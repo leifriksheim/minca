@@ -68,7 +68,7 @@ The root key never signs records. The node asks its signer for one note that
 lets the session key write everywhere the account can:
 
 ```json
-{ "aud": "<sessionDid>", "att": [{ "with": "*", "can": "record/*" }], "exp": <now + ttl> }
+{ "aud": "<sessionDid>", "att": [{ "with": "*", "can": "*" }], "exp": <now + ttl> }
 ```
 
 (The UCAN envelope and how peers verify it are in [01](01-identity.md).)
@@ -309,7 +309,7 @@ whose note's payload is
 {
   "iss": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
   "aud": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
-  "att": [{ "can": "record/*", "with": "space:bafk…" }],
+  "att": [{ "can": "*", "with": "space:bafk…" }],
   "exp": 1792614901,
   "nbf": 1790022901,
   "nnc": "a6b6617b6ed4fba0",

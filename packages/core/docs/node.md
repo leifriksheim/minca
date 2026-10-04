@@ -84,7 +84,7 @@ The **session note** a node asks for when it starts:
 
 ```
 aud = session DID
-att = [{ "with": "*", "can": "record/*" }]   (SESSION_CAPABILITY)
+att = [{ "with": "*", "can": "*" }]          (SESSION_CAPABILITY)
 exp = now + sessionTtlSeconds                     (default 3600)
 nbf = now − 300                                   (issueUCAN's default)
 fct = absent                                      (or [{"weave":"agent"}] for an agent's own node)

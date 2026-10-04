@@ -688,7 +688,7 @@ as a label for apps.
 > Rationale: a note copied off someone's record names their key, not the
 > copier's, so it is useless to anyone else.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`accountOf`, `WHO_MESSAGE`). Tests: `packages/core/tests/live.test.ts` ("a peer showing someone else's note is known as nobody")._
+_Source: `packages/core/src/node/space-runtime.ts` (`accountOf`, `WHO_MESSAGE`). Tests: `packages/core/tests/live.test.ts` ("a peer showing someone else’s note is known as nobody")._
 
 ---
 

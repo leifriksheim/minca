@@ -156,7 +156,7 @@ export function AppsView({
             <h2 style={styles.sectionTitle}>More apps</h2>
             <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
               {mayDefine
-                ? 'Ready-made. Adding one adds the collections it needs, which hold ordinary records.'
+                ? 'Ready-made. Adding one adds every collection it uses, which hold ordinary records.'
                 : 'Someone whose role lets them add collections can add these.'}
             </p>
           </div>

@@ -1326,7 +1326,7 @@ To ask a keeper for records on a topic, a reader computes the tag the same way
 > Rationale: a blind index (as in CipherSweet) — equality only, never ranges or
 > substrings. The keeper learns co-occurrence and frequency, nothing more.
 
-_Source: `packages/core/src/records/topics.ts` (`checkTopics`, `topicValues`, `topicKey`, `topicTag`, `tagsFor`, `sameTags`, `MAX_TOPICS`, `MAX_TAGS`, `LINK`), `packages/core/src/node/space-runtime.ts` (`tagKey`, `tagProblem`, `write`). Tests: `packages/core/tests/topics.test.ts` (all; "topic tags on links" for link roles)._
+_Source: `packages/core/src/records/topics.ts` (`checkTopics`, `topicValues`, `topicKey`, `topicTag`, `tagsFor`, `sameTags`, `MAX_TOPICS`, `MAX_TAGS`), `packages/core/src/records/links.ts` (`LINK_FIELD_PATTERN`), `packages/core/src/node/space-runtime.ts` (`tagKey`, `tagProblem`, `write`). Tests: `packages/core/tests/topics.test.ts` (all; "topic tags on links" for link roles)._
 
 ---
 
@@ -1432,7 +1432,7 @@ hold, and refusing would leave peers disagreeing forever. A reader may flag
 such a record instead. A writer
 checks them before signing and SHOULD NOT write what does not conform.
 
-_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/ucan.ts` (`UCAN_CLOCK_SKEW_SECONDS`), `packages/core/src/node/space-runtime.ts` (`writeCapability`, `judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don't match…"), `packages/core/tests/checks.test.ts` ("between peers"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/ucan.ts` (`UCAN_CLOCK_SKEW_SECONDS`), `packages/core/src/node/space-runtime.ts` (`writeCapability`, `judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/checks.test.ts` ("between peers"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
 
 ---
 

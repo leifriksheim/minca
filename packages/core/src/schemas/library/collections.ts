@@ -79,7 +79,7 @@ export const guide = define({
         type: 'string',
         minLength: 1,
         maxLength: 100,
-        description: 'Which guide, so there is one of each: "launcher.screens"',
+        description: 'Which guide, so there is one of each: "launcher.apps"',
       },
       title: { type: 'string', minLength: 1, maxLength: 200 },
       text: { type: 'string', minLength: 1, maxLength: 20000 },

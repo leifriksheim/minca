@@ -5,7 +5,7 @@ written-down code, keep your data in signed records that sync directly between
 devices, and every app is a view onto that data rather than its owner.
 
 > **Building an app?** Short guides — sign-in, collections and rules,
-> queries, screens, agents — are in [packages/core/docs](packages/core/docs/README.md),
+> queries, blueprints, agents — are in [packages/core/docs](packages/core/docs/README.md),
 > and ship in the package as `node_modules/@weaveprotocol/core/docs/`, so a
 > coding agent finds the ones that match the installed version.
 >
@@ -81,7 +81,7 @@ const session = await provider.generateKeyPair();
 const sessionDid = publicKeyToDid(await provider.exportPublicKey(session.publicKey), P256_MULTICODEC);
 const ucan = await root.delegate({
   audience: sessionDid,
-  capabilities: [{ with: '*', can: 'record/*' }],
+  capabilities: [{ with: '*', can: '*' }],
   expiration: Math.floor(Date.now() / 1000) + 3600,
 });
 

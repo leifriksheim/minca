@@ -21,7 +21,7 @@ export const standardAnnotations: Definitions = annotationGroups.Annotations;
 
 /**
  * The library by area, in the order it is listed: what `collections_standard`
- * shows an agent, and Appendix A of the records spec.
+ * shows an agent, and the tables in `packages/core/docs/standard-library.md`.
  */
 export const standardGroups: Readonly<Record<string, Definitions>> = Object.freeze({
   ...annotationGroups,
