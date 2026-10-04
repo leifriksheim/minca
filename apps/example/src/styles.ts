@@ -224,6 +224,63 @@ export function injectBaseStyles(): void {
     }
     .chat-places [data-nav]:not([aria-current]):hover { background: rgba(0,0,0,.04) !important; }
 
+    /* Events: covers in a grid, the next one large, a month to look across (components/apps/Events.tsx). */
+    .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .ev-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); overflow: hidden; border-radius: 14px !important; }
+    .ev-hero > button { display: block; width: 100%; }
+    .ev-hero-cover { height: 100%; min-height: 260px; }
+    .ev-banner { height: 240px; }
+    .ev-detail { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; align-items: start; }
+    .ev-form-row { display: flex; gap: 10px; }
+    .ev-month {
+      display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+      border: 1px solid ${surface.line}; border-radius: 12px; overflow: hidden; background: ${surface.line}; gap: 1px;
+    }
+    .ev-weekday { padding: 8px 10px; background: ${surface.sunken}; color: ${ink.muted}; font-size: 12px; font-weight: 500; }
+    .ev-day { min-height: 108px; padding: 6px; display: flex; flex-direction: column; gap: 3px; background: ${surface.card}; cursor: pointer; min-width: 0; }
+    .ev-day[data-other] { background: ${surface.sunken}; }
+    .ev-day[data-other] .ev-day-number { color: ${ink.faint}; }
+    .ev-day[data-picked] { box-shadow: inset 0 0 0 2px ${ink.strong}; }
+    .ev-day-number {
+      align-self: flex-start; display: inline-flex; align-items: center; justify-content: center;
+      min-width: 24px; height: 24px; padding: 0 4px; border-radius: 12px; font-size: 12px; font-weight: 500; color: ${ink.body};
+    }
+    .ev-day-number[data-today] { background: ${accent.danger}; color: #fff; font-weight: 600; }
+    .ev-chip {
+      display: block; width: 100%; border: none; border-radius: 5px; padding: 2px 6px; text-align: left;
+      font-size: 11.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ev-more { font-size: 11px; color: ${ink.faint}; padding-left: 6px; }
+    .ev-dots { display: none; gap: 3px; justify-content: center; }
+    .ev-dots > i { width: 6px; height: 6px; border-radius: 3px; }
+
+    /* Marketplace: square pictures in a grid, prices first (components/apps/Marketplace.tsx). */
+    .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 24px 16px; }
+    .mk-tools { display: flex; gap: 8px; }
+    .mk-photo { transition: transform .2s ease, box-shadow .2s ease; }
+    .mk-detail { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+    @media (hover: hover) {
+      .mk-card:hover .mk-photo { transform: translateY(-2px); box-shadow: 0 12px 24px -16px rgba(15, 17, 21, .45); }
+      .ev-chip:hover { filter: brightness(.96); }
+      .ev-day:not([data-picked]):hover { background: ${surface.sunken}; }
+    }
+
+    @media (max-width: 760px) {
+      .ev-hero, .ev-detail, .mk-detail { grid-template-columns: minmax(0, 1fr); }
+      .ev-hero-cover { min-height: 180px; }
+      .ev-banner { height: 170px; }
+    }
+    @media (max-width: 640px) {
+      .ev-grid { grid-template-columns: minmax(0, 1fr); }
+      .ev-form-row { flex-direction: column; }
+      .ev-day { min-height: 54px; align-items: center; padding: 4px 2px; }
+      .ev-day-number { align-self: center; }
+      .ev-chip, .ev-more { display: none; }
+      .ev-dots { display: flex; }
+      .ev-weekday { padding: 6px 2px; text-align: center; font-size: 11px; }
+      .mk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 10px; }
+    }
+
     @media (max-width: 900px) {
       .space-shell { grid-template-columns: 200px minmax(0, 1fr); }
       .space-content { padding: 20px 20px 48px; }

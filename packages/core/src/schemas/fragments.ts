@@ -120,12 +120,22 @@ export const address = () => ({
 const latitude = () => ({ type: 'number' as const, minimum: -90, maximum: 90 });
 const longitude = () => ({ type: 'number' as const, minimum: -180, maximum: 180 });
 
-/** The fields of a place, for a definition that is one */
+/**
+ * The fields of a place, for a definition that is one. `cells` are the
+ * geohashes of `lat` and `lon` at a few sizes (`cellsOf` in `geo.ts`), for a
+ * topic: a keeper matches them to find places in an area without reading.
+ */
 export const placeFields = () => ({
   name: text(200),
   address: address(),
   lat: latitude(),
   lon: longitude(),
+  cells: {
+    type: 'array' as const,
+    maxItems: 8,
+    items: text(12, undefined, 1),
+    description: 'The geohash cells lat and lon are in, coarsest first: precisions 3, 4, 5 and 6',
+  },
 });
 
 /** A place inside another record: a name, an address, a point */

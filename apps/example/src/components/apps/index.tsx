@@ -11,12 +11,18 @@ import {
   call,
   channel,
   column,
+  comment,
   decision,
   direct,
+  event,
+  listing,
   message,
+  order,
+  orderUpdate,
   poll,
   proposal,
   reaction,
+  rsvp,
   task,
   vote,
   positionBetween,
@@ -24,7 +30,9 @@ import {
 import { CallHistory } from './CallHistory';
 import { Chat } from './Chat';
 import { Decisions } from './Decisions';
+import { Events } from './Events';
 import { Kanban } from './Kanban';
+import { Marketplace } from './Marketplace';
 import { Polls } from './Polls';
 import type { AppNotify } from '@weaveprotocol/core/schemas';
 import type { Glyph } from '../Icon';
@@ -159,6 +167,42 @@ export const APPS: ReadonlyArray<WeaveApp> = [
       'Put something to the space, and decide it once enough people agree. Every device checks the count.',
     needs: [proposal, ballot, decision],
     View: Decisions,
+  },
+  {
+    id: 'events',
+    icon: 'calendar',
+    hue: 352,
+    notify: [
+      { label: 'New event', collection: event.name },
+      { label: 'Answers to my events', collection: rsvp.name, topic: { field: 'respondingTo', me: true } },
+      {
+        label: 'Comments on my events',
+        collection: comment.name,
+        topic: { field: 'respondingTo', me: true },
+      },
+    ],
+    title: 'Events',
+    description: "Concerts, meetups, parties: what's on, who's going, and a place to talk about each one.",
+    needs: [event, rsvp, comment],
+    View: Events,
+  },
+  {
+    id: 'marketplace',
+    icon: 'tag',
+    hue: 196,
+    notify: [
+      { label: 'New listing', collection: listing.name },
+      { label: 'Requests for my things', collection: order.name, topic: { field: 'respondingTo', me: true } },
+      {
+        label: 'Answers to my requests',
+        collection: orderUpdate.name,
+        topic: { field: 'respondingTo', me: true },
+      },
+    ],
+    title: 'Marketplace',
+    description: 'Sell, give away and find things among the people in the space.',
+    needs: [listing, order, orderUpdate, comment],
+    View: Marketplace,
   },
   fromMiniApp(liquid),
   {

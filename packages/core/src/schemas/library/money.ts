@@ -130,6 +130,8 @@ export const listing = define({
       title: words(300),
       description: text(10000),
       price: money('Left out when it is free'),
+      category: text(100, 'Like "furniture", "bikes" or "clothes"'),
+      condition: choice(['new', 'like-new', 'good', 'fair', 'for-parts']),
       images: { type: 'array', maxItems: 12, items: image() },
       status: choice(['available', 'reserved', 'sold']),
       place: placeRef('Where to pick it up'),
@@ -138,6 +140,7 @@ export const listing = define({
   },
   permissions: ['moderate'],
   rules: authored,
+  topics: ['place.cells'],
 });
 export type Listing = BodyOf<typeof listing>;
 

@@ -32,6 +32,7 @@ export const place = define({
     properties: { ...placeFields(), name: words(200), category: text(100), url: url() },
     required: ['name'],
   },
+  topics: ['cells'],
 });
 export type PlaceEntry = BodyOf<typeof place>;
 

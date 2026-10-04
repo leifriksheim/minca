@@ -252,8 +252,8 @@ export function Home() {
         title="Tools too small for any company, and just right for you."
         intro={
           <p>
-            Chat, polls, decisions, a kanban board and calls come built in. Everything else is one
-            conversation with an assistant away.
+            Chat, polls, decisions, events, a marketplace, a kanban board and calls come built in. Everything
+            else is one conversation with an assistant away.
           </p>
         }
       >
