@@ -136,7 +136,7 @@ A client MUST use this derivation for a space's room; two implementations
 that differ here never meet.
 
 Other protocols meet in rooms of their own on the same relays, with names
-derived elsewhere: device pairing (`pairingRoomId`, [01 — Identity](01-identity.md))
+derived elsewhere: device pairing (`pairingRoomId`, [01 — Identity](01-identity.md) §14)
 and the agent link ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md)).
 The relay treats them all alike.
 

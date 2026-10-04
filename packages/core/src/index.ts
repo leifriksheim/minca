@@ -95,14 +95,17 @@ export type { DeviceKey } from './identity/device-key.js';
 export { createLocalRootSigner } from './identity/root-signer.js';
 export type { RootSigner } from './identity/root-signer.js';
 export {
+  newPairingSecret,
   pairingRoomId,
-  derivePairingKey,
+  pairingKeyPair,
+  pairingCommitment,
+  derivePairingChannel,
   encodePairingTicket,
   decodePairingTicket,
   sealPairingPayload,
   openPairingPayload,
 } from './identity/pairing.js';
-export type { PairingTicket } from './identity/pairing.js';
+export type { PairingTicket, PairingChannel } from './identity/pairing.js';
 export {
   issueUCAN,
   parseUCAN,

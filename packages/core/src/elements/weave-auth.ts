@@ -202,8 +202,11 @@ function describePairing(stage: PairingStage): string {
   switch (stage.kind) {
     case 'waiting':
       return 'Looking for your computer…';
-    case 'connected':
-      return 'Found it. Collecting your spaces…';
+    case 'confirm':
+    case 'compare':
+      return 'Check your computer shows the same code, and confirm there.';
+    case 'sending':
+      return 'Collecting your account…';
     case 'received':
       return stage.spaces === 1 ? 'Got 1 space.' : `Got ${stage.spaces} spaces.`;
     case 'sent':
@@ -931,48 +934,63 @@ export class WeaveAuthElement extends Base {
   // ─── Arriving from a phone-pairing QR code ─────────────────────────
 
   /**
-   * One button. Everything needed is already in the address bar, but signing
-   * in still takes a tap: the code in the link is a secret, and a page that
-   * used it the instant it loaded would sign someone in from a link they had
-   * merely opened by accident.
+   * One button. The link holds only where to meet, but meeting still takes a
+   * tap: a page that went looking the instant it loaded would pair from a link
+   * someone had merely opened by accident. Once the computer answers, both show
+   * the same code, and the account comes over only after the person confirms
+   * it there.
    */
   #pair(state: AuthState): HTMLElement {
     const auth = this.auth;
+    const stage = state.pairingStage;
+    const code = stage?.kind === 'confirm' ? stage.code : null;
     return card(
       'Add this phone',
       subtitle('You scanned a code from your computer.'),
-      h(
-        'p',
-        { class: 'wa-hint' },
-        'This phone becomes the same account, with its own copy of your spaces.',
-        info(
-          'What happens next',
-          'It syncs with your computer when both are around, and keeps working when they are not. Your spaces come over the network directly between the two devices — the relay only introduces them.',
-        ),
-      ),
-      h(
-        'button',
-        {
-          type: 'button',
-          class: 'wa-button',
-          disabled: state.busy,
-          onclick: () => void auth.acceptPairing(),
-        },
-        state.busy ? 'Setting up…' : 'Set up this phone',
-      ),
-      state.pairingStage
+      code
+        ? h(
+            'code',
+            { class: 'wa-code wa-code-large', style: 'font-size:28px' },
+            `${code.slice(0, 3)} ${code.slice(3)}`,
+          )
+        : h(
+            'p',
+            { class: 'wa-hint' },
+            'This phone becomes the same account, with its own copy of your spaces.',
+            info(
+              'What happens next',
+              'Your computer and this phone show the same six digits. When you confirm them on the computer, it sends the account here directly — the relay only introduces the two, and sees nothing it could use.',
+            ),
+          ),
+      state.accounts.length > 0 && !code
         ? h(
             'p',
+            { class: 'wa-error' },
+            'Only continue if the code is on your own screen, in front of you. A link someone sent you would put this phone in their account instead of yours.',
+          )
+        : null,
+      state.pairing && !code
+        ? h(
+            'button',
             {
-              class: state.pairingStage.kind === 'failed' ? 'wa-error' : 'wa-hint',
-              style: 'margin-top:12px',
+              type: 'button',
+              class: 'wa-button',
+              disabled: state.busy,
+              onclick: () => void auth.acceptPairing(),
             },
-            describePairing(state.pairingStage),
+            state.busy ? 'Looking…' : 'Set up this phone',
+          )
+        : null,
+      stage
+        ? h(
+            'p',
+            { class: stage.kind === 'failed' ? 'wa-error' : 'wa-hint', style: 'margin-top:12px' },
+            describePairing(stage),
           )
         : null,
       errorBox(state.error),
-      h('p', { class: 'wa-small' }, 'Keep the code showing until this finishes.'),
-      links(link('Not now', () => auth.dismissPairing(), state.busy)),
+      h('p', { class: 'wa-small' }, 'Keep the code showing on your computer until this finishes.'),
+      links(link(state.pairing ? 'Not now' : 'Back', () => auth.dismissPairing(), state.busy && !code)),
     );
   }
 }

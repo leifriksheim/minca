@@ -86,7 +86,7 @@ import {
 } from '../space/notify.js';
 import {
   clearPairingTicket,
-  collectFromDesktop,
+  receiveFromDesktop,
   offerToPhone as offerPairing,
   readPairingTicket,
   type PairingOffer,
@@ -993,13 +993,30 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const ticket = state.pairing;
       if (!ticket) return;
       if (!state.place) update({ place: await browserPlace() });
-      // The link says which account; whichever was last used here is beside the point.
-      const opened = await run(async () => arrive(await openWithCode(ticket.code, null), 'paired'));
+      const onStage = (stage: PairingStage) => update({ pairingStage: stage });
+      let spaces: ReadonlyArray<string> = [];
+      // The account arrives over the exchange, after the person has compared
+      // the codes; the link only says where to meet.
+      const opened = await run(async () => {
+        const handover = await receiveFromDesktop(ticket, onStage);
+        spaces = handover.spaces;
+        await arrive(await openWithCode(seedToRecoveryCode(handover.seed), null), 'paired');
+      });
+      clearPairingTicket();
+      update({ pairing: null });
       const session = state.session;
       if (!opened || !session) return;
-      clearPairingTicket();
-      await collectFromDesktop(session.node, ticket, (stage) => update({ pairingStage: stage }));
-      update({ pairing: null });
+      let joined = 0;
+      for (const invite of spaces) {
+        if (
+          await session.node.spaces.join(invite).then(
+            () => true,
+            () => false,
+          )
+        )
+          joined++;
+      }
+      onStage({ kind: 'received', spaces: joined });
     },
 
     dismissPairing() {
@@ -1166,8 +1183,11 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const location = globalThis.location;
       return offerPairing(
         {
-          node: session.node,
           seed,
+          invites: async () =>
+            Promise.all(
+              (await session.node.spaces.list()).map((space) => session.node.spaces.invite(space.id)),
+            ),
           relays: config.network?.relays ?? [],
           link: config.pairingLink ?? (location ? `${location.origin}${location.pathname}` : ''),
         },

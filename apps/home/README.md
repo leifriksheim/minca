@@ -144,14 +144,15 @@ link it offers. There is no scanner in the app —
 iPhone and Android both read a URL out of a QR natively, which is also why this
 works in Safari.
 
-The code holds a link whose fragment carries your recovery code and the relay
-address. A fragment never reaches a server, so the secret goes straight from
-your screen to your phone. Treat the code on screen like the recovery code it
-contains: anyone who photographs it gets the account.
+The code holds a link whose fragment carries a one-time secret and the relay
+address, and nothing about your account. Once your phone opens it, both
+screens show six digits; check they match and click **Same code — send**, and
+only then does the account go over, sealed for that phone alone. The code works
+once, for a couple of minutes, so a photo of it is no use to anyone.
 
 The list of spaces is deliberately _not_ in the QR — it would not fit, and a
 denser code is a code your camera struggles with. Instead both devices work out
-the same private room from the seed, meet there over WebRTC, and your computer
+the same private room from the secret, meet there over WebRTC, and your computer
 sends the spaces across encrypted. Once that is done the phone is a full peer: it
 holds its own copy, syncs with anyone in the space, and never needs your
 computer again.
@@ -192,7 +193,6 @@ the web has no filesystem change notification.
 - **A passkey that works on a new device.** Today a passkey synced by iCloud or Bitwarden gates a key that stays in one browser, so a new device still needs pairing or the recovery code. With the PRF extension the passkey could wrap the seed itself, its user handle could name the DID, and an always-on node could keep the wrapped copy — at the cost of working only with managers that implement PRF, and of those copies becoming a target.
 
 - **Members and roles.** Screens to see who is in a space and what they hold, edit roles, make an invite link per role, hand over, and leave. So far only `example/` has these (`RolesView`). The copy should be honest: someone removed keeps what they already downloaded, and view-only links made before a removal stop working.
-- **Pairing.** Warn on the arrival screen when a `#pair=` link would sign in to a different account than the one here ([01](../../spec/01-identity.md), pairing).
 - **Notifications per device.** The app that asked shows its notifications itself; say which devices and apps are showing them.
 - **Hosting.**
   - Say plainly, before a lapsed host deletes data, that it will.
