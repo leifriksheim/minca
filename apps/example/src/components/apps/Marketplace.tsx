@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { useAccount, useCan, useLive, useNode } from '@weaveprotocol/core/react';
 import type { IncludedOf, QueryRecord } from '@weaveprotocol/core';
 import { comment, listing, order, orderUpdate, type Listing, type Money } from '@weaveprotocol/core/schemas';
@@ -10,6 +10,19 @@ import { styles, palette, ui } from '../../styles';
 import { Person } from '../Person';
 import { Comments } from '../std/Comments';
 import { Cover, kindOf, type Kind } from './Cover';
+import {
+  NearButton,
+  NearContext,
+  PlaceField,
+  PlaceMap,
+  distanceFrom,
+  inReach,
+  nearWhere,
+  placeLabel,
+  useDistance,
+  useNear,
+  type Place,
+} from './Where';
 import type { AppProps } from './index';
 
 /** What a listing can be, for its cover and for browsing. The last is the catch-all. */
@@ -51,7 +64,7 @@ type Request = ListingRecord['included']['requests'][number];
 type Answer = 'waiting' | 'accepted' | 'declined';
 
 type View = 'browse' | 'selling' | 'buying';
-type Sort = 'new' | 'cheap' | 'dear';
+type Sort = 'new' | 'cheap' | 'dear' | 'near';
 
 /**
  * `std.listing`, the way people shop from neighbours: a grid of things with
@@ -70,20 +83,23 @@ export function Marketplace({ space }: AppProps) {
   const [freeOnly, setFreeOnly] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [editing, setEditing] = useState<ListingRecord | 'new' | null>(null);
+  const [near, setNear] = useNear();
 
-  const listings = useLive(
+  const data = useLive(
     space.id,
-    async () =>
-      (
-        await node.records.query(space.id, {
-          collection: listing,
-          sort: { '@createdAt': 'desc' },
-          include: withRequests,
-        })
-      ).records,
-    [],
+    async () => {
+      const query = { collection: listing, sort: { '@createdAt': 'desc' }, include: withRequests } as const;
+      const all = (await node.records.query(space.id, query)).records;
+      if (!near) return { all, close: null };
+      // The cells around the circle, as a keeper would match them; then the exact distance.
+      const where = nearWhere(near);
+      const candidates = where ? (await node.records.query(space.id, { ...query, where })).records : all;
+      return { all, close: new Set(candidates.filter((l) => inReach(near, l.body.place)).map((l) => l.key)) };
+    },
+    [near?.lat, near?.lon, near?.km],
   );
-  if (!listings) return null;
+  if (!data) return null;
+  const listings = data.all;
 
   const form = editing && (
     <ListingForm
@@ -104,7 +120,7 @@ export function Marketplace({ space }: AppProps) {
   const open = openKey ? listings.find((l) => l.key === openKey) : undefined;
   if (open) {
     return (
-      <>
+      <NearContext.Provider value={near}>
         <ListingPage
           space={space}
           record={open}
@@ -112,7 +128,7 @@ export function Marketplace({ space }: AppProps) {
           onEdit={() => setEditing(open)}
         />
         {form}
-      </>
+      </NearContext.Provider>
     );
   }
 
@@ -127,12 +143,18 @@ export function Marketplace({ space }: AppProps) {
       ? listings.filter((l) => l.createdBy === me)
       : view === 'buying'
         ? listings.filter((l) => myRequest(l, me))
-        : listings.filter((l) => l.body.status !== 'sold');
+        : listings.filter((l) => l.body.status !== 'sold' && (!data.close || data.close.has(l.key)));
   const shown = inView
     .filter((l) => !category || kindOf(CATEGORIES, l.body.category).id === category)
     .filter((l) => !freeOnly || isFree(l.body.price))
     .filter(matches)
-    .sort((a, b) => (sort === 'new' ? 0 : (priceOf(a) - priceOf(b)) * (sort === 'cheap' ? 1 : -1)));
+    .sort((a, b) =>
+      sort === 'near' && near
+        ? (distanceFrom(near, a.body.place) ?? Infinity) - (distanceFrom(near, b.body.place) ?? Infinity)
+        : sort === 'cheap' || sort === 'dear'
+          ? (priceOf(a) - priceOf(b)) * (sort === 'cheap' ? 1 : -1)
+          : 0,
+    );
   const categoriesHere = CATEGORIES.filter((c) =>
     listings.some((l) => kindOf(CATEGORIES, l.body.category).id === c.id),
   );
@@ -141,118 +163,131 @@ export function Marketplace({ space }: AppProps) {
     .reduce((n, l) => n + l.included.requests.filter((r) => answerTo(r, l) === 'waiting').length, 0);
 
   return (
-    <div style={{ ...ui.stack, gap: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div className="segmented scroll-x" role="tablist" aria-label="Marketplace">
-          {(
-            [
-              ['browse', 'Browse'],
-              ['selling', 'Selling'],
-              ['buying', 'Buying'],
-            ] as const
-          ).map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)}>
-              {label}
-              {id === 'selling' && waiting > 0 && <span className="count">{waiting}</span>}
-            </button>
-          ))}
-        </div>
-        <span style={{ flex: 1 }} />
-        {maySell && (
-          <button onClick={() => setEditing('new')} data-variant="primary" style={styles.addButton}>
-            + Sell something
-          </button>
-        )}
-      </div>
-
-      <div className="mk-tools">
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search the marketplace"
-          aria-label="Search"
-          style={{ ...styles.input, flex: 1, minWidth: 0 }}
-        />
-        <select
-          value={sort}
-          onChange={(e) => setSort(sortOf(e.target.value))}
-          aria-label="Sort"
-          style={{ ...styles.input, width: 'auto' }}
-        >
-          <option value="new">Newest first</option>
-          <option value="cheap">Price: low to high</option>
-          <option value="dear">Price: high to low</option>
-        </select>
-      </div>
-
-      {categoriesHere.length > 0 && (
-        <div className="scroll-x" style={{ display: 'flex', gap: 6 }} role="group" aria-label="Categories">
-          <button
-            aria-pressed={!category && !freeOnly}
-            onClick={() => {
-              setCategory(null);
-              setFreeOnly(false);
-            }}
-            style={{ ...ui.chip, height: 32, ...(!category && !freeOnly ? ui.chipOn : {}) }}
-          >
-            All
-          </button>
-          <button
-            aria-pressed={freeOnly}
-            onClick={() => setFreeOnly(!freeOnly)}
-            style={{ ...ui.chip, height: 32, ...(freeOnly ? ui.chipOn : {}) }}
-          >
-            <span aria-hidden>🎁</span> Free
-          </button>
-          {categoriesHere.map((c) => (
-            <button
-              key={c.id}
-              aria-pressed={category === c.id}
-              onClick={() => setCategory(category === c.id ? null : c.id)}
-              style={{ ...ui.chip, height: 32, ...(category === c.id ? ui.chipOn : {}) }}
-            >
-              <span aria-hidden>{c.emoji}</span> {c.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {shown.length === 0 ? (
-        <div
-          style={{ ...styles.emptyState, ...ui.stack, gap: 12, alignItems: 'center', padding: '48px 16px' }}
-        >
-          <span aria-hidden style={{ fontSize: 36 }}>
-            🛍️
-          </span>
-          <span>
-            {words || category || freeOnly
-              ? 'Nothing matches.'
-              : view === 'selling'
-                ? "You aren't selling anything."
-                : view === 'buying'
-                  ? "You haven't asked for anything yet."
-                  : 'Nothing for sale yet.'}
-          </span>
-          {maySell && view !== 'buying' && !words && !category && !freeOnly && (
-            <button
-              onClick={() => setEditing('new')}
-              data-variant="primary"
-              style={{ ...styles.addButton, alignSelf: 'center' }}
-            >
-              Sell something
+    <NearContext.Provider value={near}>
+      <div style={{ ...ui.stack, gap: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div className="segmented scroll-x" role="tablist" aria-label="Marketplace">
+            {(
+              [
+                ['browse', 'Browse'],
+                ['selling', 'Selling'],
+                ['buying', 'Buying'],
+              ] as const
+            ).map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)}>
+                {label}
+                {id === 'selling' && waiting > 0 && <span className="count">{waiting}</span>}
+              </button>
+            ))}
+          </div>
+          <span style={{ flex: 1 }} />
+          {maySell && (
+            <button onClick={() => setEditing('new')} data-variant="primary" style={styles.addButton}>
+              + Sell something
             </button>
           )}
         </div>
-      ) : (
-        <div className="mk-grid">
-          {shown.map((l) => (
-            <ListingCard key={l.key} record={l} onOpen={() => setOpenKey(l.key)} />
-          ))}
+
+        <div className="mk-tools">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search the marketplace"
+            aria-label="Search"
+            style={{ ...styles.input, flex: 1, minWidth: 0 }}
+          />
+          <select
+            value={sort}
+            onChange={(e) => setSort(sortOf(e.target.value))}
+            aria-label="Sort"
+            style={{ ...styles.input, width: 'auto' }}
+          >
+            <option value="new">Newest first</option>
+            {near && <option value="near">Nearest first</option>}
+            <option value="cheap">Price: low to high</option>
+            <option value="dear">Price: high to low</option>
+          </select>
         </div>
-      )}
-      {form}
-    </div>
+
+        {view === 'browse' && (
+          <div
+            className="scroll-x"
+            style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+            role="group"
+            aria-label="Categories"
+          >
+            <NearButton near={near} onChange={setNear} />
+            <span
+              aria-hidden
+              style={{ width: 1, height: 20, background: palette.surface.line, margin: '0 4px' }}
+            />
+            <button
+              aria-pressed={!category && !freeOnly}
+              onClick={() => {
+                setCategory(null);
+                setFreeOnly(false);
+              }}
+              style={{ ...ui.chip, height: 32, ...(!category && !freeOnly ? ui.chipOn : {}) }}
+            >
+              All
+            </button>
+            <button
+              aria-pressed={freeOnly}
+              onClick={() => setFreeOnly(!freeOnly)}
+              style={{ ...ui.chip, height: 32, ...(freeOnly ? ui.chipOn : {}) }}
+            >
+              <span aria-hidden>🎁</span> Free
+            </button>
+            {categoriesHere.map((c) => (
+              <button
+                key={c.id}
+                aria-pressed={category === c.id}
+                onClick={() => setCategory(category === c.id ? null : c.id)}
+                style={{ ...ui.chip, height: 32, ...(category === c.id ? ui.chipOn : {}) }}
+              >
+                <span aria-hidden>{c.emoji}</span> {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {shown.length === 0 ? (
+          <div
+            style={{ ...styles.emptyState, ...ui.stack, gap: 12, alignItems: 'center', padding: '48px 16px' }}
+          >
+            <span aria-hidden style={{ fontSize: 36 }}>
+              🛍️
+            </span>
+            <span>
+              {words || category || freeOnly
+                ? 'Nothing matches.'
+                : view === 'selling'
+                  ? "You aren't selling anything."
+                  : view === 'buying'
+                    ? "You haven't asked for anything yet."
+                    : 'Nothing for sale yet.'}
+            </span>
+            {maySell && view !== 'buying' && !words && !category && !freeOnly && (
+              <button
+                onClick={() => setEditing('new')}
+                data-variant="primary"
+                style={{ ...styles.addButton, alignSelf: 'center' }}
+              >
+                Sell something
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="mk-grid">
+            {shown.map((l) => (
+              <ListingCard key={l.key} record={l} onOpen={() => setOpenKey(l.key)} />
+            ))}
+          </div>
+        )}
+        {form}
+      </div>
+    </NearContext.Provider>
   );
 }
 
@@ -260,6 +295,7 @@ export function Marketplace({ space }: AppProps) {
 function ListingCard({ record, onOpen }: { record: ListingRecord; onOpen: () => void }) {
   const { did: me } = useAccount();
   const body = record.body;
+  const away = useDistance(body.place);
   const mineWaiting =
     record.createdBy === me
       ? record.included.requests.filter((r) => answerTo(r, record) === 'waiting').length
@@ -323,7 +359,7 @@ function ListingCard({ record, onOpen }: { record: ListingRecord; onOpen: () => 
           {body.title}
         </span>
         <span style={{ ...ui.ellipsis, fontSize: 12, color: palette.ink.faint }}>
-          {[placeLabel(body.place), ago(record.createdAt)].filter(Boolean).join(' · ')}
+          {[away, placeLabel(body.place), ago(record.createdAt)].filter(Boolean).join(' · ')}
         </span>
       </span>
     </button>
@@ -346,6 +382,7 @@ function ListingPage({
   const { did: me } = useAccount();
   const body = record.body;
   const cat = kindOf(CATEGORIES, body.category);
+  const away = useDistance(body.place);
   const selling = record.createdBy === me;
   const condition = CONDITIONS.find((c) => c.id === body.condition);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -391,6 +428,7 @@ function ListingPage({
             <span style={{ fontSize: 13, color: palette.ink.muted }}>
               Listed {ago(record.createdAt)}
               {placeLabel(body.place) ? ` in ${placeLabel(body.place)}` : ''}
+              {away ? ` · ${away} away` : ''}
             </span>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
               {body.status && body.status !== 'available' && (
@@ -444,6 +482,8 @@ function ListingPage({
           )}
 
           <SellerCard did={record.createdBy} />
+
+          <PlaceMap place={body.place} height={180} />
 
           {body.description && (
             <section style={{ ...ui.stack, gap: 8 }}>
@@ -736,7 +776,8 @@ function ListingForm({
   const [condition, setCondition] = useState<string>(was?.condition ?? '');
   const [amount, setAmount] = useState(was?.price?.amount ?? '');
   const [currency, setCurrency] = useState(was?.price?.currency ?? lastCurrency());
-  const [locality, setLocality] = useState(was?.place?.address?.locality ?? was?.place?.name ?? '');
+  const [place, setPlace] = useState<Place | undefined>(was?.place);
+  const near = useContext(NearContext);
   const [description, setDescription] = useState(was?.description ?? '');
   const [busy, setBusy] = useState(false);
 
@@ -759,7 +800,7 @@ function ListingForm({
             category,
             ...(price && Number(price) > 0 ? { price: { amount: price, currency } } : {}),
             ...(chosenCondition ? { condition: chosenCondition } : {}),
-            ...(locality.trim() ? { place: { address: { locality: locality.trim() } } } : {}),
+            ...(place ? { place } : {}),
             ...(description.trim() ? { description: description.trim() } : {}),
             status: was?.status ?? 'available',
           }).finally(() => setBusy(false));
@@ -829,12 +870,12 @@ function ListingForm({
           </div>
         </Field>
         <Field label="Where to pick it up">
-          <input
-            value={locality}
-            onChange={(e) => setLocality(e.target.value)}
+          <PlaceField
+            value={place}
+            onChange={setPlace}
+            coarse
+            near={near}
             placeholder="Neighbourhood or town"
-            maxLength={200}
-            style={styles.input}
           />
         </Field>
         <Field label="Description">
@@ -917,12 +958,8 @@ function priceLabel(price: Money | undefined): string {
 /** For sorting by price; currencies are compared as plain numbers */
 const priceOf = (record: ListingRecord) => Number(record.body.price?.amount ?? 0);
 
-const sortOf = (value: string): Sort => (value === 'cheap' || value === 'dear' ? value : 'new');
-
-function placeLabel(place: Listing['place']): string {
-  if (!place) return '';
-  return [place.name, place.address?.locality].filter(Boolean).join(', ');
-}
+const sortOf = (value: string): Sort =>
+  value === 'cheap' || value === 'dear' || value === 'near' ? value : 'new';
 
 /** The currency this person last priced something in, so they don't pick it every time */
 function lastCurrency(): string {

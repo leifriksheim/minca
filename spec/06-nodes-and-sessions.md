@@ -756,6 +756,15 @@ are there for waking an app that is closed (below).
 
 _Source: `packages/core/src/space/notify.ts`, `packages/core/src/node/node.ts` (`notifications`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
 
+> **Planned: matching any of several topic values.** `topic` names one
+> value, which is enough for "mentions me" but not for an area: places carry
+> their geohash cells as a topic, and everything within a radius is in one of
+> nine cells (the library's "Places and areas"). The plan: `topic` may be
+> `{ field, values }` with 1–9 values, and a version matches when it carries
+> a tag for any of them. The carried copy already holds a list of tags per
+> space, so carriers change only in computing one tag per value. Tracked in
+> [#141](https://github.com/leifriksheim/weave/issues/141).
+
 > **Planned: Web Push, to a closed app or a phone.** Today only an app that
 > is running shows a match (§2.11), so nothing reaches a device where it is
 > closed, and an app with `scope: spaces`, which cannot read the registry,

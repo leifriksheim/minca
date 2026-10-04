@@ -64,6 +64,7 @@ export const event = define({
     required: ['title', 'start'],
   },
   links: { in: one(['std.calendar'], 'The calendar it is in') },
+  topics: ['place.cells'],
 });
 export type CalendarEvent = BodyOf<typeof event>;
 

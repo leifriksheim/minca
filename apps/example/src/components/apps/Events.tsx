@@ -26,6 +26,18 @@ import { styles, palette, ui } from '../../styles';
 import { Person } from '../Person';
 import { Comments } from '../std/Comments';
 import { Cover, kindOf, type Kind } from './Cover';
+import {
+  NearButton,
+  NearContext,
+  PlaceField,
+  PlaceMap,
+  inReach,
+  nearWhere,
+  placeLabel,
+  useDistance,
+  useNear,
+  type Place,
+} from './Where';
 import type { AppProps } from './index';
 
 /** What an event can be, for its cover and for browsing by kind. The last is the catch-all. */
@@ -86,16 +98,31 @@ export function Events({ space }: AppProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [editing, setEditing] = useState<EventRecord | 'new' | null>(null);
   const now = useMinute();
+  const [near, setNear] = useNear();
 
-  const events = useLive(
+  const data = useLive(
     space.id,
-    async () =>
-      [...(await node.records.query(space.id, { collection: event, include: withGuests })).records].sort(
-        (a, b) => dateOf(a.body.start).getTime() - dateOf(b.body.start).getTime(),
-      ),
-    [],
+    async () => {
+      const soonest = (records: ReadonlyArray<EventRecord>) =>
+        [...records].sort((a, b) => dateOf(a.body.start).getTime() - dateOf(b.body.start).getTime());
+      const all = soonest(
+        (await node.records.query(space.id, { collection: event, include: withGuests })).records,
+      );
+      if (!near) return { all, close: null };
+      // The cells around the circle, as a keeper would match them; then the exact distance.
+      const where = nearWhere(near);
+      const candidates = where
+        ? (await node.records.query(space.id, { collection: event, include: withGuests, where })).records
+        : all;
+      return { all, close: new Set(candidates.filter((e) => inReach(near, e.body.place)).map((e) => e.key)) };
+    },
+    [near?.lat, near?.lon, near?.km],
   );
-  if (!events) return null;
+  if (!data) return null;
+  const events = data.all;
+  // Somewhere near, or online: an event with a link and no place is anywhere.
+  const browsable = (e: EventRecord) =>
+    !data.close || data.close.has(e.key) || (!e.body.place?.lat && !!e.body.url);
 
   const form = editing && (
     <EventForm
@@ -117,24 +144,26 @@ export function Events({ space }: AppProps) {
   if (open) {
     return (
       <Now.Provider value={now}>
-        <EventPage
-          space={space}
-          record={open}
-          onBack={() => setOpenKey(null)}
-          onEdit={() => setEditing(open)}
-        />
-        {form}
+        <NearContext.Provider value={near}>
+          <EventPage
+            space={space}
+            record={open}
+            onBack={() => setOpenKey(null)}
+            onEdit={() => setEditing(open)}
+          />
+          {form}
+        </NearContext.Provider>
       </Now.Provider>
     );
   }
 
-  const upcoming = events.filter((e) => endOf(e.body) > now);
+  const upcoming = events.filter((e) => endOf(e.body) > now && browsable(e));
   const answerOf = (e: EventRecord) => latestAnswers(e).get(me)?.body.status;
   const inView =
     view === 'past'
-      ? events.filter((e) => endOf(e.body) <= now).reverse()
+      ? events.filter((e) => endOf(e.body) <= now && browsable(e)).reverse()
       : view === 'mine'
-        ? upcoming.filter((e) => answerOf(e) === 'going' || answerOf(e) === 'maybe')
+        ? events.filter((e) => endOf(e.body) > now && (answerOf(e) === 'going' || answerOf(e) === 'maybe'))
         : view === 'hosting'
           ? events.filter((e) => e.createdBy === me)
           : upcoming;
@@ -144,42 +173,55 @@ export function Events({ space }: AppProps) {
 
   return (
     <Now.Provider value={now}>
-      <div style={{ ...ui.stack, gap: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <div className="segmented scroll-x" role="tablist" aria-label="Events">
-            {VIEWS.map((v) => (
-              <button key={v.id} role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}>
-                {v.label}
+      <NearContext.Provider value={near}>
+        <div style={{ ...ui.stack, gap: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div className="segmented scroll-x" role="tablist" aria-label="Events">
+              {VIEWS.map((v) => (
+                <button key={v.id} role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <span style={{ flex: 1 }} />
+            {mayCreate && (
+              <button onClick={() => setEditing('new')} data-variant="primary" style={styles.addButton}>
+                + Create event
               </button>
-            ))}
+            )}
           </div>
-          <span style={{ flex: 1 }} />
-          {mayCreate && (
-            <button onClick={() => setEditing('new')} data-variant="primary" style={styles.addButton}>
-              + Create event
-            </button>
+
+          {(view === 'upcoming' || view === 'calendar' || view === 'past') && (
+            <div className="scroll-x" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <NearButton near={near} onChange={setNear} />
+              {view !== 'calendar' && kindsHere.length > 1 && (
+                <>
+                  <span
+                    aria-hidden
+                    style={{ width: 1, height: 20, background: palette.surface.line, margin: '0 4px' }}
+                  />
+                  <KindChips kinds={kindsHere} chosen={kind} onChoose={setKind} />
+                </>
+              )}
+            </div>
           )}
+
+          {view === 'calendar' ? (
+            <MonthView events={events.filter(browsable)} onOpen={openEvent} />
+          ) : shown.length === 0 ? (
+            <Empty view={view} mayCreate={mayCreate} filtered={!!kind} onCreate={() => setEditing('new')} />
+          ) : view === 'upcoming' && !kind ? (
+            <Upcoming space={space} events={shown} onOpen={openEvent} />
+          ) : (
+            <div className="ev-grid">
+              {shown.map((e) => (
+                <EventCard key={e.key} space={space} record={e} onOpen={() => openEvent(e)} />
+              ))}
+            </div>
+          )}
+          {form}
         </div>
-
-        {view !== 'calendar' && kindsHere.length > 1 && (
-          <KindChips kinds={kindsHere} chosen={kind} onChoose={setKind} />
-        )}
-
-        {view === 'calendar' ? (
-          <MonthView events={events} onOpen={openEvent} />
-        ) : shown.length === 0 ? (
-          <Empty view={view} mayCreate={mayCreate} filtered={!!kind} onCreate={() => setEditing('new')} />
-        ) : view === 'upcoming' && !kind ? (
-          <Upcoming space={space} events={shown} onOpen={openEvent} />
-        ) : (
-          <div className="ev-grid">
-            {shown.map((e) => (
-              <EventCard key={e.key} space={space} record={e} onOpen={() => openEvent(e)} />
-            ))}
-          </div>
-        )}
-        {form}
-      </div>
+      </NearContext.Provider>
     </Now.Provider>
   );
 }
@@ -195,7 +237,7 @@ function KindChips({
   onChoose: (id: string | null) => void;
 }) {
   return (
-    <div className="scroll-x" style={{ display: 'flex', gap: 6 }} role="group" aria-label="Kinds">
+    <div style={{ display: 'flex', gap: 6 }} role="group" aria-label="Kinds">
       <button
         aria-pressed={chosen === null}
         onClick={() => onChoose(null)}
@@ -323,6 +365,7 @@ function EventCard({
   const mine = latestAnswers(record).get(me);
   const past = endOf(body) <= useContext(Now);
   const interested = mine?.body.status === 'maybe' || mine?.body.status === 'going';
+  const away = useDistance(body.place);
   return (
     <article data-tile style={{ ...ui.card, ...ui.stack, overflow: 'hidden' }}>
       <button onClick={onOpen} style={{ ...bare, ...ui.stack, flex: 1, textAlign: 'left' }}>
@@ -358,7 +401,7 @@ function EventCard({
           </strong>
           {placeLabel(body.place) && (
             <span style={{ ...ui.ellipsis, fontSize: 13, color: palette.ink.muted }}>
-              {placeLabel(body.place)}
+              {[placeLabel(body.place), away].filter(Boolean).join(' · ')}
             </span>
           )}
         </div>
@@ -402,6 +445,7 @@ function EventPage({
   const hosting = record.createdBy === me && space.writable;
   const past = endOf(body) <= useContext(Now);
   const cancelled = body.status === 'cancelled';
+  const away = useDistance(body.place);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
@@ -499,16 +543,11 @@ function EventPage({
             <Fact icon="🕒">{longWhen(body)}</Fact>
             {placeLabel(body.place) && (
               <Fact icon="📍">
-                <a
-                  href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(placeLabel(body.place))}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={link}
-                >
-                  {placeLabel(body.place)}
-                </a>
+                {placeLabel(body.place)}
+                {away && <span style={{ color: palette.ink.faint }}> · {away} away</span>}
               </Fact>
             )}
+            <PlaceMap place={body.place} />
             {body.url && (
               <Fact icon="🔗">
                 <a
@@ -834,6 +873,7 @@ function EventForm({
   onClose: () => void;
 }) {
   const was = initial?.body;
+  const near = useContext(NearContext);
   const [start] = useState(() => (was ? dateOf(was.start) : addDays(startOfDay(new Date()), 1)));
   const end = was?.end ? dateOf(was.end) : null;
   const [title, setTitle] = useState(was?.title ?? '');
@@ -843,8 +883,7 @@ function EventForm({
   const [clock, setClock] = useState(was && !isWholeDay(was.start) ? clockOf(start) : '19:00');
   const [endDay, setEndDay] = useState(end ? dayKey(end) : '');
   const [endClock, setEndClock] = useState(end && was?.end && !isWholeDay(was.end) ? clockOf(end) : '');
-  const [placeName, setPlaceName] = useState(was?.place?.name ?? '');
-  const [street, setStreet] = useState(was?.place?.address?.street ?? '');
+  const [place, setPlace] = useState<Place | undefined>(was?.place);
   const [url, setUrl] = useState(was?.url ?? '');
   const [description, setDescription] = useState(was?.description ?? '');
   const [busy, setBusy] = useState(false);
@@ -868,17 +907,13 @@ function EventForm({
           e.preventDefault();
           if (!ready) return;
           setBusy(true);
-          const place = {
-            ...(placeName.trim() ? { name: placeName.trim() } : {}),
-            ...(street.trim() ? { address: { street: street.trim() } } : {}),
-          };
           void onSave({
             title: title.trim(),
             category,
             start: startAt,
             ...(endAt ? { end: endAt } : {}),
             ...(allDay ? { allDay: true } : { tz: localZone() }),
-            ...(Object.keys(place).length ? { place } : {}),
+            ...(place ? { place } : {}),
             ...(url.trim() ? { url: url.trim() } : {}),
             ...(description.trim() ? { description: description.trim() } : {}),
             ...(was?.status ? { status: was.status } : {}),
@@ -953,26 +988,14 @@ function EventForm({
           All day
         </label>
         {backwards && <p style={styles.error}>It ends before it starts.</p>}
-        <div className="ev-form-row">
-          <Field label="Where">
-            <input
-              value={placeName}
-              onChange={(e) => setPlaceName(e.target.value)}
-              placeholder="Venue or place"
-              maxLength={200}
-              style={styles.input}
-            />
-          </Field>
-          <Field label="Address">
-            <input
-              value={street}
-              onChange={(e) => setStreet(e.target.value)}
-              placeholder="Street, town"
-              maxLength={500}
-              style={styles.input}
-            />
-          </Field>
-        </div>
+        <Field label="Where" group>
+          <PlaceField
+            value={place}
+            onChange={setPlace}
+            near={near}
+            placeholder="A venue, an address, a park"
+          />
+        </Field>
         <Field label="Link (tickets, stream, page)">
           <input
             value={url}
@@ -1227,13 +1250,6 @@ async function answer(
     { status, ...respondingTo(record.root, me) },
     { links: [{ rel: 'about', to: record.key }] },
   );
-}
-
-/** Where, in one line: the place's name, then its address */
-function placeLabel(place: CalendarEvent['place']): string {
-  if (!place) return '';
-  const { name, address } = place;
-  return [name, address?.street, address?.locality].filter(Boolean).join(', ');
 }
 
 /** The event as a file a calendar app opens */

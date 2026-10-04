@@ -10,4 +10,6 @@ interface ImportMetaEnv {
   readonly VITE_WEAVE_HOST?: string;
   /** What "Connect an agent" and "Add a bot" tell people to run, e.g. `npm run weave -- connect` in this repo */
   readonly VITE_WEAVE_CONNECT?: string;
+  /** A Photon server for finding places (`places.ts`); photon.komoot.io when unset */
+  readonly VITE_WEAVE_PLACES?: string;
 }

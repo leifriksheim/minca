@@ -140,6 +140,7 @@ export const listing = define({
   },
   permissions: ['moderate'],
   rules: authored,
+  topics: ['place.cells'],
 });
 export type Listing = BodyOf<typeof listing>;
 
