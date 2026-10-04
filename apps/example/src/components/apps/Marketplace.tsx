@@ -61,7 +61,7 @@ const withRequests = {
 
 type ListingRecord = QueryRecord<Listing, IncludedOf<typeof withRequests>>;
 type Request = ListingRecord['included']['requests'][number];
-type Answer = 'waiting' | 'accepted' | 'declined';
+type Answer = 'waiting' | 'accepted' | 'declined' | 'done';
 
 type View = 'browse' | 'selling' | 'buying';
 type Sort = 'new' | 'cheap' | 'dear' | 'near';
@@ -530,40 +530,58 @@ function Ask({ space, record }: { space: AppProps['space']; record: ListingRecor
 
   if (mine) {
     const state = answerTo(mine, record);
-    const said: Record<Answer, { title: string; text: string; tone: string }> = {
-      waiting: {
-        title: 'Request sent',
-        text: 'The seller will see it and answer here.',
-        tone: palette.surface.sunken,
-      },
-      accepted: {
-        title: "It's yours if you want it",
-        text: 'The seller accepted. Agree on pickup in the questions below, or in chat.',
-        tone: '#ecf8ef',
-      },
-      declined: {
-        title: 'The seller said no this time',
-        text: 'It may have gone to someone else.',
-        tone: palette.accent.dangerSoft,
-      },
+    const seller = <Person did={record.createdBy} style={{ fontWeight: 600, color: palette.ink.strong }} />;
+    const tone: Record<Answer, string> = {
+      waiting: palette.surface.sunken,
+      accepted: '#ecf8ef',
+      declined: palette.accent.dangerSoft,
+      done: '#ecf8ef',
     };
+    const said: Record<Answer, { title: ReactNode; text: ReactNode }> = {
+      waiting: { title: 'Request sent', text: <>{seller} will answer here.</> },
+      accepted: {
+        title: <>{seller} said yes</>,
+        text: 'Agree on when and where to pick it up in the comments below. Once you have it, say so here.',
+      },
+      declined: { title: <>{seller} said no this time</>, text: 'It may have gone to someone else.' },
+      done: { title: "It's yours 🎉", text: <>You got it from {seller}.</> },
+    };
+    const gotIt = () =>
+      void node.records.put(
+        space.id,
+        orderUpdate,
+        { status: 'delivered', ...respondingTo(record.createdBy ?? record.root, me) },
+        { links: [{ rel: 'about', to: mine.key }] },
+      );
     return (
-      <div style={{ ...ui.stack, gap: 6, padding: 14, borderRadius: 12, background: said[state].tone }}>
-        <strong style={{ fontSize: 14, color: palette.ink.strong }}>{said[state].title}</strong>
-        <span style={{ fontSize: 13, color: palette.ink.muted }}>{said[state].text}</span>
-        {mine.body.note && (
+      <div style={{ ...ui.stack, gap: 10, padding: 16, borderRadius: 12, background: tone[state] }}>
+        {state !== 'declined' && <Steps at={state === 'waiting' ? 0 : state === 'accepted' ? 1 : 2} />}
+        <strong style={{ fontSize: 15, color: palette.ink.strong }}>{said[state].title}</strong>
+        <span style={{ fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>{said[state].text}</span>
+        {mine.body.note && state === 'waiting' && (
           <span style={{ fontSize: 13, color: palette.ink.body, fontStyle: 'italic' }}>
             “{mine.body.note}”
           </span>
         )}
-        {space.writable && (
-          <button
-            onClick={() => void node.records.delete(space.id, mine.key)}
-            data-variant="quiet"
-            style={{ ...styles.smallButton, alignSelf: 'flex-start', marginTop: 4 }}
-          >
-            Withdraw request
-          </button>
+        {space.writable && state !== 'done' && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+            {state === 'accepted' && (
+              <button onClick={gotIt} style={{ ...styles.darkSmall, height: 36 }}>
+                I've got it
+              </button>
+            )}
+            <button
+              onClick={() => void node.records.delete(space.id, mine.key)}
+              data-variant="quiet"
+              style={{ ...styles.smallButton, height: 36 }}
+            >
+              {state === 'declined'
+                ? 'Remove request'
+                : state === 'accepted'
+                  ? "I don't want it after all"
+                  : 'Withdraw request'}
+            </button>
+          </div>
         )}
       </div>
     );
@@ -655,7 +673,7 @@ function Requests({ space, record }: { space: AppProps['space']; record: Listing
   const requests = [...record.included.requests].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (requests.length === 0) return null;
 
-  const reply = async (request: Request, status: 'accepted' | 'cancelled') => {
+  const reply = async (request: Request, status: 'accepted' | 'cancelled' | 'delivered') => {
     await node.records.put(
       space.id,
       orderUpdate,
@@ -666,7 +684,14 @@ function Requests({ space, record }: { space: AppProps['space']; record: Listing
     if (status === 'accepted' && (record.body.status ?? 'available') === 'available') {
       await node.records.update(space.id, record.key, { ...record.body, status: 'reserved' });
     }
+    if (status === 'delivered') await markSold();
   };
+  const markSold = () =>
+    record.body.status === 'sold'
+      ? Promise.resolve()
+      : node.records.update(space.id, record.key, { ...record.body, status: 'sold' });
+  const sellerSaidDone = (r: Request) =>
+    r.included.updates.some((u) => u.root === me && u.body.status === 'delivered');
 
   return (
     <section style={{ ...ui.stack, gap: 10 }}>
@@ -706,30 +731,51 @@ function Requests({ space, record }: { space: AppProps['space']; record: Listing
                   </p>
                 )}
               </div>
-              {state === 'waiting' && space.writable ? (
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button
-                    onClick={() => void reply(r, 'cancelled')}
-                    data-variant="quiet"
-                    style={styles.smallButton}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                {state === 'waiting' && space.writable ? (
+                  <>
+                    <button
+                      onClick={() => void reply(r, 'cancelled')}
+                      data-variant="quiet"
+                      style={styles.smallButton}
+                    >
+                      Decline
+                    </button>
+                    <button onClick={() => void reply(r, 'accepted')} style={styles.darkSmall}>
+                      Accept
+                    </button>
+                  </>
+                ) : state === 'accepted' && space.writable ? (
+                  <button onClick={() => void reply(r, 'delivered')} style={styles.darkSmall}>
+                    Handed over
+                  </button>
+                ) : state === 'done' &&
+                  !sellerSaidDone(r) &&
+                  record.body.status !== 'sold' &&
+                  space.writable ? (
+                  <>
+                    <span style={{ fontSize: 13, color: palette.accent.good }}>They have it</span>
+                    <button onClick={() => void markSold()} style={styles.darkSmall}>
+                      Mark as sold
+                    </button>
+                  </>
+                ) : (
+                  <span
+                    style={{
+                      ...styles.badge,
+                      color: state === 'declined' ? palette.ink.muted : palette.accent.good,
+                    }}
                   >
-                    Decline
-                  </button>
-                  <button onClick={() => void reply(r, 'accepted')} style={styles.darkSmall}>
-                    Accept
-                  </button>
-                </div>
-              ) : (
-                <span
-                  style={{
-                    ...styles.badge,
-                    flexShrink: 0,
-                    color: state === 'accepted' ? palette.accent.good : palette.ink.muted,
-                  }}
-                >
-                  {state === 'accepted' ? 'Accepted' : state === 'declined' ? 'Declined' : 'Waiting'}
-                </span>
-              )}
+                    {state === 'done'
+                      ? 'Handed over'
+                      : state === 'accepted'
+                        ? 'Accepted'
+                        : state === 'declined'
+                          ? 'Declined'
+                          : 'Waiting'}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}
@@ -926,16 +972,57 @@ const myRequest = (record: ListingRecord, me: string): Request | undefined =>
   record.included.requests.find((r) => (r.root ?? r.author) === me);
 
 /**
- * Where a request stands: the seller's latest answer to it. Anyone in the
- * space could write an update about someone's order, so only the seller's
- * count.
+ * Where a request stands. Anyone in the space could write an update about
+ * someone's order, so only the seller's and the buyer's own count: the
+ * seller's latest says yes or no, and after a yes either side saying it was
+ * handed over (`delivered`) finishes it. A seller who never comes back, a bot
+ * say, still leaves the buyer able to finish their side.
  */
 function answerTo(request: Request, record: ListingRecord): Answer {
-  const latest = request.included.updates
-    .filter((u) => u.root !== null && u.root === (record.createdBy ?? record.root))
+  const seller = record.createdBy ?? record.root;
+  const buyer = request.root ?? request.author;
+  const updates = request.included.updates.filter(
+    (u) => u.root !== null && (u.root === seller || u.root === buyer),
+  );
+  const latest = updates
+    .filter((u) => u.root === seller && u.body.status !== 'delivered')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   if (!latest) return 'waiting';
-  return latest.body.status === 'cancelled' || latest.body.status === 'refunded' ? 'declined' : 'accepted';
+  if (latest.body.status === 'cancelled' || latest.body.status === 'refunded') return 'declined';
+  return updates.some((u) => u.body.status === 'delivered') ? 'done' : 'accepted';
+}
+
+/** Asked, said yes, picked up: how far a request has come */
+function Steps({ at }: { at: number }) {
+  const steps = ['Asked', 'Accepted', 'Picked up'];
+  return (
+    <ol style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0, padding: 0, listStyle: 'none' }}>
+      {steps.map((step, i) => (
+        <li key={step} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          {i > 0 && (
+            <span
+              aria-hidden
+              style={{
+                width: 16,
+                height: 1.5,
+                background: i <= at ? palette.accent.good : palette.surface.lineStrong,
+              }}
+            />
+          )}
+          <span
+            aria-current={i === at ? 'step' : undefined}
+            style={{
+              fontWeight: i === at ? 600 : 500,
+              color: i <= at ? palette.accent.good : palette.ink.faint,
+            }}
+          >
+            {i < at || at === steps.length - 1 ? '✓ ' : ''}
+            {step}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 const isFree = (price: Money | undefined) => !price || Number(price.amount) === 0;
