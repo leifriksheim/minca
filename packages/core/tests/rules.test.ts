@@ -371,7 +371,7 @@ describe('rules: arriving in any order', () => {
     await hold(bob.node, space);
     const stranger = hub.transport('did:key:zstranger', space);
     stranger.on('connected', (peer: string) => {
-      const payload = { v: SYNC_PROTOCOL_VERSION, type: 'push-update', version: version };
+      const payload = { v: SYNC_PROTOCOL_VERSION, type: 'push-update', version };
       stranger.send(
         peer,
         new TextEncoder().encode(JSON.stringify({ type: 'sync', from: 'did:key:zstranger', payload })),

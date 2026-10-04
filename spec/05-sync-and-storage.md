@@ -254,9 +254,9 @@ whose `type` is not a string. It MUST NOT answer it.
 > a quiet partial sync.
 >
 > Version 5 came with the envelope of [02 §3.2](02-records.md): a version
-> signs its body's hash, not its body, so a version 4 peer would refuse every
-> version a version 5 peer sends. Version 6 renamed `push-update`'s
-> `expression` to `version`, as the spec now calls it.
+> signs its body's hash, not its body, so a peer speaking 4 would refuse every
+> version a peer speaking 5 sends. Protocol 6 renamed `push-update`'s
+> `expression` member to `version`.
 
 Ids below are version ids (strings, §2). Byte strings are `base64url`.
 

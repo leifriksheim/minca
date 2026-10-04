@@ -62,8 +62,9 @@ await applyBlueprint(node, space.id, proposal.key);
 - At most 10 collections per blueprint, none of them `sys.*`, none twice, and
   none with a `version`: the space decides that when it is applied
   (`checkBlueprint`).
-- A standard collection may be given by name (`"std.event"`) and is then
-  exactly the library's ([what a `std.*` name means](standard-library.md#what-a-std-name-means)).
+- Through `collections_propose`, a standard collection may be given by name
+  (`"std.event"`): `standardCollections` puts the library's definition in its
+  place, so it is exactly the library's ([what a `std.*` name means](standard-library.md#what-a-std-name-means)).
 - `copyBlueprint` proposes the same blueprint in another space, with `from`
   naming where it came from. People there decide for themselves.
 - The actions are `collections_propose`, `collections_proposals` and
@@ -170,7 +171,7 @@ anything. What a collection actually allows is worked out from its rules, as
 fixed sentences, so a person deciding whether to add a collection reads what
 every peer will enforce.
 
-`describe(definition)` returns, in this order:
+`describeCollection(definition)` returns, in this order:
 
 1. Who may add: "Anyone in the space can add a vote." / "Only … can add …".
 2. Who may change and remove — one sentence when `edit` and effective `delete`
@@ -319,8 +320,8 @@ loosen them past what an app relies on ("never looser", above).
 ## Planned: meaning-level hints
 
 A definition says what a record may hold and who may change it, not what it
-means to a screen. Screens derived from definitions (the blueprint review, apps
-without a screen of their own; [06](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)) have to guess
+means to a screen. Views derived from definitions (the blueprint review, an
+app's collection views, made apps without a screen of their own) have to guess
 which field is the title or that votes are shown as counts. The plan adds
 optional hints to a definition:
 
@@ -336,5 +337,4 @@ Like `x-choicesFrom`, hints are display only and never checked when
 validating, and [`compare`](#compatible-definitions) ignores them. They would go in a new
 top-level definition member rather than as schema keywords: unknown
 top-level members are ignored by today's peers, while an unknown schema
-keyword makes the definition invalid ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)). Added when a real agent-made app
-shows the derived screen falling short. _Open:_ the format.
+keyword makes the definition invalid ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)). Added when a derived view falls short. _Open:_ the format.

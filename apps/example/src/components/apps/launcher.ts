@@ -40,7 +40,7 @@ import {
   type AppNotify,
   type DraftCollection,
 } from '@weaveprotocol/core/schemas';
-import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE } from './screens';
+import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
 
 export interface LauncherApp {
   /** A built-in app, by its id: `chat`. A made app leaves it out and says the rest. */
@@ -102,6 +102,9 @@ export function checkLauncherApp(body: LauncherApp): string | null {
   if (!body.title?.trim()) return 'An app needs a title';
   const names = new Set(body.collections ?? []);
   if (names.size === 0) return 'An app needs the collections it shows';
+  // Its screen writes these as whoever looks: the launcher's own would let it add apps.
+  const kept = [...names].find(offLimits);
+  if (kept) return `${kept} is the space's own, not an app's to show`;
   if (body.screen !== undefined) {
     const bytes = new TextEncoder().encode(body.screen).length;
     if (bytes > MAX_SCREEN_BYTES)
@@ -154,11 +157,18 @@ export interface Launcher {
   readonly proposed: ReadonlyArray<NodeRecord<LauncherApp>>;
 }
 
-/** Sorts a space's launcher records into what is on it, in order, and what is proposed */
+/**
+ * Sorts a space's launcher records into what is on it, in order, and what is
+ * proposed. `needsOf` names the collections a built-in app needs, by its id;
+ * a built-in this app doesn't know is left out. A built-in counts only when
+ * someone who may define collections put it there and its collections are
+ * here; anything else naming one is ignored, not proposed.
+ */
 export function sortLauncher(
   records: ReadonlyArray<NodeRecord<LauncherApp>>,
   collections: ReadonlyArray<NodeCollection>,
   access: SpaceAccess | null | undefined,
+  needsOf: (id: string) => ReadonlyArray<string> | undefined,
 ): Launcher {
   const here = defined(collections);
   const placed: NodeRecord<LauncherApp>[] = [];
@@ -168,9 +178,11 @@ export function sortLauncher(
     const body = record.body;
     if (!body || record.deleted || checkLauncherApp(body)) continue;
     if (body.builtIn !== undefined) {
+      const needs = needsOf(body.builtIn);
+      const stands = needs !== undefined && vouchedFor(record, access) && needs.every((n) => here.has(n));
       // Two people adding the same app at once: the first one placed counts.
-      if (!builtIns.has(body.builtIn)) placed.push(record);
-      builtIns.add(body.builtIn);
+      if (stands && !builtIns.has(body.builtIn)) placed.push(record);
+      if (stands) builtIns.add(body.builtIn);
       continue;
     }
     const stands =
@@ -182,9 +194,20 @@ export function sortLauncher(
   return { placed, proposed };
 }
 
-/** A position after the last app on the launcher */
-const atEnd = (placed: ReadonlyArray<NodeRecord<LauncherApp>>) =>
-  positionBetween(placed.at(-1)?.body?.position ?? null);
+/** A position after every app on the launcher */
+function atEnd(placed: ReadonlyArray<NodeRecord<LauncherApp>>): string {
+  const last = placed.map((record) => record.body?.position ?? '').reduce((a, b) => (b > a ? b : a), '');
+  return positionBetween(last || null);
+}
+
+/** The made app on the launcher a proposal updates, if it still is one */
+export const updated = (
+  proposal: NodeRecord<LauncherApp>,
+  placed: ReadonlyArray<NodeRecord<LauncherApp>>,
+): NodeRecord<LauncherApp> | undefined =>
+  proposal.body?.updates === undefined
+    ? undefined
+    : placed.find((record) => record.key === proposal.body?.updates && record.body?.builtIn === undefined);
 
 /**
  * What agents read to propose an app here, written in the space as a guide
@@ -207,7 +230,8 @@ writes the record again as theirs. A launcher.app record that person did not wri
 never runs. To change an app that is already added, write a new launcher.app record with "updates": the key of the one
 it replaces, and, if its collections change, a new blueprint whose "updates" names the old blueprint.
 
-Removing an app deletes its launcher.app record; its records stay.
+Removing an app deletes its launcher.app record; its records stay. A made app may not show launcher.app,
+std.blueprint, std.guide or sys.* collections.
 
 How a screen works:
 
@@ -304,7 +328,8 @@ export async function addMade(
   if (missing.length)
     throw new Error(`The space has no ${missing.join(' or ')}, and this app proposes no collections to add`);
   const rest = settled(body);
-  const target = body.updates ? placed.find((record) => record.key === body.updates) : undefined;
+  // A change to an app no longer on the launcher, or to a built-in one, is added as an app of its own.
+  const target = updated(proposal, placed);
   if (target) {
     await node.records.update<LauncherApp>(
       spaceId,
@@ -319,10 +344,27 @@ export async function addMade(
   return proposal.key;
 }
 
-/** Takes an app off the launcher. Its collections and records stay. */
-export const removeApp = (node: P2PNode, spaceId: string, key: string) => node.records.delete(spaceId, key);
+/**
+ * Takes an app off the launcher. Its collections and records stay. For a
+ * built-in app, every record naming it goes, so one two people added at once
+ * doesn't come back.
+ */
+export async function removeApp(
+  node: P2PNode,
+  spaceId: string,
+  record: NodeRecord<LauncherApp>,
+  records: ReadonlyArray<NodeRecord<LauncherApp>>,
+): Promise<void> {
+  const id = record.body?.builtIn;
+  const all = id === undefined ? [record] : records.filter((one) => one.body?.builtIn === id && !one.deleted);
+  for (const one of all) await node.records.delete(spaceId, one.key);
+}
 
-/** Moves an app on the launcher to sit at `to` among the others */
+/**
+ * Moves an app on the launcher to sit at `to` among the others. Usually only
+ * it is written. Records with no position, or two with the same one, get new
+ * positions too, so the order shown is the order kept.
+ */
 export async function moveApp(
   node: P2PNode,
   spaceId: string,
@@ -332,13 +374,24 @@ export async function moveApp(
 ): Promise<void> {
   const moving = placed.find((record) => record.key === key);
   if (!moving?.body) return;
-  const others = placed.filter((record) => record.key !== key);
-  const at = Math.max(0, Math.min(to, others.length));
-  const before = others[at - 1]?.body?.position ?? null;
-  const after = others[at]?.body?.position ?? null;
-  // Records written before positions sort last; giving the neighbours none leaves room at the end.
-  const position = positionBetween(before, after && after > (before ?? '') ? after : null);
-  await node.records.update<LauncherApp>(spaceId, key, { ...moving.body, position });
+  const order = placed.filter((record) => record.key !== key);
+  order.splice(Math.max(0, Math.min(to, order.length)), 0, moving);
+  let before: string | null = null;
+  for (const [at, record] of order.entries()) {
+    const own = record.body?.position;
+    // A record already after the one before it keeps its place.
+    if (record !== moving && own !== undefined && (before === null || own > before)) {
+      before = own;
+      continue;
+    }
+    const next = order[at + 1];
+    const nextOwn = next && next !== moving ? next.body?.position : undefined;
+    const after = nextOwn !== undefined && (before === null || nextOwn > before) ? nextOwn : null;
+    const position = positionBetween(before, after);
+    if (record.body)
+      await node.records.update<LauncherApp>(spaceId, record.key, { ...record.body, position });
+    before = position;
+  }
 }
 
 /** A collection as the space holds it, as a blueprint proposes it */

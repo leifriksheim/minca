@@ -280,7 +280,8 @@ await node.spaces.setMember(space.id, did, 'host');
 - `*` alone is every permission. `*/*` is every permission any collection
   declares, so a moderator can moderate every app in the space.
 - Space permissions include `invite`, `define` (add or change collections)
-  and `manage`.
+  and `manage`. Defining also needs a note that grants `collection/define`,
+  which an agent's doesn't (spec 01 §8).
 - You can only change people and roles ranked below your own.
 
 ## Other options

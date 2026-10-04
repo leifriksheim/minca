@@ -1515,7 +1515,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /** Making and joining spaces for two needs a note good for every space — whole-account access. */
   function requireEverywhere(what: string): void {
-    if (!current.payload.att.some((capability) => capability.with === '*')) {
+    // As a knock needs: `account/write` for every space (spec 01 §8, 07).
+    if (!noteGrants(current.encoded, { with: '*', can: ACCOUNT_ABILITY })) {
       throw new Error(
         `${what} makes or joins a space, which needs access to your whole account. Connect to your account home again, and ask for it.`,
       );
@@ -1796,9 +1797,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   >();
   const DAY_MS = 24 * 3600 * 1000;
 
+  /** Doors live in the contacts space: a note must grant `account/write` there, as every peer checks */
+  const doorsAllowed = () =>
+    contactsSpaceId !== null &&
+    noteGrants(current.encoded, { with: `space:${contactsSpaceId}`, can: ACCOUNT_ABILITY });
+
   function requireContactKey(what: string): Uint8Array {
     // Doors are the account's: a key whose note doesn't grant `account/write` never opens one or knocks.
-    if (narrowNote)
+    if (!doorsAllowed())
       throw new Error(`This key's note doesn't let it use doors. ${what} is the person's to do.`);
     if (!config.contactKey)
       throw new Error(
@@ -2049,7 +2055,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   const doors = Object.freeze<NodeDoors>({
     async list() {
-      if (!config.contactKey || narrowNote) return [];
+      if (!config.contactKey || !doorsAllowed()) return [];
       return Promise.all((await doorRecords()).map(doorView));
     },
 
@@ -2314,7 +2320,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (note.payload.aud !== agentDid) throw new Error('That note was made out to a different key.');
     if (note.payload.iss !== config.signer.did) throw new Error('That note is from a different account.');
 
-    // The spaces its note names; `*` is every space, which a home never gives an agent but a note could say.
+    // The spaces its note names; `*` is every space, which a home gives an agent granted the whole account.
+    // What it may do there is its note's to say; this node also refuses, by the label, what needs a person.
     const all = note.payload.att.some((capability) => capability.with === '*');
     const named = new Set(
       note.payload.att.filter((c) => c.with.startsWith('space:')).map((c) => c.with.slice('space:'.length)),

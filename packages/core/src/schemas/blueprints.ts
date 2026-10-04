@@ -321,15 +321,15 @@ export async function applyBlueprint(node: P2PNode, spaceId: string, key: string
   const record = await node.records.get<Blueprint>(spaceId, key);
   if (!record?.body || record.collection !== blueprint.name)
     throw new Error(`No blueprint ${key} in this space`);
-  // Knowing std.blueprint itself means its own rules hold from now on: only its proposer edits it.
   const known = await node.collections.list(spaceId);
-  if (!known.some((c) => c.name === blueprint.name && c.version !== null))
-    await node.collections.define(spaceId, blueprint);
   const review = reviewBlueprint(record.body, known);
   if (review.problem) throw new Error(review.problem);
   const blueprints = await node.records.list<Blueprint>(spaceId, { collection: blueprint.name });
   if (supersededBlueprints(blueprints, known).has(key))
     throw new Error('A newer version of this blueprint has been applied; applying this one would undo it');
+  // Knowing std.blueprint itself means its own rules hold from now on: only its proposer edits it.
+  if (!known.some((c) => c.name === blueprint.name && c.version !== null))
+    await node.collections.define(spaceId, blueprint);
   for (const one of review.collections) {
     if (one.status === 'same') continue;
     await node.collections.define(spaceId, one.definition);

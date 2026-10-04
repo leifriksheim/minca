@@ -12,8 +12,8 @@
  * - `account/write`: the account's own spaces (its list of spaces, a
  *   carrier's passes) and its doors.
  *
- * A person's own sessions get `*`. A key the account trusts less — an agent,
- * a borrowed device — gets `record/*`, and proposes what it can't do.
+ * A person's own sessions, and apps given write, get `*`. A key the account
+ * trusts less, such as an agent's, gets `record/*`, and proposes what it can't do.
  */
 import { isCapabilitySubset, parseUCAN, type Capability } from './ucan.js';
 

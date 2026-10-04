@@ -100,15 +100,25 @@ function entriesOf(placed: ReadonlyArray<NodeRecord<LauncherApp>>): ReadonlyArra
   });
 }
 
-/** A space's apps: those on its launcher, in order, the built-in ones it could add, and proposals waiting */
+/** The collections a built-in app needs, by its id; undefined for one this app doesn't know */
+export const needsOf = (id: string): ReadonlyArray<string> | undefined =>
+  APPS.find((app) => app.id === id)?.needs.map((need) => need.name);
+
+/**
+ * A space's apps: those on its launcher, in order, the built-in ones it could
+ * add, and proposals waiting. Until the space's access is known nothing can be
+ * vouched for, so `loading` says to wait rather than show apps as gone.
+ */
 export function useSpaceApps(space: SpaceSummary, collections: ReadonlyArray<NodeCollection>) {
   const records = useLauncherRecords(space.id);
   const access = useAccess(space.id);
-  const { placed, proposed } = sortLauncher(records, collections, access);
+  const { placed, proposed } = sortLauncher(records, collections, access, needsOf);
   return {
     ready: entriesOf(placed),
     placed,
+    records,
     addable: APPS.filter((app) => !placed.some((record) => record.body?.builtIn === app.id)),
-    proposed,
+    proposed: access ? proposed : [],
+    loading: !access,
   };
 }

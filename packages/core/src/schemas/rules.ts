@@ -486,8 +486,8 @@ export async function rulesFor(
   return records.flatMap((record: NodeRecord) => {
     const maker = record.createdBy;
     const body = ruleOf(record);
-    // An agent may suggest a rule; it runs once the person saves it themselves.
-    if (!record.verified || record.viaAgent || !maker || !body || body.paused) return [];
+    // A key given records only, an agent's, may suggest a rule; it runs once the person saves it themselves.
+    if (!record.verified || record.recordsOnly || !maker || !body || body.paused) return [];
     const runs =
       body.by === undefined
         ? maker === account
@@ -499,7 +499,7 @@ export async function rulesFor(
 /** How many rules in a space an agent wrote for `account`, waiting for the person to save them */
 export async function suggestedRules(node: P2PNode, space: string, account: string): Promise<number> {
   const records = await node.records.list(space, { collection: rule.name });
-  return records.filter((record) => record.createdBy === account && record.viaAgent).length;
+  return records.filter((record) => record.createdBy === account && record.recordsOnly).length;
 }
 
 /** The records each rule has run for, by rule key, and the records rules wrote */
@@ -579,7 +579,7 @@ export async function runRules(
       )
         continue;
       // What the runner's agent, or the bot, wrote itself never sets a rule off: an agent asked to act can't set itself off.
-      if (record.createdBy === account && (record.viaAgent || options.bot)) continue;
+      if (record.createdBy === account && (record.recordsOnly || options.bot)) continue;
       if (when.from && !holdsOneOf(access, record.createdBy ?? '', when.from)) continue;
       busy.add(claim);
       try {

@@ -116,7 +116,8 @@ Each database:
 - has object store `kv`: out-of-line string keys, values `ArrayBuffer`s (the
   entry bytes). `list(prefix)` is a key-range cursor over
   `[prefix, prefix + "￿"]`.
-- has object store `expressions`: key path `id`, no indexes (databases made
+- has object store `expressions` (named before versions were called that;
+  kept so existing databases open): key path `id`, no indexes (databases made
   before may have `collection`, `author` and `createdAt` ones, which nothing
   reads). Values are the version objects.
 - writes `batch` as one `readwrite` transaction over `kv`. Bodies are written

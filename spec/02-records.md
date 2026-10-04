@@ -114,7 +114,7 @@ _Source: `packages/core/src/utils/hash.ts` (`cidFromBytes`, `cidDigest`, `cidOfD
 
 ---
 
-## 3. Versions
+## 3. The signed version
 
 ### 3.1 Fields
 
@@ -244,7 +244,7 @@ _Source: `packages/core/src/types.ts` (`Version`, `UnsignedVersion`, `Envelope`,
 
 ---
 
-## 4. Versions
+## 4. A record's versions
 
 ### 4.1 Keys
 
@@ -637,8 +637,10 @@ history. In a private space its body is encrypted like any other record's.
 
 A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
-has no schema, no rules and no topics. The same holds for a definition version
-that is a delete, or whose key does not match its `name`.
+has no schema, no rules and no topics. The same holds for a version of a
+definition record that is a delete, or whose key does not match its `name`.
+Members not listed above are ignored: a definition stored with the `screen`
+and `network` of earlier versions of this spec is judged without them.
 
 Example (the standard `std.vote`, as stored):
 
@@ -717,7 +719,7 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
 
-### 6.3 Versions of a definition
+### 6.3 A definition's version number
 
 A definition's `version` is a whole number from 1. Records do not name the
 definition version they were written under; a record is judged by the

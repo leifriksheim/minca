@@ -21,6 +21,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const isObject = isRecord;
 
+/**
+ * Collections no screen may use: the space's own, and the launcher's, through
+ * which a screen running as someone who may define collections could add apps.
+ */
+export const offLimits = (name: string): boolean =>
+  name.startsWith('sys.') || ['launcher.app', 'std.blueprint', 'std.guide'].includes(name);
+
 /** The largest screen an app may carry, in bytes of UTF-8: it travels with every copy of its record */
 export const MAX_SCREEN_BYTES = 48 * 1024;
 
@@ -267,7 +274,7 @@ export function createScreenBridge(params: {
   readonly port: MessagePort;
 }): ScreenBridge {
   const { node, spaceId, port } = params;
-  const allowed = new Set(params.collections);
+  const allowed = new Set(params.collections.filter((name) => !offLimits(name)));
   let closed = false;
 
   const names = [...allowed].map((name) => `"${name}"`).join(', ');

@@ -4,7 +4,7 @@ import { useAccount, useConnection, useNode } from '@weaveprotocol/core/react';
 import { MAX_PROPOSALS, watchNotifications, type NotifyProposal, type NotifyView } from '@weaveprotocol/core';
 import type { AppNotify } from '@weaveprotocol/core/schemas';
 import { APPS } from './components/apps';
-import { isForMe, madeNotify } from './components/apps/entries';
+import { isForMe, madeNotify, needsOf } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@weave/app-shared/action';
 import { addAlert } from './alerts';
@@ -133,7 +133,7 @@ function useEverything(): ReadonlyArray<NotifyProposal> {
           node.collections.list(space.id),
           node.spaces.access(space.id),
         ]).catch(() => [[], [], null] as const);
-        for (const record of sortLauncher(records, collections, access).placed)
+        for (const record of sortLauncher(records, collections, access, needsOf).placed)
           if (record.body && record.body.builtIn === undefined) made.push(record.body);
       }
       if (live) setOffers(gather(made));

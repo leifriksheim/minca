@@ -65,7 +65,7 @@ _Source: `packages/core/src/node/node.ts`, `packages/core/src/node/types.ts`. Te
 ### 1.2 The session note, and renewing it
 
 The root key never signs records. The node asks its signer for one note that
-lets the session key write everywhere the account can:
+lets the session key do everything the account can, everywhere:
 
 ```json
 { "aud": "<sessionDid>", "att": [{ "with": "*", "can": "*" }], "exp": <now + ttl> }
@@ -116,7 +116,7 @@ When a node joins, leaves and reconciles, which spaces it hides from its own
 list, and when it publishes the account's profile are the node's own; the
 reference node is in [the node](../packages/core/docs/node.md#following-the-account).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/agents.test.ts` ("it never writes the account itself")._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/agents.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
 
 ## 2. The account home protocol
 
@@ -346,7 +346,7 @@ _Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSig
 
 |                       | `scope: spaces`                                                    | `scope: account`                        |
 | --------------------- | ------------------------------------------------------------------ | --------------------------------------- |
-| Note                  | `space:<id>` per granted space                                     | `*`                                     |
+| Note                  | `with: "space:<id>"` per granted space                             | `with: "*"`                             |
 | Account key           | no                                                                 | yes                                     |
 | Sees                  | the granted spaces                                                 | every space; the account registry       |
 | Makes or joins spaces | the home makes them at grant time                                  | itself; they land in the account's list |
@@ -520,7 +520,8 @@ _Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `
 ### 3.1 Agents' notes
 
 An agent is not an identity. It writes for a person under a note from their
-account, like an app. The note grants records only (`record/*`), so every
+account, like an app. The note grants records only (`record/*`, or
+`record/read` to read), so every
 peer refuses from it what a records-only note can't do ([01](01-identity.md)
 §8): it never changes a space's collections or who may do what, and never
 writes in the account's own spaces. It also carries the agent fact
@@ -529,7 +530,7 @@ writes in the account's own spaces. It also carries the agent fact
 may define them (the library's blueprints,
 [blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
 
-Recipients additionally ignore, which is not protocol:
+Not protocol, but recipients also ignore:
 
 - a contact request (`std.contact-request`) written under a records-only
   note: it is never opened ([contacts](../packages/core/docs/contacts.md));
@@ -543,7 +544,7 @@ key in its grant (§2.5), so the contact list is within its note to read. A home
 MUST NOT give an agent the contact key: with it, an agent could open contact
 requests and knocks on the account's doors ([07](07-doors.md)).
 
-_Source: `packages/core/src/session/connect.ts` (`grantCapabilities`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/agents.test.ts` ("a definition an agent signs by hand is ignored by every peer", "what counts is what the note grants, not whether it says agent", "it never writes the account itself"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
+_Source: `packages/core/src/session/connect.ts` (`grantCapabilities`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/agents.test.ts` ("a definition an agent signs by hand is ignored by every peer", "what counts is what the note grants, not whether it says agent", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
 
 ### 3.2 Connecting an agent with a code
 

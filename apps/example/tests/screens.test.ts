@@ -154,7 +154,8 @@ describe('screens', () => {
     const bridge = createScreenBridge({
       node: bob.node,
       spaceId: space,
-      collections: ['app.chess.game'],
+      // Handed the launcher's own collection too, which no screen may use.
+      collections: ['app.chess.game', 'launcher.app'],
       port: channel.port1,
     });
     const Answer = z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.string().optional() });
@@ -175,6 +176,8 @@ describe('screens', () => {
       const secret = await call('list', 'app.secret');
       assert.equal(secret.ok, false);
       assert.match(secret.error!, /can't use/);
+      const launcher = await call('list', 'launcher.app');
+      assert.equal(launcher.ok, false, "the launcher's own collection is off limits");
 
       const game = await call('put', 'app.chess.game', { white: 'bob' });
       assert.equal(game.ok, true);

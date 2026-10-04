@@ -29,14 +29,18 @@ const trip = {
   schema: { type: 'object', properties: { when: { type: 'string' } }, required: ['when'] },
 } as const;
 
-/** The space's launcher as this node sees it */
+/** The built-in apps these tests know, and the collections each needs */
+const NEEDS: Readonly<Record<string, ReadonlyArray<string>>> = { chat: [message.name], polls: [] };
+const needsOf = (id: string) => NEEDS[id];
+
+/** The space's launcher as this node sees it, and every record behind it */
 async function launcherOf(node: P2PNode, space: string) {
   const [records, collections, access] = await Promise.all([
     node.records.list<LauncherApp>(space, { collection: launcherApp.name }),
     node.collections.list(space),
     node.spaces.access(space),
   ]);
-  return sortLauncher(records, collections, access);
+  return { ...sortLauncher(records, collections, access, needsOf), records };
 }
 
 const titles = (records: ReadonlyArray<NodeRecord<LauncherApp>>) =>
@@ -93,6 +97,7 @@ describe('the launcher', () => {
 
   test('adding applies the blueprint it points at, and a change goes into the app it updates, in its place', async () => {
     const { alice, space } = await setup();
+    await alice.node.collections.define(space, message);
     await placeBuiltIn(alice.node, space, 'chat', []);
     const plan = await proposeCollections(alice.node, space, { title: 'Carpool', collections: [trip] });
     const first = await alice.node.records.put(
@@ -147,8 +152,8 @@ describe('the launcher', () => {
     await alice.node.collections.define(space, message);
     await placeBuiltIn(alice.node, space, 'chat', []);
     const said = await alice.node.records.put(space, message.name, { text: 'Bring chalk' });
-    const [chat] = (await launcherOf(alice.node, space)).placed;
-    await removeApp(alice.node, space, chat!.key);
+    const before = await launcherOf(alice.node, space);
+    await removeApp(alice.node, space, before.placed[0]!, before.records);
 
     assert.deepEqual((await launcherOf(alice.node, space)).placed, []);
     assert.ok((await alice.node.collections.list(space)).some((c) => c.name === message.name));
@@ -157,6 +162,101 @@ describe('the launcher', () => {
       'Bring chalk',
     );
     await waitFor(async () => (await launcherOf(bob.node, space)).placed.length === 0, 'Bob to see it gone');
+  });
+
+  test('a built-in app counts only when someone who may define put it there, and its collections are here', async () => {
+    const { alice, bob, space } = await setup();
+    await prepareLauncher(alice.node, space);
+    const agent = await agentOf(alice, [space]);
+    // An agent naming one: ignored, not proposed. So is one whose collections the space lacks.
+    await agent.records.put(space, launcherApp, { builtIn: 'polls', position: 'a' });
+    await alice.node.records.put(space, launcherApp, { builtIn: 'chat', position: 'b' });
+    let launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(launcher.placed, []);
+    assert.deepEqual(launcher.proposed, []);
+    // Once chat's collection is here it counts; the agent's polls still don't.
+    await alice.node.collections.define(space, message);
+    launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(titles(launcher.placed), ['chat']);
+
+    // Two people adding it at once: one shows, and taking it off takes both.
+    await bob.node.collections.define(space, message).catch(() => {});
+    await waitFor(async () => (await launcherOf(bob.node, space)).placed.length === 1, 'chat to reach Bob');
+    await bob.node.records.put(space, launcherApp, { builtIn: 'chat', position: 'c' });
+    await waitFor(
+      async () =>
+        (await launcherOf(alice.node, space)).records.filter((r) => r.body?.builtIn === 'chat').length === 2,
+      "Bob's chat to reach Alice",
+    );
+    launcher = await launcherOf(alice.node, space);
+    assert.equal(launcher.placed.length, 1);
+    await removeApp(alice.node, space, launcher.placed[0]!, launcher.records);
+    assert.deepEqual((await launcherOf(alice.node, space)).placed, []);
+  });
+
+  test('moving puts an app where it is shown, past apps with no position or the same one', async () => {
+    const { alice, space } = await setup();
+    await prepareLauncher(alice.node, space);
+    await alice.node.collections.define(space, trip);
+    const put = (title: string, position?: string) =>
+      alice.node.records.put(space, launcherApp, {
+        title,
+        collections: ['carpool.trip'],
+        ...(position ? { position } : {}),
+      });
+    await put('A', 'b');
+    await put('B', 'b');
+    await put('C');
+    const d = await put('D', 'c');
+    let launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(titles(launcher.placed).sort(), ['A', 'B', 'C', 'D']);
+    await moveApp(alice.node, space, launcher.placed, d.key, launcher.placed.length - 1);
+    launcher = await launcherOf(alice.node, space);
+    assert.equal(titles(launcher.placed).at(-1), 'D', 'last, past the one with no position');
+    const order = titles(launcher.placed);
+    await moveApp(alice.node, space, launcher.placed, launcher.placed[1]!.key, 0);
+    launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(titles(launcher.placed), [order[1], order[0], ...order.slice(2)]);
+    const positions = launcher.placed.map((r) => r.body?.position ?? '');
+    assert.deepEqual([...positions].sort(), positions, 'every position sorts in the order shown');
+    assert.equal(new Set(positions).size, positions.length, 'no two the same');
+  });
+
+  test('a change may update a made app, never a built-in one, and someone without define only proposes', async () => {
+    const { alice, bob, space } = await setup();
+    await alice.node.collections.define(space, message);
+    await placeBuiltIn(alice.node, space, 'chat', []);
+    await alice.node.collections.define(space, trip);
+    let launcher = await launcherOf(alice.node, space);
+    const chat = launcher.placed[0]!;
+    const takeover = await alice.node.records.put(space, launcherApp, {
+      title: 'Not chat',
+      collections: ['carpool.trip'],
+      updates: chat.key,
+    });
+    launcher = await launcherOf(alice.node, space);
+    const proposal = launcher.proposed.find((r) => r.key === takeover.key)!;
+    assert.equal(
+      await addMade(alice.node, space, proposal, launcher.placed),
+      takeover.key,
+      'added as its own',
+    );
+    launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(titles(launcher.placed), ['chat', 'Not chat']);
+
+    // Bob loses define: what he writes now stays a proposal.
+    await alice.node.spaces.putRole(space, { name: 'guest', title: 'Guest', rank: 1, permissions: [] });
+    await alice.node.spaces.setMember(space, bob.node.did, 'guest');
+    await waitFor(
+      async () => (await bob.node.spaces.access(space)).role?.name === 'guest',
+      'Bob to be a guest',
+    );
+    const his = await bob.node.records.put(space, launcherApp, {
+      title: 'Rides',
+      collections: ['carpool.trip'],
+    });
+    await waitFor(async () => (await alice.node.records.get(space, his.key)) !== null, "Bob's app");
+    assert.ok((await launcherOf(alice.node, space)).proposed.some((r) => r.key === his.key));
   });
 
   test('the guide agents read is in the space, on the collections it is about', async () => {
@@ -195,6 +295,9 @@ describe('the launcher', () => {
       /not one of its collections/,
     );
     assert.match(checkLauncherApp({ ...app, network: ['https://api.example.com'] }) ?? '', /no screen/);
+    // The launcher's own collections: a screen writing them as someone who may define could add apps.
+    for (const own of ['launcher.app', 'std.blueprint', 'std.guide', 'sys.role'])
+      assert.match(checkLauncherApp({ ...app, collections: ['carpool.trip', own] }) ?? '', /space's own/);
     assert.match(checkLauncherApp({ ...app, screen: 'x'.repeat(49 * 1024) }) ?? '', /at most 48 KB/);
     // Reactions are standard, so another app's records of them are the same records.
     assert.equal(checkLauncherApp({ ...app, collections: ['carpool.trip', reaction.name] }), null);

@@ -44,8 +44,9 @@ change without touching this spec:
 - **Collections proposed for a space** (`std.blueprint`), their review, and
   guides to how a space's collections are used (`std.guide`)
   ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
-  Apps with screens of their own are an app's convention: the example app's
-  launcher (`apps/example/src/components/apps/launcher.ts`).
+  Apps with screens of their own are an app's convention
+  ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md#apps-with-a-screen-of-their-own);
+  the example app's launcher, `apps/example/src/components/apps/launcher.ts`).
 - **Contacts**: the contact list, contact requests and how they are sealed
   ([contacts](../packages/core/docs/contacts.md)).
 - **Direct messages**, sealed to members' keys ([direct messages](../packages/core/docs/direct-messages.md)).

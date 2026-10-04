@@ -396,8 +396,8 @@ only optional fields and link roles: `std.attachment` a `blob`; `std.task`
 first topics ([spec 02 §8](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)); `std.vote` `choices` (every
 choice, most preferred first, with `choice` the first of them); `std.proposal`
 `quorum`, for `std.decision`. A space that
-holds an earlier definition keeps it until someone adds an app that needs the
-new one, which shows as a change. One of them is not additive in the sense of
+holds an earlier definition keeps it until someone applies a blueprint that
+carries the new one, which its review shows as a change. One of them is not additive in the sense of
 [spec 02 §6.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md): `std.vote`'s `about` may now also point at a `std.proposal`, so an app
 that reads votes may meet one on something that is not a poll.
 

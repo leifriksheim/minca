@@ -282,9 +282,10 @@ Which of the knocks that pass these checks a client offers the person
 >   `from` before anyone joins anything, as a record's does. Binding `door`
 >   stops an owner re-sealing someone's knock to another door as if sent there.
 > - **Authority (6):** knocking makes a space and hands out its invite, so it
->   needs what `contacts.ask` needs: a note for the whole account. Every
->   connected app holds a root-signed note; one given a single space, or only
->   read access, must not be able to knock as the account.
+>   needs what `contacts.ask` needs: a note that grants `account/write` for
+>   every space. Every connected app holds a root-signed note; one given a
+>   single space, only records, or only read access, must not be able to knock
+>   as the account.
 > - **Time (4):** notes are judged when a knock was signed, since knocks are
 >   read days later, long after an hour-long session note ran out. But `at` is
 >   the signer's word. Tying it to when the relay took the knock, a time the
@@ -322,7 +323,8 @@ account home MUST NOT give an agent the contact key
   address can hold; the reserve keeps every door able to take a knock or two
   when the relay is full; the TTL can't be raised by clients. Both budgets are
   weaker than that today (see the known defect in §5).
-- **Authority.** Only a note for the whole account, to write, can knock (§6).
+- **Authority.** Only a note that grants `{ with: "*", can: "account/write" }`
+  can knock (§6).
   A note that ran out can't be used by backdating (§6). _Known limitation:_ a
   note that was **revoked** but hasn't run out yet (an app disconnected at the
   home, whose note lasts up to its grant's days) can still knock, because the

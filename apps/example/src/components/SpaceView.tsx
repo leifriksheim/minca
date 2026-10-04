@@ -109,8 +109,9 @@ export function SpaceView({
   const account = useAccount();
   const node = useNode();
   const [view, setView] = useState<View>({ kind: 'apps' });
-  // The app being dragged to a new place in the sidebar, by its launcher record
+  // The app being dragged to a new place in the sidebar, by its launcher record, and why a move failed
   const [dragging, setDragging] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [place, setPlace] = useState<Place>({ collection: null, key: null });
   const [creating, setCreating] = useState(false);
   const [everyApp, setEveryApp] = useState(false);
@@ -187,7 +188,10 @@ export function SpaceView({
     setDragging(null);
     if (!key || key === target.record.key) return;
     const to = apps.placed.findIndex((record) => record.key === target.record.key);
-    void moveApp(node, space.id, apps.placed, key, to).catch(() => {});
+    setMoveError(null);
+    moveApp(node, space.id, apps.placed, key, to).catch((error: unknown) =>
+      setMoveError(error instanceof Error ? error.message : String(error)),
+    );
   };
   const title =
     open?.title ??
@@ -255,6 +259,11 @@ export function SpaceView({
                     : {})}
                 />
               ))}
+              {moveError && (
+                <p role="alert" style={{ ...styles.error, padding: '2px 8px', fontSize: 12 }}>
+                  {moveError}
+                </p>
+              )}
               {folds && (
                 <SideItem
                   icon={
@@ -463,7 +472,7 @@ export function SpaceView({
                   onOpen={openRecord}
                 />
               )}
-              {view.kind === 'app' && !open && (
+              {view.kind === 'app' && !open && !apps.loading && (
                 <p style={styles.emptyState}>This app isn't in the space any more.</p>
               )}
               {view.kind === 'more' && (
@@ -704,6 +713,8 @@ function SideItem({
             draggable: true,
             onDragStart: (event: DragEvent) => {
               event.dataTransfer.effectAllowed = 'move';
+              // Some browsers start no drag without data.
+              event.dataTransfer.setData('text/plain', label);
               drag.onStart();
             },
             onDragEnd: () => {

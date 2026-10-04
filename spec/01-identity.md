@@ -332,7 +332,7 @@ A node signs records with a session key (§6) under a note from the root
 absent, or `[{"weave":"agent"}]` for an agent's own node (§8.1). Every record the
 session key signs carries that leaf token, encoded, as its `proof`
 ([02 — Records](02-records.md)). Peers check only that the note verifies and
-covers what each record needs (§7.4–§7.6); which capabilities it grants, how
+covers what each record needs (§7.4–§7.6, §8); which capabilities it grants, how
 long it lasts and when it is renewed are the node's choice
 ([Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes),
 [06](06-nodes-and-sessions.md)).
@@ -626,12 +626,12 @@ coverage (§7.6) against what each version needs. The protocol never asks what
 kind of thing holds a key: a person's session, an app, an agent and a borrowed
 device are told apart only by what their notes grant.
 
-| A version in space `S`…                                                                                   | needs `{ "with": "space:S", "can": … }` |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| any record                                                                                                | `record/write`                          |
-| and in `sys.collection`                                                                                   | also `collection/define`                |
-| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                           | also `access/change`                    |
-| and in one of the account's own spaces (its registry, a carrier's passes; [06](06-nodes-and-sessions.md)) | also `account/write`                    |
+| A version in space `S`…                                                                                                     | needs `{ "with": "space:S", "can": … }` |
+| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| any record                                                                                                                  | `record/write`                          |
+| and in `sys.collection`                                                                                                     | also `collection/define`                |
+| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | also `access/change`                    |
+| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | also `account/write`                    |
 
 A knock ([07 — Doors](07-doors.md)) needs `{ "with": "*", "can": "account/write" }`.
 
@@ -644,18 +644,18 @@ A knock ([07 — Doors](07-doors.md)) needs `{ "with": "*", "can": "account/writ
 - The check reads the leaf note's `att`. A chain that verifies (§7.5) never
   grants more than its parents, so the leaf says enough.
 
-A person's own sessions get `*`. A key the account trusts less, such as an
-agent's, gets `record/*`: it writes records, and proposes what it can't do
-for someone who may to apply (the library's blueprints,
-[packages/core/docs/blueprints-and-guides.md](../packages/core/docs/blueprints-and-guides.md)).
+A person's own sessions, and apps granted write, get `*`. A key the account
+trusts less, such as an agent's, gets `record/*`: it writes records, and
+proposes anything more for someone who may to apply
+([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
 
-> Rationale: an earlier version marked agents with a fact and refused, from a
-> note that carried it, exactly these changes. That tied the protocol to one
+> Rationale: earlier, the protocol marked agents with a fact and refused, from
+> a note that carried it, exactly these changes. That tied the protocol to one
 > kind of key. Abilities say the same thing in what UCAN already has, and
 > serve any key the account trusts less, a person's too.
 
 _Source:_ `packages/core/src/identity/abilities.ts` (`noteGrants`, `DEFINE_ABILITY`, `ACCESS_ABILITY`, `ACCOUNT_ABILITY`), `packages/core/src/node/space-runtime.ts` (`accessCapability`, `buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantCapabilities`).
-_Tests:_ `packages/core/tests/agents.test.ts` ("what counts is what the note grants, not whether it says agent", "a definition an agent signs by hand is ignored by every peer", "taking someone out of the space, signed by an agent, is ignored too"), `packages/core/tests/doors.test.ts` ("needs a note that grants account/write: …").
+_Tests:_ `packages/core/tests/agents.test.ts` ("what counts is what the note grants, not whether it says agent", "a definition an agent signs by hand is ignored by every peer", "taking someone out of the space, signed by an agent, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants account/write: …").
 
 ### 8.1 The agent fact
 

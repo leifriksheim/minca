@@ -15,6 +15,8 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { AGENT_FACT, isAgentNote } from '../src/identity/agent-note.js';
+import { parseUCAN } from '../src/identity/ucan.js';
+import { deriveAccountRegistry } from '../src/space/account-registry.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion, type CreateVersionParams } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
@@ -144,6 +146,8 @@ describe('an agent acting for a person', () => {
     assert.equal(note.viaAgent, true);
     const mine = await alice.node.records.put(space, 'app.note', { text: 'Bring rope' });
     assert.equal(mine.viaAgent, undefined, "the person's own writes are not marked");
+    assert.equal(note.recordsOnly, true, 'its note grants records only, which apps can trust by');
+    assert.equal(mine.recordsOnly, undefined);
 
     await until(
       async () => (await bob.node.records.get(space, note.key)) !== null,
@@ -781,6 +785,9 @@ describe('an agent connected through the account home', () => {
     });
     assert.equal(isAgentNote(app.token), false);
     assert.equal(isAgentNote(agent.token), true);
+    // What keeps an agent from defining collections anywhere: its note grants records only.
+    assert.deepEqual(parseUCAN(agent.token).payload.att, [{ with: `space:${gym.id}`, can: 'record/*' }]);
+    assert.deepEqual(parseUCAN(app.token).payload.att, [{ with: `space:${gym.id}`, can: '*' }]);
     assert.equal(agent.agent, true);
     assert.equal(agent.accountKey, undefined);
     assert.equal(auth.connections().length, 2, 'the agent does not replace the app');
@@ -832,6 +839,7 @@ describe('an agent connected through the account home', () => {
     });
     assert.ok(laptop.accountKey, 'it follows the account, so spaces made later reach it');
     assert.ok(isAgentNote(laptop.token));
+    assert.deepEqual(parseUCAN(laptop.token).payload.att, [{ with: '*', can: 'record/*' }]);
     assert.equal(
       laptop.contactKey,
       undefined,
@@ -943,6 +951,40 @@ describe('an agent running a node of its own', () => {
     const seen = await ada.node.records.get(after.id, note.key);
     assert.equal(seen?.viaAgent, true);
     assert.equal(seen?.createdBy, ada.me.did);
+  });
+
+  test("in the account's own spaces, a version under a records-only note does not stand", async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const ada = await accountHolder(hub);
+    await ada.node.account.setName('Ada');
+    const registry = (await deriveAccountRegistry(await deriveVaultKeyBytes(ada.seed), ada.me.did)).space.id;
+    const provider = ada.manager.getProvider();
+    const slipIn = async (can: string) => {
+      const pair = await provider.generateKeyPair();
+      const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
+      const note = await createLocalRootSigner(ada.me, provider).delegate({
+        audience: did,
+        capabilities: [{ with: '*', can }],
+        expiration: Math.floor(Date.now() / 1000) + 3600,
+      });
+      const signed = await createSigner(provider).sign(
+        createVersion({
+          seen: await seenBy(ada.node, registry),
+          collection: 'app.note',
+          version: { key: `note-${can === '*' ? 'all' : 'records'}`, seq: 0 },
+          body: { text: 'Joined somewhere' },
+          author: did,
+          space: registry,
+          proof: note.encoded,
+        }),
+        pair.privateKey,
+      );
+      await createStorageProvider(await ada.stores(`spaces/${registry}`)).addVersion(signed);
+      return ada.node.records.get(registry, signed.key);
+    };
+    // Past every writer's check, straight into the account's store: judged on reading, as from a peer.
+    assert.equal(await slipIn('record/*'), null, 'records only: it does not count');
+    assert.equal((await slipIn('*'))?.verified, true, 'a note that grants account/write: it does');
   });
 
   test('it never writes the account itself: not its list of spaces, not its name', async () => {

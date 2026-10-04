@@ -418,7 +418,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         links: {
           type: 'object',
           description:
-            'Link roles its records may carry: { "about": { "to": ["app.poll"], "cardinality": "one" } }. "to" is "*" for any collection.',
+            'Link roles its records may carry: { "trip": { "to": ["carpool.trip"], "cardinality": "one" } }. "to" is "*" for any collection.',
         },
         permissions: {
           type: 'array',

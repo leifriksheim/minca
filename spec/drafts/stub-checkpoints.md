@@ -346,5 +346,5 @@ dropped. Worth doing for canvases and chats with many deletes. It touches
 - A branch written offline below the anchor is fenced off on every peer
   alike; a node offers its edit again on top.
 - A checkpoint over a chain with a retained version, by an author without
-  `manage`, by an agent, or naming an anchor whose chain skips `seq` is refused.
+  `manage`, under a note without `access/change`, or naming an anchor whose chain skips `seq` is refused.
 - The churn benchmark: settle time flat in edits per record.

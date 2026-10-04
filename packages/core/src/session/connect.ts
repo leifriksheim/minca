@@ -310,9 +310,11 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
     options.timeoutMs,
   );
   await checkGrant(grant, audience);
-  // An agent's note must say so, or its writes would pass as the person's own.
+  // An agent's note must say so, or its writes would pass as the person's own; and grant records only.
   if (options.request.agent && !isAgentNote(grant.token))
     throw new Error("The home gave an ordinary note, not an agent's. Update your account home.");
+  if (options.request.agent && !recordsOnlyGrant(grant.token))
+    throw new Error('The home gave an agent more than records. Update your account home.');
   return { ...grant, home: homeUrl.href };
 }
 
@@ -455,6 +457,19 @@ export async function checkGrant(grant: Grant, audience: string): Promise<void> 
   const { payload } = parseUCAN(grant.token);
   if (payload.aud !== audience) throw new Error('The grant was made out to a different key.');
   if (payload.iss !== grant.did) throw new Error('The grant was not signed by the account it names.');
+  if (payload.att.some((capability) => capability.can.startsWith('expression/'))) throw new Error(OLD_GRANT);
+}
+
+/** A grant from before abilities were named for records: every write under it would be refused */
+const OLD_GRANT = 'This connection is from an older version of Weave. Connect to your account home again.';
+
+/** Whether a note grants records and nothing more, as an agent's must (spec 01 §8) */
+export function recordsOnlyGrant(token: string): boolean {
+  try {
+    return parseUCAN(token).payload.att.every((capability) => capability.can.startsWith('record/'));
+  } catch {
+    return false;
+  }
 }
 
 /** A signer that answers with the note the home gave — the app holds nothing else. */
@@ -467,6 +482,8 @@ export function grantSigner(grant: Grant): RootSigner {
       if (grant.expiresAt <= Math.floor(Date.now() / 1000)) {
         throw new Error('Access has run out. Connect to your account home again.');
       }
+      if (parseUCAN(grant.token).payload.att.some((capability) => capability.can.startsWith('expression/')))
+        throw new Error(OLD_GRANT);
       token ??= cidFromBytes(utf8Encode(grant.token)).then((cid) => ({
         ...parseUCAN(grant.token),
         encoded: grant.token,

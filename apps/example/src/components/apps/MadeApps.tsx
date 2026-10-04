@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { message, useAction } from '@weave/app-shared/action';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
+import {
+  describeCollection,
+  type NodeCollection,
+  type NodeRecord,
+  type SpaceSummary,
+} from '@weaveprotocol/core';
 import { useLive, useNode, useSpaces } from '@weaveprotocol/core/react';
 import {
   blueprint as blueprintSchema,
@@ -9,7 +14,7 @@ import {
   type BlueprintReview,
 } from '@weaveprotocol/core/schemas';
 import { AppBoard } from './AppBoard';
-import { addMade, copyApp, removeApp, type LauncherApp } from './launcher';
+import { addMade, copyApp, removeApp, updated, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '../../derive/time';
 import { styles, palette } from '../../styles';
@@ -72,7 +77,7 @@ export function Proposals({
             key={record.key}
             space={space}
             record={record}
-            replaces={placed.find((other) => other.key === record.body?.updates)}
+            replaces={updated(record, placed)}
             placed={placed}
             collections={collections}
             mayDefine={mayDefine}
@@ -113,16 +118,43 @@ function Proposal({
       !plan?.collections.some((c) => c.name === name),
   );
   const problem = review?.problem ?? (missing.length ? `the space has no ${missing.join(' or ')}` : null);
+  // What it shows that the space has already, which its blueprint doesn't cover: listed too, so nothing it can write is unseen.
+  const alsoShows = (body?.collections ?? []).flatMap((name) => {
+    if (plan?.collections.some((c) => c.name === name)) return [];
+    const held = collections.find((c) => c.name === name && c.version !== null);
+    return held ? [held] : [];
+  });
+  // Written by someone other than whoever made it: what is proposed now is theirs.
+  const by = record.root ?? record.createdBy;
+  // It was on the launcher once: someone changed it since, or whoever added it can't add collections now.
+  const wasAdded = body?.position !== undefined;
+  const mine = by === node.did;
 
   const add = () =>
     run(async () => {
       onAdded(await addMade(node, space.id, record, placed));
     });
-  const remove = () => run(() => removeApp(node, space.id, record.key));
+  const remove = () => {
+    const sure = globalThis.confirm(
+      mine
+        ? `Withdraw ${body?.title ?? 'this app'}?`
+        : `Decline ${body?.title ?? 'this app'}? It is removed for everyone.`,
+    );
+    if (sure) void run(() => removeApp(node, space.id, record, [record]));
+  };
 
-  const mine = record.createdBy === node.did;
   const changes = review?.collections.filter((one) => one.status === 'change') ?? [];
-  const reviewed = review?.collections ?? [];
+  // Every collection it can write, each with what it allows: its blueprint's, then those the space has already.
+  const reviewed = [
+    ...(review?.collections ?? []),
+    ...alsoShows.map((held) => ({
+      definition: { name: held.name, ...(held.title !== undefined ? { title: held.title } : {}) },
+      status: 'same' as const,
+      summary: describeCollection({ ...held, schema: held.schema ?? undefined }),
+      changes: [],
+      usedBy: [],
+    })),
+  ];
 
   return (
     <article style={{ ...tile, gap: 12 }}>
@@ -132,16 +164,19 @@ function Proposal({
             {body?.title ?? 'An app that could not be read'}
           </strong>
           <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 2 }}>
-            Proposed by <Person did={record.createdBy} />
-            {record.viaAgent && record.seq === 0 && <AgentBadge />} · {ago(record.createdAt)}
+            {wasAdded ? 'Changed by' : 'Proposed by'} <Person did={by} />
+            {record.viaAgent && <AgentBadge />} · {ago(record.updatedAt)}
             {plan?.from && ' · copied from another space'}
             {replaces?.body && ` · an update to ${replaces.body.title}`}
+            {body?.updates !== undefined &&
+              !replaces &&
+              ' · an update to an app no longer here; adding it adds it as its own'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           {mine && (
             <button
-              onClick={() => void remove()}
+              onClick={remove}
               disabled={busy}
               data-variant="quiet"
               style={{ ...styles.smallButton, height: 28 }}
@@ -151,7 +186,7 @@ function Proposal({
           )}
           {mayDefine && !mine && (
             <button
-              onClick={() => void remove()}
+              onClick={remove}
               disabled={busy}
               data-variant="quiet"
               style={{ ...styles.smallButton, height: 28 }}
@@ -359,7 +394,7 @@ function AgentBadge() {
   );
 }
 
-/** An added app: its own screen when its definition, as the space holds it, carries one. */
+/** An added app: its own screen when its launcher record carries one, else its records. */
 export function MadeAppScreen({
   space,
   record,

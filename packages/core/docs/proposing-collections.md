@@ -45,8 +45,8 @@ place.
 
 ## Saying how they are meant to be used
 
-A definition can't say "write a rota for each week, and link each chore to
-it". A guide can, and an agent finds it from `collections_list`:
+A definition can't say "write one rota for each week, and say in it who does
+what". A guide can, and an agent finds it from `collections_list`:
 
 ```typescript
 import { writeGuide } from '@weaveprotocol/core/schemas';
@@ -54,7 +54,7 @@ import { writeGuide } from '@weaveprotocol/core/schemas';
 await writeGuide(node, space.id, {
   name: 'chores.how',
   title: 'Keeping the rota',
-  text: 'One rota record per week. Each chore names who does it.',
+  text: 'One rota record per week. It says who does what that week.',
   collections: ['chores.rota'],
 });
 ```
@@ -64,7 +64,8 @@ await writeGuide(node, space.id, {
 Core runs no app's code. The example app lets a space add apps with a screen
 of their own: a `launcher.app` record that points at its blueprint and holds
 one HTML document, run in a sealed frame, as the person looking. It runs only
-once someone who may define collections has written the record. The pieces
+once someone who may define collections has written the record, under a note
+that isn't records-only. The pieces
 are in the repository: `apps/example/src/components/apps/launcher.ts`,
 `screens.ts` and `ScreenFrame.tsx`, and `apps/example/public/screen.html`.
 

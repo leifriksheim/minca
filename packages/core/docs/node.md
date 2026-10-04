@@ -84,7 +84,7 @@ The **session note** a node asks for when it starts:
 
 ```
 aud = session DID
-att = [{ "with": "*", "can": "*" }]          (SESSION_CAPABILITY)
+att = [{ "with": "*", "can": "*" }]          (SESSION_CAPABILITY; an agent's own node signs under its grant, `record/*`)
 exp = now + sessionTtlSeconds                     (default 3600)
 nbf = now − 300                                   (issueUCAN's default)
 fct = absent                                      (or [{"weave":"agent"}] for an agent's own node)
@@ -560,7 +560,8 @@ and was issued by `node.did`. The agent:
 
 Closing the agent leaves the underlying node running.
 
-An agent granted `scope: account` gets a `*` note and the account key in its
+An agent granted `scope: account` gets a records-only note for every space
+(`{ "with": "*", "can": "record/*" }`) and the account key in its
 grant ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home must not
 give an agent the contact key: with it, an agent could open contact requests
 and knocks on the account's doors ([doors.md](doors.md)).

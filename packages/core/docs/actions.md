@@ -106,7 +106,8 @@ own: signer `grantSigner(grant)`, session key = the agent key, the grant's
 account key when present, relays = the grant's ∪ `$WEAVE_RELAYS` (default
 `wss://p2p-web-relay.fly.dev`), WebRTC via `node-datachannel`; joins any granted
 spaces it lacks; wraps the node with `asAgent`; holds every space; and serves
-MCP over stdio with the person-only tools removed ([actions](#)).
+MCP over stdio: `offeredActions({ agent: true })`, without the `PERSON_ONLY`
+actions or direct messages ([actions](#actions)).
 
 > **Known defect:** every `weave mcp` with the same `--home` signs with the one
 > agent key, so only the first gets into a space's room; the others report

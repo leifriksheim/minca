@@ -52,9 +52,11 @@ export function AppsView({
   };
   const remove = (app: AppEntry) => {
     const sure = globalThis.confirm(
-      `Take ${app.title} off ${space.name}? Everything it holds stays in the space, and adding it again brings it back.`,
+      app.builtIn
+        ? `Take ${app.title} off ${space.name}? Everything it holds stays in the space, and adding it again brings it back.`
+        : `Take ${app.title} off ${space.name}? Everything it holds stays in the space; to have the app again, someone proposes it again.`,
     );
-    if (sure) void arrange.run(() => removeApp(node, space.id, app.record.key));
+    if (sure) void arrange.run(() => removeApp(node, space.id, app.record, apps.records));
   };
 
   return (

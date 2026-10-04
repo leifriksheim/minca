@@ -105,7 +105,8 @@ into another space, or re-posted by someone else, does not open.
 - `others(did)` lists accounts other than the two seen in the space for two
   (members, profiles, connected peers).
 
-`ask` and `accept` need a session note with `with: "*"`. An app granted
+`ask` and `accept` need a session note that grants `account/write` for every
+space (`with: "*"`), as a knock does. An app granted
 `contacts` sees the list and requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
