@@ -171,8 +171,6 @@ export {
 export {
   CATALOG_COLLECTION,
   checkStoredCollection,
-  checkScreenNetwork,
-  MAX_SCREEN_ORIGINS,
   checkPublishableSchema,
   validateJsonSchema,
   asStandardSchema,
@@ -339,6 +337,8 @@ export {
 } from './node/index.js';
 /** How many subscriptions one proposal to the home may offer */
 export { MAX_PROPOSALS } from './space/notify.js';
+/** Why an app's "worth hearing about" entry can't be offered, or null */
+export { checkAppNotify } from './space/notify.js';
 export type {
   StoreFactory,
   StoreOptions,
@@ -359,6 +359,7 @@ export type {
   NodeNetwork,
   SpaceSummary,
   SpaceStatus,
+  SpaceAccess,
   CarrierSummary,
   SpaceProfile,
   NewSpace,

@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import { DEFINE, roleHolds } from '@weaveprotocol/core';
 import type { NodeRecord, SpaceSummary } from '@weaveprotocol/core';
 import {
   useAccess,
   useCollections,
   useHoldSpace,
+  useNode,
   useProfiles,
   useAccount,
   useSpaceStatus,
@@ -23,6 +24,7 @@ import { AutomationsView } from './automations/AutomationsView';
 import { Bell } from './Bell';
 import { HostingView } from './HostingView';
 import { fills, useSpaceApps, type AppEntry } from './apps/entries';
+import { moveApp } from './apps/launcher';
 import { DataView, NEW, type Place } from './DataView';
 import { SpaceMark } from './SpaceList';
 import { AccountMenu } from './AccountMenu';
@@ -105,7 +107,10 @@ export function SpaceView({
   onHome: () => void;
 }) {
   const account = useAccount();
+  const node = useNode();
   const [view, setView] = useState<View>({ kind: 'apps' });
+  // The app being dragged to a new place in the sidebar, by its launcher record
+  const [dragging, setDragging] = useState<string | null>(null);
   const [place, setPlace] = useState<Place>({ collection: null, key: null });
   const [creating, setCreating] = useState(false);
   const [everyApp, setEveryApp] = useState(false);
@@ -175,7 +180,15 @@ export function SpaceView({
     { count: 0, forMe: 0 },
   );
 
-  const fill = open ? fills(open, collections) : false;
+  const fill = open ? fills(open) : false;
+  // Dropped on another app: it goes where that one is, for everyone in the space.
+  const dropOn = (target: AppEntry) => {
+    const key = dragging;
+    setDragging(null);
+    if (!key || key === target.record.key) return;
+    const to = apps.placed.findIndex((record) => record.key === target.record.key);
+    void moveApp(node, space.id, apps.placed, key, to).catch(() => {});
+  };
   const title =
     open?.title ??
     (view.kind === 'people'
@@ -230,6 +243,16 @@ export function SpaceView({
                   unread={unreadOf(unread, app.id)}
                   on={open?.id === app.id}
                   onClick={() => openApp(app.id)}
+                  {...(mayDefine
+                    ? {
+                        drag: {
+                          over: dragging !== null && dragging !== app.record.key,
+                          onStart: () => setDragging(app.record.key),
+                          onEnd: () => setDragging(null),
+                          onDrop: () => dropOn(app),
+                        },
+                      }
+                    : {})}
                 />
               ))}
               {folds && (
@@ -649,6 +672,7 @@ function SideItem({
   on,
   quiet,
   expanded,
+  drag,
   onClick,
 }: {
   icon: ReactNode;
@@ -658,8 +682,16 @@ function SideItem({
   quiet?: boolean;
   /** For a row that folds others away: whether they show now */
   expanded?: boolean;
+  /** For a row that can be dragged to a new place, and another dropped on */
+  drag?: {
+    readonly over: boolean;
+    readonly onStart: () => void;
+    readonly onEnd: () => void;
+    readonly onDrop: () => void;
+  };
   onClick: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={onClick}
@@ -667,7 +699,32 @@ function SideItem({
       aria-expanded={expanded}
       data-nav
       className="side-item"
+      {...(drag
+        ? {
+            draggable: true,
+            onDragStart: (event: DragEvent) => {
+              event.dataTransfer.effectAllowed = 'move';
+              drag.onStart();
+            },
+            onDragEnd: () => {
+              setHovered(false);
+              drag.onEnd();
+            },
+            onDragOver: (event: DragEvent) => {
+              if (!drag.over) return;
+              event.preventDefault();
+              setHovered(true);
+            },
+            onDragLeave: () => setHovered(false),
+            onDrop: (event: DragEvent) => {
+              event.preventDefault();
+              setHovered(false);
+              drag.onDrop();
+            },
+          }
+        : {})}
       style={{
+        outline: hovered ? `1px dashed ${palette.surface.lineStrong}` : undefined,
         color:
           on || (unread?.count ?? 0) > 0 ? palette.ink.strong : quiet ? palette.ink.muted : palette.ink.body,
         fontWeight: on || (unread?.count ?? 0) > 0 ? 600 : 400,

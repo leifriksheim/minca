@@ -98,7 +98,7 @@ describe('connecting an app to an account home', () => {
     const { payload } = parseUCAN(grant.token);
     assert.equal(payload.iss, auth.getState().session!.did);
     assert.equal(payload.aud, key.did);
-    assert.deepEqual(payload.att, [{ with: `space:${groceries.id}`, can: 'expression/*' }]);
+    assert.deepEqual(payload.att, [{ with: `space:${groceries.id}`, can: '*' }]);
     assert.deepEqual(
       grant.spaces.map((space) => space.name),
       ['Groceries'],
@@ -192,7 +192,7 @@ describe('connecting an app to an account home', () => {
     });
     assert.equal(grant.scope, 'account');
     assert.ok(grant.accountKey);
-    assert.deepEqual(parseUCAN(grant.token).payload.att, [{ with: '*', can: 'expression/*' }]);
+    assert.deepEqual(parseUCAN(grant.token).payload.att, [{ with: '*', can: '*' }]);
 
     const browser = await app(hub, grant, key);
     await until(

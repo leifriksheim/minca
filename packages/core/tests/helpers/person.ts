@@ -88,7 +88,7 @@ export async function forge(
   const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
   const ucan = await createLocalRootSigner(who.me, provider).delegate({
     audience: keyDid,
-    capabilities: [{ with: `space:${space}`, can: 'expression/write' }],
+    capabilities: [{ with: `space:${space}`, can: '*' }],
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const signed = await createSigner(provider).sign(

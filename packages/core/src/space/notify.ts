@@ -190,10 +190,9 @@ function isOrigin(value: string): boolean {
 }
 
 /**
- * What an app kept in a space (`std.app`) says is worth hearing about: a
- * subscription it offers, before anyone has picked spaces or where a click
- * goes. Whoever shows the app proposes it, as a {@link NotifyProposal} of
- * its own, when the person asks.
+ * What an app says is worth hearing about: a subscription it offers, before
+ * anyone has picked spaces or where a click goes. Whoever shows the app
+ * proposes it, as a {@link NotifyProposal} of its own, when the person asks.
  */
 export interface AppNotify {
   readonly label: string;

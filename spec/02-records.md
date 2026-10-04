@@ -14,8 +14,8 @@ Out of scope here, and specified elsewhere:
 - How versions travel and how they are stored: [05 — Sync and storage](05-sync-and-storage.md).
 - Not protocol, and described in the package docs instead: querying records
   ([query format](../packages/core/docs/query-format.md)), the optional standard collections
-  ([standard library](../packages/core/docs/standard-library.md)), and apps kept in a space,
-  their review and their screens ([apps as records](../packages/core/docs/apps-as-records.md)).
+  ([standard library](../packages/core/docs/standard-library.md)), and collections
+  proposed for a space and their review ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
 
 **Terms.** An _expression_ is one signed version of a record — the unit that is
 hashed, signed, stored and synced. A _record_ is every expression that shares
@@ -621,20 +621,18 @@ space's access history ([03 — Spaces](03-spaces.md)): it carries `retain: true
 and `seen`, and which definition is in force is decided by replaying that
 history. In a private space its body is encrypted like any other record's.
 
-| Field         | Type                  | Req. | Meaning                                                                                                                                                                                                                                                                                                                                 |
-| ------------- | --------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | string                | yes  | Lower case, at least one dot (local to the space, §6.4): `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`. MUST NOT start with `sys.`. The record's key MUST be `collection:` + this.                                                                                                                                                            |
-| `title`       | string                | no   | Display name                                                                                                                                                                                                                                                                                                                            |
-| `description` | string                | no   | The author's words                                                                                                                                                                                                                                                                                                                      |
-| `schema`      | object                | yes  | JSON Schema for a record's `body`, in the subset of §6.2                                                                                                                                                                                                                                                                                |
-| `version`     | integer ≥ 1           | yes  | Shape version (§6.3)                                                                                                                                                                                                                                                                                                                    |
-| `history`     | `"latest"` \| `"all"` | no   | Default `"latest"`. `"all"`: writers mark every version `retain` (§4.5).                                                                                                                                                                                                                                                                |
-| `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                                                                                                                                                                                |
-| `permissions` | string[]              | no   | Permissions its rules may name, each `^[a-z][a-zA-Z0-9]{0,39}$` (§7.1)                                                                                                                                                                                                                                                                  |
-| `rules`       | object                | no   | §7                                                                                                                                                                                                                                                                                                                                      |
-| `topics`      | string[]              | no   | §8                                                                                                                                                                                                                                                                                                                                      |
-| `screen`      | string                | no   | One HTML document, at most 48 KiB of UTF-8, non-blank. Peers only check its size; how an app runs it: [screens](../packages/core/docs/apps-as-records.md#screens).                                                                                                                                                                      |
-| `network`     | string[]              | no   | The exact origins its `screen` may reach: at most 8, distinct, each `^(https\|wss)://` + a lower-case host with at least one dot + an optional `:port`, no path (`https://api.open-meteo.com`). Only with a `screen`. Peers only check the format; how an app enforces it: [screens](../packages/core/docs/apps-as-records.md#screens). |
+| Field         | Type                  | Req. | Meaning                                                                                                                                                                      |
+| ------------- | --------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | string                | yes  | Lower case, at least one dot (local to the space, §6.4): `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`. MUST NOT start with `sys.`. The record's key MUST be `collection:` + this. |
+| `title`       | string                | no   | Display name                                                                                                                                                                 |
+| `description` | string                | no   | The author's words                                                                                                                                                           |
+| `schema`      | object                | yes  | JSON Schema for a record's `body`, in the subset of §6.2                                                                                                                     |
+| `version`     | integer ≥ 1           | yes  | Shape version (§6.3)                                                                                                                                                         |
+| `history`     | `"latest"` \| `"all"` | no   | Default `"latest"`. `"all"`: writers mark every version `retain` (§4.5).                                                                                                     |
+| `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                     |
+| `permissions` | string[]              | no   | Permissions its rules may name, each `^[a-z][a-zA-Z0-9]{0,39}$` (§7.1)                                                                                                       |
+| `rules`       | object                | no   | §7                                                                                                                                                                           |
+| `topics`      | string[]              | no   | §8                                                                                                                                                                           |
 
 A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
@@ -730,8 +728,9 @@ The definition in force for a collection is the latest change to
 with the highest `version`. Who may make such a change is also the replay's
 question: creating a definition needs the permission `define`; changing or
 deleting one needs `manage`, or being whoever first defined it (while still a
-member). A definition written under an agent's delegation never counts
-([01 — Identity](01-identity.md), agent notes).
+member). A definition counts only under a note that grants
+`collection/define` ([01 — Identity](01-identity.md) §8), whatever the
+writer's role.
 
 Peers do not check `version` against the definition it replaces. What the
 library does with it: [collections](../packages/core/docs/collections.md#versions-of-a-definition).
@@ -758,7 +757,7 @@ Names are **local to a space**. Nothing registers or owns a name across
 spaces, so a name never says what shape a collection has; its definition in
 that space does.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`, `MAX_SCREEN_BYTES`, `checkScreenNetwork`, `MAX_SCREEN_ORIGINS`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events). Tests: `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
+_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events). Tests: `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
 
 ### 6.5 Planned: compatible definitions
 
@@ -770,7 +769,7 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 > for itself whether a space's definition is one it can use. Whether an app
 > can read and write a definition it did not write, `compare(held, wanted)`,
 > is the library's, not a peer's: see
-> [apps as records](../packages/core/docs/apps-as-records.md#compatible-definitions).
+> [blueprints and guides](../packages/core/docs/blueprints-and-guides.md#compatible-definitions).
 > These two plans make part of it a peer's check.
 >
 > - **Content-addressed definitions (#11).** A definition's id is the hash of
@@ -807,7 +806,7 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 > break. Rules (`create`, `edit`, `delete`, `onePer`, `fixed`,
 > `permissions`) are the space's governance, not shape: under the same name
 > they may tighten, never loosen. Why this line, after oasdiff:
-> [apps as records](../packages/core/docs/apps-as-records.md#what-additive-means).
+> [blueprints and guides](../packages/core/docs/blueprints-and-guides.md#what-additive-means).
 
 ## 7. Rules
 
@@ -1374,8 +1373,8 @@ The capability every write in space `S` needs is
 Given a valid signature and root, whether the version _stands_ in this space:
 
 1. `space` equals this space's id.
-2. If written under an agent's note in a space that admits only the account
-   itself: refused ([06](06-nodes-and-sessions.md)).
+2. In a space that admits only the account itself, a note that does not grant
+   `account/write`: refused ([01](01-identity.md) §8, [06](06-nodes-and-sessions.md)).
 3. Access-history collections: judged by the replay ([03 — Spaces](03-spaces.md)).
 4. Otherwise:
    1. The first version (§4.6) is held and is this record's, and a later
@@ -1450,8 +1449,6 @@ _Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`),
 | Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 32 deep                                                |
 | Steps judging one version's checks          | ≤ 10,000                                                                             |
 | Versions one version's checks cite          | ≤ 256 distinct                                                                       |
-| Definition `screen`                         | ≤ 48 KiB UTF-8                                                                       |
-| Definition `network`                        | ≤ 8 origins                                                                          |
 | Future-dated `createdAt` (delegated writes) | ≤ 300 s ahead                                                                        |
 | Size of a body or an expression             | _Not yet specified_ — no limit is enforced                                           |
 | Collection name on a record                 | _Not yet specified_ — only definitions constrain names; a record may name any string |

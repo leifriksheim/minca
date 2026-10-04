@@ -109,18 +109,17 @@ export async function useSchemas(
 
 export { contact, contactRequest, door, knock, knockAnswer } from './contacts.js';
 export type { Contact, ContactRequestRecord, Door, Knock, KnockAnswer } from './contacts.js';
+export * from './library/collections.js';
 export {
-  app,
-  appScreen,
-  checkApp,
-  reviewApp,
-  standardNeeds,
-  supersededApps,
-  proposeApp,
-  addApp,
-  copyApp,
-  MAX_APP_COLLECTIONS,
-} from './apps.js';
+  checkBlueprint,
+  reviewBlueprint,
+  standardCollections,
+  supersededBlueprints,
+  proposeCollections,
+  applyBlueprint,
+  copyBlueprint,
+} from './blueprints.js';
+export { guidesOf, writeGuide } from './guides.js';
 export {
   rule,
   ruleRun,
@@ -158,7 +157,5 @@ export type {
   StartRulesOptions,
 } from './rules.js';
 export { checkCron, cronMatches, SCHEDULES } from './cron.js';
-export { SCREEN_GUIDE, SCREEN_CLIENT, screenDocument, screenPolicy, createScreenBridge } from './screens.js';
-export type { ScreenBridge, ScreenRecord, ScreenViewer } from './screens.js';
-export type { App, AppDefinition, AppReview, AppNeedReview, ReviewContext } from './apps.js';
+export type { BlueprintReview, CollectionReview, ReviewContext } from './blueprints.js';
 export type { AppNotify } from '../space/notify.js';

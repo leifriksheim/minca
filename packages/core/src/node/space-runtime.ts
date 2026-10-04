@@ -28,6 +28,7 @@ import type { SpaceRecord } from '../space/space-manager.js';
 import type { Capability } from '../identity/ucan.js';
 import { parseUCAN, resolveDelegationRoot } from '../identity/ucan.js';
 import { isAgentNote } from '../identity/agent-note.js';
+import { ACCESS_ABILITY, ACCOUNT_ABILITY, DEFINE_ABILITY, noteGrants } from '../identity/abilities.js';
 import { bodyProblem, createExpression, isStub } from '../schema/expression.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
 import { chainProblem, newRecordKey, nextVersion } from '../records/version.js';
@@ -239,6 +240,25 @@ export const writeCapability = (spaceId: string): Capability => ({
   can: 'expression/write',
 });
 
+/** What a change to the access history requires: defining collections, or changing who may do what */
+const accessCapability = (spaceId: string, collection: string): Capability => ({
+  with: `space:${spaceId}`,
+  can: collection === DEFINITION_COLLECTION ? DEFINE_ABILITY : ACCESS_ABILITY,
+});
+
+/** What a write in one of the account's own spaces requires */
+const accountCapability = (spaceId: string): Capability => ({
+  with: `space:${spaceId}`,
+  can: ACCOUNT_ABILITY,
+});
+
+/** Said when a key's note doesn't let it define collections — it can propose them instead */
+export const CANNOT_DEFINE =
+  "This key's note doesn't let it add or change collections. Propose them instead (collections_propose), and someone who may adds them.";
+const CANNOT_CHANGE_ACCESS =
+  "This key's note doesn't let it change who may do what in a space. Ask the person.";
+const NOT_ACCOUNT = "This key's note doesn't let it change the account itself. Ask the person.";
+
 /** The CID a note is known by — what a revoke names */
 export const noteCid = (encoded: string) => cidFromBytes(utf8Encode(encoded));
 
@@ -284,11 +304,12 @@ export interface SpaceRuntimeDeps {
    */
   readonly mirrors?: ReadonlyArray<BlobStore>;
   /**
-   * Nothing an agent signs counts here — for the account's own spaces (its
-   * list of spaces, a carrier's passes), where a note for "every space" would
-   * otherwise let an agent join the account to a space or leave one.
+   * Only notes that grant `account/write` count here — for the account's own
+   * spaces (its list of spaces, a carrier's passes), where a note for "every
+   * space" would otherwise let a key it trusts less join the account to a
+   * space or leave one.
    */
-  readonly peopleOnly?: boolean;
+  readonly accountOnly?: boolean;
   /** Hold only the collections used, once the space names a keeper (`NodeConfig.cache`). Absent: hold it whole. */
   readonly cache?: CacheConfig;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
@@ -580,8 +601,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   async function buildEvent(version: Expression): Promise<AccessEvent | null> {
     if (!ACCESS_COLLECTIONS.has(version.collection) || !version.retain) return null;
-    // An agent never changes the space's collections or who may do what: a person does.
-    if (isAgentNote(version.proof)) return null;
+    // Only a note that grants it changes the space's collections, or who may do what.
+    if (!noteGrants(version.proof, accessCapability(space.id, version.collection))) return null;
     const verdict = await judge(version);
     if (!verdict.verified || !verdict.root) return null;
     const seen = version.seen ?? [];
@@ -911,8 +932,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const verdict = await judge(expression);
     if (!verdict.verified || !verdict.root)
       return { ok: false, reason: verdict.reason ?? 'Its signature does not check out' };
-    if (deps.peopleOnly && isAgentNote(expression.proof))
-      return { ok: false, reason: 'Only the account itself writes here, not an agent' };
+    if (deps.accountOnly && !noteGrants(expression.proof, accountCapability(space.id)))
+      return { ok: false, reason: "Its note doesn't let it write in the account's own spaces" };
     const { history } = await access();
 
     if (ACCESS_COLLECTIONS.has(expression.collection)) {
@@ -1291,6 +1312,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       encrypted,
       verified: verdict.verified && stands.ok,
       ...(isAgentNote(expression.proof) ? { viaAgent: true as const } : {}),
+      ...(!noteGrants(expression.proof, { with: `space:${space.id}`, can: DEFINE_ABILITY })
+        ? { recordsOnly: true as const }
+        : {}),
       ...(reason ? { reason } : {}),
       ...(expression.deleted ? { deleted: true as const } : {}),
       conforms: issues === null ? null : issues.length === 0,
@@ -1412,8 +1436,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       permissions: definition?.permissions ?? [],
       rules: definition?.rules ?? {},
       topics: definition?.topics ?? [],
-      ...(definition?.screen !== undefined ? { screen: definition.screen } : {}),
-      ...(definition?.network?.length ? { network: definition.network } : {}),
       records,
     });
   }
@@ -1709,13 +1731,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * the key when due and seals it to whoever lacks it.
    */
   async function upkeep(): Promise<void> {
-    if (isAgentNote(session.proof())) {
+    // A note that can't change access keeps no keys for others: it only reads.
+    if (!noteGrants(session.proof(), { with: `space:${space.id}`, can: ACCESS_ABILITY })) {
       if (space.visibility === 'private') await learnKeys();
       return;
     }
     await nameRelays();
     if (space.visibility !== 'private') return;
-    if (deps.peopleOnly) {
+    if (deps.accountOnly) {
       await learnKeys();
       return;
     }
@@ -2300,15 +2323,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     options: { joining?: boolean; as?: ActiveSession } = {},
   ): Promise<Expression> {
     const writer = options.as ?? session;
-    if (deps.peopleOnly && isAgentNote(writer.proof()))
-      throw new Error("An agent can't change the account itself. Ask the person to do it.");
+    if (deps.accountOnly && !noteGrants(writer.proof(), accountCapability(space.id)))
+      throw new Error(NOT_ACCOUNT);
     // Every peer would ignore it (see buildEvent); say why here instead.
-    if (ACCESS_COLLECTIONS.has(collection) && isAgentNote(writer.proof())) {
-      throw new Error(
-        collection === CATALOG_COLLECTION
-          ? "An agent can't add or change collections. Propose an app instead (apps_propose), and a person in the space adds it."
-          : "An agent can't change who may do what in a space. Ask the person to do it.",
-      );
+    if (
+      ACCESS_COLLECTIONS.has(collection) &&
+      !noteGrants(writer.proof(), accessCapability(space.id, collection))
+    ) {
+      throw new Error(collection === CATALOG_COLLECTION ? CANNOT_DEFINE : CANNOT_CHANGE_ACCESS);
     }
     // Every other copy would refuse it, so refuse it here rather than show a
     // change that exists on this device alone.
@@ -2723,8 +2745,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ...(input.permissions !== undefined ? { permissions: input.permissions } : {}),
         ...(input.rules !== undefined ? { rules: input.rules } : {}),
         ...(input.topics !== undefined ? { topics: input.topics } : {}),
-        ...(input.screen !== undefined ? { screen: input.screen } : {}),
-        ...(input.network?.length ? { network: input.network } : {}),
       };
       const problem = checkStoredCollection(definition);
       if (problem) throw new Error(problem);

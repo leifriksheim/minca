@@ -12,6 +12,7 @@ import { lifeGroups } from './library/life.js';
 import { moneyGroups } from './library/money.js';
 import { communityGroups } from './library/community.js';
 import { activity, rule, ruleRun } from '../schemas/rules.js';
+import { collectionsGroups } from './library/collections.js';
 
 type Definitions = ReadonlyArray<DefineCollection>;
 
@@ -32,6 +33,7 @@ export const standardGroups: Readonly<Record<string, Definitions>> = Object.free
   ...moneyGroups,
   ...communityGroups,
   Rules: [rule, ruleRun, activity],
+  ...collectionsGroups,
 });
 
 /** Common nouns apps share: everything but the annotations */

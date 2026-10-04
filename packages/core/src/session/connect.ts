@@ -62,11 +62,11 @@ export interface ConnectRequest {
   readonly chooseSpaces?: boolean;
   /**
    * The key is an agent's — one on the person's computer, connected with
-   * `weave connect` (`agent-link.ts`). Its note says so (`AGENT_FACT`), so
-   * every record it writes shows as "via agent", and every peer refuses it
-   * changing the space's collections or who may do what, or the account's
-   * list of spaces. It may be given chosen spaces or the whole account, but
-   * never spaces made for it.
+   * `weave connect` (`agent-link.ts`). Its note grants writing records only,
+   * so every peer refuses it changing the space's collections or who may do
+   * what, or the account's list of spaces; and it carries `AGENT_FACT`, so
+   * every record it writes shows as "via agent". It may be given chosen
+   * spaces or the whole account, but never spaces made for it.
    */
   readonly agent?: boolean;
   /** How many days the note should last, 1–365. The home decides; default 7. */
@@ -224,12 +224,17 @@ export function homeAddress(input: string): string {
   return url.href;
 }
 
-/** The capabilities a grant carries, for these spaces */
+/**
+ * The capabilities a grant carries, for these spaces. Writing is everything
+ * the account may do there; `records` is writing records only, for a key the
+ * account trusts less (an agent's): it can't define collections, change who
+ * may do what, or write for the account (`identity/abilities.ts`).
+ */
 export function grantCapabilities(
-  access: 'read' | 'write',
+  access: 'read' | 'write' | 'records',
   spaceIds: ReadonlyArray<string> | 'all',
 ): Capability[] {
-  const can = access === 'write' ? 'expression/*' : 'expression/read';
+  const can = access === 'write' ? '*' : access === 'records' ? 'expression/*' : 'expression/read';
   return spaceIds === 'all' ? [{ with: '*', can }] : spaceIds.map((id) => ({ with: `space:${id}`, can }));
 }
 

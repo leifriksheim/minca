@@ -2,10 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount, useConnection, useNode } from '@weaveprotocol/core/react';
 import { MAX_PROPOSALS, watchNotifications, type NotifyProposal, type NotifyView } from '@weaveprotocol/core';
-import { app as appSchema, supersededApps, type App, type AppNotify } from '@weaveprotocol/core/schemas';
+import type { AppNotify } from '@weaveprotocol/core/schemas';
 import { APPS } from './components/apps';
 import { isForMe, madeNotify } from './components/apps/entries';
-import { isAdded } from './components/apps/MadeApps';
+import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
 import { message } from '@weave/app-shared/action';
 import { addAlert } from './alerts';
 
@@ -126,16 +126,15 @@ function useEverything(): ReadonlyArray<NotifyProposal> {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
-      const made: App[] = [];
+      const made: LauncherApp[] = [];
       for (const space of await node.spaces.list()) {
-        const [apps, collections] = await Promise.all([
-          node.records.list<App>(space.id, { collection: appSchema.name }),
+        const [records, collections, access] = await Promise.all([
+          node.records.list<LauncherApp>(space.id, { collection: launcherApp.name }),
           node.collections.list(space.id),
-        ]).catch(() => [[], []] as const);
-        const superseded = supersededApps(apps, collections);
-        for (const record of apps)
-          if (record.body && !superseded.has(record.key) && isAdded(record, collections))
-            made.push(record.body);
+          node.spaces.access(space.id),
+        ]).catch(() => [[], [], null] as const);
+        for (const record of sortLauncher(records, collections, access).placed)
+          if (record.body && record.body.builtIn === undefined) made.push(record.body);
       }
       if (live) setOffers(gather(made));
     };
@@ -156,7 +155,7 @@ function useEverything(): ReadonlyArray<NotifyProposal> {
 }
 
 /** Contact requests, the built-in apps and these made ones, once each, as many as one request may carry */
-function gather(made: ReadonlyArray<App>): ReadonlyArray<NotifyProposal> {
+function gather(made: ReadonlyArray<LauncherApp>): ReadonlyArray<NotifyProposal> {
   const all = [CONTACTS, ...APPS.flatMap((app) => app.notify), ...made.flatMap(madeNotify)];
   const once = new Map(
     all.map((offer) => [`${offer.collection} ${JSON.stringify(offer.topic ?? null)}`, offer]),

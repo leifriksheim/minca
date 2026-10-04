@@ -211,10 +211,11 @@ operation as a WebMCP tool on `document.modelContext` (`src/webmcp.ts`, with
 otherwise). A browser agent sees the same tools as the CLI and `weave mcp`,
 and works as the person, with nothing to switch on: anything that can call a
 page's tools can already click through the page. It isn't offered
-`collections_define`: it proposes apps (`apps_propose`) and a person adds
-them. Anything that changes a space's people, or hands out its key, asks the
-person first. An app may bring its own screen, which the example runs in a
-sandboxed frame with no network ([screens and apps](../../packages/core/docs/screens-and-apps.md)).
+`collections_define`: it proposes collections (`collections_propose`) and a
+person adds them. Anything that changes a space's people, or hands out its
+key, asks the person first. An app an agent makes may bring its own screen,
+which the example runs in a sandboxed frame with no network (the launcher's
+guide, `src/components/apps/launcher.ts`, and `src/components/apps/screens.ts`).
 
 **On your computer (Claude Code, Claude Desktop, Cursor).** "Connect an
 agent", in the account menu, shows one command:

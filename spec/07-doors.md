@@ -259,10 +259,11 @@ otherwise ignore it. `receivedAt` is the relay's `at` for the blob.
    10 minutes before it.
 5. `sig` verifies over `canonicalJSON(body)` with the public key of the
    `session` DID.
-6. **Authority.** `proof` is not an agent's note; its delegation chain resolves
-   **with no proofs beyond itself** (one link), valid at `at`, with audience
-   `session` and root `from`; and it grants `{ with: "*", can: "expression/*" }`
-   (or `can: "*"`): the whole account, to write.
+6. **Authority.** `proof`'s delegation chain resolves **with no proofs beyond
+   itself** (one link), valid at `at`, with audience `session` and root
+   `from`; and it grants `{ with: "*", can: "account/write" }`
+   ([01](01-identity.md) §8): a note to write for the whole account. An app
+   given some spaces, or a key given records only, may not knock.
 7. `invite` parses; its space's creator is `from`; it is private and carries
    its key; and the space checks out (its id is the hash of its genesis).
 
@@ -290,7 +291,7 @@ Which of the knocks that pass these checks a client offers the person
 >   door's owner picked the keeper of, means a note that ran out can't be used
 >   by dating a knock back to when it was good.
 
-_Source: `packages/core/src/doors/doors.ts` (`sealKnock`, `openKnock`, `knockId`). Tests: `packages/core/tests/doors.test.ts` ("a knock")._
+_Source: `packages/core/src/doors/doors.ts` (`sealKnock`, `openKnock`, `knockId`), `packages/core/src/identity/abilities.ts`. Tests: `packages/core/tests/doors.test.ts` ("a knock")._
 
 ## 7. The exchange
 

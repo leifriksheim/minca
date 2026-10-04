@@ -27,6 +27,7 @@ import {
   type UCANToken,
 } from '../identity/ucan.js';
 import { isAgentNote } from '../identity/agent-note.js';
+import { ACCOUNT_ABILITY, noteGrants } from '../identity/abilities.js';
 import { createSigner } from '../schema/signer.js';
 import { createSchemaEngine } from '../schema/schema-engine.js';
 import {
@@ -42,6 +43,7 @@ import { MANAGE, MAX_KEEPERS, MAX_RELAYS, roleHolds, type Keeper } from '../spac
 import {
   meshFor,
   noteCid,
+  CANNOT_DEFINE,
   usableRelays,
   openSpaceRuntime,
   type ActiveSession,
@@ -164,7 +166,7 @@ import type {
 } from './types.js';
 
 /** Everything a session key may do, across every space the node holds */
-export const SESSION_CAPABILITY: Capability = { with: '*', can: 'expression/*' };
+export const SESSION_CAPABILITY: Capability = { with: '*', can: '*' };
 
 const DEFAULT_TTL_SECONDS = 3600;
 
@@ -255,11 +257,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   };
   const mesh = meshFor(config.network, sessionDid);
   /**
-   * A node that writes under an agent's note — an agent on someone's computer
-   * running a node of its own. It follows the account, but never writes for
-   * it: no list of spaces, no passes, no name. Every peer would ignore those.
+   * A node whose note doesn't grant `account/write` — an agent on someone's
+   * computer running a node of its own, say. It follows the account, but never
+   * writes for it: no list of spaces, no passes, no name. Every peer would
+   * ignore those.
    */
-  const agentSession = isAgentNote(current.encoded);
+  const narrowNote = !noteGrants(current.encoded, { with: '*', can: ACCOUNT_ABILITY });
 
   // ─── Events ────────────────────────────────────────────────────────
 
@@ -403,7 +406,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * all; a space not open now hears on its next open.
    */
   async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
-    if (spaceId === accountSpaceId || spaceId === contactsSpaceId || agentSession) return;
+    if (spaceId === accountSpaceId || spaceId === contactsSpaceId || narrowNote) return;
     const name = await ownName();
     if (name)
       await open.publishProfile({ name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) });
@@ -430,7 +433,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           rootDid: config.signer.did,
           ...(config.network ? { network: config.network } : {}),
           ...(mesh ? { mesh } : {}),
-          peopleOnly: ownSpace(spaceId),
+          accountOnly: ownSpace(spaceId),
           // The account's own spaces are always held whole: every device needs all of them.
           ...(config.cache && !ownSpace(spaceId) ? { cache: config.cache } : {}),
           watchIntervalMs: config.watchIntervalMs ?? 2000,
@@ -562,7 +565,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * new device joins with the key in use now.
    */
   async function remember(spaceId: string, options: { refresh?: boolean } = {}): Promise<void> {
-    if (!accountSpaceId || agentSession) return;
+    if (!accountSpaceId || narrowNote) return;
     const open = await runtime(accountSpaceId);
     const known = await open.get<Membership>(membershipKey(spaceId));
     // A view-only invite: what lets the account write is its role in the
@@ -630,7 +633,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * the space's tag: the carrier matches, never learns.
    */
   async function syncPasses(carrier: Carrier): Promise<void> {
-    if (!account || agentSession) return;
+    if (!account || narrowNote) return;
     const passes = new Map<string, SpacePass>();
     const spaces: NotifySpace[] = [];
     // The registry and the contacts too, so a restore can come through the carrier.
@@ -705,7 +708,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * manage is left to whoever does.
    */
   async function nameKeepers(spaceId: string, rt: SpaceRuntime): Promise<void> {
-    if (!account || agentSession || spaceId === accountSpaceId || hidden(spaceId)) return;
+    if (!account || narrowNote || spaceId === accountSpaceId || hidden(spaceId)) return;
     const access = await rt.access();
     if (!roleHolds(access.role, MANAGE)) return;
     const carriers = await carrierRecords();
@@ -1121,7 +1124,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     receipt: SignedStatus,
     description: HostDescription,
   ): Promise<void> {
-    if (agentSession || !accountSpaceId) return;
+    if (narrowNote || !accountSpaceId) return;
     const { name } = description;
     const peer = hostPeerAddress(hosting.url, description) ?? undefined;
     const same =
@@ -1158,7 +1161,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         // rather than answer "not carrying" while they're on their way.
         const handed = await inFlight.catch(() => null);
         if (handed) ({ status, receipt } = handed);
-      } else if (!status.carrying && paid && due && !agentSession) {
+      } else if (!status.carrying && paid && due && !narrowNote) {
         handedAt.set(hosting.url, Date.now());
         const attaching = carryFor(hosting).then((invite) => client.attach(config.signer.did, invite));
         handing.set(hosting.url, attaching);
@@ -1199,7 +1202,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /** Every device keeps its hosts carrying: after the registry changes, ask each once more */
   async function keepHosted(): Promise<void> {
-    if (agentSession) return;
+    if (narrowNote) return;
     for (const hosting of await hostingRecords()) await viewHosting(hosting).catch(() => {});
   }
 
@@ -1321,7 +1324,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (ownSpace(spaceId)) return;
     const hosts = await namedHosts(spaceId);
     await reachHosts(spaceId, hosts);
-    if (agentSession) return;
+    if (narrowNote) return;
     const named = hosts.map((h) => h.url).join(' ');
     const asked = spaceHostsAsked.get(spaceId);
     if (!hosts.length || (asked?.named === named && Date.now() - asked.at < SPACE_HOSTS_EVERY_MS)) return;
@@ -1383,7 +1386,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   const hosting = Object.freeze<NodeHosting>({
     async space(spaceId) {
-      const hand = !agentSession;
+      const hand = !narrowNote;
       const views = await Promise.all(
         (await namedHosts(spaceId)).map((known) => askSpaceHost(spaceId, known, hand)),
       );
@@ -1601,7 +1604,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (
       !contactKeys ||
       !record.verified ||
-      record.viaAgent ||
+      record.recordsOnly ||
       record.collection !== contactRequestSchema.name
     )
       return null;
@@ -1794,8 +1797,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const DAY_MS = 24 * 3600 * 1000;
 
   function requireContactKey(what: string): Uint8Array {
-    // Agents never open doors or knock, even one a home gave the contact key.
-    if (agentSession) throw new Error(`An agent can't use doors. ${what} is the person's to do.`);
+    // Doors are the account's: a key whose note doesn't grant `account/write` never opens one or knocks.
+    if (narrowNote)
+      throw new Error(`This key's note doesn't let it use doors. ${what} is the person's to do.`);
     if (!config.contactKey)
       throw new Error(
         `${what} needs your contact key. Connect to your account home again, and allow contacts.`,
@@ -2045,7 +2049,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   const doors = Object.freeze<NodeDoors>({
     async list() {
-      if (!config.contactKey || agentSession) return [];
+      if (!config.contactKey || narrowNote) return [];
       return Promise.all((await doorRecords()).map(doorView));
     },
 
@@ -2339,9 +2343,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         // The runtime refuses this too, and every peer ignores it — said early, with what to do instead.
         collections: {
           define: async () => {
-            throw new Error(
-              "An agent can't add or change collections. Propose an app instead (apps_propose), and a person in the space adds it.",
-            );
+            throw new Error(CANNOT_DEFINE);
           },
         },
         hosting: {

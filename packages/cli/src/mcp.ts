@@ -59,8 +59,10 @@ export function toolInstructions(node: P2PNode, options: McpOptions = {}): strin
         "write shows as you, and every member's device checks it against your role there. You cannot add " +
         'collections or change who is in a space.'
       : options.agent
-        ? ' You are an agent: what you write shows as the person\'s, "via agent". You cannot add collections or change ' +
-          'who is in a space; to make something new, propose an app (apps_propose) and the person adds it.'
+        ? ' You are an agent: what you write shows as the person\'s, "via agent". Your note lets you write records, ' +
+          'not add collections or change who is in a space; to make something new, propose the collections it needs ' +
+          "(collections_propose) and someone who may adds them. A collection's guides (collections_list) say how " +
+          'the apps in a space want new things proposed.'
         : '')
   );
 }

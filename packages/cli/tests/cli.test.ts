@@ -416,7 +416,7 @@ describe('MCP', () => {
       info,
       agent,
     );
-    assert.match(String(at(init, 'result', 'instructions')), /apps_propose/);
+    assert.match(String(at(init, 'result', 'instructions')), /collections_propose/);
     const tools = at(
       await handleMcpMessage(node, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, info, agent),
       'result',
@@ -425,7 +425,7 @@ describe('MCP', () => {
     assert.ok(Array.isArray(tools));
     const names = tools.map((tool: unknown) => at(tool, 'name'));
     for (const name of PERSON_ONLY) assert.ok(!names.includes(name), `${name} is not offered`);
-    assert.ok(names.includes('apps_propose') && names.includes('records_put'));
+    assert.ok(names.includes('collections_propose') && names.includes('records_put'));
 
     const refused = await handleMcpMessage(
       node,

@@ -254,8 +254,8 @@ From then on the agent starts `weave mcp` itself. It's a node of its own: it
 follows your account's list of spaces, meets your other devices over WebRTC,
 and keeps working with every tab closed. What it writes shows "via agent". It
 isn't offered what needs a person (making, joining or leaving spaces, invites,
-roles, defining collections): it proposes apps with `apps_propose`, and you add
-them. `weave disconnect` forgets it on this computer; disconnecting it in your
+roles, defining collections), and its note doesn't let it: it proposes
+collections with `collections_propose`, and you add them. `weave disconnect` forgets it on this computer; disconnecting it in your
 account home stops its note working everywhere.
 
 `weave mcp --account` serves the unlocked account instead, as you:

@@ -1,9 +1,12 @@
 # Agents
 
 An agent reads and writes as the person, with a note from their account that
-every peer checks. What it writes shows as theirs, "via agent", everywhere.
-It never gets the seed, and it can't do what needs a person: define
-collections, change roles, invite, join or leave spaces.
+every peer checks. The note grants writing records and nothing more
+(`expression/*`), so every peer refuses it defining collections, changing who
+may do what, or writing for the account ([spec 01](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md),
+abilities). The note also says the key is an agent's, so what it writes shows
+as theirs, "via agent", everywhere; that is a label, and no peer acts on it.
+It never gets the seed.
 
 ## Every operation, described once
 
@@ -58,16 +61,18 @@ _Source: `packages/core/src/session/agent-link.ts`, `apps/example/src/components
 `collections_list`, `records_query`, `records_list`, `records_get`,
 `records_linked`, `records_history`, `records_can`, `records_put`,
 `records_update`, `records_delete`, `activity_set` (what it is doing, for
-people to see), and for new tools: `apps_list`, `apps_propose`,
-`apps_screen_guide`. A bot, an account of its own, also gets
+people to see), and for new collections: `collections_standard`,
+`collections_proposals`, `collections_propose`. A bot, an account of its own, also gets
 `direct_list` and `direct_send`: it holds its own member key, and an agent
 isn't given the person's ([direct messages](direct-messages.md)).
 
-To make something new, an agent proposes an app (`apps_propose`): the
-collections it needs, optionally a screen for each, and optionally what is
-worth hearing about (`notify`: `[{ "label": "New ride", "collection":
-"carpool.ride" }]`), which people can then turn on with one click. The person
-reads what it would do and adds it. See [screens-and-apps.md](screens-and-apps.md).
+To make something new, an agent proposes the collections it needs
+(`collections_propose`), the same way a person whose role can't define
+collections does. Someone who may reads what it would do and applies it.
+What else an app keeps, such as a screen or what is worth hearing about, is
+the app's: `collections_list` points at the guides a space's apps wrote
+(`std.guide`), which say how to propose one there. See
+[blueprints and guides](blueprints-and-guides.md).
 
 ## Rules
 
@@ -106,7 +111,9 @@ by whoever wants to, with their own key.
 
 `node.asAgent({ keys, note })` gives the same node acting as an agent, from an
 agent's note issued by the account home. Everything it writes is signed under
-that note.
+that note. A record written under a note that can't define collections is
+`recordsOnly: true`; an app that runs what a record holds, as code, should
+trust only records without it.
 
 > **Planned (open question): naming the agent.** Records show as "via agent",
 > without saying which. The note could carry a name (say

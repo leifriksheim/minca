@@ -9,8 +9,8 @@ produced by an agent. It runs against the records one node holds of one space.
 > interface another query language plugs into, which reports the collections
 > it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them; and the
 > small filter a screen's `weave.list(collection, { where })` takes (field
-> equality and `link:<rel>`, `packages/core/src/schemas/screens.ts`), which
-> apps that run [screens](apps-as-records.md#screens) have to agree on.
+> equality and `link:<rel>`, `apps/example/src/components/apps/screens.ts`), which
+> apps that run [screens](blueprints-and-guides.md#apps-with-a-screen-of-their-own) have to agree on.
 > A [rule](rules.md) keeps a query in a record, so everything that runs rules
 > has to read this format the same way; peers that only sync and judge the
 > record still never read it.

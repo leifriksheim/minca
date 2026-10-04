@@ -222,7 +222,10 @@ one the prefix belongs to (`role:`→`sys.role`, `member:`→`sys.member`,
 A version yields no event when any of these hold:
 
 - it lacks `retain`;
-- it was written under an agent note ([01](01-identity.md)) — agents never change access;
+- its note does not grant the ability it needs: `collection/define` for a
+  `sys.collection` version, `access/change` for any other
+  ([01](01-identity.md) §8). A key whose note grants records only never
+  changes access, whatever its writer's role;
 - its signature, or the note chain behind it, does not verify ([02](02-records.md));
 - it is not a `sys.collection` version and it is deleted, or its body is
   encrypted, or its body is not an object;
@@ -516,8 +519,9 @@ A version outside the access collections **stands** when, in this order:
 
 1. its `space` equals the space id;
 2. its signature and note chain verify ([02](02-records.md)) — giving `root`;
-3. in the account's own spaces (registry, contacts, carry spaces) it is not
-   written under an agent note (_implementation detail_: `peopleOnly`);
+3. in the account's own spaces (registry, contacts, carry spaces) its note
+   grants `account/write` ([01](01-identity.md) §8; _implementation detail_:
+   `accountOnly`);
 4. its first version is present, is `seq` 0, has the same key and collection;
 5. `at(seen)` is available (else: not yet);
 6. with `rules` = the rules of the definition in force for its collection in
@@ -1088,7 +1092,8 @@ Example (seed `01 02 … 10`): registry `bkbogrf2jtmudunoee5mtpgfdenyrwbdnagfkog
 > everything the account signs.
 
 In these spaces only the account writes (a record whose root is another
-account is ignored by readers), and agents write nothing.
+account is ignored by readers), and nothing written under a note without
+`account/write` counts ([01](01-identity.md) §8).
 
 ### 13.2 What the registry records
 

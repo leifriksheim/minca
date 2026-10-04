@@ -14,8 +14,8 @@
  *
  * Two things stay, because the agent reads what other people wrote and any of
  * that may try to steer it: anything that removes, overwrites, joins, or
- * hands out a space's key asks you first; and it can't add collections —
- * it proposes an app (`apps_propose`) and you add it.
+ * hands out a space's key asks you first; and it can't add collections: it
+ * proposes them (`collections_propose`) and you add them.
  *
  * The tools are registered once, when the page loads, and stay: agents read
  * the list early, and a list that appears only after sign-in is one they miss.
@@ -33,8 +33,8 @@ const text = (value: string, isError = false) => ({
   ...(isError ? { isError: true } : {}),
 });
 
-/** Not offered: a new collection arrives as a proposal the person adds (`apps_propose`) */
-const PROPOSE_INSTEAD = new Set(['collections_define', 'collections_delete']);
+/** Not offered: a new collection arrives as a proposal the person adds (`collections_propose`) */
+const PROPOSE_INSTEAD = new Set(['collections_define', 'collections_delete', 'collections_apply']);
 
 /** Changes to a space's people or membership — asked about with what they'd do */
 const changesPeople = (name: string) => name.startsWith('spaces_');

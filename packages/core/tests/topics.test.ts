@@ -24,7 +24,7 @@ import { carriedFor, checkNotify, checkProposal, matchesRecord, whereHolds } fro
 import { channel, message, post } from '../src/schemas/library/publishing.js';
 import { comment } from '../src/schemas/library/annotations.js';
 import { task } from '../src/schemas/library/planning.js';
-import { standardNeeds } from '../src/schemas/apps.js';
+import { standardCollections } from '../src/schemas/blueprints.js';
 import { standardDefinition } from '../src/schemas/standard.js';
 import { toJsonSchema } from '../src/schema/collection-def.js';
 import { isRecord } from '../src/utils/guards.js';
@@ -460,11 +460,11 @@ describe('a standard message’s topics', () => {
   });
 
   test('an app that needs std.message gets its topics, and one without them is not the standard message', () => {
-    const needs = standardNeeds(['std.message']);
+    const needs = standardCollections(['std.message']);
     assert.ok(Array.isArray(needs) && isRecord(needs[0]));
     assert.deepEqual(needs[0].topics, ['link:channel', 'mentions', 'replyingTo']);
     const { topics: _topics, ...without } = { ...message, schema: toJsonSchema(message.schema) };
-    assert.throws(() => standardNeeds([without]), /different shape/);
+    assert.throws(() => standardCollections([without]), /different shape/);
   });
 
   test('every standard collection that names people has them as topics, so a keeper can tell them', () => {
@@ -494,7 +494,7 @@ describe('a standard message’s topics', () => {
       'std.expense': ['paidBy', 'owedBy'],
       'std.direct': ['to'],
     };
-    const needs = standardNeeds(Object.keys(expected));
+    const needs = standardCollections(Object.keys(expected));
     assert.ok(Array.isArray(needs));
     assert.deepEqual(
       Object.fromEntries(needs.map((need) => (isRecord(need) ? [need.name, need.topics] : [null, null]))),

@@ -3,72 +3,77 @@ import { message, useAction } from '@weave/app-shared/action';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
 import { useLive, useNode, useSpaces } from '@weaveprotocol/core/react';
 import {
-  addApp,
-  app as appSchema,
-  appScreen,
-  copyApp,
-  reviewApp,
-  type App,
-  type AppReview,
+  blueprint as blueprintSchema,
+  reviewBlueprint,
+  type Blueprint,
+  type BlueprintReview,
 } from '@weaveprotocol/core/schemas';
 import { AppBoard } from './AppBoard';
+import { addMade, copyApp, removeApp, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '../../derive/time';
 import { styles, palette } from '../../styles';
 import { Person } from '../Person';
 
-/** Apps made for this space as `std.app` records, judged by their rules rather than their words. */
-export function useMadeApps(space: SpaceSummary): ReadonlyArray<NodeRecord<App>> {
-  return (
-    useLive(
-      space.id,
-      (node) => node.records.list<App>(space.id, { collection: appSchema.name, newestFirst: true }),
-      [space.id],
-    ) ?? []
+/**
+ * The blueprint a proposed app points at, if any, and what applying it would
+ * do: worked out from its rules rather than its words.
+ */
+function useBlueprintReview(
+  space: SpaceSummary,
+  record: NodeRecord<LauncherApp>,
+  collections: ReadonlyArray<NodeCollection>,
+): { readonly plan: Blueprint | null; readonly review: BlueprintReview | null } {
+  const key = record.links.find((link) => link.rel === 'blueprint')?.to;
+  const blueprints = useLive(
+    space.id,
+    async (node) => (key ? node.records.list<Blueprint>(space.id, { collection: blueprintSchema.name }) : []),
+    [space.id, key],
   );
-}
-
-/** Whether an app record is readable and fully added */
-export function isAdded(record: NodeRecord<App>, collections: ReadonlyArray<NodeCollection>): boolean {
-  return !!record.body && reviewApp(record.body, collections).added;
+  const found = blueprints?.find((one) => one.key === key);
+  if (!found?.body) return { plan: null, review: null };
+  return {
+    plan: found.body,
+    review: reviewBlueprint(found.body, collections, { blueprints: blueprints ?? [], key: found.key }),
+  };
 }
 
 /** Proposals waiting for someone to add them */
 export function Proposals({
   space,
-  apps,
-  all,
+  proposals,
+  placed,
   collections,
   mayDefine,
   onAdded,
 }: {
   space: SpaceSummary;
-  apps: ReadonlyArray<NodeRecord<App>>;
-  /** Every app in the space, to name the one an update replaces */
-  all: ReadonlyArray<NodeRecord<App>>;
+  proposals: ReadonlyArray<NodeRecord<LauncherApp>>;
+  /** The apps on the launcher, to name the one an update replaces and to place the new one after */
+  placed: ReadonlyArray<NodeRecord<LauncherApp>>;
   collections: ReadonlyArray<NodeCollection>;
   mayDefine: boolean;
   onAdded: (key: string) => void;
 }) {
-  if (apps.length === 0) return null;
+  if (proposals.length === 0) return null;
   return (
     <section aria-label="Proposed apps" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div>
         <h2 style={styles.sectionTitle}>Proposed</h2>
         <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
-          Apps someone — or their agent — made for this space. Nothing changes until someone who can add
+          Apps someone, or their agent, made for this space. Nothing changes until someone who can add
           collections adds one. What each allows is worked out from its rules, not from what its author says
           about it.
         </p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {apps.map((record) => (
+        {proposals.map((record) => (
           <Proposal
             key={record.key}
             space={space}
             record={record}
-            replaces={all.find((other) => other.key === record.body?.updates)}
-            all={all}
+            replaces={placed.find((other) => other.key === record.body?.updates)}
+            placed={placed}
             collections={collections}
             mayDefine={mayDefine}
             onAdded={onAdded}
@@ -83,15 +88,15 @@ function Proposal({
   space,
   record,
   replaces,
-  all,
+  placed,
   collections,
   mayDefine,
   onAdded,
 }: {
   space: SpaceSummary;
-  record: NodeRecord<App>;
-  replaces: NodeRecord<App> | undefined;
-  all: ReadonlyArray<NodeRecord<App>>;
+  record: NodeRecord<LauncherApp>;
+  replaces: NodeRecord<LauncherApp> | undefined;
+  placed: ReadonlyArray<NodeRecord<LauncherApp>>;
   collections: ReadonlyArray<NodeCollection>;
   mayDefine: boolean;
   onAdded: (key: string) => void;
@@ -100,17 +105,24 @@ function Proposal({
   const { run, busy, error } = useAction();
   const [open, setOpen] = useState(false);
   const body = record.body;
-  const review: AppReview | null = body ? reviewApp(body, collections, { apps: all, key: record.key }) : null;
+  const { plan, review } = useBlueprintReview(space, record, collections);
+  // Collections it shows that neither the space nor its blueprint has: adding it would leave them missing.
+  const missing = (body?.collections ?? []).filter(
+    (name) =>
+      !collections.some((c) => c.name === name && c.version !== null) &&
+      !plan?.collections.some((c) => c.name === name),
+  );
+  const problem = review?.problem ?? (missing.length ? `the space has no ${missing.join(' or ')}` : null);
 
   const add = () =>
     run(async () => {
-      await addApp(node, space.id, record.key);
-      onAdded(record.key);
+      onAdded(await addMade(node, space.id, record, placed));
     });
-  const remove = () => run(() => node.records.delete(space.id, record.key));
+  const remove = () => run(() => removeApp(node, space.id, record.key));
 
   const mine = record.createdBy === node.did;
-  const changes = review?.needs.filter((need) => need.status === 'change') ?? [];
+  const changes = review?.collections.filter((one) => one.status === 'change') ?? [];
+  const reviewed = review?.collections ?? [];
 
   return (
     <article style={{ ...tile, gap: 12 }}>
@@ -122,7 +134,7 @@ function Proposal({
           <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 2 }}>
             Proposed by <Person did={record.createdBy} />
             {record.viaAgent && record.seq === 0 && <AgentBadge />} · {ago(record.createdAt)}
-            {body?.from && ' · copied from another space'}
+            {plan?.from && ' · copied from another space'}
             {replaces?.body && ` · an update to ${replaces.body.title}`}
           </p>
         </div>
@@ -137,7 +149,17 @@ function Proposal({
               Withdraw
             </button>
           )}
-          {mayDefine && review && !review.problem && (
+          {mayDefine && !mine && (
+            <button
+              onClick={() => void remove()}
+              disabled={busy}
+              data-variant="quiet"
+              style={{ ...styles.smallButton, height: 28 }}
+            >
+              Decline
+            </button>
+          )}
+          {mayDefine && body && !problem && (
             <button
               onClick={() => void add()}
               disabled={busy}
@@ -157,13 +179,11 @@ function Proposal({
         </p>
       )}
 
-      {review?.problem && <p style={styles.error}>This can't be added: {review.problem}</p>}
+      {problem && <p style={styles.error}>This can't be added: {problem}</p>}
 
-      {body && appScreen(body) && (
-        <ScreenNote screen={appScreen(body)!.screen} network={appScreen(body)!.network} />
-      )}
+      {body?.screen && <ScreenNote screen={body.screen} network={body.network ?? []} />}
 
-      {review && !review.problem && (
+      {!problem && reviewed.length > 0 && (
         <>
           {changes.length > 0 && (
             <p style={{ fontSize: 13, color: palette.accent.danger, lineHeight: 1.5 }}>
@@ -191,7 +211,7 @@ function Proposal({
           >
             {open
               ? 'Hide what it allows'
-              : `What it allows (${review.needs.length} ${review.needs.length === 1 ? 'collection' : 'collections'})`}
+              : `What it allows (${reviewed.length} ${reviewed.length === 1 ? 'collection' : 'collections'})`}
           </button>
           {open && (
             <ul
@@ -204,7 +224,7 @@ function Proposal({
                 borderTop: `1px solid ${palette.surface.line}`,
               }}
             >
-              {review.needs.map((need) => (
+              {reviewed.map((need) => (
                 <li key={need.definition.name} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
                     <span style={{ color: palette.ink.strong, fontWeight: 500 }}>
@@ -242,7 +262,7 @@ function Proposal({
         </>
       )}
 
-      {!mayDefine && review && !review.problem && (
+      {!mayDefine && !problem && (
         <p style={{ fontSize: 12, color: palette.ink.faint }}>
           Someone whose role lets them add collections can add it.
         </p>
@@ -347,13 +367,13 @@ export function MadeAppScreen({
   onOpen,
 }: {
   space: SpaceSummary;
-  record: NodeRecord<App>;
+  record: NodeRecord<LauncherApp>;
   collections: ReadonlyArray<NodeCollection>;
   onOpen: (record: NodeRecord) => void;
 }) {
   const body = record.body!;
-  const names = body.needs.map((need) => need.name);
-  const withScreen = names.map((name) => collections.find((c) => c.name === name)).find((c) => c?.screen);
+  const names = body.collections ?? [];
+  const screen = body.screen;
   const [plain, setPlain] = useState(false);
   const others = useSpaces().spaces.filter((other) => other.id !== space.id && other.writable);
 
@@ -362,9 +382,9 @@ export function MadeAppScreen({
       aria-label={body.title}
       style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, minHeight: 0 }}
     >
-      {(withScreen || others.length > 0) && (
+      {(screen || others.length > 0) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {withScreen && (
+          {screen && (
             <button
               onClick={() => setPlain((was) => !was)}
               data-variant="ghost"
@@ -376,14 +396,14 @@ export function MadeAppScreen({
           <CopyTo space={space} record={record} others={others} />
         </div>
       )}
-      {withScreen?.screen && !plain ? (
+      {screen && !plain ? (
         <ScreenFrame
           spaceId={space.id}
-          collection={withScreen.name}
+          appKey={record.key}
           collections={names}
-          screen={withScreen.screen}
-          network={withScreen.network ?? []}
-          title={body.title}
+          screen={screen}
+          network={body.network ?? []}
+          title={body.title ?? 'An app'}
         />
       ) : (
         <AppBoard space={space} names={names} collections={collections} onOpen={onOpen} />
@@ -399,7 +419,7 @@ function CopyTo({
   others,
 }: {
   space: SpaceSummary;
-  record: NodeRecord<App>;
+  record: NodeRecord<LauncherApp>;
   others: ReadonlyArray<SpaceSummary>;
 }) {
   const node = useNode();
@@ -415,7 +435,7 @@ function CopyTo({
           const target = others.find((other) => other.id === event.target.value);
           if (!target) return;
           setSaid(null);
-          copyApp(node, space.id, record.key, target.id).then(
+          copyApp(node, space.id, record, target.id).then(
             () => setSaid(`Proposed in ${target.name}`),
             (e: unknown) => setSaid(message(e)),
           );

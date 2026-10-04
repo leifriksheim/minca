@@ -27,13 +27,13 @@ specified in `spec/` in the repository: https://github.com/leifriksheim/weave/tr
 
 ## Guides
 
-| Guide                                            | Read it to                                                        |
-| ------------------------------------------------ | ----------------------------------------------------------------- |
-| [building-an-app.md](building-an-app.md)         | Get a node: sign-in, the account home, React                      |
-| [collections.md](collections.md)                 | Say what your data is and who may do what with it                 |
-| [records-and-queries.md](records-and-queries.md) | Write, edit, delete, query and watch records                      |
-| [screens-and-apps.md](screens-and-apps.md)       | Ship a small app inside a space, with no deploy                   |
-| [agents.md](agents.md)                           | Let an agent read and write as the person, from a terminal or MCP |
+| Guide                                                | Read it to                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| [building-an-app.md](building-an-app.md)             | Get a node: sign-in, the account home, React                        |
+| [collections.md](collections.md)                     | Say what your data is and who may do what with it                   |
+| [records-and-queries.md](records-and-queries.md)     | Write, edit, delete, query and watch records                        |
+| [proposing-collections.md](proposing-collections.md) | Grow a space's collections, and say how to use them, with no deploy |
+| [agents.md](agents.md)                               | Let an agent read and write as the person, from a terminal or MCP   |
 
 ## Reference
 
@@ -43,21 +43,21 @@ one. Some of it is a convention apps share, like `std.*` bodies and direct
 messages: an app that does it differently still syncs, but can't read what
 the others wrote.
 
-| Page                                       | Covers                                                                                                                                                                                   |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [node.md](node.md)                         | `createNode`: configuration, root signers and session notes, stores, holding spaces, following the account, events, the network, the app-side client, carriers and hosting, doors, React |
-| [sign-in.md](sign-in.md)                   | `createWeaveAuth`: places, account stores, ways in, passkeys, staying signed in, pods, pairing, the account home's side                                                                  |
-| [actions.md](actions.md)                   | The node's actions, and the CLI, MCP and WebMCP tools made of them                                                                                                                       |
-| [query-format.md](query-format.md)         | The JSON query format: filters, operators, sort and cursor, include                                                                                                                      |
-| [standard-library.md](standard-library.md) | Every `std.*` collection, and the conventions they follow                                                                                                                                |
-| [direct-messages.md](direct-messages.md)   | `std.direct` and `node.direct`: text sealed for some members of a space                                                                                                                  |
-| [apps-as-records.md](apps-as-records.md)   | `std.app`: the review, updates, notifications, compatibility, and how screens run                                                                                                        |
-| [rules.md](rules.md)                       | `std.rule`: when a query finds records a condition holds for, or at set times, do something: in an app, an agent or a bot                                                                |
-| [calls.md](calls.md)                       | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
-| [contacts.md](contacts.md)                 | `std.contact` and `std.contact-request`: the list, sealed requests, `node.contacts`                                                                                                      |
-| [doors.md](doors.md)                       | Doors kept as records, and how a knock becomes a contact: `std.door`, `std.knock`, the answer                                                                                            |
-| [spaces.md](spaces.md)                     | Role presets, invite defaults, key upkeep, profiles, the space manager                                                                                                                   |
-| [storage.md](storage.md)                   | Pacing sync, the store in memory, storage adapters, IndexedDB, data folders, blob stores and mirrors                                                                                     |
+| Page                                                 | Covers                                                                                                                                                                                   |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [node.md](node.md)                                   | `createNode`: configuration, root signers and session notes, stores, holding spaces, following the account, events, the network, the app-side client, carriers and hosting, doors, React |
+| [sign-in.md](sign-in.md)                             | `createWeaveAuth`: places, account stores, ways in, passkeys, staying signed in, pods, pairing, the account home's side                                                                  |
+| [actions.md](actions.md)                             | The node's actions, and the CLI, MCP and WebMCP tools made of them                                                                                                                       |
+| [query-format.md](query-format.md)                   | The JSON query format: filters, operators, sort and cursor, include                                                                                                                      |
+| [standard-library.md](standard-library.md)           | Every `std.*` collection, and the conventions they follow                                                                                                                                |
+| [direct-messages.md](direct-messages.md)             | `std.direct` and `node.direct`: text sealed for some members of a space                                                                                                                  |
+| [blueprints-and-guides.md](blueprints-and-guides.md) | `std.blueprint` and `std.guide`: proposing collections, the review, updates, guides, compatibility                                                                                       |
+| [rules.md](rules.md)                                 | `std.rule`: when a query finds records a condition holds for, or at set times, do something: in an app, an agent or a bot                                                                |
+| [calls.md](calls.md)                                 | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
+| [contacts.md](contacts.md)                           | `std.contact` and `std.contact-request`: the list, sealed requests, `node.contacts`                                                                                                      |
+| [doors.md](doors.md)                                 | Doors kept as records, and how a knock becomes a contact: `std.door`, `std.knock`, the answer                                                                                            |
+| [spaces.md](spaces.md)                               | Role presets, invite defaults, key upkeep, profiles, the space manager                                                                                                                   |
+| [storage.md](storage.md)                             | Pacing sync, the store in memory, storage adapters, IndexedDB, data folders, blob stores and mirrors                                                                                     |
 
 ## Rules of thumb
 
@@ -84,8 +84,8 @@ under **Planned** in each part. Library work that isn't protocol:
   when declared schemas differ from the space's catalogue.
 - **Typed collections.** One TypeScript builder that emits the schema, the
   rules and the types, and typed handles (`node.use(space, Poll)`).
-- **Definitions that update themselves.** `useSchemas` and `addApp` applying
-  harmless changes, with `differences()` in `packages/core/src/schemas/apps.ts`
+- **Definitions that update themselves.** `useSchemas` and `applyBlueprint` applying
+  harmless changes, with `differences()` in `packages/core/src/schemas/blueprints.ts`
   replaced by the planned `compare` ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md),
   compatible definitions).
 - **Web components** for the standard schemas.

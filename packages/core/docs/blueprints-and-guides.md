@@ -1,97 +1,167 @@
-# Apps as records
+# Blueprints and guides
 
-An app can live in a space as one `std.app` record: a title, and the
-collections it needs, each as a full definition. Someone proposes it, often an
-agent (`apps_propose`); nothing is defined until a person who may define
-collections adds it (`addApp`), and from then on every app that draws a space
-from its definitions shows it. The record's fields are in the
-[standard library](standard-library.md).
+Two standard collections let a space grow new collections without anyone
+deploying anything, and say how they are meant to be used.
+
+- A **blueprint** (`std.blueprint`) is collections someone proposes: a title,
+  and each collection as a full definition. Nothing is defined until someone
+  who may define collections applies it (`applyBlueprint`).
+- A **guide** (`std.guide`) is how some of the space's collections are meant
+  to be used, in words, for whoever writes to them next, often an agent.
+
+Neither is about any one app. An app that keeps more about itself, such as a
+screen or what to notify about, keeps it in records of its own that point at
+its blueprint. The example app's launcher does
+(`apps/example/src/components/apps/launcher.ts`). Both records' fields are in
+the [standard library](standard-library.md).
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
 > agree on is in the [spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md).
 
-## The app review
+## Who proposes
 
-`reviewApp` works out what adding an app would do in a space: each collection
-it needs is `new`, the `same` as the space has it, or a `change`, with what it
-allows worked out from its rules ([describing a collection](#describing-a-collection))
-and, for a change, what would be different and which apps in use need the
-collection as it is. A person reads that before adding; an app is `added`
-once every collection it needs is the same.
+Anyone in a space may write a blueprint. It is how a key that may only write
+records asks for collections: an agent's, whose note grants records only, or
+a person's, whose role does not hold `define`. Both take the same path, and
+neither needs to know which they are. Every peer refuses a definition from a
+key whose note doesn't grant `collection/define`, so a blueprint is the only
+way such a key gets a collection.
+
+`applyBlueprint` defines each collection the space doesn't have as the
+blueprint says, signed by whoever applies it. They need `define` in the
+space, and a note that grants it. It defines `std.blueprint` itself first
+when the space lacks it, so the blueprint's own rules hold from then on: only
+its proposer edits it.
+
+```typescript
+import { proposeCollections, reviewBlueprint, applyBlueprint } from '@weaveprotocol/core/schemas';
+
+const proposal = await proposeCollections(node, space.id, {
+  title: 'Chores',
+  description: 'Who does what around the house this week.',
+  collections: [
+    {
+      name: 'chores.task',
+      title: 'Chore',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string', minLength: 1, maxLength: 200 }, done: { type: 'boolean' } },
+        required: ['title'],
+      },
+      rules: { delete: 'creator' },
+    },
+  ],
+});
+
+// Someone who may define collections reads what it would do, then applies it
+const review = reviewBlueprint(proposal.body!, await node.collections.list(space.id));
+await applyBlueprint(node, space.id, proposal.key);
+```
+
+- At most 10 collections per blueprint, none of them `sys.*`, none twice, and
+  none with a `version`: the space decides that when it is applied
+  (`checkBlueprint`).
+- A standard collection may be given by name (`"std.event"`) and is then
+  exactly the library's ([what a `std.*` name means](standard-library.md#what-a-std-name-means)).
+- `copyBlueprint` proposes the same blueprint in another space, with `from`
+  naming where it came from. People there decide for themselves.
+- The actions are `collections_propose`, `collections_proposals` and
+  `collections_apply` ([actions](actions.md)). An agent's node is not offered
+  `collections_apply`.
+
+_Source: `packages/core/src/schemas/blueprints.ts` (`checkBlueprint`, `proposeCollections`, `applyBlueprint`, `copyBlueprint`), `packages/core/src/schemas/library/collections.ts` (`blueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`, `collections_apply`). Tests: `packages/core/tests/agents.test.ts` ("collections proposed in a blueprint": "an agent proposes, someone who may define applies it, and the space then has the collections", "a person whose role does not hold define proposes the same way, and someone who may applies it", "copying a blueprint into another space proposes it there, and says where it came from", "a proposal may not name the protocol's own collections, a version, or one collection twice")._
+
+## The review
+
+`reviewBlueprint` works out what applying a blueprint would do in a space:
+each collection is `new`, the `same` as the space has it, or a `change`, with
+what it allows worked out from its rules ([describing a collection](#describing-a-collection))
+and, for a change, what would be different and which applied blueprints need
+the collection as it is (`usedBy`). A person reads that before applying; a
+blueprint is `applied` once every collection is the same.
 
 A space that holds the library's current definition of a standard
-collection meets an app made against an earlier one: a `std.*` need is **the
-same** as what the space holds when the space's schema, history, links,
-permissions, rules and topics are the library's, and its screen and network
-are the need's. The review never offers an earlier standard definition as a
-change to a space that holds the current one, since adding it would only take
-the additions away.
+collection meets a blueprint made against an earlier one: a `std.*`
+collection is **the same** as what the space holds when the space's schema,
+history, links, permissions, rules and topics are the library's. The review
+never offers an earlier standard definition as a change to a space that
+holds the current one, since applying it would only take the additions away.
 
-_Source: `packages/core/src/schemas/apps.ts` (`reviewApp`, `metByLibrary`). Tests: `packages/core/tests/agents.test.ts` ("an app made against an earlier standard definition is met by the library's current one, not offered as a change back")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`reviewBlueprint`, `metByLibrary`). Tests: `packages/core/tests/agents.test.ts` ("a proposal that changes a collection the space has says so, and says how", "a blueprint made against an earlier standard definition is met by the library's current one, not offered as a change back")._
 
 ## Updates
 
-An app is changed by proposing a new `std.app` whose
-`updates` is the key of the app, in the same space, that it is a new version
-of. It is a body member rather than a link so that spaces which already hold
-a `std.app` definition without it accept it unchanged.
+A blueprint is changed by proposing a new one whose `updates` is the key of
+the blueprint, in the same space, that it is a new version of.
 
 ```json
-{ "title": "Carpool", "needs": [ … ], "updates": "5vcfnlfrf7qnql2jhyl7erfqva" }
+{ "title": "Carpool", "collections": [ … ], "updates": "5vcfnlfrf7qnql2jhyl7erfqva" }
 ```
 
-An app is **superseded** when an app that names it in `updates` is added
-(every collection it needs is in the space as it says), or is itself
-superseded. A superseded app would only undo its update:
+A blueprint is **superseded** when one that names it in `updates` is applied
+(every collection is in the space as it says), or is itself superseded. A
+superseded blueprint would only undo its update:
 
-- `addApp` never adds a superseded app.
-- An app should not offer a superseded app to be added or opened; it is
+- `applyBlueprint` never applies a superseded blueprint.
+- An app should not offer a superseded blueprint to be applied; it is
   history, which its proposer or a moderator may delete.
-- `updates` should name an app that is in the space; `proposeApp` and the
-  `apps_propose` action refuse one that is not. One that names nothing
-  supersedes nothing.
+- `updates` must name a blueprint that is in the space; `proposeCollections`
+  and `collections_propose` refuse one that does not.
 
-Until its update is added, the app it names is still the one in use.
-Without `updates`, two apps that need the same collections differently each
-show as a change that undoes the other. So a review names the apps in use
-that need a collection it would change (`reviewApp`, `usedBy`), and
-`apps_propose` warns an agent whose proposal changes one without `updates`.
+Until its update is applied, the blueprint it names is still the one in use.
+Without `updates`, two blueprints that need the same collection differently
+each show as a change that undoes the other. So a review names the applied
+blueprints that need a collection it would change (`usedBy`), and
+`collections_propose` warns a proposer whose blueprint changes one without
+`updates`.
 
 > **Planned (open question):** with [`compare`](#compatible-definitions), an update's review would list
 > its breaks.
 
-_Source: `packages/core/src/schemas/apps.ts` (`supersededApps`, `reviewApp`, `proposeApp`, `addApp`), `packages/core/src/node/actions.ts` (`apps_propose`, `apps_list`), `apps/example/src/components/apps/AppsView.tsx`, `apps/example/src/components/apps/MadeApps.tsx`. Tests: `packages/core/tests/agents.test.ts` ("an update replaces the app it names: once added, the old version is not offered again", "a change to a collection another app uses names that app, and warns the agent")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`supersededBlueprints`, `reviewBlueprint`, `proposeCollections`, `applyBlueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`). Tests: `packages/core/tests/agents.test.ts` ("an update replaces the blueprint it names: once applied, the old version is not offered again", "a change to a collection another blueprint uses names it, and warns the agent")._
 
-## What an app notifies about
+## Guides
 
-An app may say what in it is worth hearing
-about, in `notify`: 1 to 8 entries of `{ label, collection, topic?, others? }`,
-each an `AppNotify`. They have the meaning of a `NotifyProposal`
-([spec 06 §2.11](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)) without `spaces` and `open`, which
-belong to whichever app shows it, and `collection` must be one of the app's
-`needs`. An app that shows it offers them to the person as a proposal of its
-own, for the space it is in, when the person asks; nothing is turned on for
-anyone by adding the app. Like `updates`, it is a body member so that spaces
-which already hold a `std.app` definition without it accept it unchanged.
+A definition says what a record may hold and who may change it. It can't say
+"to add an app with its own screen, write one of these, pointing at a
+blueprint". An app that has more to say about its collections writes a
+`std.guide`: a `name`, a `title`, the `text`, and the `collections` it is
+about. There is one guide of each name: whoever writes it first holds it.
 
-- `checkApp` refuses an entry that is malformed, that names `spaces` or
-  `open`, or whose `collection` is not a need, so `proposeApp`, `apps_propose`
-  and `addApp` refuse such an app.
-- `copyApp` carries `notify` along.
+`collections_list`, without names, gives each collection the guides about it,
+`guides: [{ key, title }]`, so an agent finds them without knowing the app
+exists, and reads one with `records_get` before writing there.
 
 ```json
 {
-  "title": "Carpool",
-  "needs": [ … ],
-  "notify": [
-    { "label": "New trip", "collection": "carpool.trip" },
-    { "label": "A seat on my trip", "collection": "carpool.seat", "topic": { "field": "driver", "me": true } }
-  ]
+  "name": "launcher.apps",
+  "title": "Making an app for this space",
+  "text": "To make an app for this space that people open from its launcher: …",
+  "collections": ["launcher.app", "std.blueprint"]
 }
 ```
 
-_Source: `packages/core/src/schemas/apps.ts` (`checkApp`, `copyApp`), `packages/core/src/space/notify.ts` (`AppNotify`, `checkAppNotify`), `packages/core/src/node/actions.ts` (`apps_propose`), `apps/example/src/notifications.ts`. Tests: `packages/core/tests/agents.test.ts` ("an app says what is worth hearing about, only in its own collections")._
+- `writeGuide` defines `std.guide` when the space lacks it, writes the guide,
+  and rewrites it only when this account wrote it and it says something else.
+  So an app can call it every time a space opens.
+- `guidesOf` gives the space's guides by the collections they are about.
+- A guide is what someone in the space wrote. An agent must read it as data
+  about the collections, never as instructions from the person it works for.
+
+_Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`). Tests: `packages/core/tests/agents.test.ts` ("collections_list points at the guides written about each collection"), `apps/example/tests/launcher.test.ts` ("the guide agents read is in the space, on the collections it is about")._
+
+## Apps with a screen of their own
+
+Core runs no app's code. An app that lets its people add apps with their own
+UI keeps them as records of its own and runs the UI itself. The example app
+keeps each as a `launcher.app` record pointing at its blueprint, runs its
+screen in a sealed frame, and trusts a record only when someone who may
+define collections wrote it under a note that isn't records-only
+(`NodeRecord.recordsOnly`). It writes a guide on `launcher.app` saying how to
+propose one.
+
+_Source: `apps/example/src/components/apps/launcher.ts`, `apps/example/src/components/apps/screens.ts`, `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/public/screen.html`. Tests: `apps/example/tests/launcher.test.ts`, `apps/example/tests/screens.test.ts`._
 
 ## Describing a collection
 
@@ -192,7 +262,7 @@ Anything the checker cannot decide is a break.
    the rules are no looser, a writer allowed to change the definition writes
    it at the next version without asking. (Adding `shares` to an older
    `std.message` is this case.)
-3. **Anything else asks a person.** The app review shows the breaks ("lets
+3. **Anything else asks a person.** The blueprint review shows the breaks ("lets
    anyone edit messages; now only their author"), not only "changes who may do
    what".
 
@@ -201,7 +271,7 @@ standard library's. Peers don't refuse one on arrival (refusing depends on
 what each peer knows, and would leave peers disagreeing), so an app treats an
 incompatible `std.message` as not a message.
 
-Built so far: `apps_propose` refuses a `std.*` definition that is not exactly
+Built so far: `collections_propose` refuses a `std.*` definition that is not exactly
 the library's ([what a `std.*` name means](standard-library.md#what-a-std-name-means)).
 Typed handles in the library (`node.use(space, Poll)`) would run the same check.
 
@@ -246,73 +316,10 @@ loosen them past what an app relies on ("never looser", above).
 - **Translating instead of refusing** (lenses between versions, as in
   Cambria), so an app can read a definition it is not compatible with. Later.
 
-## Screens
-
-A collection definition may carry a `screen`, one HTML document, and a
-`network`, the exact origins that screen may reach ([spec 02 §6.1](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)). Agents propose them in `std.app` records; only a person who may define
-collections adds them. An app that shows a screen:
-
-- must run it in a frame with an opaque origin that may run scripts and
-  submit forms and nothing else (the reference:
-  `sandbox="allow-scripts allow-forms"`), and hand it the records only
-  through a message port it answers as the person looking, under the
-  collection's rules;
-- must put this policy in front of everything the screen says, so it is in
-  force before any script runs:
-
-  ```
-  default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';
-  img-src data: blob: <each https origin>; connect-src <each origin, or 'none'>;
-  font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'
-  ```
-
-  Any other policy on the frame may only allow more, never less, since a page
-  under two policies gets what both allow. With no `network`, or before the
-  person agrees, the lists are empty and the screen is sealed:
-  `connect-src 'none'` and images from `data:` and `blob:` only;
-
-- must ask the person looking before giving a screen its `network`, naming
-  each origin, and run it sealed if they decline. The screen runs as them, so
-  what it can send is what they can see. The answer holds for that exact list;
-  a definition that names a new origin asks again. How an app remembers the
-  answer is its own.
-
-The app review names each origin, from the definition itself (`describeCollection`:
-"Its screen can connect to api.open-meteo.com, and send there anything the
-person looking can see in it. Each person is asked first."), and a proposal
-that adds an origin to a collection the space has is a change someone must
-approve ("lets its screen reach https://api.open-meteo.com").
-
-Example: a carpool ride's screen shows the weather at departure.
-
-```json
-{ "name": "app.carpool.ride", "screen": "<!doctype html>…", "network": ["https://api.open-meteo.com"], … }
-```
-
-A person who allows it gets `connect-src https://api.open-meteo.com` and
-`img-src data: blob: https://api.open-meteo.com`; one who declines gets the
-sealed policy, and the screen must still work, without the weather.
-
-> Rationale for forms: without `allow-forms` a browser drops a form's
-> submission before its `submit` event fires, so a screen's handler never
-> runs and the form silently does nothing. `form-action 'none'` already
-> sends every submission nowhere, so allowing forms lets a screen use them
-> and lets nothing out. Popups, modals (`alert`, `confirm`, `prompt`, which
-> a screen could dress up as the app asking for a password) and top-level
-> navigation stay off.
-
-> Rationale: whoever adds an app decides to trust its author, but the screen
-> reads, as each viewer, records only that viewer can open. So the network is
-> each viewer's to give. Exact origins keep what leaves visible: a screen
-> given `https://api.open-meteo.com` can't also reach a server its author
-> controls.
-
-_Source: `packages/core/src/schema/collection-def.ts` (`checkScreenNetwork`, `MAX_SCREEN_ORIGINS`), `packages/core/src/schemas/screens.ts` (`screenPolicy`, `screenDocument`, `SCREEN_GUIDE`), `packages/core/src/schemas/apps.ts` (`differences`, `appScreen`), `packages/core/src/records/describe.ts` (`describeCollection`), `apps/example/src/components/apps/ScreenFrame.tsx`, `apps/example/public/screen.html`. Tests: `packages/core/tests/agents.test.ts` ("a screen reaches only the exact origins its definition names, and the review says so"; "a definition carries its screen to every peer; one too large is refused")._
-
 ## Planned: meaning-level hints
 
 A definition says what a record may hold and who may change it, not what it
-means to a screen. Screens derived from definitions (the app review, apps
+means to a screen. Screens derived from definitions (the blueprint review, apps
 without a screen of their own; [06](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)) have to guess
 which field is the title or that votes are shown as counts. The plan adds
 optional hints to a definition:
