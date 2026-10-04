@@ -264,7 +264,7 @@ this one own the use; this table is the registry.
 | `weave/contacts/nonce/v1`               | as above                                  | vault key bytes                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:93,104` | 03     |
 | `weave/contacts/key/v1`                 | as above                                  | vault key bytes                                                                      | AES-256-GCM space key      | Contacts space                                               | `space/account-registry.ts:93,105` | 03     |
 | `weave/topic-tags/v1`                   | HKDF → HMAC-SHA256 key                    | raw space key (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:224`        | 04     |
+| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:219`        | 04     |
 | `weave-agent-link-room-v1`              | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                          | room id                    | Agent link room                                              | `session/agent-link.ts:24`         | 06     |
 | `weave-agent-link-key-v1`               | HKDF, L=32                                | 16-byte connect-code secret                                                          | AES-256-GCM key            | Agent link messages                                          | `session/agent-link.ts:25`         | 06     |
 
@@ -278,7 +278,7 @@ by a convention built on the protocol (`packages/core/docs/`), not by it:
 | `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:204`                                   | 03     |
 | `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:191`                                   | 03     |
 | `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:193`                                   | 03, 04 |
-| `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1340`                                           | docs   |
+| `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1506`                                           | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>`           | Sealing context (the text)                       | `privacy/direct.ts:37`                                        | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>\|<reader>` | `sealFor` context (one reader's box)             | `privacy/direct.ts:41`                                        | docs   |
 | `weave/knock/v1\|<doorKey>`                            | `sealFor` context                                | `doors/doors.ts` (`sealKnock`)                                | 07     |
@@ -308,7 +308,7 @@ Notes:
 | **Root key**         | `P256KeyFrom(seed)`                                 | The account's              | UCANs only (§7)                         |
 | **Session key**      | Fresh random P-256 key pair                         | One node run               | Records, peer-auth messages             |
 | **App key**          | Fresh random P-256 key pair kept by an app          | Until the app forgets it   | Records, under a grant                  |
-| **Agent key**        | Fresh random P-256 key pair kept by an agent        | Until the agent forgets it | Records, under an agent note (§8)       |
+| **Agent key**        | Fresh random P-256 key pair kept by an agent        | Until the agent forgets it | Records, under a records-only note (§8) |
 | **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`         | The account's              | Nothing; ECDH only (§9)                 |
 | **Member key**       | `ScalarFrom(HKDF(vaultKey, member label, 48))`      | The account's              | Nothing; ECDH only (§9)                 |
 | **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`      | Until the door is closed   | Nothing; ECDH only (§9)                 |
@@ -329,10 +329,10 @@ notes through, are the library's: see
 
 A node signs records with a session key (§6) under a note from the root
 (§7) made out to it: `aud` is the session DID, `prf` is `[]`, and `fct` is
-absent, or `[{"weave":"agent"}]` for an agent's own node (§8). Every record the
+absent, or `[{"weave":"agent"}]` for an agent's own node (§8.1). Every record the
 session key signs carries that leaf token, encoded, as its `proof`
 ([02 — Records](02-records.md)). Peers check only that the note verifies and
-covers what each record needs (§7.4–§7.6); which capabilities it grants, how
+covers what each record needs (§7.4–§7.6, §8); which capabilities it grants, how
 long it lasts and when it is renewed are the node's choice
 ([Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes),
 [06](06-nodes-and-sessions.md)).
@@ -387,7 +387,7 @@ token = b64u(canonicalJSON(header)) "." b64u(canonicalJSON(payload)) "." b64u(si
 | `nnc` | string                | issuers always set it | Nonce: 8 random bytes as 16 lowercase hex characters. Not checked by verifiers |
 | `att` | array of Capability   | yes                   | Capabilities granted (may be empty)                                            |
 | `prf` | array of string       | yes                   | CIDs of parent tokens (§7.5); `[]` for a token issued directly by the root     |
-| `fct` | array of object       | no                    | Facts. Omitted when there are none. Weave defines one fact (§8)                |
+| `fct` | array of object       | no                    | Facts. Omitted when there are none. Weave defines one fact (§8.1)              |
 
 `nbf` is optional in UCAN 0.10 but **required** here: a verifier MUST reject a
 token without a finite numeric `exp` and `nbf`.
@@ -409,15 +409,20 @@ Resources and abilities in use:
 | `*`               | Every space |
 | `space:<spaceId>` | One space   |
 
-| `can`              | Meaning                                                                                            |
-| ------------------ | -------------------------------------------------------------------------------------------------- |
-| `expression/write` | Write records (what a record in a space requires: `{with: "space:<id>", can: "expression/write"}`) |
-| `expression/read`  | Read-only access (app grants with read access)                                                     |
-| `expression/*`     | Every `expression/…` ability                                                                       |
-| `*`                | Every ability                                                                                      |
+| `can`               | Meaning                                                                                                     |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `record/write`      | Write records (what a record in a space requires: `{with: "space:<id>", can: "record/write"}`)              |
+| `record/read`       | Read-only access (app grants with read access)                                                              |
+| `record/*`          | Every `record/…` ability: records, and nothing more                                                         |
+| `collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                   |
+| `access/change`     | Every other change to a space's access history: roles, members, invites, revocations, keys, relays, keepers |
+| `account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                             |
+| `*`                 | Every ability                                                                                               |
 
 What each ability permits in a space is specified in
-[02 — Records](02-records.md) and [06](06-nodes-and-sessions.md).
+[02 — Records](02-records.md), [03 — Spaces](03-spaces.md) and
+[06](06-nodes-and-sessions.md). Which abilities a version needs, and how a
+peer checks them, is §8.
 
 > **Planned: grants narrower than a space.** The smallest resource is a whole
 > space, so an app or agent granted a private space can write in every
@@ -483,7 +488,7 @@ an `iss` whose multicodec is not `p256-pub` (§4).
   `floor(Date.parse(createdAt) / 1000)` — so a record stays valid after the
   session's token expires ([02 — Records](02-records.md) bounds how far in the
   future `createdAt` may be);
-- for anything else (an app checking its grant, an agent note), the current
+- for anything else (an app checking its grant, an agent's note), the current
   time.
 
 The cost: `createdAt` is whatever the writer typed, so a leaked session key
@@ -549,9 +554,9 @@ note to a helper.
 
 What it unblocks:
 
-- Agent notes today are signed **root → agent key** directly, only because
-  peers resolve one link (§8, [06](06-nodes-and-sessions.md)). With chains, an
-  app could delegate to its agent itself.
+- Agents' notes today are signed **root → agent key** directly, only because
+  peers resolve one link (§8.1, [06](06-nodes-and-sessions.md)). With chains,
+  an app could delegate to its agent itself, a narrower note than its own.
 - The older idea of **roles as delegations** ("anyone the owner made a
   moderator" as a UCAN from the owner, carried in the record's proof) needed
   this. Roles now live in the space's access history
@@ -560,7 +565,7 @@ What it unblocks:
 
 Open questions:
 
-- Where parents go: a new optional expression member (for example
+- Where parents go: a new optional version member (for example
   `proofs: [token, …]`, parents in order), or tokens stored once per space and
   referred to by CID. The first is self-contained; the second is smaller when
   one note signs many records.
@@ -575,8 +580,8 @@ A parent capability `P` covers a child capability `C` iff both hold:
 - `P.with == "*"` or `P.with == C.with` (exact string match — no other
   wildcards; `space:*` is _not_ a pattern);
 - `P.can == "*"`, or `P.can == C.can`, or `P.can` ends in `/*` and `C.can`
-  starts with `P.can` minus its final `*` (so `expression/*` covers
-  `expression/write` and `expression/read`, but not `*`).
+  starts with `P.can` minus its final `*` (so `record/*` covers
+  `record/write` and `record/read`, but not `*`).
 
 ### 7.7 Example
 
@@ -589,7 +594,7 @@ Payload JSON:
 
 ```json
 {
-  "att": [{ "can": "expression/*", "with": "*" }],
+  "att": [{ "can": "record/*", "with": "*" }],
   "aud": "did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169",
   "exp": 1790000000,
   "fct": [{ "weave": "agent" }],
@@ -604,37 +609,70 @@ Encoded (ECDSA signatures are randomized, so the third part differs every
 time):
 
 ```
-eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsInVjdiI6IjAuMTAuMCJ9.eyJhdHQiOlt7ImNhbiI6ImV4cHJlc3Npb24vKiIsIndpdGgiOiIqIn1dLCJhdWQiOiJkaWQ6a2V5OnpEbmFlckRhVEY1QlhFYXZDcmZSWkVrMzE2ZHBiTHNmUERaM1dKNWhSVFBGVTIxNjkiLCJleHAiOjE3OTAwMDAwMDAsImZjdCI6W3sid2VhdmUiOiJhZ2VudCJ9XSwiaXNzIjoiZGlkOmtleTp6RG5hZWFBN0JjVnhBaUxkTlAxNXdMdlM2U0MxdmFRYzl6cGVWeHJVcEVDNDh5eGtyIiwibmJmIjoxNzg5OTk2MTAwLCJubmMiOiIwMTIzNDU2Nzg5YWJjZGVmIiwicHJmIjpbXX0.rHSTyMWb-ryjlm0LoqyvPnye5o9PFGXL-zVv7bCx6g-6e4ZVPkOibbYtgHOOoMV9uNBQyuaKr20WDdngn638cg
+eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsInVjdiI6IjAuMTAuMCJ9.eyJhdHQiOlt7ImNhbiI6InJlY29yZC8qIiwid2l0aCI6IioifV0sImF1ZCI6ImRpZDprZXk6ekRuYWVyRGFURjVCWEVhdkNyZlJaRWszMTZkcGJMc2ZQRFozV0o1aFJUUEZVMjE2OSIsImV4cCI6MTc5MDAwMDAwMCwiZmN0IjpbeyJ3ZWF2ZSI6ImFnZW50In1dLCJpc3MiOiJkaWQ6a2V5OnpEbmFlYUE3QmNWeEFpTGROUDE1d0x2UzZTQzF2YVFjOXpwZVZ4clVwRUM0OHl4a3IiLCJuYmYiOjE3ODk5OTYxMDAsIm5uYyI6IjAxMjM0NTY3ODlhYmNkZWYiLCJwcmYiOltdfQ.Y5L8NSDzSGQy2SbWMJyhYDV8nSOvTjySrbOoqyAIpbpdpbU5wH9MsnWQAJ15N4Z0WyTMBd70wRDB-dLaUz3Olg
 ```
 
-Its CID (for this exact string): `bykutxpp5vpapg44f3cvy5vt3wiynyt2odlswcbez6dpt4u5fcera`.
+Its CID (for this exact string): `bz2isut3y2xpj7qfz4ufmnbjpn7yitvm4hjuikxczrmawkx4ud2ca`.
 
 _Source:_ `packages/core/src/identity/ucan.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/node/space-runtime.ts` (`writeCapability`, `noteCid`).
 _Tests:_ `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`, `packages/core/tests/attacks.test.ts`.
 
 ---
 
-## 8. Agent notes
+## 8. What a note lets a key do
 
-An **agent** is not an identity. It writes for an account under a UCAN from
-that account, like an app. What marks the key as an agent's is one fact the
-account signs into the note:
+A key may do in a space what its note grants there, judged by capability
+coverage (§7.6) against what each version needs. The protocol never asks what
+kind of thing holds a key: a person's session, an app, an agent and a borrowed
+device are told apart only by what their notes grant.
+
+| A version in space `S`…                                                                                                     | needs `{ "with": "space:S", "can": … }` |
+| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| any record                                                                                                                  | `record/write`                          |
+| and in `sys.collection`                                                                                                     | also `collection/define`                |
+| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | also `access/change`                    |
+| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | also `account/write`                    |
+
+A knock ([07 — Doors](07-doors.md)) needs `{ "with": "*", "can": "account/write" }`.
+
+- A version with no `proof` was signed by its author key itself, which may do
+  anything (§6).
+- A peer MUST ignore a change to the access history whose note does not grant
+  the ability it needs: it is not an event in the history, whatever the
+  writer's role ([03 — Spaces](03-spaces.md)). A version in one of the
+  account's own spaces whose note lacks `account/write` MUST NOT count there.
+- The check reads the leaf note's `att`. A chain that verifies (§7.5) never
+  grants more than its parents, so the leaf says enough.
+
+A person's own sessions, and apps granted write, get `*`. A key the account
+trusts less, such as an agent's, gets `record/*`: it writes records, and
+proposes anything more for someone who may to apply
+([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
+
+> Rationale: earlier, the protocol marked agents with a fact and refused, from
+> a note that carried it, exactly these changes. That tied the protocol to one
+> kind of key. Abilities say the same thing in what UCAN already has, and
+> serve any key the account trusts less, a person's too.
+
+_Source:_ `packages/core/src/identity/abilities.ts` (`noteGrants`, `DEFINE_ABILITY`, `ACCESS_ABILITY`, `ACCOUNT_ABILITY`), `packages/core/src/node/space-runtime.ts` (`accessCapability`, `buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantCapabilities`).
+_Tests:_ `packages/core/tests/agents.test.ts` ("what counts is what the note grants, not whether it says agent", "a definition an agent signs by hand is ignored by every peer", "taking someone out of the space, signed by an agent, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants account/write: …").
+
+### 8.1 The agent fact
+
+The account may sign one fact into a note to say its key is an agent's:
 
 ```json
 { "weave": "agent" }
 ```
 
-- A note is an **agent note** iff its payload's `fct` is an array containing an
-  object whose `weave` member is the string `"agent"`. Anything unparseable is
-  not an agent note.
+- A note is an **agent's note** iff its payload's `fct` is an array containing
+  an object whose `weave` member is the string `"agent"`. Anything unparseable
+  is not one.
 - The fact is only meaningful in a note whose signature and chain verify
   (§7); on its own it proves nothing.
-- The fact is set by the account (the root signer) when it issues the note.
-  Nothing about the key itself says "agent".
-
-What agents may not do (change collections, roles, membership) and how peers
-enforce it is specified in [02 — Records](02-records.md),
-[03 — Spaces](03-spaces.md) and [06](06-nodes-and-sessions.md).
+- It is a label. Apps show records written under it as "via agent"; a peer
+  MUST NOT judge a version differently for carrying it. What the key may do is
+  what the note grants (§8).
 
 _Source:_ `packages/core/src/identity/agent-note.ts`, `packages/core/src/session/auth.ts` (issuing with `AGENT_FACT`).
 _Tests:_ `packages/core/tests/agents.test.ts`.

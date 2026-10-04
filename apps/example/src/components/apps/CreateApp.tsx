@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SpaceSummary } from '@weaveprotocol/core';
 import { Modal } from '@weave/app-shared/Modal';
 import { ConnectAgent, useKnownAgent } from '../ConnectAgent';
 import { Icon } from '../Icon';
-import { useMadeApps } from './MadeApps';
+import { useNode } from '@weaveprotocol/core/react';
+import { useLauncherRecords } from './entries';
+import { prepareLauncher } from './launcher';
 import { DESIGNS, designPrompt, type Design } from './designs';
 import { styles, palette, ui, variants } from '../../styles';
 
@@ -29,7 +31,11 @@ const rememberedDesign = (): Design => {
   }
 };
 
-/** Making an app by describing it to an agent, which proposes it as a `std.app` record to add. */
+/**
+ * Making an app by describing it to an agent, which proposes it as the guide
+ * the launcher writes in the space says: a blueprint, and a `launcher.app`
+ * record to add.
+ */
 export function CreateApp({
   space,
   mayDefine,
@@ -45,7 +51,12 @@ export function CreateApp({
   onBuildByHand?: () => void;
 }) {
   const known = useKnownAgent();
-  const apps = useMadeApps(space);
+  const node = useNode();
+  const apps = useLauncherRecords(space.id);
+  // The guide the agent reads is in the space before it looks, when this person may write it.
+  useEffect(() => {
+    if (mayDefine) void prepareLauncher(node, space.id).catch(() => {});
+  }, [node, space.id, mayDefine]);
   const [idea, setIdea] = useState('');
   const [connecting, setConnecting] = useState(false);
   // The apps there were when the prompt was copied; one not among them is the answer.
@@ -65,7 +76,7 @@ export function CreateApp({
   if (connecting) return <ConnectAgent onClose={() => setConnecting(false)} />;
 
   const what = idea.trim().replace(/[.\s]+$/, '');
-  const prompt = `In my Weave space "${space.name}", make an app: ${what}. Use the standard collections where they fit, and propose it to the space, saying what is worth being notified about. ${designPrompt(design)}`;
+  const prompt = `In my Weave space "${space.name}", make an app: ${what}. Use the standard collections where they fit, and propose it to the space the way the space's guide on launcher.app says (collections_list points at it), saying what is worth being notified about. ${designPrompt(design)}`;
   const agent = known ?? 'your agent';
   const adds = mayDefine ? 'you add it' : 'someone who runs the space adds it';
   const byHand = mayDefine ? onBuildByHand : undefined;
@@ -83,7 +94,7 @@ export function CreateApp({
       () => setCopyFailed(true),
     );
   };
-  const proposed = before && apps.find((one) => !before.has(one.key) && one.body)?.body;
+  const proposed = before && apps.find((one) => !before.has(one.key) && one.body && !one.body.builtIn)?.body;
 
   return (
     <Modal title="Create an app" onClose={onClose} width={560}>

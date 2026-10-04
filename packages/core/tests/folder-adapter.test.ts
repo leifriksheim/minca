@@ -12,19 +12,19 @@ import { createStorageProvider, type StorageProvider } from '../src/storage/stor
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { utf8Encode, utf8Decode } from '../src/utils/encoding.js';
-import type { Expression } from '../src/types.js';
+import type { Version } from '../src/types.js';
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
 const COLLECTION = 'app.test.note';
 
-/** A signed expression, so the fixtures look like the real thing. */
-async function makeExpression(text: string): Promise<Expression> {
+/** A signed version, so the fixtures look like the real thing. */
+async function makeVersion(text: string): Promise<Version> {
   const keys = await provider.generateKeyPair();
   const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
-  const unsigned = createExpression({ author: did, collection: COLLECTION, body: { text } });
+  const unsigned = createVersion({ author: did, collection: COLLECTION, body: { text } });
   return await signer.sign(unsigned, keys.privateKey);
 }
 
@@ -96,19 +96,19 @@ describe('folder adapter — key/value storage', () => {
   });
 });
 
-describe('folder adapter — expressions', () => {
-  test('stores each expression as its own file', async () => {
+describe('folder adapter — versions', () => {
+  test('stores each version as its own file', async () => {
     const folder = createMemoryDirectory();
     const adapter = await createFolderAdapter(folder.handle, 'notes');
 
-    const first = await makeExpression('one');
-    const second = await makeExpression('two');
-    await adapter.putExpression(first);
-    await adapter.putExpression(second);
+    const first = await makeVersion('one');
+    const second = await makeVersion('two');
+    await adapter.putVersion(first);
+    await adapter.putVersion(second);
 
-    assert.deepEqual([...(await adapter.listExpressionIds())].sort(), [first.id, second.id].sort());
-    assert.deepEqual(await adapter.getExpression(first.id), first);
-    assert.equal(await adapter.getExpression('nope'), null);
+    assert.deepEqual([...(await adapter.listVersionIds())].sort(), [first.id, second.id].sort());
+    assert.deepEqual(await adapter.getVersion(first.id), first);
+    assert.equal(await adapter.getVersion('nope'), null);
 
     // One file per record, named after its own hash — that is what lets two
     // copies of the folder merge by union.
@@ -120,12 +120,12 @@ describe('folder adapter — expressions', () => {
   test('reopening a folder finds what was written before', async () => {
     const folder = createMemoryDirectory();
     const first = await createFolderAdapter(folder.handle, 'notes');
-    const expression = await makeExpression('durable');
-    await first.putExpression(expression);
+    const version = await makeVersion('durable');
+    await first.putVersion(version);
     await first.close();
 
     const reopened = await createFolderAdapter(folder.handle, 'notes');
-    assert.deepEqual(await reopened.getExpression(expression.id), expression);
+    assert.deepEqual(await reopened.getVersion(version.id), version);
   });
 });
 
@@ -157,20 +157,20 @@ describe('two origins, one folder', () => {
     const a = await openOrigin(folder.open());
     const b = await openOrigin(folder.open());
 
-    const expression = await makeExpression('written on A');
-    await a.storage.addExpression(expression);
+    const version = await makeVersion('written on A');
+    await a.storage.addVersion(version);
 
     // Reconciling notices the file A added. (Both read the same root pointer
     // from disk, so B's lists already include it; reconciling is what repairs
     // a tree whose pointer write was lost.)
     const result = await reconcileFolder(b.storage, b.adapter);
-    assert.deepEqual(result.added, [expression.id]);
+    assert.deepEqual(result.added, [version.id]);
     assert.equal(result.changed, true);
 
-    const seen = await b.storage.queryExpressions(COLLECTION);
+    const seen = await b.storage.queryVersions(COLLECTION);
     assert.deepEqual(
       seen.map((item) => item.id),
-      [expression.id],
+      [version.id],
     );
   });
 
@@ -179,15 +179,15 @@ describe('two origins, one folder', () => {
     const a = await openOrigin(folder.open());
     const b = await openOrigin(folder.open());
 
-    const expression = await makeExpression('short-lived');
-    await a.storage.addExpression(expression);
+    const version = await makeVersion('short-lived');
+    await a.storage.addVersion(version);
     await reconcileFolder(b.storage, b.adapter);
-    assert.equal((await b.storage.queryExpressions(COLLECTION)).length, 1);
+    assert.equal((await b.storage.queryVersions(COLLECTION)).length, 1);
 
-    await a.storage.removeExpression(expression.id);
+    await a.storage.removeVersion(version.id);
     await reconcileFolder(b.storage, b.adapter);
 
-    assert.equal((await b.storage.queryExpressions(COLLECTION)).length, 0);
+    assert.equal((await b.storage.queryVersions(COLLECTION)).length, 0);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
   });
 
@@ -195,22 +195,22 @@ describe('two origins, one folder', () => {
     const folder = createMemoryDirectory();
     const a = await openOrigin(folder.open());
 
-    const expression = await makeExpression('deleted behind our back');
-    await a.storage.addExpression(expression);
+    const version = await makeVersion('deleted behind our back');
+    await a.storage.addVersion(version);
 
     // Delete the file without going through the provider — another device did
     // it while this one was closed, so the root pointer still indexes it. This
     // is the case the shared root pointer cannot cover, and the reason
     // reconciling reads the directory rather than trusting the pointer.
     const store = await (await folder.open().getDirectoryHandle('spaces')).getDirectoryHandle('demo');
-    const expressions = await store.getDirectoryHandle('expressions');
-    await expressions.removeEntry(`${expression.id}.json`);
+    const versions = await store.getDirectoryHandle('expressions');
+    await versions.removeEntry(`${version.id}.json`);
 
     const result = await reconcileFolder(a.storage, a.adapter);
 
-    assert.deepEqual(result.removed, [expression.id]);
-    assert.deepEqual(result.repaired, [expression.id], 'the entries should have been fixed');
-    assert.equal((await a.storage.queryExpressions(COLLECTION)).length, 0);
+    assert.deepEqual(result.removed, [version.id]);
+    assert.deepEqual(result.repaired, [version.id], 'the entries should have been fixed');
+    assert.equal((await a.storage.queryVersions(COLLECTION)).length, 0);
   });
 
   test('concurrent writes converge on the union, with the same fingerprint', async () => {
@@ -220,10 +220,10 @@ describe('two origins, one folder', () => {
 
     // Neither knows about the other: interleaved writes, no coordination, and
     // both write the same folder's entries on the way.
-    const fromA = await makeExpression('from A');
-    const fromB = await makeExpression('from B');
-    await a.storage.addExpression(fromA);
-    await b.storage.addExpression(fromB);
+    const fromA = await makeVersion('from A');
+    const fromB = await makeVersion('from B');
+    await a.storage.addVersion(fromA);
+    await b.storage.addVersion(fromB);
 
     await reconcileFolder(a.storage, a.adapter);
     await reconcileFolder(b.storage, b.adapter);
@@ -232,7 +232,7 @@ describe('two origins, one folder', () => {
     await reconcileFolder(a.storage, a.adapter);
 
     const idsFrom = async (origin: { storage: StorageProvider }) =>
-      (await origin.storage.queryExpressions(COLLECTION)).map((item) => item.id).sort();
+      (await origin.storage.queryVersions(COLLECTION)).map((item) => item.id).sort();
 
     assert.deepEqual(await idsFrom(a), [fromA.id, fromB.id].sort());
     assert.deepEqual(await idsFrom(b), [fromA.id, fromB.id].sort());
@@ -245,7 +245,7 @@ describe('two origins, one folder', () => {
   test('reconciling with nothing new reports no change', async () => {
     const folder = createMemoryDirectory();
     const a = await openOrigin(folder.open());
-    await a.storage.addExpression(await makeExpression('settled'));
+    await a.storage.addVersion(await makeVersion('settled'));
 
     const result = await reconcileFolder(a.storage, a.adapter);
     assert.equal(result.changed, false);

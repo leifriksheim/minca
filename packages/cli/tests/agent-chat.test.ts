@@ -105,8 +105,8 @@ describe('weave agent', () => {
 
     const offered = (model.sent[0]?.tools ?? []).map((tool) => ('name' in tool ? tool.name : ''));
     for (const name of PERSON_ONLY) assert.ok(!offered.includes(name), `${name} is not offered`);
-    assert.ok(offered.includes('apps_propose'));
-    assert.match(text(model.sent[0]?.system), /apps_propose/);
+    assert.ok(offered.includes('collections_propose'));
+    assert.match(text(model.sent[0]?.system), /collections_propose/);
 
     const results = lastResults(model.sent);
     assert.deepEqual(

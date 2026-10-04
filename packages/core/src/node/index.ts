@@ -48,6 +48,7 @@ export type {
   NodeNetwork,
   SpaceSummary,
   SpaceStatus,
+  SpaceAccess,
   SpaceProfile,
   NewSpace,
   InvitePreview,

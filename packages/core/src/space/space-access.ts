@@ -22,7 +22,7 @@
  */
 import type { CryptoProvider, Space } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
-import { canonicalize } from '../schema/expression.js';
+import { canonicalize } from '../schema/version.js';
 import { cidFromBytes, hashedKey } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';

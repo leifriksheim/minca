@@ -13,7 +13,7 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
 import { nextVersion } from '../src/records/version.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { PROFILE_COLLECTION } from '../src/space/account-registry.js';
 import { seenBy } from './helpers/as-member.js';
@@ -98,11 +98,11 @@ describe('profiles', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const ucan = await createLocalRootSigner(mallory.me, provider).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: 'expression/write' }],
+      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const authored = await createSigner(provider).sign(
-      createExpression({
+      createVersion({
         author: keyDid,
         collection: PROFILE_COLLECTION,
         space,
@@ -116,7 +116,7 @@ describe('profiles', () => {
     );
     // Mallory is a member — she may write here — so the profile rule is what must stop her.
     const forged = authored;
-    await createStorageProvider(await mallory.stores(`spaces/${space}`)).addExpression(forged);
+    await createStorageProvider(await mallory.stores(`spaces/${space}`)).addVersion(forged);
     await hold(mallory.node, space);
 
     // Mallory's own records reach Alice, so sync is working…

@@ -92,8 +92,9 @@ that a newcomer has reason to trust. Proposed:
 - its author, as of its `seen`, holds `manage` in the space; or is named
   among the space's keepers (`sys.keepers`), whose job is already to hold the
   space whole;
-- it is written by a person's root or a non-agent note, never by an agent
-  (as for the access history, 03);
+- it is written by a person's root, or under a note that grants
+  `access/change`, never a records-only note such as an agent's (as for the
+  access history, 03);
 - the author's node MUST hold the whole chain from `genesis` to `anchor` and
   have accepted every link, and MUST NOT checkpoint a chain it holds a
   competing branch of below `seq` (§4.3).
@@ -345,5 +346,5 @@ dropped. Worth doing for canvases and chats with many deletes. It touches
 - A branch written offline below the anchor is fenced off on every peer
   alike; a node offers its edit again on top.
 - A checkpoint over a chain with a retained version, by an author without
-  `manage`, by an agent, or naming an anchor whose chain skips `seq` is refused.
+  `manage`, under a note without `access/change`, or naming an anchor whose chain skips `seq` is refused.
 - The churn benchmark: settle time flat in edits per record.

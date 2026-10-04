@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAccount, useNode } from '@weaveprotocol/core/react';
-import { createScreenBridge, screenDocument, type ScreenBridge } from '@weaveprotocol/core/schemas';
+import { createScreenBridge, screenDocument, type ScreenBridge } from './screens';
 import { isObject } from '../../derive/schema-ui';
 import { styles, palette } from '../../styles';
 
@@ -10,15 +10,15 @@ import { styles, palette } from '../../styles';
  */
 export function ScreenFrame({
   spaceId,
-  collection,
+  appKey,
   collections,
   screen,
   network,
   title,
 }: {
   spaceId: string;
-  /** The collection whose definition carries the screen */
-  collection: string;
+  /** The app's launcher record, which carries the screen */
+  appKey: string;
   collections: ReadonlyArray<string>;
   screen: string;
   network: ReadonlyArray<string>;
@@ -33,7 +33,7 @@ export function ScreenFrame({
   // Compared by value, so a new array with the same names changes nothing.
   const names = collections.join('|');
   const allowed = network.join(' ');
-  const consentKey = `weave.screen-network:${node.did}:${spaceId}:${collection}`;
+  const consentKey = `weave.screen-network:${node.did}:${spaceId}:${appKey}`;
   const [answer, setAnswer] = useState<'yes' | 'no' | null>(() =>
     origins ? readConsent(consentKey, origins) : 'no',
   );

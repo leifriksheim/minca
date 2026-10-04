@@ -364,14 +364,14 @@ describe('rules: arriving in any order', () => {
     await letGo(bob.node, space);
     const poll = await alice.node.records.put(space, 'app.poll', { question: 'v0', options: ['a'] });
     const edit = await alice.node.records.update(space, poll.key, { question: 'v1', options: ['a'] });
-    const version = await (await stored(alice.stores, space)).getExpression(edit.version);
+    const version = await (await stored(alice.stores, space)).getVersion(edit.version);
     await letGo(alice.node, space);
 
     // Someone passes Bob the edit alone. It waits for its first version, which nobody there has.
     await hold(bob.node, space);
     const stranger = hub.transport('did:key:zstranger', space);
     stranger.on('connected', (peer: string) => {
-      const payload = { v: SYNC_PROTOCOL_VERSION, type: 'push-update', expression: version };
+      const payload = { v: SYNC_PROTOCOL_VERSION, type: 'push-update', version };
       stranger.send(
         peer,
         new TextEncoder().encode(JSON.stringify({ type: 'sync', from: 'did:key:zstranger', payload })),

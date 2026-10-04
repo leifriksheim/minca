@@ -682,12 +682,13 @@ delegation chain ([01 — Identity](01-identity.md)) and takes the root DID as
 the peer's account **only if** the chain is valid and its audience is the
 peer's proven session DID. A note longer than 16 384 characters, invalid, or
 made out to another key gives the peer **no account** (`null`). Whether the
-note is an agent's note is recorded alongside.
+note carries the agent fact ([01](01-identity.md) §8.1) is recorded alongside,
+as a label for apps.
 
 > Rationale: a note copied off someone's record names their key, not the
 > copier's, so it is useless to anyone else.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`accountOf`, `WHO_MESSAGE`). Tests: `packages/core/tests/live.test.ts` ("a peer showing someone else's note is known as nobody")._
+_Source: `packages/core/src/node/space-runtime.ts` (`accountOf`, `WHO_MESSAGE`). Tests: `packages/core/tests/live.test.ts` ("a peer showing someone else’s note is known as nobody")._
 
 ---
 

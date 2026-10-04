@@ -244,8 +244,8 @@ npx @weaveprotocol/cli connect wv_…      # in this repo: npm run weave -- conn
 
 It makes a key for this computer's agent (it never leaves `~/.weave/agent/`),
 finds the app through the relay, and waits while you allow it at your account
-home, which signs an agent's note for your whole account, for as long as you
-chose. Then it adds `weave` to Claude Code (`claude mcp add`), Claude Desktop
+home, which signs a records-only note (`record/*`) for every space in your
+account, marked as an agent's, for as long as you chose. Then it adds `weave` to Claude Code (`claude mcp add`), Claude Desktop
 and Cursor, where it finds them. `--no-configure` prints the config instead,
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
 one the app uses (`$WEAVE_RELAYS` sets the defaults).
@@ -254,9 +254,10 @@ From then on the agent starts `weave mcp` itself. It's a node of its own: it
 follows your account's list of spaces, meets your other devices over WebRTC,
 and keeps working with every tab closed. What it writes shows "via agent". It
 isn't offered what needs a person (making, joining or leaving spaces, invites,
-roles, defining collections): it proposes apps with `apps_propose`, and you add
-them. `weave disconnect` forgets it on this computer; disconnecting it in your
-account home stops its note working everywhere.
+roles, defining collections), and its note doesn't let it: it proposes
+collections with `collections_propose`, and you add them. `weave disconnect`
+forgets it on this computer; disconnecting it in your account home stops its
+note working everywhere.
 
 `weave mcp --account` serves the unlocked account instead, as you:
 

@@ -40,7 +40,7 @@ Letters, digits and `-` in each part. `sys.*` is the protocol's own and
 Names are local to a space: nothing registers or owns one across spaces. Two
 apps sharing a space settle a clash over a name before anything is defined,
 when a person reads what each would define
-([the app review](apps-as-records.md#the-app-review)).
+([the blueprint review](blueprints-and-guides.md#the-review)).
 
 ## Schemas
 
@@ -280,7 +280,8 @@ await node.spaces.setMember(space.id, did, 'host');
 - `*` alone is every permission. `*/*` is every permission any collection
   declares, so a moderator can moderate every app in the space.
 - Space permissions include `invite`, `define` (add or change collections)
-  and `manage`.
+  and `manage`. Defining also needs a note that grants `collection/define`,
+  which an agent's doesn't (spec 01 §8).
 - You can only change people and roles ranked below your own.
 
 ## Other options
@@ -294,8 +295,6 @@ await node.spaces.setMember(space.id, did, 'host');
 - `topics: ['mentions', 'link:channel']` lets a node that can't read the
   space still match records by a field's value, or by where a link of that
   role points, for notifications. At most 8.
-- `screen`: a small UI for the collection's records. See
-  [screens-and-apps.md](screens-and-apps.md).
 - `version`: see [below](#versions-of-a-definition).
 
 ## Versions of a definition

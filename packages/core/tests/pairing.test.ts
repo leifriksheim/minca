@@ -33,7 +33,7 @@ describe('the meeting room', () => {
 
   test('the room is not derivable from anything public', async () => {
     // Named after the seed rather than the DID on purpose: a DID appears in
-    // every expression the account has signed, so a room named after one could
+    // every version the account has signed, so a room named after one could
     // be found by anyone who had ever seen its data.
     const seed = generateSeed();
     const room = await pairingRoomId(seed);

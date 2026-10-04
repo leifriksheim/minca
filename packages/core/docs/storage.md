@@ -74,20 +74,20 @@ read again once told")._
 A store runs over an adapter with this contract (`StorageAdapter`, all
 methods async):
 
-| Method                           | Contract                                                                                                                                                          |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get(key)`                       | Entry bytes, or null                                                                                                                                              |
-| `put(key, bytes)`                | Set an entry                                                                                                                                                      |
-| `delete(key)`                    | Remove an entry; absent is fine                                                                                                                                   |
-| `list(prefix?)`                  | Every entry key starting with `prefix`, in no guaranteed order                                                                                                    |
-| `batch(ops)`                     | Apply `{type:'put',key,value}` / `{type:'delete',key}` ops; should be atomic                                                                                      |
-| `putExpression(v)`               | Store a version body by its `id`                                                                                                                                  |
-| `getExpression(id)`              | A version body, or null                                                                                                                                           |
-| `deleteExpression(id)`           | Remove a version body                                                                                                                                             |
-| `close()`                        | Release it                                                                                                                                                        |
-| `entries(prefix)`                | _Optional._ Every entry under `prefix` with its bytes, in one read. Without it, `list` then `get` each                                                            |
-| `getExpressions(ids)`            | _Optional._ Version bodies by id, null where absent, in the order asked, in one read. Without it, `getExpression` each                                            |
-| `commit({ store, ops, remove })` | _Optional._ Stores these bodies, applies these entry ops and deletes these bodies, atomically. Without it, `putExpression` each, `batch`, `deleteExpression` each |
+| Method                           | Contract                                                                                                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get(key)`                       | Entry bytes, or null                                                                                                                                        |
+| `put(key, bytes)`                | Set an entry                                                                                                                                                |
+| `delete(key)`                    | Remove an entry; absent is fine                                                                                                                             |
+| `list(prefix?)`                  | Every entry key starting with `prefix`, in no guaranteed order                                                                                              |
+| `batch(ops)`                     | Apply `{type:'put',key,value}` / `{type:'delete',key}` ops; should be atomic                                                                                |
+| `putVersion(v)`                  | Store a version body by its `id`                                                                                                                            |
+| `getVersion(id)`                 | A version body, or null                                                                                                                                     |
+| `deleteVersion(id)`              | Remove a version body                                                                                                                                       |
+| `close()`                        | Release it                                                                                                                                                  |
+| `entries(prefix)`                | _Optional._ Every entry under `prefix` with its bytes, in one read. Without it, `list` then `get` each                                                      |
+| `getVersions(ids)`               | _Optional._ Version bodies by id, null where absent, in the order asked, in one read. Without it, `getVersion` each                                         |
+| `commit({ store, ops, remove })` | _Optional._ Stores these bodies, applies these entry ops and deletes these bodies, atomically. Without it, `putVersion` each, `batch`, `deleteVersion` each |
 
 The optional methods only save round trips: a store gives the same answers
 with or without them. With `commit`, one placement of a version is one atomic
@@ -116,14 +116,15 @@ Each database:
 - has object store `kv`: out-of-line string keys, values `ArrayBuffer`s (the
   entry bytes). `list(prefix)` is a key-range cursor over
   `[prefix, prefix + "￿"]`.
-- has object store `expressions`: key path `id`, no indexes (databases made
+- has object store `expressions` (named before versions were called that;
+  kept so existing databases open): key path `id`, no indexes (databases made
   before may have `collection`, `author` and `createdAt` ones, which nothing
   reads). Values are the version objects.
 - writes `batch` as one `readwrite` transaction over `kv`. Bodies are written
   in their own transactions, except through `commit`: one `readwrite`
   transaction over `kv` and `expressions`.
 - reads `entries(prefix)` with `getAllKeys` and `getAll` over the same key
-  range in one `readonly` transaction; `getExpressions` is one `readonly`
+  range in one `readonly` transaction; `getVersions` is one `readonly`
   transaction.
 
 Accounts kept in a browser live in database `weave-accounts`, object store

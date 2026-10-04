@@ -90,7 +90,7 @@ sync:
   overlapping lists is enough.
 
 The relay only introduces peers — it forwards connection offers and never sees
-an expression — so running your own is a small thing, and pointing at someone
+a version — so running your own is a small thing, and pointing at someone
 else's costs you nothing but availability.
 
 **And it is only needed for the first connection.** Once two peers are talking,
@@ -175,8 +175,11 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 ### Derived UI
 
 A space opens on its **Apps** tab: apps built on the standard schemas (a chat,
-a kanban board, polls, decisions, events and a marketplace) show up once the space holds the
-collections they need, and adding one defines what is missing. The
+a kanban board, polls, decisions, events and a marketplace) show up once
+someone who may add collections has put them on the space's launcher
+(`launcher.app` records, `src/components/apps/launcher.ts`). Adding one
+defines every collection it uses, and someone who may can arrange or remove
+them; removing one keeps what it holds. The
 **Collections** tab lists every collection down the side. Each one is a list
 you can search and add to in one line, or a table, or (when it has a field with
 fixed choices) a board you drag cards across; a yes/no field becomes a checkbox
@@ -211,10 +214,11 @@ operation as a WebMCP tool on `document.modelContext` (`src/webmcp.ts`, with
 otherwise). A browser agent sees the same tools as the CLI and `weave mcp`,
 and works as the person, with nothing to switch on: anything that can call a
 page's tools can already click through the page. It isn't offered
-`collections_define`: it proposes apps (`apps_propose`) and a person adds
-them. Anything that changes a space's people, or hands out its key, asks the
-person first. An app may bring its own screen, which the example runs in a
-sandboxed frame with no network ([screens and apps](../../packages/core/docs/screens-and-apps.md)).
+`collections_define`: it proposes collections (`collections_propose`) and a
+person adds them. Anything that changes a space's people, or hands out its
+key, asks the person first. An app an agent makes may bring its own screen,
+which the example runs in a sandboxed frame with no network (the launcher's
+guide, `src/components/apps/launcher.ts`, and `src/components/apps/screens.ts`).
 
 **On your computer (Claude Code, Claude Desktop, Cursor).** "Connect an
 agent", in the account menu, shows one command:
@@ -259,12 +263,11 @@ src/
 ## Still to do
 
 - **Contacts.** The Contacts screen warns when someone else is in a space for two; it should offer the choice between starting a group and letting them stay. Door codes as QR codes too, not only links.
-- **The Apps tab.** A coded app wins over an agent-made one with the same collections.
 - **Hosting.** An "Always online" mark on spaces a host keeps.
-- **Notifications.** "Notify me when I'm mentioned" in chat; and showing them with the app closed, which needs a service worker and Web Push ([spec 06 §6.4](../../spec/06-nodes-and-sessions.md)).
+- **Notifications.** "Notify me when I'm mentioned" in chat; and showing them with the app closed, which needs a service worker and Web Push ([spec 06 §4.4](../../spec/06-nodes-and-sessions.md), planned).
 - **Agents.** A connect dialog left open keeps a relay connection; it should let go.
-- **Compatible definitions in the Apps tab.** Open apps by compatibility (`readiness()` in `components/apps/index.ts`) and show what breaks, once definitions can be compared ([02](../../spec/02-records.md), compatible definitions).
-- **Typed queries.** Move `src/collections.ts` onto typed collections and drop the hand-written record interfaces.
+- **Compatible definitions in the Apps tab.** Open apps by compatibility (`sortLauncher` in `components/apps/launcher.ts`) and show what breaks, once definitions can be compared ([02](../../spec/02-records.md), compatible definitions).
+- **Typed queries.** Move the example's queries onto typed collections and drop the hand-written record interfaces.
 
 ## Not production
 

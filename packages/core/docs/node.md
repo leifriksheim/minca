@@ -84,7 +84,7 @@ The **session note** a node asks for when it starts:
 
 ```
 aud = session DID
-att = [{ "with": "*", "can": "expression/*" }]   (SESSION_CAPABILITY)
+att = [{ "with": "*", "can": "*" }]          (SESSION_CAPABILITY; an agent's own node signs under its grant, `record/*`)
 exp = now + sessionTtlSeconds                     (default 3600)
 nbf = now − 300                                   (issueUCAN's default)
 fct = absent                                      (or [{"weave":"agent"}] for an agent's own node)
@@ -176,7 +176,7 @@ Copied versions are meant to pass the same checks as versions arriving by
 sync ([02 — Records](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md), validation) before they are stored.
 
 > **Known defect:** `copyAccountData` stores each version with
-> `addExpression` directly, without running it through the validation
+> `addVersion` directly, without running it through the validation
 > pipeline (`packages/core/src/node/copy.ts`). A pod or data folder that another origin
 > wrote to can bring versions this node would have refused from a peer. A fix
 > will validate on copy, as sync does.
@@ -339,7 +339,7 @@ account's profile in that space: `{ name, contactKey? }`, with the name taken
 from the account registry's `sys.profile` record and `contactKey` only when
 the node holds the contact key. It does this only in spaces other than the
 account registry and the contacts space, only with an account name to publish,
-and never under an agent's note. The profile record format is in
+and never under a note that lacks `account/write`, such as an agent's. The profile record format is in
 [03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md).
 
 **Joining.** `spaces.join(invite)` accepts a bare invite or any link carrying
@@ -560,7 +560,8 @@ and was issued by `node.did`. The agent:
 
 Closing the agent leaves the underlying node running.
 
-An agent granted `scope: account` gets a `*` note and the account key in its
+An agent granted `scope: account` gets a records-only note for every space
+(`{ "with": "*", "can": "record/*" }`) and the account key in its
 grant ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home must not
 give an agent the contact key: with it, an agent could open contact requests
 and knocks on the account's doors ([doors.md](doors.md)).
@@ -706,8 +707,8 @@ space for the space itself: its own subscription, `space:<id>`, with a fund
 anyone adds to, which pays for keeping it online and for its bots
 ([spec 06 §4.6](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
-Every device holding the space's key (not an agent's note alone, nor a
-carrier) looks at the hosts its space names when it takes a role there and
+Every device holding the space's key (not one whose note lacks
+`account/write`, such as an agent's, nor a carrier) looks at the hosts its space names when it takes a role there and
 on changes after that: at once when the list of hosts changed, else at most
 every ten minutes. For each, it reads the description, refuses a host whose
 key is not the one the record names, asks for the status, and hands over the

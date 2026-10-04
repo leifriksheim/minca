@@ -2,7 +2,7 @@
  * Several rendezvous points behind one interface.
  *
  * A relay is a phone book, not an authority: it forwards connection offers and
- * never sees an expression. But with exactly one of them configured there is
+ * never sees a version. But with exactly one of them configured there is
  * still, in practice, a single point of failure and a single operator who can
  * decide nobody gets introduced today. Pointing at several removes that without
  * changing what any of them can do.

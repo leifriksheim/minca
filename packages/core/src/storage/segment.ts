@@ -6,24 +6,24 @@
  * in the hash of its bytes, so an upload retried after a timeout lands on the
  * same name, and two writers never write the same file differently.
  */
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import { sha256 } from '../utils/hash.js';
 import { utf8Decode, utf8Encode } from '../utils/encoding.js';
-import { isObject, isStoredExpression } from '../utils/guards.js';
+import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
 
 /** Packs versions into a segment's bytes */
-export function packSegment(versions: ReadonlyArray<Expression>): Uint8Array {
+export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {
   return utf8Encode(JSON.stringify({ v: 1, versions }));
 }
 
 /** The versions in a segment; none for bytes that are not one */
-export function unpackSegment(bytes: Uint8Array): Expression[] {
+export function unpackSegment(bytes: Uint8Array): Version[] {
   try {
     const parsed: unknown = JSON.parse(utf8Decode(bytes));
     if (!isObject(parsed) || parsed.v !== 1 || !Array.isArray(parsed.versions)) return [];
-    return parsed.versions.filter(isStoredExpression);
+    return parsed.versions.filter(isStoredVersion);
   } catch {
     return [];
   }
@@ -38,4 +38,4 @@ export async function segmentName(counter: number, bytes: Uint8Array): Promise<s
 }
 
 /** Roughly how many bytes a version takes in a segment */
-export const versionSize = (version: Expression) => utf8Encode(JSON.stringify(version)).length;
+export const versionSize = (version: Version) => utf8Encode(JSON.stringify(version)).length;

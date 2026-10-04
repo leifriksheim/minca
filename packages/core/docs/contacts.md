@@ -70,7 +70,8 @@ Example: in space `bspace`, `did:key:zA` asking `did:key:zB` seals under
 ### Opening
 
 The receiver must open a request only when the record verifies and stands, is
-not written under an agent note, is in `std.contact-request`, `to` is the
+not written under a records-only note (`recordsOnly`: one that can't define
+collections, such as an agent's), is in `std.contact-request`, `to` is the
 receiver's account, and `from` (the record's root) equals the root of the
 record's first version and is not the receiver. It must use the context built
 from the space the record is in and that `from`. It must then reject the value
@@ -104,7 +105,8 @@ into another space, or re-posted by someone else, does not open.
 - `others(did)` lists accounts other than the two seen in the space for two
   (members, profiles, connected peers).
 
-`ask` and `accept` need a session note with `with: "*"`. An app granted
+`ask` and `accept` need a session note that grants `account/write` for every
+space (`with: "*"`), as a knock does. An app granted
 `contacts` sees the list and requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 

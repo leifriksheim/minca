@@ -62,7 +62,7 @@ async function person(
 
 /** How many versions of a collection a node's store holds, looked at directly */
 async function held(p: Person, space: string, collection: string): Promise<number> {
-  return (await createStorageProvider(await p.stores(`spaces/${space}`)).queryExpressions(collection)).length;
+  return (await createStorageProvider(await p.stores(`spaces/${space}`)).queryVersions(collection)).length;
 }
 
 /** Alice's space with chat and photos in it, and Bob and Carol in it too, their nodes holding everything */

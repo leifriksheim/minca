@@ -24,19 +24,19 @@ to the convention:
 
 - `collections_standard` lists the library, and gives any of its definitions
   in full ([06](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md), actions).
-- `apps_propose` takes a standard collection by name (`"std.event"` in
-  `needs`) and stores the library's definition for it.
-- `apps_propose` refuses a `std.*` name the library does not have, and a
-  `std.*` definition whose `schema`, `links`, `rules`, `permissions` or
-  `history` differ from the library's. Its `title`, `description`, `screen`
-  and `network` may be the app's own.
+- `collections_propose` takes a standard collection by name (`"std.event"`
+  in `collections`) and stores the library's definition for it.
+- `collections_propose` refuses a `std.*` name the library does not have, and
+  a `std.*` definition whose `schema`, `links`, `rules`, `permissions`,
+  `topics` or `history` differ from the library's. Its `title` and
+  `description` may be its own.
 
 Names of an app's own collections should say what they are for
 (`carpool.ride`) rather than share a generic prefix (`app.ride`) that another
 app may want for something else. Making apps open collections by what they
-hold rather than by name is [compatible definitions](apps-as-records.md#compatible-definitions).
+hold rather than by name is [compatible definitions](blueprints-and-guides.md#compatible-definitions).
 
-_Source: `packages/core/src/schemas/apps.ts` (`standardNeeds`), `packages/core/src/schemas/standard.ts` (`standardDefinition`, `standardGroups`), `packages/core/src/node/actions.ts` (`collections_standard`, `apps_propose`). Tests: `packages/core/tests/agents.test.ts` ("a standard collection by name is exactly the library’s; a look-alike std.\* is refused", "collections_standard lists the library by area, and gives definitions in full")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `packages/core/src/schemas/standard.ts` (`standardDefinition`, `standardGroups`), `packages/core/src/node/actions.ts` (`collections_standard`, `collections_propose`). Tests: `packages/core/tests/agents.test.ts` ("a standard collection by name is exactly the library’s; a look-alike std.\* is refused", "collections_standard lists the library by area, and gives definitions in full")._
 
 ## Conventions
 
@@ -283,6 +283,19 @@ model last said it was doing; it tells the model which record to say it on
 
 _Source: `packages/core/src/schemas/rules.ts` (`activity`, `setActivity`, `activeNow`), `packages/cli/src/bot-runner.ts` (`runRules`), `apps/example/src/activity.ts`, `apps/example/src/components/apps/Chat.tsx` (`Working`). Tests: `packages/core/tests/rule-runners.test.ts` ("std.activity"), `packages/cli/tests/agent-rules.test.ts` ("while a rule runs")._
 
+**Collections**
+
+`std.blueprint` and `std.guide`: collections someone proposes for the space,
+not yet added, and how some of its collections are meant to be used. Neither
+is about any one app. Described in [blueprints and guides](blueprints-and-guides.md).
+
+| Collection      | Body                                                                                                                                        | Rules                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `std.blueprint` | **`title`** 1–100; **`collections`** 1–10 objects, each a definition without `version`; `description` ≤ 1000; `from` ≤ 300; `updates` 1–100 | edit: creator; delete: creator, `can:moderate`                   |
+| `std.guide`     | **`name`** 1–100; **`title`** 1–200; **`text`** 1–20000; `collections` ≤ 16 names                                                           | edit: creator; delete: creator, `can:moderate`; `onePer: [name]` |
+
+_Source: `packages/core/src/schemas/library/collections.ts` (`blueprint`, `guide`), `packages/core/src/schemas/blueprints.ts`, `packages/core/src/schemas/guides.ts`. Tests: `packages/core/tests/agents.test.ts` ("collections proposed in a blueprint")._
+
 **Bots.** A bot is an account of its own that people invite to their spaces
 as a member. The protocol does not tell bots and people apart, and has no way
 to: an account is an account. Disclosing is a convention. A bot says so with
@@ -383,8 +396,8 @@ only optional fields and link roles: `std.attachment` a `blob`; `std.task`
 first topics ([spec 02 §8](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)); `std.vote` `choices` (every
 choice, most preferred first, with `choice` the first of them); `std.proposal`
 `quorum`, for `std.decision`. A space that
-holds an earlier definition keeps it until someone adds an app that needs the
-new one, which shows as a change. One of them is not additive in the sense of
+holds an earlier definition keeps it until someone applies a blueprint that
+carries the new one, which its review shows as a change. One of them is not additive in the sense of
 [spec 02 §6.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md): `std.vote`'s `about` may now also point at a `std.proposal`, so an app
 that reads votes may meet one on something that is not a poll.
 
@@ -400,14 +413,13 @@ so "mentions me" and "assigned to me" match from then on.
 
 **Also exported** from the same module (specified with their features):
 
-| Name                  | Body                                                                                                                            | Rules                                                                     | Where                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `std.contact`         | `did` ≤ 256 and `name` ≤ 200, required; `space` ≤ 256; `note` ≤ 2000; `blocked` boolean                                         | `onePer: [did]`                                                           | [contacts](contacts.md)                                                                                        |
-| `std.contact-request` | `to` ≤ 256 and `sealed` ≤ 16000, required                                                                                       | edit, delete: `creator`                                                   | [contacts](contacts.md)                                                                                        |
-| `std.door`            | `id` 16–64 and `relays` (1–3, each ≤ 200), required; `name` ≤ 64; `label` ≤ 64                                                  | `onePer: [id]`                                                            | [doors.md](doors.md)                                                                                           |
-| `std.knock`           | `space` ≤ 256, `name` ≤ 64, `door` ≤ 64, `sign` ≤ 64 and `invite` ≤ 8000, all required                                          | `onePer: [space]`                                                         | [doors.md](doors.md)                                                                                           |
-| `std.knock-answer`    | `sig` ≤ 200, required                                                                                                           | edit, delete: `creator`                                                   | [doors.md](doors.md)                                                                                           |
-| `std.app`             | `title` 1–100 and `needs` (1–10 objects), required; `description` ≤ 1000; `from` ≤ 300; `updates` 1–100; `notify` (1–8 objects) | edit: `creator`; delete: `creator`, `can:moderate`; permission `moderate` | [06 — Nodes, sessions and apps](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md) |
+| Name                  | Body                                                                                    | Rules                   | Where                   |
+| --------------------- | --------------------------------------------------------------------------------------- | ----------------------- | ----------------------- |
+| `std.contact`         | `did` ≤ 256 and `name` ≤ 200, required; `space` ≤ 256; `note` ≤ 2000; `blocked` boolean | `onePer: [did]`         | [contacts](contacts.md) |
+| `std.contact-request` | `to` ≤ 256 and `sealed` ≤ 16000, required                                               | edit, delete: `creator` | [contacts](contacts.md) |
+| `std.door`            | `id` 16–64 and `relays` (1–3, each ≤ 200), required; `name` ≤ 64; `label` ≤ 64          | `onePer: [id]`          | [doors.md](doors.md)    |
+| `std.knock`           | `space` ≤ 256, `name` ≤ 64, `door` ≤ 64, `sign` ≤ 64 and `invite` ≤ 8000, all required  | `onePer: [space]`       | [doors.md](doors.md)    |
+| `std.knock-answer`    | `sig` ≤ 200, required                                                                   | edit, delete: `creator` | [doors.md](doors.md)    |
 
 **Positions.** `position` is a string that sorts (by plain string comparison)
 where a record goes in a hand-made order. Digits are `0–9a–z`; a position
@@ -415,7 +427,7 @@ never ends in `0`, so there is always room between two. Equal positions sort by
 key. A record without one goes at the end. `positionBetween(before, after)` in
 the library makes one; any string that sorts correctly is valid.
 
-_Source: `packages/core/src/schemas/fragments.ts`, `packages/core/src/schemas/library/` (one file per area), `packages/core/src/schemas/standard.ts` (`standardGroups`), `packages/core/src/schemas/index.ts` (`positionBetween`, `useSchemas`), `packages/core/src/schemas/contacts.ts`, `packages/core/src/schemas/apps.ts`. Tests: `packages/core/tests/schemas.test.ts` ("the standard library", "standard nouns"), `packages/core/tests/contacts.test.ts`, `packages/core/tests/agents.test.ts`._
+_Source: `packages/core/src/schemas/fragments.ts`, `packages/core/src/schemas/library/` (one file per area), `packages/core/src/schemas/standard.ts` (`standardGroups`), `packages/core/src/schemas/index.ts` (`positionBetween`, `useSchemas`), `packages/core/src/schemas/contacts.ts`. Tests: `packages/core/tests/schemas.test.ts` ("the standard library", "standard nouns"), `packages/core/tests/contacts.test.ts`, `packages/core/tests/agents.test.ts`._
 
 **Places and areas.** A place with a point also carries its `cells`: the
 geohash of `lat` and `lon` at precisions 3, 4, 5 and 6, coarsest first, about

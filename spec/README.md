@@ -11,15 +11,15 @@ the code disagree, that is a bug in one of them: open an issue, and say which.
 
 ## Parts
 
-| Part                                                      | Covers                                                                                                                                                                 |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [01 — Identity](01-identity.md)                           | Seeds and recovery codes, key derivation, DIDs, the account vault, root and session signers, UCAN delegations, agent notes, device keys, contact keys, pairing         |
-| [02 — Records](02-records.md)                             | Expressions, canonical encoding and hashing, signatures, versions and which one wins, links, collection definitions, rules and checks, topics, the validation pipeline |
-| [03 — Spaces](03-spaces.md)                               | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                             |
-| [04 — Network](04-network.md)                             | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN  |
-| [05 — Sync and storage](05-sync-and-storage.md)           | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                        |
-| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, agents, carriers and hosts                                                                |
-| [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock                                      |
+| Part                                                      | Covers                                                                                                                                                                       |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [01 — Identity](01-identity.md)                           | Seeds and recovery codes, key derivation, DIDs, the account vault, root and session signers, UCAN delegations, what a note lets a key do, device keys, contact keys, pairing |
+| [02 — Records](02-records.md)                             | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules and checks, topics, the validation pipeline |
+| [03 — Spaces](03-spaces.md)                               | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                   |
+| [04 — Network](04-network.md)                             | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN        |
+| [05 — Sync and storage](05-sync-and-storage.md)           | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                              |
+| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, agents, carriers and hosts                                                                      |
+| [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock                                            |
 
 ## What is not in it
 
@@ -41,8 +41,12 @@ change without touching this spec:
   ([actions](../packages/core/docs/actions.md)).
 - **The standard collections** (`std.*`), which are a naming convention, not
   reserved ([standard library](../packages/core/docs/standard-library.md)).
-- **Apps kept in a space** (`std.app`), their review, what they notify about,
-  and how an app runs their screens ([apps as records](../packages/core/docs/apps-as-records.md)).
+- **Collections proposed for a space** (`std.blueprint`), their review, and
+  guides to how a space's collections are used (`std.guide`)
+  ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
+  Apps with screens of their own are an app's convention
+  ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md#apps-with-a-screen-of-their-own);
+  the example app's launcher, `apps/example/src/components/apps/launcher.ts`).
 - **Contacts**: the contact list, contact requests and how they are sealed
   ([contacts](../packages/core/docs/contacts.md)).
 - **Direct messages**, sealed to members' keys ([direct messages](../packages/core/docs/direct-messages.md)).

@@ -12,7 +12,7 @@ import { createLocalRootSigner } from '../../../packages/core/src/identity/root-
 import { generateSeed } from '../../../packages/core/src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../../../packages/core/src/identity/did.js';
 import { createSigner } from '../../../packages/core/src/schema/signer.js';
-import { createExpression } from '../../../packages/core/src/schema/expression.js';
+import { createVersion } from '../../../packages/core/src/schema/version.js';
 import { createStorageProvider } from '../../../packages/core/src/storage/storage-provider.js';
 import { team } from '../../../packages/core/src/space/presets.js';
 import { runChecks, type CheckedVersion } from '../../../packages/core/src/records/checks.js';
@@ -55,17 +55,17 @@ async function person(hub: FakeHub) {
 type Person = Awaited<ReturnType<typeof person>>;
 
 /** Signs a version by hand, as a modified app could, into the writer's own copy of the space */
-async function forge(who: Person, space: string, fields: Parameters<typeof createExpression>[0]) {
+async function forge(who: Person, space: string, fields: Parameters<typeof createVersion>[0]) {
   const provider = who.manager.getProvider();
   const pair = await provider.generateKeyPair();
   const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
   const ucan = await createLocalRootSigner(who.me, provider).delegate({
     audience: keyDid,
-    capabilities: [{ with: `space:${space}`, can: 'expression/write' }],
+    capabilities: [{ with: `space:${space}`, can: 'record/write' }],
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const signed = await createSigner(provider).sign(
-    createExpression({
+    createVersion({
       seen: await seenBy(who.node, space),
       ...fields,
       author: keyDid,
@@ -74,7 +74,7 @@ async function forge(who: Person, space: string, fields: Parameters<typeof creat
     }),
     pair.privateKey,
   );
-  await createStorageProvider(await who.stores(`spaces/${space}`)).addExpression(signed);
+  await createStorageProvider(await who.stores(`spaces/${space}`)).addVersion(signed);
   return signed;
 }
 
@@ -280,7 +280,7 @@ describe('liquid: conflicts', () => {
     await hold(alice.node, space);
     // Both stand, as any two versions written apart do; Bob's device holds both.
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
-    await until(async () => (await bobStore.getExpression(twice.id)) !== null, 4000, 'the second vote');
+    await until(async () => (await bobStore.getVersion(twice.id)) !== null, 4000, 'the second vote');
     const proof = await bob.node.records.put(
       space,
       conflict,

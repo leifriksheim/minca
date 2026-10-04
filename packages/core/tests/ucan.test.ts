@@ -19,9 +19,9 @@ import { makeKey } from './helpers/person.js';
 
 const provider = createP256Provider();
 
-const ALL: Capability = { with: 'space:todos', can: 'expression/*' };
-const WRITE: Capability = { with: 'space:todos', can: 'expression/write' };
-const READ: Capability = { with: 'space:todos', can: 'expression/read' };
+const ALL: Capability = { with: 'space:todos', can: 'record/*' };
+const WRITE: Capability = { with: 'space:todos', can: 'record/write' };
+const READ: Capability = { with: 'space:todos', can: 'record/read' };
 
 /** A proof resolver that knows only these tokens */
 const proofs =

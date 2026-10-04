@@ -3,10 +3,11 @@
  * A note that says its key is an agent's.
  *
  * An agent isn't an identity of its own: it writes for a person, under a note
- * from their account, like any app. What sets it apart is one fact the account
- * signs into that note — so every peer can tell a record was written "via
- * agent", and can refuse what an agent must never do alone: change the space's
- * collections, or who may do what. Those always need a person.
+ * from their account, like any app. The account can sign one fact into that
+ * note so apps can show a record was written "via agent". It is a label:
+ * no peer judges a version by it. What a key may do is what its note grants
+ * (`identity/abilities.ts`), and an agent's note grants records only. Apps
+ * may still use the label, to show it or to leave agents out of a call.
  *
  * The fact is the account's word, carried in a note it signed. A note without
  * it is an ordinary app's; nothing about the key itself says "agent".

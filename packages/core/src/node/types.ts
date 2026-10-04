@@ -9,7 +9,7 @@ import type { CollectionRules } from '../records/rules.js';
 import type {
   CollectionDef,
   CryptoProvider,
-  Expression,
+  Version,
   Link,
   SpaceRole,
   SpaceVisibility,
@@ -174,6 +174,12 @@ export interface NodeRecord<T = unknown> {
   readonly verified: boolean;
   /** True when an agent wrote this version for `root`, as the note it was signed under says (`AGENT_FACT`) */
   readonly viaAgent?: true;
+  /**
+   * True when the note this version was signed under grants writing records
+   * and no more: it could not have defined a collection here. An app that
+   * runs what a record holds, as code, trusts only versions without it.
+   */
+  readonly recordsOnly?: true;
   readonly reason?: string;
   /** Present, and true, when this version deletes the record (listed only with `includeDeleted`) */
   readonly deleted?: true;
@@ -206,10 +212,6 @@ export interface NodeCollection {
   readonly rules: CollectionRules;
   /** Fields whose values are topics, tagged on the outside of each record so keepers can match them unread */
   readonly topics: ReadonlyArray<string>;
-  /** A screen for its records, when its definer gave one: one HTML document, run sealed */
-  readonly screen?: string;
-  /** Where that screen may connect, when its definer allowed any (`StoredCollection.network`) */
-  readonly network?: ReadonlyArray<string>;
   readonly records: number;
 }
 
@@ -231,10 +233,6 @@ export interface DefineCollection {
   readonly rules?: CollectionRules;
   /** Fields whose values are topics — `channel`, `mentions` — so a keeper can match them without reading (`StoredCollection.topics`) */
   readonly topics?: ReadonlyArray<string>;
-  /** A screen for its records — one HTML document an app may run in a sealed frame (`StoredCollection.screen`) */
-  readonly screen?: string;
-  /** Exact origins that screen may connect to, each named in the app review (`StoredCollection.network`) */
-  readonly network?: ReadonlyArray<string>;
 }
 
 export interface NodeCollections {
@@ -477,9 +475,9 @@ export interface NodeNotifications {
   update(id: string, changes: { readonly label?: string; readonly paused?: boolean }): Promise<NotifyView>;
   remove(id: string): Promise<void>;
   /** Every version of these subscriptions, signed, for another device of the account to `take` */
-  versions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Expression>>;
+  versions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version>>;
   /** Takes in subscriptions handed over outside sync, checked as a peer's. How many were new */
-  take(versions: ReadonlyArray<Expression>): Promise<number>;
+  take(versions: ReadonlyArray<Version>): Promise<number>;
 }
 
 /** A host the account uses, and what it says now */

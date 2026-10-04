@@ -38,7 +38,6 @@ import {
   signPurge,
 } from '../src/doors/doors.js';
 import { createMailboxClient } from '../src/network/mailbox.js';
-import { AGENT_FACT } from '../src/identity/agent-note.js';
 import { grantSigner } from '../src/session/connect.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -327,7 +326,7 @@ describe('a knock', () => {
   /** Leif's account, a session under it with a note saying `capabilities`, and a space for two he made */
   async function leifWith(
     hub: FakeHub,
-    capabilities: Capability[] = [{ with: '*', can: 'expression/*' }],
+    capabilities: Capability[] = [{ with: '*', can: '*' }],
     expiresIn = 3600,
   ) {
     const seed = generateSeed();
@@ -396,7 +395,7 @@ describe('a knock', () => {
     const deeperDid = publicKeyToDid(await provider.exportPublicKey(deeper.publicKey), P256_MULTICODEC);
     const { token: passedOn } = await leif.delegate({
       audience: deeperDid,
-      capabilities: [{ with: '*', can: 'expression/*' }],
+      capabilities: [{ with: '*', can: '*' }],
     });
     const relayed = await sealKnock(
       door.publicKey,
@@ -407,12 +406,13 @@ describe('a knock', () => {
     assert.equal(await openKnock(door.key, relayed, Date.now(), provider), null);
   });
 
-  test('needs a note for the whole account, to write: an app given one space, or only to read, cannot knock', async () => {
+  test('needs a note that grants account/write: an app given one space, a key given records only, or one only to read, cannot knock', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const door = await someDoor('door-cccccccccccc');
     for (const capabilities of [
-      [{ with: 'space:bafyonespace', can: 'expression/*' }],
-      [{ with: '*', can: 'expression/read' }],
+      [{ with: 'space:bafyonespace', can: '*' }],
+      [{ with: '*', can: 'record/*' }],
+      [{ with: '*', can: 'record/read' }],
     ]) {
       const { leif, provider, invite, session } = await leifWith(hub, capabilities);
       const blob = await sealKnock(
@@ -444,7 +444,7 @@ describe('a knock', () => {
     try {
       const token = await root.delegate({
         audience: sessionDid,
-        capabilities: [{ with: '*', can: 'expression/*' }],
+        capabilities: [{ with: '*', can: '*' }],
         expiration: Math.floor(Date.now() / 1000) + 1800,
       });
       blob = await sealKnock(
@@ -685,7 +685,7 @@ describe('node.doors', () => {
     assert.equal(onLaptop!.from, leif.did);
   });
 
-  test("an agent has no doors and can't knock, even when it was given the contact key", async () => {
+  test("a key given records only has no doors and can't knock, even when it was given the contact key", async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const seed = generateSeed();
     const anna = await person(hub, 'Anna');
@@ -697,9 +697,9 @@ describe('node.doors', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(await manager.fromSeed(seed), provider).delegate({
       audience: did,
-      capabilities: [{ with: '*', can: 'expression/*' }],
+      // No agent fact: what it may do is what the note grants, whatever holds the key.
+      capabilities: [{ with: '*', can: 'record/*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
-      facts: [AGENT_FACT],
     });
     const agent = await createNode({
       signer: grantSigner({
@@ -711,7 +711,6 @@ describe('node.doors', () => {
         scope: 'account',
         spaces: [],
         expiresAt: Math.floor(Date.now() / 1000) + 3600,
-        agent: true,
         home: 'https://home.test/connect',
       }),
       sessionKey: keys,
@@ -726,8 +725,8 @@ describe('node.doors', () => {
     });
     open.push(agent);
     assert.deepEqual(await agent.doors.list(), []);
-    await assert.rejects(agent.doors.open(), /An agent can't use doors/);
-    await assert.rejects(agent.doors.knock(door.code), /An agent can't use doors/);
-    await assert.rejects(agent.doors.knocks(), /An agent can't use doors/);
+    await assert.rejects(agent.doors.open(), /doesn't let it use doors/);
+    await assert.rejects(agent.doors.knock(door.code), /doesn't let it use doors/);
+    await assert.rejects(agent.doors.knocks(), /doesn't let it use doors/);
   });
 });

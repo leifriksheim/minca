@@ -1220,7 +1220,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const { signer } = await rootFromSeed(seed);
       const token = await signer.delegate({
         audience: request.audience,
-        capabilities: grantCapabilities(access, whole ? 'all' : ids),
+        capabilities: grantCapabilities(
+          agent && access === 'write' ? 'records' : access,
+          whole ? 'all' : ids,
+        ),
         expiration: expiresAt,
         ...(agent ? { facts: [AGENT_FACT] } : {}),
       });

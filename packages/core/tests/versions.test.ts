@@ -16,14 +16,14 @@ import { RECORD_KEY_PATTERN } from '../src/records/key.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression, stubOf } from '../src/schema/expression.js';
+import { createVersion, stubOf } from '../src/schema/version.js';
 import { publicKeyToDid, didToPublicKey, P256_MULTICODEC } from '../src/identity/did.js';
 import { createNode } from '../src/node/node.js';
 import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import type { Expression } from '../src/types.js';
+import type { Version } from '../src/types.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -56,9 +56,9 @@ async function version(
     createdAt?: string;
     collection?: string;
   } = {},
-): Promise<Expression> {
+): Promise<Version> {
   return signer.sign(
-    createExpression({
+    createVersion({
       author: author.did,
       collection: extra.collection ?? 'app.test',
       body: extra.deleted ? null : body,
@@ -77,8 +77,8 @@ async function version(
 }
 
 /** A chain of versions of one record: 0, 1, 2, … */
-async function chain(key: string, length: number, options: { retain?: boolean } = {}): Promise<Expression[]> {
-  const versions: Expression[] = [await version(key, 0, { n: 0 }, options)];
+async function chain(key: string, length: number, options: { retain?: boolean } = {}): Promise<Version[]> {
+  const versions: Version[] = [await version(key, 0, { n: 0 }, options)];
   for (let n = 1; n < length; n++) {
     versions.push(await version(key, n, { n }, { ...nextVersion(versions[n - 1]!), ...options }));
   }
@@ -92,9 +92,9 @@ function permutations<T>(items: T[]): T[][] {
   );
 }
 
-async function storeOf(versions: Expression[]) {
+async function storeOf(versions: Version[]) {
   const storage = createStorageProvider(createMemoryAdapter());
-  for (const v of versions) await storage.addExpression(v);
+  for (const v of versions) await storage.addVersion(v);
   return storage;
 }
 
@@ -144,7 +144,7 @@ describe('a store of versions', () => {
     const versions = await chain(key, 4);
     const storage = await storeOf(versions);
     const before = await storage.fingerprint();
-    await storage.addExpression(versions[1]!);
+    await storage.addVersion(versions[1]!);
     assert.equal(await storage.fingerprint(), before);
     assert.equal((await storage.getCurrent(key))?.seq, 3);
   });
@@ -162,7 +162,7 @@ describe('a store of versions', () => {
     const [v0, v1, v2] = await chain(key, 3);
     const storage = await storeOf([v2!, v0!, v1!]);
     assert.deepEqual((await storage.getCurrent(key))?.body, { n: 2 });
-    for (const old of [v0!, v1!]) assert.equal('body' in (await storage.getExpression(old.id))!, false);
+    for (const old of [v0!, v1!]) assert.equal('body' in (await storage.getVersion(old.id))!, false);
   });
 
   test('a stub on top takes its body when the whole version arrives', async () => {
@@ -170,7 +170,7 @@ describe('a store of versions', () => {
     const [v0, v1] = await chain(key, 2);
     const storage = await storeOf([stubOf(v0!), stubOf(v1!)]);
     assert.equal('body' in (await storage.getCurrent(key))!, false);
-    await storage.addExpression(v1!);
+    await storage.addVersion(v1!);
     assert.deepEqual((await storage.getCurrent(key))?.body, { n: 1 });
   });
 
@@ -178,7 +178,7 @@ describe('a store of versions', () => {
     const key = newRecordKey();
     const [v0, v1, v2] = await chain(key, 3, { retain: true });
     const storage = await storeOf([v0!, v1!, v2!, stubOf(v1!)]);
-    assert.deepEqual((await storage.getExpression(v1!.id))?.body, { n: 1 });
+    assert.deepEqual((await storage.getVersion(v1!.id))?.body, { n: 1 });
     assert.equal((await storage.history(key)).length, 3);
   });
 
@@ -188,7 +188,7 @@ describe('a store of versions', () => {
     const storage = await storeOf(versions);
     assert.equal((await storage.versionIds()).length, 1000);
     for (const n of [0, 500, 998]) {
-      const stub = await storage.getExpression(versions[n]!.id);
+      const stub = await storage.getVersion(versions[n]!.id);
       assert.ok(stub);
       assert.equal(stub.seq, n);
       assert.equal('body' in stub, false, `version ${n} keeps no body`);
@@ -265,7 +265,7 @@ describe('a record’s chain', () => {
     const me = await manager.fromSeed(new Uint8Array(16).fill(7));
     assert.equal(me.did, 'did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ');
     const example = await createSigner(manager.getProvider()).sign(
-      createExpression({
+      createVersion({
         author: me.did,
         collection: 'app.todo.item',
         body: { text: 'Buy milk', done: false },
@@ -400,7 +400,7 @@ describe('versioned records through the node', () => {
     );
     const held = await (await stored(bobStores, space)).versionIds();
     const versions = await Promise.all(
-      held.map(async (id) => (await stored(bobStores, space)).getExpression(id)),
+      held.map(async (id) => (await stored(bobStores, space)).getVersion(id)),
     );
     const ofIt = versions.filter((v) => v?.key === said.key);
     assert.deepEqual(ofIt.map((v) => v!.seq).sort(), [0, 1, 2]);

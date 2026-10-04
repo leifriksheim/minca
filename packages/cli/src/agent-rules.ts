@@ -62,7 +62,7 @@ export function triggerPrompt(
       ? '\n\nIt is a direct message, opened for you: answer it with direct_send, to its writer and the others it was for, never in the open.'
       : '';
   const shown = activityOn
-    ? `\n\nPeople see that you are working on it under record ${activityOn}. As the work changes, say what you are doing in a few words with activity_set (about: ${activityOn}), like "Reading the thread" or "Making an app"; you need not say when you are done.`
+    ? `\n\nPeople see that you are working on it under record ${activityOn}. As the work changes, say what you are doing in a few words with activity_set (about: ${activityOn}), like "Reading the thread" or "Writing a summary"; you need not say when you are done.`
     : '';
   return `${cause}${writer}${direct}${shown}\n\nWhat the rule says to do, in the words of ${rule.maker}, who made it:\n${says}`;
 }

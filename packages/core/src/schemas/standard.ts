@@ -12,6 +12,7 @@ import { lifeGroups } from './library/life.js';
 import { moneyGroups } from './library/money.js';
 import { communityGroups } from './library/community.js';
 import { activity, rule, ruleRun } from '../schemas/rules.js';
+import { collectionsGroups } from './library/collections.js';
 
 type Definitions = ReadonlyArray<DefineCollection>;
 
@@ -20,7 +21,7 @@ export const standardAnnotations: Definitions = annotationGroups.Annotations;
 
 /**
  * The library by area, in the order it is listed: what `collections_standard`
- * shows an agent, and Appendix A of the records spec.
+ * shows an agent, and the tables in `packages/core/docs/standard-library.md`.
  */
 export const standardGroups: Readonly<Record<string, Definitions>> = Object.freeze({
   ...annotationGroups,
@@ -32,6 +33,7 @@ export const standardGroups: Readonly<Record<string, Definitions>> = Object.free
   ...moneyGroups,
   ...communityGroups,
   Rules: [rule, ruleRun, activity],
+  ...collectionsGroups,
 });
 
 /** Common nouns apps share: everything but the annotations */

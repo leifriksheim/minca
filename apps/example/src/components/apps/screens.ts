@@ -1,8 +1,9 @@
 /**
- * Screens: an app's own UI, kept on a collection definition and run sealed.
+ * Screens: a made app's own UI, kept on its launcher record and run sealed.
  *
- * A definition may carry a `screen` — one HTML document, scripts and styles
- * inline. An app that wants to show it runs it in a frame that has no network,
+ * A launcher record (`launcher.ts`) may carry a `screen`: one HTML document,
+ * scripts and styles inline. It runs only once someone who may define
+ * collections has written that record, and then in a frame that has no network,
  * no storage and no way to reach the page around it, and hands it one thing:
  * a message port to a {@link createScreenBridge bridge}. Through that port the
  * screen reads and writes the records of the collections its app named, in
@@ -14,13 +15,50 @@
  * navigates somewhere else leaves it behind, so a page it navigates to hears
  * nothing.
  */
-import type { NodeRecord, P2PNode } from '../node/types.js';
-import type { Link } from '../types.js';
-import { checkScreenNetwork } from '../schema/collection-def.js';
-import { isObject, isRecord } from '../utils/guards.js';
+import type { Link, NodeRecord, P2PNode } from '@weaveprotocol/core';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isObject = isRecord;
+
+/**
+ * Collections no screen may use: the space's own, and the launcher's, through
+ * which a screen running as someone who may define collections could add apps.
+ */
+export const offLimits = (name: string): boolean =>
+  name.startsWith('sys.') || ['launcher.app', 'std.blueprint', 'std.guide'].includes(name);
+
+/** The largest screen an app may carry, in bytes of UTF-8: it travels with every copy of its record */
+export const MAX_SCREEN_BYTES = 48 * 1024;
+
+/** At most this many origins a screen may reach */
+const MAX_SCREEN_ORIGINS = 8;
+
+/** `https://api.example.com`, `wss://feed.example.com:8443`: a scheme, a lower-case host, maybe a port; no path, no wildcard */
+const SCREEN_ORIGIN =
+  /^(https|wss):\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?$/;
+
+/**
+ * Checks a screen's `network`: why it is wrong, or null.
+ * An origin goes straight into the frame's security policy, so only exact
+ * origins pass: nothing that could widen it (`*`, `https:`) or break out of it.
+ */
+export function checkScreenNetwork(network: unknown, hasScreen: boolean): string | null {
+  if (network === undefined) return null;
+  if (!Array.isArray(network)) return 'network must be a list of origins, like ["https://api.example.com"]';
+  if (!hasScreen && network.length) return 'network is where a screen may connect; this app has no screen';
+  if (network.length > MAX_SCREEN_ORIGINS) return `network may name at most ${MAX_SCREEN_ORIGINS} origins`;
+  for (const origin of network) {
+    if (typeof origin !== 'string' || !SCREEN_ORIGIN.test(origin)) {
+      return `"${String(origin)}" is not an origin a screen may reach: give https:// or wss:// and a host, lower case, no path, like "https://api.example.com"`;
+    }
+  }
+  if (new Set(network).size !== network.length) return 'network names an origin twice';
+  return null;
+}
 
 /** What a screen sees of a record */
-export interface ScreenRecord {
+interface ScreenRecord {
   readonly key: string;
   /** The same as `key` — what a screen written by guessing tends to reach for */
   readonly id: string;
@@ -39,20 +77,14 @@ export interface ScreenRecord {
   readonly viaAgent: boolean;
 }
 
-/** Who is looking */
-export interface ScreenViewer {
-  readonly did: string;
-  readonly name: string;
-}
-
-/** How to write a screen — for an agent, in `apps_screen_guide`, and for people */
-export const SCREEN_GUIDE = `A screen is one HTML document (scripts and styles inline, at most 48 KB) put on a collection definition as "screen".
-When the app is added, apps in the space can show it instead of plain lists. It runs sealed: no network (no fetch, no
+/** How to write a screen, for an agent: part of the guide the launcher writes in the space (`launcher.ts`) */
+export const SCREEN_GUIDE = `A screen is one HTML document (scripts and styles inline, at most 48 KB) put on an app's launcher.app record as "screen".
+When the app is added, the app shows it instead of plain lists. It runs sealed: no network (no fetch, no
 images from URLs, no fonts from URLs), no storage, no popups, and no alert, confirm or prompt (show messages in the page).
 Forms work: handle "submit", call event.preventDefault() and save with weave.put; a form never goes anywhere itself.
 Keep state in records, never in the page.
 
-If it truly needs the network — weather, a map, a timetable — give its collection "network": the exact origins it may
+If it truly needs the network — weather, a map, a timetable — give the record "network": the exact origins it may
 fetch from and load images from, like ["https://api.open-meteo.com"] (https:// or wss://, a host, no path; at most 8).
 Nothing else is reachable, and fonts never are. Each origin is named when people review the app, and each person is asked
 before a screen they open gets it: a person who says no gets the screen sealed, so it must still work without them.
@@ -60,7 +92,7 @@ Ask for no more than it needs.
 
 Inside it, window.weave is:
   weave.me                          { did, name } — who is looking
-  weave.collections                 the collection names this screen may use (its app's)
+  weave.collections                 the collection names this screen may use (its app's "collections")
   await weave.list(collection, { where? })   records, oldest first: { key, collection, body, links, createdBy, createdAt, updatedAt, mine, viaAgent }
                                     where: { "link:<rel>": "<record key>" } for records linking there, { field: value } for a field's value
   await weave.get(key)              one record, or null
@@ -242,7 +274,7 @@ export function createScreenBridge(params: {
   readonly port: MessagePort;
 }): ScreenBridge {
   const { node, spaceId, port } = params;
-  const allowed = new Set(params.collections);
+  const allowed = new Set(params.collections.filter((name) => !offLimits(name)));
   let closed = false;
 
   const names = [...allowed].map((name) => `"${name}"`).join(', ');

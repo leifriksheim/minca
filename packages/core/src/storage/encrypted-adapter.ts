@@ -10,7 +10,7 @@
  * the space record go in sealed under a key derived from the account seed, so
  * they are readable only once the folder has actually been unlocked.
  *
- * Scoped deliberately narrowly. Expressions and their index entries pass
+ * Scoped deliberately narrowly. Versions and their index entries pass
  * straight through: bodies are already encrypted where it matters, files are
  * content addressed, and sealing them would cost the property that makes a folder worth
  * having — that you can open it and see what is in it. What stays legible is
@@ -161,10 +161,10 @@ export function createEncryptedAdapter(
     delete: (storageKey: string) => inner.delete(storageKey),
     list: (prefix?: string) => inner.list(prefix),
 
-    // Expressions carry their own encryption where the space calls for it.
-    putExpression: inner.putExpression.bind(inner),
-    getExpression: (id: string) => inner.getExpression(id),
-    deleteExpression: (id: string) => inner.deleteExpression(id),
+    // Versions carry their own encryption where the space calls for it.
+    putVersion: inner.putVersion.bind(inner),
+    getVersion: (id: string) => inner.getVersion(id),
+    deleteVersion: (id: string) => inner.deleteVersion(id),
     close: () => inner.close(),
   });
 }

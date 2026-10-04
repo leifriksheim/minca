@@ -61,7 +61,7 @@ async function personAndAgent(fill: number) {
   const keys = await provider.generateKeyPair();
   const note = await createLocalRootSigner(me, provider).delegate({
     audience: publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC),
-    capabilities: [{ with: `space:${space}`, can: 'expression/*' }],
+    capabilities: [{ with: `space:${space}`, can: 'record/*' }],
     expiration: Math.floor(Date.now() / 1000) + 3600,
     facts: [AGENT_FACT],
   });

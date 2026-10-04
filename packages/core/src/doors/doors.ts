@@ -42,15 +42,23 @@ import {
   verifyWithPoint,
 } from '../identity/contact-key.js';
 import { didToPublicKey } from '../identity/did.js';
-import { resolveDelegationRoot, UCAN_CLOCK_SKEW_SECONDS } from '../identity/ucan.js';
-import { isAgentNote } from '../identity/agent-note.js';
-import { canonicalize } from '../schema/expression.js';
+import {
+  isCapabilitySubset,
+  resolveDelegationRoot,
+  UCAN_CLOCK_SKEW_SECONDS,
+  type Capability,
+} from '../identity/ucan.js';
+import { ACCOUNT_ABILITY } from '../identity/abilities.js';
+import { canonicalize } from '../schema/version.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
 import { checkSpace } from '../space/space-access.js';
 import { checkRelays } from '../space/roles.js';
 import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
 import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
+
+/** What a knock's note must grant: writing for the whole account */
+const KNOCK_CAPABILITY: Capability = { with: '*', can: ACCOUNT_ABILITY };
 
 /** A door names at most this many relays: enough that one going away doesn't matter */
 export const MAX_DOOR_RELAYS = 3;
@@ -306,21 +314,15 @@ export async function openKnock(
     return null;
   }
   if (!signed) return null;
-  // …which the account it claims had delegated to when it signed. Agents never knock.
-  if (isAgentNote(body.proof)) return null;
+  // …which the account it claims had delegated to when it signed.
   const chain = await resolveDelegationRoot(body.proof, () => null, provider, { at: body.at }).catch(
     () => null,
   );
   if (!chain?.valid || chain.audience !== body.session || chain.rootDid !== body.from) return null;
-  // Knocking makes a space and hands out its invite: only a note for the whole
-  // account, to write, may. An app given one space, or only to read, may not.
-  if (
-    !chain.capabilities.some(
-      (capability) =>
-        capability.with === '*' && (capability.can === 'expression/*' || capability.can === '*'),
-    )
-  )
-    return null;
+  // Knocking makes a space and hands out its invite: only a note that may write
+  // for the whole account may. An app given one space, or a key the account
+  // trusts less, may not.
+  if (!chain.capabilities.some((capability) => isCapabilitySubset(capability, KNOCK_CAPABILITY))) return null;
 
   // A private space the knocker made, with its key: anything else isn't a space for two from them.
   let invited;

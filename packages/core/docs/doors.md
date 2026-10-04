@@ -110,9 +110,10 @@ knocks and keeps the door open.
 | `std.contact`      | adds `door` ≤64, optional                                                       | as before            | Owner's contacts space   |
 
 **Who may.** Knocking and accepting create or join a space, so they need a note
-for every space (`with: '*'`), as `contacts.ask` does, and the contact key.
-Doors are the person's: a node whose note is an agent's refuses to open,
-close, clear, read, knock, accept or dismiss. A home never gives an agent the
+that grants `account/write` for every space (`with: '*'`), as `contacts.ask`
+does, and the contact key. Doors are the person's: a node whose note lacks
+`account/write`, such as an agent's, refuses to open, close, clear, read,
+knock, accept or dismiss. A home never gives an agent the
 contact key in the first place ([spec 06 §3.1](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/node/node.ts` (Doors), `packages/core/src/node/types.ts` (`NodeDoors`), `packages/core/src/schemas/contacts.ts` (`knock`, `knockAnswer`, `contact`), `packages/core/src/doors/doors.ts` (`signAnswer`, `checkAnswer`), `packages/core/src/session/auth.ts` (`grant`). Tests: `packages/core/tests/doors.test.ts` ("node.doors"), `packages/core/tests/agents.test.ts`._

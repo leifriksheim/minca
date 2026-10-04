@@ -24,9 +24,9 @@
  * reaches them through {@link StorageProvider.invalidate}.
  */
 
-import type { StorageAdapter, Expression, BatchOp } from '../types.js';
+import type { StorageAdapter, Version, BatchOp } from '../types.js';
 import { byVersion, supersedes } from '../records/version.js';
-import { isStub, stubOf } from '../schema/expression.js';
+import { isStub, stubOf } from '../schema/version.js';
 import { utf8Encode, utf8Decode, bytesToHex } from '../utils/encoding.js';
 import { cidDigest } from '../utils/hash.js';
 import {
@@ -45,23 +45,23 @@ export interface StorageProvider {
    * Takes in a version of a record: it becomes current if it supersedes the
    * current one, and is kept or dropped otherwise. Idempotent.
    */
-  addExpression(expression: Expression): Promise<void>;
+  addVersion(version: Version): Promise<void>;
   /** Drops a version from the store and wherever it is indexed. */
-  removeExpression(id: string): Promise<void>;
+  removeVersion(id: string): Promise<void>;
   /** A version by its id, current or not, if this store holds it. */
-  getExpression(id: string): Promise<Expression | null>;
+  getVersion(id: string): Promise<Version | null>;
   /** The current version of a record — possibly a delete. */
-  getCurrent(key: string): Promise<Expression | null>;
+  getCurrent(key: string): Promise<Version | null>;
   /** The record's first version, when it has been edited and so is stored apart. */
-  getGenesis(key: string): Promise<Expression | null>;
+  getGenesis(key: string): Promise<Version | null>;
   /** Every version of a record this store keeps: current, first, and retained. Newest first. */
-  history(key: string): Promise<Expression[]>;
+  history(key: string): Promise<Version[]>;
   /** {@link history} for every record whose key starts with `prefix`, reading only those entries. */
-  histories(prefix: string): Promise<Map<string, Expression[]>>;
+  histories(prefix: string): Promise<Map<string, Version[]>>;
   /** Current versions of every record, deletes included. */
-  listCurrent(): Promise<Expression[]>;
+  listCurrent(): Promise<Version[]>;
   /** Current versions in one collection, deletes included — found through the store's collection index. */
-  queryExpressions(collection: string): Promise<Expression[]>;
+  queryVersions(collection: string): Promise<Version[]>;
   /** The id of every version this store keeps — current, first and retained. */
   versionIds(): Promise<string[]>;
   /** The versions kept in one collection, as sync compares them: sorted, with sums. */
@@ -89,19 +89,19 @@ const MAX_BODIES = 50_000;
 const currentKey = (key: string) => `${CURRENT_PREFIX}${key}`;
 const genesisKey = (key: string) => `${GENESIS_PREFIX}${key}`;
 /** `seq` padded so a key's history lists in order */
-const historyKey = (e: Expression) => `${HISTORY_PREFIX}${e.key}/${String(e.seq).padStart(15, '0')}/${e.id}`;
+const historyKey = (e: Version) => `${HISTORY_PREFIX}${e.key}/${String(e.seq).padStart(15, '0')}/${e.id}`;
 
 /**
  * Where a version sorts for sync: its own time, in whole seconds. Only an
  * order — a wrong clock makes a version slower to find, never lost.
  */
-export function syncTime(version: Pick<Expression, 'createdAt'>): number {
+export function syncTime(version: Pick<Version, 'createdAt'>): number {
   const ms = Date.parse(version.createdAt);
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : 0;
 }
 
 /** Collection names may hold anything; the entry needs them free of `/`. */
-const itemKey = (e: Expression) => `${ITEM_PREFIX}${encodeURIComponent(e.collection)}/${syncTime(e)}/${e.id}`;
+const itemKey = (e: Version) => `${ITEM_PREFIX}${encodeURIComponent(e.collection)}/${syncTime(e)}/${e.id}`;
 
 /** Reads an `i/` entry back: null for anything malformed, or an id that is not a content id */
 function parseItemKey(key: string): { collection: string; id: string; item: Item } | null {
@@ -123,9 +123,9 @@ interface Entries {
   set(key: string, id: string): void;
   unset(key: string): void;
   /** Stores a version, whole or a stub, and indexes it for sync */
-  keep(version: Expression): Promise<void>;
+  keep(version: Version): Promise<void>;
   /** Unindexes a version; its body is deleted once the change has landed */
-  drop(version: Expression): void;
+  drop(version: Version): void;
 }
 
 /** Creates a StorageProvider wrapping an adapter. */
@@ -150,25 +150,25 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
   /** `r/` and `g/` entries: the id they name, or null for none */
   const pointers = new Map<string, string | null>();
   /** Version bodies by id, the oldest let go first */
-  const bodies = new Map<string, Expression>();
+  const bodies = new Map<string, Version>();
   /** Counts changes landed, so a read that raced one is not kept */
   let landed = 0;
 
   const isPointer = (key: string) => key.startsWith(CURRENT_PREFIX) || key.startsWith(GENESIS_PREFIX);
 
-  const remember = (version: Expression) => {
+  const remember = (version: Version) => {
     bodies.delete(version.id);
     bodies.set(version.id, version);
     if (bodies.size > MAX_BODIES) bodies.delete(bodies.keys().next().value!);
   };
 
   /** Bodies the changes landing now will store: readable by the changes after them in the same group */
-  const staging = new Map<string, Expression>();
+  const staging = new Map<string, Version>();
 
-  async function body(id: string): Promise<Expression | null> {
+  async function body(id: string): Promise<Version | null> {
     const known = staging.get(id) ?? bodies.get(id);
     if (known) return known;
-    const version = await adapter.getExpression(id);
+    const version = await adapter.getVersion(id);
     if (version) remember(version);
     return version;
   }
@@ -206,7 +206,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
     });
 
   /** Keeps the in-memory sets in step with a change just written */
-  const track = (added: ReadonlyArray<Expression>, removed: ReadonlyArray<Expression>) => {
+  const track = (added: ReadonlyArray<Version>, removed: ReadonlyArray<Version>) => {
     for (const e of [...added, ...removed]) sets.delete(e.collection);
     if (!kept || !totals) return;
     for (const e of removed) {
@@ -261,19 +261,19 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
 
   async function land(group: ReadonlyArray<Pending>): Promise<void> {
     const writes = new Map<string, Uint8Array | null>();
-    const added = new Map<string, Expression>();
-    const dropped = new Map<string, Expression>();
+    const added = new Map<string, Version>();
+    const dropped = new Map<string, Version>();
     /** Bodies not held yet */
-    const toStore = new Map<string, Expression>();
+    const toStore = new Map<string, Version>();
     const ran: Pending[] = [];
 
     for (const one of group) {
       // Each change on a layer of its own, so one that fails leaves nothing behind.
       const layer = {
         writes: new Map<string, Uint8Array | null>(),
-        added: new Map<string, Expression>(),
-        dropped: new Map<string, Expression>(),
-        toStore: new Map<string, Expression>(),
+        added: new Map<string, Version>(),
+        dropped: new Map<string, Version>(),
+        toStore: new Map<string, Version>(),
       };
       const entries: Entries = {
         get: async (key) => {
@@ -337,9 +337,9 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
         await adapter.commit({ store: [...toStore.values()], ops, remove: [...dropped.keys()] });
       } else {
         // Bodies first and deletes last, so no entry ever names a version that is not there.
-        for (const version of toStore.values()) await adapter.putExpression(version);
+        for (const version of toStore.values()) await adapter.putVersion(version);
         await adapter.batch(ops);
-        for (const id of dropped.keys()) await adapter.deleteExpression(id);
+        for (const id of dropped.keys()) await adapter.deleteVersion(id);
       }
     } catch (error) {
       // Whether any of it landed is unknown: read it all again.
@@ -366,7 +366,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
    * otherwise, and named as the record's first version if it is the lowest-id
    * one seen.
    */
-  async function demote(entries: Entries, version: Expression, current: Expression): Promise<void> {
+  async function demote(entries: Entries, version: Version, current: Version): Promise<void> {
     await keepSuperseded(entries, version);
     // The first version decides who created the record — the one with the
     // lowest id, if several devices each created the same chosen key. Not
@@ -378,7 +378,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
   }
 
   /** Keeps a superseded version: whole if its writer said to retain it, else as a stub */
-  async function keepSuperseded(entries: Entries, version: Expression): Promise<void> {
+  async function keepSuperseded(entries: Entries, version: Version): Promise<void> {
     if (!version.retain) return entries.keep(stubOf(version));
     // A stub of a retained version is kept only until the whole of it turns up.
     const held = isStub(version) ? await body(version.id) : null;
@@ -387,15 +387,15 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
   }
 
   /** Versions by id, those held, in one read where the adapter can */
-  async function load(ids: Iterable<string>): Promise<Expression[]> {
+  async function load(ids: Iterable<string>): Promise<Version[]> {
     const wanted = [...ids];
     const missing = wanted.filter((id) => !bodies.has(id));
-    if (adapter.getExpressions && missing.length > 1) {
-      for (const version of await adapter.getExpressions(missing)) if (version) remember(version);
+    if (adapter.getVersions && missing.length > 1) {
+      for (const version of await adapter.getVersions(missing)) if (version) remember(version);
     } else {
       await Promise.all(missing.map((id) => body(id)));
     }
-    return wanted.map((id) => bodies.get(id)).filter((v): v is Expression => v !== undefined);
+    return wanted.map((id) => bodies.get(id)).filter((v): v is Version => v !== undefined);
   }
 
   /** `[entry key, version id]` for every pointer under a prefix, in one read where the adapter can */
@@ -422,7 +422,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
     return id;
   };
 
-  async function histories(prefix: string): Promise<Map<string, Expression[]>> {
+  async function histories(prefix: string): Promise<Map<string, Version[]>> {
     const ids = new Map<string, Set<string>>();
     const add = (key: string, id: string) => (ids.get(key) ?? ids.set(key, new Set()).get(key)!).add(id);
     for (const entry of [CURRENT_PREFIX, GENESIS_PREFIX]) {
@@ -436,7 +436,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
     const found = new Map(
       (await load(new Set([...ids.values()].flatMap((held) => [...held])))).map((v) => [v.id, v]),
     );
-    const result = new Map<string, Expression[]>();
+    const result = new Map<string, Version[]>();
     for (const [key, held] of ids) {
       result.set(key, [...held].flatMap((id) => found.get(id) ?? []).sort(byVersion));
     }
@@ -457,7 +457,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
   }
 
   return Object.freeze({
-    addExpression(incoming: Expression): Promise<void> {
+    addVersion(incoming: Version): Promise<void> {
       return change(async (entries) => {
         const currentId = await entries.get(currentKey(incoming.key));
         const current = currentId ? await body(currentId) : null;
@@ -474,7 +474,7 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
       });
     },
 
-    removeExpression(id: string): Promise<void> {
+    removeVersion(id: string): Promise<void> {
       return change(async (entries) => {
         const version = await body(id);
         if (!version) return;
@@ -486,29 +486,29 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
       });
     },
 
-    getExpression: body,
+    getVersion: body,
 
-    async getCurrent(key: string): Promise<Expression | null> {
+    async getCurrent(key: string): Promise<Version | null> {
       const id = await readId(currentKey(key));
       return id ? body(id) : null;
     },
 
-    async getGenesis(key: string): Promise<Expression | null> {
+    async getGenesis(key: string): Promise<Version | null> {
       const id = await readId(genesisKey(key));
       return id ? body(id) : null;
     },
 
-    async history(key: string): Promise<Expression[]> {
+    async history(key: string): Promise<Version[]> {
       return (await histories(key)).get(key) ?? [];
     },
 
     histories,
 
-    async listCurrent(): Promise<Expression[]> {
+    async listCurrent(): Promise<Version[]> {
       return load((await pointersUnder(CURRENT_PREFIX)).map(([, id]) => id));
     },
 
-    async queryExpressions(collection: string): Promise<Expression[]> {
+    async queryVersions(collection: string): Promise<Version[]> {
       // `i/` names every version kept, not only current ones; the entries say which is current.
       const held = await load((await loadKept()).get(collection)?.keys() ?? []);
       const current = await Promise.all(held.map(async (v) => (await readId(currentKey(v.key))) === v.id));

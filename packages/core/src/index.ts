@@ -2,7 +2,7 @@
  * @weaveprotocol/core
  * Self-sovereign, peer-to-peer protocol for the browser.
  *
- * Identity via WebAuthn passkeys, data as signed Expressions,
+ * Identity via WebAuthn passkeys, data as signed Versions,
  * sync by range-based set reconciliation (Negentropy),
  * and end-to-end encryption for private Spaces.
  *
@@ -17,8 +17,8 @@ export type {
   StandardJSONSchemaV1,
   StandardSchemaResult,
   StandardSchemaIssue,
-  Expression,
-  UnsignedExpression,
+  Version,
+  UnsignedVersion,
   Envelope,
   Link,
   Space,
@@ -130,7 +130,7 @@ export { createSchemaEngine } from './schema/schema-engine.js';
 export type { SchemaEngine, ValidationResult } from './schema/schema-engine.js';
 export { createSigner } from './schema/signer.js';
 export type { Signer } from './schema/signer.js';
-export { createExpression, canonicalize, getExpressionId, signedPart } from './schema/expression.js';
+export { createVersion, canonicalize, getVersionId, signedPart } from './schema/version.js';
 
 // Phase 3: Local Storage & State
 export { createIndexedDBAdapter } from './storage/indexeddb-adapter.js';
@@ -171,8 +171,6 @@ export {
 export {
   CATALOG_COLLECTION,
   checkStoredCollection,
-  checkScreenNetwork,
-  MAX_SCREEN_ORIGINS,
   checkPublishableSchema,
   validateJsonSchema,
   asStandardSchema,
@@ -289,10 +287,10 @@ export type { CapabilityGate, CapabilityGateConfig } from './validation/capabili
 export { createVersionCheck } from './validation/check-version.js';
 
 // Phase 7: Encryption & Privacy
-export { generateSpaceKey, encryptExpression, decryptExpression } from './privacy/space-encryption.js';
+export { generateSpaceKey, encryptVersion, decryptVersion } from './privacy/space-encryption.js';
 export { sealDirect, openDirect, directContext, directRecipients, MAX_DIRECT_TO } from './privacy/direct.js';
 export type { DirectBody, DirectContent } from './privacy/direct.js';
-export type { SpaceKey, EncryptedExpression, EncryptedExpressionBody } from './privacy/space-encryption.js';
+export type { SpaceKey, EncryptedVersion, EncryptedVersionBody } from './privacy/space-encryption.js';
 
 // Utilities
 export {
@@ -339,6 +337,8 @@ export {
 } from './node/index.js';
 /** How many subscriptions one proposal to the home may offer */
 export { MAX_PROPOSALS } from './space/notify.js';
+/** Why an app's "worth hearing about" entry can't be offered, or null */
+export { checkAppNotify } from './space/notify.js';
 export type {
   StoreFactory,
   StoreOptions,
@@ -359,6 +359,7 @@ export type {
   NodeNetwork,
   SpaceSummary,
   SpaceStatus,
+  SpaceAccess,
   CarrierSummary,
   SpaceProfile,
   NewSpace,

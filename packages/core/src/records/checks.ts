@@ -2,7 +2,7 @@
  * Checks: conditions a collection's records must meet, written as data and
  * judged by every peer that can read them.
  *
- * A check is an expression over the version being judged (its body, the
+ * A check is a version over the version being judged (its body, the
  * version before it, who wrote it) and over versions it cites as evidence,
  * by id. Peers only check; they never search. Whatever is hard to work out
  * (who voted, what adds up, which move is legal) the writer works out and
@@ -22,7 +22,7 @@
  * every version is checked against the one before is a state machine, and
  * versions citing versions build on each other the way a ledger does.
  */
-import { canonicalize } from '../schema/expression.js';
+import { canonicalize } from '../schema/version.js';
 import { cidFromBytes } from '../utils/hash.js';
 import { utf8Encode } from '../utils/encoding.js';
 import { isObject } from '../utils/guards.js';

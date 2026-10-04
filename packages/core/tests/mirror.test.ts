@@ -11,7 +11,7 @@ import { isRecord } from '../src/utils/guards.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { nextVersion } from '../src/records/version.js';
 import { createStorageProvider, type StorageProvider } from '../src/storage/storage-provider.js';
 import type { BlobStore } from '../src/storage/blob-store.js';
@@ -19,7 +19,7 @@ import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
 import { createS3BlobStore } from '../src/storage/blob/s3.js';
 import { createMirror, deleteMirrored, type Taken } from '../src/storage/mirror.js';
 import { packSegment, unpackSegment } from '../src/storage/segment.js';
-import type { Expression } from '../src/types.js';
+import type { Version } from '../src/types.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { patience } from './helpers/until.js';
 
@@ -67,9 +67,9 @@ async function author() {
 }
 type Author = Awaited<ReturnType<typeof author>>;
 
-const note = (who: Author, text: string, version?: Parameters<typeof createExpression>[0]['version']) =>
+const note = (who: Author, text: string, version?: Parameters<typeof createVersion>[0]['version']) =>
   signer.sign(
-    createExpression({
+    createVersion({
       author: who.did,
       collection: 'app.note',
       space: SPACE,
@@ -80,11 +80,11 @@ const note = (who: Author, text: string, version?: Parameters<typeof createExpre
   );
 
 /** A device: its own store, and a mirror onto the shared one */
-async function device(store: BlobStore, refuse: (version: Expression) => boolean = () => false) {
+async function device(store: BlobStore, refuse: (version: Version) => boolean = () => false) {
   const storage = createStorageProvider(createMemoryAdapter());
-  const accept = async (version: Expression): Promise<Taken> => {
+  const accept = async (version: Version): Promise<Taken> => {
     if (refuse(version)) return 'refused';
-    await storage.addExpression(version);
+    await storage.addVersion(version);
     return 'stored';
   };
   const mirror = await createMirror({
@@ -111,10 +111,10 @@ describe('a mirror', () => {
     const laptop = await device(shared.store);
     const phone = await device(shared.store);
 
-    await laptop.storage.addExpression(await note(who, 'from the laptop'));
+    await laptop.storage.addVersion(await note(who, 'from the laptop'));
     await laptop.mirror.flush();
     await phone.mirror.pull();
-    await phone.storage.addExpression(await note(who, 'from the phone'));
+    await phone.storage.addVersion(await note(who, 'from the phone'));
     await phone.mirror.flush();
     await laptop.mirror.pull();
 
@@ -133,7 +133,7 @@ describe('a mirror', () => {
     const who = await author();
     const laptop = await device(shared.store);
     const phone = await device(shared.store);
-    for (let i = 0; i < 20; i += 1) await laptop.storage.addExpression(await note(who, `n${i}`));
+    for (let i = 0; i < 20; i += 1) await laptop.storage.addVersion(await note(who, `n${i}`));
     await laptop.mirror.flush();
 
     assert.equal((await phone.mirror.pull()).added, 20);
@@ -150,8 +150,8 @@ describe('a mirror', () => {
     const shared = counted(createMemoryBlobStore());
     const who = await author();
     const writer = await device(shared.store);
-    await writer.storage.addExpression(await note(who, 'fine'));
-    await writer.storage.addExpression(await note(who, 'junk'));
+    await writer.storage.addVersion(await note(who, 'fine'));
+    await writer.storage.addVersion(await note(who, 'junk'));
     await writer.mirror.flush();
 
     const reader = await device(shared.store, (version) => textOf(version.body) === 'junk');
@@ -164,15 +164,15 @@ describe('a mirror', () => {
     const who = await author();
     const writer = await device(shared.store);
     let current = await note(who, 'v0');
-    await writer.storage.addExpression(current);
+    await writer.storage.addVersion(current);
     await writer.mirror.flush();
     for (let i = 1; i <= 10; i += 1) {
       current = await note(who, `v${i}`, nextVersion(current));
-      await writer.storage.addExpression(current);
+      await writer.storage.addVersion(current);
       await writer.mirror.flush();
     }
     const other = await note(who, 'another record');
-    await writer.storage.addExpression(other);
+    await writer.storage.addVersion(other);
     await writer.mirror.flush();
     const before = (await shared.store.list(`${SPACE}/`)).length;
     assert.equal(before, 12);
@@ -197,7 +197,7 @@ describe('a mirror', () => {
     const shared = counted(createMemoryBlobStore());
     const who = await author();
     const laptop = await device(shared.store);
-    await laptop.storage.addExpression(await note(who, 'soon'));
+    await laptop.storage.addVersion(await note(who, 'soon'));
     laptop.mirror.changed();
     laptop.mirror.changed();
     const deadline = Date.now() + patience(2000);
@@ -317,7 +317,7 @@ describe('the S3 driver', () => {
     const who = await author();
     const a = await device(store);
     const b = await device(store);
-    for (let i = 0; i < 5; i += 1) await a.storage.addExpression(await note(who, `n${i}`));
+    for (let i = 0; i < 5; i += 1) await a.storage.addVersion(await note(who, `n${i}`));
     await a.mirror.flush();
     await b.mirror.pull();
     assert.equal((await texts(b.storage)).length, 5);

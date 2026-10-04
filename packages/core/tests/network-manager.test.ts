@@ -18,7 +18,7 @@ import type { PeerTransport, PeerTransportEvents } from '../src/network/transpor
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, didToPublicKey, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createCryptoGate } from '../src/validation/crypto-gate.js';
 import { createSyncEngine } from '../src/sync/sync-engine.js';
@@ -142,8 +142,8 @@ describe('sync through a transport', () => {
         storageProvider: storage,
         heartbeatInterval: 60_000,
         sendToPeer: (peerId, message) => network.send(peerId, { type: 'sync', from: did, payload: message }),
-        validate: async (expression) => {
-          const result = await cryptoGate.validate(expression, async (did) =>
+        validate: async (version) => {
+          const result = await cryptoGate.validate(version, async (did) =>
             provider.importPublicKey(didToPublicKey(did).publicKeyBytes),
           );
           return { valid: result.passed, reason: result.reason };
@@ -166,10 +166,10 @@ describe('sync through a transport', () => {
     const author = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     for (const text of ['one', 'two', 'three']) {
       const signed = await signer.sign(
-        createExpression({ author, collection: 'app.test.note', body: { text } }),
+        createVersion({ author, collection: 'app.test.note', body: { text } }),
         pair.privateKey,
       );
-      await a.storage.addExpression(signed);
+      await a.storage.addVersion(signed);
     }
 
     await a.network.connect();
@@ -184,7 +184,7 @@ describe('sync through a transport', () => {
       rootB = await b.storage.fingerprint();
     }
     assert.equal(rootB, rootA);
-    assert.equal((await b.storage.queryExpressions('app.test.note')).length, 3);
+    assert.equal((await b.storage.queryVersions('app.test.note')).length, 3);
 
     a.sync.stop();
     b.sync.stop();

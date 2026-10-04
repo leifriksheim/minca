@@ -2,17 +2,20 @@ import { useState } from 'react';
 import { useAction } from '@weave/app-shared/action';
 import type { NodeCollection, SpaceSummary } from '@weaveprotocol/core';
 import { useNode } from '@weaveprotocol/core/react';
-// `useSchemas` defines collections in a space; it is not a React hook, whatever its name says.
-import { useSchemas as addSchemas } from '@weaveprotocol/core/schemas';
 import { has, type WeaveApp } from './index';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
+import { addBuiltIn, moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { styles, palette } from '../../styles';
 
-/** A space's apps like a phone's home screen: those added, then proposals and built-ins to add. */
+/**
+ * A space's apps like a phone's home screen: those added, then proposals and
+ * built-ins to add. Someone who may add collections can arrange them: move
+ * them, or take them off. Taking one off keeps everything it holds.
+ */
 export function AppsView({
   space,
   collections,
@@ -32,15 +35,28 @@ export function AppsView({
 }) {
   const node = useNode();
   const [adding, setAdding] = useState<WeaveApp | null>(null);
+  const [arranging, setArranging] = useState(false);
   const { run, busy, error } = useAction();
+  const arrange = useAction();
 
   const add = (app: WeaveApp) => {
     setAdding(app);
     void run(async () => {
-      await addSchemas(node, space.id, app.needs);
-      await app.setup?.(node, space.id);
+      await addBuiltIn(node, space.id, app, apps.placed);
       onOpenApp(app.id);
     });
+  };
+  const move = (app: AppEntry, by: number) => {
+    const at = apps.placed.findIndex((record) => record.key === app.record.key);
+    void arrange.run(() => moveApp(node, space.id, apps.placed, app.record.key, at + by));
+  };
+  const remove = (app: AppEntry) => {
+    const sure = globalThis.confirm(
+      app.builtIn
+        ? `Take ${app.title} off ${space.name}? Everything it holds stays in the space, and adding it again brings it back.`
+        : `Take ${app.title} off ${space.name}? Everything it holds stays in the space; to have the app again, someone proposes it again.`,
+    );
+    if (sure) void arrange.run(() => removeApp(node, space.id, app.record, apps.records));
   };
 
   return (
@@ -53,28 +69,52 @@ export function AppsView({
               What you use together here. Everything they save stays in the space.
             </p>
           </div>
-          {space.writable && (
-            <button
-              onClick={onCreate}
-              data-variant="primary"
-              className="hide-on-phone"
-              style={{ ...styles.button, ...inlineButton }}
-            >
-              <Icon name="sparkle" size={14} /> Create an app
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {mayDefine && apps.ready.length > 0 && (
+              <button
+                onClick={() => setArranging((was) => !was)}
+                aria-pressed={arranging}
+                data-variant={arranging ? 'primary' : 'quiet'}
+                style={{ ...styles.button, ...inlineButton }}
+              >
+                {arranging ? 'Done' : 'Arrange'}
+              </button>
+            )}
+            {space.writable && !arranging && (
+              <button
+                onClick={onCreate}
+                data-variant="primary"
+                className="hide-on-phone"
+                style={{ ...styles.button, ...inlineButton }}
+              >
+                <Icon name="sparkle" size={14} /> Create an app
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="app-grid">
-          {apps.ready.map((app) => (
-            <AppCard
-              key={app.id}
-              app={app}
-              unread={unreadOf(unread, app.id)}
-              onClick={() => onOpenApp(app.id)}
-            />
-          ))}
-          {space.writable && (
+          {apps.ready.map((app, at) =>
+            arranging ? (
+              <ArrangeCard
+                key={app.id}
+                app={app}
+                busy={arrange.busy}
+                first={at === 0}
+                last={at === apps.ready.length - 1}
+                onMove={(by) => move(app, by)}
+                onRemove={() => remove(app)}
+              />
+            ) : (
+              <AppCard
+                key={app.id}
+                app={app}
+                unread={unreadOf(unread, app.id)}
+                onClick={() => onOpenApp(app.id)}
+              />
+            ),
+          )}
+          {space.writable && !arranging && (
             <button onClick={onCreate} data-tile-new className="app-card" style={createCard}>
               <span
                 className="app-card-icon"
@@ -95,6 +135,7 @@ export function AppsView({
             </button>
           )}
         </div>
+        {arrange.error && <p style={styles.error}>{arrange.error}</p>}
         {apps.ready.length === 0 && (
           <p style={{ fontSize: 13, color: palette.ink.muted }}>
             No apps here yet. Add a ready-made one below, or create your own.
@@ -104,8 +145,8 @@ export function AppsView({
 
       <Proposals
         space={space}
-        apps={apps.proposed}
-        all={apps.made}
+        proposals={apps.proposed}
+        placed={apps.placed}
         collections={collections}
         mayDefine={mayDefine}
         onAdded={(key) => onOpenApp(`made:${key}`)}
@@ -117,7 +158,7 @@ export function AppsView({
             <h2 style={styles.sectionTitle}>More apps</h2>
             <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
               {mayDefine
-                ? 'Ready-made. Adding one adds the collections it needs, which hold ordinary records.'
+                ? 'Ready-made. Adding one adds every collection it uses, which hold ordinary records.'
                 : 'Someone whose role lets them add collections can add these.'}
             </p>
           </div>
@@ -197,6 +238,60 @@ function AppCard({ app, unread, onClick }: { app: AppEntry; unread: Unread; onCl
   );
 }
 
+/** An app on the home screen while it is being arranged: moved earlier or later, or taken off */
+function ArrangeCard({
+  app,
+  busy,
+  first,
+  last,
+  onMove,
+  onRemove,
+}: {
+  app: AppEntry;
+  busy: boolean;
+  first: boolean;
+  last: boolean;
+  onMove: (by: number) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="app-card" data-arranging style={{ ...card, alignItems: 'center' }}>
+      <AppIcon icon={app.icon} hue={app.hue} size={44} className="app-card-icon" />
+      <strong style={{ ...cardTitle, flex: 1, minWidth: 0 }}>{app.title}</strong>
+      <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <button
+          onClick={() => onMove(-1)}
+          disabled={busy || first}
+          aria-label={`Move ${app.title} earlier`}
+          data-variant="quiet"
+          style={{ ...styles.smallButton, width: 32, padding: 0 }}
+        >
+          <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+            <Icon name="chevron" size={12} />
+          </span>
+        </button>
+        <button
+          onClick={() => onMove(1)}
+          disabled={busy || last}
+          aria-label={`Move ${app.title} later`}
+          data-variant="quiet"
+          style={{ ...styles.smallButton, width: 32, padding: 0 }}
+        >
+          <Icon name="chevron" size={12} />
+        </button>
+        <button
+          onClick={onRemove}
+          disabled={busy}
+          data-variant="quiet"
+          style={{ ...styles.smallButton, color: palette.accent.danger }}
+        >
+          Remove
+        </button>
+      </span>
+    </div>
+  );
+}
+
 /** What an app reads and writes, and whether this space has each yet */
 function SchemaList({ app, collections }: { app: WeaveApp; collections: ReadonlyArray<NodeCollection> }) {
   const rows = [
@@ -232,7 +327,7 @@ function SchemaList({ app, collections }: { app: WeaveApp; collections: Readonly
               {s.title} <code style={{ fontSize: 11, color: palette.ink.faint }}>{s.name}</code>
             </span>
             <span style={{ color: here ? palette.accent.good : palette.ink.faint, whiteSpace: 'nowrap' }}>
-              {here ? 'in this space' : optional ? 'optional' : 'will be added'}
+              {here ? 'in this space' : optional ? 'will be added, for when it is used' : 'will be added'}
             </span>
           </li>
         );

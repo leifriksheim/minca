@@ -16,7 +16,7 @@ import { isAgentNote } from '../identity/agent-note.js';
 import type { RootSigner } from '../identity/root-signer.js';
 import { startPageNode, type WorkerLike } from '../node/worker.js';
 import type { StoreFactory } from '../node/stores.js';
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import type { CacheConfig, NewSpace, NodeNetworkConfig, P2PNode } from '../node/types.js';
 import { checkStartingRoles } from '../space/space-access.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
@@ -62,11 +62,11 @@ export interface ConnectRequest {
   readonly chooseSpaces?: boolean;
   /**
    * The key is an agent's — one on the person's computer, connected with
-   * `weave connect` (`agent-link.ts`). Its note says so (`AGENT_FACT`), so
-   * every record it writes shows as "via agent", and every peer refuses it
-   * changing the space's collections or who may do what, or the account's
-   * list of spaces. It may be given chosen spaces or the whole account, but
-   * never spaces made for it.
+   * `weave connect` (`agent-link.ts`). Its note grants writing records only,
+   * so every peer refuses it changing the space's collections or who may do
+   * what, or the account's list of spaces; and it carries `AGENT_FACT`, so
+   * every record it writes shows as "via agent". It may be given chosen
+   * spaces or the whole account, but never spaces made for it.
    */
   readonly agent?: boolean;
   /** How many days the note should last, 1–365. The home decides; default 7. */
@@ -100,7 +100,7 @@ export interface Proposed {
    * signed, so its node holds them at once rather than once it meets another
    * of the account's devices, which may be long after the home's window closed.
    */
-  readonly versions?: ReadonlyArray<Expression>;
+  readonly versions?: ReadonlyArray<Version>;
 }
 
 /** Whether a request the home received is a proposal rather than a connection */
@@ -224,12 +224,17 @@ export function homeAddress(input: string): string {
   return url.href;
 }
 
-/** The capabilities a grant carries, for these spaces */
+/**
+ * The capabilities a grant carries, for these spaces. Writing is everything
+ * the account may do there; `records` is writing records only, for a key the
+ * account trusts less (an agent's): it can't define collections, change who
+ * may do what, or write for the account (`identity/abilities.ts`).
+ */
 export function grantCapabilities(
-  access: 'read' | 'write',
+  access: 'read' | 'write' | 'records',
   spaceIds: ReadonlyArray<string> | 'all',
 ): Capability[] {
-  const can = access === 'write' ? 'expression/*' : 'expression/read';
+  const can = access === 'write' ? '*' : access === 'records' ? 'record/*' : 'record/read';
   return spaceIds === 'all' ? [{ with: '*', can }] : spaceIds.map((id) => ({ with: `space:${id}`, can }));
 }
 
@@ -305,9 +310,11 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
     options.timeoutMs,
   );
   await checkGrant(grant, audience);
-  // An agent's note must say so, or its writes would pass as the person's own.
+  // An agent's note must say so, or its writes would pass as the person's own; and grant records only.
   if (options.request.agent && !isAgentNote(grant.token))
     throw new Error("The home gave an ordinary note, not an agent's. Update your account home.");
+  if (options.request.agent && !recordsOnlyGrant(grant.token))
+    throw new Error('The home gave an agent more than records. Update your account home.');
   return { ...grant, home: homeUrl.href };
 }
 
@@ -450,6 +457,19 @@ export async function checkGrant(grant: Grant, audience: string): Promise<void> 
   const { payload } = parseUCAN(grant.token);
   if (payload.aud !== audience) throw new Error('The grant was made out to a different key.');
   if (payload.iss !== grant.did) throw new Error('The grant was not signed by the account it names.');
+  if (payload.att.some((capability) => capability.can.startsWith('expression/'))) throw new Error(OLD_GRANT);
+}
+
+/** A grant from before abilities were named for records: every write under it would be refused */
+const OLD_GRANT = 'This connection is from an older version of Weave. Connect to your account home again.';
+
+/** Whether a note grants records and nothing more, as an agent's must (spec 01 §8) */
+export function recordsOnlyGrant(token: string): boolean {
+  try {
+    return parseUCAN(token).payload.att.every((capability) => capability.can.startsWith('record/'));
+  } catch {
+    return false;
+  }
 }
 
 /** A signer that answers with the note the home gave — the app holds nothing else. */
@@ -462,6 +482,8 @@ export function grantSigner(grant: Grant): RootSigner {
       if (grant.expiresAt <= Math.floor(Date.now() / 1000)) {
         throw new Error('Access has run out. Connect to your account home again.');
       }
+      if (parseUCAN(grant.token).payload.att.some((capability) => capability.can.startsWith('expression/')))
+        throw new Error(OLD_GRANT);
       token ??= cidFromBytes(utf8Encode(grant.token)).then((cid) => ({
         ...parseUCAN(grant.token),
         encoded: grant.token,

@@ -65,10 +65,10 @@ _Source: `packages/core/src/node/node.ts`, `packages/core/src/node/types.ts`. Te
 ### 1.2 The session note, and renewing it
 
 The root key never signs records. The node asks its signer for one note that
-lets the session key write everywhere the account can:
+lets the session key do everything the account can, everywhere:
 
 ```json
-{ "aud": "<sessionDid>", "att": [{ "with": "*", "can": "expression/*" }], "exp": <now + ttl> }
+{ "aud": "<sessionDid>", "att": [{ "with": "*", "can": "*" }], "exp": <now + ttl> }
 ```
 
 (The UCAN envelope and how peers verify it are in [01](01-identity.md).)
@@ -106,17 +106,17 @@ carrier sees only what these devices write, so without them it carries stale
 passes or none.
 
 The account registry, the contacts space and carry spaces are the account's
-own machinery. In them a record signed under an agent's note never counts
-(§3.1), and a node always holds them whole ([05](05-sync-and-storage.md) §5).
-A node writing under an agent's note never writes the account registry: no
-`sys.joined`, no passes, no name, no hosting receipts (every peer would ignore
-them).
+own machinery. In them a record counts only under a note that grants
+`account/write` ([01](01-identity.md) §8), and a node always holds them whole
+([05](05-sync-and-storage.md) §5). A node whose note lacks it, such as an
+agent's, never writes the account registry: no `sys.joined`, no passes, no
+name, no hosting receipts (every peer would ignore them).
 
 When a node joins, leaves and reconciles, which spaces it hides from its own
 list, and when it publishes the account's profile are the node's own; the
 reference node is in [the node](../packages/core/docs/node.md#following-the-account).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/agents.test.ts` ("it never writes the account itself")._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/agents.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
 
 ## 2. The account home protocol
 
@@ -202,7 +202,7 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 | `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given. |
 | `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                 |
 | `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                   |
-| `agent`        | boolean, optional               | The audience is an agent's key (§3).                                                                                                                    |
+| `agent`        | boolean, optional               | The audience is an agent's key (§3): its note grants records only.                                                                                      |
 | `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                             |
 
 A home MUST refuse a request (as in §2.3 step 4) unless: `v` is `1`; `audience`
@@ -256,8 +256,10 @@ When the person approves, the home:
    - `scope: account` → `[{ with: "*", can }]`
    - `scope: spaces` → one `{ with: "space:<id>", can }` per granted space
 
-   where `can` is `expression/*` for `write`, `expression/read` for `read`; and
-   `fct: [{ "weave": "agent" }]` when `agent: true`.
+   where `can` is `*` for `write`, `record/*` for `write` with
+   `agent: true` (records only, [01](01-identity.md) §8), and
+   `record/read` for `read`; and `fct: [{ "weave": "agent" }]` when
+   `agent: true`.
 
 6. Remembers the connection (§2.10).
 7. Answers with the grant.
@@ -279,7 +281,7 @@ page it opened):
 | `contactsSpace` | string, optional                     | With `contacts` and `scope: spaces`: which of `spaces` is the contacts space.                                                                                              |
 | `relays`        | string[], optional                   | Relays the home uses; the app joins them too, so the two always share one.                                                                                                 |
 | `expiresAt`     | number                               | Unix seconds.                                                                                                                                                              |
-| `agent`         | `true`, optional                     | The note is an agent's.                                                                                                                                                    |
+| `agent`         | `true`, optional                     | The note is an agent's: records only, with the agent fact.                                                                                                                 |
 | `home`          | string                               | Added by the app.                                                                                                                                                          |
 
 Example (token shortened):
@@ -307,7 +309,7 @@ whose note's payload is
 {
   "iss": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
   "aud": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
-  "att": [{ "can": "expression/*", "with": "space:bafk…" }],
+  "att": [{ "can": "*", "with": "space:bafk…" }],
   "exp": 1792614901,
   "nbf": 1790022901,
   "nnc": "a6b6617b6ed4fba0",
@@ -327,7 +329,7 @@ _Source: `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/sessi
 Before using a grant the app MUST check that the note verifies
 ([01](01-identity.md)), that its `aud` is the app's own key, and that its `iss`
 is `grant.did`. An app that asked for `agent: true` MUST refuse a note without
-the agent fact.
+the agent fact, so its key's records show as an agent's.
 
 ### 2.7 Starting a connected node
 
@@ -344,7 +346,7 @@ _Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSig
 
 |                       | `scope: spaces`                                                    | `scope: account`                        |
 | --------------------- | ------------------------------------------------------------------ | --------------------------------------- |
-| Note                  | `space:<id>` per granted space                                     | `*`                                     |
+| Note                  | `with: "space:<id>"` per granted space                             | `with: "*"`                             |
 | Account key           | no                                                                 | yes                                     |
 | Sees                  | the granted spaces                                                 | every space; the account registry       |
 | Makes or joins spaces | the home makes them at grant time                                  | itself; they land in the account's list |
@@ -515,36 +517,34 @@ _Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `
 
 ## 3. Agents
 
-### 3.1 Agent notes, and what peers refuse from them
+### 3.1 Agents' notes
 
 An agent is not an identity. It writes for a person under a note from their
-account, like an app; the note carries the fact `{ "weave": "agent" }`
-(`AGENT_FACT`, [01](01-identity.md)). A note is an agent's when any entry of its
-`fct` has `weave === "agent"`.
+account, like an app. The note grants records only (`record/*`, or
+`record/read` to read), so every
+peer refuses from it what a records-only note can't do ([01](01-identity.md)
+§8): it never changes a space's collections or who may do what, and never
+writes in the account's own spaces. It also carries the agent fact
+(`AGENT_FACT`, [01](01-identity.md) §8.1), so apps show what it writes as
+"via agent". To make something new it proposes collections for someone who
+may define them (the library's blueprints,
+[blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
 
-Every record written under an agent's note shows as `viaAgent: true`. Every
-peer MUST refuse, from a version whose proof is an agent's note:
+Not protocol, but recipients also ignore:
 
-| What                                                                                                                                                      | How it is refused                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Any record in the access log collections (`sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.keepers`) | It is never an access event: it changes nothing about who may do what, or which collections exist. |
-| Any record in the account registry, the contacts space or a carry space                                                                                   | It does not stand ("Only the account itself writes here, not an agent").                           |
-
-Recipients additionally ignore:
-
-- a contact request (`std.contact-request`) written `viaAgent`: it is never
-  opened ([03](03-spaces.md));
+- a contact request (`std.contact-request`) written under a records-only
+  note: it is never opened ([contacts](../packages/core/docs/contacts.md));
 - call messages from an agent ([calls](../packages/core/docs/calls.md#messages)).
 
-A node writing under an agent's note never names relays, seals member keys or
-rotates a space key; in a private space it only learns keys.
+A node whose note can't change access never names relays, seals member keys
+or rotates a space key; in a private space it only learns keys.
 
-An agent granted `scope: account` gets a `*` note and the account key in its
-grant (§2.5), so the contact list is within its note to read. A home MUST NOT
-give an agent the contact key: with it, an agent could open contact requests
-and knocks on the account's doors ([07](07-doors.md)).
+An agent granted `scope: account` gets a note for every space and the account
+key in its grant (§2.5), so the contact list is within its note to read. A home
+MUST NOT give an agent the contact key: with it, an agent could open contact
+requests and knocks on the account's doors ([07](07-doors.md)).
 
-_Source: `packages/core/src/identity/agent-note.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/agents.test.ts` ("a definition an agent signs by hand is ignored by every peer", "taking someone out of the space, signed by an agent, is ignored too", "it never writes the account itself")._
+_Source: `packages/core/src/session/connect.ts` (`grantCapabilities`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/agents.test.ts` ("a definition an agent signs by hand is ignored by every peer", "what counts is what the note grants, not whether it says agent", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
 
 ### 3.2 Connecting an agent with a code
 

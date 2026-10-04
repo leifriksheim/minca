@@ -16,7 +16,7 @@ import { isAgentNote } from '../identity/agent-note.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { isObject } from '../utils/guards.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
-import { checkGrant, type Grant } from './connect.js';
+import { checkGrant, recordsOnlyGrant, type Grant } from './connect.js';
 import { sealedRoom } from './pairing.js';
 
 const CODE_PREFIX = 'wv_';
@@ -184,6 +184,8 @@ export async function offerAgentLink(
 export async function checkAgentGrant(grant: Grant, audience: string): Promise<void> {
   await checkGrant(grant, audience);
   if (!isAgentNote(grant.token)) throw new Error("The note is not an agent's. Update your account home.");
+  if (!recordsOnlyGrant(grant.token))
+    throw new Error('The note gives an agent more than records. Update your account home.');
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import { didToPublicKey } from '../identity/did.js';
 import { checkVersionShape } from '../records/version.js';
 import { createCryptoGate, type GateResult } from './crypto-gate.js';
@@ -17,10 +17,10 @@ export function createVersionCheck(config: CapabilityGateConfig) {
   const resolvePublicKey = async (did: string) =>
     provider.importPublicKey(didToPublicKey(did).publicKeyBytes);
 
-  return async (expression: Expression): Promise<GateResult> => {
-    const malformed = checkVersionShape(expression);
+  return async (version: Version): Promise<GateResult> => {
+    const malformed = checkVersionShape(version);
     if (malformed) return { passed: false, gate: 'structural', reason: malformed };
-    const signed = await crypto.validate(expression, resolvePublicKey);
-    return signed.passed ? capability.validate(expression) : signed;
+    const signed = await crypto.validate(version, resolvePublicKey);
+    return signed.passed ? capability.validate(version) : signed;
   };
 }

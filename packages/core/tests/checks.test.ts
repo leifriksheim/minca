@@ -5,7 +5,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { bodyHashOf } from '../src/schema/expression.js';
+import { bodyHashOf } from '../src/schema/version.js';
 import { checkRules, onePerKey } from '../src/records/rules.js';
 import {
   checkChecks,

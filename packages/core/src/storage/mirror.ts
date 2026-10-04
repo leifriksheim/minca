@@ -27,7 +27,7 @@
  * only what its store still keeps, then delete the old ones. New first,
  * delete after: a reader in between sees duplicates, which are harmless.
  */
-import type { Expression, StorageAdapter } from '../types.js';
+import type { Version, StorageAdapter } from '../types.js';
 import type { BlobStore } from './blob-store.js';
 import type { StorageProvider } from './storage-provider.js';
 import { packSegment, segmentName, SEGMENT_SUFFIX, unpackSegment, versionSize } from './segment.js';
@@ -42,7 +42,7 @@ export interface MirrorConfig {
   readonly space: string;
   readonly storage: StorageProvider;
   /** The gates sync uses, and storing what passes: nothing from the store is trusted more than a peer */
-  readonly accept: (version: Expression) => Promise<Taken>;
+  readonly accept: (version: Version) => Promise<Taken>;
   /** Where this writer keeps its id, what it read and what it knows the store holds */
   readonly state: StorageAdapter;
   /** Pack a segment once this much is waiting. Default 256 KiB. */
@@ -112,7 +112,7 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     return next;
   };
 
-  async function writeSegment(versions: ReadonlyArray<Expression>): Promise<string> {
+  async function writeSegment(versions: ReadonlyArray<Version>): Promise<string> {
     const bytes = packSegment(versions);
     counter += 1;
     const name = `${mine}${await segmentName(counter, bytes)}`;
@@ -124,10 +124,10 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
 
   /** Writes versions in segments of about `flushBytes`, telling `written` each one */
   async function writeSegments(
-    versions: Iterable<Expression>,
-    written: (batch: ReadonlyArray<Expression>) => Promise<void> = async () => {},
+    versions: Iterable<Version>,
+    written: (batch: ReadonlyArray<Version>) => Promise<void> = async () => {},
   ): Promise<void> {
-    let batch: Expression[] = [];
+    let batch: Version[] = [];
     let size = 0;
     const send = async () => {
       if (batch.length === 0) return;
@@ -146,10 +146,10 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
 
   async function flushNow(): Promise<void> {
     // Every version this store keeps: whole if current or retained, as a stub otherwise.
-    const waiting: Expression[] = [];
+    const waiting: Version[] = [];
     for (const id of await storage.versionIds()) {
       if (await isKnown(id)) continue;
-      const version = await storage.getExpression(id);
+      const version = await storage.getVersion(id);
       if (version) waiting.push(version);
     }
     await writeSegments(waiting, async (batch) => {
@@ -163,14 +163,14 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     const old = (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX));
     if (old.length < 2) return;
     const wanted = new Set(await storage.versionIds());
-    const keep = new Map<string, Expression>();
+    const keep = new Map<string, Version>();
     for (const key of old) {
       const bytes = await store.get(key);
       // The store's copy, not the segment's: a version superseded since it was
       // written is a stub now, and its body is not carried forward.
       for (const version of bytes ? unpackSegment(bytes) : [])
         if (wanted.has(version.id) && !keep.has(version.id))
-          keep.set(version.id, (await storage.getExpression(version.id)) ?? version);
+          keep.set(version.id, (await storage.getVersion(version.id)) ?? version);
     }
     // New first, then delete: a reader in between sees each version twice, which is harmless.
     await writeSegments(keep.values());
@@ -194,7 +194,7 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
       // Pass over the rest until nothing more goes in.
       for (let progress = true; pending.length > 0 && progress;) {
         progress = false;
-        const later: Expression[] = [];
+        const later: Version[] = [];
         for (const version of pending) {
           const taken = await config.accept(version);
           if (taken === 'later') {

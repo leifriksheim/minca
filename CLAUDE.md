@@ -58,8 +58,8 @@ work together: bytes on the wire, what is stored and signed, what a peer
 checks or refuses, and exchanges between two parties (an app and its account
 home, a carrier, a relay). What a record body means, how the library is
 called and how an app shows something are not protocol, however useful: the
-standard collections (`std.*`), the query format, node actions, `std.app` and
-screens are described in `packages/core/docs/` instead.
+standard collections (`std.*`), the query format, node actions, blueprints and
+guides are described in `packages/core/docs/` instead.
 
 To tell which a change is, ask: **would a peer that has never heard of it
 still sync, store and judge every record the same way?** If yes, it is a layer
