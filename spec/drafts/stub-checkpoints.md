@@ -92,8 +92,9 @@ that a newcomer has reason to trust. Proposed:
 - its author, as of its `seen`, holds `manage` in the space; or is named
   among the space's keepers (`sys.keepers`), whose job is already to hold the
   space whole;
-- it is written by a person's root or a non-agent note, never by an agent
-  (as for the access history, 03);
+- it is written by a person's root, or under a note that grants
+  `access/change`, never a records-only note such as an agent's (as for the
+  access history, 03);
 - the author's node MUST hold the whole chain from `genesis` to `anchor` and
   have accepted every link, and MUST NOT checkpoint a chain it holds a
   competing branch of below `seq` (§4.3).

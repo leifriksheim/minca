@@ -138,8 +138,8 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           </p>
           <Note title="What it can do" below={12}>
             Read {whole ? 'every space, including ones you make later' : 'the spaces you pick'}, write in them
-            as you, and propose new apps there. Everything it writes shows as yours, “via agent”, to everyone
-            in the space. It keeps working when no app is open.
+            as you, and propose new collections and apps there. Everything it writes shows as yours, “via
+            agent”, to everyone in the space. It keeps working when no app is open.
           </Note>
           <Note title="What always needs you">
             Adding an app or a collection, changing roles, inviting or removing people, joining or leaving

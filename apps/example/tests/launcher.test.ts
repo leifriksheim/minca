@@ -43,7 +43,7 @@ const titles = (records: ReadonlyArray<NodeRecord<LauncherApp>>) =>
   records.map((record) => record.body?.builtIn ?? record.body?.title);
 
 describe('the launcher', () => {
-  test('an agent proposes an app; it stays a proposal waitFor someone who may define collections adds it', async () => {
+  test('an agent proposes an app; it stays a proposal until someone who may define collections adds it', async () => {
     const { alice, bob, space } = await setup();
     await prepareLauncher(alice.node, space);
     const agent = await agentOf(alice, [space]);
@@ -102,7 +102,7 @@ describe('the launcher', () => {
       { links: [{ rel: 'blueprint', to: plan.key }] },
     );
     let launcher = await launcherOf(alice.node, space);
-    // Alice wrote it, but its collections weren't there yet: a proposal waitFor added.
+    // Alice wrote it, but its collections weren't there yet: a proposal until added.
     assert.deepEqual(titles(launcher.proposed), ['Carpool']);
     await addMade(alice.node, space, launcher.proposed[0]!, launcher.placed);
     assert.ok((await alice.node.collections.list(space)).some((c) => c.name === 'carpool.trip'));
@@ -119,7 +119,7 @@ describe('the launcher', () => {
       updates: first.key,
     });
     launcher = await launcherOf(alice.node, space);
-    assert.deepEqual(titles(launcher.proposed), ['Rides'], 'a change is a proposal waitFor added');
+    assert.deepEqual(titles(launcher.proposed), ['Rides'], 'a change is a proposal until added');
     assert.equal(await addMade(alice.node, space, launcher.proposed[0]!, launcher.placed), first.key);
     launcher = await launcherOf(alice.node, space);
     assert.deepEqual(titles(launcher.placed), ['Rides', 'chat'], 'in the place of the one it changed');
