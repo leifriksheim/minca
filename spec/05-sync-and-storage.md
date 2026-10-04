@@ -894,7 +894,7 @@ that follows this section can share a folder with this one.
       expressions/                      (empty for a registry)
     spaces/<space id>/
       kv/<encoded key>
-      expressions/<version id>.json     one file per version body
+      expressions/<version id>.json     one file per version, whole (§14.3)
     mirrors/<space id>/<n>/kv/…
 ```
 

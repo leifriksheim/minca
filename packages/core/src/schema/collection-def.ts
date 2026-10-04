@@ -87,7 +87,7 @@ export interface StoredCollection {
   readonly description?: string;
   /** JSON Schema for a record's body */
   readonly schema: JsonSchema;
-  /** Bumped when the shape changes; records keep the version they were written under */
+  /** Bumped when the shape changes. Records don't name it: each is judged by the definition in force as of what it saw (spec 02 §6.3) */
   readonly version: number;
   /**
    * Whether edits to its records keep old versions. `latest` (the default)

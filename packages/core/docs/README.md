@@ -4,7 +4,8 @@ Short guides for building an app with `@weaveprotocol/core`. They ship in the
 package, so they always match the version installed: an agent working in an
 app's repository finds them at `node_modules/@weaveprotocol/core/docs/`.
 
-The package README, one folder up, covers every module in depth. The protocol
+The repository's README (https://github.com/leifriksheim/weave) gives the
+whole picture, and where each thing is described. The protocol
 itself (what goes over the wire, what is signed, what every peer checks) is
 specified in `spec/` in the repository: https://github.com/leifriksheim/weave/tree/main/spec
 
