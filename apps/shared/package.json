@@ -17,6 +17,7 @@
     "./useDismiss": "./src/useDismiss.ts",
     "./action": "./src/action.ts",
     "./hash": "./src/hash.ts",
+    "./places": "./src/places.ts",
     "./mini-app": "./src/mini-app.ts",
     "./Payment": "./src/Payment.tsx",
     "./CommunitySetup": "./src/CommunitySetup.tsx",

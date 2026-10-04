@@ -44,6 +44,17 @@ export * from './library/planning.js';
 export * from './library/life.js';
 export * from './library/money.js';
 export * from './library/community.js';
+export {
+  CELL_PRECISIONS,
+  geohash,
+  cellOf,
+  centreOf,
+  aroundCell,
+  cellsOf,
+  cellsAround,
+  distanceKm,
+  type Cell,
+} from './geo.js';
 /** The pieces the definitions are built from — a time, money, a place, a file — for definitions of your own */
 export * as fragments from './fragments.js';
 export type { Money, Address, Place, BlobRef, ImageRef } from './fragments.js';

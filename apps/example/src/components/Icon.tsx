@@ -30,6 +30,8 @@ export const ICONS = {
   chat: 'M2.5 2.5h11V11H7l-3.5 3v-3h-1z',
   board: 'M2 2.5h3.5v11H2zM6.25 2.5h3.5v7h-3.5zM10.5 2.5H14v9h-3.5z',
   poll: 'M3 13.5V8M8 13.5V2.5M13 13.5V5.5',
+  calendar: 'M2 3.5h12v10H2zM2 6.5h12M5 1.5v3M11 1.5v3',
+  tag: 'M1.5 1.5h6l7 7-6 6-7-7zM5 5h.01',
   decide: 'M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13ZM5 8.2l2 2L11 6',
   sparkle: 'M8 1.5 9.4 6.6 14.5 8 9.4 9.4 8 14.5 6.6 9.4 1.5 8 6.6 6.6Z',
   plus: 'M8 3v10M3 8h10',
