@@ -2559,6 +2559,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     get,
 
+    /** The note a record's current version was signed under; null when its account signed it itself */
+    noteOf: async (recordKey: string): Promise<string | null> => (await currentOf(recordKey))?.proof ?? null,
+
     async put<T>(
       collection: string,
       body: T,

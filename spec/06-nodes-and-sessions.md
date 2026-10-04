@@ -532,8 +532,9 @@ may define them (the library's blueprints,
 
 Not protocol, but recipients also ignore:
 
-- a contact request (`std.contact-request`) written under a records-only
-  note: it is never opened ([contacts](../packages/core/docs/contacts.md));
+- a contact request (`std.contact-request`) written under a note without
+  `account/write` for every space, an agent's among them: it is never opened,
+  as such a note could not knock either ([contacts](../packages/core/docs/contacts.md));
 - call messages from an agent ([calls](../packages/core/docs/calls.md#messages)).
 
 A node whose note can't change access never names relays, seals member keys
@@ -610,8 +611,7 @@ _Source: `packages/core/src/session/agent-link.ts`, `apps/example/src/components
 > - **Renewing an agent's note.** Today, when the note runs out, the agent
 >   says to connect again (§3.2). It could instead ask an open tab of the
 >   person's for a new note, while one is open. Open: how the agent reaches the
->   tab (an agent sends no live messages: one carries no note to say "via agent"), and whether the person must
->   approve each renewal.
+>   tab, and whether the person must approve each renewal.
 > - **Agents that cannot run a program** (a hosted chat's connectors, a phone
 >   app) would need an HTTPS MCP endpoint somewhere else, such as on a relay,
 >   which would then see the traffic. If offered at all, it is a separate,

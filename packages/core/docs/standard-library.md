@@ -23,7 +23,7 @@ so that apps reach for the same definitions.
 to the convention:
 
 - `collections_standard` lists the library, and gives any of its definitions
-  in full ([06](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md), actions).
+  in full ([actions](actions.md)).
 - `collections_propose` takes a standard collection by name (`"std.event"`
   in `collections`) and stores the library's definition for it.
 - `collections_propose` refuses a `std.*` name the library does not have, and
@@ -336,7 +336,7 @@ mention someone on a record whose own definition has no `mentions`, without
 changing that definition. An app's own collection can name a `mentions` field
 as a topic the same way.
 
-_Source: `packages/core/src/schemas/library/publishing.ts` (`message`, `post`), `packages/core/src/schemas/library/annotations.ts` (`comment`), `packages/core/src/schemas/library/planning.ts` (`task`), `apps/example/src/components/std/Mentions.tsx`, `apps/example/src/components/apps/Chat.tsx`, `apps/example/src/components/std/Comments.tsx`. Tests: `packages/core/tests/topics.test.ts` ("mentions and replies are tagged, so “mentions me” and “replies to me” match only those", "a std.comment is tagged like a message…", "a std.post is tagged like a message…", "a task carries a tag for each assignee…", "an app that needs std.comment, std.post or std.task gets their topics")._
+_Source: `packages/core/src/schemas/library/publishing.ts` (`message`, `post`), `packages/core/src/schemas/library/annotations.ts` (`comment`), `packages/core/src/schemas/library/planning.ts` (`task`), `apps/example/src/components/std/Mentions.tsx`, `apps/example/src/components/apps/Chat.tsx`, `apps/example/src/components/std/Comments.tsx`. Tests: `packages/core/tests/topics.test.ts` ("mentions and replies are tagged, so “mentions me” and “replies to me” match only those", "a std.comment is tagged like a message…", "a std.post is tagged like a message…", "a task carries a tag for each assignee…", "an app that needs std.message gets its topics…")._
 
 **Responses.** A record written in answer to someone's record names them in
 `respondingTo`: a `std.reaction`, `std.comment` or `std.repost` the author of

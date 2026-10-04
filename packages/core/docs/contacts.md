@@ -69,9 +69,10 @@ Example: in space `bspace`, `did:key:zA` asking `did:key:zB` seals under
 
 ### Opening
 
-The receiver must open a request only when the record verifies and stands, is
-not written under a records-only note (`recordsOnly`: one that can't define
-collections, such as an agent's), is in `std.contact-request`, `to` is the
+The receiver must open a request only when the record verifies and stands, its
+current version was signed by the account itself or under a note that grants
+`account/write` for every space (`with: "*"`), as a knock needs (spec 01 §8;
+not one for some spaces, nor an agent's), is in `std.contact-request`, `to` is the
 receiver's account, and `from` (the record's root) equals the root of the
 record's first version and is not the receiver. It must use the context built
 from the space the record is in and that `from`. It must then reject the value

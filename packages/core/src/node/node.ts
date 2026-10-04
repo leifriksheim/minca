@@ -1602,14 +1602,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     readonly note?: string;
     readonly pairSpace: string;
   } | null> {
-    if (
-      !contactKeys ||
-      !record.verified ||
-      record.recordsOnly ||
-      record.collection !== contactRequestSchema.name
-    )
-      return null;
+    if (!contactKeys || !record.verified || record.collection !== contactRequestSchema.name) return null;
     if (record.body?.to !== config.signer.did || typeof record.body.sealed !== 'string') return null;
+    // Asking makes a space for two for the account, as a knock does: only a note that may write for all of it.
+    const note = await (await runtime(spaceId)).noteOf(record.key);
+    if (!noteGrants(note, { with: '*', can: ACCOUNT_ABILITY })) return null;
     const from = record.root;
     if (!from || record.createdBy !== from || from === config.signer.did) return null;
     const value = await openSealed(
