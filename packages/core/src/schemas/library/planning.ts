@@ -51,6 +51,7 @@ export const event = define({
     properties: {
       title: words(500),
       description: markdown(10000),
+      category: text(100, 'Like "music", "meetup" or "sports"'),
       start: when(),
       end: when(),
       tz: timeZone(),
