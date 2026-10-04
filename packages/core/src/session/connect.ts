@@ -16,7 +16,7 @@ import { isAgentNote } from '../identity/agent-note.js';
 import type { RootSigner } from '../identity/root-signer.js';
 import { startPageNode, type WorkerLike } from '../node/worker.js';
 import type { StoreFactory } from '../node/stores.js';
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import type { CacheConfig, NewSpace, NodeNetworkConfig, P2PNode } from '../node/types.js';
 import { checkStartingRoles } from '../space/space-access.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
@@ -100,7 +100,7 @@ export interface Proposed {
    * signed, so its node holds them at once rather than once it meets another
    * of the account's devices, which may be long after the home's window closed.
    */
-  readonly versions?: ReadonlyArray<Expression>;
+  readonly versions?: ReadonlyArray<Version>;
 }
 
 /** Whether a request the home received is a proposal rather than a connection */
@@ -234,7 +234,7 @@ export function grantCapabilities(
   access: 'read' | 'write' | 'records',
   spaceIds: ReadonlyArray<string> | 'all',
 ): Capability[] {
-  const can = access === 'write' ? '*' : access === 'records' ? 'expression/*' : 'expression/read';
+  const can = access === 'write' ? '*' : access === 'records' ? 'record/*' : 'record/read';
   return spaceIds === 'all' ? [{ with: '*', can }] : spaceIds.map((id) => ({ with: `space:${id}`, can }));
 }
 

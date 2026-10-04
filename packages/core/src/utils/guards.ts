@@ -4,7 +4,7 @@
  * @module guards
  */
 
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 
 /** A plain object's fields, to be checked one by one. Not an array. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,10 +69,10 @@ export function readField(value: unknown, key: string): unknown {
 }
 
 /**
- * Whether a value this node read back from its own storage is an expression.
+ * Whether a value this node read back from its own storage is a version.
  * Checks only that it is an object with a string id: what arrives from a peer
  * goes through the validation gates, not this.
  */
-export function isStoredExpression(value: unknown): value is Expression {
+export function isStoredVersion(value: unknown): value is Version {
   return isObject(value) && typeof value.id === 'string';
 }

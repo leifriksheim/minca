@@ -27,9 +27,9 @@ function cronField(text: string, min: number, max: number): Set<number> | string
   return allowed;
 }
 
-/** Why a cron expression can't be read, or null */
-export function checkCron(expression: string): string | null {
-  const parts = expression.trim().split(/\s+/);
+/** Why a cron version can't be read, or null */
+export function checkCron(version: string): string | null {
+  const parts = version.trim().split(/\s+/);
   if (parts.length !== 5) return 'A schedule is five fields: minute hour day month weekday';
   for (const [index, field] of CRON_FIELDS.entries()) {
     const read = cronField(parts[index] ?? '', field.min, field.max);
@@ -38,9 +38,9 @@ export function checkCron(expression: string): string | null {
   return null;
 }
 
-/** Whether a cron expression names this minute, in local time. As in cron, a day and a weekday both given means either. */
-export function cronMatches(expression: string, at: Date): boolean {
-  const parts = expression.trim().split(/\s+/);
+/** Whether a cron version names this minute, in local time. As in cron, a day and a weekday both given means either. */
+export function cronMatches(version: string, at: Date): boolean {
+  const parts = version.trim().split(/\s+/);
   if (parts.length !== 5) return false;
   const sets = CRON_FIELDS.map((field, index) => cronField(parts[index] ?? '', field.min, field.max));
   const [minute, hour, day, month, weekday] = sets;

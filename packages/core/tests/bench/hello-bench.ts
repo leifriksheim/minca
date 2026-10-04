@@ -7,13 +7,13 @@
  */
 import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import { createSyncEngine, type SyncEngine } from '../../src/sync/sync-engine.js';
-import type { Expression } from '../../src/types.js';
+import type { Version } from '../../src/types.js';
 import { cidFromBytes } from '../../src/utils/hash.js';
 import { createMemoryAdapter } from '../helpers/memory-adapter.js';
 
 const N = Number(process.argv[2] ?? 100_000);
 
-async function fakeExpression(i: number): Promise<Expression> {
+async function fakeVersion(i: number): Promise<Version> {
   return {
     id: await cidFromBytes(new TextEncoder().encode(`bench:${i}`)),
     author: 'did:key:zBench',
@@ -30,9 +30,9 @@ const a = createStorageProvider(createMemoryAdapter());
 const b = createStorageProvider(createMemoryAdapter());
 let t = performance.now();
 for (let i = 0; i < N; i++) {
-  const expression = await fakeExpression(i);
-  await a.addExpression(expression);
-  await b.addExpression(expression);
+  const version = await fakeVersion(i);
+  await a.addVersion(version);
+  await b.addVersion(version);
 }
 console.log(`fill ${N} × 2: ${(performance.now() - t).toFixed(0)}ms`);
 
@@ -75,8 +75,8 @@ await hello('hello 1');
 await hello('hello 2');
 await hello('hello 3');
 // One more version on each, as a write that both took in: the sums must follow it, not be rebuilt.
-const extra = await fakeExpression(N);
-await a.addExpression(extra);
-await b.addExpression(extra);
+const extra = await fakeVersion(N);
+await a.addVersion(extra);
+await b.addVersion(extra);
 await hello('hello after one more version');
 process.exit(0);

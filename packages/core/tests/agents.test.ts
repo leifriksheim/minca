@@ -16,7 +16,7 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { AGENT_FACT, isAgentNote } from '../src/identity/agent-note.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression, type CreateExpressionParams } from '../src/schema/expression.js';
+import { createVersion, type CreateVersionParams } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { describeCollection } from '../src/records/describe.js';
 import { checkRules, type CollectionRules } from '../src/records/rules.js';
@@ -59,12 +59,7 @@ import { open, person, settle, type Person } from './helpers/person.js';
  * An agent key for this person, and a note from their account saying it is an
  * agent's, for these spaces: records only, unless `can` says otherwise.
  */
-async function agentFor(
-  who: Person,
-  spaces: ReadonlyArray<string>,
-  facts = [AGENT_FACT],
-  can = 'expression/*',
-) {
+async function agentFor(who: Person, spaces: ReadonlyArray<string>, facts = [AGENT_FACT], can = 'record/*') {
   const provider = who.manager.getProvider();
   const keys = await provider.generateKeyPair();
   const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
@@ -81,13 +76,13 @@ async function agentFor(
 async function forgeAsAgent(
   who: Person,
   space: string,
-  fields: Omit<CreateExpressionParams<unknown>, 'author' | 'space' | 'proof'>,
+  fields: Omit<CreateVersionParams<unknown>, 'author' | 'space' | 'proof'>,
   note: { facts?: (typeof AGENT_FACT)[]; can?: string } = {},
 ) {
   const agent = await agentFor(who, [space], note.facts, note.can);
   const provider = who.manager.getProvider();
   const signed = await createSigner(provider).sign(
-    createExpression({
+    createVersion({
       seen: await seenBy(who.node, space),
       ...fields,
       author: agent.did,
@@ -96,7 +91,7 @@ async function forgeAsAgent(
     }),
     agent.keys.privateKey,
   );
-  await createStorageProvider(await who.stores(`spaces/${space}`)).addExpression(signed);
+  await createStorageProvider(await who.stores(`spaces/${space}`)).addVersion(signed);
   return signed;
 }
 
@@ -233,7 +228,7 @@ describe('an agent acting for a person', () => {
     // Refused on arrival as not a change anyone may make; even the agent's own person ignores it.
     await settle(500);
     assert.equal(
-      await createStorageProvider(await bob.stores(`spaces/${space}`)).getExpression(forged.id),
+      await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(forged.id),
       null,
     );
     assert.equal(
@@ -280,7 +275,7 @@ describe('an agent acting for a person', () => {
       'the granted definition',
     );
     assert.equal(
-      await createStorageProvider(await bob.stores(`spaces/${space}`)).getExpression(narrow.id),
+      await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(narrow.id),
       null,
     );
     assert.equal(
@@ -874,7 +869,7 @@ describe('an agent running a node of its own', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(who.me, provider).delegate({
       audience: did,
-      capabilities: [{ with: '*', can: 'expression/*' }],
+      capabilities: [{ with: '*', can: 'record/*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
       facts: [AGENT_FACT],
     });
@@ -989,7 +984,7 @@ describe('connecting an agent with a code', () => {
       void (async () => {
         const note = await createLocalRootSigner(who.me, provider).delegate({
           audience: stage.agent.did,
-          capabilities: [{ with: '*', can: 'expression/*' }],
+          capabilities: [{ with: '*', can: 'record/*' }],
           expiration: Math.floor(Date.now() / 1000) + 3600,
           facts: [AGENT_FACT],
         });

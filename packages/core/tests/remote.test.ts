@@ -174,7 +174,7 @@ describe('a node across a port', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(me, provider).delegate({
       audience: did,
-      capabilities: [{ with: `space:${space}`, can: 'expression/*' }],
+      capabilities: [{ with: `space:${space}`, can: 'record/*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
       facts: [AGENT_FACT],
     });

@@ -256,7 +256,7 @@ describe('proving you may read, after the key changed', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(who.me, who.manager.getProvider()).delegate({
       audience: did,
-      capabilities: [{ with: `space:${space}`, can: 'expression/write' }],
+      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     return { did, key: pair.privateKey, note: note.encoded };

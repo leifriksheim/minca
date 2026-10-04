@@ -68,7 +68,7 @@ The root key never signs records. The node asks its signer for one note that
 lets the session key write everywhere the account can:
 
 ```json
-{ "aud": "<sessionDid>", "att": [{ "with": "*", "can": "expression/*" }], "exp": <now + ttl> }
+{ "aud": "<sessionDid>", "att": [{ "with": "*", "can": "record/*" }], "exp": <now + ttl> }
 ```
 
 (The UCAN envelope and how peers verify it are in [01](01-identity.md).)
@@ -256,9 +256,9 @@ When the person approves, the home:
    - `scope: account` → `[{ with: "*", can }]`
    - `scope: spaces` → one `{ with: "space:<id>", can }` per granted space
 
-   where `can` is `*` for `write`, `expression/*` for `write` with
+   where `can` is `*` for `write`, `record/*` for `write` with
    `agent: true` (records only, [01](01-identity.md) §8), and
-   `expression/read` for `read`; and `fct: [{ "weave": "agent" }]` when
+   `record/read` for `read`; and `fct: [{ "weave": "agent" }]` when
    `agent: true`.
 
 6. Remembers the connection (§2.10).
@@ -309,7 +309,7 @@ whose note's payload is
 {
   "iss": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
   "aud": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
-  "att": [{ "can": "expression/*", "with": "space:bafk…" }],
+  "att": [{ "can": "record/*", "with": "space:bafk…" }],
   "exp": 1792614901,
   "nbf": 1790022901,
   "nnc": "a6b6617b6ed4fba0",
@@ -520,7 +520,7 @@ _Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `
 ### 3.1 Agents' notes
 
 An agent is not an identity. It writes for a person under a note from their
-account, like an app. The note grants records only (`expression/*`), so every
+account, like an app. The note grants records only (`record/*`), so every
 peer refuses from it what a records-only note can't do ([01](01-identity.md)
 §8): it never changes a space's collections or who may do what, and never
 writes in the account's own spaces. It also carries the agent fact

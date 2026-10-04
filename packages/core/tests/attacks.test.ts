@@ -141,7 +141,7 @@ describe('attacks on a shared space', () => {
       const payload = {
         v: SYNC_PROTOCOL_VERSION,
         type: 'push-update',
-        expression: { ...real!, signature: 'AAAA' },
+        version: { ...real!, signature: 'AAAA' },
       };
       stranger.send(
         peer,

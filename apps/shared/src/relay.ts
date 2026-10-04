@@ -2,7 +2,7 @@
  * Where peers meet.
  *
  * The relay is a rendezvous, not an authority: it forwards offers and ICE
- * candidates between peers in a room and never sees an expression. But peers
+ * candidates between peers in a room and never sees a version. But peers
  * pointed at different relays never find each other, so every view that should
  * gossip has to be given the same address — and a deployed page has to be given
  * one at all, because the development default is a process on your own machine.

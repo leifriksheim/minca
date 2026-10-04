@@ -179,8 +179,7 @@ describe('holding a space', () => {
     const note = await alice.node.records.put(space, 'app.note', { text: 'still here' });
     await until(
       async () =>
-        (await createStorageProvider(await bob.stores(`spaces/${space}`)).getExpression(note.version)) !==
-        null,
+        (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(note.version)) !== null,
       4000,
       'the write to reach Bob',
     );

@@ -10,7 +10,7 @@ import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { publicKeyToDid, didToPublicKey, P256_MULTICODEC } from '../src/identity/did.js';
 import { p256 } from '@noble/curves/nist.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { utf8Encode, base64UrlEncode, base64UrlDecode } from '../src/utils/encoding.js';
 
 const provider = createP256Provider();
@@ -132,12 +132,12 @@ describe('identity manager', () => {
     assert.notEqual(a.did, other.did);
   });
 
-  test('expressions signed by an identity verify against its DID', async () => {
+  test('versions signed by an identity verify against its DID', async () => {
     const manager = createIdentityManager();
     const identity = await manager.fromSeed(new Uint8Array(16).fill(1));
     const signer = createSigner(provider);
 
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: identity.did,
       collection: 'app.test.note',
       body: { text: 'signed by a derived key' },

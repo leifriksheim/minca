@@ -872,7 +872,7 @@ sealed = base64url( iv(12) ‖ AES-256-GCM(key, iv, UTF-8(JSON.stringify(value))
 Opening fails (returns nothing) for the wrong key, the wrong context, or a
 changed value. Inputs longer than 1 000 000 characters are not tried.
 
-_Source: `packages/core/src/privacy/space-encryption.ts`, `packages/core/src/node/space-runtime.ts` (`IN_THE_CLEAR`, `write`, `openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space expressions"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
+_Source: `packages/core/src/privacy/space-encryption.ts`, `packages/core/src/node/space-runtime.ts` (`IN_THE_CLEAR`, `write`, `openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space versions"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
 
 ### 8.6 Planned: what a private space still shows
 

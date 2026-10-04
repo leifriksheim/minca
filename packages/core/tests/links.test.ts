@@ -9,7 +9,7 @@ import { runAction } from '../src/node/actions.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createSigner } from '../src/schema/signer.js';
 import { didToPublicKey, publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { checkLinks } from '../src/records/links.js';
 import { reaction as reactionSchema, comment as commentSchema, useSchemas } from '../src/schemas/index.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -54,7 +54,7 @@ describe('links', () => {
     const pair = await provider.generateKeyPair();
     const author = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const signed = await signer.sign(
-      createExpression({
+      createVersion({
         author,
         collection: 'std.reaction',
         body: { emoji: '👍' },

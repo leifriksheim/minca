@@ -49,7 +49,7 @@ import {
   type Capability,
 } from '../identity/ucan.js';
 import { ACCOUNT_ABILITY } from '../identity/abilities.js';
-import { canonicalize } from '../schema/expression.js';
+import { canonicalize } from '../schema/version.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
 import { checkSpace } from '../space/space-access.js';
 import { checkRelays } from '../space/roles.js';

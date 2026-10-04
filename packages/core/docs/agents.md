@@ -2,7 +2,7 @@
 
 An agent reads and writes as the person, with a note from their account that
 every peer checks. The note grants writing records and nothing more
-(`expression/*`), so every peer refuses it defining collections, changing who
+(`record/*`), so every peer refuses it defining collections, changing who
 may do what, or writing for the account ([spec 01](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md),
 abilities). The note also says the key is an agent's, so what it writes shows
 as theirs, "via agent", everywhere; that is a label, and no peer acts on it.

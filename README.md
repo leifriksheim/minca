@@ -61,7 +61,7 @@ import {
   publicKeyToDid,
   P256_MULTICODEC,
   createSigner,
-  createExpression,
+  createVersion,
   createIndexedDBAdapter,
   createStorageProvider,
   createSpaceManager,
@@ -81,7 +81,7 @@ const session = await provider.generateKeyPair();
 const sessionDid = publicKeyToDid(await provider.exportPublicKey(session.publicKey), P256_MULTICODEC);
 const ucan = await root.delegate({
   audience: sessionDid,
-  capabilities: [{ with: '*', can: 'expression/*' }],
+  capabilities: [{ with: '*', can: 'record/*' }],
   expiration: Math.floor(Date.now() / 1000) + 3600,
 });
 
@@ -92,7 +92,7 @@ const { space } = await spaces.create({ name: 'Notes', visibility: 'public', cre
 // 4. A signed record, stored in that space's own store
 const storage = createStorageProvider(await createIndexedDBAdapter(`my-app/space/${space.id}`));
 const signed = await createSigner(provider).sign(
-  createExpression({
+  createVersion({
     author: sessionDid,
     collection: 'app.example.note',
     space: space.id,
@@ -101,7 +101,7 @@ const signed = await createSigner(provider).sign(
   }),
   session.privateKey,
 );
-await storage.addExpression(signed);
+await storage.addVersion(signed);
 ```
 
 That is the protocol by hand. Most apps never do it: `createNode` wires an
@@ -235,7 +235,7 @@ stores; data folders with several writers; spaces, invites and
 encrypt-then-sign; UCAN issuing, attenuation and chain validation; phone
 pairing; peer introductions; Negentropy, checked against the reference
 implementation; the validation gates; and two peers reconciling, including the forged, stolen,
-unauthorized and malformed expressions their gatekeepers reject. Above those:
+unauthorized and malformed versions their gatekeepers reject. Above those:
 the node API — versioned records, links, queries, collection definitions,
 profiles, the account registry, moving and merging accounts — and the CLI.
 

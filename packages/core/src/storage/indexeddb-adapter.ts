@@ -3,8 +3,8 @@
  * IndexedDB implementation of StorageAdapter for P2P network.
  */
 
-import type { StorageAdapter, BatchOp, Expression } from '../types.js';
-import { isStoredExpression } from '../utils/guards.js';
+import type { StorageAdapter, BatchOp, Version } from '../types.js';
+import { isStoredVersion } from '../utils/guards.js';
 import { requestResult as idbRequest, transactionDone } from '../identity/idb.js';
 
 /**
@@ -14,10 +14,10 @@ import { requestResult as idbRequest, transactionDone } from '../identity/idb.js
  */
 const DB_VERSION = 3;
 
-/** A stored expression, or null for a miss */
-async function readExpression(request: IDBRequest<unknown>): Promise<Expression | null> {
+/** A stored version, or null for a miss */
+async function readVersion(request: IDBRequest<unknown>): Promise<Version | null> {
   const value = await idbRequest(request);
-  return isStoredExpression(value) ? value : null;
+  return isStoredVersion(value) ? value : null;
 }
 
 /** A transaction, and a promise that settles when it commits */
@@ -129,42 +129,42 @@ export async function createIndexedDBAdapter(dbName = 'weave-storage'): Promise<
     },
 
     async commit(write: {
-      readonly store: ReadonlyArray<Expression>;
+      readonly store: ReadonlyArray<Version>;
       readonly ops: ReadonlyArray<BatchOp>;
       readonly remove: ReadonlyArray<string>;
     }): Promise<void> {
       const { tx, complete } = idbTransaction(db, ['kv', 'expressions'], 'readwrite');
-      const expressions = tx.objectStore('expressions');
+      const versions = tx.objectStore('expressions');
       const kv = tx.objectStore('kv');
-      for (const expression of write.store) expressions.put(expression);
+      for (const version of write.store) versions.put(version);
       for (const op of write.ops) {
         if (op.type === 'put') kv.put(op.value.buffer, op.key);
         else kv.delete(op.key);
       }
-      for (const id of write.remove) expressions.delete(id);
+      for (const id of write.remove) versions.delete(id);
       await complete;
     },
 
-    async getExpressions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Expression | null>> {
+    async getVersions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version | null>> {
       if (ids.length === 0) return [];
       const { tx } = idbTransaction(db, ['expressions'], 'readonly');
       const store = tx.objectStore('expressions');
-      return Promise.all(ids.map((id) => readExpression(store.get(id))));
+      return Promise.all(ids.map((id) => readVersion(store.get(id))));
     },
 
-    async putExpression(expression: Expression): Promise<void> {
+    async putVersion(version: Version): Promise<void> {
       const { tx, complete } = idbTransaction(db, ['expressions'], 'readwrite');
       const store = tx.objectStore('expressions');
-      store.put(expression);
+      store.put(version);
       await complete;
     },
 
-    async getExpression(id: string): Promise<Expression | null> {
+    async getVersion(id: string): Promise<Version | null> {
       const { tx } = idbTransaction(db, ['expressions'], 'readonly');
-      return readExpression(tx.objectStore('expressions').get(id));
+      return readVersion(tx.objectStore('expressions').get(id));
     },
 
-    async deleteExpression(id: string): Promise<void> {
+    async deleteVersion(id: string): Promise<void> {
       const { tx, complete } = idbTransaction(db, ['expressions'], 'readwrite');
       const store = tx.objectStore('expressions');
       store.delete(id);

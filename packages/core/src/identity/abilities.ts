@@ -3,7 +3,7 @@
  * What a note lets its key do, beyond writing records.
  *
  * A note (a UCAN from the account) grants abilities on spaces. Writing a
- * record takes `expression/write`. Three more are checked by every peer, so a
+ * record takes `record/write`. Three more are checked by every peer, so a
  * note can leave them out and its key can't do those things anywhere:
  *
  * - `collection/define`: define, change or remove a space's collections;
@@ -13,7 +13,7 @@
  *   carrier's passes) and its doors.
  *
  * A person's own sessions get `*`. A key the account trusts less — an agent,
- * a borrowed device — gets `expression/*`, and proposes what it can't do.
+ * a borrowed device — gets `record/*`, and proposes what it can't do.
  */
 import { isCapabilitySubset, parseUCAN, type Capability } from './ucan.js';
 

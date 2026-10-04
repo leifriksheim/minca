@@ -71,12 +71,12 @@ export async function copyAccountData(params: CopyAccountParams): Promise<CopyRe
       // it would have reached by syncing with the source.
       const ids = new Set(await source.versionIds());
       for (const id of ids) {
-        const held = await target.getExpression(id);
-        const expression = await source.getExpression(id);
-        if (!expression) continue;
-        await target.addExpression(expression);
+        const held = await target.getVersion(id);
+        const version = await source.getVersion(id);
+        if (!version) continue;
+        await target.addVersion(version);
         // Counted only if it stayed: a version the target's own one supersedes is dropped again.
-        if (!held && (await target.getExpression(id))) recordsAdded++;
+        if (!held && (await target.getVersion(id))) recordsAdded++;
       }
     } finally {
       await Promise.all([source.close(), target.close()]);

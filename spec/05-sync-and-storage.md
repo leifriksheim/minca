@@ -246,7 +246,7 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 5` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 6` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
@@ -255,7 +255,8 @@ whose `type` is not a string. It MUST NOT answer it.
 >
 > Version 5 came with the envelope of [02 §3.2](02-records.md): a version
 > signs its body's hash, not its body, so a version 4 peer would refuse every
-> version a version 5 peer sends.
+> version a version 5 peer sends. Version 6 renamed `push-update`'s
+> `expression` to `version`, as the spec now calls it.
 
 Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
@@ -325,11 +326,11 @@ The responder's answer to one `reconcile`.
 
 Versions, as they are on the wire ([02 — Records](02-records.md)).
 
-| Field      | Type           | Meaning                                                                                                                 |
-| ---------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `type`     | `"versions"`   |                                                                                                                         |
-| `id`       | number         | Present: the answer to the `want` with that id. Absent: versions the sender found the receiver lacks while reconciling. |
-| `versions` | `Expression[]` | At most 200.                                                                                                            |
+| Field      | Type         | Meaning                                                                                                                 |
+| ---------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `type`     | `"versions"` |                                                                                                                         |
+| `id`       | number       | Present: the answer to the `want` with that id. Absent: versions the sender found the receiver lacks while reconciling. |
+| `versions` | `Version[]`  | At most 200.                                                                                                            |
 
 A `want` MUST always be answered with a `versions` carrying its `id`, even
 when none of the ids are held (`versions: []`): the asker counts answers to
@@ -337,10 +338,10 @@ know it is done.
 
 ### `push-update`
 
-| Field        | Type            | Meaning                          |
-| ------------ | --------------- | -------------------------------- |
-| `type`       | `"push-update"` |                                  |
-| `expression` | `Expression`    | A version written just now (§7). |
+| Field     | Type            | Meaning                          |
+| --------- | --------------- | -------------------------------- |
+| `type`    | `"push-update"` |                                  |
+| `version` | `Version`       | A version written just now (§7). |
 
 ### `stored`
 
@@ -637,7 +638,7 @@ taken. A `versions` without `id` is limited to its first 200 entries.
 
 _Source: `packages/core/src/sync/sync-engine.ts` (`admit`, `admitAll`, `retryWaiting`),
 `packages/core/src/node/space-runtime.ts` (`admit`). Tests: `packages/core/tests/sync.test.ts` (forged
-expression, no capability, schema), `packages/core/tests/reconcile.test.ts` ("a refused
+version, no capability, schema), `packages/core/tests/reconcile.test.ts` ("a refused
 version is not asked for again", "a version that waits for its first version
 asks for it at once"), `packages/core/tests/rules.test.ts` ("an edit that came
 before its first version counts once the first version comes"),
@@ -904,7 +905,8 @@ that follows this section can share a folder with this one.
   path, and MUST NOT resolve a path from them.
 - A store at path `a/b/c` is the directory `<dataPath>/a/b/c`, each segment
   encoded as in §14.2. Each store directory has exactly two subdirectories,
-  `kv` and `expressions`, created on open.
+  `kv` and `expressions`, created on open. `expressions` is the old name for
+  versions, kept so folders written before still open.
 - Legacy single-account folders also have `weave-account.json` and
   `README.txt` at the root ([01 — Identity](01-identity.md)).
 
@@ -1067,7 +1069,7 @@ offline by anyone holding the store.
 A segment is UTF-8 JSON:
 
 ```json
-{"v":1,"versions":[ <Expression>, … ]}
+{"v":1,"versions":[ <Version>, … ]}
 ```
 
 The versions are exactly as on the wire — private bodies still sealed. A
@@ -1170,7 +1172,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 5                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 6                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

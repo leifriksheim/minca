@@ -84,7 +84,7 @@ The **session note** a node asks for when it starts:
 
 ```
 aud = session DID
-att = [{ "with": "*", "can": "expression/*" }]   (SESSION_CAPABILITY)
+att = [{ "with": "*", "can": "record/*" }]   (SESSION_CAPABILITY)
 exp = now + sessionTtlSeconds                     (default 3600)
 nbf = now − 300                                   (issueUCAN's default)
 fct = absent                                      (or [{"weave":"agent"}] for an agent's own node)
@@ -176,7 +176,7 @@ Copied versions are meant to pass the same checks as versions arriving by
 sync ([02 — Records](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md), validation) before they are stored.
 
 > **Known defect:** `copyAccountData` stores each version with
-> `addExpression` directly, without running it through the validation
+> `addVersion` directly, without running it through the validation
 > pipeline (`packages/core/src/node/copy.ts`). A pod or data folder that another origin
 > wrote to can bring versions this node would have refused from a peer. A fix
 > will validate on copy, as sync does.

@@ -34,7 +34,7 @@ import {
   SUBSCRIPTION_COLLECTION,
   type CarriedSubscription,
 } from '../space/notify.js';
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import { createLocalHub, type LocalHub } from '../network/local-transport.js';
 import { meshFor, openSpaceRuntime, type SpaceRuntime } from './space-runtime.js';
 import type { StoreFactory } from './stores.js';
@@ -187,7 +187,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
     as: typeof session,
     network: NodeNetworkConfig,
     onEvent: (event: NodeEvent) => void,
-    onArrived?: (version: Expression) => void,
+    onArrived?: (version: Version) => void,
   ) =>
     openSpaceRuntime({
       ...(onArrived ? { onArrived } : {}),
@@ -249,7 +249,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
   const noticed = new Set<string>();
 
   /** A record arrived in a space: does any subscription of an account carrying it ask about it? */
-  function arrived(record: SpaceRecord, version: Expression): void {
+  function arrived(record: SpaceRecord, version: Version): void {
     const spaceId = record.space.id;
     if (noticed.has(version.id) || carries.has(spaceId)) return;
     for (const entry of carries.values()) {

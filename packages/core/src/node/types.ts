@@ -9,7 +9,7 @@ import type { CollectionRules } from '../records/rules.js';
 import type {
   CollectionDef,
   CryptoProvider,
-  Expression,
+  Version,
   Link,
   SpaceRole,
   SpaceVisibility,
@@ -475,9 +475,9 @@ export interface NodeNotifications {
   update(id: string, changes: { readonly label?: string; readonly paused?: boolean }): Promise<NotifyView>;
   remove(id: string): Promise<void>;
   /** Every version of these subscriptions, signed, for another device of the account to `take` */
-  versions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Expression>>;
+  versions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version>>;
   /** Takes in subscriptions handed over outside sync, checked as a peer's. How many were new */
-  take(versions: ReadonlyArray<Expression>): Promise<number>;
+  take(versions: ReadonlyArray<Version>): Promise<number>;
 }
 
 /** A host the account uses, and what it says now */

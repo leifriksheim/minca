@@ -90,7 +90,7 @@ sync:
   overlapping lists is enough.
 
 The relay only introduces peers — it forwards connection offers and never sees
-an expression — so running your own is a small thing, and pointing at someone
+a version — so running your own is a small thing, and pointing at someone
 else's costs you nothing but availability.
 
 **And it is only needed for the first connection.** Once two peers are talking,

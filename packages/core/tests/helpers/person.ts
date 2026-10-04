@@ -13,10 +13,10 @@ import { publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
 import { deriveVaultKeyBytes } from '../../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../../src/identity/contact-key.js';
 import { createSigner } from '../../src/schema/signer.js';
-import { createExpression, type CreateExpressionParams } from '../../src/schema/expression.js';
+import { createVersion, type CreateVersionParams } from '../../src/schema/version.js';
 import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import type { StoreFactory } from '../../src/node/stores.js';
-import type { Expression } from '../../src/types.js';
+import type { Version } from '../../src/types.js';
 import type { FakeHub } from './fake-transport.js';
 import { memoryStores } from './memory-stores.js';
 import { seenBy } from './as-member.js';
@@ -68,8 +68,8 @@ export async function person(hub?: FakeHub, options: PersonOptions = {}) {
 }
 export type Person = Awaited<ReturnType<typeof person>>;
 
-type ForgedFields = Omit<CreateExpressionParams<unknown>, 'author' | 'space' | 'proof'> &
-  Partial<Pick<CreateExpressionParams<unknown>, 'author' | 'space' | 'proof'>>;
+type ForgedFields = Omit<CreateVersionParams<unknown>, 'author' | 'space' | 'proof'> &
+  Partial<Pick<CreateVersionParams<unknown>, 'author' | 'space' | 'proof'>>;
 
 /**
  * Signs a version by hand, as a modified app or an attacker could, under a
@@ -82,7 +82,7 @@ export async function forge(
   space: string,
   fields: ForgedFields,
   { keep = true } = {},
-): Promise<Expression> {
+): Promise<Version> {
   const provider = who.manager.getProvider();
   const pair = await provider.generateKeyPair();
   const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
@@ -92,7 +92,7 @@ export async function forge(
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const signed = await createSigner(provider).sign(
-    createExpression({
+    createVersion({
       seen: fields.seen ?? (await seenBy(who.node, space)),
       ...fields,
       author: keyDid,
@@ -101,7 +101,7 @@ export async function forge(
     }),
     pair.privateKey,
   );
-  if (keep) await createStorageProvider(await who.stores(`spaces/${space}`)).addExpression(signed);
+  if (keep) await createStorageProvider(await who.stores(`spaces/${space}`)).addVersion(signed);
   return signed;
 }
 

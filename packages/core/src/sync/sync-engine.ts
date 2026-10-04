@@ -25,7 +25,7 @@
  * node holding part of a space keeps its own writes until enough keepers have
  * said so.
  */
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import type { StorageProvider } from '../storage/storage-provider.js';
 import { cidDigest, cidOfDigest } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, bytesToHex } from '../utils/encoding.js';
@@ -38,7 +38,7 @@ import {
   type SyncMessageBody,
 } from './sync-messages.js';
 
-/** Verdict on an expression that arrived from a peer */
+/** Verdict on a version that arrived from a peer */
 export interface IncomingValidation {
   readonly valid: boolean;
   readonly reason?: string;
@@ -64,7 +64,7 @@ const holdsCollection = (holds: Holds, collection: string): boolean =>
   collection.startsWith('sys.') || holds === 'all' || holds.has(collection);
 
 /** Collection definitions first, then records by version — what others depend on comes first */
-const rank = (e: Expression): number => (e?.collection === 'sys.collection' ? -1 : (e?.seq ?? 0));
+const rank = (e: Version): number => (e?.collection === 'sys.collection' ? -1 : (e?.seq ?? 0));
 
 export interface SyncEngineConfig {
   readonly storageProvider: StorageProvider;
@@ -77,14 +77,14 @@ export interface SyncEngineConfig {
   readonly self?: string;
   readonly heartbeatInterval?: number;
   /**
-   * Gatekeeper for expressions arriving from peers — typically
+   * Gatekeeper for versions arriving from peers — typically
    * `createVersionCheck`. Anything it rejects is dropped instead of committed,
    * and surfaces as a `rejected` event.
    *
    * Leaving it out accepts whatever peers send, which is only ever appropriate
    * for a trusted transport or a test.
    */
-  readonly validate?: (expression: Expression) => Promise<IncomingValidation>;
+  readonly validate?: (version: Version) => Promise<IncomingValidation>;
   /** What this node holds, asked afresh for every hello. Default: everything. */
   readonly holds?: () => Holds;
 }
@@ -94,7 +94,7 @@ export interface SyncEngineConfig {
  * - `level` (peer, collection, full): this node holds what the peer holds of a
  *   collection, as far as it could take it in; `full` when the peer holds every collection
  * - `stored` (peer, ids): the peer says it now has these versions
- * - `expression-received` (version): each version taken in
+ * - `version-received` (version): each version taken in
  * - `received` (versions): every version one message brought, once all are in — what to redraw after
  * - `rejected` (peer, version, reason), `error` (error)
  */
@@ -102,10 +102,10 @@ interface SyncEvents {
   synced: (peer: string, full: boolean) => void;
   level: (peer: string, collection: string, full: boolean) => void;
   stored: (peer: string, ids: string[]) => void;
-  'expression-received': (version: Expression) => void;
-  received: (versions: Expression[]) => void;
+  'version-received': (version: Version) => void;
+  received: (versions: Version[]) => void;
   /** A method, so listeners written before `reason` could be missing still type-check */
-  rejected(peer: string, version: Expression, reason: string | undefined): void;
+  rejected(peer: string, version: Version, reason: string | undefined): void;
   error: (error: unknown) => void;
 }
 export type SyncEvent = keyof SyncEvents;
@@ -117,7 +117,7 @@ export interface SyncEngine {
   handleMessage(peerId: string, message: unknown): Promise<void>;
   /** Says hello to these peers now, rather than at the next heartbeat. */
   notifyPeers(peers: ReadonlyArray<string>): void;
-  onLocalChange(expression: Expression): void;
+  onLocalChange(version: Version): void;
   addPeer(peerId: string): void;
   removePeer(peerId: string): void;
   on<K extends SyncEvent>(event: K, callback: SyncEvents[K]): void;
@@ -137,15 +137,15 @@ const FRAME_SIZE_LIMIT = 32_000;
  * versions that changed or deleted it, and is never shown as it once was —
  * nor waits for the rest while the peer sends everything else.
  */
-function byRecord(versions: ReadonlyArray<Expression>, size: number): Expression[][] {
-  const records = new Map<string, Expression[]>();
+function byRecord(versions: ReadonlyArray<Version>, size: number): Version[][] {
+  const records = new Map<string, Version[]>();
   for (const version of versions) {
     const record = records.get(version.key);
     if (record) record.push(version);
     else records.set(version.key, [version]);
   }
-  const messages: Expression[][] = [];
-  let message: Expression[] = [];
+  const messages: Version[][] = [];
+  let message: Version[] = [];
   for (const record of records.values()) {
     if (message.length + record.length > size && message.length > 0) {
       messages.push(message);
@@ -234,7 +234,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   // ─── Taking in versions ────────────────────────────────────────────
 
   /** Records that could not be judged yet — tried again whenever something new is admitted */
-  const waiting = new Map<string, { peerId: string; expression: Expression }>();
+  const waiting = new Map<string, { peerId: string; version: Version }>();
   /**
    * Versions the gatekeeper refused, as `peer + id`, oldest first. By peer,
    * not by id alone: an id doesn't cover the signature, so a stranger's
@@ -246,38 +246,38 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
   /** What one message brought in: the versions stored, and the versions they wait for, to ask for */
   interface Intake {
-    readonly placed: Expression[];
+    readonly placed: Version[];
     readonly firsts: Map<string, string>;
   }
 
   /**
-   * Commits an expression from a peer, but only if the gatekeeper allows it.
+   * Commits a version from a peer, but only if the gatekeeper allows it.
    * A version waiting for its first version, or for the version before it,
    * names them, so they are asked for at once rather than on the next round.
    */
-  const admit = async (peerId: string, expression: Expression, intake: Intake): Promise<boolean> => {
+  const admit = async (peerId: string, version: Version, intake: Intake): Promise<boolean> => {
     if (validate) {
-      const verdict = await validate(expression);
+      const verdict = await validate(version);
       if (!verdict.valid) {
         if (verdict.later) {
-          waiting.set(expression.id, { peerId, expression });
+          waiting.set(version.id, { peerId, version });
           if (waiting.size > MAX_WAITING) waiting.delete(waiting.keys().next().value!);
-          for (const needed of expression.seq > 0 ? [expression.genesis, expression.prev] : []) {
-            if (typeof needed === 'string' && !(await storage.getExpression(needed)))
-              intake.firsts.set(needed, expression.collection);
+          for (const needed of version.seq > 0 ? [version.genesis, version.prev] : []) {
+            if (typeof needed === 'string' && !(await storage.getVersion(needed)))
+              intake.firsts.set(needed, version.collection);
           }
         } else {
-          refused.add(refusal(peerId, expression.id));
+          refused.add(refusal(peerId, version.id));
           if (refused.size > MAX_REFUSED) refused.delete(refused.values().next().value!);
-          emit('rejected', peerId, expression, verdict.reason);
+          emit('rejected', peerId, version, verdict.reason);
         }
         return false;
       }
     }
-    waiting.delete(expression.id);
-    await storage.addExpression(expression);
-    intake.placed.push(expression);
-    emit('expression-received', expression);
+    waiting.delete(version.id);
+    await storage.addVersion(version);
+    intake.placed.push(version);
+    emit('version-received', version);
     return true;
   };
 
@@ -288,7 +288,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       progressed = false;
       for (const [id, held] of [...waiting]) {
         waiting.delete(id);
-        if (!(await admit(held.peerId, held.expression, intake))) continue;
+        if (!(await admit(held.peerId, held.version, intake))) continue;
         progressed = true;
         (stored.get(held.peerId) ?? stored.set(held.peerId, []).get(held.peerId)!).push(id);
       }
@@ -349,15 +349,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
    * them, so little has to wait. Versions of collections this node doesn't
    * hold are passed over. The peer is told which it now has.
    */
-  const admitAll = async (peerId: string, expressions: ReadonlyArray<Expression>) => {
+  const admitAll = async (peerId: string, versions: ReadonlyArray<Version>) => {
     const holds = ourHolds();
     const stored: string[] = [];
     const intake: Intake = { placed: [], firsts: new Map() };
-    for (const expression of [...expressions].sort((a, b) => rank(a) - rank(b))) {
-      if (!expression || typeof expression !== 'object' || typeof expression.collection !== 'string')
-        continue;
-      if (!holdsCollection(holds, expression.collection)) continue;
-      if (await admit(peerId, expression, intake)) stored.push(expression.id);
+    for (const version of [...versions].sort((a, b) => rank(a) - rank(b))) {
+      if (!version || typeof version !== 'object' || typeof version.collection !== 'string') continue;
+      if (!holdsCollection(holds, version.collection)) continue;
+      if (await admit(peerId, version, intake)) stored.push(version.id);
     }
     if (stored.length > 0) {
       send(peerId, { type: 'stored', ids: stored });
@@ -368,8 +367,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       const inFlight = asked(peerId);
       const byCollection = new Map<string, string[]>();
       for (const [id, collection] of intake.firsts) {
-        if (inFlight.has(id) || refused.has(refusal(peerId, id)) || (await storage.getExpression(id)))
-          continue;
+        if (inFlight.has(id) || refused.has(refusal(peerId, id)) || (await storage.getVersion(id))) continue;
         (byCollection.get(collection) ?? byCollection.set(collection, []).get(collection)!).push(id);
       }
       for (const [collection, ids] of byCollection) want(peerId, collection, ids, true);
@@ -507,8 +505,8 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       // Asked for before the session goes, so the peer never looks idle in between.
       want(peerId, session.collection, session.need.reverse());
       state.sessions.delete(session.collection);
-      const have = (await Promise.all(session.have.reverse().map((v) => storage.getExpression(v)))).filter(
-        (v): v is Expression => v !== null,
+      const have = (await Promise.all(session.have.reverse().map((v) => storage.getVersion(v)))).filter(
+        (v): v is Version => v !== null,
       );
       for (const versions of byRecord(have, MAX_IDS_PER_REQUEST))
         send(peerId, { type: 'versions', versions });
@@ -572,16 +570,16 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   };
 
   const serveWant = async (peerId: string, id: number, ids: ReadonlyArray<string>) => {
-    const versions: Expression[] = [];
+    const versions: Version[] = [];
     for (const v of ids.slice(0, MAX_IDS_PER_REQUEST)) {
-      const expression = typeof v === 'string' && cidDigest(v) ? await storage.getExpression(v) : null;
-      if (expression) versions.push(expression);
+      const version = typeof v === 'string' && cidDigest(v) ? await storage.getVersion(v) : null;
+      if (version) versions.push(version);
     }
     // Always answered, even empty: the asker counts replies to know it is done.
     send(peerId, { type: 'versions', id, versions });
   };
 
-  const onVersions = async (peerId: string, id: number | undefined, versions: ReadonlyArray<Expression>) => {
+  const onVersions = async (peerId: string, id: number | undefined, versions: ReadonlyArray<Version>) => {
     const state = states.get(peerId);
     if (id === undefined) {
       // Sent because we lacked them. Nothing is taken on trust: each passes the gatekeeper.
@@ -649,7 +647,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
           await onVersions(peerId, msg.id, Array.isArray(msg.versions) ? msg.versions : []);
           break;
         case 'push-update':
-          if (msg.expression && typeof msg.expression === 'object') await admitAll(peerId, [msg.expression]);
+          if (msg.version && typeof msg.version === 'object') await admitAll(peerId, [msg.version]);
           break;
         case 'stored':
           if (Array.isArray(msg.ids))
@@ -700,11 +698,11 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       for (const peer of peerIds) if (peers.has(peer)) void hello(peer).catch((err) => emit('error', err));
     },
 
-    onLocalChange(expression: Expression) {
+    onLocalChange(version: Version) {
       // Not to a peer whose hello said it doesn't hold the collection: it would pass it by.
       for (const peer of peers) {
-        if (holdsCollection(states.get(peer)?.holds ?? 'all', expression.collection))
-          send(peer, { type: 'push-update', expression });
+        if (holdsCollection(states.get(peer)?.holds ?? 'all', version.collection))
+          send(peer, { type: 'push-update', version });
       }
     },
 

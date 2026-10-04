@@ -9,19 +9,19 @@ import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { issueUCAN, type Capability } from '../src/identity/ucan.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
 import { createSyncEngine } from '../src/sync/sync-engine.js';
 import type { SyncMessage } from '../src/sync/sync-messages.js';
-import type { Expression } from '../src/types.js';
+import type { Version } from '../src/types.js';
 import { makeKey } from './helpers/person.js';
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
 
 const COLLECTION = 'app.test.note';
-const WRITE: Capability = { with: `space:${COLLECTION}`, can: 'expression/write' };
+const WRITE: Capability = { with: `space:${COLLECTION}`, can: 'record/write' };
 
 /** A storage provider plus the validating sync engine in front of it. */
 function createPeer(send: (peerId: string, message: SyncMessage) => void) {
@@ -32,8 +32,8 @@ function createPeer(send: (peerId: string, message: SyncMessage) => void) {
   const sync = createSyncEngine({
     storageProvider: storage,
     sendToPeer: send,
-    validate: async (expression) => {
-      const result = await check(expression);
+    validate: async (version) => {
+      const result = await check(version);
       return { valid: result.passed, reason: result.reason };
     },
   });
@@ -81,7 +81,7 @@ function createPair() {
 async function delegatedNote(root: { did: string; privateKey: CryptoKey }, text: string) {
   const session = await makeKey();
   const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [WRITE] }, provider);
-  const unsigned = createExpression({
+  const unsigned = createVersion({
     author: session.did,
     collection: COLLECTION,
     body: { text },
@@ -96,11 +96,11 @@ describe('sync engine', () => {
     const root = await makeKey();
 
     const note = await delegatedNote(root, 'pushed');
-    await a.storage.addExpression(note);
+    await a.storage.addVersion(note);
     a.sync.onLocalChange(note);
     await settle();
 
-    assert.notEqual(await b.storage.getExpression(note.id), null);
+    assert.notEqual(await b.storage.getVersion(note.id), null);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
   });
 
@@ -109,19 +109,19 @@ describe('sync engine', () => {
     const root = await makeKey();
 
     for (const text of ['first', 'second', 'third']) {
-      await a.storage.addExpression(await delegatedNote(root, text));
+      await a.storage.addVersion(await delegatedNote(root, text));
     }
 
     // b asks a what it has, and pulls whatever it is missing
     b.sync.notifyPeers(['a']);
     await settle();
 
-    const notes = await b.storage.queryExpressions(COLLECTION);
+    const notes = await b.storage.queryVersions(COLLECTION);
     assert.equal(notes.length, 3);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
   });
 
-  test('drops a forged expression instead of committing it', async () => {
+  test('drops a forged version instead of committing it', async () => {
     const { a, b, settle } = createPair();
     const root = await makeKey();
 
@@ -129,20 +129,20 @@ describe('sync engine', () => {
     const forged = { ...note, body: { text: 'tampered in transit' } };
 
     const rejected: string[] = [];
-    b.sync.on('rejected', (_peer: string, _expression: Expression, reason: string) => {
+    b.sync.on('rejected', (_peer: string, _version: Version, reason: string) => {
       rejected.push(reason);
     });
 
-    await a.storage.addExpression(forged);
+    await a.storage.addVersion(forged);
     a.sync.onLocalChange(forged);
     await settle();
 
-    assert.equal(await b.storage.getExpression(forged.id), null);
+    assert.equal(await b.storage.getVersion(forged.id), null);
     assert.equal(rejected.length, 1);
     assert.match(rejected[0] ?? '', /not the one it signed/i);
   });
 
-  test('drops an expression whose author holds no capability', async () => {
+  test('drops a version whose author holds no capability', async () => {
     const { a, b, settle } = createPair();
 
     // Signed correctly, but the session key presents no delegation at all and
@@ -157,7 +157,7 @@ describe('sync engine', () => {
       },
       provider,
     );
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: stranger.did,
       collection: COLLECTION,
       body: { text: 'not mine to write' },
@@ -166,15 +166,15 @@ describe('sync engine', () => {
     const note = await signer.sign(unsigned, stranger.privateKey);
 
     const rejected: string[] = [];
-    b.sync.on('rejected', (_peer: string, _expression: Expression, reason: string) => {
+    b.sync.on('rejected', (_peer: string, _version: Version, reason: string) => {
       rejected.push(reason);
     });
 
-    await a.storage.addExpression(note);
+    await a.storage.addVersion(note);
     a.sync.onLocalChange(note);
     await settle();
 
-    assert.equal(await b.storage.getExpression(note.id), null);
+    assert.equal(await b.storage.getVersion(note.id), null);
     assert.match(rejected[0] ?? '', /different key/i);
   });
 
@@ -184,7 +184,7 @@ describe('sync engine', () => {
     const session = await makeKey();
 
     const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [WRITE] }, provider);
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: session.did,
       collection: COLLECTION,
       body: { text: 'fine' },
@@ -193,15 +193,15 @@ describe('sync engine', () => {
     const note = await signer.sign({ ...unsigned, key: 'Has Spaces' }, session.privateKey);
 
     const rejected: string[] = [];
-    b.sync.on('rejected', (_peer: string, _expression: Expression, reason: string) => {
+    b.sync.on('rejected', (_peer: string, _version: Version, reason: string) => {
       rejected.push(reason);
     });
 
-    await a.storage.addExpression(note);
+    await a.storage.addVersion(note);
     a.sync.onLocalChange(note);
     await settle();
 
-    assert.equal(await b.storage.getExpression(note.id), null);
+    assert.equal(await b.storage.getVersion(note.id), null);
     assert.match(rejected[0] ?? '', /key is missing or malformed/);
   });
 });

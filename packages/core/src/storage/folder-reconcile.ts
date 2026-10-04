@@ -3,12 +3,12 @@
  *
  * Two origins — or two devices behind Dropbox, iCloud or Syncthing — can write
  * into one folder at the same time. Almost nothing there can actually conflict:
- * expression files are named by their own content hash, so two writers either
+ * version files are named by their own content hash, so two writers either
  * produce different files or produce byte-identical ones. The entries saying
  * which version is current can be written by both, and one write can be lost;
  * that costs nothing, because they are derived from the files.
  *
- * So the rule is: **the set of expression files wins.** Reconciling means
+ * So the rule is: **the set of version files wins.** Reconciling means
  * placing every file that turned up — which also puts right a current-version
  * entry the other writer overwrote — and dropping entries whose file went
  * away. That is the whole concurrency story.
@@ -16,13 +16,13 @@
 
 import type { StorageProvider } from './storage-provider.js';
 import type { FolderAdapter } from './folder-adapter.js';
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 
 /** What a pass over the folder found */
 export interface FolderReconciliation {
-  /** Expression files that appeared since the last pass — another origin's writes */
+  /** Version files that appeared since the last pass — another origin's writes */
   readonly added: ReadonlyArray<string>;
-  /** Expression files that are gone */
+  /** Version files that are gone */
   readonly removed: ReadonlyArray<string>;
   /**
    * Versions placed or unplaced to match the directory: files another writer
@@ -49,12 +49,12 @@ export interface FolderReconciliation {
 export async function reconcileFolder(
   storage: StorageProvider,
   adapter: FolderAdapter,
-  accept: (expression: Expression) => Promise<boolean> = async () => true,
+  accept: (version: Version) => Promise<boolean> = async () => true,
 ): Promise<FolderReconciliation> {
   const disk = await adapter.reload();
   // Another writer's entries are on disk now too: what sync compares is read again.
   if (disk.added.length > 0 || disk.removed.length > 0) storage.invalidate();
-  const onDisk = new Set(await adapter.listExpressionIds());
+  const onDisk = new Set(await adapter.listVersionIds());
 
   // Versions another writer put on disk. Each goes through the ordering rule
   // like anything else: it becomes current, is kept as history, or loses and
@@ -66,11 +66,11 @@ export async function reconcileFolder(
   const missing = [...onDisk].filter((id) => !indexed.has(id) || appeared.has(id));
   const placed: string[] = [];
   for (const id of missing) {
-    const expression = await adapter.getExpression(id);
+    const version = await adapter.getVersion(id);
     // A file can vanish between the listing and the read — another writer
     // dropping a superseded version. Nothing to add, and the next pass agrees.
-    if (expression && (await accept(expression))) {
-      await storage.addExpression(expression);
+    if (version && (await accept(version))) {
+      await storage.addVersion(version);
       placed.push(id);
     }
   }
@@ -79,7 +79,7 @@ export async function reconcileFolder(
   // its replacement was placed above.
   const stale = (await storage.versionIds()).filter((id) => !onDisk.has(id) && !missing.includes(id));
   for (const id of stale) {
-    if (!(await adapter.getExpression(id))) await storage.removeExpression(id);
+    if (!(await adapter.getVersion(id))) await storage.removeVersion(id);
   }
 
   // A refused file is not a change: it would otherwise redraw every pass.

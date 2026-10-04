@@ -1,4 +1,4 @@
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import { base64UrlEncode, base64UrlDecode, concatBytes, utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { aesOpen, aesSeal, NONCE_BYTES } from '../identity/aes.js';
 import { sha256 } from '../utils/hash.js';
@@ -12,16 +12,16 @@ export interface SpaceKey {
   readonly version: number;
 }
 
-/** The body of an expression after it has been encrypted. */
-export interface EncryptedExpressionBody {
+/** The body of a version after it has been encrypted. */
+export interface EncryptedVersionBody {
   readonly ciphertext: string;
   readonly iv: string;
   readonly keyId: string;
 }
 
-/** An expression whose body has been encrypted. */
-export type EncryptedExpression = Omit<Expression, 'body'> & {
-  readonly body: EncryptedExpressionBody;
+/** A version whose body has been encrypted. */
+export type EncryptedVersion = Omit<Version, 'body'> & {
+  readonly body: EncryptedVersionBody;
 };
 
 /** A new random AES-256-GCM key for a space */
@@ -41,14 +41,11 @@ export async function generateSpaceKey(): Promise<SpaceKey> {
   });
 }
 
-/** Encrypts an expression's body under a space key */
-export async function encryptExpression(
-  expression: Expression,
-  spaceKey: SpaceKey,
-): Promise<EncryptedExpression> {
-  const sealed = await aesSeal(spaceKey.key, utf8Encode(JSON.stringify(expression.body)));
+/** Encrypts a version's body under a space key */
+export async function encryptVersion(version: Version, spaceKey: SpaceKey): Promise<EncryptedVersion> {
+  const sealed = await aesSeal(spaceKey.key, utf8Encode(JSON.stringify(version.body)));
   return Object.freeze({
-    ...expression,
+    ...version,
     body: Object.freeze({
       ciphertext: base64UrlEncode(sealed.subarray(NONCE_BYTES)),
       iv: base64UrlEncode(sealed.subarray(0, NONCE_BYTES)),
@@ -57,11 +54,8 @@ export async function encryptExpression(
   });
 }
 
-/** Decrypts an encrypted expression's body; throws when the key id doesn't match */
-export async function decryptExpression(
-  encrypted: EncryptedExpression,
-  spaceKey: SpaceKey,
-): Promise<Expression> {
+/** Decrypts an encrypted version's body; throws when the key id doesn't match */
+export async function decryptVersion(encrypted: EncryptedVersion, spaceKey: SpaceKey): Promise<Version> {
   if (encrypted.body.keyId !== spaceKey.id) {
     throw new Error('Key ID mismatch');
   }

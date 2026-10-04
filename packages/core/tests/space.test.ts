@@ -9,10 +9,10 @@ import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { issueUCAN, type Capability } from '../src/identity/ucan.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { createCapabilityGate } from '../src/validation/capability-gate.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
-import { encryptExpression, decryptExpression } from '../src/privacy/space-encryption.js';
+import { encryptVersion, decryptVersion } from '../src/privacy/space-encryption.js';
 import { team } from '../src/space/presets.js';
 import { makeKey } from './helpers/person.js';
 
@@ -90,7 +90,7 @@ describe('invites', () => {
     assert.equal(joined.invite, null, 'a view-only invite carries no secret to wait on');
 
     // The key that arrived must open what the owner sealed
-    const sealed = await encryptExpression(
+    const sealed = await encryptVersion(
       {
         id: 'x',
         author: OWNER,
@@ -103,7 +103,7 @@ describe('invites', () => {
       },
       record.key!,
     );
-    const opened = await decryptExpression(sealed, joined.key!);
+    const opened = await decryptVersion(sealed, joined.key!);
     assert.deepEqual(opened.body, { text: 'secret' });
   });
 
@@ -136,7 +136,7 @@ describe('invites', () => {
   });
 });
 
-describe('private space expressions', () => {
+describe('private space versions', () => {
   test('encrypt-then-sign survives validation without the key', async () => {
     const spaces = createSpaceManager(createMemoryAdapter());
     const owner = await makeKey();
@@ -148,16 +148,16 @@ describe('private space expressions', () => {
     });
     const spaceId = record.space.id;
 
-    const required: Capability = { with: `space:${spaceId}`, can: 'expression/write' };
+    const required: Capability = { with: `space:${spaceId}`, can: 'record/write' };
 
     const session = await makeKey();
     const ucan = await issueUCAN(
-      { issuer: owner, audience: session.did, capabilities: [{ with: '*', can: 'expression/*' }] },
+      { issuer: owner, audience: session.did, capabilities: [{ with: '*', can: 'record/*' }] },
       provider,
     );
 
     // Encrypt first, then sign: the signature covers the ciphertext.
-    const sealed = await encryptExpression(
+    const sealed = await encryptVersion(
       {
         id: '',
         author: '',
@@ -170,25 +170,25 @@ describe('private space expressions', () => {
       },
       record.key!,
     );
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: session.did,
       collection: 'app.test.note',
       space: spaceId,
       body: sealed.body,
       proof: ucan.encoded,
     });
-    const expression = await signer.sign(unsigned, session.privateKey);
+    const version = await signer.sign(unsigned, session.privateKey);
 
     const check = createVersionCheck({ provider, requiredCapability: () => required });
 
     // A peer with no key still verifies and relays it: the signature and capability hold.
-    const verdict = await check(expression);
+    const verdict = await check(version);
     assert.equal(verdict.passed, true, verdict.reason ?? 'no reason given');
-    assert.equal(expression.space, spaceId);
-    assert.equal('text' in expression.body, false);
+    assert.equal(version.space, spaceId);
+    assert.equal('text' in version.body, false);
 
     // A member opens it
-    const opened = await decryptExpression(expression, record.key!);
+    const opened = await decryptVersion(version, record.key!);
     assert.deepEqual(opened.body, { text: 'dinner at eight' });
   });
 
@@ -200,25 +200,25 @@ describe('private space expressions', () => {
 
     const gate = createCapabilityGate({
       provider,
-      requiredCapability: () => ({ with: `space:${spaceId}`, can: 'expression/write' }),
+      requiredCapability: () => ({ with: `space:${spaceId}`, can: 'record/write' }),
       isTrustedRoot: (rootDid) => rootDid === owner.did,
     });
 
     // Perfectly valid UCAN — from the wrong root.
     const ucan = await issueUCAN(
-      { issuer: stranger, audience: strangerSession.did, capabilities: [{ with: '*', can: 'expression/*' }] },
+      { issuer: stranger, audience: strangerSession.did, capabilities: [{ with: '*', can: 'record/*' }] },
       provider,
     );
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: strangerSession.did,
       collection: 'app.test.note',
       space: spaceId,
       body: { text: 'let me in' },
       proof: ucan.encoded,
     });
-    const expression = await signer.sign(unsigned, strangerSession.privateKey);
+    const version = await signer.sign(unsigned, strangerSession.privateKey);
 
-    const result = await gate.validate(expression);
+    const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /not authorized/i);
   });

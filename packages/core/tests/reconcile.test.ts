@@ -13,7 +13,7 @@ import { createSyncEngine, type Holds } from '../src/sync/sync-engine.js';
 import type { SyncMessage } from '../src/sync/sync-messages.js';
 import { base32Decode, base32Encode, cidDigest, cidFromBytes, cidOfDigest } from '../src/utils/hash.js';
 import { bytesToHex } from '../src/utils/encoding.js';
-import type { Expression } from '../src/types.js';
+import type { Version } from '../src/types.js';
 
 const hex = (b: Uint8Array) => bytesToHex(b);
 
@@ -140,7 +140,7 @@ describe('content ids as Negentropy ids', () => {
 
 let counter = 0;
 /** A version with a real content id, no signature: these tests run without a gatekeeper */
-async function version(collection: string, overrides: Partial<Expression> = {}): Promise<Expression> {
+async function version(collection: string, overrides: Partial<Version> = {}): Promise<Version> {
   const key = `k${++counter}x${Math.random().toString(36).slice(2, 8)}`;
   return {
     id: await cidFromBytes(new TextEncoder().encode(`${key}:${collection}:${JSON.stringify(overrides)}`)),
@@ -157,7 +157,7 @@ async function version(collection: string, overrides: Partial<Expression> = {}):
 
 function pair(
   options: {
-    validate?: (e: Expression) => Promise<{ valid: boolean; reason?: string; later?: boolean }>;
+    validate?: (e: Version) => Promise<{ valid: boolean; reason?: string; later?: boolean }>;
     holdsA?: () => Holds;
     holdsB?: () => Holds;
     /** Lose this message on the way */
@@ -212,16 +212,16 @@ describe('sync by reconciliation', () => {
     const { a, b, sent, settle } = pair();
     for (let i = 0; i < 2000; i++) {
       const v = await version('app.note');
-      await a.storage.addExpression(v);
-      await b.storage.addExpression(v);
+      await a.storage.addVersion(v);
+      await b.storage.addVersion(v);
     }
     const extra = await version('app.note');
-    await a.storage.addExpression(extra);
+    await a.storage.addVersion(extra);
 
     b.sync.notifyPeers(['a']);
     await settle();
 
-    assert.notEqual(await b.storage.getExpression(extra.id), null);
+    assert.notEqual(await b.storage.getVersion(extra.id), null);
     assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
     // Two hellos, a few rounds of 16 fingerprints, and one version — not 2,000 ids.
     assert.ok(sent.bytes < 8_000, `${sent.bytes} bytes`);
@@ -231,20 +231,20 @@ describe('sync by reconciliation', () => {
     const { a, b, settle } = pair();
     const onlyA = await version('app.note');
     const onlyB = await version('app.note');
-    await a.storage.addExpression(onlyA);
-    await b.storage.addExpression(onlyB);
+    await a.storage.addVersion(onlyA);
+    await b.storage.addVersion(onlyB);
 
     // b sorts after a, so a does the work either way.
     b.sync.notifyPeers(['a']);
     await settle();
-    assert.notEqual(await a.storage.getExpression(onlyB.id), null);
-    assert.notEqual(await b.storage.getExpression(onlyA.id), null);
+    assert.notEqual(await a.storage.getVersion(onlyB.id), null);
+    assert.notEqual(await b.storage.getVersion(onlyA.id), null);
 
     const later = await version('app.note');
-    await b.storage.addExpression(later);
+    await b.storage.addVersion(later);
     a.sync.notifyPeers(['b']);
     await settle();
-    assert.notEqual(await a.storage.getExpression(later.id), null);
+    assert.notEqual(await a.storage.getVersion(later.id), null);
   });
 
   test('only collections that differ are reconciled', async () => {
@@ -252,11 +252,11 @@ describe('sync by reconciliation', () => {
     for (const collection of ['app.a', 'app.b', 'app.c']) {
       for (let i = 0; i < 50; i++) {
         const v = await version(collection);
-        await a.storage.addExpression(v);
-        await b.storage.addExpression(v);
+        await a.storage.addVersion(v);
+        await b.storage.addVersion(v);
       }
     }
-    await a.storage.addExpression(await version('app.b'));
+    await a.storage.addVersion(await version('app.b'));
     b.sync.notifyPeers(['a']);
     await settle();
     assert.deepEqual([...sent.reconciles.keys()], ['app.b']);
@@ -264,10 +264,10 @@ describe('sync by reconciliation', () => {
 
   test('a collection one side has never seen comes across whole', async () => {
     const { a, b, settle } = pair();
-    for (let i = 0; i < 40; i++) await a.storage.addExpression(await version('app.fresh'));
+    for (let i = 0; i < 40; i++) await a.storage.addVersion(await version('app.fresh'));
     a.sync.notifyPeers(['b']);
     await settle();
-    assert.equal((await b.storage.queryExpressions('app.fresh')).length, 40);
+    assert.equal((await b.storage.queryVersions('app.fresh')).length, 40);
   });
 
   test('a refused version is not asked for again', async () => {
@@ -279,7 +279,7 @@ describe('sync by reconciliation', () => {
       },
     });
     // b holds the bad version; a (the initiator) refuses it.
-    await b.storage.addExpression(await version('app.note'));
+    await b.storage.addVersion(await version('app.note'));
     b.sync.notifyPeers(['a']);
     await settle();
     assert.equal(asked, 1);
@@ -292,9 +292,9 @@ describe('sync by reconciliation', () => {
     const adapter = createMemoryAdapter();
     const mine = createStorageProvider(adapter);
     const other = createStorageProvider(adapter);
-    await mine.addExpression(await version('app.note'));
+    await mine.addVersion(await version('app.note'));
     const before = await mine.fingerprint();
-    await other.addExpression(await version('app.note'));
+    await other.addVersion(await version('app.note'));
     assert.equal(await mine.fingerprint(), before, 'not yet: nothing said the store changed');
     mine.invalidate();
     assert.equal(await mine.fingerprint(), await other.fingerprint());
@@ -303,28 +303,28 @@ describe('sync by reconciliation', () => {
   test('a superseded version stays in the set as a stub; its replacement joins it', async () => {
     const storage = createStorageProvider(createMemoryAdapter());
     const first = await version('app.note');
-    const second: Expression = await version('app.note', {
+    const second: Version = await version('app.note', {
       key: first.key,
       seq: 1,
       prev: first.id,
       genesis: first.id,
     });
-    await storage.addExpression(first);
-    await storage.addExpression(second);
+    await storage.addVersion(first);
+    await storage.addVersion(second);
     assert.deepEqual((await storage.versionIds()).sort(), [first.id, second.id].sort());
-    const third: Expression = await version('app.note', {
+    const third: Version = await version('app.note', {
       key: first.key,
       seq: 2,
       prev: second.id,
       genesis: first.id,
     });
-    await storage.addExpression(third);
+    await storage.addVersion(third);
     assert.deepEqual((await storage.versionIds()).sort(), [first.id, second.id, third.id].sort());
     assert.equal((await storage.items('app.note')).size, 3);
     // What they said is gone; that they were is not.
-    assert.equal('body' in (await storage.getExpression(second.id))!, false);
-    assert.equal('body' in (await storage.getExpression(first.id))!, false);
-    assert.deepEqual((await storage.getExpression(third.id))?.body, third.body);
+    assert.equal('body' in (await storage.getVersion(second.id))!, false);
+    assert.equal('body' in (await storage.getVersion(first.id))!, false);
+    assert.deepEqual((await storage.getVersion(third.id))?.body, third.body);
   });
 
   test('joining, a deleted record never shows as it once was', async () => {
@@ -332,7 +332,7 @@ describe('sync by reconciliation', () => {
     let b: StorageProvider | null = null;
     const synced = pair({
       validate: async (e) =>
-        e.seq > 0 && e.genesis && !(await b!.getExpression(e.genesis))
+        e.seq > 0 && e.genesis && !(await b!.getVersion(e.genesis))
           ? { valid: false, reason: 'first version not here', later: true }
           : { valid: true },
     });
@@ -341,8 +341,8 @@ describe('sync by reconciliation', () => {
     const gone = [];
     for (let i = 0; i < 300; i++) gone.push(await version('app.pixel'));
     for (const first of gone) {
-      await synced.a.storage.addExpression(first);
-      await synced.a.storage.addExpression(
+      await synced.a.storage.addVersion(first);
+      await synced.a.storage.addVersion(
         await version('app.pixel', {
           key: first.key,
           seq: 1,
@@ -353,12 +353,12 @@ describe('sync by reconciliation', () => {
         }),
       );
     }
-    for (let i = 0; i < 100; i++) await synced.a.storage.addExpression(await version('app.pixel'));
+    for (let i = 0; i < 100; i++) await synced.a.storage.addVersion(await version('app.pixel'));
 
     // What b would show after each message, from what it took in: a record whose newest version is not a delete.
-    const newest = new Map<string, Expression>();
+    const newest = new Map<string, Version>();
     let most = 0;
-    synced.b.sync.on('received', (versions: Expression[]) => {
+    synced.b.sync.on('received', (versions: Version[]) => {
       for (const v of versions) if ((newest.get(v.key)?.seq ?? -1) < v.seq) newest.set(v.key, v);
       most = Math.max(most, [...newest.values()].filter((v) => !v.deleted).length);
     });
@@ -376,7 +376,7 @@ describe('sync by reconciliation', () => {
     let b: StorageProvider | null = null;
     const synced = pair({
       validate: async (e) =>
-        e.seq > 0 && (!(await b!.getExpression(e.genesis!)) || !(await b!.getExpression(e.prev!)))
+        e.seq > 0 && (!(await b!.getVersion(e.genesis!)) || !(await b!.getVersion(e.prev!)))
           ? { valid: false, reason: 'an earlier version is not here', later: true }
           : { valid: true },
     });
@@ -385,7 +385,7 @@ describe('sync by reconciliation', () => {
     const createdAt = new Date(1_700_000_000_000).toISOString();
     const painted = [];
     for (let i = 0; i < 1100; i++) painted.push(await version('app.pixel', { createdAt }));
-    for (const first of painted) await synced.a.storage.addExpression(first);
+    for (const first of painted) await synced.a.storage.addVersion(first);
     const cleared = [];
     for (const first of painted) {
       const gone = await version('app.pixel', {
@@ -398,10 +398,10 @@ describe('sync by reconciliation', () => {
         createdAt,
       });
       cleared.push(gone);
-      await synced.a.storage.addExpression(gone);
+      await synced.a.storage.addVersion(gone);
     }
     for (const gone of cleared.slice(0, 550)) {
-      await synced.a.storage.addExpression(
+      await synced.a.storage.addVersion(
         await version('app.pixel', {
           key: gone.key,
           seq: 2,
@@ -412,10 +412,10 @@ describe('sync by reconciliation', () => {
       );
     }
 
-    const newest = new Map<string, Expression>();
+    const newest = new Map<string, Version>();
     const shown: number[] = [];
     const ever = new Set<string>();
-    synced.b.sync.on('received', (versions: Expression[]) => {
+    synced.b.sync.on('received', (versions: Version[]) => {
       for (const v of versions) if ((newest.get(v.key)?.seq ?? -1) < v.seq) newest.set(v.key, v);
       const live = [...newest.values()].filter((v) => !v.deleted);
       for (const v of live) ever.add(v.key);
@@ -434,7 +434,7 @@ describe('sync by reconciliation', () => {
     let b: StorageProvider | null = null;
     const synced = pair({
       validate: async (e) =>
-        e.seq > 0 && e.genesis && !(await b!.getExpression(e.genesis))
+        e.seq > 0 && e.genesis && !(await b!.getVersion(e.genesis))
           ? { valid: false, reason: 'first version not here', later: true }
           : { valid: true },
     });
@@ -444,13 +444,13 @@ describe('sync by reconciliation', () => {
     synced.a.sync.on('stored', (_peer: string, ids: string[]) => stored.push(...ids));
     const first = await version('app.note');
     const edit = await version('app.note', { key: first.key, seq: 1, prev: first.id, genesis: first.id });
-    await synced.a.storage.addExpression(first);
-    await synced.a.storage.addExpression(edit);
+    await synced.a.storage.addVersion(first);
+    await synced.a.storage.addVersion(edit);
     // Only the edit is pushed, and no round of sync runs: the first version comes because b asks for it.
     synced.a.sync.onLocalChange(edit);
     await synced.settle();
     assert.equal((await b.getCurrent(first.key))?.id, edit.id);
-    assert.notEqual(await b.getExpression(first.id), null);
+    assert.notEqual(await b.getVersion(first.id), null);
     assert.ok(stored.includes(edit.id), 'the pushed edit, though it went in after its first version');
   });
 
@@ -465,14 +465,14 @@ describe('sync by reconciliation', () => {
     });
     try {
       const onlyB = await version('app.note');
-      await synced.b.storage.addExpression(onlyB);
+      await synced.b.storage.addVersion(onlyB);
       let syncedWithB = 0;
       synced.a.sync.on('synced', (peer: string) => peer === 'b' && syncedWithB++);
       synced.a.sync.start();
       await synced.settle(40);
       assert.equal(lost, true);
       // The next hello asked again and got it; the lost want still counts as in flight.
-      assert.notEqual(await synced.a.storage.getExpression(onlyB.id), null);
+      assert.notEqual(await synced.a.storage.getVersion(onlyB.id), null);
       syncedWithB = 0;
       await synced.settle(40);
       assert.equal(syncedWithB, 0, 'not synced while a want is in flight');
@@ -496,12 +496,12 @@ describe('sync by reconciliation', () => {
         batches++;
         return adapter.batch(ops);
       },
-      getExpression: (id: string) =>
-        id === broken ? Promise.reject(new Error('unreadable')) : adapter.getExpression(id),
+      getVersion: (id: string) =>
+        id === broken ? Promise.reject(new Error('unreadable')) : adapter.getVersion(id),
     };
     const storage = createStorageProvider(counted);
     const versions = await Promise.all(Array.from({ length: 16 }, () => version('app.note')));
-    await Promise.all(versions.map((v) => storage.addExpression(v)));
+    await Promise.all(versions.map((v) => storage.addVersion(v)));
     assert.ok(batches <= 2, `${batches} writes for 16 changes`);
     for (const v of versions) assert.equal((await storage.getCurrent(v.key))?.id, v.id);
 
@@ -511,10 +511,7 @@ describe('sync by reconciliation', () => {
     broken = target.id;
     const edit = await version('app.note', { key: target.key, seq: 1, prev: target.id, genesis: target.id });
     const other = await version('app.note');
-    const [failed, landed] = await Promise.allSettled([
-      fresh.addExpression(edit),
-      fresh.addExpression(other),
-    ]);
+    const [failed, landed] = await Promise.allSettled([fresh.addVersion(edit), fresh.addVersion(other)]);
     assert.equal(failed.status, 'rejected');
     assert.equal(landed.status, 'fulfilled');
     broken = null;
@@ -526,7 +523,7 @@ describe('sync by reconciliation', () => {
 
 describe('holding part of a space', () => {
   const ids = async (storage: StorageProvider, collection: string) =>
-    (await storage.queryExpressions(collection)).map((v) => v.id).sort();
+    (await storage.queryVersions(collection)).map((v) => v.id).sort();
 
   for (const [name, cacheIs] of [
     ['as the initiator', 'a'],
@@ -542,11 +539,11 @@ describe('holding part of a space', () => {
       c.sync.on('level', (_peer: string, collection: string) => level.push(collection));
       c.sync.on('stored', (_peer: string, got: string[]) => stored.push(...got));
 
-      for (let i = 0; i < 40; i++) await k.storage.addExpression(await version('app.chat'));
-      for (let i = 0; i < 40; i++) await k.storage.addExpression(await version('app.photos'));
-      await k.storage.addExpression(await version('sys.member'));
+      for (let i = 0; i < 40; i++) await k.storage.addVersion(await version('app.chat'));
+      for (let i = 0; i < 40; i++) await k.storage.addVersion(await version('app.photos'));
+      await k.storage.addVersion(await version('sys.member'));
       const mine = await version('app.chat');
-      await c.storage.addExpression(mine);
+      await c.storage.addVersion(mine);
 
       c.sync.notifyPeers([cacheIs === 'a' ? 'b' : 'a']);
       await settle();
@@ -560,10 +557,10 @@ describe('holding part of a space', () => {
 
       // A push for a collection it doesn't hold passes it by.
       const photo = await version('app.photos');
-      await k.storage.addExpression(photo);
+      await k.storage.addVersion(photo);
       k.sync.onLocalChange(photo);
       await settle();
-      assert.equal(await c.storage.getExpression(photo.id), null);
+      assert.equal(await c.storage.getVersion(photo.id), null);
 
       // Holding more: the next hello brings it across.
       held = new Set(['app.chat', 'app.photos']);
@@ -578,13 +575,13 @@ describe('holding part of a space', () => {
     const { a, b, settle } = pair({
       holdsB: () => new Set(['app.chat']),
       drop: (message) => {
-        if (message.type === 'push-update') pushed.push(message.expression.collection);
+        if (message.type === 'push-update') pushed.push(message.version.collection);
         return false;
       },
     });
     // Before a hello, what a peer holds is not known: everything goes.
     const early = await version('app.photos');
-    await a.storage.addExpression(early);
+    await a.storage.addVersion(early);
     a.sync.onLocalChange(early);
     await settle();
     assert.deepEqual(pushed.splice(0), ['app.photos']);
@@ -593,7 +590,7 @@ describe('holding part of a space', () => {
     await settle();
     for (const collection of ['app.photos', 'app.chat', 'sys.member']) {
       const write = await version(collection);
-      await a.storage.addExpression(write);
+      await a.storage.addVersion(write);
       a.sync.onLocalChange(write);
     }
     await settle();
@@ -607,8 +604,8 @@ describe('holding part of a space', () => {
       holdsB: () => new Set(['app.y', 'app.z']),
     });
     for (const c of ['app.x', 'app.y', 'app.z']) {
-      await a.storage.addExpression(await version(c));
-      await b.storage.addExpression(await version(c));
+      await a.storage.addVersion(await version(c));
+      await b.storage.addVersion(await version(c));
     }
     b.sync.notifyPeers(['a']);
     await settle();

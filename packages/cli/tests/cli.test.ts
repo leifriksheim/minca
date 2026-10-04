@@ -25,7 +25,7 @@ import { createStorageProvider } from '../../core/src/storage/storage-provider.j
 import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { createSigner } from '../../core/src/schema/signer.js';
-import { createExpression } from '../../core/src/schema/expression.js';
+import { createVersion } from '../../core/src/schema/version.js';
 import { generateSeed, recoveryCodeToSeed } from '../../core/src/identity/recovery-code.js';
 import { deriveVaultKeyBytes } from '../../core/src/identity/account-vault.js';
 import { NODE_ACTIONS, PERSON_ONLY } from '../../core/src/node/actions.js';
@@ -46,16 +46,16 @@ describe('a folder on disk', () => {
     const manager = createIdentityManager();
     const me = await manager.fromSeed(new Uint8Array(16).fill(7));
     const signed = await createSigner(manager.getProvider()).sign(
-      createExpression({ author: me.did, collection: 'app.note', body: { text: 'on disk' } }),
+      createVersion({ author: me.did, collection: 'app.note', body: { text: 'on disk' } }),
       me.privateKey,
     );
 
     const first = createStorageProvider(await createFolderAdapter(dir, 'stores/one'));
-    await first.addExpression(signed);
+    await first.addVersion(signed);
 
     // A second process opening the same folder sees it.
     const second = createStorageProvider(await createFolderAdapter(dir, 'stores/one'));
-    assert.deepEqual(await second.getExpression(signed.id), signed);
+    assert.deepEqual(await second.getVersion(signed.id), signed);
     assert.equal(await second.fingerprint(), await first.fingerprint());
   });
 });

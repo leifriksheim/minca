@@ -13,7 +13,7 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
 import {
@@ -184,7 +184,7 @@ describe('space access: who may write', () => {
     // She forges a record anyway: valid account, valid session, no role.
     await letGo(mallory.node, space);
     const forged = await forge(mallory, space, { text: 'spam' });
-    await createStorageProvider(await mallory.stores(`spaces/${space}`)).addExpression(forged);
+    await createStorageProvider(await mallory.stores(`spaces/${space}`)).addVersion(forged);
 
     const reasons: string[] = [];
     alice.node.subscribe((event) => {
@@ -194,7 +194,7 @@ describe('space access: who may write', () => {
     await until(async () => reasons.length >= 1, 4000, 'Alice to refuse it');
     assert.ok(reasons.some((r) => /not a member/.test(r)));
     assert.equal(
-      await createStorageProvider(await alice.stores(`spaces/${space}`)).getExpression(forged.id),
+      await createStorageProvider(await alice.stores(`spaces/${space}`)).getVersion(forged.id),
       null,
     );
     // Mallory still reads what Alice wrote.
@@ -221,9 +221,8 @@ describe('space access: who may write', () => {
     await hold(blind.node, space);
     await until(
       async () =>
-        (await createStorageProvider(await blind.stores(`spaces/${space}`)).getExpression(
-          written.version,
-        )) !== null,
+        (await createStorageProvider(await blind.stores(`spaces/${space}`)).getVersion(written.version)) !==
+        null,
       4000,
       'the note',
     );
@@ -234,7 +233,7 @@ describe('space access: who may write', () => {
     );
     await letGo(mallory.node, space);
     const stranger = await forge(mallory, space, { ciphertext: 'x', iv: 'y' });
-    await createStorageProvider(await mallory.stores(`spaces/${space}`)).addExpression(stranger);
+    await createStorageProvider(await mallory.stores(`spaces/${space}`)).addVersion(stranger);
     const refused: string[] = [];
     blind.node.subscribe((event) => {
       if (event.type === 'rejected') refused.push(event.reason);
@@ -242,7 +241,7 @@ describe('space access: who may write', () => {
     await hold(mallory.node, space);
     await until(async () => refused.length > 0, 4000, 'the blind node to refuse it');
     assert.equal(
-      await createStorageProvider(await blind.stores(`spaces/${space}`)).getExpression(stranger.id),
+      await createStorageProvider(await blind.stores(`spaces/${space}`)).getVersion(stranger.id),
       null,
     );
     assert.equal(
@@ -364,8 +363,8 @@ describe('space access: taking it back', () => {
     const before = await bob.node.records.put(space, 'app.note', { text: 'before' });
     await until(async () => (await alice.node.records.get(space, before.key)) !== null, 4000, 'Bob’s note');
     const seenThen =
-      (await createStorageProvider(await bob.stores(`spaces/${space}`)).getExpression(before.version))!
-        .seen ?? [];
+      (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(before.version))!.seen ??
+      [];
 
     await alice.node.spaces.setMember(space, bob.node.did, null);
     await until(
@@ -381,13 +380,13 @@ describe('space access: taking it back', () => {
     // He forges one that claims to have been written before the removal.
     const backdated = await forge(bob, space, { text: 'backdated' }, seenThen);
     await letGo(bob.node, space);
-    await createStorageProvider(await bob.stores(`spaces/${space}`)).addExpression(backdated);
+    await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(backdated);
     await hold(bob.node, space);
     // Alice keeps it, withdrawn, in case a proof that had not seen the removal cites it
     // (02 §9.5); it never counts as a note.
     const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
     await until(
-      async () => (await aliceStore.getExpression(backdated.id)) !== null,
+      async () => (await aliceStore.getVersion(backdated.id)) !== null,
       4000,
       'the backdated note to reach Alice',
     );
@@ -473,16 +472,16 @@ describe('space access: taking it back', () => {
     const appDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
       audience: appDid,
-      capabilities: [{ with: `space:${space}`, can: 'expression/write' }],
+      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const store = createStorageProvider(await bob.stores(`spaces/${space}`));
     const heads =
-      (await store.getExpression((await bob.node.records.put(space, 'app.note', { text: 'Bob' })).version))!
+      (await store.getVersion((await bob.node.records.put(space, 'app.note', { text: 'Bob' })).version))!
         .seen ?? [];
     const sign = (text: string) =>
       createSigner(provider).sign(
-        createExpression({
+        createVersion({
           author: appDid,
           collection: 'app.note',
           space,
@@ -494,7 +493,7 @@ describe('space access: taking it back', () => {
       );
     const early = await sign('early');
     await letGo(bob.node, space);
-    await store.addExpression(early);
+    await store.addVersion(early);
     await hold(bob.node, space);
     await until(
       async () => (await alice.node.records.get(space, early.key)) !== null,
@@ -509,13 +508,13 @@ describe('space access: taking it back', () => {
       if (event.type === 'rejected') refused.push(event.reason);
     });
     await letGo(bob.node, space);
-    await createStorageProvider(await bob.stores(`spaces/${space}`)).addExpression(late);
+    await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(late);
     await hold(bob.node, space);
     // Refused on arrival if the revoke got there first; stored, and then not counted, if not.
     await until(
       async () =>
         refused.some((r) => /revoked/.test(r)) ||
-        (await (await stored(alice.stores, space)).getExpression(late.id)) !== null,
+        (await (await stored(alice.stores, space)).getVersion(late.id)) !== null,
       4000,
       'the late note to reach Alice',
     );

@@ -15,7 +15,7 @@
  * The rule is load-bearing forever: nodes running two versions of it would
  * disagree about which version is current. It is pinned by tests.
  */
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import { base32Encode } from '../utils/hash.js';
 import { checkLinks } from './links.js';
 import { RECORD_KEY_PATTERN } from './key.js';
@@ -49,7 +49,7 @@ export function byVersion(a: Versioned, b: Versioned): number {
 }
 
 /** The version fields for the next change to a record, given its current version. */
-export function nextVersion(current: Pick<Expression, 'id' | 'key' | 'seq' | 'genesis'>): {
+export function nextVersion(current: Pick<Version, 'id' | 'key' | 'seq' | 'genesis'>): {
   key: string;
   seq: number;
   prev: string;
@@ -69,8 +69,8 @@ export function nextVersion(current: Pick<Expression, 'id' | 'key' | 'seq' | 'ge
  * Only what can be seen in this one version. Whether `prev` is the version
  * before it is {@link chainProblem}'s question, asked once that is held.
  */
-export function checkVersionShape(expression: Partial<Expression>): string | null {
-  const { key, seq, prev, genesis, deleted, retain, body, bodyHash, seen } = expression;
+export function checkVersionShape(version: Partial<Version>): string | null {
+  const { key, seq, prev, genesis, deleted, retain, body, bodyHash, seen } = version;
   if (typeof key !== 'string' || !RECORD_KEY_PATTERN.test(key)) return 'Record key is missing or malformed';
   if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0)
     return 'Version number must be a whole number from 0';
@@ -79,7 +79,7 @@ export function checkVersionShape(expression: Partial<Expression>): string | nul
   } else {
     if (typeof prev !== 'string' || typeof genesis !== 'string')
       return 'A later version must name its previous and first versions';
-    if (prev === expression.id || genesis === expression.id) return 'A version cannot name itself';
+    if (prev === version.id || genesis === version.id) return 'A version cannot name itself';
   }
   if (
     seen !== undefined &&
@@ -97,12 +97,12 @@ export function checkVersionShape(expression: Partial<Expression>): string | nul
   } else if (typeof bodyHash !== 'string' || bodyHash.length === 0 || bodyHash.length > 128) {
     return 'A version must carry the hash of its body';
   }
-  if (expression.links !== undefined) return checkLinks(expression.links);
+  if (version.links !== undefined) return checkLinks(version.links);
   return null;
 }
 
 /** The parts of a version its place in a record's chain is judged by */
-type Linked = Pick<Expression, 'id' | 'key' | 'seq' | 'prev' | 'genesis' | 'collection'>;
+type Linked = Pick<Version, 'id' | 'key' | 'seq' | 'prev' | 'genesis' | 'collection'>;
 
 /**
  * Why a later version is not the one after `previous`, the version its `prev`

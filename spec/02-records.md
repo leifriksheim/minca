@@ -17,9 +17,10 @@ Out of scope here, and specified elsewhere:
   ([standard library](../packages/core/docs/standard-library.md)), and collections
   proposed for a space and their review ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
 
-**Terms.** An _expression_ is one signed version of a record — the unit that is
-hashed, signed, stored and synced. A _record_ is every expression that shares
-one `key` in a space. The _author_ is the key that signed an expression
+**Terms.** A _record_ is a thing in a space, named by its `key`: a message, a
+task, a vote. It changes by gaining _versions_: a _version_ is one signed state
+of a record, and the unit that is hashed, signed, stored and synced. A
+record's current version is what an app shows. The _author_ is the key that signed a version
 (usually a session key); the _root_ is the account that key acts for, found by
 walking its `proof` ([01 — Identity](01-identity.md)), or the author itself when
 there is no proof.
@@ -77,13 +78,13 @@ sorts before lower case.)
 > independent writers produce the same bytes. Reusing ECMAScript's number and
 > string output means a browser gets it from `JSON.stringify` for free.
 
-_Source: `packages/core/src/schema/expression.ts` (`canonicalize`). Tests: `packages/core/tests/validation.test.ts`, `packages/core/tests/versions.test.ts` (ids and signatures depend on it throughout)._
+_Source: `packages/core/src/schema/version.ts` (`canonicalize`). Tests: `packages/core/tests/validation.test.ts`, `packages/core/tests/versions.test.ts` (ids and signatures depend on it throughout)._
 
 ---
 
 ## 2. Content ids
 
-The **id** of an expression, and the content id of anything else hashed the
+The **id** of a version, and the content id of anything else hashed the
 same way (a space's genesis, a UCAN note in [01](01-identity.md) and
 [03](03-spaces.md)), is:
 
@@ -96,7 +97,7 @@ id = "b" ‖ lowercase( base32( SHA-256( bytes ) ) )
 - 32 bytes of digest give 52 base32 characters, so an id is always **53
   characters**: `b` followed by 52 of `[a-z2-7]`. The last character carries
   1 bit of the digest; its 4 low bits are zero.
-- For an expression, `bytes` is the UTF-8 of the canonical form of its signed
+- For a version, `bytes` is the UTF-8 of the canonical form of its signed
   part (§3.2).
 
 A reader decoding an id back to its digest MUST refuse anything that is not
@@ -107,17 +108,17 @@ The leading `b` is the multibase prefix for base32, but an id is **not** a
 CIDv1: there is no version, codec or multihash prefix before the digest.
 
 Example: `bh7mi3b35uek5zf46drxzvkhqopnu3z2y3dp3r6din5zfbubiro2a` (the id of the
-expression in §3.4).
+version in §3.4).
 
-_Source: `packages/core/src/utils/hash.ts` (`cidFromBytes`, `cidDigest`, `cidOfDigest`, `base32Encode`, `base32Decode`), `packages/core/src/schema/expression.ts` (`getExpressionId`). Tests: `packages/core/tests/validation.test.ts` ("rejects an id that does not match the content"), `packages/core/tests/sync.test.ts`._
+_Source: `packages/core/src/utils/hash.ts` (`cidFromBytes`, `cidDigest`, `cidOfDigest`, `base32Encode`, `base32Decode`), `packages/core/src/schema/version.ts` (`getVersionId`). Tests: `packages/core/tests/validation.test.ts` ("rejects an id that does not match the content"), `packages/core/tests/sync.test.ts`._
 
 ---
 
-## 3. Expressions
+## 3. Versions
 
 ### 3.1 Fields
 
-An expression is a JSON object with these members. Optional members are
+A version is a JSON object with these members. Optional members are
 **absent** when they do not apply — never `null`, never `false`, never an empty
 list unless a list is meant (an absent member and a present one hash differently).
 
@@ -126,7 +127,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `id`         | string   | yes        | Content id of the signed part (§2). Not itself signed.                                                                                                                                                                            |
 | `author`     | string   | yes        | The `did:key` of the P-256 key that signed ([01 — Identity](01-identity.md)).                                                                                                                                                     |
 | `collection` | string   | yes        | The collection the record is in, e.g. `app.todo.item`.                                                                                                                                                                            |
-| `space`      | string   | in a space | Id of the space it belongs to. Signed, so it cannot be replayed into another space. A peer MUST refuse an expression whose `space` is not the space it arrived for.                                                               |
+| `space`      | string   | in a space | Id of the space it belongs to. Signed, so it cannot be replayed into another space. A peer MUST refuse a version whose `space` is not the space it arrived for.                                                                   |
 | `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3); used for judging the delegation (§9.3), for display, and as a sync hint ([05](05-sync-and-storage.md)).                       |
 | `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, an encryption envelope `{ "ciphertext", "iv", "keyId" }` ([03 — Spaces](03-spaces.md)). |
 | `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                        |
@@ -148,14 +149,14 @@ not know: the signed part is "everything except `id`, `signature` and `body`"
 
 ### 3.2 What is signed
 
-The **signed part**, or **envelope**, of an expression is the expression with
+The **signed part**, or **envelope**, of a version is the version with
 the `id`, `signature` and `body` members removed — every other member, known
 or not. The body is signed through `bodyHash`, so the envelope checks without
 it, and a version can be kept, and synced, as a stub (§4.5).
 
 ```
 bodyHash = "b" ‖ base32lower( SHA-256( UTF-8( canonical( body ) ) ) )     // absent on a delete
-signed   = expression − { id, signature, body }
+signed   = version − { id, signature, body }
 payload  = UTF-8( canonical( signed ) )
 id       = "b" ‖ base32lower( SHA-256( payload ) )
 signature = base64url( ECDSA-P256-SHA256-sign( authorKey, payload ) )    // 64 bytes, r ‖ s
@@ -184,13 +185,13 @@ signature }`.
 To verify, in this order:
 
 1. Recompute the id from the signed part. If it differs from `id`, the
-   expression is invalid.
+   version is invalid.
 2. Resolve `author` to a P-256 public key ([01 — Identity](01-identity.md)). If
-   it cannot be resolved, the expression is invalid.
+   it cannot be resolved, the version is invalid.
 3. base64url-decode `signature` and verify it over the payload. If it does not
-   verify, the expression is invalid.
+   verify, the version is invalid.
 4. If `body` is present and the version is not a delete, recompute its content
-   id. If it differs from `bodyHash`, the expression is invalid.
+   id. If it differs from `bodyHash`, the version is invalid.
 
 Step 4 MUST be made on every copy that carries a body, even one whose id and
 signature a peer has already verified: `id` and `signature` do not cover the
@@ -216,7 +217,7 @@ part, canonical (one line in reality, wrapped here only between members):
 "space":"bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a"}
 ```
 
-The expression:
+The version:
 
 ```json
 {
@@ -239,7 +240,7 @@ Its stub is the same object without `body`. Member order on the wire is
 irrelevant. The id is reproducible from the canonical text above; the
 signature is not (ECDSA uses a fresh nonce), but any valid signature verifies.
 
-_Source: `packages/core/src/types.ts` (`Expression`, `UnsignedExpression`, `Envelope`, `Link`), `packages/core/src/schema/expression.ts` (`createExpression`, `bodyHashOf`, `envelopeOf`, `signedPart`, `bodyProblem`, `getExpressionId`), `packages/core/src/schema/signer.ts`, `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/node/space-runtime.ts` (`admit`). Tests: `packages/core/tests/validation.test.ts` ("crypto gate"), `packages/core/tests/identity.test.ts` ("expressions signed by an identity verify against its DID"), `packages/core/tests/links.test.ts` ("links are signed"), `packages/core/tests/versions.test.ts` ("the example in 02 §3.4…", "the body is signed through its hash…"), `packages/core/tests/sync.test.ts` ("drops a forged expression…"), `packages/core/tests/attacks.test.ts` ("a stranger sending a mangled copy first…")._
+_Source: `packages/core/src/types.ts` (`Version`, `UnsignedVersion`, `Envelope`, `Link`), `packages/core/src/schema/version.ts` (`createVersion`, `bodyHashOf`, `envelopeOf`, `signedPart`, `bodyProblem`, `getVersionId`), `packages/core/src/schema/signer.ts`, `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/node/space-runtime.ts` (`admit`). Tests: `packages/core/tests/validation.test.ts` ("crypto gate"), `packages/core/tests/identity.test.ts` ("versions signed by an identity verify against its DID"), `packages/core/tests/links.test.ts` ("links are signed"), `packages/core/tests/versions.test.ts` ("the example in 02 §3.4…", "the body is signed through its hash…"), `packages/core/tests/sync.test.ts` ("drops a forged version…"), `packages/core/tests/attacks.test.ts` ("a stranger sending a mangled copy first…")._
 
 ---
 
@@ -375,7 +376,7 @@ of the next one, and each verifies on its own.
 > Stubs rather than nothing, so that every later version can be checked
 > against the one before it (§4.7) by a peer that never saw the bodies.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`addExpression`, `demote`, `keepSuperseded`), `packages/core/src/schema/expression.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`, `write`, `judgeStanding`, `currentOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/checks.test.ts` ("a version under a check must be kept whole…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/schema/version.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`, `write`, `judgeStanding`, `currentOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/checks.test.ts` ("a version under a check must be kept whole…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
 
 ### 4.6 Shape of a version, alone
 
@@ -407,7 +408,7 @@ Checks that depend on what else a peer holds are **not** shape checks:
 - A current version whose `collection` differs from the record's held first
   version is ignored when reading, as if absent.
 
-_Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/expression.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addExpression`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`, `firstOf`, `consistent`, `write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
+_Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/version.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`, `firstOf`, `consistent`, `write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
 
 ### 4.7 Versions whose history can be checked
 
@@ -553,8 +554,8 @@ Links point at keys in the same space. A link to a key not held (yet) is
 normal and not an error: a reaction may arrive before its post.
 
 **Where links live.** In a public space, links are the `links` member of the
-expression, signed with the rest. In a private space, `links` is absent from
-the expression, and the links are sealed with the body: the plaintext of the
+version, signed with the rest. In a private space, `links` is absent from
+the version, and the links are sealed with the body: the plaintext of the
 encrypted body is `{"body": <body>, "links": [<link>…]}` (`links` left out
 when there are none) — see [03 — Spaces](03-spaces.md). A reader that opens a
 sealed body with malformed links treats the record as having none.
@@ -1349,7 +1350,7 @@ signature verifies, and a body that is present hashes to `bodyHash`.
 ### 9.3 Delegation (the capability gate)
 
 The capability every write in space `S` needs is
-`{ "with": "space:<S>", "can": "expression/write" }`.
+`{ "with": "space:<S>", "can": "record/write" }`.
 
 - No `proof`: the author signs for itself; its root is `author`.
 - With `proof`:
@@ -1450,5 +1451,5 @@ _Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`),
 | Steps judging one version's checks          | ≤ 10,000                                                                             |
 | Versions one version's checks cite          | ≤ 256 distinct                                                                       |
 | Future-dated `createdAt` (delegated writes) | ≤ 300 s ahead                                                                        |
-| Size of a body or an expression             | _Not yet specified_ — no limit is enforced                                           |
+| Size of a body or a version                 | _Not yet specified_ — no limit is enforced                                           |
 | Collection name on a record                 | _Not yet specified_ — only definitions constrain names; a record may name any string |

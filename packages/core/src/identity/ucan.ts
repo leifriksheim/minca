@@ -1,7 +1,7 @@
 import type { CryptoProvider } from '../types.js';
 import { base64UrlEncode, base64UrlDecode, utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { cidFromBytes } from '../utils/hash.js';
-import { canonicalize } from '../schema/expression.js';
+import { canonicalize } from '../schema/version.js';
 import { didToPublicKey } from './did.js';
 
 /** UCAN header */
@@ -14,7 +14,7 @@ export interface UCANHeader {
 /** A capability (attenuation) */
 export interface Capability {
   readonly with: string; // Resource URI, e.g. 'space:*' or 'space:did:key:z...'
-  readonly can: string; // Action namespace, e.g. 'space/write', 'expression/create', '*'
+  readonly can: string; // Action namespace, e.g. 'space/write', 'record/create', '*'
 }
 
 /** Optional fact attached to UCAN */

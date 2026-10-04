@@ -30,12 +30,12 @@
  * reads the registry and matches what it sees arrive (`matchesRecord`,
  * `node/watch-notifications.ts`), with the body in hand.
  */
-import type { Expression, Link } from '../types.js';
+import type { Version, Link } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
 import { parseUCAN } from '../identity/ucan.js';
 import { checkTopics, topicKey, topicTag, topicValues } from '../records/topics.js';
 import { checkRecordCondition, recordHolds, type Condition } from '../records/checks.js';
-import { canonicalize } from '../schema/expression.js';
+import { canonicalize } from '../schema/version.js';
 import { COLLECTION_NAME, schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { isObject } from '../utils/guards.js';
 
@@ -352,7 +352,7 @@ function isCarried(body: unknown): body is CarriedSubscription {
 }
 
 /** Who a version was written for: the account at the root of its note, else its own key */
-function rootOf(version: Expression): string {
+function rootOf(version: Version): string {
   if (!version.proof) return version.author;
   try {
     return parseUCAN(version.proof).payload.iss;
@@ -383,7 +383,7 @@ function inWindow(
 export function matchesSubscription(
   sub: CarriedSubscription,
   spaceId: string,
-  version: Expression,
+  version: Version,
   account: string,
   now = Date.now(),
 ): boolean {

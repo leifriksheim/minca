@@ -411,9 +411,9 @@ Resources and abilities in use:
 
 | `can`               | Meaning                                                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `expression/write`  | Write records (what a record in a space requires: `{with: "space:<id>", can: "expression/write"}`)          |
-| `expression/read`   | Read-only access (app grants with read access)                                                              |
-| `expression/*`      | Every `expression/…` ability: records, and nothing more                                                     |
+| `record/write`      | Write records (what a record in a space requires: `{with: "space:<id>", can: "record/write"}`)              |
+| `record/read`       | Read-only access (app grants with read access)                                                              |
+| `record/*`          | Every `record/…` ability: records, and nothing more                                                         |
 | `collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                   |
 | `access/change`     | Every other change to a space's access history: roles, members, invites, revocations, keys, relays, keepers |
 | `account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                             |
@@ -565,7 +565,7 @@ What it unblocks:
 
 Open questions:
 
-- Where parents go: a new optional expression member (for example
+- Where parents go: a new optional version member (for example
   `proofs: [token, …]`, parents in order), or tokens stored once per space and
   referred to by CID. The first is self-contained; the second is smaller when
   one note signs many records.
@@ -580,8 +580,8 @@ A parent capability `P` covers a child capability `C` iff both hold:
 - `P.with == "*"` or `P.with == C.with` (exact string match — no other
   wildcards; `space:*` is _not_ a pattern);
 - `P.can == "*"`, or `P.can == C.can`, or `P.can` ends in `/*` and `C.can`
-  starts with `P.can` minus its final `*` (so `expression/*` covers
-  `expression/write` and `expression/read`, but not `*`).
+  starts with `P.can` minus its final `*` (so `record/*` covers
+  `record/write` and `record/read`, but not `*`).
 
 ### 7.7 Example
 
@@ -594,7 +594,7 @@ Payload JSON:
 
 ```json
 {
-  "att": [{ "can": "expression/*", "with": "*" }],
+  "att": [{ "can": "record/*", "with": "*" }],
   "aud": "did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169",
   "exp": 1790000000,
   "fct": [{ "weave": "agent" }],
@@ -628,7 +628,7 @@ device are told apart only by what their notes grant.
 
 | A version in space `S`…                                                                                   | needs `{ "with": "space:S", "can": … }` |
 | --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| any record                                                                                                | `expression/write`                      |
+| any record                                                                                                | `record/write`                          |
 | and in `sys.collection`                                                                                   | also `collection/define`                |
 | and in any other collection of the access history ([03 — Spaces](03-spaces.md))                           | also `access/change`                    |
 | and in one of the account's own spaces (its registry, a carrier's passes; [06](06-nodes-and-sessions.md)) | also `account/write`                    |
@@ -645,7 +645,7 @@ A knock ([07 — Doors](07-doors.md)) needs `{ "with": "*", "can": "account/writ
   grants more than its parents, so the leaf says enough.
 
 A person's own sessions get `*`. A key the account trusts less, such as an
-agent's, gets `expression/*`: it writes records, and proposes what it can't do
+agent's, gets `record/*`: it writes records, and proposes what it can't do
 for someone who may to apply (the library's blueprints,
 [packages/core/docs/blueprints-and-guides.md](../packages/core/docs/blueprints-and-guides.md)).
 

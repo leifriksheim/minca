@@ -1,4 +1,4 @@
-import type { StorageAdapter, BatchOp, Expression } from '../../src/types.js';
+import type { StorageAdapter, BatchOp, Version } from '../../src/types.js';
 
 /**
  * An in-memory StorageAdapter, for tests and headless runtimes without IndexedDB.
@@ -6,7 +6,7 @@ import type { StorageAdapter, BatchOp, Expression } from '../../src/types.js';
  */
 export function createMemoryAdapter(): StorageAdapter {
   const kv = new Map<string, Uint8Array>();
-  const expressions = new Map<string, Expression>();
+  const versions = new Map<string, Version>();
 
   return {
     async get(key) {
@@ -21,14 +21,14 @@ export function createMemoryAdapter(): StorageAdapter {
     async list(prefix = '') {
       return [...kv.keys()].filter((key) => key.startsWith(prefix));
     },
-    async putExpression(expression) {
-      expressions.set(expression.id, expression);
+    async putVersion(version) {
+      versions.set(version.id, version);
     },
-    async getExpression(id) {
-      return expressions.get(id) ?? null;
+    async getVersion(id) {
+      return versions.get(id) ?? null;
     },
-    async deleteExpression(id) {
-      expressions.delete(id);
+    async deleteVersion(id) {
+      versions.delete(id);
     },
     async batch(ops: ReadonlyArray<BatchOp>) {
       for (const op of ops) {
@@ -38,7 +38,7 @@ export function createMemoryAdapter(): StorageAdapter {
     },
     async close() {
       kv.clear();
-      expressions.clear();
+      versions.clear();
     },
   };
 }

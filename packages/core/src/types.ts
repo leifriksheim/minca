@@ -84,7 +84,7 @@ export interface Link {
  * A version before it is signed: its envelope and its body. What is signed is
  * the envelope, with the body's hash in place of the body ({@link Envelope}).
  */
-export interface UnsignedExpression<T = unknown> {
+export interface UnsignedVersion<T = unknown> {
   readonly author: string; // DID of the author
   readonly collection: string; // Collection name (e.g., 'app.bsky.feed.post')
   /** Space this belongs to — signed, so it cannot be replayed into another space. Omitted for unscoped data. */
@@ -137,14 +137,14 @@ export interface UnsignedExpression<T = unknown> {
  * without the body, so a superseded version can be kept, and synced, as this
  * alone.
  */
-export type Envelope = Omit<UnsignedExpression, 'body'> & {
+export type Envelope = Omit<UnsignedVersion, 'body'> & {
   /** Content id of the canonical body. Absent on a delete, which has none. */
   readonly bodyHash?: string;
 };
 
-/** Expression — the atomic data unit */
-export interface Expression<T = unknown> extends Omit<UnsignedExpression<T>, 'body'> {
-  /** The content — absent on a stub (see {@link UnsignedExpression.body}) */
+/** Version — the atomic data unit */
+export interface Version<T = unknown> extends Omit<UnsignedVersion<T>, 'body'> {
+  /** The content — absent on a stub (see {@link UnsignedVersion.body}) */
   readonly body?: T;
   readonly id: string; // CID of the envelope
   /** Content id of the canonical body, signed in its place. Absent on a delete. */
@@ -215,26 +215,26 @@ export interface StorageAdapter {
   put(key: string, value: Uint8Array): Promise<void>;
   delete(key: string): Promise<void>;
   list(prefix?: string): Promise<string[]>;
-  /** Store an expression */
-  putExpression(expression: Expression): Promise<void>;
-  /** Get an expression by ID */
-  getExpression(id: string): Promise<Expression | null>;
-  /** Delete an expression by ID */
-  deleteExpression(id: string): Promise<void>;
+  /** Store a version */
+  putVersion(version: Version): Promise<void>;
+  /** Get a version by ID */
+  getVersion(id: string): Promise<Version | null>;
+  /** Delete a version by ID */
+  deleteVersion(id: string): Promise<void>;
   /** Batch operations */
   batch(ops: ReadonlyArray<BatchOp>): Promise<void>;
   close(): Promise<void>;
   /** Optional: every entry under a prefix with its value, in one read. Without it, `list` then `get` each. */
   entries?(prefix: string): Promise<ReadonlyArray<readonly [string, Uint8Array]>>;
-  /** Optional: many expressions by id in one read, null where absent, in the order asked. Without it, `getExpression` each. */
-  getExpressions?(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Expression | null>>;
+  /** Optional: many versions by id in one read, null where absent, in the order asked. Without it, `getVersion` each. */
+  getVersions?(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version | null>>;
   /**
-   * Optional: stores these expressions, applies these entry ops and deletes
-   * these expressions in one atomic write. Without it: `putExpression` each,
-   * then `batch`, then `deleteExpression` each.
+   * Optional: stores these versions, applies these entry ops and deletes
+   * these versions in one atomic write. Without it: `putVersion` each,
+   * then `batch`, then `deleteVersion` each.
    */
   commit?(write: {
-    readonly store: ReadonlyArray<Expression>;
+    readonly store: ReadonlyArray<Version>;
     readonly ops: ReadonlyArray<BatchOp>;
     readonly remove: ReadonlyArray<string>;
   }): Promise<void>;

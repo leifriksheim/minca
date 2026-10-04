@@ -8,20 +8,20 @@ import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { didToPublicKey } from '../src/identity/did.js';
 import { issueUCAN, type Capability } from '../src/identity/ucan.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { createCryptoGate } from '../src/validation/crypto-gate.js';
 import { createCapabilityGate } from '../src/validation/capability-gate.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
-import type { Expression } from '../src/types.js';
+import type { Version } from '../src/types.js';
 import { makeKey } from './helpers/person.js';
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
 
 const COLLECTION = 'app.test.note';
-const WRITE: Capability = { with: `space:${COLLECTION}`, can: 'expression/write' };
-const ALL: Capability = { with: `space:${COLLECTION}`, can: 'expression/*' };
-const OTHER: Capability = { with: 'space:something.else', can: 'expression/*' };
+const WRITE: Capability = { with: `space:${COLLECTION}`, can: 'record/write' };
+const ALL: Capability = { with: `space:${COLLECTION}`, can: 'record/*' };
+const OTHER: Capability = { with: 'space:something.else', can: 'record/*' };
 
 const resolvePublicKey = async (did: string) => provider.importPublicKey(didToPublicKey(did).publicKeyBytes);
 
@@ -30,8 +30,8 @@ async function signNote(
   key: { did: string; privateKey: CryptoKey },
   text: string,
   proof?: string,
-): Promise<Expression<{ text: string }>> {
-  const unsigned = createExpression({
+): Promise<Version<{ text: string }>> {
+  const unsigned = createVersion({
     author: key.did,
     collection: COLLECTION,
     body: { text },
@@ -43,18 +43,18 @@ async function signNote(
 describe('crypto gate', () => {
   const gate = createCryptoGate(provider);
 
-  test('accepts an expression signed by its author', async () => {
+  test('accepts a version signed by its author', async () => {
     const author = await makeKey();
-    const expression = await signNote(author, 'hello');
+    const version = await signNote(author, 'hello');
 
-    const result = await gate.validate(expression, resolvePublicKey);
+    const result = await gate.validate(version, resolvePublicKey);
     assert.equal(result.passed, true, result.reason ?? 'no reason given');
   });
 
   test('rejects a tampered body', async () => {
     const author = await makeKey();
-    const expression = await signNote(author, 'hello');
-    const tampered = { ...expression, body: { text: 'goodbye' } };
+    const version = await signNote(author, 'hello');
+    const tampered = { ...version, body: { text: 'goodbye' } };
 
     const result = await gate.validate(tampered, resolvePublicKey);
     assert.equal(result.passed, false);
@@ -62,8 +62,8 @@ describe('crypto gate', () => {
 
   test('rejects an id that does not match the content', async () => {
     const author = await makeKey();
-    const expression = await signNote(author, 'hello');
-    const relabelled = { ...expression, id: 'bafyfake' };
+    const version = await signNote(author, 'hello');
+    const relabelled = { ...version, id: 'bafyfake' };
 
     const result = await gate.validate(relabelled, resolvePublicKey);
     assert.equal(result.passed, false);
@@ -74,7 +74,7 @@ describe('crypto gate', () => {
     const author = await makeKey();
     const impostor = await makeKey();
     // Same payload, signed by someone else while still claiming the author DID
-    const unsigned = createExpression({ author: author.did, collection: COLLECTION, body: { text: 'hi' } });
+    const unsigned = createVersion({ author: author.did, collection: COLLECTION, body: { text: 'hi' } });
     const forged = await signer.sign(unsigned, impostor.privateKey);
 
     const result = await gate.validate(forged, resolvePublicKey);
@@ -87,7 +87,7 @@ describe('version check', () => {
 
   test('refuses a malformed version, however well signed', async () => {
     const author = await makeKey();
-    const unsigned = createExpression({ author: author.did, collection: COLLECTION, body: { text: 'x' } });
+    const unsigned = createVersion({ author: author.did, collection: COLLECTION, body: { text: 'x' } });
     const malformed = await signer.sign({ ...unsigned, seq: 2 }, author.privateKey);
     const result = await check(malformed);
     assert.equal(result.passed, false);
@@ -96,7 +96,7 @@ describe('version check', () => {
 
   test('does not refuse a body for its shape: that depends on which definition a node has', async () => {
     const author = await makeKey();
-    const unsigned = createExpression({ author: author.did, collection: COLLECTION, body: { text: 42 } });
+    const unsigned = createVersion({ author: author.did, collection: COLLECTION, body: { text: 42 } });
     assert.equal((await check(await signer.sign(unsigned, author.privateKey))).passed, true);
   });
 
@@ -114,9 +114,9 @@ describe('capability gate', () => {
 
   test('accepts an author writing for itself', async () => {
     const author = await makeKey();
-    const expression = await signNote(author, 'my own note');
+    const version = await signNote(author, 'my own note');
 
-    const result = await gate.validate(expression);
+    const result = await gate.validate(version);
     assert.equal(result.passed, true, result.reason ?? 'no reason given');
   });
 
@@ -125,8 +125,8 @@ describe('capability gate', () => {
     const session = await makeKey();
     const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
 
-    const expression = await signNote(session, 'delegated note', ucan.encoded);
-    const result = await gate.validate(expression);
+    const version = await signNote(session, 'delegated note', ucan.encoded);
+    const result = await gate.validate(version);
     assert.equal(result.passed, true, result.reason ?? 'no reason given');
   });
 
@@ -138,8 +138,8 @@ describe('capability gate', () => {
     // A perfectly valid UCAN — for somebody else.
     const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
 
-    const expression = await signNote(thief, 'stolen proof', ucan.encoded);
-    const result = await gate.validate(expression);
+    const version = await signNote(thief, 'stolen proof', ucan.encoded);
+    const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /different key/i);
   });
@@ -149,8 +149,8 @@ describe('capability gate', () => {
     const session = await makeKey();
     const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [OTHER] }, provider);
 
-    const expression = await signNote(session, 'wrong space', ucan.encoded);
-    const result = await gate.validate(expression);
+    const version = await signNote(session, 'wrong space', ucan.encoded);
+    const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /does not grant/i);
   });
@@ -168,8 +168,8 @@ describe('capability gate', () => {
       provider,
     );
 
-    const expression = await signNote(session, 'stale', ucan.encoded);
-    const result = await gate.validate(expression);
+    const version = await signNote(session, 'stale', ucan.encoded);
+    const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /expired/i);
   });
@@ -191,15 +191,15 @@ describe('capability gate', () => {
     );
 
     const signedAt = new Date((now - 7200) * 1000).toISOString();
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: session.did,
       collection: COLLECTION,
       body: { text: 'written two hours ago' },
       proof: ucan.encoded,
       createdAt: signedAt,
     });
-    const expression = await signer.sign(unsigned, session.privateKey);
-    const result = await gate.validate(expression);
+    const version = await signer.sign(unsigned, session.privateKey);
+    const result = await gate.validate(version);
     assert.equal(result.passed, true, result.reason ?? 'no reason given');
   });
 
@@ -210,15 +210,15 @@ describe('capability gate', () => {
     const now = Math.floor(Date.now() / 1000);
     const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
 
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: session.did,
       collection: COLLECTION,
       body: { text: 'backdated' },
       proof: ucan.encoded,
       createdAt: new Date((now - 86_400 * 365) * 1000).toISOString(),
     });
-    const expression = await signer.sign(unsigned, session.privateKey);
-    assert.equal((await gate.validate(expression)).passed, false);
+    const version = await signer.sign(unsigned, session.privateKey);
+    assert.equal((await gate.validate(version)).passed, false);
   });
 
   test('rejects a record dated in the future', async () => {
@@ -229,7 +229,7 @@ describe('capability gate', () => {
       { issuer: root, audience: session.did, capabilities: [ALL], expiration: now + 86_400 },
       provider,
     );
-    const unsigned = createExpression({
+    const unsigned = createVersion({
       author: session.did,
       collection: COLLECTION,
       body: { text: 'from tomorrow' },
@@ -253,9 +253,9 @@ describe('capability gate', () => {
     });
 
     const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
-    const expression = await signNote(session, 'stranger', ucan.encoded);
+    const version = await signNote(session, 'stranger', ucan.encoded);
 
-    const result = await strictGate.validate(expression);
+    const result = await strictGate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /not authorized/i);
   });

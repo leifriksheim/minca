@@ -28,7 +28,7 @@ import {
 } from '../schema/collection-def.js';
 import { standardDefinition } from './standard.js';
 import { isObject } from '../utils/guards.js';
-import { canonicalize } from '../schema/expression.js';
+import { canonicalize } from '../schema/version.js';
 import { describeCollection } from '../records/describe.js';
 import { blueprint, type Blueprint, type DraftCollection } from './library/collections.js';
 

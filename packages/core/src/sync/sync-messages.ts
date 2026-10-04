@@ -8,10 +8,10 @@
  * speak rather than half-processing it: two versions that cannot reconcile
  * should fail loudly, not leave a quiet partial sync.
  */
-import type { Expression } from '../types.js';
+import type { Version } from '../types.js';
 import { isObject } from '../utils/guards.js';
 
-export const SYNC_PROTOCOL_VERSION = 5;
+export const SYNC_PROTOCOL_VERSION = 6;
 
 type V = { readonly v: typeof SYNC_PROTOCOL_VERSION };
 
@@ -48,9 +48,9 @@ export type SyncMessage = V &
      * Versions: the answer to a `want` (with its `id`), or versions the sender
      * found the other side lacks while reconciling (without one).
      */
-    | { readonly type: 'versions'; readonly id?: number; readonly versions: ReadonlyArray<Expression> }
+    | { readonly type: 'versions'; readonly id?: number; readonly versions: ReadonlyArray<Version> }
     /** A record written just now, pushed without waiting for the next round. */
-    | { readonly type: 'push-update'; readonly expression: Expression }
+    | { readonly type: 'push-update'; readonly version: Version }
     /**
      * "I have these now": versions the sender took in from the receiver, or
      * already had. A node holding only part of a space lets go of its own

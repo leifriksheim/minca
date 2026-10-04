@@ -14,17 +14,17 @@
  *     expressions/<cid>.json
  * ```
  *
- * **Expressions are the truth; the entries are an index over them.** That
+ * **Versions are the truth; the entries are an index over them.** That
  * inversion is what lets two origins share one folder with no locking. Every
- * expression file is immutable and named by its own content hash, so
+ * version file is immutable and named by its own content hash, so
  * concurrent writers can only ever add files that agree — the one genuinely
  * mutable thing, which version is current, is derived state that either side
  * can put right. {@link reconcileFolder} is what puts it right.
  */
 
-import type { StorageAdapter, BatchOp, Expression } from '../types.js';
+import type { StorageAdapter, BatchOp, Version } from '../types.js';
 import { utf8Encode, utf8Decode } from '../utils/encoding.js';
-import { isStoredExpression } from '../utils/guards.js';
+import { isStoredVersion } from '../utils/guards.js';
 
 // ─── The slice of the File System Access API this module relies on ─────
 //
@@ -53,9 +53,9 @@ export interface DirectoryHandleLike {
 
 /** What changed on disk since the last pass */
 export interface FolderReload {
-  /** Expression ids that appeared — written by another origin, or another device */
+  /** Version ids that appeared — written by another origin, or another device */
   readonly added: ReadonlyArray<string>;
-  /** Expression ids whose files are gone */
+  /** Version ids whose files are gone */
   readonly removed: ReadonlyArray<string>;
 }
 
@@ -71,11 +71,11 @@ export interface FolderAdapter extends StorageAdapter {
    * local tree.
    */
   reload(): Promise<FolderReload>;
-  /** Every expression id currently on disk, whatever the entries believe */
-  listExpressionIds(): Promise<ReadonlyArray<string>>;
+  /** Every version id currently on disk, whatever the entries believe */
+  listVersionIds(): Promise<ReadonlyArray<string>>;
 }
 
-const EXPRESSION_SUFFIX = '.json';
+const VERSION_SUFFIX = '.json';
 
 /**
  * Percent-encodes a storage key into a filename.
@@ -161,7 +161,7 @@ async function removeFile(dir: DirectoryHandleLike, name: string): Promise<void>
 /**
  * Opens a storage adapter backed by a directory on the user's disk.
  *
- * Expressions are held in memory as well as on disk — a query would otherwise
+ * Versions are held in memory as well as on disk — a query would otherwise
  * mean one file read per record, and the example app re-lists on every render.
  * The cost is that the working set has to fit in memory.
  *
@@ -176,21 +176,21 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
   }
   const base = await resolvePath(root, segments);
   const kvDir = await base.getDirectoryHandle('kv', { create: true });
-  const expressionsDir = await base.getDirectoryHandle('expressions', { create: true });
+  const versionsDir = await base.getDirectoryHandle('expressions', { create: true });
 
-  const expressions = new Map<string, Expression>();
+  const versions = new Map<string, Version>();
 
   // Content-addressed nodes never change, so caching them is free. The root
   // pointer does change, which is why `reload` throws the whole cache away
   // rather than trying to be clever about which entries are still good.
   const kvCache = new Map<string, Uint8Array | null>();
 
-  async function readExpressionFile(name: string): Promise<Expression | null> {
-    const bytes = await readFolderFile(expressionsDir, name);
+  async function readVersionFile(name: string): Promise<Version | null> {
+    const bytes = await readFolderFile(versionsDir, name);
     if (!bytes) return null;
     try {
       const parsed: unknown = JSON.parse(utf8Decode(bytes));
-      return isStoredExpression(parsed) ? parsed : null;
+      return isStoredVersion(parsed) ? parsed : null;
     } catch {
       // A half-written file from a writer that died mid-flush. It will either be
       // rewritten or stay unreadable; either way it is not ours to repair.
@@ -202,20 +202,20 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
     const seen = new Set<string>();
     const added: string[] = [];
 
-    for await (const name of expressionsDir.keys()) {
-      if (!name.endsWith(EXPRESSION_SUFFIX)) continue;
-      const id = decodeKey(name.slice(0, -EXPRESSION_SUFFIX.length));
+    for await (const name of versionsDir.keys()) {
+      if (!name.endsWith(VERSION_SUFFIX)) continue;
+      const id = decodeKey(name.slice(0, -VERSION_SUFFIX.length));
       seen.add(id);
-      if (expressions.has(id)) continue;
+      if (versions.has(id)) continue;
 
-      const expression = await readExpressionFile(name);
-      if (!expression) continue;
-      expressions.set(id, expression);
+      const version = await readVersionFile(name);
+      if (!version) continue;
+      versions.set(id, version);
       added.push(id);
     }
 
-    const removed = [...expressions.keys()].filter((id) => !seen.has(id));
-    for (const id of removed) expressions.delete(id);
+    const removed = [...versions.keys()].filter((id) => !seen.has(id));
+    for (const id of removed) versions.delete(id);
 
     kvCache.clear();
     return { added, removed };
@@ -227,8 +227,8 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
     namespace: path,
     reload,
 
-    async listExpressionIds(): Promise<ReadonlyArray<string>> {
-      return [...expressions.keys()];
+    async listVersionIds(): Promise<ReadonlyArray<string>> {
+      return [...versions.keys()];
     },
 
     async get(key: string): Promise<Uint8Array | null> {
@@ -263,28 +263,28 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
       return keys;
     },
 
-    async putExpression(expression: Expression): Promise<void> {
+    async putVersion(version: Version): Promise<void> {
       await writeFolderFile(
-        expressionsDir,
-        encodeKey(expression.id) + EXPRESSION_SUFFIX,
-        utf8Encode(JSON.stringify(expression)),
+        versionsDir,
+        encodeKey(version.id) + VERSION_SUFFIX,
+        utf8Encode(JSON.stringify(version)),
       );
-      expressions.set(expression.id, expression);
+      versions.set(version.id, version);
     },
 
-    async getExpression(id: string): Promise<Expression | null> {
-      const known = expressions.get(id);
+    async getVersion(id: string): Promise<Version | null> {
+      const known = versions.get(id);
       if (known) return known;
 
       // Not in memory: another origin may have written it since the last reload.
-      const expression = await readExpressionFile(encodeKey(id) + EXPRESSION_SUFFIX);
-      if (expression) expressions.set(id, expression);
-      return expression;
+      const version = await readVersionFile(encodeKey(id) + VERSION_SUFFIX);
+      if (version) versions.set(id, version);
+      return version;
     },
 
-    async deleteExpression(id: string): Promise<void> {
-      await removeFile(expressionsDir, encodeKey(id) + EXPRESSION_SUFFIX);
-      expressions.delete(id);
+    async deleteVersion(id: string): Promise<void> {
+      await removeFile(versionsDir, encodeKey(id) + VERSION_SUFFIX);
+      versions.delete(id);
     },
 
     async batch(ops: ReadonlyArray<BatchOp>): Promise<void> {
@@ -300,7 +300,7 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
     },
 
     async close(): Promise<void> {
-      expressions.clear();
+      versions.clear();
       kvCache.clear();
     },
   });

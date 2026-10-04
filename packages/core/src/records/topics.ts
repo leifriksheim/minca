@@ -17,7 +17,7 @@
  * Tags are signed with the rest of the record. Any node that can read the body
  * works them out again and refuses a record whose tags don't match it.
  */
-import { canonicalize } from '../schema/expression.js';
+import { canonicalize } from '../schema/version.js';
 import { base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { isRecord } from '../utils/guards.js';
 import type { Link } from '../types.js';

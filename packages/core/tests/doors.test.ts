@@ -411,8 +411,8 @@ describe('a knock', () => {
     const door = await someDoor('door-cccccccccccc');
     for (const capabilities of [
       [{ with: 'space:bafyonespace', can: '*' }],
-      [{ with: '*', can: 'expression/*' }],
-      [{ with: '*', can: 'expression/read' }],
+      [{ with: '*', can: 'record/*' }],
+      [{ with: '*', can: 'record/read' }],
     ]) {
       const { leif, provider, invite, session } = await leifWith(hub, capabilities);
       const blob = await sealKnock(
@@ -698,7 +698,7 @@ describe('node.doors', () => {
     const note = await createLocalRootSigner(await manager.fromSeed(seed), provider).delegate({
       audience: did,
       // No agent fact: what it may do is what the note grants, whatever holds the key.
-      capabilities: [{ with: '*', can: 'expression/*' }],
+      capabilities: [{ with: '*', can: 'record/*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const agent = await createNode({

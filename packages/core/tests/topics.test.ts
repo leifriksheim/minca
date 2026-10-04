@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
-import { createExpression } from '../src/schema/expression.js';
+import { createVersion } from '../src/schema/version.js';
 import { checkStoredCollection } from '../src/schema/collection-def.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { generateSpaceKey } from '../src/privacy/space-encryption.js';
@@ -178,12 +178,12 @@ describe('topic tags on records', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const ucan = await createLocalRootSigner(alice.me, provider).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: 'expression/write' }],
+      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     // Says #random, tagged #design: a push to the wrong people, or hiding from the right ones.
     const lying = await createSigner(provider).sign(
-      createExpression({
+      createVersion({
         seen: await seenBy(alice.node, space),
         author: keyDid,
         space,
@@ -194,7 +194,7 @@ describe('topic tags on records', () => {
       }),
       pair.privateKey,
     );
-    await createStorageProvider(await alice.stores(`spaces/${space}`)).addExpression(lying);
+    await createStorageProvider(await alice.stores(`spaces/${space}`)).addVersion(lying);
 
     let rejected = '';
     bob.node.subscribe((event) => {
@@ -276,11 +276,11 @@ describe('topic tags on links', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const ucan = await createLocalRootSigner(alice.me, provider).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: 'expression/write' }],
+      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const lying = await createSigner(provider).sign(
-      createExpression({
+      createVersion({
         seen: await seenBy(alice.node, space),
         author: keyDid,
         space,
@@ -294,7 +294,7 @@ describe('topic tags on links', () => {
       }),
       pair.privateKey,
     );
-    await createStorageProvider(await alice.stores(`spaces/${space}`)).addExpression(lying);
+    await createStorageProvider(await alice.stores(`spaces/${space}`)).addVersion(lying);
 
     let rejected = '';
     bob.node.subscribe((event) => {

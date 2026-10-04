@@ -33,7 +33,7 @@ export async function agentOf(who: Person, spaces: ReadonlyArray<string>) {
   const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
   const note = await createLocalRootSigner(who.me, provider).delegate({
     audience: did,
-    capabilities: spaces.map((id) => ({ with: `space:${id}`, can: 'expression/*' })),
+    capabilities: spaces.map((id) => ({ with: `space:${id}`, can: 'record/*' })),
     expiration: Math.floor(Date.now() / 1000) + 3600,
     facts: [AGENT_FACT],
   });
