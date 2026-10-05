@@ -356,8 +356,10 @@ their own view of the definition. A writer MUST set `retain: true` when:
 - the collection's definition in force says `history: "all"` (§6); or
 - the collection is one of the access-history collections (`sys.role`,
   `sys.member`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`,
-  `sys.relays`, `sys.keepers`). A peer MUST refuse a version of one of these
-  without `retain` ([03 — Spaces](03-spaces.md)); or
+  `sys.relays`, `sys.keepers`, `sys.fork`). A peer MUST refuse a version of
+  one of these without `retain` ([03 — Spaces](03-spaces.md)); or
+- the collection is `sys.warrant`, whose versions are proof every peer must
+  be able to check ([03](03-spaces.md) §6.6); or
 - the version is a first version (`seq 0`) and the rules in force (§7) have
   `onePer` or `fixed`. Both are checked against the first version's body,
   which every peer must be able to read, however late it joins. A peer MUST

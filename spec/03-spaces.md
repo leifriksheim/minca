@@ -218,7 +218,8 @@ into nothing. It **MUST** collect versions by record key prefix — every
 version, not only current ones — and use only those whose collection is the
 one the prefix belongs to (`role:`→`sys.role`, `member:`→`sys.member`,
 `invite:`→`sys.invite`, `revoke:`→`sys.revoke`, `collection:`→`sys.collection`,
-`key:`→`sys.key`, `relays:`→`sys.relays`, `keepers:`→`sys.keepers`).
+`key:`→`sys.key`, `relays:`→`sys.relays`, `keepers:`→`sys.keepers`,
+`fork:`→`sys.fork`).
 
 A version yields no event when any of these hold:
 
@@ -705,14 +706,19 @@ nothing away by itself: what to do about it is a decision for whoever manages
 the space (§6.1), and an account whose key was stolen revokes its note (§6.4).
 
 ```
-sys.warrant at warrant:<hex40(account DID)>
+sys.warrant at warrant:<hex40(account DID + "|" + writer's account DID)>
 { kind, evidence: [<version>, <version>?] }        in the clear, retain: true
 ```
 
 `evidence[0]` is the offending version, and its signer's root (02 §9.3) is the
 account. Only an account the history names (`named`, §3.4, §4.6) can be warranted, so
-a stranger minting keys and notes costs nobody a write. There is at most one
-warrant per account in a space. The kinds:
+a stranger minting keys and notes costs nobody a write.
+
+A warrant is **its writer's own record**: its key names both the account and
+the account that wrote it, so only that writer can write any version of it,
+and neither the accused nor anyone else can replace it. A writer has at most
+one warrant against each account. A node writes one only when no warrant
+against that account stands in the space already. The kinds:
 
 | `kind`     | `evidence`                                        | Holds when                                                                                                                                                                               |
 | ---------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -724,7 +730,8 @@ warrant per account in a space. The kinds:
 A `sys.warrant` version stands when its author may write in the space (§5.2)
 and its proof holds: it is well formed, its `evidence[0]` is validly signed
 (02 §3.3) in this space by a key whose root the history names, its record key
-is `warrant:<hex40(that root)>`, and its kind's check holds. A peer:
+is `warrant:<hex40(that root + "|" + the warrant's own root)>`, and its
+kind's check holds. A delete of a warrant never stands. A peer:
 
 - judges it **not yet** when what the check needs is not here (`at(seen)`
   unknown);
@@ -953,7 +960,9 @@ In a private space, the body of every version is encrypted **before signing**,
 except in these collections, which stay in the clear:
 
 `sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.key`, `sys.box`,
-`sys.memberkey`, `sys.relays`, `sys.keepers`.
+`sys.memberkey`, `sys.relays`, `sys.keepers`, `sys.fork` (§6.5) and
+`sys.warrant` (§6.6): proof every peer must check, holding signed envelopes
+rather than anyone's words.
 
 Everything else is encrypted — application records, `sys.collection`
 definitions, `sys.profile`, and the registry's own collections. The envelope

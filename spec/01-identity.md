@@ -690,7 +690,8 @@ d_contact = ScalarFrom(HKDF(seed, "weave/p256-contact-key/v1", 48))
 ```
 
 - It is not the root key (one key should not both sign and decrypt) and not a
-  session key (those rotate hourly; a request read next week must still open).
+  session key (one may last only a run, and its note an hour; a request read
+  next week must still open).
 - The public half, as published, is `base64url(compressed point)` — 44
   characters. A valid public contact key is a string of at most 64 characters
   that decodes to a point on P-256.

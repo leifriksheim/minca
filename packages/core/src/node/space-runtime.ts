@@ -2938,7 +2938,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     }
   }
 
-  /** Whether a warrant record proves what it says, against the account its key names */
+  /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
   async function warrantVerdict(
     version: Version,
     options: { nested?: boolean } = {},
@@ -2949,7 +2949,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // A warrant against a warrant against a warrant proves nothing more.
     if (options.nested && warrant.kind === 'warrant') return 'false';
     const against = warrant.evidence[0] && (await accountable(warrant.evidence[0]));
-    if (!against || version.key !== (await warrantKey(against))) return 'false';
+    const by = (await judge(version)).root;
+    // Its key names both: a version under someone else's key is never theirs to write.
+    if (!against || !by || version.key !== (await warrantKey(against, by))) return 'false';
     return evidenceHolds(warrant.kind, warrant.evidence);
   }
 
@@ -2975,20 +2977,20 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   }
 
   /**
-   * Writes down the proof a version gives against its account, unless the
-   * account has a warrant here already. Any member may; one that can't write
-   * leaves it to one that can.
+   * Writes down, as this account's own record, the proof a version gives
+   * against its account — unless a warrant against that account stands here
+   * already, from anyone. Any member may; one that can't write leaves it to
+   * one that can.
    */
   async function warrantIfDue(version: Version): Promise<void> {
     if (closed || (await cannotWrite())) return;
     const violation = await violationIn(version);
     if (!violation) return;
     const root = (await judge(version)).root!;
-    const key = await warrantKey(root);
-    const held = await currentOf(key);
+    if ((await flagged()).some((flag) => flag.account === root)) return;
     // Checked again: the space may have closed while the proof was being worked out.
-    if ((held && !held.deleted) || closed) return;
-    await upsert(WARRANT_COLLECTION, key, violation);
+    if (closed) return;
+    await upsert(WARRANT_COLLECTION, await warrantKey(root, deps.rootDid), violation);
   }
 
   /** The accounts proven to have broken the protocol's rules here, by the warrants that stand */

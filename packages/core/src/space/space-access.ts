@@ -179,8 +179,13 @@ export const revokeKey = (noteCid: string) => hashedKey('revoke', noteCid);
  * per account: `{ kind, evidence }` (spec 03 §6.6).
  */
 export const WARRANT_COLLECTION = 'sys.warrant';
-/** The key of the warrant against an account */
-export const warrantKey = (accountDid: string) => hashedKey('warrant', accountDid);
+/**
+ * The key of the warrant one account brought against another. Each is its
+ * writer's own record: the key names the writer, so no one else — the
+ * accused least of all — can write a version of it.
+ */
+export const warrantKey = (accountDid: string, byDid: string) =>
+  hashedKey('warrant', `${accountDid}|${byDid}`);
 /** The key of the record proving a writer's log forked, from the writer's key */
 export const forkKey = (writerDid: string) => hashedKey('fork', writerDid);
 /** The key of a role's record */

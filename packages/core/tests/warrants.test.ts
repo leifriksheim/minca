@@ -142,7 +142,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [evidence] },
-        version: { key: await warrantKey(alice.node.did), seq: 0 },
+        version: { key: await warrantKey(alice.node.did, bob.node.did), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -154,6 +154,55 @@ describe('warrants', () => {
       false,
       'Alice is not flagged',
     );
+  });
+
+  test('the accused can’t overwrite the proof against them: a warrant is its writer’s own record', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    await alice.node.collections.define(space, {
+      name: 'app.notice',
+      schema: { type: 'object' },
+      permissions: ['post'],
+      rules: { create: 'can:post' },
+    });
+    await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
+    await slip(bob, space, [
+      await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false }),
+    ]);
+    await flaggedEverywhere([alice, bob], space, bob.node.did, 'standing');
+
+    // Bob writes the next version of Alice's warrant against him: of a kind nobody knows, with one
+    // of his own versions as evidence — so it names him, and would stand unjudged and flag no one.
+    const own = await bob.node.records.put(space, 'app.note', { text: 'mine' });
+    const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
+    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    const key = await warrantKey(bob.node.did, alice.node.did);
+    await until(async () => (await bobStore.getCurrent(key)) !== null, 4000, 'Alice’s warrant at Bob’s');
+    const current = (await bobStore.getCurrent(key))!;
+    const overwrite = await forge(
+      bob,
+      space,
+      {
+        collection: WARRANT_COLLECTION,
+        body: { kind: 'nothing-to-see', evidence: [stubOf((await bobStore.getVersion(own.version))!)] },
+        version: { key, seq: current.seq + 1, prev: current.id, genesis: current.genesis ?? current.id },
+        retain: true,
+      },
+      { keep: false },
+    );
+    await slip(bob, space, [overwrite]);
+    const after = await bob.node.records.put(space, 'app.note', { text: 'after' });
+    await until(
+      async () => (await alice.node.records.get(space, after.key)) !== null,
+      4000,
+      'Bob’s next note',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(await aliceStore.getVersion(overwrite.id), null, 'refused: not his to write');
+    for (const who of [alice, bob])
+      assert.ok(
+        (await flaggedFor(who, space)).some((f) => f.account === bob.node.did && f.kind === 'standing'),
+        'Bob is still flagged',
+      );
   });
 
   test('a race is not misconduct: a version withdrawn by a change it had not seen is never warranted', async () => {
