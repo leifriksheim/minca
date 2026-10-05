@@ -326,6 +326,22 @@ describe('asking to be added', () => {
     assert.equal((await leif.node.contacts.get(carol.node.did))?.space, withCarol.space);
   });
 
+  test('removing a contact gives up your place in the space for two', async () => {
+    const { leif, anna, club } = await bookClub();
+    const asked = await leif.node.contacts.ask(club, anna.node.did);
+    await until(async () => (await anna.node.contacts.requests(club)).length === 1, 5000, 'the request');
+    await anna.node.contacts.accept(club, (await anna.node.contacts.requests(club))[0]!.key);
+    await joined(anna.node, asked.space);
+    for (const who of [leif, anna]) await who.node.spaces.hold(asked.space);
+
+    await anna.node.contacts.remove(leif.node.did);
+    await until(
+      async () => !(await leif.node.spaces.access(asked.space)).members.some((m) => m.did === anna.node.did),
+      5000,
+      'Leif to see Anna leave',
+    );
+  });
+
   test('blocking someone hides their requests', async () => {
     const { leif, anna, club } = await bookClub();
     await leif.node.contacts.ask(club, anna.node.did);

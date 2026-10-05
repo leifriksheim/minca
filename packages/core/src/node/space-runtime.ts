@@ -2495,6 +2495,19 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** Display order: when a record was created, then its key. It decides nothing. */
   const createdAtOf = async (version: Version) => (await genesisOf(version))?.createdAt ?? version.createdAt;
 
+  /** Gives someone a role, or takes theirs away with null */
+  async function setMember(did: string, role: string | null): Promise<NodeRecord<unknown>> {
+    const { history } = await access();
+    const was = standing(history.current, did);
+    const next = role === null ? null : history.current.roles.get(role);
+    if (role !== null && !next) throw new Error(`There is no role "${role}" in "${space.name}"`);
+    // Taking power away keeps what this node has seen them write.
+    const lowers =
+      was && (!next || next.rank < was.rank || was.permissions.some((p) => !next.permissions.includes(p)));
+    const keep = lowers ? await keepFrom(new Set([did])) : [];
+    return upsert(MEMBER_COLLECTION, await memberKey(did), { did, role, ...(keep.length ? { keep } : {}) });
+  }
+
   /**
    * What a change taking power from these people keeps: every record of
    * theirs that counts now — what this node has seen them write.
@@ -2788,15 +2801,52 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     async setMember(did: string, role: string | null) {
-      const { history } = await access();
-      const was = standing(history.current, did);
-      const next = role === null ? null : history.current.roles.get(role);
-      if (role !== null && !next) throw new Error(`There is no role "${role}" in "${space.name}"`);
-      // Taking power away keeps what this node has seen them write.
-      const lowers =
-        was && (!next || next.rank < was.rank || was.permissions.some((p) => !next.permissions.includes(p)));
-      const keep = lowers ? await keepFrom(new Set([did])) : [];
-      await upsert(MEMBER_COLLECTION, await memberKey(did), { did, role, ...(keep.length ? { keep } : {}) });
+      await setMember(did, role);
+    },
+
+    /**
+     * Gives up this account's place before it forgets the space: its own
+     * member record with no role, so the others stop counting it a reader and
+     * a key change becomes due. Nothing sends the removal once the space is
+     * closed, so this waits up to `waitMs` for a peer of another account to
+     * say it has it. False when it couldn't be written, or nobody took it in
+     * time.
+     */
+    async giveUpPlace(waitMs: number): Promise<boolean> {
+      const state = (await access()).history.current;
+      // Shared to view, or already gone: there is nothing to remove.
+      if (!standing(state, deps.rootDid)) return true;
+      // Nobody else holds a place, so nobody else needs to know.
+      if ([...readers(state)].every((did) => did === deps.rootDid)) return true;
+      const taken = new Set<string>();
+      let wanted: string | null = null;
+      let found: () => void = () => {};
+      const onStored = (peer: string, ids: ReadonlyArray<string>) => {
+        void peerAccounts.get(peer)?.then(({ account }) => {
+          if (account === deps.rootDid) return;
+          for (const id of ids) taken.add(id);
+          if (wanted !== null && taken.has(wanted)) found();
+        });
+      };
+      // Listening before writing: a peer can answer before the write returns.
+      sync.on('stored', onStored);
+      try {
+        wanted = (await setMember(deps.rootDid, null)).version;
+        if (taken.has(wanted)) return true;
+        if (waitMs <= 0) return false;
+        return await new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => resolve(false), waitMs);
+          found = () => {
+            clearTimeout(timer);
+            resolve(true);
+          };
+        });
+      } catch {
+        // A note that may not change access; another of the account's devices can.
+        return false;
+      } finally {
+        sync.off('stored', onStored);
+      }
     },
 
     async putRole(role: Role) {
