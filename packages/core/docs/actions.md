@@ -109,11 +109,8 @@ spaces it lacks; wraps the node with `asAgent`; holds every space; and serves
 MCP over stdio: `offeredActions({ agent: true })`, without the `PERSON_ONLY`
 actions or direct messages ([actions](#actions)).
 
-> **Known defect:** every `weave mcp` with the same `--home` signs with the one
-> agent key, so only the first gets into a space's room; the others report
-> `refused` in `spaces_status` and log it to stderr, keep their writes, and
-> sync once the first stops. They also share `data/` on disk, each with its own
-> copy in memory. See [spec 04 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md) and
-> [#55](https://github.com/leifriksheim/weave/issues/55).
+Only one `weave mcp` or `weave agent` with the same `--home` runs at a time:
+both sign with the one agent key, which is held under a lock in the agent's
+folder, so a second says the agent is already running and stops.
 
-_Source: `packages/cli/src/agent.ts`, `packages/cli/src/mcp.ts`. Tests: `packages/core/tests/agents.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP")._
+_Source: `packages/cli/src/agent.ts` (`startAgentNode`), `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/mcp.ts`. Tests: `packages/core/tests/agents.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP")._

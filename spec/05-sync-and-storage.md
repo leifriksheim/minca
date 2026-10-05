@@ -278,7 +278,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 5,
+  "v": 8,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -816,14 +816,14 @@ keeps in its store, are the node's own (the library's are in
 
 **Registry entries.** One space's registry entries, each keyed by space id:
 
-| Key                   | Value                                                                                                           | Sealed by default          |
-| --------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `space:<id>`          | UTF-8 JSON of the `Space` ([03](03-spaces.md))                                                                  | yes                        |
-| `spacekey:<id>`       | UTF-8 JSON `{ "keys": [{ "id", "raw" (base64url AES-256 key), "createdAt", "version" }], "current": <key id> }` | yes                        |
-| `spaceinvite:<id>`    | UTF-8 base64url of an invite secret, until used                                                                 | yes                        |
-| `spacerole:<id>`      | UTF-8 role name this account last held (a listing hint)                                                         | yes                        |
-| `spacememberkey:<id>` | UTF-8 base64url of this account's member key for the space                                                      | **no** — known defect, §15 |
-| `spacerelays:<id>`    | UTF-8 JSON array of relay URLs                                                                                  | no — known defect, §15     |
+| Key                   | Value                                                                                                           | Sealed by default            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `space:<id>`          | UTF-8 JSON of the `Space` ([03](03-spaces.md))                                                                  | yes                          |
+| `spacekey:<id>`       | UTF-8 JSON `{ "keys": [{ "id", "raw" (base64url AES-256 key), "createdAt", "version" }], "current": <key id> }` | yes                          |
+| `spaceinvite:<id>`    | UTF-8 base64url of an invite secret, until used                                                                 | yes                          |
+| `spacerole:<id>`      | UTF-8 role name this account last held (a listing hint)                                                         | yes                          |
+| `spacememberkey:<id>` | UTF-8 base64url of this account's member key for the space                                                      | yes (since `sealed:v1`, §15) |
+| `spacerelays:<id>`    | UTF-8 JSON array of relay URLs                                                                                  | yes (since `sealed:v1`, §15) |
 
 Forgetting a space deletes all six.
 
@@ -1162,5 +1162,3 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 - **Responder errors.** How a responder reports a `reconcile` it cannot
   parse. See the known defect in §6.4.
-- **Member key at rest.** How to move `spacememberkey:` and `spacerelays:`
-  entries written unsealed to sealed ones. See the known defect in §15.

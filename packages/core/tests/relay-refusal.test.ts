@@ -1,7 +1,7 @@
 /**
  * One DID per room (#55): a relay lets the first socket with a DID into a room
  * and closes any later one with 4009. Two nodes signing with the same key — two
- * tabs of one app, two processes of one agent — collide there. The second must
+ * tabs of one app that don't share a worker — collide there. The second must
  * say it was refused, not look connected, and get in once the first stops.
  */
 import { describe, test, before, after } from 'node:test';

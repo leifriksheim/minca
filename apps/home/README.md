@@ -196,4 +196,4 @@ the web has no filesystem change notification.
 - **Notifications per device.** The app that asked shows its notifications itself; say which devices and apps are showing them.
 - **Hosting.**
   - Say plainly, before a lapsed host deletes data, that it will.
-  - Remind people before time runs out. The protocol side is planned in [06](../../spec/06-nodes-and-sessions.md).
+  - Remind people before time runs out on a device, not only by email (email reminders are built: `RemindMe` in `apps/shared/src/Payment.tsx`); that needs Web Push ([#60](https://github.com/leifriksheim/weave/issues/60)).

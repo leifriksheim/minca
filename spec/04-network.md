@@ -103,12 +103,13 @@ fixes the socket's DID for the life of the socket.
 
 > **Known defect:** two nodes that sign with the same key have the same DID,
 > and only the first gets into a room; the other is refused until it stops.
-> That happens with every tab of one app, which signs with the app's key
-> ([06](06-nodes-and-sessions.md) §2.1), and every `weave mcp` process of one
-> agent (06 §3). The refused node now says so (§2, and `refused` in
-> `spaces.status`), but it still cannot sync. A fresh session key per node
-> run, delegated from the durable key, would fix it; that needs peers to
-> accept a two-link chain ([01](01-identity.md) §7.5). Tracked in
+> That still happens with the tabs of one app where they don't share a
+> SharedWorker: each signs with the app's key ([06](06-nodes-and-sessions.md)
+> §2.1). (An agent's processes can't collide any more: only one may hold its
+> key.) The refused tab says so (§2, and `refused` in `spaces.status`), but
+> it cannot sync until the first closes. A key per tab, delegated from the
+> app's key, would fix it; that needs peers to accept a two-link chain
+> ([01](01-identity.md) §7.5). Tracked in
 > [#55](https://github.com/leifriksheim/weave/issues/55).
 
 _Source: `packages/relay/relay.mjs` (`handleMessage`, `isDid`, `CLOSE_DID_TAKEN`). Tests: `packages/core/tests/relay-refusal.test.ts` ("one DID per room")._

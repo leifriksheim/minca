@@ -10,7 +10,7 @@ never heard of `std.direct` sync, store and judge it like any other record,
 and nothing about the space changes for them. Only apps that want to read each
 other's direct messages have to agree on what follows. It uses these protocol
 parts: member keys ([spec 03 §9.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
-`sealWith` (§8.5) and `sealFor` (§16.4).
+`sealWith` (§8.5) and `sealFor` ([spec 01 §9.4](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
 
 One record serves every reader and every one of their devices. A fresh
 **message key** seals the text once, and that key is sealed to each reader's

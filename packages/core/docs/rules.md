@@ -161,6 +161,7 @@ A bot answering mentions, from anyone holding a role, run by the bot:
 Two runners of one account, an app and an agent, may both claim a record
 before either hears the other. `startRules` waits `claimMs` after claiming;
 the earlier claim acts, and the later is taken back. Nothing runs while every
-runner is closed ([#109](https://github.com/leifriksheim/weave/issues/109)).
+runner is closed: to keep rules running with every device off, run
+`weave agent --no-chat`, or a bot on a host.
 
 _Source: `packages/core/src/schemas/rules.ts` (`rule`, `ruleRun`, `checkRule`, `matching`, `act`, `rulesFor`, `runRules`, `startRules`, `fillRuleText`, `IT`, `ME`), `packages/core/src/schemas/cron.ts`, `packages/core/src/schema/quick-add.ts` (`quickAddBody`), `packages/core/src/records/checks.ts` (`checkRecordCondition`, `recordHolds`), `packages/cli/src/main.ts` (`runAgent`), `packages/cli/src/agent-rules.ts` (`triggerPrompt`), `apps/example/src/rules.ts` (`compile`, `useRunRules`). Tests: `packages/core/tests/rule-records.test.ts`, `packages/core/tests/rule-runners.test.ts` (all)._

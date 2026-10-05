@@ -368,7 +368,7 @@ goes through objects only), so `owedBy` repeats those accounts as a list, at
 most 63 so that with `paidBy` every one is tagged: a record carries at most
 64 tags.
 
-_Source: `packages/core/src/schemas/library/annotations.ts`, `publishing.ts`, `planning.ts`, `community.ts`, `money.ts`, `social.ts`, `media.ts`; `apps/example/src/derive/people.ts` (`respondingTo`), `apps/example/src/components/std/Reactions.tsx`, `apps/example/src/components/std/Comments.tsx`, `apps/example/src/components/apps/Polls.tsx`, `apps/example/src/components/apps/Decisions.tsx`, `apps/example/src/components/apps/Events.tsx`, `apps/example/src/components/apps/Marketplace.tsx`. Tests: `packages/core/tests/topics.test.ts` ("every standard collection that names people has them as topics…", "a report names nobody…", "a std.reaction is tagged for the person in its respondingTo…" and the rest of that list)._
+_Source: `packages/core/src/schemas/library/annotations.ts`, `packages/core/src/schemas/library/publishing.ts`, `packages/core/src/schemas/library/planning.ts`, `packages/core/src/schemas/library/community.ts`, `packages/core/src/schemas/library/money.ts`, `packages/core/src/schemas/library/social.ts`, `packages/core/src/schemas/library/media.ts`; `apps/example/src/derive/people.ts` (`respondingTo`), `apps/example/src/components/std/Reactions.tsx`, `apps/example/src/components/std/Comments.tsx`, `apps/example/src/components/apps/Polls.tsx`, `apps/example/src/components/apps/Decisions.tsx`, `apps/example/src/components/apps/Events.tsx`, `apps/example/src/components/apps/Marketplace.tsx`. Tests: `packages/core/tests/topics.test.ts` ("every standard collection that names people has them as topics…", "a report names nobody…", "a std.reaction is tagged for the person in its respondingTo…" and the rest of that list)._
 
 **Channels.** A space with more than one conversation lists `std.channel`
 records, by `position` then name, and a message links its channel as
@@ -467,8 +467,7 @@ _Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`
 
 ## Planned: what the library still waits on
 
-> **Planned.** Not normative. Issue:
-> [#36](https://github.com/leifriksheim/weave/issues/36).
+> **Planned.** Not normative. Each item names its own issue.
 >
 > - **File bytes** ([spec 05 §16.6](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md),
 >   [#37](https://github.com/leifriksheim/weave/issues/37)). The `blob`
@@ -509,4 +508,4 @@ _Implementation detail:_ the call a device is in is kept in `sessionStorage`
 under `weave-call` as `{ space, call }`, so after a reload the page can offer to
 rejoin while the call is still going on.
 
-_Source: `packages/core/src/calls/calls.ts`, `packages/core/src/schemas/index.ts` (`call`). Tests: `packages/core/tests/calls.test.ts`._
+_Source: `packages/core/src/calls/calls.ts`, `packages/core/src/schemas/library/publishing.ts` (`call`). Tests: `packages/core/tests/calls.test.ts`._

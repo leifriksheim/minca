@@ -196,13 +196,18 @@ async function withNode(globals: Globals, work: (node: P2PNode) => Promise<numbe
   }
 }
 
-/** Says when the relay refuses this node, as another process with the same key holds the room (#55), and when it lets it in */
+/**
+ * Says when the relay refuses this node, as a socket with the same key holds
+ * the room — left from a process that crashed, or the agent's folder copied to
+ * another machine — and when it lets it in. Two agents on one computer can't
+ * both run: the agent key is locked to one process.
+ */
 const sayRelayRefusal = (node: P2PNode, who: string, meanwhile: string) =>
   watchRelayRefusal(node, (refused) =>
     stderr(
       refused
-        ? `${who}: the relay refused this node: another \`weave agent\`, \`weave mcp\` or \`weave run\` with the ` +
-            `same --home is connected. ${meanwhile} (\`ps aux | grep weave\`).`
+        ? `${who}: the relay refused this node: something else is connected with this agent's key — ` +
+            `a process that crashed, until the relay lets go of it, or a copy of this agent's folder elsewhere. ${meanwhile}.`
         : `${who}: connected to the relay.`,
     ),
   );
@@ -849,7 +854,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     stderr(
       `weave mcp: an agent for ${agent.grant.name} (${agent.grant.did}), ${daysLeft(agent.grant)} days left`,
     );
-    // Every agent process on this computer signs with the one agent key, and a relay lets one of them in.
+    // A socket left with the agent's key, or a copy of the agent elsewhere, keeps this one out of a relay's rooms.
     sayRelayRefusal(agent.node, 'weave mcp', 'Writes are kept here and sync once that one stops');
     await runMcpStdio(agent.node, { name: 'weave', version: VERSION }, { agent: true });
     await agent.close();

@@ -839,7 +839,9 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 A definition's `version` is a whole number from 1. Records do not name the
 definition version they were written under; a record is judged by the
 definition **in force as of the access changes it saw** (`seen`), which every
-peer computes the same way ([03 — Spaces](03-spaces.md)).
+peer computes the same way, and by the rules of any later change to it that
+it had not seen and that did not keep it ([03 — Spaces](03-spaces.md) §5.2
+step 10).
 
 The definition in force for a collection is the latest change to
 `collection:<name>` that counted in the access-history replay — not the one
@@ -894,7 +896,8 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 >   its content and never changes; a new one names `supersedes: <hash>`, and
 >   `sys.collection` becomes a pointer from a name to the current hash. Each
 >   record may store the hash it was written against. Today a record is
->   judged by the definition in force as of `seen` (§6.3) and names none: a
+>   judged by the definition in force as of `seen`, and by narrowing changes
+>   it had not seen (§6.3), and names none: a
 >   writer-chosen definition was removed because a writer could name an
 >   older, looser one (vote ten times under a definition from before "one
 >   vote per person"). So a pin **adds** a check and never removes one: a

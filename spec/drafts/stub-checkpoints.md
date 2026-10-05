@@ -258,9 +258,9 @@ forgetting content, which is the point of stubs (02 §4.9).
 
 Also related: Git's shallow clones (a cut the client chooses, trusted
 because it is local), and Hypercore and Certificate Transparency's signed tree
-heads (a signer vouches for a prefix), which is closest to §3 and to signed
-writer logs (#13). Once writer logs land, a checkpoint could cite a log
-position instead of a chain.
+heads (a signer vouches for a prefix), which is closest to §3. Writers' logs
+have landed (02 §4.10): a checkpoint could cite a writer's log position
+instead of a chain.
 
 ## 6. Migration
 
@@ -330,9 +330,12 @@ dropped. Worth doing for canvases and chats with many deletes. It touches
 - **Anchors that may be withdrawn** (§4.4): require a root-written anchor?
 - **Private spaces** (§4.5): `anchor` and `seq` in the clear?
 - **The switch** (§6): per space, or per collection in its definition?
-- **Interaction with #13** (signed writer logs): a log entry below a
-  checkpoint is "proven superseded" by the checkpoint, so completeness still
-  holds. Check that once #13's design settles.
+- **Interaction with writers' logs** (02 §4.10): a node holding a
+  collection lacks nothing a writer's line there names only if it holds every
+  stub the lines name. A stub dropped below a checkpoint is named by the next
+  version's `log.prev` or `log.c.prev`, and is fork evidence (03 §6.5), so a
+  checkpoint must stand in for it in both: completeness counts it as held, and
+  a fork or break below it can no longer be proven.
 
 ## 9. Tests it would need
 
