@@ -414,7 +414,9 @@ message to every connected peer of the space, once per peer, over whichever
 network that peer was last connected on. With `to`, it goes only to peers
 whose session DID equals `to` (one device), or whose account DID, as learned
 from their `who`, equals `to` (every device of that account); a peer whose
-`who` has not been checked yet is matched by session DID only. An agent's node
+`who` has not been checked yet is matched by session DID only. In a private
+space, nothing goes to someone removed or who left, and nothing from them is
+emitted. An agent's node
 refuses `send` ([acting as an agent](#a-node-acting-as-an-agent)). The wire
 format, the per-peer allowance (a burst of 60, then 20 per second) and how the
 sender's account is established are in
