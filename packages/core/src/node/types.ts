@@ -61,7 +61,7 @@ export interface NodeConfig {
   readonly network?: NodeNetworkConfig;
   /** How long each session delegation lasts. Renewed before it runs out. Default 3600. */
   readonly sessionTtlSeconds?: number;
-  /** The key this node signs with, when the signer already named it (an app an account home delegated to). Default: a fresh one */
+  /** The key this node signs with, when the signer already named it (an app an account home delegated to). Default: one claimed from `writerKey`, else a fresh one */
   readonly sessionKey?: CryptoKeyPair;
   /**
    * Where to keep a signing key across runs, so this device keeps one log in
@@ -366,7 +366,7 @@ export interface NodeSpaces {
   preview(invite: string): InvitePreview;
   /** Joins a space from an invite. `memberKey`, for a node without the account key, lets a new key of the space reach it */
   join(invite: string, options?: { readonly memberKey?: Uint8Array }): Promise<SpaceSummary>;
-  /** Forgets a space on this node, with its key. Your role stays: `setMember` yourself to null to give it up */
+  /** Gives up the account's place in a space (its own member record, with no role), then forgets it on this node with its key */
   leave(spaceId: string): Promise<void>;
   /** Roles, members and invites, as the space's access history says now */
   access(spaceId: string): Promise<SpaceAccess>;

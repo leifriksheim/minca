@@ -761,6 +761,13 @@ checks the proof and shows Bob flagged; Alice decides whether to remove him.
 > (§6.4) and a person's place (§6.1); a warrant puts the proof in front of the
 > people who can use them.
 
+> **Planned:** more kinds. A `note` kind (a version under a note made out to
+> another key, or not covering what it writes) once there is an account to
+> hold to it; and kinds for keys that belong to their creator
+> ([#72](https://github.com/leifriksheim/weave/issues/72)) and chains that
+> travel ([#17](https://github.com/leifriksheim/weave/issues/17)). Tracked in
+> [#148](https://github.com/leifriksheim/weave/issues/148).
+
 _Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-runtime.ts` (`warrantVerdict`, `evidenceHolds`, `standingBroken`, `violationIn`, `warrantIfDue`, `flagged`, `admit`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`, `warrantKey`), `packages/core/src/space/roles.ts` (`refusal`). Tests: `packages/core/tests/warrants.test.ts`._
 
 ---
@@ -1418,8 +1425,10 @@ Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
 
 - Deleting an invite record does not close it; planned in §7.2
   ([#20](https://github.com/leifriksheim/weave/issues/20)).
-- That every peer reaches the same access state under any interleaving is
-  pinned only by the conflict tests of §4; a randomized convergence test is
+- That every peer reaches the same access state under any interleaving
+  through real sync (partitions and heals, the gatekeeper, waiting versions)
+  is not yet tested; the replay alone is, against a reference, over random
+  histories ([05](05-sync-and-storage.md) §8). Tracked in
   [#10](https://github.com/leifriksheim/weave/issues/10).
 - Content-addressed definitions
   ([#11](https://github.com/leifriksheim/weave/issues/11)), which would pin

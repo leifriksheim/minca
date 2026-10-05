@@ -261,7 +261,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     proof: () => current.encoded,
   };
   // A key made here dies with the node, and its places in each log with it. A
-  // claimed key keeps them in its slot; one handed in (an agent's) in the
+  // claimed key keeps them in its slot; one handed in (an agent's, an app's) in the
   // node's stores (`node/writers.ts`).
   const handedIn = await config.stores('writers');
   const writers = createWriters((did) =>

@@ -83,8 +83,9 @@ under **Planned** in each part. Library work that isn't protocol:
   `where`, a misspelled collection name as a compile error, typed link roles,
   types generated from a space's stored definitions, and a dev-time warning
   when declared schemas differ from the space's catalogue.
-- **Typed collections.** One TypeScript builder that emits the schema, the
-  rules and the types, and typed handles (`node.use(space, Poll)`).
+- **Typed handles.** `collection()` already emits the schema, the rules and
+  the types from one builder; what's left is a handle bound to a space,
+  `node.use(space, Poll)`.
 - **Definitions that update themselves.** `useSchemas` and `applyBlueprint` applying
   harmless changes, with `differences()` in `packages/core/src/schemas/blueprints.ts`
   replaced by the planned `compare` ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md),

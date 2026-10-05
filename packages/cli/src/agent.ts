@@ -343,9 +343,10 @@ export async function saveModelKey(home: string, key: string, provider = 'anthro
 }
 
 /**
- * Calls `onChange(true)` when every relay refused this agent because another
- * process with the same agent key holds the room, and `onChange(false)` once
- * one lets it in again. Otherwise it would sit there looking connected (#55).
+ * Calls `onChange(true)` when every relay refused this agent because a socket
+ * with the same agent key holds the room — one left from a crash, or a copy of
+ * the agent elsewhere — and `onChange(false)` once one lets it in again.
+ * Otherwise it would sit there looking connected (#55).
  */
 export function watchRelayRefusal(node: P2PNode, onChange: (refused: boolean) => void): () => void {
   let refused = false;

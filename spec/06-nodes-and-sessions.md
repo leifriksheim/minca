@@ -769,7 +769,8 @@ _Source: `packages/core/src/space/notify.ts`, `packages/core/src/node/node.ts` (
 > space, so carriers change only in computing one tag per value. Tracked in
 > [#141](https://github.com/leifriksheim/weave/issues/141).
 
-> **Planned: Web Push, to a closed app or a phone.** Today only an app that
+> **Planned: Web Push, to a closed app or a phone.** Issue:
+> [#60](https://github.com/leifriksheim/weave/issues/60). Today only an app that
 > is running shows a match (§2.11), so nothing reaches a device where it is
 > closed, and an app with `scope: spaces`, which cannot read the registry,
 > shows nothing. The plan:

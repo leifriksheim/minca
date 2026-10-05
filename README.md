@@ -98,6 +98,8 @@ const signed = await createSigner(provider).sign(
     space: space.id,
     body: { text: 'Hello, decentralized world!' },
     proof: ucan.encoded,
+    // This key's first version here: its place in its log (spec 02 §4.10). A node keeps count for you.
+    log: { n: 0, c: { n: 0 } },
   }),
   session.privateKey,
 );

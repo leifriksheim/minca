@@ -263,9 +263,9 @@ this one own the use; this table is the registry.
 | `weave/contacts/nonce/v1`               | as above                                  | vault key bytes                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:93,104` | 03     |
 | `weave/contacts/key/v1`                 | as above                                  | vault key bytes                                                                      | AES-256-GCM space key      | Contacts space                                               | `space/account-registry.ts:93,105` | 03     |
 | `weave/topic-tags/v1`                   | HKDF → HMAC-SHA256 key                    | raw space key (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:225`        | 04     |
-| `weave-agent-link-room-v1`              | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                          | room id                    | Agent link room                                              | `session/agent-link.ts:24`         | 06     |
-| `weave-agent-link-key-v1`               | HKDF, L=32                                | 16-byte connect-code secret                                                          | AES-256-GCM key            | Agent link messages                                          | `session/agent-link.ts:25`         | 06     |
+| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:233`        | 04     |
+| `weave-agent-link-room-v1`              | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                          | room id                    | Agent link room                                              | `session/agent-link.ts:26`         | 06     |
+| `weave-agent-link-key-v1`               | HKDF, L=32                                | 16-byte connect-code secret                                                          | AES-256-GCM key            | Agent link messages                                          | `session/agent-link.ts:27`         | 06     |
 
 Strings that separate _signed messages_ or _AEAD contexts_ rather than derive
 keys, listed so new labels do not collide with them. _docs_ marks a label used
@@ -273,18 +273,18 @@ by a convention built on the protocol (`packages/core/docs/`), not by it:
 
 | String                                                 | Kind                                             | Defined in                                                    | Part   |
 | ------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- | ------ |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:208`                                   | 03     |
-| `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:206`                                   | 03     |
-| `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:193`                                   | 03     |
-| `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:195`                                   | 03, 04 |
-| `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1546`                                           | docs   |
+| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:215`                                   | 03     |
+| `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:213`                                   | 03     |
+| `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:200`                                   | 03     |
+| `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:202`                                   | 03, 04 |
+| `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1549`                                           | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>`           | Sealing context (the text)                       | `privacy/direct.ts:37`                                        | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>\|<reader>` | `sealFor` context (one reader's box)             | `privacy/direct.ts:41`                                        | docs   |
 | `weave/knock/v1\|<doorKey>`                            | `sealFor` context                                | `doors/doors.ts` (`sealKnock`)                                | 07     |
 | `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07     |
 | `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                     | `doors/doors.ts` (`signAnswer`)                               | docs   |
-| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:185,187`                                | 04     |
-| `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:297`                                    | 04     |
+| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:190,192`                                | 04     |
+| `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:302`                                    | 04     |
 | `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                | `session/hosting.ts:78,340`                                   | 06     |
 
 Notes:
@@ -302,16 +302,16 @@ Notes:
 
 ## 6. Keys and signers
 
-| Key                  | How made                                            | Lifetime                   | Signs                                   |
-| -------------------- | --------------------------------------------------- | -------------------------- | --------------------------------------- |
-| **Root key**         | `P256KeyFrom(seed)`                                 | The account's              | UCANs only (§7)                         |
-| **Session key**      | Fresh random P-256 key pair                         | One node run               | Records, peer-auth messages             |
-| **App key**          | Fresh random P-256 key pair kept by an app          | Until the app forgets it   | Records, under a grant                  |
-| **Agent key**        | Fresh random P-256 key pair kept by an agent        | Until the agent forgets it | Records, under a records-only note (§8) |
-| **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`         | The account's              | Nothing; ECDH only (§9)                 |
-| **Member key**       | `ScalarFrom(HKDF(vaultKey, member label, 48))`      | The account's              | Nothing; ECDH only (§9)                 |
-| **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`      | Until the door is closed   | Nothing; ECDH only (§9)                 |
-| **Door signing key** | `ScalarFrom(HKDF(contactKey, door sign label, 48))` | Until the door is closed   | Purge challenges and knock answers (07) |
+| Key                  | How made                                                        | Lifetime                                     | Signs                                   |
+| -------------------- | --------------------------------------------------------------- | -------------------------------------------- | --------------------------------------- |
+| **Root key**         | `P256KeyFrom(seed)`                                             | The account's                                | UCANs only (§7)                         |
+| **Session key**      | A lasting P-256 key claimed under a lock, else fresh (02 §4.10) | While the device keeps it, else one node run | Records, peer-auth messages             |
+| **App key**          | Fresh random P-256 key pair kept by an app                      | Until the app forgets it                     | Records, under a grant                  |
+| **Agent key**        | Fresh random P-256 key pair kept by an agent                    | Until the agent forgets it                   | Records, under a records-only note (§8) |
+| **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§9)                 |
+| **Member key**       | `ScalarFrom(HKDF(vaultKey, member label, 48))`                  | The account's                                | Nothing; ECDH only (§9)                 |
+| **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`                  | Until the door is closed                     | Nothing; ECDH only (§9)                 |
+| **Door signing key** | `ScalarFrom(HKDF(contactKey, door sign label, 48))`             | Until the door is closed                     | Purge challenges and knock answers (07) |
 
 The root key signs exactly one kind of thing: a UCAN delegating to another key.
 It MUST NOT be used to sign records directly in normal operation. (A record
@@ -534,9 +534,9 @@ record needs, and that the root DID is allowed in the space
 the intended check for a chain of any length up to 10.
 
 > **Known defect:** a record carries only its leaf token in `proof`, and the
-> reference wires no proof resolver for records — the capability gate and
-> `packages/core/src/node/space-runtime.ts` pass `() => null`
-> (`packages/core/src/validation/capability-gate.ts`). So a chain deeper than one link never
+> reference wires no proof resolver for records — the capability gate
+> defaults to `() => null` (`packages/core/src/validation/capability-gate.ts`),
+> and `packages/core/src/network/peer-auth.ts` passes it too. So a chain deeper than one link never
 > validates on a record; only tokens issued directly by the root (`prf: []`)
 > do. A fix will define how parents travel and resolve them.
 > Tracked in [#17](https://github.com/leifriksheim/weave/issues/17), [#19](https://github.com/leifriksheim/weave/issues/19).
@@ -1165,6 +1165,3 @@ _Tests:_ `packages/core/tests/pairing.test.ts`.
   key event log synced like records) is issue
   [#9](https://github.com/leifriksheim/weave/issues/9). It would change
   the DID format everywhere a root appears.
-- Account-level revocation of a root delegation is by CID (`noteCid`); its
-  record format belongs to [03 — Spaces](03-spaces.md) and
-  [06](06-nodes-and-sessions.md).

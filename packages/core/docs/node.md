@@ -37,8 +37,9 @@ _Source: `packages/core/src/node/types.ts` (`NodeConfig`, `NodeNetworkConfig`, `
 
 Starting a node does the following, in order:
 
-1. Uses `config.sessionKey`, or generates a fresh P-256 key pair. Its DID
-   (`did:key`, P-256 multicodec) is `sessionDid`.
+1. Uses `config.sessionKey`; else claims a lasting key from `config.writerKey`
+   ([writer keys](#writer-keys)); else generates a fresh P-256 key pair for this
+   run. Its DID (`did:key`, P-256 multicodec) is `sessionDid`.
 2. Asks `config.signer.delegate` for a session note ([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)) and waits for it.
    If the signer refuses, `createNode` fails.
 3. Schedules renewal of the note ([renewing the session note](#renewing-the-session-note)).
@@ -412,9 +413,9 @@ record, then tries to use the invite's role secret at once. If the space's
 invite record has not reached this device yet, the space is held with
 `joining: true` and the node tries again each time records arrive in it.
 
-**Leaving.** `spaces.leave(id)` deletes the `sys.joined` record, closes the
-space and forgets it with its key. It does not give up the account's role in
-the space; to do that, `setMember(id, self, null)` first.
+**Leaving.** `spaces.leave(id)` gives up the account's place in the space,
+then deletes the `sys.joined` record, closes the space and forgets it with its
+key ([leaving a space](#leaving-a-space)).
 
 _Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `remember`, `forget`, `finishJoining`, `publishProfile`, `spaces`), `packages/core/src/space/space-manager.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/profiles.test.ts`, `packages/core/tests/space-access.test.ts`._
 
