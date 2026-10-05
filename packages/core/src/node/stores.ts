@@ -2,9 +2,10 @@
  * @module node/stores
  * Where a node keeps its data.
  *
- * A node needs two kinds of store: one registry listing the spaces it holds
- * (and their keys), and one store per space. It asks for them by path —
- * `registry`, `spaces/<id>` — and a {@link StoreFactory} decides what a path
+ * A node needs a registry listing the spaces it holds (and their keys), one
+ * store per space, and one for where its lasting keys are in their logs. It
+ * asks for them by path — `registry`, `spaces/<id>`, `writers` — and a
+ * {@link StoreFactory} decides what a path
  * means: a database in this browser, a directory in a data folder, a directory
  * on a server's disk.
  */

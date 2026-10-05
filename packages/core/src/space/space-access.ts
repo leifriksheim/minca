@@ -174,6 +174,8 @@ export const memberKey = (did: string) => hashedKey('member', did);
 export const inviteKey = (inviteDid: string) => hashedKey('invite', inviteDid);
 /** The key of the record revoking a note, from the note's CID */
 export const revokeKey = (noteCid: string) => hashedKey('revoke', noteCid);
+/** The key of the record proving a writer's log forked, from the writer's key */
+export const forkKey = (writerDid: string) => hashedKey('fork', writerDid);
 /** The key of a role's record */
 export const roleKey = (name: string) => `role:${name}`;
 /**

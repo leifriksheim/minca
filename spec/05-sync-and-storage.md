@@ -246,7 +246,7 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 6` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 7` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
@@ -256,7 +256,9 @@ whose `type` is not a string. It MUST NOT answer it.
 > Version 5 came with the envelope of [02 §3.2](02-records.md): a version
 > signs its body's hash, not its body, so a peer speaking 4 would refuse every
 > version a peer speaking 5 sends. Protocol 6 renamed `push-update`'s
-> `expression` member to `version`.
+> `expression` member to `version`. Protocol 7 came with writers' logs
+> ([02 §4.10](02-records.md)): every version in a space carries `log`, and a
+> peer speaking 7 refuses every version a peer speaking 6 writes.
 
 Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
@@ -677,40 +679,37 @@ _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space")
 `packages/core/src/space/roles.ts` (`Keeper`, `checkKeepers`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts`
 ("holding part of a space")._
 
-### 9.1 Planned: completeness from signed writer logs
+### 9.1 Planned: completeness from writers' logs
 
 > **Planned** ([#13](https://github.com/leifriksheim/weave/issues/13)). Not
 > normative. Replaces the library's definition of **complete**
 > ([docs](../packages/core/docs/node.md#holding-part-of-a-space)).
 
-Every writer keeps a signed, append-only log per `(account, writer, space,
-collection)`, `sys.*` included; each version carries its writer id, its
-position `n`, and a Merkle Mountain Range root over entries `0..n` (new
-envelope fields, to be specified in [02 — Records](02-records.md) with the
-version format; 02 §4.7 names the overlap). Logs add checks; they
-do not change which version wins. What changes here:
+Every key's versions in a space already form one line, its log, and a fork in
+it is proven and withdrawn ([02 §4.10](02-records.md)). What completeness adds
+on top: each version also carries a Merkle Mountain Range root over the
+writer's entries `0..n`, so a writer's head commits to everything before it.
+Logs add checks; they do not change which version wins. What changes here:
 
-- **Heads in `hello`.** Peers exchange the highest signed `(n, root)` they
-  hold per log, for the collections both hold.
-- **Complete.** A collection is complete when, for every log, taking the
-  highest head seen from **any** peer, each entry `0..n` is held, or proven
-  superseded by a later version of the same record that is held. Superseded
-  entries are the **stubs** a store already keeps (§10), so logs stay
-  checkable while bodies are forgotten.
+- **Heads in `hello`.** Peers exchange the highest `(n, root)` they hold per
+  writer, for the spaces both hold.
+- **Complete.** A collection is complete when, for every writer, taking the
+  highest head seen from **any** peer, each entry `0..n` in that collection is
+  held, or proven superseded by a later version of the same record that is
+  held. Superseded entries are the **stubs** a store already keeps (§10), so
+  logs stay checkable while bodies are forgotten.
 - **What it guarantees.** One keeper can still hide a writer's newest entries
   if no other peer has seen them. Withholding then needs every peer the reader
   syncs with to collude. It is not a guarantee.
-- **`prove`.** A new message, `prove { log, n }` → `{ envelope, proof }`,
-  serves one version with an MMR proof against a signed head, so a cache can
-  check a single record without syncing the collection. Useful on its own.
-- **Legacy.** Versions without log fields are accepted, but a collection
-  holding any is never complete.
+- **`prove`.** A new message, `prove { writer, n }` → `{ envelope, proof }`,
+  serves one version with an MMR proof against a head, so a cache can check a
+  single record without syncing the collection. Useful on its own.
 
-Depends on: the log fields, and a fork rule (two entries at the same `n`
-freeze the log, and the proof spreads as a `sys.fork` record), both still to
-be written into 02. Open: how heads are
-encoded in `hello` without breaking its 1,000-collection bound, and how many
-heads a hello may carry.
+Open: a log spans every collection a key writes in, while a node may hold only
+some; whether a leaf commits to `(id, collection)` so a partial holder can tell
+which entries it should hold; how heads are encoded in `hello` without breaking
+its 1,000-collection bound, and how many heads a hello may carry. Needs keys
+that outlive their node (02 §4.10, Planned), or each log is one run long.
 
 ### 9.2 Planned: caches that fetch by key, and hold subsets
 
@@ -1172,7 +1171,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 6                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 7                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

@@ -49,6 +49,8 @@ import type { BlobStore } from '../storage/blob-store.js';
 import { createMirror, type Mirror } from '../storage/mirror.js';
 import type { FolderAdapter } from '../storage/folder-adapter.js';
 import { createVersionCheck } from '../validation/check-version.js';
+import type { Writers } from './writers.js';
+import { checkFork, forkProof } from '../records/fork.js';
 import {
   encryptVersion,
   decryptVersion,
@@ -88,6 +90,7 @@ import {
   roleKey,
   signInvite,
   verifyInvite,
+  forkKey,
 } from '../space/space-access.js';
 import {
   ACCESS_COLLECTIONS,
@@ -99,6 +102,7 @@ import {
   RELAYS_COLLECTION,
   checkRelays,
   KEEPERS_COLLECTION,
+  FORK_COLLECTION,
   checkKeepers,
   type Keeper,
   MEMBER_COLLECTION,
@@ -175,6 +179,7 @@ const IN_THE_CLEAR = new Set([
   MEMBER_KEY_COLLECTION,
   RELAYS_COLLECTION,
   KEEPERS_COLLECTION,
+  FORK_COLLECTION,
 ]);
 
 /** Which collection each access record key belongs to */
@@ -187,6 +192,7 @@ const ACCESS_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['key:', KEY_COLLECTION],
   ['relays:', RELAYS_COLLECTION],
   ['keepers:', KEEPERS_COLLECTION],
+  ['fork:', FORK_COLLECTION],
 ];
 
 /** How many records a keep list may name */
@@ -272,6 +278,8 @@ export interface ActiveSession {
 
 export interface SpaceRuntimeDeps {
   readonly record: SpaceRecord;
+  /** The logs of the keys this node signs with: one line per key and space (`node/writers.ts`) */
+  readonly writers: Writers;
   readonly stores: StoreFactory;
   readonly provider: CryptoProvider;
   readonly signer: Signer;
@@ -682,6 +690,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           return null;
         return { ...base, keep: [], kind: 'relays', relays: body.relays };
       }
+      case FORK_COLLECTION: {
+        // The proof stands on its own: every peer checks both signatures itself.
+        const fork = await checkFork(body.a, body.b, space.id, provider);
+        if (typeof fork === 'string' || version.key !== (await forkKey(fork.writer))) return null;
+        return { ...base, keep: [], kind: 'fork', writer: fork.writer, from: fork.from };
+      }
       case KEEPERS_COLLECTION: {
         const { keepers } = body;
         const copies = body.copies ?? null;
@@ -1009,7 +1023,18 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ok: false,
         reason: `A ${version.collection} record is final: it can't be edited or deleted`,
       };
-    const judged = history.judge({ id: version.id, root, seen, note: await noteOf(version) }, needs, within);
+    const judged = history.judge(
+      {
+        id: version.id,
+        root,
+        seen,
+        note: await noteOf(version),
+        writer: version.author,
+        ...(version.log ? { at: version.log.n } : {}),
+      },
+      needs,
+      within,
+    );
     // Withdrawn by a later change: still judged on everything else, since it
     // is kept and others may cite it.
     if (!judged.ok && !judged.withdrawn) return judged;
@@ -1206,6 +1231,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // Not cached with the signature's verdict: a copy with another body shares the id and signature.
     const problem = await bodyProblem(version);
     if (problem) return { ok: false, reason: problem };
+    // Whatever its key signed takes a place in that key's log, allowed or not: a second at one place is a fork.
+    if ((await judge(version)).verified) await placeInLog(version);
     if (version.retain && isStub(version))
       return { ok: false, reason: 'A version its writer retained travels whole' };
     const chain = await chainStanding(version);
@@ -2460,41 +2487,47 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // Every version under a check: it reads the one before, and others cite it.
       (!deleted && !!definition?.rules?.check?.length);
 
-    const { history, events: held } = await access();
-    const signed = await signer.sign(
-      createVersion({
-        author: writer.did,
-        collection,
-        space: space.id,
-        body: payload,
-        proof: writer.proof(),
-        version,
-        retain,
-        deleted,
-        seen: history.heads(),
-        // In the clear only where the body is: a private space sealed them above.
-        ...(space.visibility === 'public' && !deleted && links.length ? { links } : {}),
-        ...(tags.length ? { tags } : {}),
-      }),
-      writer.key,
-    );
-
-    // The same verdict every other peer will reach: refused here, with the reason, rather than there.
-    const judged = await judge(signed);
-    if (!judged.verified) throw new Error(judged.reason ?? 'This key may not write here.');
-    if (ACCESS_COLLECTIONS.has(collection)) {
-      const event = await toEvent(signed);
-      if (!event) throw new Error('That is not a well-formed change to who may do what');
-      const status = (history.extend(event) ?? replayAccess(accessGenesis, [...held, event])).status(
-        event.id,
+    // The next place in this key's log here: given back if the version is refused below.
+    const signed = await deps.writers.append(writer.did, space.id, async (log) => {
+      const { history, events: held } = await access();
+      const made = await signer.sign(
+        createVersion({
+          author: writer.did,
+          collection,
+          space: space.id,
+          body: payload,
+          proof: writer.proof(),
+          version,
+          retain,
+          deleted,
+          seen: history.heads(),
+          // In the clear only where the body is: a private space sealed them above.
+          ...(space.visibility === 'public' && !deleted && links.length ? { links } : {}),
+          ...(tags.length ? { tags } : {}),
+          log,
+        }),
+        writer.key,
       );
-      if (status?.status !== 'applied')
-        throw new Error(status?.status === 'dropped' ? status.reason : 'That change could not be made');
-    } else {
-      const stands = await standingOf(signed);
-      if (!stands.ok) throw new Error(stands.reason);
-    }
+
+      // The same verdict every other peer will reach: refused here, with the reason, rather than there.
+      const judged = await judge(made);
+      if (!judged.verified) throw new Error(judged.reason ?? 'This key may not write here.');
+      if (ACCESS_COLLECTIONS.has(collection)) {
+        const event = await toEvent(made);
+        if (!event) throw new Error('That is not a well-formed change to who may do what');
+        const status = (history.extend(event) ?? replayAccess(accessGenesis, [...held, event])).status(
+          event.id,
+        );
+        if (status?.status !== 'applied')
+          throw new Error(status?.status === 'dropped' ? status.reason : 'That change could not be made');
+      } else {
+        const stands = await standingOf(made);
+        if (!stands.ok) throw new Error(stands.reason);
+      }
+      return made;
+    });
     await storage.addVersion(signed);
+    await placeInLog(signed);
     await markPending(signed);
     channel?.postMessage('changed');
     sync.onLocalChange(signed);
@@ -2551,6 +2584,44 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const guard = (collection: string) => {
     if (MANAGED.has(collection)) throw new Error(`${collection} is written by the node itself`);
   };
+
+  // ─── Writers' logs ─────────────────────────────────────────────────
+  //
+  // Every key's writes here form one line (02 §4.10). Each place a key took is
+  // remembered by the version that took it, so a second version at the same
+  // place is found the moment it arrives, and proven to everyone else.
+
+  /** `log/<author>/<n>` → the id of the version that took that place */
+  const LOG_PREFIX = 'log/';
+
+  async function placeInLog(version: Version): Promise<void> {
+    if (version.space !== space.id || !version.log) return;
+    const at = `${LOG_PREFIX}${version.author}/${version.log.n}`;
+    const held = await adapter.get(at);
+    if (!held) {
+      await adapter.put(at, utf8Encode(version.id));
+      return;
+    }
+    const other = utf8Decode(held);
+    if (other === version.id) return;
+    const first = await storage.getVersion(other);
+    if (first) void reportFork(first, version).catch(() => {});
+  }
+
+  /**
+   * Hands every peer the proof that a key forked its log, unless a proof of a
+   * fork at or before this place stands already. Any member may; one whose
+   * note doesn't let it change access leaves it to one whose note does.
+   */
+  async function reportFork(a: Version, b: Version): Promise<void> {
+    const from = a.log?.n;
+    if (from === undefined || closed) return;
+    const known = (await access()).history.forked(a.author);
+    if (known && known.from <= from) return;
+    if (!noteGrants(session.proof(), accessCapability(space.id, FORK_COLLECTION)) || (await cannotWrite()))
+      return;
+    await upsert(FORK_COLLECTION, await forkKey(a.author), forkProof(a, b));
+  }
 
   /** Display order: when a record was created, then its key. It decides nothing. */
   const createdAtOf = async (version: Version) => (await genesisOf(version))?.createdAt ?? version.createdAt;
@@ -2873,6 +2944,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         relays: state.relays.length ? state.relays : relays,
         keepers: state.keepers,
         copies: state.copies,
+        forks: history.forks(),
       });
     },
 

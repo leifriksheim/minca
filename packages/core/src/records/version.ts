@@ -89,6 +89,8 @@ export function checkVersionShape(version: Partial<Version>): string | null {
   ) {
     return `seen must be a list of at most ${MAX_SEEN} version ids`;
   }
+  const logProblem = checkLogShape(version);
+  if (logProblem) return logProblem;
   if (deleted !== undefined && deleted !== true) return 'deleted must be true when present';
   if (retain !== undefined && retain !== true) return 'retain must be true when present';
   if (deleted) {
@@ -99,6 +101,28 @@ export function checkVersionShape(version: Partial<Version>): string | null {
   }
   if (version.links !== undefined) return checkLinks(version.links);
   return null;
+}
+
+/**
+ * Why a version's place in its writer's log is malformed, or null: in a
+ * space every version carries one, `n` a whole number from 0, naming the
+ * writer's previous version from 1 on and nothing at 0 (02 §4.10).
+ */
+function checkLogShape(version: Partial<Version>): string | null {
+  const { log } = version;
+  if (log === undefined)
+    return version.space === undefined
+      ? null
+      : 'A version in a space must carry its place in its writer’s log';
+  if (typeof log !== 'object' || log === null || Array.isArray(log)) return 'log must be an object';
+  const keys = Object.keys(log);
+  if (keys.some((key) => key !== 'n' && key !== 'prev')) return 'log holds only n and prev';
+  if (typeof log.n !== 'number' || !Number.isSafeInteger(log.n) || log.n < 0)
+    return 'A log position must be a whole number from 0';
+  if (log.n === 0) return log.prev === undefined ? null : 'The first place in a log names no previous one';
+  if (typeof log.prev !== 'string' || log.prev.length === 0 || log.prev.length > 128)
+    return 'A later place in a log must name the writer’s previous version';
+  return log.prev === version.id ? 'A version cannot name itself' : null;
 }
 
 /** The parts of a version its place in a record's chain is judged by */
