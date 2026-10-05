@@ -1932,7 +1932,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** A socket to an always-on node, for this space */
   function nodeNetwork(node: string): NetworkManager {
     authenticator ??= createClientAuth(space.id, session, readAccess, provider);
-    const url = `${node}${node.includes('?') ? '&' : '?'}space=${encodeURIComponent(space.id)}`;
+    // The space goes in the query, before any pin in the fragment.
+    const [base = '', ...pin] = node.split('#');
+    const url = `${base}${base.includes('?') ? '&' : '?'}space=${encodeURIComponent(space.id)}${pin.length ? `#${pin.join('#')}` : ''}`;
     const auth = authenticator;
     return createNetworkManager({
       did: session.did,

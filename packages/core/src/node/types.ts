@@ -29,7 +29,7 @@ import type { NotifyWhen } from '../space/notify.js';
 export interface NodeNetworkConfig {
   /** Relays for WebRTC, browsers only. Each space meets in the room named after its id. */
   readonly relays?: ReadonlyArray<string>;
-  /** Always-on nodes to hold a socket to, `ws(s)://host/peer`. The space id is appended. */
+  /** Always-on nodes to hold a socket to, `wss://host/peer`, pinned by `#<DID>` (spec 04 §5.2). The space id is appended. */
   readonly nodes?: ReadonlyArray<string>;
   /** Hosts to look for the account registry at, `https://host`: how a new device with only the recovery code finds its spaces */
   readonly hosts?: ReadonlyArray<string>;

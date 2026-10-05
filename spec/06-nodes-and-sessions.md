@@ -1040,7 +1040,8 @@ anything. It runs the carrier of §4.1–4.2 for every carry space.
 **Reaching a host.** A device resolves `peer` against the host's address
 (`new URL(peer, url + "/")`), reading `https:` as `wss:` and `http:` as `ws:`.
 It MUST NOT use an address that is not `wss://`, except `ws://` on
-`localhost` or `127.0.0.1`. It keeps the resolved address in the
+`localhost`, `127.0.0.1` or `[::1]`, and pins it to the host's key
+([04 §5.2](04-network.md)). It keeps the resolved address in the
 `sys.hosting` record, so the account's other devices have it without asking.
 Every device of the account then holds a socket to that address for every
 space it holds ([04](04-network.md)), as the host carries all of them through
@@ -1048,7 +1049,7 @@ the carry space. A device also holds one, for that space, to each host a space
 it holds pays itself (§4.6). Example: a host at `https://host.example` that
 describes `"peer": "/peer"` is reached at `wss://host.example/peer`, and a
 space `b3kq7zp2f4mhx6ydwa5rtc9n1e` at
-`wss://host.example/peer?space=b3kq7zp2f4mhx6ydwa5rtc9n1e`.
+`wss://host.example/peer?space=b3kq7zp2f4mhx6ydwa5rtc9n1e#<host DID>`.
 
 A device MAY be built with hosts to look for its account registry at before it
 knows which the account uses: that is how a new device with only the recovery

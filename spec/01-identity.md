@@ -283,8 +283,8 @@ by a convention built on the protocol (`packages/core/docs/`), not by it:
 | `weave/knock/v1\|<doorKey>`                            | `sealFor` context                                | `doors/doors.ts` (`sealKnock`)                                | 07     |
 | `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07     |
 | `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                     | `doors/doors.ts` (`signAnswer`)                               | docs   |
-| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:164,166`                                | 04     |
-| `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:273`                                    | 04     |
+| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:185,187`                                | 04     |
+| `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:297`                                    | 04     |
 | `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                | `session/hosting.ts:78,340`                                   | 06     |
 
 Notes:

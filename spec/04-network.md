@@ -440,12 +440,37 @@ space**, to
 e.g. `wss://node.example.com/peer?space=abc123`. The node appears as a
 single peer, named by its session DID.
 
+**The URL.** A node URL MUST be `wss://`, or `ws://` only to `localhost`,
+`127.0.0.1` or `[::1]`: anywhere else, someone on the way could answer in the
+node's place. A client MUST refuse any other URL without dialling it.
+
+**Pinning the node.** A node URL MAY pin the node by a DID in its fragment:
+
+```
+wss://node.example.com/peer#did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169
+```
+
+The fragment is the DID itself, percent-decoded. The client strips it before
+dialling, so the node never sees it, and puts `?space=` before it. A fragment
+that is not a `did:key:` makes the URL unusable. With a pin, the client MUST
+refuse (close `4002`) a welcome unless:
+
+- the node DID is the pinned DID (a node that signs with its own key, as a
+  host does); or
+- the welcome's `note` is a valid delegation (01 §7.5) whose audience is the
+  node DID and whose root is the pinned DID. This is how a node whose session
+  key changes on restart, such as `weave run`, is pinned by its account.
+
+A client SHOULD pin a host by the key its `sys.hosting` record names, or, for
+a host it only knows by address, by the `did` its description gives
+([06](06-nodes-and-sessions.md)).
+
 The handshake is three text frames, then binary frames either way:
 
 ```
 1. node   → client   {"type":"challenge","nonce":<Nₛ>,"did":<node DID>}
 2. client → node     {"type":"hello","did":<client session DID>,"nonce":<N꜀>,"sig":…,"read"?:…,"readKey"?:…,"member"?:…,"earlier"?:[…]}
-3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>}
+3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>,"note"?:<the node's delegation>}
 4. binary frames of UTF-8 JSON, either way
 ```
 
@@ -461,15 +486,7 @@ The proof fields and what is signed are in §6.1. The client:
 
 How the reference client redials is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-> **Planned:** a node you can pin, and no plain `ws://` off this machine.
-> Today the client trusts whichever node DID the challenge names (§6.1). A
-> client will be able to pin the node's DID in the node URL, and refuse a
-> welcome from any other. It will refuse a `ws://` node URL except to
-> `localhost`, `127.0.0.1` or `[::1]`, as `sys.relays` already does (§4).
-> Open question: the form of the pin in the URL (a query parameter or the
-> fragment). Tracked in [#32](https://github.com/leifriksheim/weave/issues/32).
-
-_Source: `packages/core/src/network/ws-transport.ts`, `packages/core/src/node/space-runtime.ts` (network setup), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts`, `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts`._
+_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`), `packages/core/src/node/node.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
 
 ### 5.3 The `/peer` endpoint (node side)
 
@@ -537,10 +554,15 @@ W  = "weave-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
   also check the read proof (§6.3) over the same `H`.
 - The welcome carries `sig` = node session key signs `W`. The client MUST
   verify it against the node DID from the challenge.
+- A node whose key acts for an account SHOULD also send its delegation as
+  `note`, so a client can pin the account (§5.2). It is not covered by `sig`
+  and need not be: it is checked on its own, and binds to the node DID that
+  `sig` verified.
 
 > Rationale: naming the node in `H` keeps a hello from being replayed to a
 > different node; `W` proves the welcome comes from the node that issued the
-> challenge. Which node to trust at all is the client's choice of URL.
+> challenge. Which node to trust at all is the client's choice of URL, and its
+> pin (§5.2).
 
 _Source: `packages/core/src/network/peer-auth.ts` (`createClientAuth`, `createServerAuth`). Tests: `packages/core/tests/ws-transport.test.ts` ("a public space", "a private space", "a node that does not welcome properly is refused"), `packages/core/tests/key-change.test.ts` ("the current key lets you in; an old one only with a note…")._
 

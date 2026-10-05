@@ -962,7 +962,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // checked against the read key the space's history names now. The
       // welcome is signed by the key this node introduces itself with.
       const read = record.space.visibility === 'private' ? (await runtime(spaceId)).readAccess() : null;
-      return createServerAuth(spaceId, read, sessionKeys.privateKey, provider);
+      return createServerAuth(spaceId, read, sessionKeys.privateKey, provider, () => session.proof());
     },
   });
 
@@ -1357,12 +1357,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   // recovery code finds its registry there, and every space from it.
 
   /** Each host's socket address, as its description said: asked once, and again after a failure */
+  /** A node address pinned to a key (spec 04 §5.2); one without a key to pin stays as it is */
+  const pinnedTo = (address: string | null, did: string | undefined): string | null =>
+    address && did?.startsWith('did:key:') ? `${address.split('#')[0]}#${did}` : address;
   const describedPeers = new Map<string, Promise<string | null>>();
   function describedPeer(url: string): Promise<string | null> {
     let found = describedPeers.get(url);
     if (!found) {
       found = describeHost(url).then(
-        (description) => hostPeerAddress(url, description),
+        (description) => pinnedTo(hostPeerAddress(url, description), description.did),
         () => {
           describedPeers.delete(url);
           return null;
@@ -1372,9 +1375,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     }
     return found;
   }
-  /** A host's socket address: the one written down with it, or its description's */
-  const peerOf = async (host: { url: string; peer?: string }): Promise<string | null> =>
-    (host.peer ? hostPeerAddress(host.url, { peer: host.peer }) : null) ?? describedPeer(host.url);
+  /**
+   * A host's socket address: the one written down with it, or its
+   * description's. Pinned to the key written down with it when there is one,
+   * else the key it described itself with, so another node answering there is refused.
+   */
+  const peerOf = async (host: {
+    url: string;
+    peer?: string;
+    host?: string;
+    did?: string;
+  }): Promise<string | null> => {
+    const address =
+      (host.peer ? hostPeerAddress(host.url, { peer: host.peer }) : null) ?? (await describedPeer(host.url));
+    return pinnedTo(address, host.host ?? host.did);
+  };
 
   /** What each space was last told to reach, so nothing reconnects when nothing changed */
   const reaching = new Map<string, string>();
@@ -1382,12 +1397,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   /** Gives a space's runtime the hosts to hold sockets to: the account's, and those it pays itself */
   async function reachHosts(
     spaceId: string,
-    spaceHosts?: ReadonlyArray<{ url: string; peer?: string }>,
+    spaceHosts?: ReadonlyArray<{ url: string; peer?: string; did?: string }>,
   ): Promise<void> {
     if (!config.network) return;
     const open = runtimes.get(spaceId);
     if (!open) return;
-    const hosts: Array<{ url: string; peer?: string }> = [...(await hostingRecords())];
+    const hosts: Array<{ url: string; peer?: string; host?: string; did?: string }> = [
+      ...(await hostingRecords()),
+    ];
     if (spaceId === accountSpaceId) hosts.push(...(config.network.hosts ?? []).map((url) => ({ url })));
     if (!ownSpace(spaceId)) hosts.push(...(spaceHosts ?? (await namedHosts(spaceId))));
     const peers = [

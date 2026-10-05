@@ -89,6 +89,10 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
   log(
     `${node.did} listening on port ${served.port}${relays.length ? `, meeting devices at ${relays.join(', ')}` : ''}`,
   );
+  // Pinned to the account, which stays the same when the session key changes on restart.
+  log(
+    `apps dial it at ws://127.0.0.1:${served.port}/peer#${node.did}, or wss://… through TLS from elsewhere`,
+  );
 
   return {
     node,
