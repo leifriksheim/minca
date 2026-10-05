@@ -10,7 +10,7 @@ the docs, a change touches before changing the code.
 
 | Folder                                        |                                                                                               |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07, and its threat model. Normative.    |
+| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07 (normative), and its threat model.   |
 | `packages/core`                               | `@weaveprotocol/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`) |
 | `packages/cli`                                | `@weaveprotocol/cli`: `weave`, the always-on node, hosting, agents, MCP                       |
 | `packages/relay`                              | The signaling relay and its mailbox                                                           |
@@ -102,9 +102,9 @@ two implementations must read it the same way.
 
 Tests show a change does what its author meant. They don't show it can't be
 turned against someone, so they aren't enough. A protocol change is one to
-`spec/`, or to code any spec _Source:_ line cites (`packages/core/src`,
-`packages/relay`, the protocol parts of `packages/cli`, the grant in
-`apps/home`). Before one is called done or merged:
+`spec/`, or to code or tests any spec _Source:_ line cites
+(`packages/core/src`, `packages/core/tests`, `packages/relay`, the protocol
+parts of `packages/cli`, the grant in `apps/home`). Before one is called done or merged:
 
 1. Run the `protocol-reviewer` agent (`.claude/agents/protocol-reviewer.md`)
    on the branch, with nothing about why the change is right. It works from

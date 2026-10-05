@@ -41,6 +41,10 @@ Ask every question in `spec/threat-model.md` §5, for every adversary in its
 §2. That list is the one checklist; it is not repeated here. Hold one
 adversary fixed at a time and ask what it can do with exactly what it holds.
 
+Check the bookkeeping too. Every "Holds" claim the change touches cites a test
+that shows a peer refusing the attack: open the test and check it does. Every
+issue the threat model links says what its bullet says, and links back.
+
 Write each attack as concrete steps: who holds what, what they sign or send,
 and what each honest peer then does. Check each against the spec and the
 code. **Confirm every blocker by running it** as a probe test that shows the

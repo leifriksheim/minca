@@ -3,17 +3,14 @@
 // and the changed files, one per line, from stdin.
 import { readFileSync } from 'node:fs';
 
-// The spec, and the code its Source lines cite.
-const PROTOCOL = [
-  /^spec\//,
-  /^packages\/core\/src\//,
-  /^packages\/relay\/src\//,
-  /^packages\/cli\/src\//,
-  /^apps\/home\/src\//,
-];
+// The spec, and the code and tests its Source lines cite. A change to the first
+// group is always a protocol change; one to the second may say it isn't.
+const PROTOCOL = [/^spec\//, /^packages\/core\/src\//, /^packages\/core\/tests\//, /^packages\/relay\//];
+const NEAR = [/^packages\/cli\/src\//, /^apps\/home\/src\//];
 
 const changed = readFileSync(0, 'utf8').split('\n').filter(Boolean);
-const touched = changed.filter((file) => PROTOCOL.some((pattern) => pattern.test(file)));
+const core = changed.filter((file) => PROTOCOL.some((pattern) => pattern.test(file)));
+const touched = changed.filter((file) => [...PROTOCOL, ...NEAR].some((pattern) => pattern.test(file)));
 if (touched.length === 0) process.exit(0);
 
 /** A section's text, without HTML comments, up to the next heading */
@@ -27,8 +24,8 @@ const problems = [];
 const review = section(body, 'Adversarial review');
 if (!review) problems.push('the **Adversarial review** section is missing or empty');
 if (!section(body, 'Threat model')) problems.push('the **Threat model** section is missing or empty');
-if (touched.some((file) => file.startsWith('spec/')) && /^not a protocol change\.?$/i.test(review))
-  problems.push('it changes spec/, so it is a protocol change');
+if (core.length > 0 && /^not a protocol change/i.test(review))
+  problems.push(`it changes ${core[0]}, so it is a protocol change`);
 
 if (problems.length > 0) {
   console.error(`This PR changes protocol files:\n${touched.map((file) => `  ${file}`).join('\n')}`);
