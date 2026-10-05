@@ -572,7 +572,11 @@ A writer:
   is held by one writer at a time, under a lock, and is never put where
   something else could sign with it too: not in the account's data folder
   ([05](05-sync-and-storage.md) §14), not in a backup, not anything that syncs.
-  A writer that can't lock a key makes one for this run instead.
+  A writer that can't lock a key makes one for this run instead. Where
+  several processes must sign with one key (every tab of an app signs with
+  the app's key, 06 §2.1), they are one writer: each takes every place under
+  one lock they all share, reading the last place from the storage they all
+  share, never from a copy of its own.
 
 A device that keeps its key keeps one log in each space for as long as it
 keeps the key; one that makes a key per run has a new log each run. Both are
