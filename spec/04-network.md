@@ -638,7 +638,10 @@ The verifier:
 1. takes `claimed = readKey` if present, else the current read key;
 2. verifies `read` against `claimed` (a `claimed` not starting with
    `did:key:` fails this step);
-3. accepts if that holds and `claimed` is the current read key;
+3. accepts if that holds and `claimed` is the current read key, except that
+   while a new key is due ([03](03-spaces.md) §9.2) it rejects a prover whose
+   `member` it can open to a valid note, made out to the prover's session DID,
+   whose root account is a **former member** (03 §9.2);
 4. accepts if that holds and it holds the space key whose read key is
    `claimed`, can open `member` with it, the note inside is valid, is made
    out to the prover's session DID, and its root account is a reader of the
@@ -672,6 +675,15 @@ it does; after that it counts as having no account, and is let go of.
 A peer let go of that reconnects is checked like any other, and a removed
 member is then refused (steps 4 and 5 fail).
 
+**While a new key is due.** Until someone who manages the space changes the
+key, a former member (03 §9.2) may still hold the current one. Whenever its
+access history changes, and when a peer's `who` arrives, a verifier that
+knows a new key is due MUST let go of every peer whose `who` shows a former
+member, whatever key it was let in on, and send it nothing more. It SHOULD
+turn away that session when it reconnects, for as long as the key is still
+due. Once a newer key is in force the rule above does the work, and someone
+invited back, who holds the newer key, is let in again.
+
 Example: Carol is removed and the key changes K0 → K1. Carol and Bob are
 both connected, let in on K0. Bob is still a member, so he stays, and learns
 K1 from the history. Carol is no reader, so she is let go of at once, and
@@ -682,8 +694,10 @@ when her node redials with K0 and her note, step 4 refuses her.
 > would still be pushed new versions (sealed, but with their collections,
 > keys and authors in the clear, [03](03-spaces.md) §8.6), live messages,
 > which are not sealed, and whatever the history says next. Until the key
-> changes she may still read, as she holds the current key; a public space
-> asks no read proof, so letting someone go there would keep nobody out.
+> changes she still holds the current key, so the peers that know she is
+> out stop sending to her: only one that hasn't heard yet, or a node whose
+> `who` she withholds, can still reach her. A public space asks no read
+> proof, so letting someone go there would keep nobody out.
 
 > Rationale: someone removed holds the older key too, but is no member. The
 > note sealed under the older key shows which account is asking, and only
@@ -693,7 +707,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`sealWith`, `openWith`), `packages/core/src/space/space-access.ts` (`membershipContext`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `formerMembers`, `cutOff`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`sealWith`, `openWith`), `packages/core/src/space/space-access.ts` (`membershipContext`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
 
 ### 6.4 The account behind a session
 
@@ -922,7 +936,10 @@ account.
 
 A live message reaches whoever is connected in the space right now. It is
 not signed as a record, not stored and not synced; a peer not connected
-misses it. In a private space it reaches only peers that proved the read key.
+misses it. In a private space it reaches only peers that proved the read key,
+and never a former member ([03](03-spaces.md) §9.2): a sender MUST NOT send
+one to a peer whose `who` shows a former member, and a receiver MUST drop one
+from such a peer.
 
 On the wire it is `{"type":"live","from":<session DID>,"payload":<message>}`,
 where `payload` is any JSON value whose `JSON.stringify` is at most 65 536

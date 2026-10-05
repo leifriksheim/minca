@@ -921,7 +921,8 @@ Open questions:
 A private space's key changes when someone loses their place in it, so a
 removed member reads nothing written afterwards. Peers that let the removed
 member in on the old key then let go of them, so nothing more of the space
-reaches them ([04](04-network.md) §6.3).
+reaches them ([04](04-network.md) §6.3). Until the key changes, peers that
+know of the removal stop sending to them anyway.
 
 ### 9.1 Member keys (`sys.memberkey`)
 
@@ -951,10 +952,17 @@ publish it again when it differs from what is published.
 a role that exists (removed, left, their role deleted) and becomes false with
 the next applied `key` event.
 
+A **former member** is an account named by an applied `member` event that is
+not a reader now: removed, left, or holding a role that was removed. Peers
+send them no live messages, and while a key change is due, nothing at all
+([04](04-network.md) §6.3, §9.2).
+
 ### 9.3 Changing the key (`sys.key`)
 
 A member holding `manage` and the current key, seeing `keyDue`, **SHOULD**
-change the key:
+change the key. One whose own change made it due SHOULD change it at once,
+before it writes anything else or closes the space: until then, the one who
+lost their place still reads what others write.
 
 1. generate a new space key `K'`;
 2. `earlier` = `sealWith(K', [base64url(raw) of every key it holds], "weave/space-earlier-keys/v1|<spaceId>|<K'.id>")`;
@@ -999,7 +1007,7 @@ write, and proves it may read with the newest key it holds (see
 [04](04-network.md)). A view-only invite made before a change carries only the
 old key; its holder is not a reader and gets no box.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `rotateKey`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `boxContext`, `earlierKeysContext`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`, `sealFor`). Tests: `packages/core/tests/key-change.test.ts`._
+_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `boxContext`, `earlierKeysContext`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`, `sealFor`). Tests: `packages/core/tests/key-change.test.ts`._
 
 ---
 

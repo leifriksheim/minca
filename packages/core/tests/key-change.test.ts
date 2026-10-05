@@ -182,10 +182,12 @@ describe('removing someone from a private space', () => {
 
     await bob.node.records.put(space, 'app.note', { text: 'after' });
     await until(() => reads(alice, space, 'after'), 6000, 'Alice to read it');
-    // Carol's copy arrives — this hub lets anyone sync — but she can't open it.
-    await until(() => holdsNote(carol, space, 2), 6000, 'the note to reach Carol');
+    // Nobody sends Carol anything more, and she couldn't open it if they did.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(await holdsNote(carol, space, 2), false);
     assert.equal(await reads(carol, space, 'after'), false);
-    assert.equal((await keyChanges(carol, space))?.held, false);
+    // She never even hears that the key changed.
+    assert.equal((await keyChanges(carol, space))?.changes, 0);
     // What was written before stays readable to those still in.
     assert.equal(await reads(bob, space, 'before'), true);
   });
@@ -217,7 +219,7 @@ describe('removing someone from a private space', () => {
     await until(() => reads(bob, space, 'while away'), 6000, 'Bob to catch up');
     // And he writes with the new key, not the one Carol still has.
     await bob.node.records.put(space, 'app.note', { text: 'back' });
-    await until(() => holdsNote(carol, space, 3), 6000, 'the note to reach Carol');
+    await until(() => reads(alice, space, 'back'), 6000, 'Alice to read it');
     assert.equal(await reads(carol, space, 'back'), false);
   });
 
@@ -233,6 +235,72 @@ describe('removing someone from a private space', () => {
     await hold(erin.node, space);
     await joined(erin.node, space);
     await until(() => reads(erin, space, 'after'), 6000, 'Erin to read the new note');
+  });
+
+  test('changes the key before the removal returns, so closing at once leaves nobody reading', async () => {
+    const { alice, bob, carol, space } = await team3();
+    await alice.node.spaces.setMember(space, carol.node.did, null);
+    assert.equal((await keyChanges(alice, space))?.changes, 1, 'changed before it returned');
+    await alice.node.close();
+
+    await until(async () => (await keyChanges(bob, space))?.held === true, 6000, 'Bob to get the new key');
+    assert.equal((await keyChanges(bob, space))?.changes, 1);
+    await bob.node.records.put(space, 'app.note', { text: 'after' });
+    await until(() => reads(bob, space, 'after'), 6000, 'Bob to read his own note');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(await reads(carol, space, 'after'), false);
+  });
+
+  test('the one removed hears no live messages, and is not heard', async () => {
+    const { alice, bob, carol, space } = await team3();
+    const heard: unknown[] = [];
+    const heardFromCarol: unknown[] = [];
+    carol.node.subscribe((event) => {
+      if (event.type === 'message') heard.push(event.message);
+    });
+    bob.node.subscribe((event) => {
+      if (event.type === 'message' && event.from === carol.node.did) heardFromCarol.push(event.message);
+    });
+    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await until(
+      async () => !(await bob.node.spaces.access(space)).members.some((m) => m.did === carol.node.did),
+      6000,
+      'Bob to see Carol removed',
+    );
+
+    await bob.node.spaces.send(space, { text: 'after' });
+    await carol.node.spaces.send(space, { text: 'still here?' });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.deepEqual(heard, []);
+    assert.deepEqual(heardFromCarol, []);
+  });
+
+  test('with nobody here to change the key, the members let go of the one who lost their place', async () => {
+    const { alice, bob, carol, space } = await team3();
+    // Alice, the only one who may change the key, is away.
+    await letGo(alice.node, space);
+    // Carol gives up her place but keeps the space open, holding the key.
+    await carol.node.spaces.setMember(space, carol.node.did, null);
+    await until(
+      async () => (await bob.node.spaces.access(space)).members.length === 2,
+      6000,
+      'Bob to see it',
+    );
+    assert.equal((await keyChanges(bob, space))?.changes, 0, 'no new key yet');
+    await until(
+      async () => (await carol.node.spaces.status(space)).peers.length === 0,
+      6000,
+      'Bob to let Carol go',
+    );
+
+    await bob.node.records.put(space, 'app.note', { text: 'while the key is due' });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(
+      await reads(carol, space, 'while the key is due'),
+      false,
+      'she would read it, if it reached her',
+    );
+    assert.deepEqual((await carol.node.spaces.status(space)).peers, [], 'and nobody lets her back');
   });
 
   test('a public space has no key to change', async () => {
@@ -332,6 +400,49 @@ describe('proving you may read, after the key changed', () => {
       'an old key alone — a view-only link from before, say',
     );
     assert.equal(await tries(carol, oldKey, true), false, 'an old key, from someone removed');
+    assert.equal(await tries(bob, newKey, true), true, 'the current key, with a note from a member');
+    // A key made since the removal: someone invited back holds it, and gets in before their join lands.
+    assert.equal(await tries(carol, newKey, true), true, 'a key made after the removal');
+  });
+});
+
+describe('proving you may read, while a new key is due', () => {
+  test('someone who lost their place is refused on the current key, with their own note', async () => {
+    const { alice, bob, carol, space } = await team3();
+    const key = await spaceKeyFromRaw(
+      base64UrlDecode(parseSpaceInvite(await bob.node.spaces.invite(space, { write: false })).key!),
+    );
+    await letGo(alice.node, space);
+    await carol.node.spaces.setMember(space, carol.node.did, null);
+    await until(
+      async () => (await bob.node.spaces.access(space)).members.length === 2,
+      6000,
+      'Bob to see it',
+    );
+
+    const server = (await bob.node.spaces.authenticator(space))!;
+    const tries = async (who: Person) => {
+      const pair = await provider.generateKeyPair();
+      const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
+      const note = await createLocalRootSigner(who.me, who.manager.getProvider()).delegate({
+        audience: did,
+        capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+        expiration: Math.floor(Date.now() / 1000) + 3600,
+      });
+      const read: ReadAccess = {
+        key: () => deriveReadKey(key, provider),
+        current: () => 'did:key:not-this-one',
+        membership: async () => sealWith(key, note.encoded, membershipContext(space)),
+      };
+      const hello = await createClientAuth(space, { did, key: pair.privateKey }, read, provider).hello(
+        did,
+        'did:key:zNode',
+        'nonce',
+      );
+      return server.checkHello(did, 'did:key:zNode', 'nonce', hello);
+    };
+    assert.equal(await tries(bob), true, 'a member');
+    assert.equal(await tries(carol), false, 'Carol, who still holds the key');
   });
 });
 

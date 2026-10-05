@@ -44,6 +44,8 @@ export interface ReadAccess {
   membership?(): Promise<string | null>;
   /** Whether a peer proving an older read key, with this sealed note, is still a member */
   admits?(peerDid: string, readKey: string, membership: unknown): Promise<boolean>;
+  /** Whether a peer's sealed note shows an account removed from the space: refused on any key */
+  removed?(peerDid: string, readKey: string, membership: unknown): Promise<boolean>;
   /**
    * Told the read key a peer was let in on — so a peer let in on a key that is
    * no longer current can be let go once nothing else would let it in.
@@ -118,7 +120,10 @@ async function checkRead(
   };
   const claimed = typeof proof.readKey === 'string' ? proof.readKey : current;
   if (await verifyBy(provider, claimed, proof.read, label)) {
-    if (claimed === current) return admit(current);
+    if (claimed === current)
+      return proof.member !== undefined && (await access.removed?.(peerDid, current, proof.member))
+        ? false
+        : admit(current);
     if (access.admits && (await access.admits(peerDid, claimed, proof.member))) return admit(claimed);
   }
   // The reader may be ahead of us: then it proves the key we call current among its older ones.

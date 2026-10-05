@@ -327,6 +327,8 @@ interface PeerAccount {
 const NO_ACCOUNT: PeerAccount = Object.freeze({ account: null, agent: false });
 /** How long a peer checked here has to become a peer before the check is forgotten: past any handshake's timeout */
 const STALE_ADMISSION_MS = 60_000;
+/** How long a removed member's socket stays open after nothing more is sent on it, for frames already on their way */
+const LET_GO_AFTER_MS = 1000;
 /** How long a peer let in on an older key has to show its account before it counts as nobody's */
 const WHO_WAIT_MS = 10_000;
 
@@ -733,6 +735,26 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     void deps.onRelays?.(relays).catch(() => {});
   }
   const access = () => (accessCache ??= loadAccess());
+
+  /**
+   * Accounts that held a place in this private space and hold none now:
+   * removed, or left. No live message goes to them, and while a new key is
+   * due (`untilNewKey`) — they may hold the current one — nothing else does
+   * either. Empty in a public space, which anyone may read.
+   */
+  async function formerMembers(options: { untilNewKey?: boolean } = {}): Promise<ReadonlySet<string>> {
+    if (space.visibility !== 'private') return new Set();
+    const { history, events } = await access();
+    // A key made since: it does the work, and someone invited back holds it.
+    if (options.untilNewKey && !history.current.keyDue) return new Set();
+    const allowed = readers(history.current);
+    const gone = new Set<string>();
+    for (const event of events) {
+      if (event.kind !== 'member' || allowed.has(event.did)) continue;
+      if (history.status(event.id)?.status === 'applied') gone.add(event.did);
+    }
+    return gone;
+  }
 
   async function loadAccess(): Promise<Access> {
     const found: AccessEvent[] = [];
@@ -1811,6 +1833,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
             );
             return account !== null && readers(history.current).has(account);
           },
+          async removed(peerDid: string, readKey: string, membership: unknown) {
+            const { history } = await access();
+            const epoch = history.current.keys.find((known) => known.readKey === readKey);
+            const held = epoch ? keyring.get(epoch.keyId) : undefined;
+            if (!held) return false;
+            const note = await openWith(held, membership, membershipContext(space.id)).catch(() => null);
+            const { account } = await accountOf(peerDid, note);
+            return account !== null && (await formerMembers({ untilNewKey: true })).has(account);
+          },
           admitted(peerDid: string, readKey: string) {
             admittedOn.set(peerDid, { readKey, at: Date.now() });
           },
@@ -1973,6 +2004,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // so a note copied off someone's record is no use to anyone else.
 
   const peerAccounts = new Map<string, Promise<PeerAccount>>();
+  /** Peers let go of because their account was removed, by session DID: turned away again when they redial */
+  const cutOff = new Map<string, string>();
   const knownAccounts = new Map<string, PeerAccount>();
   const liveAllowance = new Map<string, { tokens: number; at: number }>();
 
@@ -1998,6 +2031,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const { account, agent } = (await peerAccounts.get(peer)) ?? NO_ACCOUNT;
     // Gone while its note was being checked.
     if (!routes.has(peer)) return;
+    if (account !== null && (await formerMembers()).has(account)) return;
     emit({ type: 'message', space: space.id, from: account, peer, agent, message: payload });
   }
 
@@ -2010,8 +2044,28 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * getting anything the moment this node knows the new key.
    */
   async function letGoOfOutsiders(): Promise<void> {
-    if (admittedOn.size === 0) return;
     const connected = new Set(connectedPeers());
+    // Someone removed is let go of as soon as this node knows, on any key:
+    // the key may not have changed yet, if nobody who manages the space is here.
+    const gone = await formerMembers({ untilNewKey: true });
+    for (const [peer, account] of cutOff) if (!gone.has(account)) cutOff.delete(peer);
+    for (const peer of connected) {
+      const account = knownAccounts.get(peer)?.account ?? null;
+      if (account === null || !gone.has(account) || cutOff.has(peer)) continue;
+      cutOff.set(peer, account);
+      admittedOn.delete(peer);
+      // Nothing more goes to them from now; the socket closes a moment later,
+      // so what was already sent — the "stored" for their own leaving — arrives.
+      sync.removePeer(peer);
+      routes.delete(peer);
+      setTimeout(() => {
+        peerAccounts.delete(peer);
+        knownAccounts.delete(peer);
+        liveAllowance.delete(peer);
+        for (const network of networks) network.drop(peer);
+      }, LET_GO_AFTER_MS);
+    }
+    if (admittedOn.size === 0) return;
     for (const [peer, { at }] of admittedOn) {
       // Checked, and never let in: a handshake the other side refused.
       if (!connected.has(peer) && Date.now() - at > STALE_ADMISSION_MS) admittedOn.delete(peer);
@@ -2047,6 +2101,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       } else if (message.type === LIVE_MESSAGE) void onLive(message.from, message.payload);
     });
     network.on('peer-connected', (info: PeerInfo) => {
+      if (cutOff.has(info.did)) {
+        network.drop(info.did);
+        return;
+      }
       // Said first, so it reaches them before any live message from here.
       network.send(info.did, { type: WHO_MESSAGE, from: session.did, payload: { note: session.proof() } });
       routes.set(info.did, network);
@@ -2507,7 +2565,23 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const lowers =
       was && (!next || next.rank < was.rank || was.permissions.some((p) => !next.permissions.includes(p)));
     const keep = lowers ? await keepFrom(new Set([did])) : [];
-    return upsert(MEMBER_COLLECTION, await memberKey(did), { did, role, ...(keep.length ? { keep } : {}) });
+    const written = await upsert(MEMBER_COLLECTION, await memberKey(did), {
+      did,
+      role,
+      ...(keep.length ? { keep } : {}),
+    });
+    await changeKeyNow();
+    return written;
+  }
+
+  /**
+   * A change that took someone's place makes a new key due. The node that
+   * made it changes the key before the call returns, not later in the
+   * background: one that closes straight after a removal would otherwise
+   * leave the removed member reading everything written since.
+   */
+  async function changeKeyNow(): Promise<void> {
+    if (space.visibility === 'private' && (await access()).history.current.keyDue) await keepingUp();
   }
 
   /**
@@ -2869,6 +2943,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         permissions: [...role.permissions],
         ...(keep.length ? { keep } : {}),
       });
+      await changeKeyNow();
     },
 
     async removeRole(name: string) {
@@ -2879,6 +2954,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       );
       const keep = holders.size ? await keepFrom(holders) : [];
       await upsert(ROLE_COLLECTION, roleKey(name), { name, removed: true, ...(keep.length ? { keep } : {}) });
+      await changeKeyNow();
     },
 
     async openInvite(role: string) {
@@ -2985,8 +3061,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     async send(message: unknown, to?: string) {
       const encoded = JSON.stringify(message ?? null);
       if (encoded.length > MAX_LIVE_BYTES) throw new Error('A live message can be at most 64 KB');
+      const gone = await formerMembers();
       for (const peer of connectedPeers()) {
-        if (to && to !== peer && (await peerAccounts.get(peer))?.account !== to) continue;
+        const account = (await peerAccounts.get(peer))?.account ?? null;
+        if (to && to !== peer && account !== to) continue;
+        // Removed, or left: live messages stop with everything else.
+        if (account !== null && gone.has(account)) continue;
         routes.get(peer)?.send(peer, { type: LIVE_MESSAGE, from: session.did, payload: message ?? null });
       }
     },
