@@ -17,6 +17,8 @@ import { checkFork, forkProof } from '../src/records/fork.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { team } from '../src/space/presets.js';
 import type { Version, WriterLog } from '../src/types.js';
+import type { ClaimedWriter, HeadStore, WriterKeySource } from '../src/node/writer-keys.js';
+import { browserWriterKeys } from '../src/node/writer-keys.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { joined } from './helpers/joined.js';
@@ -140,6 +142,76 @@ describe('a writer’s log', () => {
       checkVersionShape({ ...version, log: Object.assign({ n: 0 }, { at: 1 }) }) ?? '',
       /only n and prev/,
     );
+  });
+});
+
+/** Writer keys kept in memory, as a browser keeps them in IndexedDB: slots, each claimed by one node at a time */
+function memoryWriterKeys(): WriterKeySource & { readonly claimed: () => number } {
+  const slots: Array<{ keys: CryptoKeyPair; heads: Map<string, Uint8Array>; held: boolean }> = [];
+  return {
+    claimed: () => slots.filter((slot) => slot.held).length,
+    async claim(): Promise<ClaimedWriter | null> {
+      let slot = slots.find((candidate) => !candidate.held);
+      if (!slot) {
+        slot = { keys: await provider.generateKeyPair(), heads: new Map(), held: false };
+        slots.push(slot);
+      }
+      const taken = slot;
+      taken.held = true;
+      const heads: HeadStore = {
+        get: async (key) => taken.heads.get(key) ?? null,
+        put: async (key, value) => void taken.heads.set(key, value),
+      };
+      return { keys: taken.keys, heads, release: async () => void (taken.held = false) };
+    },
+  };
+}
+
+describe('a writer key that outlives the node', () => {
+  async function nodeWith(writerKey: WriterKeySource, who: Person, stores = memoryStores()) {
+    const node = await createNode({
+      signer: createLocalRootSigner(who.me, who.manager.getProvider()),
+      stores,
+      writerKey,
+      watchIntervalMs: 0,
+    });
+    open.push(node);
+    return node;
+  }
+
+  test('a restart signs with the same key, and carries its log on', async () => {
+    const who = await person();
+    const keys = memoryWriterKeys();
+    const stores = memoryStores();
+    const before = await nodeWith(keys, who, stores);
+    const { id: space } = await before.spaces.create({ name: 'Mine', visibility: 'public' });
+    const a = await before.records.put(space, 'app.note', { text: 'a' });
+    await before.close();
+    assert.equal(keys.claimed(), 0, 'closing lets go of the key');
+
+    const after = await nodeWith(keys, who, stores);
+    assert.equal(after.sessionDid, before.sessionDid);
+    const b = await after.records.put(space, 'app.note', { text: 'b' });
+    const read = async (id: string) =>
+      (await createStorageProvider(await stores(`spaces/${space}`)).getVersion(id))!.log;
+    assert.deepEqual(await read(b.version), { n: (await read(a.version))!.n + 1, prev: a.version });
+  });
+
+  test('two nodes running at once never share a key', async () => {
+    const who = await person();
+    const keys = memoryWriterKeys();
+    const one = await nodeWith(keys, who);
+    const two = await nodeWith(keys, who);
+    assert.notEqual(one.sessionDid, two.sessionDid);
+    assert.equal(keys.claimed(), 2);
+  });
+
+  test('where nothing can lock a key, there is no lasting one: the node makes its own', async () => {
+    // No IndexedDB here, as in Node.
+    assert.equal(await browserWriterKeys('weave:test').claim(), null);
+    const who = await person();
+    const node = await nodeWith(browserWriterKeys('weave:test'), who);
+    assert.match(node.sessionDid, /^did:key:/);
   });
 });
 

@@ -36,8 +36,10 @@ import {
   type PassphraseWrap,
   type RootSigner,
   type StoreFactory,
+  type WriterKeySource,
 } from '@weaveprotocol/core';
 import { openFsDirectory } from './fs-directory.js';
+import { fileWriterKeys } from './writer-keys.js';
 
 export interface Home {
   readonly path: string;
@@ -124,6 +126,8 @@ export interface Unlocked {
   readonly accountKey: Uint8Array;
   /** Opens contact requests sent to the account, and goes on its profile in every space */
   readonly contactKey: Uint8Array;
+  /** Where this machine keeps the account's signing keys across runs, outside its data */
+  readonly writerKey: WriterKeySource;
 }
 
 /**
@@ -163,15 +167,14 @@ export async function unlock(
   if (identity.did !== account.did)
     throw new Error(`That code belongs to a different account than "${account.name}"`);
 
+  const vaultKey = await deriveVaultKey(seed);
   return {
     account,
     signer,
-    stores: folderStores(home.directory, {
-      basePath: account.dataPath,
-      vaultKey: await deriveVaultKey(seed),
-    }),
+    stores: folderStores(home.directory, { basePath: account.dataPath, vaultKey }),
     accountKey: await deriveVaultKeyBytes(seed),
     contactKey: await deriveContactKeyBytes(seed),
+    writerKey: fileWriterKeys(path.join(home.path, 'writers', account.id), vaultKey),
   };
 }
 
@@ -182,5 +185,6 @@ export const nodeFor = (unlocked: Unlocked, extra: Partial<NodeConfig> = {}): Pr
     stores: unlocked.stores,
     accountKey: unlocked.accountKey,
     contactKey: unlocked.contactKey,
+    writerKey: unlocked.writerKey,
     ...extra,
   });

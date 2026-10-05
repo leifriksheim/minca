@@ -553,9 +553,20 @@ A writer:
   failure after signing can never hand out the same place again. A version
   refused before it leaves gives its place back.
 - MUST keep its places for as long as the key can sign. A key that outlives
-  the process signing with it (an agent's key, a host's) keeps them on disk,
-  with the key. A key made for one run, and never stored, takes its places
-  with it when the run ends.
+  the process signing with it keeps them beside the key, in the same place
+  and never anywhere that could be restored to an older copy without it. A
+  key made for one run, and never stored, takes its places with it when the
+  run ends.
+- MUST NOT let a key that outlives its process be in two places at once. It
+  is held by one writer at a time, under a lock, and is never put where
+  something else could sign with it too: not in the account's data folder
+  ([05](05-sync-and-storage.md) §14), not in a backup, not anything that syncs.
+  A writer that can't lock a key makes one for this run instead.
+
+A device that keeps its key keeps one log in each space for as long as it
+keeps the key; one that makes a key per run has a new log each run. Both are
+correct, and only the first can be checked over time (§9.1 of
+[05](05-sync-and-storage.md), Planned).
 
 A key used by two writers at once breaks the first rule. That is what a
 **fork** shows: **two versions with the same `author`, the same `space` and
@@ -587,17 +598,13 @@ peer, and `v1`, `w1` and anything K signed after them do not.
 > would fork honestly all the time. One key is one writer, so its line can be
 > kept exactly, and only a key used in two places breaks it.
 
-> **Planned:** keys that outlive their node. Today a node makes a new session
-> key each time it starts, so each run is a new writer with a short log. A
-> node that keeps one writer key across runs, held so it can't be copied out,
-> with a lock so two tabs never share it, gives each device one long log.
-> Checking the line: a version whose `prev` is not the key's version at
+> **Planned:** checking the line. A version whose `prev` is not the key's version at
 > `n − 1`, or whose `seen` leaves out something the key's earlier version had
 > seen, would be proof too. Signed log heads, for completeness a reader can
 > check and proofs for a single record. Tracked in
 > [#13](https://github.com/leifriksheim/weave/issues/13).
 
-_Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/records/fork.ts` (`checkFork`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`write`, `placeInLog`, `reportFork`, `judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/core/src/records/fork.ts` (`checkFork`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`write`, `placeInLog`, `reportFork`, `judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts`, `packages/cli/tests/writer-keys.test.ts`, `packages/core/tests/access-convergence.test.ts`._
 
 ---
 

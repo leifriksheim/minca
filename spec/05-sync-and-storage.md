@@ -708,8 +708,9 @@ Logs add checks; they do not change which version wins. What changes here:
 Open: a log spans every collection a key writes in, while a node may hold only
 some; whether a leaf commits to `(id, collection)` so a partial holder can tell
 which entries it should hold; how heads are encoded in `hello` without breaking
-its 1,000-collection bound, and how many heads a hello may carry. Needs keys
-that outlive their node (02 §4.10, Planned), or each log is one run long.
+its 1,000-collection bound, and how many heads a hello may carry. A device
+that makes a key per run has a log per run, so completeness is checked per
+run there (02 §4.10).
 
 ### 9.2 Planned: caches that fetch by key, and hold subsets
 

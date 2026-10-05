@@ -21,6 +21,7 @@ import type { Capability, UCANToken } from '../identity/ucan.js';
 import type { PeerTransport, SignalledTransport } from '../network/transport.js';
 import type { MeshStatus } from '../network/mesh.js';
 import type { ServerAuth } from '../network/peer-auth.js';
+import type { WriterKeySource } from './writer-keys.js';
 import type { StoreFactory } from './stores.js';
 import type { JsonSchema, SchemaIssue } from '../schema/collection-def.js';
 import type { Keeper } from '../space/roles.js';
@@ -62,6 +63,13 @@ export interface NodeConfig {
   readonly sessionTtlSeconds?: number;
   /** The key this node signs with, when the signer already named it (an app an account home delegated to). Default: a fresh one */
   readonly sessionKey?: CryptoKeyPair;
+  /**
+   * Where to keep a signing key across runs, so this device keeps one log in
+   * each space (`browserWriterKeys`; the CLI keeps them on disk). Ignored with
+   * `sessionKey`. Without it, or when no key can be claimed, the node makes a
+   * key for this run alone.
+   */
+  readonly writerKey?: WriterKeySource;
   /** How often to look for writes another process made to a folder store. 0 disables. Default 2000. */
   readonly watchIntervalMs?: number;
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */

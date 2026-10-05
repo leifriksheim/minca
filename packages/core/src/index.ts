@@ -324,6 +324,7 @@ export {
   relayRoom,
   indexedDBStores,
   folderStores,
+  browserWriterKeys,
   copyAccountData,
   NODE_ACTIONS,
   runAction,
@@ -344,6 +345,9 @@ export { MAX_PROPOSALS } from './space/notify.js';
 export { checkAppNotify } from './space/notify.js';
 export type {
   StoreFactory,
+  WriterKeySource,
+  ClaimedWriter,
+  HeadStore,
   StoreOptions,
   CopyAccountParams,
   CopyResult,

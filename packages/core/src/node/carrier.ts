@@ -170,7 +170,8 @@ export async function createCarryCore(config: CarryCoreConfig) {
   const podDid = await didOf(podKeys.publicKey, provider);
   const podSession = { did: podDid, key: podKeys.privateKey, proof: () => '' };
   // Its own key outlives it, so its places in each log are kept; the pod's dies with it.
-  const writers = createWriters(await config.stores('writers'), (writer) => writer === did);
+  const kept = await config.stores('writers');
+  const writers = createWriters((writer) => (writer === did ? kept : null));
 
   // Carry spaces are joined like any space: their keys are the only ones a carrier holds.
   const registryStore = await config.stores('registry');
