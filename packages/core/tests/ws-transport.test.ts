@@ -9,7 +9,8 @@ import * as z from 'zod';
 import { WebSocketServer, type RawData, type WebSocket as ServerSocket } from 'ws';
 import { portOf, textOf } from './helpers/net.js';
 
-import { createWebSocketTransport } from '../src/network/ws-transport.js';
+import { createWebSocketTransport, nodeAddress } from '../src/network/ws-transport.js';
+import { issueUCAN } from '../src/identity/ucan.js';
 import { createClientAuth, createServerAuth, peerNonce, type ServerAuth } from '../src/network/peer-auth.js';
 import { generateSpaceKey } from '../src/privacy/space-encryption.js';
 import { deriveReadKey } from '../src/space/space-access.js';
@@ -68,10 +69,11 @@ function startNode(
       }
       greetedBy.push(hello.did);
       const sig = options.authenticator ? await options.authenticator.welcome(did, hello.nonce) : undefined;
+      const note = options.authenticator?.note();
       socket.send(
         options.welcome
           ? await options.welcome(hello)
-          : JSON.stringify({ type: 'welcome', did, ...(sig ? { sig } : {}) }),
+          : JSON.stringify({ type: 'welcome', did, ...(sig ? { sig } : {}), ...(note ? { note } : {}) }),
       );
       socket.on('message', (frame, binary) => {
         if (binary) socket.send(frame, { binary: true });
@@ -184,6 +186,92 @@ describe('WebSocket transport', () => {
     assert.equal(seen.connected.length, 0);
     assert.match(seen.errors[0]!.message, /welcome/);
     await node.stop();
+  });
+
+  describe('pinning the node', () => {
+    /** A browser in a public space, dialling `url` */
+    async function dialler(url: string) {
+      const me = await nodeIdentity();
+      const transport = createWebSocketTransport({
+        url,
+        did: me.did,
+        reconnect: false,
+        authenticator: createClientAuth('space-1', { did: me.did, key: me.privateKey }, null, provider),
+      });
+      return { transport, seen: watch(transport) };
+    }
+
+    /** A node whose session key acts for an account, as `weave run` does: the key changes on restart, the account doesn't */
+    async function sessionNode() {
+      const account = await nodeIdentity();
+      const session = await nodeIdentity();
+      const note = await issueUCAN(
+        { issuer: account, audience: session.did, capabilities: [{ with: '*', can: '*' }] },
+        provider,
+      );
+      const node = startNode(0, {
+        did: session.did,
+        authenticator: createServerAuth('space-1', null, session.privateKey, provider, () => note.encoded),
+      });
+      return { account, session, node };
+    }
+
+    test('a node pinned by its own key connects', async () => {
+      const me = await nodeIdentity();
+      const node = startNode(0, {
+        did: me.did,
+        authenticator: createServerAuth('space-1', null, me.privateKey, provider),
+      });
+      const { transport, seen } = await dialler(`ws://127.0.0.1:${await node.ready}/peer#${me.did}`);
+      await transport.connect!();
+      assert.deepEqual(seen.connected, [me.did]);
+      transport.closeAll();
+      await node.stop();
+    });
+
+    test('a node pinned by its account connects through the note its session key carries', async () => {
+      const { account, session, node } = await sessionNode();
+      const { transport, seen } = await dialler(`ws://127.0.0.1:${await node.ready}/peer#${account.did}`);
+      await transport.connect!();
+      assert.deepEqual(seen.connected, [session.did]);
+      transport.closeAll();
+      await node.stop();
+    });
+
+    test('another node answering at a pinned address is refused', async () => {
+      const { node } = await sessionNode();
+      const expected = await nodeIdentity();
+      const { transport, seen } = await dialler(`ws://127.0.0.1:${await node.ready}/peer#${expected.did}`);
+      await assert.rejects(transport.connect!(), /is not did:key:/);
+      assert.deepEqual(seen.connected, []);
+      await node.stop();
+    });
+
+    test('a pinned node must show its note: one without is refused', async () => {
+      const account = await nodeIdentity();
+      const session = await nodeIdentity();
+      const node = startNode(0, {
+        did: session.did,
+        authenticator: createServerAuth('space-1', null, session.privateKey, provider),
+      });
+      const { transport } = await dialler(`ws://127.0.0.1:${await node.ready}/peer#${account.did}`);
+      await assert.rejects(transport.connect!(), /pins/);
+      await node.stop();
+    });
+
+    test('plain ws:// is refused off this machine, before anything is dialled', async () => {
+      const { transport, seen } = await dialler('ws://node.example.com/peer');
+      await assert.rejects(transport.connect!(), /only for this machine/);
+      assert.equal(seen.errors.length, 1);
+      assert.equal(typeof nodeAddress('ws://localhost:8787/peer'), 'object');
+      assert.equal(typeof nodeAddress('ws://[::1]:8787/peer'), 'object');
+      assert.equal(typeof nodeAddress('http://node.example.com/peer'), 'string');
+      assert.equal(typeof nodeAddress('wss://node.example.com/peer#not-a-did'), 'string');
+      assert.deepEqual(nodeAddress('wss://node.example.com/peer?space=a#did:key:zX'), {
+        dial: 'wss://node.example.com/peer?space=a',
+        pin: 'did:key:zX',
+      });
+    });
   });
 
   describe('a public space', () => {

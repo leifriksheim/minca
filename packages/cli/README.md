@@ -92,8 +92,11 @@ weave run --port 8787
 ```
 
 - `ws://host:8787/peer?space=<id>` — the protocol's WebSocket transport. Browsers
-  reach it with `network: { nodes: ['wss://host/peer'] }` (the example app reads
-  `VITE_WEAVE_NODES`). No relay, no TURN.
+  reach it with `network: { nodes: ['wss://host/peer#<account DID>'] }` (the
+  example app reads `VITE_WEAVE_NODES`). No relay, no TURN. The fragment pins
+  the node to your account, so nothing else answering at that address is let
+  in; `weave run` prints the pinned address when it starts. Plain `ws://` works
+  only on this machine.
 - `ws://host:8787?room=<id>` — the signaling relay, so one process bootstraps a space.
 - `GET /health` — `{"ok":true}`, nothing more
 

@@ -240,7 +240,11 @@ export async function serve(options: ServeOptions): Promise<Served> {
           served.add(spaceId);
         }
         const sig = await authenticator.welcome(node.sessionDid, hello.nonce);
-        socket.send(JSON.stringify({ type: 'welcome', did: node.sessionDid, sig }));
+        // The note lets a client that pinned this node's account, not its session key, know it.
+        const note = authenticator.note();
+        socket.send(
+          JSON.stringify({ type: 'welcome', did: node.sessionDid, sig, ...(note ? { note } : {}) }),
+        );
         inbound.accept(spaceId, socket, hello.did);
       })().catch(() => socket.close(1011, 'could not open space'));
     });

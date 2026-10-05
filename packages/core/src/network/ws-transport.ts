@@ -10,12 +10,17 @@
  *
  * 1. node → `{"type":"challenge","nonce":…,"did":…}`
  * 2. client → `{"type":"hello","did":…,"nonce":…,"sig"?:…}`
- * 3. node → `{"type":"welcome","did":…,"sig"?:…}`
+ * 3. node → `{"type":"welcome","did":…,"sig"?:…,"note"?:…}`
  * 4. binary frames either way, passed through untouched.
  *
  * With an authenticator both sides sign: the client proves the DID it gives
  * is its own — and, for a private space, that it may read — and the node that
  * the welcome comes from the node that sent the challenge (see `peer-auth.ts`).
+ *
+ * A URL may pin the node in its fragment, `wss://node.example.com/peer#did:key:z…`:
+ * the node must then be that key, or a session its note shows acting for it.
+ * The fragment never leaves this side. Plain `ws://` is refused except to this
+ * machine, where nobody on the way could answer in the node's place.
  */
 
 import type { PeerTransport, PeerTransportEvents } from './transport.js';
@@ -25,7 +30,7 @@ import { bufferSource, isObject } from '../utils/guards.js';
 import { backoff, createRetry } from '../utils/backoff.js';
 
 export interface WebSocketTransportConfig {
-  /** `wss://node.example.com/peer` */
+  /** `wss://node.example.com/peer`, optionally pinned: `…/peer#did:key:z…` */
   readonly url: string;
   /** This side's DID, sent in the hello */
   readonly did: string;
@@ -42,6 +47,7 @@ interface Frame {
   readonly did: string;
   readonly nonce?: unknown;
   readonly sig?: unknown;
+  readonly note?: unknown;
 }
 
 function parseFrame(data: unknown, type: string): Frame | null {
@@ -49,11 +55,39 @@ function parseFrame(data: unknown, type: string): Frame | null {
   try {
     const parsed: unknown = JSON.parse(data);
     return isObject(parsed) && parsed.type === type && typeof parsed.did === 'string' && parsed.did.length > 0
-      ? { type, did: parsed.did, nonce: parsed.nonce, sig: parsed.sig }
+      ? { type, did: parsed.did, nonce: parsed.nonce, sig: parsed.sig, note: parsed.note }
       : null;
   } catch {
     return null;
   }
+}
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Where to dial and which node to expect, from a node URL — or why it can't be
+ * dialled: not ws:// or wss://, or plain ws:// to another machine.
+ */
+export function nodeAddress(url: string): { readonly dial: string; readonly pin: string | null } | string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return `"${url}" is not a URL`;
+  }
+  if (parsed.protocol !== 'wss:' && !(parsed.protocol === 'ws:' && LOOPBACK.has(parsed.hostname)))
+    return `"${parsed.origin}" is not a wss:// node: plain ws:// is only for this machine`;
+  let pin: string | null = null;
+  if (parsed.hash.length > 1) {
+    try {
+      pin = decodeURIComponent(parsed.hash.slice(1));
+    } catch {
+      return `"${url}" pins a node it doesn't name`;
+    }
+    if (!pin.startsWith('did:key:')) return `"${url}" pins "${pin}", which is not a did:key`;
+  }
+  parsed.hash = '';
+  return { dial: parsed.href, pin };
 }
 
 /** Holds one socket to one node, redialling it with backoff for as long as the transport is wanted. */
@@ -77,16 +111,25 @@ export function createWebSocketTransport(config: WebSocketTransportConfig): Peer
     retryCount += 1;
   };
 
+  const address = nodeAddress(config.url);
+
   const dial = (): Promise<void> =>
     new Promise((resolve, reject) => {
       if (stopped) {
         reject(new Error('Transport was closed'));
         return;
       }
+      // Never dialled, so never redialled: the address won't get any better.
+      if (typeof address === 'string') {
+        const error = new Error(address);
+        emit('error', config.url, error);
+        reject(error);
+        return;
+      }
 
       let socket: WebSocket;
       try {
-        socket = new WebSocket(config.url);
+        socket = new WebSocket(address.dial);
       } catch (err) {
         reject(err instanceof Error ? err : new Error(String(err)));
         scheduleRedial();
@@ -134,6 +177,11 @@ export function createWebSocketTransport(config: WebSocketTransportConfig): Peer
           ) {
             return refuse('The node could not prove it is the node that answered');
           }
+          if (
+            address.pin !== null &&
+            !(authenticator && (await authenticator.checkPin(address.pin, did, welcome.note)))
+          )
+            return refuse(`The node at ${address.dial} is not ${address.pin}, the node this address pins`);
           stage = 'open';
           peerId = did;
           retryCount = 0;

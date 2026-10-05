@@ -195,6 +195,32 @@ describe('the daemon', () => {
     await a.close();
   });
 
+  test('a device that pins the node by its account reaches it; one that pins another key never does', async () => {
+    const pinnedTo = (did: string) =>
+      createNode({
+        signer,
+        stores: memoryStores(),
+        watchIntervalMs: 0,
+        network: { nodes: [`${peerUrl}#${did}`] },
+      });
+    const right = await pinnedTo(daemon.node.did);
+    const wrong = await pinnedTo('did:key:zDnaeSomeoneElse');
+    const space = await right.spaces.create({ name: 'Pinned', ...team, visibility: 'public' });
+    await wrong.spaces.join(await right.spaces.invite(space.id, { write: false }));
+    await daemon.node.spaces.join(await right.spaces.invite(space.id));
+
+    for (const device of [right, wrong]) await hold(device, space.id);
+    await until(
+      async () => (await right.spaces.status(space.id)).peers.length > 0,
+      5000,
+      'the pinned device to connect',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.deepEqual((await wrong.spaces.status(space.id)).peers, []);
+    await right.close();
+    await wrong.close();
+  });
+
   test('serves a space the account created elsewhere, without being told', async () => {
     // A laptop of the same account, following the registry through the node.
     const laptop = await createNode({

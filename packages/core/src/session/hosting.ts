@@ -325,7 +325,7 @@ export function hostPeerAddress(url: string, description: Pick<HostDescription, 
     const address = new URL(description.peer, `${url.replace(/\/+$/, '')}/`);
     if (address.protocol === 'https:') address.protocol = 'wss:';
     else if (address.protocol === 'http:') address.protocol = 'ws:';
-    const local = ['localhost', '127.0.0.1'].includes(address.hostname);
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(address.hostname);
     if (address.protocol !== 'wss:' && !(address.protocol === 'ws:' && local)) return null;
     address.hash = '';
     return address.toString();

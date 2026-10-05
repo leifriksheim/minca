@@ -8,6 +8,7 @@
 import type { CryptoProvider } from '../types.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { didToPublicKey } from '../identity/did.js';
+import { resolveDelegationRoot } from '../identity/ucan.js';
 import { isObject } from '../utils/guards.js';
 
 /** What a client sends to prove itself: its own signature, and in a private space the read key's */
@@ -147,12 +148,32 @@ async function checkProof(
 export interface ClientAuth {
   hello(clientDid: string, nodeDid: string, nodeNonce: string): Promise<HelloProof>;
   checkWelcome(nodeDid: string, clientNonce: string, sig: unknown): Promise<boolean>;
+  /** Whether the node is the one pinned: its own key, or a session whose note the pinned key signed */
+  checkPin(pin: string, nodeDid: string, note: unknown): Promise<boolean>;
 }
 
 /** The serving side: checks a peer's hello, and signs its welcome. */
 export interface ServerAuth {
   checkHello(clientDid: string, nodeDid: string, nodeNonce: string, proof: unknown): Promise<boolean>;
   welcome(nodeDid: string, clientNonce: string): Promise<string>;
+  /** The node's note, sent with its welcome so a client can pin the account rather than a session key that changes */
+  note(): string | null;
+}
+
+/** Longest note a welcome may carry */
+const MAX_NOTE_LENGTH = 16 * 1024;
+
+/** Whether a node DID is the pinned one, or a session the pinned key delegated to */
+async function pinned(
+  provider: CryptoProvider,
+  pin: string,
+  nodeDid: string,
+  note: unknown,
+): Promise<boolean> {
+  if (nodeDid === pin) return true;
+  if (typeof note !== 'string' || note.length > MAX_NOTE_LENGTH) return false;
+  const chain = await resolveDelegationRoot(note, () => null, provider).catch(() => null);
+  return !!chain?.valid && chain.audience === nodeDid && chain.rootDid === pin;
 }
 
 /** A fresh random nonce */
@@ -205,6 +226,7 @@ export function createClientAuth(
     checkWelcome(nodeDid: string, clientNonce: string, sig: unknown) {
       return verifyBy(provider, nodeDid, sig, welcomeLabel(spaceId, nodeDid, clientNonce));
     },
+    checkPin: (pin: string, nodeDid: string, note: unknown) => pinned(provider, pin, nodeDid, note),
   });
 }
 
@@ -214,9 +236,11 @@ export function createServerAuth(
   read: ReadAccess | string | null,
   nodeKey: CryptoKey,
   provider: CryptoProvider,
+  note: () => string | null = () => null,
 ): ServerAuth {
   const access = readAccessOf(read);
   return Object.freeze({
+    note,
     checkHello: (clientDid: string, nodeDid: string, nodeNonce: string, proof: unknown) =>
       checkProof(provider, access, clientDid, helloLabel(spaceId, clientDid, nodeDid, nodeNonce), proof),
     welcome: (nodeDid: string, clientNonce: string) =>
