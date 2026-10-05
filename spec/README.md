@@ -21,6 +21,10 @@ the code disagree, that is a bug in one of them: open an issue, and say which.
 | [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, agents, carriers and hosts                                                                      |
 | [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock                                            |
 
+What it defends, against whom, and where it does not yet, is in the
+[threat model](threat-model.md). Every part answers to it, and every change to
+the protocol is reviewed against it before it merges.
+
 ## What is not in it
 
 Only what two implementations must agree on to work together is here. What

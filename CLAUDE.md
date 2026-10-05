@@ -10,7 +10,7 @@ the docs, a change touches before changing the code.
 
 | Folder                                        |                                                                                               |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07. Normative.                          |
+| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07, and its threat model. Normative.    |
 | `packages/core`                               | `@weaveprotocol/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`) |
 | `packages/cli`                                | `@weaveprotocol/cli`: `weave`, the always-on node, hosting, agents, MCP                       |
 | `packages/relay`                              | The signaling relay and its mailbox                                                           |
@@ -97,6 +97,29 @@ two implementations must read it the same way.
   `file:line` references must be kept current when the code moves.
 - Tests are the executable half of the spec. A rule a peer must check gets a
   test that shows a peer refusing the thing that breaks it.
+
+## Every protocol change is reviewed adversarially
+
+Tests show a change does what its author meant. They don't show it can't be
+turned against someone, so they aren't enough. Before a change to `spec/`, or
+to protocol code in `packages/core/src` (records, sync, space, identity,
+network, node), is called done or merged:
+
+1. Run the `protocol-reviewer` agent (`.claude/agents/protocol-reviewer.md`)
+   on the branch. It works from the diff, the spec and
+   `spec/threat-model.md`, and is not told why the change is right.
+2. Fix every blocker. Answer every other finding: fixed, filed as an issue, or
+   why it isn't one.
+3. Put the findings and what was done about each under **Adversarial review**
+   in the PR description.
+4. If a guarantee in `spec/threat-model.md` changes, or a new gap opens,
+   change that page in the same PR.
+
+Design against the threat model, not only against the issue at hand: for
+every new record, ask who may write its next version, and for every mechanism
+that punishes or withdraws, ask who could aim it at an honest party.
+Audits of the spec look for soundness (spec against spec, spec against code,
+attacks), not only for what went stale.
 
 ## Issues and pull requests
 
