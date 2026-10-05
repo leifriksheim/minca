@@ -491,7 +491,9 @@ describe('space access: taking it back', () => {
           body: { text },
           proof: note.encoded,
           seen: heads,
-          log: last ? { n: (last.log?.n ?? 0) + 1, prev: last.id } : { n: 0 },
+          log: last
+            ? { n: (last.log?.n ?? 0) + 1, prev: last.id, c: { n: (last.log?.c.n ?? 0) + 1, prev: last.id } }
+            : { n: 0, c: { n: 0 } },
         }),
         pair.privateKey,
       ));

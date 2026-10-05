@@ -16,7 +16,7 @@ import { checkVersionShape } from '../src/records/version.js';
 import { checkFork, forkProof } from '../src/records/fork.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { team } from '../src/space/presets.js';
-import type { Version, WriterLog } from '../src/types.js';
+import type { LogPlace, Version } from '../src/types.js';
 import type { ClaimedWriter, HeadStore, WriterKeySource } from '../src/node/writer-keys.js';
 import { browserWriterKeys } from '../src/node/writer-keys.js';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -56,10 +56,15 @@ async function handKey(bob: Person, space: string) {
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const { heads: seen } = await bob.node.spaces.access(space);
+  // Its line in the collection is kept in step unless a test gives one: what's tested is the space's line.
+  let lastInCollection: Version | null = null;
   return {
     did,
-    sign: (text: string, log: WriterLog) =>
-      createSigner(provider).sign(
+    sign: async (text: string, log: LogPlace & { readonly c?: LogPlace }) => {
+      const c =
+        log.c ??
+        (lastInCollection ? { n: lastInCollection.log!.c.n + 1, prev: lastInCollection.id } : { n: 0 });
+      const signed = await createSigner(provider).sign(
         createVersion({
           author: did,
           collection: 'app.note',
@@ -67,10 +72,13 @@ async function handKey(bob: Person, space: string) {
           body: { text },
           proof: note.encoded,
           seen,
-          log,
+          log: { ...log, c },
         }),
         pair.privateKey,
-      ),
+      );
+      lastInCollection = signed;
+      return signed;
+    },
   };
 }
 
@@ -83,10 +91,11 @@ describe('a writer’s log', () => {
     const logs = await Promise.all(ids.map(async (id) => (await versionOf(alice, space, id)).log));
     // Whatever else the node wrote first (its profile, its member key), the three follow each other.
     const first = logs[0]!.n;
+    // And in their collection's line, the first three there.
     assert.deepEqual(logs, [
-      { n: first, prev: logs[0]!.prev },
-      { n: first + 1, prev: ids[0] },
-      { n: first + 2, prev: ids[1] },
+      { n: first, prev: logs[0]!.prev, c: { n: 0 } },
+      { n: first + 1, prev: ids[0], c: { n: 1, prev: ids[0] } },
+      { n: first + 2, prev: ids[1], c: { n: 2, prev: ids[1] } },
     ]);
 
     const other = await alice.node.spaces.create({ name: 'Other', visibility: 'public' });
@@ -128,20 +137,28 @@ describe('a writer’s log', () => {
     const b = await after.records.put(space, 'app.note', { text: 'b' });
     const read = async (id: string) =>
       (await createStorageProvider(await stores(`spaces/${space}`)).getVersion(id))!.log;
-    assert.deepEqual(await read(b.version), { n: (await read(a.version))!.n + 1, prev: a.version });
+    const [was, now] = [(await read(a.version))!, (await read(b.version))!];
+    assert.deepEqual(now, { n: was.n + 1, prev: a.version, c: { n: was.c.n + 1, prev: a.version } });
   });
 
   test('a version in a space without its place is malformed', () => {
     const version = { key: 'abc', seq: 0, space: 's', bodyHash: 'bx' };
     assert.match(checkVersionShape(version) ?? '', /place in its writer/);
-    assert.equal(checkVersionShape({ ...version, log: { n: 0 } }), null);
-    assert.match(checkVersionShape({ ...version, log: { n: 1 } }) ?? '', /previous version/);
-    assert.match(checkVersionShape({ ...version, log: { n: 0, prev: 'x' } }) ?? '', /names no previous/);
-    assert.match(checkVersionShape({ ...version, log: { n: -1 } }) ?? '', /whole number/);
+    assert.equal(checkVersionShape({ ...version, log: { n: 0, c: { n: 0 } } }), null);
+    const c = { n: 0 };
+    assert.match(checkVersionShape({ ...version, log: { n: 1, c } }) ?? '', /previous version/);
+    assert.match(checkVersionShape({ ...version, log: { n: 0, prev: 'x', c } }) ?? '', /names no previous/);
+    assert.match(checkVersionShape({ ...version, log: { n: -1, c } }) ?? '', /whole number/);
     assert.match(
-      checkVersionShape({ ...version, log: Object.assign({ n: 0 }, { at: 1 }) }) ?? '',
-      /only n and prev/,
+      checkVersionShape({ ...version, log: Object.assign({ n: 0, c }, { at: 1 }) }) ?? '',
+      /only n, prev and c/,
     );
+    // Its place in its collection's line is checked the same way.
+    assert.match(
+      checkVersionShape({ ...version, log: Object.assign({ n: 0, c: { n: 0 } }, { c: undefined }) }) ?? '',
+      /collection’s line/,
+    );
+    assert.match(checkVersionShape({ ...version, log: { n: 0, c: { n: 2 } } }) ?? '', /previous version/);
   });
 });
 
@@ -194,7 +211,8 @@ describe('a writer key that outlives the node', () => {
     const b = await after.records.put(space, 'app.note', { text: 'b' });
     const read = async (id: string) =>
       (await createStorageProvider(await stores(`spaces/${space}`)).getVersion(id))!.log;
-    assert.deepEqual(await read(b.version), { n: (await read(a.version))!.n + 1, prev: a.version });
+    const [was, now] = [(await read(a.version))!, (await read(b.version))!];
+    assert.deepEqual(now, { n: was.n + 1, prev: a.version, c: { n: was.c.n + 1, prev: a.version } });
   });
 
   test('two nodes running at once never share a key', async () => {
@@ -297,6 +315,26 @@ describe('a fork', () => {
     );
     await slip(bob, space, [first]);
     await provenEverywhere([alice, bob], space, key.did, 2);
+  });
+
+  test('two versions at one place in a collection’s line are a fork too, from the first of them', async () => {
+    const { bob, space } = await sharedWithBob();
+    const key = await handKey(bob, space);
+    const a = await key.sign('a', { n: 0, c: { n: 0 } });
+    // Its line in the space moves on; its line in the collection goes back to 0.
+    const b = await key.sign('b', { n: 1, prev: a.id, c: { n: 0 } });
+    assert.deepEqual(await checkFork(stubOf(a), stubOf(b), space, provider), { writer: key.did, from: 0 });
+  });
+
+  test('skipping a place in its collection’s line breaks that line', async () => {
+    const { bob, space } = await sharedWithBob();
+    const key = await handKey(bob, space);
+    const zero = await key.sign('zero', { n: 0, c: { n: 0 } });
+    const skipping = await key.sign('skipping', { n: 1, prev: zero.id, c: { n: 2, prev: zero.id } });
+    assert.deepEqual(await checkFork(stubOf(skipping), stubOf(zero), space, provider), {
+      writer: key.did,
+      from: 1,
+    });
   });
 
   test('a proof is checked by itself: one key, this space, one place, two versions, no bodies', async () => {

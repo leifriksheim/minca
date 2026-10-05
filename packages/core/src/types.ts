@@ -148,12 +148,22 @@ export type Envelope = Omit<UnsignedVersion, 'body'> & {
   readonly bodyHash?: string;
 };
 
-/** A version's place in its writer's log for one space */
-export interface WriterLog {
+/** A place in one line of a writer's log */
+export interface LogPlace {
   /** Its position, from 0 */
   readonly n: number;
-  /** The id of the writer's version at `n - 1` in this space. Absent at 0. */
+  /** The id of the writer's version one place before, in the same line. Absent at 0. */
   readonly prev?: string;
+}
+
+/**
+ * A version's place in its writer's log for one space: in the line of
+ * everything the key wrote there (`n`, `prev`), and in the line of what it
+ * wrote in this version's collection (`c`), which a node holding only some
+ * collections can walk (spec 02 §4.10).
+ */
+export interface WriterLog extends LogPlace {
+  readonly c: LogPlace;
 }
 
 /** Version — the atomic data unit */

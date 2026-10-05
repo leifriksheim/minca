@@ -289,8 +289,13 @@ node's own choice; how it tells peers what it holds is in
   dropped.
 - A query marks the collections it reads (its own and every `include … from`)
   as used; sync then fetches them. A query's result has `complete: false`
-  until the node has once been level with a node holding the whole space for
-  every collection it reads.
+  until, for every collection it reads, the node has once been level with a
+  node holding the whole space, **and** it lacks nothing a writer's line in
+  that collection names
+  ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+  A version naming one not here adds it to `missing` and asks every peer for
+  it by id; when it arrives it comes off. They are asked again whenever the
+  collection is level with a peer.
 - Until the node has once caught up fully with a node holding the whole space,
   it cannot know whether the space names keepers, so it holds only what it uses.
 - The node's own writes are _pending_ until `min(keepers named, max(copies ?? 2,
@@ -310,15 +315,15 @@ counts ([spec 05 §9](https://github.com/leifriksheim/weave/blob/main/spec/05-sy
 
 This state is kept in the space's own store (`spaces/<spaceId>`):
 
-| Key                    | Value (UTF-8 JSON)                                                                                                                                                                                                                |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cache`                | `{ "settled": boolean, "used": { [collection]: ms }, "level": { [collection]: ms } }`. `settled`: has synced with a whole-space peer; `used`: when a query last used it; `level`: when it was first level with a whole-space peer |
-| `pending/<version id>` | `{ "collection": string, "by": [keeper DID…] }`, deleted once `by` reaches the target                                                                                                                                             |
+| Key                    | Value (UTF-8 JSON)                                                                                                                                                                                                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cache`                | `{ "settled": boolean, "used": { [collection]: ms }, "level": { [collection]: ms }, "missing": { [collection]: [version id…] } }`. `settled`: has synced with a whole-space peer; `used`: when a query last used it; `level`: when it was first level with a whole-space peer; `missing`: what a writer's line there names that isn't here |
+| `pending/<version id>` | `{ "collection": string, "by": [keeper DID…] }`, deleted once `by` reaches the target                                                                                                                                                                                                                                                      |
 
-Completeness rests on trust: a keeper that withholds versions, or a peer
-holding `"all"` that lost some, still counts as level, and a reader cannot
-tell. Signed writer logs will replace this definition of complete
-([spec 05 §9.1](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
+What a keeper withholds from the middle of a writer's line shows up as
+missing, whichever peer the node was level with. A writer's newest versions
+are named by no line yet; holding those back needs every peer the node syncs
+with to do it.
 
 The account registry, the contacts space and carry spaces are always held
 whole. Apps connected to an account home use `cache: {}` by default ([the app-side client](#the-app-side-client)).
@@ -329,7 +334,7 @@ _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space")
 
 > **Planned.** None of it changes what other nodes see. Fetching linked
 > records by key, and holding less than a collection, need new messages and
-> are planned in [spec 05 §9.2](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md).
+> are planned in [spec 05 §9.1](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md).
 
 - **Widening.** A node holding part of a space starts holding all of it when
   too few keepers are online (Holochain's arcs: nodes grow their share when

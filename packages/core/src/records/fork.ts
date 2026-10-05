@@ -43,6 +43,21 @@ export function breaksLine(next: Version, previous: Version): boolean {
   );
 }
 
+/**
+ * Whether `next`, which names `previous` as the version before it in its
+ * key's line for its collection, can't follow it: another key's, another
+ * space's or collection's, or not one place before in that line.
+ */
+export function breaksCollectionLine(next: Version, previous: Version): boolean {
+  return (
+    next.log?.c.prev === previous.id &&
+    (previous.author !== next.author ||
+      previous.space !== next.space ||
+      previous.collection !== next.collection ||
+      previous.log?.c.n !== next.log.c.n - 1)
+  );
+}
+
 /** What a proven fork says: whose log, and from which place on */
 export interface Fork {
   readonly writer: string;
@@ -93,8 +108,18 @@ export async function checkFork(
     [first, second],
     [second, first],
   ] as const) {
-    if (next.log && breaksLine(next, previous)) return { writer: next.author, from: next.log.n };
+    if (next.log && (breaksLine(next, previous) || breaksCollectionLine(next, previous)))
+      return { writer: next.author, from: next.log.n };
   }
+  // Two at one place in a collection's line: a fork there, from the first of them.
+  if (
+    first.author === second.author &&
+    first.collection === second.collection &&
+    first.log &&
+    second.log &&
+    first.log.c.n === second.log.c.n
+  )
+    return { writer: first.author, from: Math.min(first.log.n, second.log.n) };
   if (first.author !== second.author) return 'A fork is proven by versions one key signed';
   if (first.log?.n === undefined || first.log.n !== second.log?.n)
     return 'A fork is proven by versions at one place in their log';

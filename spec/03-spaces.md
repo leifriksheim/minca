@@ -670,10 +670,13 @@ lower id. Every peer checks the proof itself before the change counts:
   ([02](02-records.md) §4.6) and the signature check (02 §3.3, steps 1–3);
 - both have this space as `space`, and different ids;
 - they are a **break**: one, `v`, has a `log.prev` naming the other, `p`, and
-  `p` is another key's or not one place before (`p.log.n ≠ v.log.n − 1`). Then
-  the event's `writer` is `v.author` and `from` is `v.log.n`;
-- or else a **fork**: the same `author` and the same `log.n`. Then `writer` is
-  the shared `author` and `from` the shared `log.n`;
+  `p` is another key's or not one place before (`p.log.n ≠ v.log.n − 1`); or a
+  `log.c.prev` naming `p`, and `p` is another key's or another collection's, or
+  not one place before in that line (`p.log.c.n ≠ v.log.c.n − 1`). Then the
+  event's `writer` is `v.author` and `from` is `v.log.n`;
+- or else a **fork**: the same `author` and the same `log.n`; or the same
+  `author`, `collection` and `log.c.n`. Then `writer` is the shared `author`
+  and `from` the lower `log.n` of the two;
 - the record key is `fork:<hex40(writer)>`.
 
 Anything else is not a well-formed change and is ignored like any other

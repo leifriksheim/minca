@@ -117,6 +117,8 @@ export interface SyncEngine {
   handleMessage(peerId: string, message: unknown): Promise<void>;
   /** Says hello to these peers now, rather than at the next heartbeat. */
   notifyPeers(peers: ReadonlyArray<string>): void;
+  /** Asks every peer that holds the collection for these versions, by id, ahead of the rest */
+  ask(collection: string, ids: ReadonlyArray<string>): void;
   onLocalChange(version: Version): void;
   addPeer(peerId: string): void;
   removePeer(peerId: string): void;
@@ -242,6 +244,13 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
    * fetching the real one from someone else.
    */
   const refused = new Set<string>();
+  /**
+   * Which connection to each peer is open now, numbered across all of them:
+   * what a message arrived on, so one from a connection since closed is not
+   * taken for the new one's.
+   */
+  const connections = new Map<string, number>();
+  let lastConnection = 0;
   const refusal = (peerId: string, id: string) => `${peerId}\n${id}`;
 
   /** What one message brought in: the versions stored, and the versions they wait for, to ask for */
@@ -686,7 +695,12 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     handleMessage(peerId: string, message: unknown): Promise<void> {
       // One peer's messages are handled in the order they came: a hello saying
       // where things stand must not overtake the versions sent before it.
-      const run = (inOrder.get(peerId) ?? Promise.resolve()).then(() => handle(peerId, message));
+      // One that came on a connection since closed is dropped when its turn
+      // comes: the peer may be back on a new one, which knows nothing of it.
+      const connection = connections.get(peerId);
+      const run = (inOrder.get(peerId) ?? Promise.resolve()).then(() =>
+        connections.get(peerId) === connection ? handle(peerId, message) : undefined,
+      );
       inOrder.set(peerId, run);
       void run.finally(() => {
         if (inOrder.get(peerId) === run) inOrder.delete(peerId);
@@ -698,6 +712,12 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       for (const peer of peerIds) if (peers.has(peer)) void hello(peer).catch((err) => emit('error', err));
     },
 
+    ask(collection: string, ids: ReadonlyArray<string>) {
+      if (ids.length === 0) return;
+      for (const peer of peers)
+        if (holdsCollection(states.get(peer)?.holds ?? 'all', collection)) want(peer, collection, ids, true);
+    },
+
     onLocalChange(version: Version) {
       // Not to a peer whose hello said it doesn't hold the collection: it would pass it by.
       for (const peer of peers) {
@@ -707,11 +727,15 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     },
 
     addPeer(peerId: string) {
+      // A new connection: nothing half-finished from an earlier one carries over.
+      connections.set(peerId, ++lastConnection);
+      states.delete(peerId);
       peers.add(peerId);
     },
 
     removePeer(peerId: string) {
       // A dropped peer must not leave half-finished sessions holding memory.
+      connections.delete(peerId);
       peers.delete(peerId);
       states.delete(peerId);
     },
