@@ -176,7 +176,7 @@ export const inviteKey = (inviteDid: string) => hashedKey('invite', inviteDid);
 export const revokeKey = (noteCid: string) => hashedKey('revoke', noteCid);
 /**
  * Where proof that an account broke the protocol's rules is kept, one record
- * per account: `{ kind, evidence }` (spec 03 §6.6).
+ * per accused account and writer, written once: `{ kind, evidence }` (spec 03 §6.6).
  */
 export const WARRANT_COLLECTION = 'sys.warrant';
 /**

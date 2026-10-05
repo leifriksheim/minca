@@ -2919,11 +2919,16 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         return chainProblem(offending, context) ? 'holds' : 'false';
       }
       case 'standing':
-        if (ACCESS_COLLECTIONS.has(offending.collection) || offending.collection === WARRANT_COLLECTION)
+        if (
+          context ||
+          ACCESS_COLLECTIONS.has(offending.collection) ||
+          offending.collection === WARRANT_COLLECTION
+        )
           return 'false';
         return standingBroken(offending, root);
       case 'access': {
-        if (!ACCESS_COLLECTIONS.has(offending.collection) || !('body' in offending)) return 'false';
+        if (context || !ACCESS_COLLECTIONS.has(offending.collection) || !('body' in offending))
+          return 'false';
         const event = await buildEvent(offending);
         if (!event) return 'false';
         const state = (await access()).history.at(event.seen);
@@ -2931,27 +2936,26 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         return refusal(event, state) ? 'holds' : 'false';
       }
       case 'warrant': {
-        if (offending.collection !== WARRANT_COLLECTION || !('body' in offending)) return 'false';
-        const inner = await warrantVerdict(offending, { nested: true });
+        if (context || offending.collection !== WARRANT_COLLECTION || !('body' in offending)) return 'false';
+        // A warrant against a warrant against a warrant proves nothing more: such a chain is never
+        // proof, so an honest node's true counter-warrant can't be turned on its writer.
+        if (readWarrant((await openBody(offending)).body)?.kind === 'warrant') return 'false';
+        const inner = await warrantVerdict(offending);
         return inner === 'false' ? 'holds' : inner === 'holds' ? 'false' : inner;
       }
     }
   }
 
   /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
-  async function warrantVerdict(
-    version: Version,
-    options: { nested?: boolean } = {},
-  ): Promise<WarrantVerdict> {
-    if (version.deleted) return 'false';
+  async function warrantVerdict(version: Version): Promise<WarrantVerdict> {
+    // Written once and kept whole: no later version can take its place, and no delete.
+    if (version.deleted || version.seq !== 0 || !version.retain) return 'false';
     const warrant = readWarrant((await openBody(version)).body);
     if (!warrant) return 'false';
-    // A warrant against a warrant against a warrant proves nothing more.
-    if (options.nested && warrant.kind === 'warrant') return 'false';
     const against = warrant.evidence[0] && (await accountable(warrant.evidence[0]));
     const by = (await judge(version)).root;
-    // Its key names both: a version under someone else's key is never theirs to write.
-    if (!against || !by || version.key !== (await warrantKey(against, by))) return 'false';
+    // Its key names both, so it is its writer's own; and nobody warrants themselves.
+    if (!against || !by || against === by || version.key !== (await warrantKey(against, by))) return 'false';
     return evidenceHolds(warrant.kind, warrant.evidence);
   }
 
@@ -2978,19 +2982,20 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /**
    * Writes down, as this account's own record, the proof a version gives
-   * against its account — unless a warrant against that account stands here
-   * already, from anyone. Any member may; one that can't write leaves it to
-   * one that can.
+   * against its account, once. Every member that sees it may: a flag that
+   * leaned on someone else's warrant would go when that warrant's writer
+   * left. One that can't write leaves it to one that can.
    */
   async function warrantIfDue(version: Version): Promise<void> {
     if (closed || (await cannotWrite())) return;
     const violation = await violationIn(version);
     if (!violation) return;
     const root = (await judge(version)).root!;
-    if ((await flagged()).some((flag) => flag.account === root)) return;
+    if (root === deps.rootDid) return;
+    const key = await warrantKey(root, deps.rootDid);
     // Checked again: the space may have closed while the proof was being worked out.
-    if (closed) return;
-    await upsert(WARRANT_COLLECTION, await warrantKey(root, deps.rootDid), violation);
+    if ((await storage.getCurrent(key)) || closed) return;
+    await upsert(WARRANT_COLLECTION, key, violation);
   }
 
   /** The accounts proven to have broken the protocol's rules here, by the warrants that stand */
@@ -2998,6 +3003,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const found: FlaggedAccount[] = [];
     for (const version of await everyCurrent(WARRANT_COLLECTION)) {
       if (version.deleted || !(await standingOf(version)).ok) continue;
+      // Only proof this peer checked: one that stands unjudged, for want of rules it can't read, flags nobody.
+      if ((await warrantVerdict(version)) !== 'holds') continue;
       const warrant = readWarrant((await openBody(version)).body);
       const offending = warrant?.evidence[0];
       const account = offending && (await accountable(offending));

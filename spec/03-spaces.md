@@ -715,40 +715,47 @@ account. Only an account the history names (`named`, §3.4, §4.6) can be warran
 a stranger minting keys and notes costs nobody a write.
 
 A warrant is **its writer's own record**: its key names both the account and
-the account that wrote it, so only that writer can write any version of it,
-and neither the accused nor anyone else can replace it. A writer has at most
-one warrant against each account. A node writes one only when no warrant
-against that account stands in the space already. The kinds:
+the account that wrote it, so only that writer can write any version of it.
+It is **written once**: only a `seq 0` version with `retain: true` can stand,
+so not even its writer can replace or delete it. Nobody warrants themselves.
+A writer has at most one warrant against each account, so warrants cost at
+most one record per member and accused account. The kinds:
 
-| `kind`     | `evidence`                                        | Holds when                                                                                                                                                                               |
-| ---------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chain`    | `[v, p]`, both without bodies                     | `p.id = v.prev` and `v` does not follow `p` ([02](02-records.md) §4.7)                                                                                                                   |
-| `standing` | `[v]`, without its body; not an access collection | as of `at(v.seen)`: `v`'s root holds no role; or `v.seq > 0` and the rules in force say `final`; or `v.seq = 0` and the rule for `create` doesn't allow the root's role (§5.2 steps 6–7) |
-| `access`   | `[v]`, whole; an access collection                | `v`'s event, built as §3.3 says, is refused by its author's power as of `at(event.seen)` (§4.5): not a rival it hadn't seen, and not a change made later                                 |
-| `warrant`  | `[w]`, whole; a `sys.warrant`                     | `w` is a warrant of another kind whose proof does not hold                                                                                                                               |
+| `kind`     | `evidence`                                                 | Holds when                                                                                                                                                                               |
+| ---------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chain`    | `[v, p]`, both without bodies                              | `p.id = v.prev` and `v` does not follow `p` ([02](02-records.md) §4.7)                                                                                                                   |
+| `standing` | `[v]`, without its body; not an access collection          | as of `at(v.seen)`: `v`'s root holds no role; or `v.seq > 0` and the rules in force say `final`; or `v.seq = 0` and the rule for `create` doesn't allow the root's role (§5.2 steps 6–7) |
+| `access`   | `[v]`, whole; an access collection                         | `v`'s event, built as §3.3 says, is refused by its author's power as of `at(event.seen)` (§4.5): not a rival it hadn't seen, and not a change made later                                 |
+| `warrant`  | `[w]`, whole; a `sys.warrant` not itself of kind `warrant` | `w`'s proof does not hold. A warrant against a `warrant`-kind warrant never holds, so a true counter-warrant can't be turned on its writer                                               |
 
 A `sys.warrant` version stands when its author may write in the space (§5.2)
 and its proof holds: it is well formed, its `evidence[0]` is validly signed
 (02 §3.3) in this space by a key whose root the history names, its record key
-is `warrant:<hex40(that root + "|" + the warrant's own root)>`, and its
-kind's check holds. A delete of a warrant never stands. A peer:
+is `warrant:<hex40(that root + "|" + the warrant's own root)>`, the two roots
+differ, it is a `seq 0` version with `retain: true`, its `evidence` has
+exactly the versions its kind's row lists, and its kind's check holds. A
+delete of a warrant never stands. A peer:
 
 - judges it **not yet** when what the check needs is not here (`at(seen)`
   unknown);
 - lets it stand without judging it when the check needs rules it can't read,
-  or its `kind` is one it doesn't know (a lower-case word of at most 32
-  characters), and never flags anyone by it;
+  or its `kind` is one it doesn't know (1 to 32 lower-case letters, `a`–`z`),
+  and never flags anyone by it. An account is flagged only by a warrant whose
+  proof this peer checked and found to hold;
 - refuses it otherwise. A refused warrant is itself proof, of kind `warrant`,
   against whoever wrote it.
 
 A peer that refuses a version that would be evidence of a kind above SHOULD
-write the warrant, unless the account has one in the space already. So does a
-peer that stores an access change whose author had no power for it as of what
-it saw.
+write the warrant, unless it has written one against that account already.
+So does a peer that stores an access change whose author had no power for it
+as of what it saw. It does not hold back because someone else's warrant
+stands: that warrant goes if its writer leaves or is removed, and the
+offending version, refused, is never seen again.
 
 Example: Bob, an editor, signs a `sys.member` making himself owner, with
 `seen` naming the space's latest changes. Every peer drops the change (§4.5).
-Alice's node, which holds it, writes `sys.warrant` at `warrant:<hex40(Bob)>`
+Alice's node, which holds it, writes `sys.warrant` at
+`warrant:<hex40(Bob + "|" + Alice)>`
 with `{ "kind": "access", "evidence": [<that version>] }`. Every member's node
 checks the proof and shows Bob flagged; Alice decides whether to remove him.
 
@@ -766,7 +773,9 @@ checks the proof and shows Bob flagged; Alice decides whether to remove him.
 > arrived, and peers would disagree. A stolen key could also get its owner
 > removed. The protocol already has signed ways to take away a key's writes
 > (§6.4) and a person's place (§6.1); a warrant puts the proof in front of the
-> people who can use them.
+> people who can use them. Since it can't be taken back, a flag earned by a
+> stolen key stays after the owner revokes its note; it names the key, and
+> the revoke explains it.
 
 > **Planned:** more kinds. A `note` kind (a version under a note made out to
 > another key, or not covering what it writes) once there is an account to

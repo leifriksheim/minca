@@ -205,6 +205,93 @@ describe('warrants', () => {
       );
   });
 
+  test('an honest warrant against a false one can’t be turned on its writer', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    const honest = await alice.node.records.put(space, 'app.note', { text: 'honest' });
+    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    await until(async () => (await aliceStore.getVersion(honest.version)) !== null, 4000, 'the note');
+    // Bob accuses Alice falsely; her node writes, truly, that his warrant doesn't hold.
+    const lie = await forge(
+      bob,
+      space,
+      {
+        collection: WARRANT_COLLECTION,
+        body: { kind: 'standing', evidence: [stubOf((await aliceStore.getVersion(honest.version))!)] },
+        version: { key: await warrantKey(alice.node.did, bob.node.did), seq: 0 },
+        retain: true,
+      },
+      { keep: false },
+    );
+    await slip(bob, space, [lie]);
+    await flaggedEverywhere([alice, bob], space, bob.node.did, 'warrant');
+    const hers = (await aliceStore.getCurrent(await warrantKey(bob.node.did, alice.node.did)))!;
+    // Bob then warrants her warrant. A warrant against a warrant-kind warrant is never proof.
+    const counter = await forge(
+      bob,
+      space,
+      {
+        collection: WARRANT_COLLECTION,
+        body: { kind: 'warrant', evidence: [hers] },
+        version: { key: await warrantKey(alice.node.did, bob.node.did), seq: 0 },
+        retain: true,
+      },
+      { keep: false },
+    );
+    await slip(bob, space, [counter]);
+    const after = await bob.node.records.put(space, 'app.note', { text: 'after' });
+    await until(
+      async () => (await alice.node.records.get(space, after.key)) !== null,
+      4000,
+      'Bob’s next note',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(await aliceStore.getVersion(counter.id), null, 'refused');
+    for (const who of [alice, bob])
+      assert.equal(
+        (await flaggedFor(who, space)).some((f) => f.account === alice.node.did),
+        false,
+      );
+  });
+
+  test('the accused can’t get in first: a warrant against yourself is never proof, and can’t be replaced', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    await alice.node.collections.define(space, {
+      name: 'app.notice',
+      schema: { type: 'object' },
+      permissions: ['post'],
+      rules: { create: 'can:post' },
+    });
+    await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
+    const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
+    // Bob warrants himself first, hoping Alice's node sees him flagged and writes nothing.
+    const self = await forge(
+      bob,
+      space,
+      {
+        collection: WARRANT_COLLECTION,
+        body: { kind: 'standing', evidence: [stubOf(bad)] },
+        version: { key: await warrantKey(bob.node.did, bob.node.did), seq: 0 },
+        retain: true,
+      },
+      { keep: false },
+    );
+    await slip(bob, space, [self, bad]);
+    // Flagged all the same, for whichever Alice's node saw first: the false self-warrant, or the post.
+    for (const who of [alice, bob])
+      await until(
+        async () =>
+          (await flaggedFor(who, space)).some((f) => f.account === bob.node.did && f.by === alice.node.did),
+        8000,
+        'Bob to be flagged by Alice',
+      );
+    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    assert.equal(await aliceStore.getVersion(self.id), null, 'refused');
+    assert.ok(
+      await aliceStore.getCurrent(await warrantKey(bob.node.did, alice.node.did)),
+      'Alice wrote her own',
+    );
+  });
+
   test('a race is not misconduct: a version withdrawn by a change it had not seen is never warranted', async () => {
     const { alice, bob, space } = await sharedWithBob();
     await bob.node.records.put(space, 'app.note', { text: 'before' });

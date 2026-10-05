@@ -82,8 +82,9 @@ Each entry is `{ account, key, kind, by }`: who, which of their keys, what they
 broke (`chain`, `standing`, `access` or `warrant`), and who brought the proof.
 
 The node does this itself. When it refuses such a version it writes the proof
-as a `sys.warrant` record, at most one per account, and every member's node
-checks it before showing the flag. Nothing is done to the account by itself.
+as a `sys.warrant` record of its own, once per account it accuses, and every
+member's node checks it before showing the flag. Several members may bring
+proof against one account, so `flagged` can name an account more than once. Nothing is done to the account by itself.
 An app shows the flag to whoever manages the space, who may remove the person
 (`spaces.setMember(id, did, null)`). It also shows it to the account itself:
 a flag against your own account usually means a key of yours is being used
