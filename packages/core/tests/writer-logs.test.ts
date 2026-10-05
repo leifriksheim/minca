@@ -141,6 +141,36 @@ describe('a writer’s log', () => {
     assert.deepEqual(now, { n: was.n + 1, prev: a.version, c: { n: was.c.n + 1, prev: a.version } });
   });
 
+  test('two nodes sharing a handed-in key and its storage, as two tabs of an app do, never take one place', async () => {
+    const { me, manager } = await person();
+    const keys = await provider.generateKeyPair();
+    // One origin's storage, as every tab of an app sees it.
+    const stores = memoryStores();
+    const tab = async () => {
+      const node = await createNode({
+        signer: createLocalRootSigner(me, manager.getProvider()),
+        sessionKey: keys,
+        stores,
+        watchIntervalMs: 0,
+      });
+      open.push(node);
+      return node;
+    };
+    const first = await tab();
+    const { id: space } = await first.spaces.create({ name: 'Mine', visibility: 'public' });
+    const second = await tab();
+    const written = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        (i % 2 ? first : second).records.put(space, 'app.note', { text: `${i}` }),
+      ),
+    );
+    const store = createStorageProvider(await stores(`spaces/${space}`));
+    const places = await Promise.all(
+      written.map(async (record) => (await store.getVersion(record.version))!.log!.n),
+    );
+    assert.equal(new Set(places).size, places.length, 'no place taken twice');
+  });
+
   test('a version in a space without its place is malformed', () => {
     const version = { key: 'abc', seq: 0, space: 's', bodyHash: 'bx' };
     assert.match(checkVersionShape(version) ?? '', /place in its writer/);

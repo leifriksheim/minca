@@ -169,10 +169,16 @@ before the version leaves the node. Where the places are kept depends on the key
   the key.
 - **A key handed in** (`config.sessionKey`, an agent's) or a carrier's own key
   keeps them in the `writers` store, and a restart carries on where it left off.
-  Two nodes that sign with one handed-in key at once fork its log, and every
-  peer then withdraws what it signed from the fork on: give each node its own key.
+  Such a key may be signing in several nodes at once: every tab of an app
+  signs with the app's key. So each place is taken under a Web Lock
+  (`weave-writer:head/<did>/<space>`) every tab and worker of the origin
+  shares, and read afresh from the store inside it, never from a copy in
+  memory. Nodes that share a key must share that store too, as tabs of one
+  origin share IndexedDB; two nodes signing with one key from separate stores,
+  or in separate processes without a shared lock, fork its log, and every
+  peer then withdraws what it signed from the fork on.
 
-_Source: `packages/core/src/node/writers.ts` (`createWriters`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log")._
+_Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…")._
 
 ### Writer keys
 
