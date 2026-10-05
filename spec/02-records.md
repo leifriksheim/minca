@@ -613,14 +613,9 @@ peer, and `v1`, `w1` and anything K signed after them do not.
 > new device, a new tab), so a writer who wants to look behind would only
 > change keys; and a device that lost its copy of the history would be
 > flagged for being honest. Writing as of an older point is answered where it
-> matters: for a removal or a demotion, by what the change keeps
-> ([03](03-spaces.md) §6.3).
-
-> **Planned:** rule changes that take away. Today a change to a collection's
-> rules takes nothing away, so a member can still sign as of a point before
-> the rules were narrowed and be judged under the old ones. A narrowing change
-> will take away, with a keep list, as a removal does. Tracked in
-> [#151](https://github.com/leifriksheim/weave/issues/151).
+> matters, whatever the key: a removal or a demotion, and a change to a
+> collection's rules, each takes away what it had not seen and did not keep
+> ([03](03-spaces.md) §5.1, §5.2, §6.3).
 
 > **Planned:** signed log heads, for completeness a reader can check and
 > proofs for a single record ([05](05-sync-and-storage.md) §9.1). Tracked in
@@ -720,18 +715,19 @@ space's access history ([03 — Spaces](03-spaces.md)): it carries `retain: true
 and `seen`, and which definition is in force is decided by replaying that
 history. In a private space its body is encrypted like any other record's.
 
-| Field         | Type                  | Req. | Meaning                                                                                                                                                                      |
-| ------------- | --------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | string                | yes  | Lower case, at least one dot (local to the space, §6.4): `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`. MUST NOT start with `sys.`. The record's key MUST be `collection:` + this. |
-| `title`       | string                | no   | Display name                                                                                                                                                                 |
-| `description` | string                | no   | The author's words                                                                                                                                                           |
-| `schema`      | object                | yes  | JSON Schema for a record's `body`, in the subset of §6.2                                                                                                                     |
-| `version`     | integer ≥ 1           | yes  | Shape version (§6.3)                                                                                                                                                         |
-| `history`     | `"latest"` \| `"all"` | no   | Default `"latest"`. `"all"`: writers mark every version `retain` (§4.5).                                                                                                     |
-| `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                     |
-| `permissions` | string[]              | no   | Permissions its rules may name, each `^[a-z][a-zA-Z0-9]{0,39}$` (§7.1)                                                                                                       |
-| `rules`       | object                | no   | §7                                                                                                                                                                           |
-| `topics`      | string[]              | no   | §8                                                                                                                                                                           |
+| Field         | Type                  | Req. | Meaning                                                                                                                                                                                            |
+| ------------- | --------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | string                | yes  | Lower case, at least one dot (local to the space, §6.4): `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`. MUST NOT start with `sys.`. The record's key MUST be `collection:` + this.                       |
+| `title`       | string                | no   | Display name                                                                                                                                                                                       |
+| `description` | string                | no   | The author's words                                                                                                                                                                                 |
+| `schema`      | object                | yes  | JSON Schema for a record's `body`, in the subset of §6.2                                                                                                                                           |
+| `version`     | integer ≥ 1           | yes  | Shape version (§6.3)                                                                                                                                                                               |
+| `history`     | `"latest"` \| `"all"` | no   | Default `"latest"`. `"all"`: writers mark every version `retain` (§4.5).                                                                                                                           |
+| `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                                           |
+| `permissions` | string[]              | no   | Permissions its rules may name, each `^[a-z][a-zA-Z0-9]{0,39}$` (§7.1)                                                                                                                             |
+| `rules`       | object                | no   | §7                                                                                                                                                                                                 |
+| `topics`      | string[]              | no   | §8                                                                                                                                                                                                 |
+| `keep`        | string[]              | no   | Ids of versions written under the rules before this definition that stay though they break its rules ([03](03-spaces.md) §6.3). At most 10 000. Not part of the definition: a reader takes it off. |
 
 A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
@@ -1487,7 +1483,7 @@ Given a valid signature and root, whether the version _stands_ in this space:
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed`, and on every version under `check` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`; then `check` (§7.6), which may make the version wait for versions it cites.
 
-   When step 3 fails only on the access history's judgement of a change that came after the version (a removal it had not seen, its note revoked, or its key's log proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges step 5, and the version is **withdrawn** if that passes.
+   When step 3 fails only on the access history's judgement of a change that came after the version (a removal it had not seen, its note revoked, its key's log proven forked at or before it, or rules it had not seen that it breaks: [03](03-spaces.md) §5.1 steps 2 and 4, §5.2 step 10, §4.10), the peer still judges step 5, and the version is **withdrawn** if that passes.
 
 ### 9.5 What a peer does with a refused version
 

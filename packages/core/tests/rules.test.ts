@@ -220,6 +220,57 @@ describe('rules: who may edit and delete', () => {
   });
 });
 
+describe('rules: changing them', () => {
+  test('narrowed rules can’t be dodged by writing as of before the change; what was there is kept', async () => {
+    const { alice, bob, space } = await pollSpace();
+    const board = { name: 'app.board', schema: { type: 'object' }, permissions: ['post'] };
+    await alice.node.collections.define(space, board);
+    await until(
+      async () => (await bob.node.collections.list(space)).some((c) => c.name === 'app.board'),
+      4000,
+      'the definition',
+    );
+    const early = await bob.node.records.put(space, 'app.board', { text: 'early' });
+    await until(async () => (await alice.node.records.get(space, early.key)) !== null, 4000, 'Bob’s post');
+    const seenThen =
+      (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(early.version))!.seen ??
+      [];
+
+    // Only those who may post, now: Bob, an editor, may not.
+    await alice.node.collections.define(space, { ...board, rules: { create: 'can:post' } });
+    await until(
+      async () => !(await bob.node.records.can(space, 'create', 'app.board')),
+      4000,
+      'the narrowed rules to reach Bob',
+    );
+
+    // He signs one that claims to have been written before the change.
+    const backdated = await forge(
+      bob,
+      space,
+      { collection: 'app.board', body: { text: 'backdated' }, seen: seenThen },
+      { keep: false },
+    );
+    await letGo(bob.node, space);
+    await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(backdated);
+    await hold(bob.node, space);
+    await until(
+      async () => (await (await stored(alice.stores, space)).getVersion(backdated.id)) !== null,
+      4000,
+      'the backdated post to reach Alice',
+    );
+    assert.equal(
+      await alice.node.records.get(space, backdated.key),
+      null,
+      'judged by the rules it had not seen',
+    );
+    assert.equal(await bob.node.records.get(space, backdated.key), null);
+    // What Alice had seen when she narrowed them stays.
+    assert.notEqual(await alice.node.records.get(space, early.key), null);
+    assert.notEqual(await bob.node.records.get(space, early.key), null);
+  });
+});
+
 describe('rules: one per something', () => {
   for (const visibility of ['public', 'private'] as const) {
     test(`voting again changes your vote — one per person per poll (${visibility} space)`, async () => {
