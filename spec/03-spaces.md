@@ -634,20 +634,23 @@ _Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `rem
 
 ### 6.5 Proving a fork
 
-A member who holds two versions that prove a key forked its log
-([02](02-records.md) §4.10) writes `sys.fork` at `fork:<hex40(writer DID)>`
+A member who holds two versions that prove a key's log is not one line, a
+fork or a break ([02](02-records.md) §4.10), writes `sys.fork` at `fork:<hex40(writer DID)>`
 with `{ a, b }`: the two versions without their bodies, `a` the one with the
 lower id. Every peer checks the proof itself before the change counts:
 
 - `a` and `b` are objects with no `body` member, each passes the shape check
   ([02](02-records.md) §4.6) and the signature check (02 §3.3, steps 1–3);
-- both have this space as `space`, the same `author` and the same `log.n`,
-  and different ids;
-- the record key is `fork:<hex40(author)>`.
+- both have this space as `space`, and different ids;
+- they are a **break**: one, `v`, has a `log.prev` naming the other, `p`, and
+  `p` is another key's or not one place before (`p.log.n ≠ v.log.n − 1`). Then
+  the event's `writer` is `v.author` and `from` is `v.log.n`;
+- or else a **fork**: the same `author` and the same `log.n`. Then `writer` is
+  the shared `author` and `from` the shared `log.n`;
+- the record key is `fork:<hex40(writer)>`.
 
 Anything else is not a well-formed change and is ignored like any other
-(§3.3). The event's `writer` is the shared `author` and `from` the shared
-`log.n`. From the first applied fork of a writer on, everything it signed in
+(§3.3). From the first applied fork of a writer on, everything it signed in
 the space at `from` or later is withdrawn (§5.1 step 2). A later proof of an
 earlier place is the record's next version, and the lowest `from` applied
 counts. Nothing is kept: no one can say which branch was the owner's.
@@ -660,7 +663,7 @@ covers the place it found.
 > note (§6.4) and go on with another; the account's place in the space is a
 > person's decision to change (§6.1).
 
-_Source: `packages/core/src/records/fork.ts` (`checkFork`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork"), `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork"), `packages/core/tests/access-convergence.test.ts`._
 
 ---
 

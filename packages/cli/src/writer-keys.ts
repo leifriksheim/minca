@@ -29,6 +29,14 @@ function alive(pid: number): boolean {
   }
 }
 
+/**
+ * Holds a lock file for this process, or gives null when another running
+ * process holds it. A lock left by a process that is gone is taken over.
+ */
+export async function holdLock(file: string): Promise<(() => Promise<void>) | null> {
+  return (await lock(file)) ? () => rm(file, { force: true }) : null;
+}
+
 /** Takes a slot's lock, or says another running process holds it */
 async function lock(file: string): Promise<boolean> {
   for (let attempt = 0; attempt < 2; attempt += 1) {

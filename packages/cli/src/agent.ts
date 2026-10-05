@@ -25,6 +25,7 @@ import { base64UrlDecode } from '@weaveprotocol/core';
 import { openFsDirectory } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
+import { holdLock } from './writer-keys.js';
 
 /** The relay the apps meet on unless told otherwise */
 const DEFAULT_RELAYS: ReadonlyArray<string> = ['wss://p2p-web-relay.fly.dev'];
@@ -173,7 +174,27 @@ export async function startAgentNode(
     );
   const key = await agentKey(home);
   await checkAgentGrant(grant, key.did);
+  // One key, so one process signing with it: two at once would fork its log (spec 02 §4.10).
+  const release = await holdLock(path.join(agentDir(home), 'lock'));
+  if (!release)
+    throw new Error(
+      'This computer’s agent is already running (another `weave agent` or `weave mcp`). Stop it first: two at once would sign with one key.',
+    );
+  try {
+    return await startWithKey(home, grant, key, options, release);
+  } catch (error) {
+    await release();
+    throw error;
+  }
+}
 
+async function startWithKey(
+  home: string,
+  grant: Grant,
+  key: Stored,
+  options: { readonly nodes?: ReadonlyArray<string> },
+  release: () => Promise<void>,
+): Promise<{ node: P2PNode; grant: Grant; close(): Promise<void> }> {
   await enableWebRTC();
   const data = await openFsDirectory(path.join(agentDir(home), 'data'));
   const relays = [...new Set([...(grant.relays ?? []), ...configuredRelays()])];
@@ -202,6 +223,7 @@ export async function startAgentNode(
       stopHolding();
       await node.close().catch(() => {});
       await base.close();
+      await release();
     },
   };
 }

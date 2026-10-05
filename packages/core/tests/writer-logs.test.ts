@@ -245,6 +245,60 @@ describe('a fork', () => {
     }
   });
 
+  /** Slips versions into Bob's copy, from where they sync, as a modified client would write them */
+  async function slip(bob: Person, space: string, versions: ReadonlyArray<Version>) {
+    await letGo(bob.node, space);
+    const store = createStorageProvider(await bob.stores(`spaces/${space}`));
+    for (const version of versions) await store.addVersion(version);
+    await hold(bob.node, space);
+  }
+
+  const provenEverywhere = (who: ReadonlyArray<Person>, space: string, writer: string, from: number) =>
+    Promise.all(
+      who.map((one) =>
+        until(
+          async () =>
+            (await one.node.spaces.access(space)).forks.some((f) => f.writer === writer && f.from === from),
+          8000,
+          'the break to be proven everywhere',
+        ),
+      ),
+    );
+
+  test('a version naming another key’s as the place before it breaks its line, from there on', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    const key = await handKey(bob, space);
+    const someoneElse = await handKey(bob, space);
+    const theirs = await someoneElse.sign('theirs', { n: 0 });
+    const first = await key.sign('first', { n: 0 });
+    const broken = await key.sign('broken', { n: 1, prev: theirs.id });
+
+    await slip(bob, space, [theirs, first, broken]);
+    await provenEverywhere([alice, bob], space, key.did, 1);
+    for (const who of [alice, bob]) {
+      assert.notEqual(await who.node.records.get(space, first.key), null, 'before the break still counts');
+      assert.equal(await who.node.records.get(space, broken.key), null);
+      assert.notEqual(await who.node.records.get(space, theirs.key), null, 'the other key is not to blame');
+    }
+  });
+
+  test('a break is found whichever version arrives first', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    const key = await handKey(bob, space);
+    const first = await key.sign('first', { n: 0 });
+    // Names its own first version, but skips a place.
+    const skipping = await key.sign('skipping', { n: 2, prev: first.id });
+
+    await slip(bob, space, [skipping]);
+    await until(
+      async () => (await alice.node.records.get(space, skipping.key)) !== null,
+      8000,
+      'it to arrive',
+    );
+    await slip(bob, space, [first]);
+    await provenEverywhere([alice, bob], space, key.did, 2);
+  });
+
   test('a proof is checked by itself: one key, this space, one place, two versions, no bodies', async () => {
     const { bob, space } = await sharedWithBob();
     const key = await handKey(bob, space);
@@ -262,5 +316,22 @@ describe('a fork', () => {
     await refuse(a, stubOf(b), /without their bodies/);
     await refuse(stubOf(a), stubOf(b), /versions of this space/, 'another-space');
     await refuse(stubOf(a), { ...stubOf(b), signature: stubOf(a).signature }, /Signature/);
+  });
+
+  test('a break is proven by the version that names the wrong one, and a true link proves nothing', async () => {
+    const { bob, space } = await sharedWithBob();
+    const key = await handKey(bob, space);
+    const other = await handKey(bob, space);
+    const zero = await key.sign('zero', { n: 0 });
+    const one = await key.sign('one', { n: 1, prev: zero.id });
+    const theirs = await other.sign('theirs', { n: 0 });
+    const naming = await key.sign('naming', { n: 1, prev: theirs.id });
+    const skipping = await key.sign('skipping', { n: 3, prev: zero.id });
+
+    const proves = async (x: Version, y: Version) => checkFork(stubOf(x), stubOf(y), space, provider);
+    assert.deepEqual(await proves(naming, theirs), { writer: key.did, from: 1 });
+    assert.deepEqual(await proves(theirs, naming), { writer: key.did, from: 1 }, 'in either order');
+    assert.deepEqual(await proves(skipping, zero), { writer: key.did, from: 3 });
+    assert.match(JSON.stringify(await proves(one, zero)), /one place/, 'a true link');
   });
 });

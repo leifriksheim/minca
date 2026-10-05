@@ -50,7 +50,7 @@ import { createMirror, type Mirror } from '../storage/mirror.js';
 import type { FolderAdapter } from '../storage/folder-adapter.js';
 import { createVersionCheck } from '../validation/check-version.js';
 import type { Writers } from './writers.js';
-import { checkFork, forkProof } from '../records/fork.js';
+import { breaksLine, checkFork, forkProof } from '../records/fork.js';
 import {
   encryptVersion,
   decryptVersion,
@@ -2589,38 +2589,51 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   //
   // Every key's writes here form one line (02 §4.10). Each place a key took is
   // remembered by the version that took it, so a second version at the same
-  // place is found the moment it arrives, and proven to everyone else.
+  // place is found the moment it arrives. And each version is checked against
+  // the one it names as the place before — when it arrives, or when that one
+  // does. Either way the proof goes to everyone else.
 
   /** `log/<author>/<n>` → the id of the version that took that place */
   const LOG_PREFIX = 'log/';
+  /** `next/<id>` → the id of a version naming that one as the place before it */
+  const NEXT_PREFIX = 'next/';
 
   async function placeInLog(version: Version): Promise<void> {
     if (version.space !== space.id || !version.log) return;
+    // Its place: a second version there is a fork.
     const at = `${LOG_PREFIX}${version.author}/${version.log.n}`;
     const held = await adapter.get(at);
-    if (!held) {
-      await adapter.put(at, utf8Encode(version.id));
-      return;
+    if (!held) await adapter.put(at, utf8Encode(version.id));
+    else if (utf8Decode(held) !== version.id) {
+      const first = await storage.getVersion(utf8Decode(held));
+      if (first) void reportFork(first, version, version.author, version.log.n).catch(() => {});
     }
-    const other = utf8Decode(held);
-    if (other === version.id) return;
-    const first = await storage.getVersion(other);
-    if (first) void reportFork(first, version).catch(() => {});
+    // The place before it, if held, must be its key's; and so must it be for whatever names it.
+    if (version.log.prev) {
+      await adapter.put(`${NEXT_PREFIX}${version.log.prev}`, utf8Encode(version.id));
+      const previous = await storage.getVersion(version.log.prev);
+      if (previous && breaksLine(version, previous))
+        void reportFork(version, previous, version.author, version.log.n).catch(() => {});
+    }
+    const naming = await adapter.get(`${NEXT_PREFIX}${version.id}`);
+    const next = naming ? await storage.getVersion(utf8Decode(naming)) : null;
+    if (next?.log && breaksLine(next, version))
+      void reportFork(next, version, next.author, next.log.n).catch(() => {});
   }
 
   /**
-   * Hands every peer the proof that a key forked its log, unless a proof of a
-   * fork at or before this place stands already. Any member may; one whose
-   * note doesn't let it change access leaves it to one whose note does.
+   * Hands every peer the proof that a key's log is not one line — a fork or a
+   * break — unless a proof at or before this place stands already. Any member
+   * may; one whose note doesn't let it change access leaves it to one whose
+   * note does.
    */
-  async function reportFork(a: Version, b: Version): Promise<void> {
-    const from = a.log?.n;
-    if (from === undefined || closed) return;
-    const known = (await access()).history.forked(a.author);
+  async function reportFork(a: Version, b: Version, writer: string, from: number): Promise<void> {
+    if (closed) return;
+    const known = (await access()).history.forked(writer);
     if (known && known.from <= from) return;
     if (!noteGrants(session.proof(), accessCapability(space.id, FORK_COLLECTION)) || (await cannotWrite()))
       return;
-    await upsert(FORK_COLLECTION, await forkKey(a.author), forkProof(a, b));
+    await upsert(FORK_COLLECTION, await forkKey(writer), forkProof(a, b));
   }
 
   /** Display order: when a record was created, then its key. It decides nothing. */
