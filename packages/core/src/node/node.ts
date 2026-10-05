@@ -172,6 +172,8 @@ const DEFAULT_TTL_SECONDS = 3600;
 
 /** How long a removed carrier's space is kept open, for the carrier to hear it was removed */
 const FORGET_CARRIER_AFTER_MS = 30 * 24 * 3600 * 1000;
+/** How long leaving waits for a peer to take the account's removal before forgetting the space anyway */
+const LEAVE_WAIT_MS = 5000;
 
 function summarize(record: SpaceRecord): SpaceSummary {
   const { space, key } = record;
@@ -582,6 +584,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     });
   }
 
+  /**
+   * Writes the account's own removal from a space it is leaving, so the
+   * space stops counting it and changes its key. Best effort: a space that
+   * won't open, or a note that may not write there, still lets it leave.
+   */
+  async function giveUpPlace(spaceId: string): Promise<void> {
+    await runtime(spaceId)
+      .then((open) => open.giveUpPlace(LEAVE_WAIT_MS))
+      .catch(() => false);
+  }
+
   async function forget(spaceId: string): Promise<void> {
     if (!accountSpaceId) return;
     const open = await runtime(accountSpaceId);
@@ -775,7 +788,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           // An unreadable invite; the next version written for it will do.
         }
       } else if (membership.deleted && held.has(spaceId)) {
-        // The account left it, on some device.
+        // The account left it, on some device. If that one couldn't give up its place, this one does.
+        await giveUpPlace(spaceId);
         await closeRuntime(spaceId);
         await registry.remove(spaceId);
         changed = true;
@@ -870,6 +884,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async leave(spaceId) {
       if (spaceId === accountSpaceId) throw new Error('The account registry cannot be left');
       if (spaceId === contactsSpaceId) throw new Error('The contacts space cannot be left');
+      await giveUpPlace(spaceId);
       await forget(spaceId);
       await closeRuntime(spaceId);
       await registry.remove(spaceId);

@@ -567,31 +567,32 @@ Each is judged by §4.5.
 (allowed: a role up to your own rank), then removes themselves. The new holder
 keeps managing.
 
-**Leaving on a device:** when an account stops holding a space, it deletes
-the space's membership record in the account registry (§13.2) and forgets
-the space and its keys. Whether it must also write the self-removal above is
-not yet specified (§17). What the library does is in
+**Leaving on a device:** when an account stops holding a space in which it
+holds a role, the device that leaves **SHOULD** first write the account's own
+`sys.member` with `role: null`, and give it to at least one peer of another
+account before it forgets the space, since nothing sends it afterwards. It
+then deletes the space's membership record in the account registry (§13.2)
+and forgets the space and its keys. The replay drops the account from
+`readers`, a key change becomes due (§9.2), and a manager changes the key
+(§9.3).
+
+- A device that follows a deleted membership in the registry, while the
+  account still holds a role in that space, **SHOULD** write the self-removal
+  too: the device where the person left may have had no peer to give it to,
+  or no note that may change access. Two such removals made apart are both
+  accepted.
+- An account with no role (a view-only holder) has nothing to remove and
+  writes nothing.
+- An account that is the space's only reader writes nothing: nobody else
+  holds a key to change.
+- Anyone may leave whatever their rank, so the last account at the top can
+  leave too. The space is then left with no one holding `manage`, and that
+  is accepted.
+
+What the library does, and how long it waits for a peer, is in
 [its docs](../packages/core/docs/node.md#leaving-a-space).
 
-> **Known defect:** the reference implementation's leave is local only: it
-> deletes the membership and writes no `sys.member` self-removal, so the
-> space's history still lists the account and no key change becomes due
-> (§9). A fix is expected to write the self-removal.
-> Tracked in [#15](https://github.com/leifriksheim/weave/issues/15).
-
-> **Planned:** leaving writes the self-removal. A device that leaves first
-> writes the account's own `sys.member` with `role: null`, then forgets the
-> space as today. The replay then drops the account from `readers`, a key
-> change becomes due (§9.2), and a manager changes the key (§9.3). Anyone may
-> leave whatever their rank, so the last account at the top can leave too:
-> the space is then left with no one holding `manage`, and that is accepted.
-> Handing over (give your role, then leave) needs nothing new in the
-> protocol. Open questions: a device that cannot write (a view-only holder)
-> has nothing to remove; and whether a device that follows a deleted
-> membership in the registry (§13.2) should also write the self-removal, or
-> leave it to the device where the person pressed Leave. Tracked in
-> [#15](https://github.com/leifriksheim/weave/issues/15), part of the
-> convergence work in [#10](https://github.com/leifriksheim/weave/issues/10).
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry")._
 
 ### 6.3 Keep lists
 
@@ -1266,8 +1267,6 @@ Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
 
 ## 17. Not yet specified
 
-- Leaving a space (§6.2) writes no self-removal yet; planned in §6.2
-  ([#15](https://github.com/leifriksheim/weave/issues/15)).
 - Deleting an invite record does not close it; planned in §7.2
   ([#20](https://github.com/leifriksheim/weave/issues/20)).
 - That every peer reaches the same access state under any interleaving is

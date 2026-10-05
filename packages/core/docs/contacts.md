@@ -99,8 +99,9 @@ into another space, or re-posted by someone else, does not open.
 - `accept(space, requestKey)` joins the invite (spec 03 §7.6) and writes a
   `std.contact` for the asker with the space for two. There is no reply
   record: joining is the answer.
-- `remove(did)` leaves the space for two (locally, spec 03 §6.2) unless
-  another contact names it, and deletes the `std.contact`.
+- `remove(did)` leaves the space for two (spec 03 §6.2), giving up the
+  account's place there, unless another contact names it, and deletes the
+  `std.contact`.
 - `block(did)` leaves the space for two likewise and writes the contact with
   `blocked: true`.
 - `others(did)` lists accounts other than the two seen in the space for two

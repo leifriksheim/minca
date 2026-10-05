@@ -210,20 +210,28 @@ _Source: `packages/core/src/node/node.ts` (`runtime`, `hold`, `closeRuntime`). T
 
 ## Leaving a space
 
-`spaces.leave(id)` deletes the space's `sys.joined` record in the account
-registry, closes the space and forgets it with its keys. It is local: it
-writes no `sys.member` self-removal, so the space's history still lists the
-account, keeps it a reader, and no key change becomes due. To give up the
-role too, call `setMember(id, self, null)` first. The account registry and
-the contacts space cannot be left.
+`spaces.leave(id)` first gives up the account's place in the space
+([spec 03 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)):
+it writes the account's own `sys.member` with `role: null`, so the others
+stop counting it a reader and a private space's key changes. Then it deletes
+the space's `sys.joined` record in the account registry, closes the space and
+forgets it with its keys. The account registry and the contacts space cannot
+be left.
 
-> **Known defect:** a leave should also give up the account's place in the
-> space ([spec 03 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md),
-> planned there). The fix makes `spaces.leave` write the account's own
-> `sys.member` with `role: null` first, then forget the space as today.
-> Tracked in [#15](https://github.com/leifriksheim/weave/issues/15).
+- The removal goes out only while the space is open, so `leave` waits up to
+  5 s for a peer of another account to say it has it. With nobody reachable,
+  it leaves anyway.
+- Another device of the account that follows the deleted `sys.joined`, and
+  still sees the account holding a role, writes the removal itself, and waits
+  the same way.
+- Shared to view, or the only reader left, there is nothing to write and
+  `leave` returns at once.
+- A note that may not change access (a narrow app note) can't write the
+  removal; `leave` still forgets the space, and another device writes it.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `forget`). Tests: `packages/core/tests/node.test.ts` ("the account registry")._
+`contacts.remove` and `contacts.block` leave the space for two this way.
+
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry")._
 
 ## Holding part of a space
 

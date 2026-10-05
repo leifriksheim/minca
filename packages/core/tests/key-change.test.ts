@@ -249,6 +249,34 @@ describe('removing someone from a private space', () => {
   });
 });
 
+describe('leaving a private space', () => {
+  test('gives up your place: the others stop counting you, and the key changes', async () => {
+    const { alice, bob, carol, space } = await team3();
+    await carol.node.spaces.leave(space);
+    assert.equal(await carol.node.spaces.get(space), null, 'Carol forgot the space');
+
+    const members = async (who: Person) => (await who.node.spaces.access(space)).members.map((m) => m.did);
+    for (const who of [alice, bob])
+      await until(async () => !(await members(who)).includes(carol.node.did), 6000, 'the removal to arrive');
+    await until(async () => (await keyChanges(alice, space))?.changes === 1, 6000, 'a new key');
+    await until(async () => (await keyChanges(bob, space))?.held === true, 6000, 'Bob to get it');
+  });
+
+  test('shared to view, there is nothing to give up', async () => {
+    const { hub, alice, space } = await team3();
+    const dave = await person(hub);
+    await dave.node.spaces.join(await alice.node.spaces.invite(space, { write: false }));
+    await hold(dave.node, space);
+    const before = (await alice.node.spaces.access(space)).heads;
+
+    const started = Date.now();
+    await dave.node.spaces.leave(space);
+    assert.ok(Date.now() - started < 1000, 'no removal to wait for');
+    assert.equal(await dave.node.spaces.get(space), null);
+    assert.deepEqual((await alice.node.spaces.access(space)).heads, before);
+  });
+});
+
 describe('proving you may read, after the key changed', () => {
   /** A session key for someone, with the note that makes it theirs */
   async function session(who: Person, space: string) {
