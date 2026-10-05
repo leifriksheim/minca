@@ -101,25 +101,34 @@ two implementations must read it the same way.
 ## Every protocol change is reviewed adversarially
 
 Tests show a change does what its author meant. They don't show it can't be
-turned against someone, so they aren't enough. Before a change to `spec/`, or
-to protocol code in `packages/core/src` (records, sync, space, identity,
-network, node), is called done or merged:
+turned against someone, so they aren't enough. A protocol change is one to
+`spec/`, or to code any spec _Source:_ line cites (`packages/core/src`,
+`packages/relay`, the protocol parts of `packages/cli`, the grant in
+`apps/home`). Before one is called done or merged:
 
 1. Run the `protocol-reviewer` agent (`.claude/agents/protocol-reviewer.md`)
-   on the branch. It works from the diff, the spec and
-   `spec/threat-model.md`, and is not told why the change is right.
-2. Fix every blocker. Answer every other finding: fixed, filed as an issue, or
-   why it isn't one.
+   on the branch, with nothing about why the change is right. It works from
+   the diff, the spec and `spec/threat-model.md`, and proves each blocker with
+   a probe test.
+2. Fix every blocker, and keep its probe as a test that fails without the
+   fix. Answer every other finding: fixed, filed as an issue, or why it isn't
+   one. Run the review again after fixing a blocker; fixes open holes too.
 3. Put the findings and what was done about each under **Adversarial review**
-   in the PR description.
+   in the PR description, and say under **Threat model** what changes there.
+   CI (`scripts/check-review.mjs`) fails a protocol PR without both.
 4. If a guarantee in `spec/threat-model.md` changes, or a new gap opens,
-   change that page in the same PR.
+   change that page in the same PR. A change to that page is reviewed against
+   every "Holds" claim on it, not only the ones it touches.
 
-Design against the threat model, not only against the issue at hand: for
-every new record, ask who may write its next version, and for every mechanism
-that punishes or withdraws, ask who could aim it at an honest party.
-Audits of the spec look for soundness (spec against spec, spec against code,
-attacks), not only for what went stale.
+Design against the threat model, not only against the issue at hand: ask its
+§5 questions while designing, not only at review.
+
+Diffs only show what changed. Before each release, and whenever the threat
+model changes, audit the whole spec for soundness: one reviewer per adversary
+in the threat model's §2, in parallel, each trying to break every "Holds"
+claim about it and every rule it could abuse, spec against spec and spec
+against code. File what they find. An audit that only looks for what went
+stale is not this one.
 
 ## Issues and pull requests
 

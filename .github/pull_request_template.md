@@ -9,10 +9,10 @@
 ## Adversarial review
 
 <!--
-Required for any change to spec/ or protocol code in packages/core/src.
+Required for any change to spec/ or code a spec Source line cites; CI checks it (scripts/check-review.mjs).
 Run the protocol-reviewer agent on the branch (.claude/agents/protocol-reviewer.md),
-then list each finding and what was done about it: fixed, filed (#N), or why it isn't one.
-Write "Not a protocol change" otherwise.
+then list each finding and what was done about it: fixed (with the test that shows it), filed (#N), or why it isn't one.
+Run it again after fixing a blocker. Write "Not a protocol change" for a change outside the protocol.
 -->
 
 ## Threat model
