@@ -124,27 +124,27 @@ A version is a JSON object with these members. Optional members are
 **absent** when they do not apply — never `null`, never `false`, never an empty
 list unless a list is meant (an absent member and a present one hash differently).
 
-| Field        | Type     | Req.       | Meaning                                                                                                                                                                                                                           |
-| ------------ | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`         | string   | yes        | Content id of the signed part (§2). Not itself signed.                                                                                                                                                                            |
-| `author`     | string   | yes        | The `did:key` of the P-256 key that signed ([01 — Identity](01-identity.md)).                                                                                                                                                     |
-| `collection` | string   | yes        | The collection the record is in, e.g. `app.todo.item`.                                                                                                                                                                            |
-| `space`      | string   | in a space | Id of the space it belongs to. Signed, so it cannot be replayed into another space. A peer MUST refuse a version whose `space` is not the space it arrived for.                                                                   |
-| `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3); used for judging the delegation (§9.3), for display, and as a sync hint ([05](05-sync-and-storage.md)).                       |
-| `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, an encryption envelope `{ "ciphertext", "iv", "keyId" }` ([03 — Spaces](03-spaces.md)). |
-| `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                        |
-| `proof`      | string   | no         | Encoded UCAN delegating to `author` the right to write here ([01 — Identity](01-identity.md)). Absent when the author signs for itself.                                                                                           |
-| `key`        | string   | yes        | The record's identity within the space, stable across versions (§4.1).                                                                                                                                                            |
-| `seq`        | integer  | yes        | `0` for the first version; each later version one more than the one it replaces.                                                                                                                                                  |
-| `prev`       | string   | seq > 0    | Id of the version this one replaces.                                                                                                                                                                                              |
-| `genesis`    | string   | seq > 0    | Id of the record's first version.                                                                                                                                                                                                 |
-| `retain`     | `true`   | no         | Keep this version after it is superseded (§4.5).                                                                                                                                                                                  |
-| `log`        | object   | in a space | Its place in its writer's log for this space: `{ "n": <integer ≥ 0> }` for the key's first version here, else `{ "n": <integer>, "prev": <id of the key's version at n − 1 here> }` (§4.10).                                      |
-| `seen`       | string[] | no         | Ids of the latest changes to the space's access history the writer knew of; the version is judged as of those ([03 — Spaces](03-spaces.md)). At most 64, each 1–128 characters.                                                   |
-| `deleted`    | `true`   | no         | This version deletes the record; `body` MUST be `null`.                                                                                                                                                                           |
-| `links`      | Link[]   | no         | What this record points at (§5). Public spaces only; in a private space links are sealed inside the body and this member is absent.                                                                                               |
-| `tags`       | string[] | no         | Blind topic tags (§8).                                                                                                                                                                                                            |
-| `signature`  | string   | yes        | base64url (no padding) of the 64-byte ECDSA P-256 / SHA-256 signature, IEEE P1363 form (r ‖ s), over the signed part.                                                                                                             |
+| Field        | Type     | Req.       | Meaning                                                                                                                                                                                                                                           |
+| ------------ | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | string   | yes        | Content id of the signed part (§2). Not itself signed.                                                                                                                                                                                            |
+| `author`     | string   | yes        | The `did:key` of the P-256 key that signed ([01 — Identity](01-identity.md)).                                                                                                                                                                     |
+| `collection` | string   | yes        | The collection the record is in, e.g. `app.todo.item`.                                                                                                                                                                                            |
+| `space`      | string   | in a space | Id of the space it belongs to. Signed, so it cannot be replayed into another space. A peer MUST refuse a version whose `space` is not the space it arrived for.                                                                                   |
+| `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3); used for judging the delegation (§9.3), for display, and as a sync hint ([05](05-sync-and-storage.md)).                                       |
+| `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, an encryption envelope `{ "ciphertext", "iv", "keyId" }` ([03 — Spaces](03-spaces.md)).                 |
+| `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                                        |
+| `proof`      | string   | no         | Encoded UCAN delegating to `author` the right to write here ([01 — Identity](01-identity.md)). Absent when the author signs for itself.                                                                                                           |
+| `key`        | string   | yes        | The record's identity within the space, stable across versions (§4.1).                                                                                                                                                                            |
+| `seq`        | integer  | yes        | `0` for the first version; each later version one more than the one it replaces.                                                                                                                                                                  |
+| `prev`       | string   | seq > 0    | Id of the version this one replaces.                                                                                                                                                                                                              |
+| `genesis`    | string   | seq > 0    | Id of the record's first version.                                                                                                                                                                                                                 |
+| `retain`     | `true`   | no         | Keep this version after it is superseded (§4.5).                                                                                                                                                                                                  |
+| `log`        | object   | in a space | Its place in its writer's log for this space, and in that log's line for its collection: `{ "n", "prev"?, "c": { "n", "prev"? } }`. `n` counts from 0, and `prev` names the key's version one place before in the same line, absent at 0 (§4.10). |
+| `seen`       | string[] | no         | Ids of the latest changes to the space's access history the writer knew of; the version is judged as of those ([03 — Spaces](03-spaces.md)). At most 64, each 1–128 characters.                                                                   |
+| `deleted`    | `true`   | no         | This version deletes the record; `body` MUST be `null`.                                                                                                                                                                                           |
+| `links`      | Link[]   | no         | What this record points at (§5). Public spaces only; in a private space links are sealed inside the body and this member is absent.                                                                                                               |
+| `tags`       | string[] | no         | Blind topic tags (§8).                                                                                                                                                                                                                            |
+| `signature`  | string   | yes        | base64url (no padding) of the 64-byte ECDSA P-256 / SHA-256 signature, IEEE P1363 form (r ‖ s), over the signed part.                                                                                                                             |
 
 A reader MUST keep and re-hash every member it receives, including ones it does
 not know: the signed part is "everything except `id`, `signature` and `body`"
@@ -216,7 +216,7 @@ part, canonical (one line in reality, wrapped here only between members):
 "bodyHash":"b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
 "collection":"app.todo.item","createdAt":"2026-09-26T12:00:00.000Z",
 "key":"mfrggzdfmztwq2lknnwg23tpoa","links":[{"rel":"about","to":"list.groceries"}],
-"log":{"n":0},"seen":["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],"seq":0,
+"log":{"c":{"n":0},"n":0},"seen":["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],"seq":0,
 "space":"bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a"}
 ```
 
@@ -224,19 +224,19 @@ The version:
 
 ```json
 {
-  "id": "bvp24phiade5evl3x5un7qv77yyp3fpkjwdeakivuxv2mz4uzbqeq",
+  "id": "bq4ldps7e2jbyewbnlj2tsrcgvnicui6cpgekt76hlkc7zepebydq",
   "author": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
   "collection": "app.todo.item",
   "createdAt": "2026-09-26T12:00:00.000Z",
   "space": "bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a",
   "key": "mfrggzdfmztwq2lknnwg23tpoa",
   "seq": 0,
-  "log": { "n": 0 },
+  "log": { "n": 0, "c": { "n": 0 } },
   "seen": ["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],
   "links": [{ "rel": "about", "to": "list.groceries" }],
   "bodyHash": "b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
   "body": { "text": "Buy milk", "done": false },
-  "signature": "vruB6GXo09dGgTlJ3wrJiWm8_SlH_tRjWWZ9z0DK3f1iffxuy7S_irESK7ZKDB8D2Pvh9-29Tj7SOPD9Y75GKQ"
+  "signature": "f-6-O0u3ci4H1P13pm48q8wmsoD-HtG7s1o9SEJOcm6h7EXAx6iHdmilR6pePBsGDHLXytMgTNwKeKaEdX0N_g"
 }
 ```
 
@@ -536,8 +536,19 @@ _Source: as §4.5. Tests: `packages/core/tests/versions.test.ts` ("a newcomer af
 A record's versions form a chain (§4.7). A key's versions form a second line,
 across records: its **log** in the space. Every version in a space carries its
 place in that line as `log` (§3.1). The key's first version in a space has
-`{"n":0}`. Each later one has `n` one more than the key's version before it
+`n` 0. Each later one has `n` one more than the key's version before it
 there, and names that version as `prev`.
+
+The log also keeps a line for each collection: `log.c` is the version's place
+among the key's versions **in its collection**, counted and linked the same
+way. `{"n":0,"c":{"n":0}}` is a key's first version in the space, and its
+first in that collection. A node that holds only some collections
+([05](05-sync-and-storage.md) §5) can walk the line of each one it holds, and
+know which of a writer's versions there it lacks.
+
+Example: key K writes `a` in `app.chat`, `b` in `app.photos`, `d` in
+`app.chat`. Their logs: `a` `{"n":0,"c":{"n":0}}`; `b`
+`{"n":1,"prev":a,"c":{"n":0}}`; `d` `{"n":2,"prev":b,"c":{"n":1,"prev":a}}`.
 
 The two lines answer different questions. A record's chain says which edit
 follows which; a writer's log says what one key signed, in order. One key
@@ -547,8 +558,8 @@ rule (§4.3) is unchanged: a log never decides which version wins.
 A writer:
 
 - MUST give each version it signs in a space the next place in its log there,
-  and MUST NOT sign two versions at one place. Writes by one key in one space
-  are made one at a time.
+  and in its collection's line, and MUST NOT sign two versions at one place in
+  either. Writes by one key in one space are made one at a time.
 - MUST remember the last place it used before the version leaves it, so a
   failure after signing can never hand out the same place again. A version
   refused before it leaves gives its place back.
@@ -565,12 +576,13 @@ A writer:
 
 A device that keeps its key keeps one log in each space for as long as it
 keeps the key; one that makes a key per run has a new log each run. Both are
-correct, and only the first can be checked over time (§9.1 of
-[05](05-sync-and-storage.md), Planned).
+correct, and only the first can be checked over time.
 
 A key used by two writers at once breaks the first rule. That is what a
 **fork** shows: **two versions with the same `author`, the same `space` and
-the same `log.n`, with different ids, each validly signed (§3.3)**. Either may
+the same `log.n`, with different ids, each validly signed (§3.3)** — or two
+with the same `author`, `space`, `collection` and `log.c.n`, proving a fork
+from the lower `log.n` of the two. Either may
 be a stub. Nothing else is needed to check one, so a fork proven by anyone is
 proven to everyone.
 
@@ -578,7 +590,9 @@ A writer that names the wrong version as the place before breaks the line in
 the same way. That is what a **break** shows: **a version `v` whose
 `log.prev` is the id of a version `p` that is another key's (`p.author ≠
 v.author`), another space's, or not one place before (`p.log.n ≠ v.log.n − 1`),
-both validly signed**. It proves `v`'s key wrote a line that isn't one, from
+both validly signed** — or whose `log.c.prev` names a version that is another
+key's, another space's or collection's, or not one place before in that line
+(`p.log.c.n ≠ v.log.c.n − 1`). It proves `v`'s key wrote a line that isn't one, from
 `v.log.n` on. A break is checked and proven exactly as a fork is, and below,
 "fork" means either.
 
@@ -617,9 +631,12 @@ peer, and `v1`, `w1` and anything K signed after them do not.
 > collection's rules, each takes away what it had not seen and did not keep
 > ([03](03-spaces.md) §5.1, §5.2, §6.3).
 
-> **Planned:** signed log heads, for completeness a reader can check and
-> proofs for a single record ([05](05-sync-and-storage.md) §9.1). Tracked in
-> [#13](https://github.com/leifriksheim/weave/issues/13).
+> Rationale: no Merkle roots. A log could also carry a root over all the
+> writer's earlier entries, so that one entry could be proven part of it
+> without the rest. Each version already carries its own signature, so a
+> single record needs no proof, and a node that holds a collection holds its
+> stubs (§4.5) and can walk its lines. A root would only shorten proofs, at
+> the price of another field every writer must keep exactly.
 
 _Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`write`, `placeInLog`, `reportFork`, `judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts`, `packages/cli/tests/writer-keys.test.ts`, `packages/core/tests/access-convergence.test.ts`._
 

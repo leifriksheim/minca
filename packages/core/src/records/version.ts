@@ -115,14 +115,22 @@ function checkLogShape(version: Partial<Version>): string | null {
       ? null
       : 'A version in a space must carry its place in its writer’s log';
   if (typeof log !== 'object' || log === null || Array.isArray(log)) return 'log must be an object';
-  const keys = Object.keys(log);
-  if (keys.some((key) => key !== 'n' && key !== 'prev')) return 'log holds only n and prev';
-  if (typeof log.n !== 'number' || !Number.isSafeInteger(log.n) || log.n < 0)
+  if (Object.keys(log).some((key) => key !== 'n' && key !== 'prev' && key !== 'c'))
+    return 'log holds only n, prev and c';
+  if (typeof log.c !== 'object' || log.c === null || Array.isArray(log.c))
+    return 'A version in a space must carry its place in its collection’s line, as log.c';
+  if (Object.keys(log.c).some((key) => key !== 'n' && key !== 'prev')) return 'log.c holds only n and prev';
+  return placeProblem(log.n, log.prev, version.id) ?? placeProblem(log.c.n, log.c.prev, version.id);
+}
+
+/** Why one place in a line is malformed: `n` a whole number from 0, a `prev` from 1 on, none at 0 */
+function placeProblem(n: unknown, prev: unknown, id: string | undefined): string | null {
+  if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0)
     return 'A log position must be a whole number from 0';
-  if (log.n === 0) return log.prev === undefined ? null : 'The first place in a log names no previous one';
-  if (typeof log.prev !== 'string' || log.prev.length === 0 || log.prev.length > 128)
+  if (n === 0) return prev === undefined ? null : 'The first place in a log names no previous one';
+  if (typeof prev !== 'string' || prev.length === 0 || prev.length > 128)
     return 'A later place in a log must name the writer’s previous version';
-  return log.prev === version.id ? 'A version cannot name itself' : null;
+  return prev === id ? 'A version cannot name itself' : null;
 }
 
 /** The parts of a version its place in a record's chain is judged by */

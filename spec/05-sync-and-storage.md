@@ -246,7 +246,7 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 7` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 8` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
@@ -258,7 +258,8 @@ whose `type` is not a string. It MUST NOT answer it.
 > version a peer speaking 5 sends. Protocol 6 renamed `push-update`'s
 > `expression` member to `version`. Protocol 7 came with writers' logs
 > ([02 §4.10](02-records.md)): every version in a space carries `log`, and a
-> peer speaking 7 refuses every version a peer speaking 6 writes.
+> peer speaking 7 refuses every version a peer speaking 6 writes. Protocol 8
+> added each version's place in its collection's line, `log.c`.
 
 Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
@@ -671,48 +672,20 @@ write waits for, when an unused collection is dropped, and the store keys it
 keeps this in) is in
 [The node: holding part of a space](../packages/core/docs/node.md#holding-part-of-a-space).
 
-Today a node that holds part of a space cannot check it has everything: it
-can only trust the keepers and whole-space peers it was level with. §9.1 plans
-a check.
+A node that holds part of a space can check, for each collection it holds,
+that it lacks nothing a writer's line there names ([02 §4.10](02-records.md)):
+each version's `log.c.prev` names the writer's version before it in that
+collection, and a store keeps superseded versions as stubs (§10), so every
+version a line names is one a node that holds the collection should hold. It
+can ask any peer for one it lacks, by id (§4). What no line names yet, a
+writer's newest versions, it learns only from the peers it syncs with:
+withholding those needs every one of them to.
 
 _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space"),
 `packages/core/src/space/roles.ts` (`Keeper`, `checkKeepers`). Tests: `packages/core/tests/caches.test.ts`, `packages/core/tests/reconcile.test.ts`
 ("holding part of a space")._
 
-### 9.1 Planned: completeness from writers' logs
-
-> **Planned** ([#13](https://github.com/leifriksheim/weave/issues/13)). Not
-> normative. Replaces the library's definition of **complete**
-> ([docs](../packages/core/docs/node.md#holding-part-of-a-space)).
-
-Every key's versions in a space already form one line, its log, and a fork in
-it is proven and withdrawn ([02 §4.10](02-records.md)). What completeness adds
-on top: each version also carries a Merkle Mountain Range root over the
-writer's entries `0..n`, so a writer's head commits to everything before it.
-Logs add checks; they do not change which version wins. What changes here:
-
-- **Heads in `hello`.** Peers exchange the highest `(n, root)` they hold per
-  writer, for the spaces both hold.
-- **Complete.** A collection is complete when, for every writer, taking the
-  highest head seen from **any** peer, each entry `0..n` in that collection is
-  held, or proven superseded by a later version of the same record that is
-  held. Superseded entries are the **stubs** a store already keeps (§10), so
-  logs stay checkable while bodies are forgotten.
-- **What it guarantees.** One keeper can still hide a writer's newest entries
-  if no other peer has seen them. Withholding then needs every peer the reader
-  syncs with to collude. It is not a guarantee.
-- **`prove`.** A new message, `prove { writer, n }` → `{ envelope, proof }`,
-  serves one version with an MMR proof against a head, so a cache can check a
-  single record without syncing the collection. Useful on its own.
-
-Open: a log spans every collection a key writes in, while a node may hold only
-some; whether a leaf commits to `(id, collection)` so a partial holder can tell
-which entries it should hold; how heads are encoded in `hello` without breaking
-its 1,000-collection bound, and how many heads a hello may carry. A device
-that makes a key per run has a log per run, so completeness is checked per
-run there (02 §4.10).
-
-### 9.2 Planned: caches that fetch by key, and hold subsets
+### 9.1 Planned: caches that fetch by key, and hold subsets
 
 > **Planned.** Not normative. Both need something new on the wire. Widening a
 > cache when keepers go missing, and trimming it by size, are a node's own and
@@ -1172,7 +1145,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 7                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 8                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

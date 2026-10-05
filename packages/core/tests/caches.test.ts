@@ -19,6 +19,11 @@ import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import type { StoreFactory } from '../src/node/stores.js';
 import { until } from './helpers/until.js';
+import { createP256Provider } from '../src/identity/crypto-p256.js';
+import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
+import { createSigner } from '../src/schema/signer.js';
+import { createVersion } from '../src/schema/version.js';
+import type { Version } from '../src/types.js';
 
 const open: P2PNode[] = [];
 afterEach(async () => {
@@ -140,6 +145,57 @@ describe('holding part of a space', () => {
       'the photos',
     );
     assert.equal(await held(dave, space, 'app.photos'), 10);
+  });
+
+  test('a writer’s line that names a version not here keeps a query incomplete, until it comes', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space } = await spaceWithKeepers(hub);
+    const dave = await app(hub, alice, space);
+    const chat = () => dave.node.records.query(space, { collection: 'app.chat' });
+    await until(async () => (await chat()).complete, 5000, 'the chat to be complete');
+
+    // A key of Alice's writes twice; only the second reaches anyone, as if a keeper had held the first back.
+    const provider = createP256Provider();
+    const pair = await provider.generateKeyPair();
+    const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
+    const note = await alice.signer.delegate({
+      audience: did,
+      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const { heads: seen } = await alice.node.spaces.access(space);
+    const sign = (text: string, log: Version['log']) =>
+      createSigner(provider).sign(
+        createVersion({
+          author: did,
+          collection: 'app.chat',
+          space,
+          body: { text },
+          proof: note.encoded,
+          seen,
+          log,
+        }),
+        pair.privateKey,
+      );
+    const first = await sign('first', { n: 0, c: { n: 0 } });
+    const second = await sign('second', { n: 1, prev: first.id, c: { n: 1, prev: first.id } });
+    const slip = async (version: Version) => {
+      await letGo(bob.node, space);
+      await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(version);
+      await hold(bob.node, space);
+    };
+
+    await slip(second);
+    await until(async () => (await held(dave, space, 'app.chat')) === 11, 5000, 'the second to reach Dave');
+    await until(async () => !(await chat()).complete, 5000, 'the gap to show');
+
+    await slip(first);
+    await until(
+      async () => (await chat()).complete,
+      5000,
+      'the first to be asked for, and the chat complete',
+    );
+    assert.equal(await held(dave, space, 'app.chat'), 12);
   });
 
   test('a space that names no keeper is held whole, as before', async () => {

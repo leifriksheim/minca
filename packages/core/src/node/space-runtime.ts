@@ -50,7 +50,7 @@ import { createMirror, type Mirror } from '../storage/mirror.js';
 import type { FolderAdapter } from '../storage/folder-adapter.js';
 import { createVersionCheck } from '../validation/check-version.js';
 import type { Writers } from './writers.js';
-import { breaksLine, checkFork, forkProof } from '../records/fork.js';
+import { breaksCollectionLine, breaksLine, checkFork, forkProof } from '../records/fork.js';
 import { knownKind, readWarrant, type WarrantKind } from '../records/warrant.js';
 import {
   encryptVersion,
@@ -427,8 +427,15 @@ interface CacheState {
   settled: boolean;
   /** Collection → when a query last used it: what this node holds */
   used: Record<string, number>;
-  /** Collection → when it was first level with a node holding the whole space: what `complete` means */
+  /** Collection → when it was first level with a node holding the whole space */
   level: Record<string, number>;
+  /**
+   * Collection → versions some writer's line there names as the one before,
+   * that this node doesn't hold: until they arrive, it knows it lacks them
+   * (02 §4.10). A collection is complete when it has been level with a node
+   * holding everything and lacks nothing a line names.
+   */
+  missing: Record<string, string[]>;
 }
 
 /** A write waiting for keepers: its collection, and the keepers that have it */
@@ -448,9 +455,20 @@ async function loadCacheState(adapter: StorageAdapter): Promise<CacheState> {
           ([, v]) => typeof v === 'number',
         ),
       );
-    return { settled: saved.settled === true, used: numbers(saved.used), level: numbers(saved.level) };
+    const lists = (value: unknown): Record<string, string[]> =>
+      Object.fromEntries(
+        Object.entries(isRecord(value) ? value : {}).flatMap(([name, ids]) =>
+          Array.isArray(ids) ? [[name, ids.filter((id): id is string => typeof id === 'string')]] : [],
+        ),
+      );
+    return {
+      settled: saved.settled === true,
+      used: numbers(saved.used),
+      level: numbers(saved.level),
+      missing: lists(saved.missing),
+    };
   } catch {
-    return { settled: false, used: {}, level: {} };
+    return { settled: false, used: {}, level: {}, missing: {} };
   }
 }
 
@@ -2381,7 +2399,39 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
     }
     if (added && partial) sync.notifyPeers(connectedPeers());
-    return !partial || collections.every((c) => c.startsWith('sys.') || cacheState.level[c] !== undefined);
+    return !partial || collections.every((c) => c.startsWith('sys.') || completeHere(c));
+  }
+
+  /** Level with a node holding everything once, and lacking nothing a writer's line in it names */
+  function completeHere(collection: string): boolean {
+    return cacheState.level[collection] !== undefined && !(cacheState.missing[collection]?.length ?? 0);
+  }
+
+  /**
+   * Keeps track of what each writer's line in a held collection names that
+   * this node lacks: a version that names one not here adds it, and asks
+   * every peer for it; one that arrives takes itself off.
+   */
+  async function noteGap(version: Version): Promise<void> {
+    if (!cache || !version.log || version.collection.startsWith('sys.')) return;
+    const { collection } = version;
+    const missing = cacheState.missing[collection] ?? [];
+    let changed = false;
+    if (missing.includes(version.id)) {
+      cacheState.missing[collection] = missing.filter((id) => id !== version.id);
+      changed = true;
+    }
+    const before = version.log.c.prev;
+    if (before && !missing.includes(before) && !(await storage.getVersion(before))) {
+      cacheState.missing[collection] = [...(cacheState.missing[collection] ?? []), before];
+      sync.ask(collection, [before]);
+      changed = true;
+    }
+    if (!changed) return;
+    if (!cacheState.missing[collection]?.length) delete cacheState.missing[collection];
+    saveCache();
+    // A query that said "complete", or not, may say otherwise now.
+    if (partial) emit({ type: 'records', space: space.id });
   }
 
   /** A write of this node's, waiting for keepers — only on a node that may hold part of a space */
@@ -2429,6 +2479,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     void confirm(peer, { ids: new Set(ids) }).catch(() => {});
   });
   sync.on('level', (peer: string, collection: string, full: boolean) => {
+    // What a line names and is not here yet: asked again, of whoever holds it now.
+    const missing = cacheState.missing[collection];
+    if (cache && missing?.length) sync.ask(collection, missing);
     if (cache && full && cacheState.level[collection] === undefined) {
       cacheState.level[collection] = Date.now();
       saveCache();
@@ -2458,6 +2511,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // No longer held first, so nothing syncs it back while it goes.
       delete cacheState.used[collection];
       delete cacheState.level[collection];
+      delete cacheState.missing[collection];
       for (const item of (await storage.items(collection)).items)
         await storage.removeVersion(cidOfDigest(item.id));
       dropped = true;
@@ -2590,7 +2644,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       (!deleted && !!definition?.rules?.check?.length);
 
     // The next place in this key's log here: given back if the version is refused below.
-    const signed = await deps.writers.append(writer.did, space.id, async (log) => {
+    const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
       const { history, events: held } = await access();
       const made = await signer.sign(
         createVersion({
@@ -2702,28 +2756,52 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const LOG_PREFIX = 'log/';
   /** `next/<id>` → the id of a version naming that one as the place before it */
   const NEXT_PREFIX = 'next/';
+  /** The same two, for each key's line in each collection */
+  const COLLECTION_LOG_PREFIX = 'clog/';
+  const COLLECTION_NEXT_PREFIX = 'cnext/';
 
   async function placeInLog(version: Version): Promise<void> {
     if (version.space !== space.id || !version.log) return;
-    // Its place: a second version there is a fork.
-    const at = `${LOG_PREFIX}${version.author}/${version.log.n}`;
-    const held = await adapter.get(at);
-    if (!held) await adapter.put(at, utf8Encode(version.id));
-    else if (utf8Decode(held) !== version.id) {
-      const first = await storage.getVersion(utf8Decode(held));
-      if (first) void reportFork(first, version, version.author, version.log.n).catch(() => {});
+    const { log } = version;
+    // Two lines: everything the key wrote here, and what it wrote in this collection.
+    const lines = [
+      {
+        at: `${LOG_PREFIX}${version.author}/${log.n}`,
+        prev: log.prev,
+        next: NEXT_PREFIX,
+        breaks: breaksLine,
+      },
+      {
+        at: `${COLLECTION_LOG_PREFIX}${version.author}/${version.collection}/${log.c.n}`,
+        prev: log.c.prev,
+        next: COLLECTION_NEXT_PREFIX,
+        breaks: breaksCollectionLine,
+      },
+    ];
+    for (const line of lines) {
+      // Its place: a second version there is a fork.
+      const held = await adapter.get(line.at);
+      if (!held) await adapter.put(line.at, utf8Encode(version.id));
+      else if (utf8Decode(held) !== version.id) {
+        const first = await storage.getVersion(utf8Decode(held));
+        if (first)
+          void reportFork(first, version, version.author, Math.min(first.log?.n ?? log.n, log.n)).catch(
+            () => {},
+          );
+      }
+      // The place before it, if held, must be its key's; and so must it be for whatever names it.
+      if (line.prev) {
+        await adapter.put(`${line.next}${line.prev}`, utf8Encode(version.id));
+        const previous = await storage.getVersion(line.prev);
+        if (previous && line.breaks(version, previous))
+          void reportFork(version, previous, version.author, log.n).catch(() => {});
+      }
+      const naming = await adapter.get(`${line.next}${version.id}`);
+      const next = naming ? await storage.getVersion(utf8Decode(naming)) : null;
+      if (next?.log && line.breaks(next, version))
+        void reportFork(next, version, next.author, next.log.n).catch(() => {});
     }
-    // The place before it, if held, must be its key's; and so must it be for whatever names it.
-    if (version.log.prev) {
-      await adapter.put(`${NEXT_PREFIX}${version.log.prev}`, utf8Encode(version.id));
-      const previous = await storage.getVersion(version.log.prev);
-      if (previous && breaksLine(version, previous))
-        void reportFork(version, previous, version.author, version.log.n).catch(() => {});
-    }
-    const naming = await adapter.get(`${NEXT_PREFIX}${version.id}`);
-    const next = naming ? await storage.getVersion(utf8Decode(naming)) : null;
-    if (next?.log && breaksLine(next, version))
-      void reportFork(next, version, next.author, next.log.n).catch(() => {});
+    await noteGap(version);
   }
 
   /**

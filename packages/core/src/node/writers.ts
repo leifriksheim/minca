@@ -27,30 +27,49 @@ interface Head {
 
 export interface Writers {
   /**
-   * Signs the next version of `did`'s log in a space. `sign` is given its
-   * place and returns the version, or throws to give the place back. Writes
-   * by one key in one space go one at a time; the place is remembered before
-   * this returns, so before the version can leave the node.
+   * Signs the next version of `did`'s log in a space, in a collection. `sign`
+   * is given its places — in the space's line and the collection's — and
+   * returns the version, or throws to give them back. Writes by one key in one
+   * space go one at a time; the places are remembered before this returns, so
+   * before the version can leave the node.
    */
-  append(did: string, spaceId: string, sign: (log: WriterLog) => Promise<Version>): Promise<Version>;
+  append(
+    did: string,
+    spaceId: string,
+    collection: string,
+    sign: (log: WriterLog) => Promise<Version>,
+  ): Promise<Version>;
+}
+
+/** A key's places in one space, kept in one record so no failure can leave the two lines out of step */
+interface Places {
+  readonly head: Head;
+  readonly collections: Readonly<Record<string, Head>>;
 }
 
 const headKey = (did: string, spaceId: string) => `head/${did}/${spaceId}`;
 
-function readHead(bytes: Uint8Array | null): Head | null {
+const isHead = (value: unknown): value is Head =>
+  isRecord(value) &&
+  typeof value.n === 'number' &&
+  Number.isSafeInteger(value.n) &&
+  typeof value.id === 'string';
+
+function readPlaces(bytes: Uint8Array | null): Places | null {
   if (!bytes) return null;
   try {
     const parsed: unknown = JSON.parse(utf8Decode(bytes));
-    return isRecord(parsed) &&
-      typeof parsed.n === 'number' &&
-      Number.isSafeInteger(parsed.n) &&
-      typeof parsed.id === 'string'
-      ? { n: parsed.n, id: parsed.id }
-      : null;
+    if (!isRecord(parsed) || !isHead(parsed.head) || !isRecord(parsed.collections)) return null;
+    const collections: Record<string, Head> = {};
+    for (const [name, head] of Object.entries(parsed.collections)) if (isHead(head)) collections[name] = head;
+    return { head: parsed.head, collections };
   } catch {
     return null;
   }
 }
+
+/** The next place after a head, or the first */
+const after = (head: Head | undefined) => (head ? { n: head.n + 1, prev: head.id } : { n: 0 });
 
 /**
  * The logs of the keys one node signs with.
@@ -58,31 +77,34 @@ function readHead(bytes: Uint8Array | null): Head | null {
  *   node; null for one that doesn't, whose places are kept in memory
  */
 export function createWriters(storeOf: (did: string) => HeadStore | null): Writers {
-  const heads = new Map<string, Head | null>();
+  const kept = new Map<string, Places | null>();
   const queues = new Map<string, Promise<unknown>>();
 
-  async function headOf(did: string, spaceId: string): Promise<Head | null> {
+  async function placesOf(did: string, spaceId: string): Promise<Places | null> {
     const key = headKey(did, spaceId);
-    if (!heads.has(key)) {
+    if (!kept.has(key)) {
       const store = storeOf(did);
-      heads.set(key, store ? readHead(await store.get(key)) : null);
+      kept.set(key, store ? readPlaces(await store.get(key)) : null);
     }
-    return heads.get(key) ?? null;
+    return kept.get(key) ?? null;
   }
 
   return Object.freeze({
-    append(did: string, spaceId: string, sign: (log: WriterLog) => Promise<Version>) {
+    append(did: string, spaceId: string, collection: string, sign: (log: WriterLog) => Promise<Version>) {
       const key = headKey(did, spaceId);
       const run = (queues.get(key) ?? Promise.resolve())
         .catch(() => {})
         .then(async () => {
-          const head = await headOf(did, spaceId);
-          const log: WriterLog = head ? { n: head.n + 1, prev: head.id } : { n: 0 };
+          const places = await placesOf(did, spaceId);
+          const log: WriterLog = { ...after(places?.head), c: after(places?.collections[collection]) };
           const version = await sign(log);
-          const next = { n: log.n, id: version.id };
-          // Kept before the version can leave: a restart must never give this place again.
+          const next: Places = {
+            head: { n: log.n, id: version.id },
+            collections: { ...places?.collections, [collection]: { n: log.c.n, id: version.id } },
+          };
+          // Kept before the version can leave: a restart must never give these places again.
           await storeOf(did)?.put(key, utf8Encode(JSON.stringify(next)));
-          heads.set(key, next);
+          kept.set(key, next);
           return version;
         });
       queues.set(key, run);

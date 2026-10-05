@@ -1,4 +1,4 @@
-import type { Envelope, Version, Link, UnsignedVersion, WriterLog } from '../types.js';
+import type { Envelope, LogPlace, Version, Link, UnsignedVersion, WriterLog } from '../types.js';
 import { utf8Encode } from '../utils/encoding.js';
 import { cidFromBytes } from '../utils/hash.js';
 import { isRecord } from '../utils/guards.js';
@@ -59,6 +59,11 @@ export function canonicalize(obj: unknown): string {
   return `{${pairs.join(',')}}`;
 }
 
+/** A place with no `prev` member at 0, as the envelope carries it */
+const placeOf = (place: LogPlace): LogPlace =>
+  place.prev ? { n: place.n, prev: place.prev } : { n: place.n };
+const logOf = (log: WriterLog): WriterLog => ({ ...placeOf(log), c: placeOf(log.c) });
+
 /** Creates an unsigned version with a generated timestamp (if not provided). */
 export function createVersion<T>(params: CreateVersionParams<T>): UnsignedVersion<T> {
   return Object.freeze({
@@ -77,9 +82,7 @@ export function createVersion<T>(params: CreateVersionParams<T>): UnsignedVersio
     ...(params.deleted ? { deleted: true as const } : {}),
     ...(params.links?.length ? { links: params.links } : {}),
     ...(params.tags?.length ? { tags: params.tags } : {}),
-    ...(params.log
-      ? { log: params.log.prev ? { n: params.log.n, prev: params.log.prev } : { n: params.log.n } }
-      : {}),
+    ...(params.log ? { log: logOf(params.log) } : {}),
   });
 }
 

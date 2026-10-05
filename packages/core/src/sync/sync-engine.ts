@@ -117,6 +117,8 @@ export interface SyncEngine {
   handleMessage(peerId: string, message: unknown): Promise<void>;
   /** Says hello to these peers now, rather than at the next heartbeat. */
   notifyPeers(peers: ReadonlyArray<string>): void;
+  /** Asks every peer that holds the collection for these versions, by id, ahead of the rest */
+  ask(collection: string, ids: ReadonlyArray<string>): void;
   onLocalChange(version: Version): void;
   addPeer(peerId: string): void;
   removePeer(peerId: string): void;
@@ -696,6 +698,12 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
 
     notifyPeers(peerIds: ReadonlyArray<string>) {
       for (const peer of peerIds) if (peers.has(peer)) void hello(peer).catch((err) => emit('error', err));
+    },
+
+    ask(collection: string, ids: ReadonlyArray<string>) {
+      if (ids.length === 0) return;
+      for (const peer of peers)
+        if (holdsCollection(states.get(peer)?.holds ?? 'all', collection)) want(peer, collection, ids, true);
     },
 
     onLocalChange(version: Version) {

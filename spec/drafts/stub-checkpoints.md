@@ -293,7 +293,7 @@ each small:
   same peer for every version of that key it holds, not just the `prev`. That
   needs one new message, `want-key { id, keys }`, answered with `versions`, or
   a `want` that names a key. This is protocol (05 §4), but it is what
-  caches that fetch by key (05 §9.2, #27) need anyway.
+  caches that fetch by key (05 §9.1, #27) need anyway.
 - **Answer wants in whole records.** A responder could add the rest of a
   record's chain to a `want` answer, which 05 §8 would have to allow (today
   only versions asked for are taken).
