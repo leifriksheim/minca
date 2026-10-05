@@ -67,6 +67,8 @@ async function forge(who: Person, space: string, fields: Parameters<typeof creat
   const signed = await createSigner(provider).sign(
     createVersion({
       seen: await seenBy(who.node, space),
+      // A fresh key: its first place in its log here.
+      log: { n: 0 },
       ...fields,
       author: keyDid,
       space,

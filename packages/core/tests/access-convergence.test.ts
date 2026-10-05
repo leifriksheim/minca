@@ -45,6 +45,11 @@ type ReferenceHistory = Omit<AccessHistory, 'extend'>;
 // change it to match a new replay: that defeats the point. If the protocol's
 // rules change on purpose, the spec changes, and this copy changes with it in
 // the same commit, saying why.
+//
+// Changed with writer logs (spec 02 §4.10): a `fork` change proves a key
+// signed two versions at one place in its log. Like a revoke it always takes
+// away, any member may bring it, and a record its key signed from that place
+// on is withdrawn; the lowest place applied wins.
 
 /**
  * Whether someone holding `granted` may hand out `permission`: one of theirs
@@ -105,6 +110,7 @@ function roleOf(state: AccessState, did: string): Role | null {
 function takesAway(event: AccessEvent, state: AccessState): boolean {
   switch (event.kind) {
     case 'revoke':
+    case 'fork':
       return true;
     case 'invite':
       return !event.open;
@@ -138,6 +144,7 @@ function takesAway(event: AccessEvent, state: AccessState): boolean {
 function mayTakeAway(event: AccessEvent): boolean {
   switch (event.kind) {
     case 'revoke':
+    case 'fork':
       return true;
     case 'invite':
       return !event.open;
@@ -205,6 +212,8 @@ function refusal(event: AccessEvent, state: AccessState): string | null {
     }
     case 'revoke':
       return event.root === event.issuer ? null : 'Only whoever signed a note may revoke it';
+    case 'fork':
+      return author ? null : 'Only a member may report a fork';
     case 'definition': {
       const existing = state.definitions.get(event.name);
       if (!existing) return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
@@ -262,6 +271,7 @@ function change(event: AccessEvent, state: MutableState): void {
       state.invites.set(event.inviteKey, { role: event.role, open: event.open, event: event.id });
       return;
     case 'revoke':
+    case 'fork':
       return;
     case 'definition': {
       if (event.deleted) {
@@ -343,6 +353,7 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
   const appliedByKey = new Map<string, string[]>();
   const reductions: Reduction[] = [];
   const revokes = new Map<string, { event: string; keep: ReadonlySet<string> }>();
+  const forks = new Map<string, { event: string; from: number }>();
 
   const stateAtCache = new Map<string, AccessState>();
   const stateAt = (seen: ReadonlyArray<string>): AccessState => {
@@ -440,6 +451,8 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
     );
     if (event.kind === 'revoke' && !revokes.has(event.note))
       revokes.set(event.note, { event: event.id, keep: new Set(event.keep) });
+    if (event.kind === 'fork' && event.from < (forks.get(event.writer)?.from ?? Infinity))
+      forks.set(event.writer, { event: event.id, from: event.from });
 
     statuses.set(event.id, { status: 'applied', index: order.length });
     order.push(event.id);
@@ -475,6 +488,9 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
       const revoked = record.note ? revokes.get(record.note) : undefined;
       if (revoked && !revoked.keep.has(record.id) && (!known || known.has(revoked.event)))
         return { ok: false, reason: 'The note it was written under was revoked', withdrawn: true };
+      const fork = record.writer === undefined ? undefined : forks.get(record.writer);
+      if (fork && (record.at ?? 0) >= fork.from && (!known || known.has(fork.event)))
+        return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
 
       const cutState = stateAt(record.seen);
       if (!needs(roleOf(cutState, record.root), cutState)) {
@@ -493,6 +509,8 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
       return { ok: true };
     },
     revoked: (note: string) => revokes.get(note) ?? null,
+    forked: (writer: string) => forks.get(writer) ?? null,
+    forks: () => [...forks].map(([writer, { from }]) => ({ writer, from })),
     named: (did: string) =>
       did === genesis.creator ||
       [...byId.values()].some((event) => event.kind === 'member' && event.did === did && event.role !== null),
@@ -552,6 +570,7 @@ const ROLE_NAMES = ['admin', 'mod', 'helper', 'member', 'extra'];
 const PEOPLE = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
 const PERMISSIONS = [MANAGE, INVITE, DEFINE, 'app.x/moderate', 'app.x/*', '*'];
 const NOTES = ['n1', 'n2', 'n3'];
+const WRITERS = ['w1', 'w2'];
 const INVITES = ['i1', 'i2', 'i3'];
 const RECORDS = 16;
 
@@ -669,7 +688,7 @@ function generate(seed: number): History {
       const inviteKey = r.pick(INVITES);
       const role = r.pick(ROLE_NAMES);
       event = { ...base, kind: 'invite', key: `invite:${inviteKey}`, inviteKey, role, open: r.chance(0.7) };
-    } else if (roll < 75) {
+    } else if (roll < 72) {
       const note = r.pick(NOTES);
       const issuer = r.pick(PEOPLE);
       event = {
@@ -680,6 +699,9 @@ function generate(seed: number): History {
         note,
         issuer,
       };
+    } else if (roll < 75) {
+      const writer = r.pick(WRITERS);
+      event = { ...base, kind: 'fork', key: `fork:${writer}`, writer, from: r.int(5) };
     } else if (roll < 83) {
       const name = r.pick(['app.x', 'app.y']);
       event = { ...base, kind: 'definition', key: `collection:${name}`, name, deleted: r.chance(0.15) };
@@ -726,6 +748,7 @@ function generate(seed: number): History {
     root: r.chance(0.8) ? r.pick([...powerful]) : r.pick(PEOPLE),
     seen: someSeen(),
     ...(r.chance(0.3) ? { note: r.pick(NOTES) } : {}),
+    ...(r.chance(0.5) ? { writer: r.pick(WRITERS), at: r.int(6) } : {}),
     ...(r.chance(0.3) ? { within: someSeen() } : {}),
   }));
   return { genesis, events, cuts, records };
@@ -783,6 +806,8 @@ function shape(history: ReferenceHistory, h: History): Record<string, string> {
       revoked && { event: revoked.event, keep: [...revoked.keep].sort() },
     );
   }
+  for (const writer of WRITERS) out[`forked ${writer}`] = JSON.stringify(history.forked(writer));
+  out.forks = JSON.stringify([...history.forks()].sort((a, b) => a.writer.localeCompare(b.writer)));
   for (const did of PEOPLE) out[`named ${did}`] = String(history.named(did));
   for (const key of INVITES) out[`knownInvite ${key}`] = String(history.knownInvite(key));
   return out;

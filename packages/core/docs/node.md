@@ -147,6 +147,7 @@ A node asks for stores by path through its `StoreFactory`:
 | ------------------ | ---------------------------------------------------- | --------------------------------------- |
 | `registry`         | the node's list of spaces and their keys             | yes: the node asks for `{ seal: true }` |
 | `spaces/<spaceId>` | one space's records and what the node keeps about it | no                                      |
+| `writers`          | the last place each lasting key took in each log     | no                                      |
 
 What a path means is the factory's choice:
 
@@ -155,6 +156,18 @@ What a path means is the factory's choice:
   already guards it.
 - `folderStores(directory, { basePath?, vaultKey? })` — a directory tree under
   `basePath`; the `registry` is sealed under `vaultKey` when one is given.
+
+Every version a node signs in a space takes the next place in its key's log
+there ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+Writes by one key in one space go one at a time, and the place is remembered
+before the version leaves the node. A session key the node made itself lives
+only as long as the node, so its places are kept in memory. A key handed in
+(`config.sessionKey`, an agent's) or a carrier's own key outlives the node,
+so its places go in `writers`, and a restart carries on where it left off.
+Two nodes that sign with one handed-in key at once fork its log, and every
+peer then withdraws what it signed from the fork on: give each node its own key.
+
+_Source: `packages/core/src/node/writers.ts` (`createWriters`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log")._
 
 Sign-in ([sign-in](sign-in.md)) uses `storesFor(account)`: IndexedDB with prefix
 `weave:<dataPath with : for />` in the browser, or `folderStores(pod,

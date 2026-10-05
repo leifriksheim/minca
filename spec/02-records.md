@@ -2,7 +2,8 @@
 
 A **record** is a signed, versioned JSON document in a **collection** of a
 **space**. This part says exactly what one looks like, how it is encoded,
-hashed and signed, which of its versions counts, how records point at each
+hashed and signed, which of its versions counts, how each key's writes form
+one line (its log) and what a fork in it proves, how records point at each
 other, how a space describes its collections and their rules (including
 conditions a version must meet, with evidence it cites), and what a peer
 checks before it keeps one.
@@ -23,7 +24,8 @@ of a record, and the unit that is hashed, signed, stored and synced. A
 record's current version is what an app shows. The _author_ is the key that signed a version
 (usually a session key); the _root_ is the account that key acts for, found by
 walking its `proof` ([01 — Identity](01-identity.md)), or the author itself when
-there is no proof.
+there is no proof. A _writer_ is whatever signs with one key; its _log_ in a
+space is the line of every version that key signed there (§4.10).
 
 ---
 
@@ -137,6 +139,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `prev`       | string   | seq > 0    | Id of the version this one replaces.                                                                                                                                                                                              |
 | `genesis`    | string   | seq > 0    | Id of the record's first version.                                                                                                                                                                                                 |
 | `retain`     | `true`   | no         | Keep this version after it is superseded (§4.5).                                                                                                                                                                                  |
+| `log`        | object   | in a space | Its place in its writer's log for this space: `{ "n": <integer ≥ 0> }` for the key's first version here, else `{ "n": <integer>, "prev": <id of the key's version at n − 1 here> }` (§4.10).                                      |
 | `seen`       | string[] | no         | Ids of the latest changes to the space's access history the writer knew of; the version is judged as of those ([03 — Spaces](03-spaces.md)). At most 64, each 1–128 characters.                                                   |
 | `deleted`    | `true`   | no         | This version deletes the record; `body` MUST be `null`.                                                                                                                                                                           |
 | `links`      | Link[]   | no         | What this record points at (§5). Public spaces only; in a private space links are sealed inside the body and this member is absent.                                                                                               |
@@ -204,7 +207,7 @@ Whether the author was _allowed_ to write is a separate question (§9.3–9.4).
 
 A first version of a to-do, in a public space, signed by the key derived from
 the 16-byte seed `07 07 … 07` ([01 — Identity](01-identity.md)), with no
-delegation. The body, canonical, is `{"done":false,"text":"Buy milk"}`, so
+delegation, as that key's first version in the space. The body, canonical, is `{"done":false,"text":"Buy milk"}`, so
 `bodyHash` is `b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq`. Signed
 part, canonical (one line in reality, wrapped here only between members):
 
@@ -213,7 +216,7 @@ part, canonical (one line in reality, wrapped here only between members):
 "bodyHash":"b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
 "collection":"app.todo.item","createdAt":"2026-09-26T12:00:00.000Z",
 "key":"mfrggzdfmztwq2lknnwg23tpoa","links":[{"rel":"about","to":"list.groceries"}],
-"seen":["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],"seq":0,
+"log":{"n":0},"seen":["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],"seq":0,
 "space":"bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a"}
 ```
 
@@ -221,18 +224,19 @@ The version:
 
 ```json
 {
-  "id": "bay24o4ltme7k2zpxr4mqueg3s4f7eovulwccdvmpqlzxf5hafetq",
+  "id": "bvp24phiade5evl3x5un7qv77yyp3fpkjwdeakivuxv2mz4uzbqeq",
   "author": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
   "collection": "app.todo.item",
   "createdAt": "2026-09-26T12:00:00.000Z",
   "space": "bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a",
   "key": "mfrggzdfmztwq2lknnwg23tpoa",
   "seq": 0,
+  "log": { "n": 0 },
   "seen": ["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],
   "links": [{ "rel": "about", "to": "list.groceries" }],
   "bodyHash": "b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
   "body": { "text": "Buy milk", "done": false },
-  "signature": "vM_qYeSxKjSHbI0WDrnyXESA6CuubAz_jDgQ0ER8ChJOcL-ticllYDL0XNXk6DYbLnJGyXUOSi7aK89AhT1Epg"
+  "signature": "vruB6GXo09dGgTlJ3wrJiWm8_SlH_tRjWWZ9z0DK3f1iffxuy7S_irESK7ZKDB8D2Pvh9-29Tj7SOPD9Y75GKQ"
 }
 ```
 
@@ -470,12 +474,9 @@ A long history might later be compacted by a checkpoint, in place of its
 stubs: a proposal for review is in
 [drafts/stub-checkpoints.md](drafts/stub-checkpoints.md).
 
-**Related.** Signed writer logs
-([#13](https://github.com/leifriksheim/weave/issues/13)) add a per-writer,
-per-collection log position and Merkle root to each version, to prove a copy
-complete and to detect a key signing two histories. They check a different
-thing (a writer's log, not a record's chain), and leave §4.3 unchanged too.
-Their stubs are the stubs of §4.5.
+**Related.** A writer's log (§4.10) checks a different thing: one key's line
+across records, not one record's chain. It leaves §4.3 unchanged too, and its
+stubs are the stubs of §4.5.
 
 **Open questions.** Who may sign a checkpoint for a record anyone may edit;
 how derived keys prove their creator.
@@ -529,6 +530,74 @@ collection, in the access history, and a first version under `onePer` or
 > not a replacement.
 
 _Source: as §4.5. Tests: `packages/core/tests/versions.test.ts` ("a newcomer after a delete receives what was written, as stubs, and the delete — never the body")._
+
+### 4.10 A writer's log
+
+A record's versions form a chain (§4.7). A key's versions form a second line,
+across records: its **log** in the space. Every version in a space carries its
+place in that line as `log` (§3.1). The key's first version in a space has
+`{"n":0}`. Each later one has `n` one more than the key's version before it
+there, and names that version as `prev`.
+
+The two lines answer different questions. A record's chain says which edit
+follows which; a writer's log says what one key signed, in order. One key
+writes many records, and one record is written by many keys. The ordering
+rule (§4.3) is unchanged: a log never decides which version wins.
+
+A writer:
+
+- MUST give each version it signs in a space the next place in its log there,
+  and MUST NOT sign two versions at one place. Writes by one key in one space
+  are made one at a time.
+- MUST remember the last place it used before the version leaves it, so a
+  failure after signing can never hand out the same place again. A version
+  refused before it leaves gives its place back.
+- MUST keep its places for as long as the key can sign. A key that outlives
+  the process signing with it (an agent's key, a host's) keeps them on disk,
+  with the key. A key made for one run, and never stored, takes its places
+  with it when the run ends.
+
+A key used by two writers at once breaks the first rule. That is what a
+**fork** shows: **two versions with the same `author`, the same `space` and
+the same `log.n`, with different ids, each validly signed (§3.3)**. Either may
+be a stub. Nothing else is needed to check one, so a fork proven by anyone is
+proven to everyone.
+
+A peer that holds both versions of a fork SHOULD prove it to the space by
+writing `sys.fork` ([03](03-spaces.md) §6.5). Once a `sys.fork` for a key
+stands, every version that key signed in the space at the proven place or
+after it is **withdrawn** (§9.5), whichever branch it is on, as for a revoked
+note. Versions before that place are untouched. When several forks of one key
+are proven, the lowest place counts.
+
+Example: key K writes `v0` (`{"n":0}`) and `v1` (`{"n":1,"prev":v0}`).
+A copy of K elsewhere writes `w1` (`{"n":1,"prev":v0}`). A peer holding `v1`
+and `w1` writes a `sys.fork` carrying both. From then on `v0` counts at every
+peer, and `v1`, `w1` and anything K signed after them do not.
+
+> Rationale: a fork is withdrawn on both branches because no peer can tell
+> which one the key's owner wrote and which a copy of the key did. A peer
+> also can't refuse the second version on arrival: peers that saw the two in
+> opposite orders would keep different ones, and never agree. A proof in the
+> access history, replayed the same way everywhere, gives every peer the same
+> answer.
+
+> Rationale: why every key's writes, and not every account's. An account
+> writes from many devices at once, often offline, so one line per account
+> would fork honestly all the time. One key is one writer, so its line can be
+> kept exactly, and only a key used in two places breaks it.
+
+> **Planned:** keys that outlive their node. Today a node makes a new session
+> key each time it starts, so each run is a new writer with a short log. A
+> node that keeps one writer key across runs, held so it can't be copied out,
+> with a lock so two tabs never share it, gives each device one long log.
+> Checking the line: a version whose `prev` is not the key's version at
+> `n − 1`, or whose `seen` leaves out something the key's earlier version had
+> seen, would be proof too. Signed log heads, for completeness a reader can
+> check and proofs for a single record. Tracked in
+> [#13](https://github.com/leifriksheim/weave/issues/13).
+
+_Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/records/fork.ts` (`checkFork`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`write`, `placeInLog`, `reportFork`, `judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
@@ -1389,7 +1458,7 @@ Given a valid signature and root, whether the version _stands_ in this space:
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed`, and on every version under `check` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`; then `check` (§7.6), which may make the version wait for versions it cites.
 
-   When step 3 fails only on the access history's judgement of a change that came after the version (a removal it had not seen, or its note revoked: [03](03-spaces.md) §5.1 steps 2 and 4), the peer still judges step 5, and the version is **withdrawn** if that passes.
+   When step 3 fails only on the access history's judgement of a change that came after the version (a removal it had not seen, its note revoked, or its key's log proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges step 5, and the version is **withdrawn** if that passes.
 
 ### 9.5 What a peer does with a refused version
 
@@ -1398,7 +1467,7 @@ A check can end four ways:
 | Outcome       | When                                                                                                                                                   | What the peer does                                                                                                                                                                  |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **stands**    | every check passes                                                                                                                                     | Stores it; the ordering rule (§4.3) decides whether it becomes current.                                                                                                             |
-| **withdrawn** | every check passes but one: a later access change took it away (§9.4)                                                                                  | Stores it and passes it on, as for one that stands. It never counts as a record (below), but a version that cites it, and had not seen that change, counts it (§7.6). Not reported. |
+| **withdrawn** | every check passes but one: a later access change took it away, or its key's log forked (§9.4, §4.10)                                                  | Stores it and passes it on, as for one that stands. It never counts as a record (below), but a version that cites it, and had not seen that change, counts it (§7.6). Not reported. |
 | **later**     | it depends on something not held: its first version, the version its `prev` names, access changes named in `seen`, or a version its checks cite (§7.6) | Holds it aside and re-judges waiting versions whenever something new is stored. Nothing is reported.                                                                                |
 | **refused**   | any other failure                                                                                                                                      | Does not store it and does not pass it on. It may remember the refusal as (peer, id), only so it does not ask that peer again.                                                      |
 

@@ -263,7 +263,7 @@ this one own the use; this table is the registry.
 | `weave/contacts/nonce/v1`               | as above                                  | vault key bytes                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:93,104` | 03     |
 | `weave/contacts/key/v1`                 | as above                                  | vault key bytes                                                                      | AES-256-GCM space key      | Contacts space                                               | `space/account-registry.ts:93,105` | 03     |
 | `weave/topic-tags/v1`                   | HKDF → HMAC-SHA256 key                    | raw space key (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:219`        | 04     |
+| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:225`        | 04     |
 | `weave-agent-link-room-v1`              | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                          | room id                    | Agent link room                                              | `session/agent-link.ts:24`         | 06     |
 | `weave-agent-link-key-v1`               | HKDF, L=32                                | 16-byte connect-code secret                                                          | AES-256-GCM key            | Agent link messages                                          | `session/agent-link.ts:25`         | 06     |
 
@@ -273,11 +273,11 @@ by a convention built on the protocol (`packages/core/docs/`), not by it:
 
 | String                                                 | Kind                                             | Defined in                                                    | Part   |
 | ------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- | ------ |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:206`                                   | 03     |
-| `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:204`                                   | 03     |
-| `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:191`                                   | 03     |
-| `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:193`                                   | 03, 04 |
-| `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1506`                                           | docs   |
+| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:208`                                   | 03     |
+| `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:206`                                   | 03     |
+| `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:193`                                   | 03     |
+| `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:195`                                   | 03, 04 |
+| `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1546`                                           | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>`           | Sealing context (the text)                       | `privacy/direct.ts:37`                                        | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>\|<reader>` | `sealFor` context (one reader's box)             | `privacy/direct.ts:41`                                        | docs   |
 | `weave/knock/v1\|<doorKey>`                            | `sealFor` context                                | `doors/doors.ts` (`sealKnock`)                                | 07     |

@@ -70,6 +70,12 @@ export const RELAYS_COLLECTION = 'sys.relays';
  * manages the space, like its relays.
  */
 export const KEEPERS_COLLECTION = 'sys.keepers';
+/**
+ * A writer's log forked: two versions one key signed at one place in its log
+ * for this space (02 §4.10). The record carries both, so every peer checks the
+ * proof for itself, and the key's versions from that place on stop counting.
+ */
+export const FORK_COLLECTION = 'sys.fork';
 
 /** Every collection whose records are part of the access history */
 export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set([
@@ -81,6 +87,7 @@ export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set([
   KEY_COLLECTION,
   RELAYS_COLLECTION,
   KEEPERS_COLLECTION,
+  FORK_COLLECTION,
 ]);
 
 const ROLE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,39}$/;
@@ -171,6 +178,13 @@ export type AccessEvent = EventBase &
         readonly keyId: string;
         /** The public half of the read key derived from it, which readers prove they hold */
         readonly readKey: string;
+      }
+    | {
+        readonly kind: 'fork';
+        /** The key whose log forked */
+        readonly writer: string;
+        /** Where: its versions here and after no longer count */
+        readonly from: number;
       }
     | {
         readonly kind: 'relays';
@@ -339,12 +353,19 @@ export interface AccessHistory {
       readonly root: string;
       readonly seen: ReadonlyArray<string>;
       readonly note?: string;
+      /** The key that signed it, and its place in that key's log here */
+      readonly writer?: string;
+      readonly at?: number;
     },
     needs: (role: Role | null, state: AccessState) => boolean,
     within?: ReadonlyArray<string>,
   ): RecordVerdict;
   /** The applied change that revoked a note, if any */
   revoked(note: string): { readonly event: string; readonly keep: ReadonlySet<string> } | null;
+  /** Where a key's log forked, as the lowest place any applied change proves, if it did */
+  forked(writer: string): { readonly event: string; readonly from: number } | null;
+  /** Every key whose log forked, and from where */
+  forks(): ReadonlyArray<{ readonly writer: string; readonly from: number }>;
   /**
    * Whether an account appears anywhere in the history — the creator, or
    * named by any member change, whatever became of it. Only grows as changes
@@ -428,6 +449,7 @@ export function standing(state: AccessState, did: string): Role | null {
 function takesAway(event: AccessEvent, state: AccessState): boolean {
   switch (event.kind) {
     case 'revoke':
+    case 'fork':
       return true;
     case 'invite':
       return !event.open;
@@ -461,6 +483,7 @@ function takesAway(event: AccessEvent, state: AccessState): boolean {
 function mayTakeAway(event: AccessEvent): boolean {
   switch (event.kind) {
     case 'revoke':
+    case 'fork':
       return true;
     case 'invite':
       return !event.open;
@@ -528,6 +551,9 @@ function refusal(event: AccessEvent, state: AccessState): string | null {
     }
     case 'revoke':
       return event.root === event.issuer ? null : 'Only whoever signed a note may revoke it';
+    // The proof stands on its own (checked before it got here); a member only has to bring it.
+    case 'fork':
+      return author ? null : 'Only a member may report a fork';
     case 'definition': {
       const existing = state.definitions.get(event.name);
       if (!existing) return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
@@ -603,6 +629,7 @@ function change(event: AccessEvent, state: MutableState): void {
       state.invites.set(event.inviteKey, { role: event.role, open: event.open, event: event.id });
       return;
     case 'revoke':
+    case 'fork':
       return;
     case 'definition': {
       if (event.deleted) {
@@ -683,6 +710,8 @@ interface Replay {
   /** How changes took power from people, by whom */
   readonly reductions: Map<string, ReadonlyArray<Reduction>>;
   readonly revokes: Map<string, { readonly event: string; readonly keep: ReadonlySet<string> }>;
+  /** Writers whose log forked: the lowest place proven, and the change that proved it */
+  readonly forks: Map<string, { readonly event: string; readonly from: number }>;
   readonly keepOf: Map<string, ReadonlySet<string>>;
   /** Each account's role name as changes were applied, and each role's: to know a rank at a past choice */
   readonly memberLog: Map<string, ReadonlyArray<{ readonly applied: number; readonly role: string | null }>>;
@@ -794,6 +823,8 @@ function place(r: Replay, event: AccessEvent): void {
   if (event.kind === 'role') appended(r.roleLog, event.name, { applied: index, role: event.role });
   if (event.kind === 'revoke' && !r.revokes.has(event.note))
     r.revokes.set(event.note, { event: event.id, keep: new Set(event.keep) });
+  if (event.kind === 'fork' && event.from < (r.forks.get(event.writer)?.from ?? Infinity))
+    r.forks.set(event.writer, { event: event.id, from: event.from });
   r.keepOf.set(event.id, new Set(event.keep));
   r.statuses.set(event.id, { status: 'applied', index });
   r.order.push(event.id);
@@ -816,6 +847,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     appliedByKey: new Map(),
     reductions: new Map(),
     revokes: new Map(),
+    forks: new Map(),
     keepOf: new Map(),
     memberLog: new Map([[genesis.creator, [{ applied: -1, role: genesis.creatorRole }]]]),
     roleLog: new Map(genesis.roles.map((role) => [role.name, [{ applied: -1, role }]])),
@@ -966,6 +998,7 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     appliedByKey: new Map(r.appliedByKey),
     reductions: new Map(r.reductions),
     revokes: new Map(r.revokes),
+    forks: new Map(r.forks),
     keepOf: new Map(r.keepOf),
     memberLog: new Map(r.memberLog),
     roleLog: new Map(r.roleLog),
@@ -1006,6 +1039,10 @@ function historyOf(r: Replay): AccessHistory {
       const revoked = record.note ? r.revokes.get(record.note) : undefined;
       if (revoked && !revoked.keep.has(record.id) && (!known || inCut(r, known, revoked.event)))
         return { ok: false, reason: 'The note it was written under was revoked', withdrawn: true };
+      // A key that forked its log: nothing it signed from the fork on can be told from a forgery.
+      const fork = record.writer === undefined ? undefined : r.forks.get(record.writer);
+      if (fork && (record.at ?? 0) >= fork.from && (!known || inCut(r, known, fork.event)))
+        return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
 
       const cutState = stateAt(r, record.seen);
       if (!needs(roleOf(cutState, record.root), cutState)) {
@@ -1024,6 +1061,8 @@ function historyOf(r: Replay): AccessHistory {
       return { ok: true };
     },
     revoked: (note: string) => r.revokes.get(note) ?? null,
+    forked: (writer: string) => r.forks.get(writer) ?? null,
+    forks: () => [...r.forks].map(([writer, { from }]) => ({ writer, from })),
     named: (did: string) => r.named.has(did),
     knownInvite: (key: string) => r.invites.has(key),
     extend(event: AccessEvent) {

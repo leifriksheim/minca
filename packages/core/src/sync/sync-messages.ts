@@ -11,7 +11,7 @@
 import type { Version } from '../types.js';
 import { isObject } from '../utils/guards.js';
 
-export const SYNC_PROTOCOL_VERSION = 6;
+export const SYNC_PROTOCOL_VERSION = 7;
 
 type V = { readonly v: typeof SYNC_PROTOCOL_VERSION };
 

@@ -14,6 +14,7 @@ import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
+import type { Version } from '../src/types.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
 import {
@@ -479,8 +480,10 @@ describe('space access: taking it back', () => {
     const heads =
       (await store.getVersion((await bob.node.records.put(space, 'app.note', { text: 'Bob' })).version))!
         .seen ?? [];
-    const sign = (text: string) =>
-      createSigner(provider).sign(
+    // One key, so one log: each version takes the next place.
+    let last: Version | null = null;
+    const sign = async (text: string) =>
+      (last = await createSigner(provider).sign(
         createVersion({
           author: appDid,
           collection: 'app.note',
@@ -488,9 +491,10 @@ describe('space access: taking it back', () => {
           body: { text },
           proof: note.encoded,
           seen: heads,
+          log: last ? { n: (last.log?.n ?? 0) + 1, prev: last.id } : { n: 0 },
         }),
         pair.privateKey,
-      );
+      ));
     const early = await sign('early');
     await letGo(bob.node, space);
     await store.addVersion(early);

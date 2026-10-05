@@ -37,6 +37,7 @@ import {
 import type { Version } from '../types.js';
 import { createLocalHub, type LocalHub } from '../network/local-transport.js';
 import { meshFor, openSpaceRuntime, type SpaceRuntime } from './space-runtime.js';
+import { createWriters } from './writers.js';
 import type { StoreFactory } from './stores.js';
 import type { BlobStore } from '../storage/blob-store.js';
 import { createListeners } from '../utils/events.js';
@@ -168,6 +169,8 @@ export async function createCarryCore(config: CarryCoreConfig) {
   const podKeys = await provider.generateKeyPair();
   const podDid = await didOf(podKeys.publicKey, provider);
   const podSession = { did: podDid, key: podKeys.privateKey, proof: () => '' };
+  // Its own key outlives it, so its places in each log are kept; the pod's dies with it.
+  const writers = createWriters(await config.stores('writers'), (writer) => writer === did);
 
   // Carry spaces are joined like any space: their keys are the only ones a carrier holds.
   const registryStore = await config.stores('registry');
@@ -200,6 +203,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
       signer,
       schemas,
       session: as,
+      writers,
       rootDid: as.did,
       network,
       watchIntervalMs: config.watchIntervalMs ?? 2000,

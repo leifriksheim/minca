@@ -40,6 +40,7 @@ import {
   type SpaceRecord,
 } from '../space/space-manager.js';
 import { MANAGE, MAX_KEEPERS, MAX_RELAYS, roleHolds, type Keeper } from '../space/roles.js';
+import { createWriters } from './writers.js';
 import {
   meshFor,
   noteCid,
@@ -257,6 +258,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     key: sessionKeys.privateKey,
     proof: () => current.encoded,
   };
+  // A key made here dies with the node, and its places in each log with it; one
+  // handed in (an agent's) outlives it, so its places are kept (`node/writers.ts`).
+  const writers = createWriters(
+    await config.stores('writers'),
+    (did) => did !== sessionDid || config.sessionKey !== undefined,
+  );
   const mesh = meshFor(config.network, sessionDid);
   /**
    * A node whose note doesn't grant `account/write` — an agent on someone's
@@ -427,6 +434,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       open = requireRecord(spaceId).then(async (record) =>
         openSpaceRuntime({
           record,
+          writers,
           stores: config.stores,
           provider,
           signer,

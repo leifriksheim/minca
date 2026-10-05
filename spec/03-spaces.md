@@ -191,6 +191,7 @@ Bodies are JSON objects; `keep` is optional everywhere it appears (§6.3).
 | `sys.key`        | `key:space`                   | `{ keyId, readKey, earlier }` (§9)                                               | `key`        |
 | `sys.relays`     | `relays:space`                | `{ relays: string[] }` (§10)                                                     | `relays`     |
 | `sys.keepers`    | `keepers:space`               | `{ keepers: [{ did, name }], copies: number \| null }` (§10)                     | `keepers`    |
+| `sys.fork`       | `fork:<hex40(writer DID)>`    | `{ a, b }`: two versions without bodies (§6.5)                                   | `fork`       |
 
 `cid(note)` is `cid` of the UTF-8 bytes of the encoded note string.
 
@@ -233,7 +234,7 @@ A version yields no event when any of these hold:
 
 Otherwise the event is `{ id: version.id, key: version.key, root, seen: version.seen ?? [], keep, kind, … }`,
 where `keep` is `body.keep` if it is a list of strings (first 10 000 taken),
-else `[]` (always `[]` for `definition`, `key`, `relays`, `keepers`), and:
+else `[]` (always `[]` for `definition`, `key`, `relays`, `keepers`, `fork`), and:
 
 | Kind         | Checks                                                                                                                                                | Event fields                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -245,6 +246,7 @@ else `[]` (always `[]` for `definition`, `key`, `relays`, `keepers`), and:
 | `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                              | `relays`                                                                                                    |
 | `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                      | `keepers`, `copies`                                                                                         |
 | `revoke`     | `note` string parsing as a UCAN; key = `revoke:<hex40(cid(note))>`                                                                                    | `note` = `cid(note)`, `issuer` = the note's `iss`                                                           |
+| `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                          | `writer` = their `author`, `from` = their `log.n`                                                           |
 
 A deleted version in any access collection other than `sys.collection` is
 therefore ignored: access is taken away by writing a change, never by deleting.
@@ -340,7 +342,7 @@ and place the ready event with the lexicographically smallest
 
 | Kind                                     | Takes away when                                                                                              |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `revoke`                                 | always                                                                                                       |
+| `revoke`, `fork`                         | always                                                                                                       |
 | `invite`                                 | `open` is false                                                                                              |
 | `member`                                 | `role` is null; or the person has a role now and the new role's rank (−∞ if the role doesn't exist) is lower |
 | `role`                                   | the role exists now and: it is removed, or its rank goes down, or it loses any permission string it had      |
@@ -351,6 +353,7 @@ and place the ready event with the lexicographically smallest
 | Kind     | May take away when                                                |
 | -------- | ----------------------------------------------------------------- |
 | `revoke` | always                                                            |
+| `fork`   | always                                                            |
 | `invite` | `open` is false                                                   |
 | `member` | `role` is null, or (`root ≠ did` and it is not joining by invite) |
 | `role`   | always                                                            |
@@ -397,6 +400,7 @@ Applying (`apply`):
 | `member`     | set `members[did] = role`, or delete it when `role` is null                                                                                          |
 | `invite`     | `invites[inviteKey] = { role, open, event: id }`                                                                                                     |
 | `revoke`     | nothing (recorded separately: the first applied revoke of each note, with its keep list)                                                             |
+| `fork`       | nothing (recorded separately: for each writer, the applied fork with the lowest `from`)                                                              |
 | `definition` | delete `definitions[name]` when `deleted`; else set it to `{ event: id, definedBy }` where `definedBy` is the existing `definedBy`, or `root` if new |
 | `key`        | append `{ keyId, readKey, event: id }` to `keys`; set `keyDue = false`                                                                               |
 | `relays`     | `relays = relays`                                                                                                                                    |
@@ -437,6 +441,9 @@ After any non-`key` event, if `keys` is non-empty and some account that was in
 - opening requires the role to exist with rank at most `A.rank`.
 
 **`revoke`** — `root` must equal the note's issuer.
+
+**`fork`** — `A` must be non-null: any member may bring the proof, which
+stands on its own.
 
 **`definition`**
 
@@ -488,7 +495,7 @@ _Source: `packages/core/src/space/roles.ts` (`replayAccess`, `place`, `extended`
 ### 5.1 `judge`
 
 Given a record's `id`, its root, its `seen`, the CID of the note it was
-written under (if any), a predicate `needs(role, state)`, and optionally
+written under (if any), its `author` and `log.n`, a predicate `needs(role, state)`, and optionally
 `within`, the `seen` of a version that cites this one
 ([02](02-records.md) §7.6):
 
@@ -496,6 +503,9 @@ written under (if any), a predicate `needs(role, state)`, and optionally
    (retry later).
 2. If the note has been revoked (§6.4), the revoke's `keep` does not list
    this record's id, and (with `within`) the revoke is in
+   `within ∪ ancestors(within)` → withdrawn.
+   The same for a fork: if a fork of `author` is recorded (§6.5) whose `from`
+   is at most `log.n`, and (with `within`) its event is in
    `within ∪ ancestors(within)` → withdrawn.
 3. `S_seen = at(seen)`. If `needs(role(S_seen, root), S_seen)` is false → refused.
 4. For every reduction of `root` whose event is **not** in `seen ∪ ancestors(seen)`,
@@ -621,6 +631,36 @@ From the first applied revoke on, every version written under that note
 stands only if kept (§5.1 step 2) — whatever it saw; the rest are withdrawn.
 
 _Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `removeRole`, `revoke`, `keepFrom`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("handing over…", "a revoked note…"), `packages/core/tests/space-access.test.ts` ("taking it back")._
+
+### 6.5 Proving a fork
+
+A member who holds two versions that prove a key forked its log
+([02](02-records.md) §4.10) writes `sys.fork` at `fork:<hex40(writer DID)>`
+with `{ a, b }`: the two versions without their bodies, `a` the one with the
+lower id. Every peer checks the proof itself before the change counts:
+
+- `a` and `b` are objects with no `body` member, each passes the shape check
+  ([02](02-records.md) §4.6) and the signature check (02 §3.3, steps 1–3);
+- both have this space as `space`, the same `author` and the same `log.n`,
+  and different ids;
+- the record key is `fork:<hex40(author)>`.
+
+Anything else is not a well-formed change and is ignored like any other
+(§3.3). The event's `writer` is the shared `author` and `from` the shared
+`log.n`. From the first applied fork of a writer on, everything it signed in
+the space at `from` or later is withdrawn (§5.1 step 2). A later proof of an
+earlier place is the record's next version, and the lowest `from` applied
+counts. Nothing is kept: no one can say which branch was the owner's.
+
+A peer writes the proof only when no applied fork of that writer already
+covers the place it found.
+
+> Rationale: the proof names a key, not an account. A copied or stolen key
+> is the account's problem, and the owner's way out is to revoke the key's
+> note (§6.4) and go on with another; the account's place in the space is a
+> person's decision to change (§6.1).
+
+_Source: `packages/core/src/records/fork.ts` (`checkFork`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork"), `packages/core/tests/access-convergence.test.ts`._
 
 ---
 

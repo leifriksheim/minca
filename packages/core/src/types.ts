@@ -106,6 +106,12 @@ export interface UnsignedVersion<T = unknown> {
   readonly prev?: string;
   /** Id of the record's first version — who created it. Absent on seq 0. */
   readonly genesis?: string;
+  /**
+   * Its place in its writer's log for this space: every key's writes in a
+   * space form one line, `n` from 0, each naming the one before. Two versions
+   * by one key at one place are a fork (02 §4.10). Required in a space.
+   */
+  readonly log?: WriterLog;
   /** Keep this version once it is superseded — set by the writer, from the collection's `history` */
   readonly retain?: true;
   /**
@@ -141,6 +147,14 @@ export type Envelope = Omit<UnsignedVersion, 'body'> & {
   /** Content id of the canonical body. Absent on a delete, which has none. */
   readonly bodyHash?: string;
 };
+
+/** A version's place in its writer's log for one space */
+export interface WriterLog {
+  /** Its position, from 0 */
+  readonly n: number;
+  /** The id of the writer's version at `n - 1` in this space. Absent at 0. */
+  readonly prev?: string;
+}
 
 /** Version — the atomic data unit */
 export interface Version<T = unknown> extends Omit<UnsignedVersion<T>, 'body'> {

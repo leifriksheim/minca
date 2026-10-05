@@ -1,4 +1,4 @@
-import type { Envelope, Version, Link, UnsignedVersion } from '../types.js';
+import type { Envelope, Version, Link, UnsignedVersion, WriterLog } from '../types.js';
 import { utf8Encode } from '../utils/encoding.js';
 import { cidFromBytes } from '../utils/hash.js';
 import { isRecord } from '../utils/guards.js';
@@ -29,6 +29,8 @@ export interface CreateVersionParams<T> {
   readonly links?: ReadonlyArray<Link>;
   /** Topic tags, worked out from the body (`records/topics.ts`) */
   readonly tags?: ReadonlyArray<string>;
+  /** Its place in the writer's log for the space (`node/writers.ts`) */
+  readonly log?: WriterLog;
 }
 
 /**
@@ -75,6 +77,9 @@ export function createVersion<T>(params: CreateVersionParams<T>): UnsignedVersio
     ...(params.deleted ? { deleted: true as const } : {}),
     ...(params.links?.length ? { links: params.links } : {}),
     ...(params.tags?.length ? { tags: params.tags } : {}),
+    ...(params.log
+      ? { log: params.log.prev ? { n: params.log.n, prev: params.log.prev } : { n: params.log.n } }
+      : {}),
   });
 }
 
