@@ -79,26 +79,26 @@ _Source: `packages/core/src/identity/account-store.ts`, `packages/core/src/ident
 
 Transitions:
 
-| From                            | Action                                                                                                                | To                                                                                                              |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `starting`                      | `start()`, a kept sign-in for an account in the place ([the session a sign-in starts](#the-session-a-sign-in-starts)) | `ready`                                                                                                         |
-| `starting`                      | `start()`, a pairing ticket in the URL                                                                                | `pair`                                                                                                          |
-| `starting`                      | `start()`, otherwise                                                                                                  | `signIn` if the place has accounts, else `welcome`                                                              |
-| `starting`                      | `start()` fails                                                                                                       | `welcome` (with `error`)                                                                                        |
-| any                             | `showWelcome()` / `showExisting()` / `showRestore()` / `showSignIn()`                                                 | `welcome` / `existing` / `restore` / `signIn`                                                                   |
-| `existing`, `signIn`            | `choosePod()` / `useBrowser()` while signed out                                                                       | `signIn` or `welcome`                                                                                           |
-| `ready`                         | `choosePod()` while signed in                                                                                         | `ready`, with `podChoice` set; `confirmPod('combine' \| 'switch')` restarts the session in the pod              |
-| `pod`                           | `choosePod()`                                                                                                         | `ready`: the new account moves into the pod without asking, and its browser copy is removed                     |
-| `pod`                           | `finishSetup()`                                                                                                       | `ready`                                                                                                         |
-| `welcome`, `existing`, `signIn` | `startCreating()`                                                                                                     | `create`                                                                                                        |
-| `signIn`                        | `signInWithPassword` / `signInWithPasskey` succeeds                                                                   | `ready`                                                                                                         |
-| `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `recovery` with `setup: 'restored'`        |
-| `create`                        | `createAccount(name)`                                                                                                 | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                  |
-| `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                        |
-| `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, else `ready`                                        |
-| `pair`                          | `acceptPairing()`                                                                                                     | `unlock` with `setup: 'paired'` if the account has no way in here, else `ready`; then collects from the desktop |
-| `pair`                          | `dismissPairing()`                                                                                                    | `ready` if signed in, else `signIn` / `welcome`                                                                 |
-| `ready`                         | `signOut()`                                                                                                           | `starting`, then `signIn` / `welcome`                                                                           |
+| From                            | Action                                                                                                                | To                                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `starting`                      | `start()`, a kept sign-in for an account in the place ([the session a sign-in starts](#the-session-a-sign-in-starts)) | `ready`                                                                                                              |
+| `starting`                      | `start()`, a pairing ticket in the URL                                                                                | `pair`                                                                                                               |
+| `starting`                      | `start()`, otherwise                                                                                                  | `signIn` if the place has accounts, else `welcome`                                                                   |
+| `starting`                      | `start()` fails                                                                                                       | `welcome` (with `error`)                                                                                             |
+| any                             | `showWelcome()` / `showExisting()` / `showRestore()` / `showSignIn()`                                                 | `welcome` / `existing` / `restore` / `signIn`                                                                        |
+| `existing`, `signIn`            | `choosePod()` / `useBrowser()` while signed out                                                                       | `signIn` or `welcome`                                                                                                |
+| `ready`                         | `choosePod()` while signed in                                                                                         | `ready`, with `podChoice` set; `confirmPod('combine' \| 'switch')` restarts the session in the pod                   |
+| `pod`                           | `choosePod()`                                                                                                         | `ready`: the new account moves into the pod without asking, and its browser copy is removed                          |
+| `pod`                           | `finishSetup()`                                                                                                       | `ready`                                                                                                              |
+| `welcome`, `existing`, `signIn` | `startCreating()`                                                                                                     | `create`                                                                                                             |
+| `signIn`                        | `signInWithPassword` / `signInWithPasskey` succeeds                                                                   | `ready`                                                                                                              |
+| `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `recovery` with `setup: 'restored'`             |
+| `create`                        | `createAccount(name)`                                                                                                 | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                       |
+| `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                             |
+| `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, else `ready`                                             |
+| `pair`                          | `acceptPairing()`                                                                                                     | once the computer confirms the code, `unlock` with `setup: 'paired'` if the account has no way in here, else `ready` |
+| `pair`                          | `dismissPairing()`                                                                                                    | `ready` if signed in, else `signIn` / `welcome`                                                                      |
+| `ready`                         | `signOut()`                                                                                                           | `starting`, then `signIn` / `welcome`                                                                                |
 
 A failed action sets `error` (`{ message, hint?, code? }`) and leaves the stage
 as it was. A dismissed passkey or folder prompt sets no error.
@@ -246,17 +246,28 @@ _Source: `packages/core/src/session/auth.ts` (`confirmPod`), `packages/core/src/
 The ticket, the room and the exchange are
 [spec 01 §14](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
 `offerToPhone(onStage)` starts an offer on the first configured relay and
-returns `{ url, stop }`: the link for the QR code, and a way to stop. The
-offer keeps listening, and hands over to every peer that joins, until `stop()`
-disconnects it. Each space goes in the handover as `node.spaces.invite(id)`
-with default options.
+returns `{ url, stop }`: the link for the QR code, and a way to stop. The link
+holds a one-time secret, not the account. The offer answers the first phone
+that turns up and nobody after it, and stops working after two minutes if no
+phone has.
 
-On the phone, the `pair` stage signs in with the ticket's code and then
-collects from the desktop (`collectFromDesktop`). It waits 30 seconds by
-default; if nothing arrives by then it finishes with zero spaces, since the
-identity is already correct and only the spaces are missing.
+When the phone is there, `onStage` gets `{ kind: 'compare', code, same,
+different }`. Show the six digits and ask whether the phone shows the same;
+call `same()` to send the account, or `different()` to end the offer having
+sent nothing. Then come `sending`, and `sent` once the phone says it arrived.
+Each space goes in the handover as `node.spaces.invite(id)` with default
+options.
 
-_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `collectFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`). Tests: `packages/core/tests/pairing.test.ts`._
+On the phone, the `pair` stage waits for a tap, then meets the computer
+(`receiveFromDesktop`) and shows the same code (`pairingStage` is `{ kind:
+'confirm', code }`). Only when the person confirms on the computer does the
+seed arrive; the phone then signs in with it and joins each space, ending on
+`received`. It waits 60 seconds for the computer to answer, and 10 minutes for
+the person to confirm. Where accounts are already kept here, `<weave-auth>`
+warns before going on: a link someone else sent would put the phone in their
+account.
+
+_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`), `packages/core/src/elements/weave-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`._
 
 ## The account home's side
 

@@ -11,8 +11,11 @@ function describe(stage: PairingStage): string {
   switch (stage.kind) {
     case 'waiting':
       return 'Waiting for your phone…';
-    case 'connected':
-      return 'Phone found. Sending your spaces…';
+    case 'confirm':
+    case 'compare':
+      return 'Does your phone show the same code?';
+    case 'sending':
+      return 'Sending your account…';
     case 'sent':
       return stage.spaces === 1 ? 'Sent 1 space. Done.' : `Sent ${stage.spaces} spaces. Done.`;
     case 'received':
@@ -26,9 +29,9 @@ function describe(stage: PairingStage): string {
  * Hands this account to a phone.
  *
  * The QR is a link, not data — phone cameras open links natively, so there is
- * no scanner here and it works on iOS as well as Android. The link carries the
- * recovery code in its fragment, which browsers never send to a server, so the
- * seed reaches the phone without passing through whatever is hosting this page.
+ * no scanner here and it works on iOS as well as Android. The link carries a
+ * one-time secret, not the account: both devices then show six digits, and
+ * the account goes over only once the person says they match.
  */
 export function PairPhone() {
   const { auth } = useAuth();
@@ -117,17 +120,33 @@ export function PairPhone() {
                 }}
               />
             )}
+            {stage?.kind === 'compare' && (
+              <p style={{ ...styles.hint, fontSize: 28, letterSpacing: '0.15em', textAlign: 'center' }}>
+                {stage.code.slice(0, 3)} {stage.code.slice(3)}
+              </p>
+            )}
             {stage && <p style={stage.kind === 'failed' ? styles.error : styles.hint}>{describe(stage)}</p>}
+            {stage?.kind === 'compare' && (
+              <div style={styles.linkRow}>
+                <button onClick={stage.same} data-variant="primary" style={styles.addButton}>
+                  Same code — send
+                </button>
+                <button onClick={stage.different} data-variant="ghost" style={styles.linkButton}>
+                  Different
+                </button>
+              </div>
+            )}
             <p style={styles.errorHint}>
-              Anyone who photographs this gets the account.
+              Works once, for a couple of minutes.
               <Info label="What is in the code">
-                Your recovery code, and the address of the relay that introduces the two devices. It travels
-                in the part of the link after the <code>#</code>, which browsers never send to a server.
+                A one-time secret and the address of the relay that introduces the two devices — nothing about
+                your account. Your account goes to the phone only after you confirm the six digits match, so a
+                photo of this code is no use to anyone.
               </Info>
             </p>
             <div style={styles.linkRow}>
               <button onClick={stop} data-variant="ghost" style={styles.linkButton}>
-                {stage?.kind === 'sent' ? 'Done' : 'Stop'}
+                {stage?.kind === 'sent' || stage?.kind === 'failed' ? 'Done' : 'Stop'}
               </button>
             </div>
           </>

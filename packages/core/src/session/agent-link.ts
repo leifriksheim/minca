@@ -2,7 +2,7 @@
  * @module session/agent-link
  * Connecting an agent on a computer with one command copied from an app:
  * `weave connect wv_…`. Both sides derive a room and a key from the code's
- * random secret, as phone pairing does from the seed; the terminal says who it
+ * random secret; the terminal says who it
  * is, the person allows it at their account home, and the app hands back an
  * agent's note. Everything is sealed, so the relay learns and changes nothing.
  */
@@ -13,11 +13,13 @@ import { createP256Provider } from '../identity/crypto-p256.js';
 import { didOf } from '../identity/did.js';
 import { parseUCAN } from '../identity/ucan.js';
 import { isAgentNote } from '../identity/agent-note.js';
-import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
+import { hkdfAesKey } from '../identity/hkdf.js';
+import { openPairingPayload, sealPairingPayload } from '../identity/pairing.js';
+import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { cidFromBytes } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import { checkGrant, recordsOnlyGrant, type Grant } from './connect.js';
-import { sealedRoom } from './pairing.js';
 
 const CODE_PREFIX = 'wv_';
 const SECRET_BYTES = 16;
@@ -70,6 +72,55 @@ interface LinkNetwork {
   readonly relays: ReadonlyArray<string>;
   /** A transport instead of WebRTC — for tests */
   readonly transport?: (did: string) => PeerTransport;
+}
+
+/**
+ * Both ends of the link: a room and a key worked out from one secret, JSON
+ * sealed under that key, and an outcome settled once.
+ */
+async function sealedRoom(params: {
+  readonly prefix: Uint8Array;
+  readonly info: Uint8Array;
+  readonly secret: Uint8Array;
+  /** Who this end is on the wire */
+  readonly did: string;
+  readonly join: (room: string) => NetworkManager;
+}) {
+  const key = await hkdfAesKey(params.secret, params.info);
+  const net = params.join(await cidFromBytes(concatBytes(params.prefix, params.secret)));
+  let settled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finish = (done: () => void = () => {}): void => {
+    if (settled) return;
+    settled = true;
+    globalThis.clearTimeout(timer);
+    // A moment for the last message to leave.
+    globalThis.setTimeout(() => net.disconnect(), 500);
+    done();
+  };
+  return {
+    net,
+    finish,
+    isSettled: () => settled,
+    /** Settles with `onTimeout` after `ms`, replacing any earlier wait */
+    wait: (ms: number, onTimeout: () => void): void => {
+      globalThis.clearTimeout(timer);
+      timer = globalThis.setTimeout(() => finish(onTimeout), ms);
+    },
+    send: async (to: string, type: string, value: unknown): Promise<void> => {
+      const sealed = await sealPairingPayload(utf8Encode(JSON.stringify(value)), key);
+      net.send(to, { type, from: params.did, payload: Array.from(sealed) });
+    },
+    /** What a message says, or null when it was not sealed with this secret */
+    open: async (message: NetworkMessage): Promise<unknown> => {
+      if (!Array.isArray(message.payload)) return null;
+      try {
+        return JSON.parse(utf8Decode(await openPairingPayload(new Uint8Array(message.payload), key)));
+      } catch {
+        return null;
+      }
+    },
+  };
 }
 
 /** The room and key for a code, met on the relays (or the test transport) */

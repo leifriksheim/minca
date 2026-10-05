@@ -14,11 +14,9 @@ seed (16 bytes)
  ├─ HKDF "weave/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
  │                                         ├─ HKDF "weave/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
  │                                         └─ HKDF "weave/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
- ├─ HKDF "weave-vault-key-v1"         ─▶ vault key (AES-256) ── also the "account key" bytes
- │                                         ├─ HKDF "weave/p256-member-key/v1|<space>" ─▶ member key per space
- │                                         └─ HKDF "weave/account-registry/…", "weave/contacts/…" ─▶ account spaces
- ├─ CID("weave-pairing-room-v1" ‖ seed)     ─▶ pairing room
- └─ HKDF "weave-pairing-key-v1"       ─▶ pairing key (AES-256)
+ └─ HKDF "weave-vault-key-v1"         ─▶ vault key (AES-256) ── also the "account key" bytes
+                                           ├─ HKDF "weave/p256-member-key/v1|<space>" ─▶ member key per space
+                                           └─ HKDF "weave/account-registry/…", "weave/contacts/…" ─▶ account spaces
 ```
 
 Conventions (MUST/SHOULD, encodings, canonical JSON) are those of the
@@ -48,7 +46,7 @@ as the account, and nothing else can.
   (§10), or held in memory while unlocked, or written down by the person as a
   recovery code (§2).
 - The seed never leaves the account home (the page or process that unlocked
-  it) except as a recovery code or inside a pairing ticket (§14). Apps receive
+  it) except as a recovery code or sealed in a pairing handover (§14). Apps receive
   delegations (§7), never the seed ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md)).
 
 > Rationale: one secret, everything derived, means recovery is "type 26
@@ -255,8 +253,9 @@ this one own the use; this table is the registry.
 | `weave/door-topic/v1\|<signKey>`        | SHA-256, base64url                        | —                                                                                    | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
 | `weave/contact-seal/v1`                 | HKDF, L=32                                | ECDH shared x (32) ‖ ephemeral uncompressed point (65)                               | AES-256-GCM key            | One sealed message to a contact or member key                | `identity/contact-key.ts:29`       | 01     |
 | `weave-vault-key-v1`                    | HKDF, L=32                                | seed                                                                                 | AES-256-GCM key / 32 bytes | Vault key: at-rest encryption; the "account key"             | `identity/account-vault.ts:25`     | 01, 05 |
-| `weave-pairing-room-v1`                 | CID of prefix ‖ seed (no separator)       | seed                                                                                 | room id                    | Pairing room                                                 | `identity/pairing.ts:15`           | 01     |
-| `weave-pairing-key-v1`                  | HKDF, L=32                                | seed                                                                                 | AES-256-GCM key            | Pairing handover                                             | `identity/pairing.ts:16`           | 01     |
+| `weave/pairing-room/v2`                 | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                               | room id                    | Pairing room                                                 | `identity/pairing.ts:22`           | 01     |
+| `weave/pairing-key/v2\|<O>\|<P>`        | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                       | AES-256-GCM key            | Pairing handover                                             | `identity/pairing.ts:23`           | 01     |
+| `weave/pairing-code/v2\|<O>\|<P>`       | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                       | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:24`           | 01     |
 | `weave/space-invite/v1`                 | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                | P-256 key                  | Invite key                                                   | `space/space-access.ts:33`         | 03     |
 | `weave/space-read/v1`                   | HKDF, L=32 → `P256KeyFrom`                | raw 32-byte space key                                                                | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:32`         | 03     |
 | `weave/account-registry/nonce/v1`       | HKDF, L=32, first 12 bytes, base64url     | vault key bytes                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:80,104` | 03     |
@@ -1029,116 +1028,128 @@ Pairing gives a second device (typically a phone, which cannot open a folder)
 the account and the list of its spaces. Afterwards the phone is a full,
 independent peer; the first device is not needed again.
 
+The QR code carries a one-time secret and nothing about the account. The two
+devices meet in a room named after the secret, run an ephemeral key exchange
+bound to it, and both show a six-digit code. The offering device sends the
+seed only after the person confirms the codes match, sealed under a key no
+other exchange shares. A photo of the QR code is useless once a phone has used
+it or a few minutes have passed, and a recording of the room opens nothing.
+
 ### 14.1 The ticket
 
 ```json
-{ "v": 1, "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE-ZW", "relay": "wss://relay.example" }
+{ "v": 2, "secret": "AAECAwQFBgcICQoLDA0ODw", "relay": "wss://relay.example" }
 ```
 
-| Field   | Type   | Meaning                                                                 |
-| ------- | ------ | ----------------------------------------------------------------------- |
-| `v`     | `1`    | Version                                                                 |
-| `code`  | string | The account's recovery code (§2)                                        |
-| `relay` | string | A relay URL the offering device is connected to and the phone can reach |
+| Field    | Type   | Meaning                                                                 |
+| -------- | ------ | ----------------------------------------------------------------------- |
+| `v`      | `2`    | Version                                                                 |
+| `secret` | string | base64url of 16 random bytes, new for every offer                       |
+| `relay`  | string | A relay URL the offering device is connected to and the phone can reach |
 
 Encoding: `base64url(UTF-8(JSON))`, placed in a URL fragment as
 `<page>#pair=<ticket>` and shown as a QR code. Readers find it with
 `/[#&]pair=([^&]+)/` on the fragment. A decoder MUST reject a ticket that is
-not base64url JSON, whose `v` is not `1`, or whose `code` or `relay` is not a
-string (`PAIRING_TICKET_UNREADABLE`). The page SHOULD remove the fragment from
-the address bar once read.
+not base64url JSON, whose `v` is not `2`, whose `relay` is not a string, or
+whose `secret` does not decode to exactly 16 bytes (`PAIRING_TICKET_UNREADABLE`).
+Version 1 tickets carried the recovery code and MUST be refused. The page
+SHOULD remove the fragment from the address bar once read.
 
 Example (the ticket above):
-`eyJ2IjoxLCJjb2RlIjoiMDA4Si00Q1Q0LUFOSzctRjI0Uy1OQVhXLVNRRkUtWlciLCJyZWxheSI6IndzczovL3JlbGF5LmV4YW1wbGUifQ`
+`eyJ2IjoyLCJzZWNyZXQiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3IiwicmVsYXkiOiJ3c3M6Ly9yZWxheS5leGFtcGxlIn0`
 
-The ticket carries the seed. It is placed in a fragment so the page's host
-never receives it; anyone who sees the QR code can take the account.
+The offering device MUST generate the secret with a CSPRNG for each offer and
+MUST NOT derive it from the seed.
 
-### 14.2 Room and key
+### 14.2 Room, keys and code
 
-Both devices derive, from the seed, without sending them:
+Both devices join mesh room ([04 — Network](04-network.md)):
 
 ```
-room = CID(UTF-8("weave-pairing-room-v1") ‖ seed)        // raw concatenation
-key  = HKDF(seed, "weave-pairing-key-v1", 32)            // AES-256-GCM
+room = CID(UTF-8("weave/pairing-room/v2") ‖ secret)     // raw concatenation
 ```
 
-Example (seed of §3.3): room `b57vwq7bthxai3s57aovb3xym47ipcu6iile33vyuknclzg45giaq`.
+Example (the secret above): room `bqhuxub5bfmr2fsg2cj4i4ycw4ztnqa32todq3e4rhk76yl6qav5a`.
 
-> Rationale: the room is derived from the seed, not the DID, because a DID is
-> public (it is in every record); only a holder of the seed can find the room.
+Each side makes an ephemeral P-256 ECDH key for this exchange only. `O` is the
+offering device's public point and `P` the phone's, each as the 65-byte
+uncompressed SEC 1 point (`04 ‖ x ‖ y`). With `Z` the 32-byte ECDH shared
+x-coordinate:
+
+```
+ikm        = secret ‖ Z
+transcript = "|" ‖ base64url(O) ‖ "|" ‖ base64url(P)
+key        = HKDF(ikm, "weave/pairing-key/v2"  ‖ transcript, 32)   // AES-256-GCM
+code       = uint32_be(HKDF(ikm, "weave/pairing-code/v2" ‖ transcript, 4)) mod 1000000,
+             as 6 decimal digits, zero-padded
+commitment = base64url(SHA-256(P))
+```
+
+A point that is not 65 bytes starting `04`, or that is not on the curve, MUST
+be refused (`PAIRING_TICKET_UNREADABLE`).
 
 A sealed payload is `iv (12 random bytes) ‖ AES-256-GCM(key, iv, plaintext)`
-(ciphertext including the 16-byte tag; no additional data). A payload of 12
-bytes or fewer, or one that does not authenticate, MUST be rejected.
+(ciphertext including the 16-byte tag; no additional data), sent as a JSON
+array of integers 0–255. A payload of 12 bytes or fewer, or one that does not
+authenticate, MUST be rejected.
+
+> Rationale: the secret is in `ikm`, so anyone who never saw the QR code gets
+> a different key and a different code. The points are in the labels, so a
+> payload sealed in one exchange opens in no other, even one with the same
+> secret. The phone commits to `P` before it sees `O`, and the offering device
+> sends `O` before it sees `P`, so neither side, nor anyone between them, can
+> choose a key to make two different exchanges show the same code; one guess
+> in a million is all that is left. The secret is high-entropy, so a PAKE
+> would add nothing an HMAC or this key schedule does not.
 
 ### 14.3 The exchange
 
-Both devices join mesh room `room` ([04 — Network](04-network.md)) as their
-session DIDs. The offering device joins with its configured relays; the phone
-joins with exactly `[ticket.relay]`.
+Both devices join `room` under a throwaway `did:key` of their own, not a
+session DID. The offering device joins with its configured relays; the phone
+joins with exactly `[ticket.relay]`. Every message is a NetworkMessage
+`{ type, from, payload }`:
 
 ```
-Offering device                                     Phone
+Offering device                                       Phone
   shows QR: <link>#pair=<ticket>
-  joins room                                          reads ticket, signs in with ticket.code
-                                                      joins room via ticket.relay
-            ◀────────────── peer connected ──────────────▶
-  builds { "spaces": [invite, …] }  (one invite per space it holds)
-  sends NetworkMessage
-    { type: "pair", from: <session DID>,
-      payload: [<sealed bytes as integers 0–255>] }  ──▶
-                                                      opens, joins each invite, leaves the room
+  joins room                                          reads ticket, joins room via ticket.relay
+            ◀─────────────── peer connected ───────────────▶
+                         ◀── pair:commit  { "commit": commitment }
+  pair:key { "key": base64url(O) } ──▶
+                         ◀── pair:reveal  { "key": base64url(P) }
+  checks SHA-256(P) against the commitment
+  shows code                                          shows code
+  the person confirms the codes match
+  pair:handover  sealed { "seed", "spaces" } ──▶
+                                                      opens, checks, signs in, joins each invite
+                         ◀── pair:done    sealed { "spaces": n }
 ```
 
-- **Plaintext:** UTF-8 JSON `{ "spaces": [<invite>, …] }`, where each invite
-  is an invite to the space ([03 — Spaces](03-spaces.md)), carrying whatever a
-  peer needs to open it, including a private space's key.
-- **Offering device:** on every peer that connects, sends the handover to that
-  peer.
-- **Phone:** ignores messages whose `type` is not `pair` or whose `payload` is
-  not an array. On the first `pair` message it opens the payload, joins every
-  invite in order, and finishes. If opening or parsing fails it finishes with
-  a failure. If nothing arrives before it stops waiting, it finishes with zero
-  spaces; the identity is already correct, only the spaces are missing
-  ([Pairing a phone](../packages/core/docs/sign-in.md#pairing-a-phone)).
-- There is no reply message and no authentication of the phone beyond knowing
-  the room and key, which require the seed.
+- **Handover plaintext:** UTF-8 JSON `{ "seed": base64url(seed), "spaces":
+[<invite>, …] }`, where each invite is an invite to the space ([03 —
+  Spaces](03-spaces.md)), carrying whatever a peer needs to open it, including
+  a private space's key. A phone MUST refuse a handover whose `seed` does not
+  decode to 16 bytes, or whose `spaces` is not an array of strings.
+- **Offering device:**
+  - answers the **first** `pair:commit` only. From then on the offer is spent:
+    it MUST NOT answer another commit, and MUST ignore `pair:reveal` and
+    `pair:done` from any other peer.
+  - MUST stop answering a commit after a short time with no phone (two minutes
+    in this implementation), and when the person stops the offer.
+  - on `pair:reveal`, MUST check the commitment and finish with a failure if it
+    does not match.
+  - MUST NOT send `pair:handover` until the person has confirmed that both
+    screens show the same code. If they say the codes differ, it finishes and
+    sends nothing.
+- **Phone:** ignores messages of other types, and answers only the first
+  `pair:key`. It shows the code and waits for `pair:handover` from the peer
+  that sent the key. If the payload does not open, or is not a handover, it
+  finishes with a failure. It sends `pair:done` after a handover it accepts.
+- A device that holds an account and opens a `#pair=` link SHOULD warn before
+  taking the account on: the link can come from someone else, and the code
+  check cannot tell a stranger's computer from your own.
 
-### 14.4 Planned: pairing without showing the account
-
-Tracked in [#31](https://github.com/leifriksheim/weave/issues/31).
-
-**Why.** The QR carries the recovery code, so a photo of the screen, a screen
-share or a recording _is_ the account, for good. The room is a hash of the
-seed, so a relay gets a tag that follows the account across pairings. The
-pairing key never changes, so a sealed handover can be replayed.
-
-**Design.**
-
-- The ticket carries a **one-time secret** (random, at least 16 bytes) and the
-  relay URL. Nothing about the account.
-- The room is a hash of the secret, under a new label. `weave-pairing-room-v1`
-  and `weave-pairing-key-v1` (§5) go away.
-- The two devices run a key exchange authenticated by the secret: ephemeral
-  ECDH, with each side proving it knows the secret (for example, an HMAC under
-  a key derived from the secret over both ephemeral public keys).
-- Both screens show a **short code** derived from the exchange. The offering
-  device sends the seed and the space invites over that channel only after the
-  person confirms the codes match.
-- The secret expires after a couple of minutes and after one use. The
-  offering device serves one phone per offer, not every peer that connects.
-- A page opened with a `#pair=` link while another account is already signed
-  in SHOULD warn clearly before switching. Today a link someone sends you can
-  sign you in to their account in one tap.
-
-**Open questions.** Whether to use a standard PAKE (for example CPace or
-SPAKE2) instead of an HMAC-authenticated ECDH, since the secret is
-high-entropy and a PAKE's main benefit is for low-entropy ones; how long the
-short code is; whether the phone sends anything back (an acknowledgement, so
-the offer can close itself).
-
-_Source:_ `packages/core/src/identity/pairing.ts`, `packages/core/src/session/pairing.ts`, `packages/core/src/session/auth.ts` (`acceptPairing`).
+_Source:_ `packages/core/src/identity/pairing.ts`, `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`acceptPairing`).
 _Tests:_ `packages/core/tests/pairing.test.ts`.
 
 ---
