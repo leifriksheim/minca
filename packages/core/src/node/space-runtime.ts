@@ -29,7 +29,7 @@ import type { Capability } from '../identity/ucan.js';
 import { parseUCAN, resolveDelegationRoot } from '../identity/ucan.js';
 import { isAgentNote } from '../identity/agent-note.js';
 import { ACCESS_ABILITY, ACCOUNT_ABILITY, DEFINE_ABILITY, noteGrants } from '../identity/abilities.js';
-import { bodyProblem, createVersion, isStub } from '../schema/version.js';
+import { bodyProblem, createVersion, isStub, stubOf } from '../schema/version.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
 import { chainProblem, newRecordKey, nextVersion } from '../records/version.js';
 import { RECORD_KEY_PATTERN } from '../records/key.js';
@@ -51,6 +51,7 @@ import type { FolderAdapter } from '../storage/folder-adapter.js';
 import { createVersionCheck } from '../validation/check-version.js';
 import type { Writers } from './writers.js';
 import { breaksLine, checkFork, forkProof } from '../records/fork.js';
+import { knownKind, readWarrant, type WarrantKind } from '../records/warrant.js';
 import {
   encryptVersion,
   decryptVersion,
@@ -91,6 +92,8 @@ import {
   signInvite,
   verifyInvite,
   forkKey,
+  WARRANT_COLLECTION,
+  warrantKey,
 } from '../space/space-access.js';
 import {
   ACCESS_COLLECTIONS,
@@ -111,6 +114,7 @@ import {
   checkRole,
   readers,
   replayAccess,
+  refusal,
   roleHolds,
   standing,
   type AccessEvent,
@@ -148,6 +152,7 @@ import type {
   NodeEvent,
   NodeNetworkConfig,
   NodeRecord,
+  FlaggedAccount,
   SpaceAccess,
   SpaceProfile,
 } from './types.js';
@@ -155,6 +160,7 @@ import type {
 /** Collections the node writes itself, through their own calls — never through `put` */
 const MANAGED = new Set([
   MEMBERSHIP_COLLECTION,
+  WARRANT_COLLECTION,
   PROFILE_COLLECTION,
   CARRIER_COLLECTION,
   PASS_COLLECTION,
@@ -170,6 +176,8 @@ const MANAGED = new Set([
  * read the records has no use for their rules.
  */
 const IN_THE_CLEAR = new Set([
+  // Proof is for every member to check, and holds no one's words, only signed envelopes.
+  WARRANT_COLLECTION,
   ROLE_COLLECTION,
   MEMBER_COLLECTION,
   INVITE_COLLECTION,
@@ -1019,6 +1027,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const role = standing(state, root);
     if (!role)
       return { ok: false, reason: 'Its author was not a member of this space, as of what it had seen' };
+    if (version.collection === WARRANT_COLLECTION) {
+      const warranted = await warrantVerdict(version);
+      if (warranted === 'later')
+        return { ok: false, reason: 'What its proof depends on has not arrived yet', later: true };
+      if (warranted === 'false') return { ok: false, reason: 'A warrant whose proof does not hold' };
+    }
     if (!needs(role)) {
       return {
         ok: false,
@@ -1306,6 +1320,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Whether a version from outside — a peer, a folder — may be stored */
   async function admit(version: Version): Promise<Standing> {
+    const verdict = await admitOnce(version);
+    // Refused for good, or a change to who may do what: perhaps proof of a broken rule (03 §6.6).
+    if ((!verdict.ok && !verdict.later && !verdict.withdrawn) || ACCESS_COLLECTIONS.has(version.collection))
+      void warrantIfDue(version).catch(() => {});
+    return verdict;
+  }
+
+  async function admitOnce(version: Version): Promise<Standing> {
     // Not cached with the signature's verdict: a copy with another body shares the id and signature.
     const problem = await bodyProblem(version);
     if (problem) return { ok: false, reason: problem };
@@ -2558,6 +2580,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       collection === PROFILE_COLLECTION ||
       collection === BOX_COLLECTION ||
       collection === MEMBER_KEY_COLLECTION ||
+      // Proof read back by every peer, however late it joins.
+      collection === WARRANT_COLLECTION ||
       // What a removed carrier was is read back after the delete (`nameKeepers`).
       collection === CARRIER_COLLECTION ||
       definition?.history === 'all' ||
@@ -2760,6 +2784,142 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       );
     }
     return view<T>(await writeFirst(collection, body, options.key ?? newRecordKey(), links, options.as));
+  }
+
+  // ─── Warrants ──────────────────────────────────────────────────────
+  //
+  // A version the protocol refuses, that no honest writer could have signed —
+  // judged as of what it says it had seen — is proof against the account
+  // behind its key. A peer that refuses one writes it down for every member,
+  // once per account; every peer checks the proof itself (03 §6.6).
+
+  type WarrantVerdict = 'holds' | 'false' | 'later' | 'unjudgeable';
+
+  /** Whether a version's account is one the space has known: only those can be warranted, so a stranger minting keys costs nobody a write */
+  async function accountable(version: Version): Promise<string | null> {
+    const verdict = await judge(version);
+    if (!verdict.verified || !verdict.root || version.space !== space.id) return null;
+    return (await access()).history.named(verdict.root) ? verdict.root : null;
+  }
+
+  /** Whether a version broke a rule of its standing, as of what it had seen: no place, or `who` or `final` against it */
+  async function standingBroken(version: Version, root: string): Promise<WarrantVerdict> {
+    const state = (await access()).history.at(version.seen ?? []);
+    if (!state) return 'later';
+    const role = standing(state, root);
+    if (!role) return 'holds';
+    if (version.collection.startsWith('sys.')) return 'false';
+    const found = await rulesAt(state, version.collection);
+    // Rules this peer can't read: it can't say.
+    if (!found) return state.definitions.has(version.collection) ? 'unjudgeable' : 'false';
+    const { rules } = found;
+    if (rules.final && version.seq > 0) return 'holds';
+    if (version.seq !== 0) return 'false';
+    const can = (permission: string) => roleHolds(role, permissionName(version.collection, permission));
+    return allows(whoMay(rules, 'create'), { member: true, creator: false, can }) ? 'false' : 'holds';
+  }
+
+  /** Whether proof of one kind holds: the offending version first, then what checking it needs */
+  async function evidenceHolds(kind: string, evidence: ReadonlyArray<Version>): Promise<WarrantVerdict> {
+    if (!knownKind(kind)) return 'unjudgeable';
+    const [offending, context] = evidence;
+    if (!offending || !(await accountable(offending))) return 'false';
+    const root = (await judge(offending)).root!;
+    switch (kind) {
+      case 'chain': {
+        if (!context || !(await judge(context)).verified || context.id !== offending.prev) return 'false';
+        return chainProblem(offending, context) ? 'holds' : 'false';
+      }
+      case 'standing':
+        if (ACCESS_COLLECTIONS.has(offending.collection) || offending.collection === WARRANT_COLLECTION)
+          return 'false';
+        return standingBroken(offending, root);
+      case 'access': {
+        if (!ACCESS_COLLECTIONS.has(offending.collection) || !('body' in offending)) return 'false';
+        const event = await buildEvent(offending);
+        if (!event) return 'false';
+        const state = (await access()).history.at(event.seen);
+        if (!state) return 'later';
+        return refusal(event, state) ? 'holds' : 'false';
+      }
+      case 'warrant': {
+        if (offending.collection !== WARRANT_COLLECTION || !('body' in offending)) return 'false';
+        const inner = await warrantVerdict(offending, { nested: true });
+        return inner === 'false' ? 'holds' : inner === 'holds' ? 'false' : inner;
+      }
+    }
+  }
+
+  /** Whether a warrant record proves what it says, against the account its key names */
+  async function warrantVerdict(
+    version: Version,
+    options: { nested?: boolean } = {},
+  ): Promise<WarrantVerdict> {
+    if (version.deleted) return 'false';
+    const warrant = readWarrant((await openBody(version)).body);
+    if (!warrant) return 'false';
+    // A warrant against a warrant against a warrant proves nothing more.
+    if (options.nested && warrant.kind === 'warrant') return 'false';
+    const against = warrant.evidence[0] && (await accountable(warrant.evidence[0]));
+    if (!against || version.key !== (await warrantKey(against))) return 'false';
+    return evidenceHolds(warrant.kind, warrant.evidence);
+  }
+
+  /** The proof a version gives against its account, or null when it gives none */
+  async function violationIn(version: Version): Promise<{ kind: WarrantKind; evidence: Version[] } | null> {
+    const root = await accountable(version);
+    if (!root) return null;
+    if (version.seq > 0 && version.prev) {
+      const previous = await storage.getVersion(version.prev);
+      if (previous && chainProblem(version, previous))
+        return { kind: 'chain', evidence: [stubOf(version), stubOf(previous)] };
+    }
+    if (ACCESS_COLLECTIONS.has(version.collection)) {
+      return (await evidenceHolds('access', [version])) === 'holds'
+        ? { kind: 'access', evidence: [version] }
+        : null;
+    }
+    if (version.collection === WARRANT_COLLECTION)
+      return (await warrantVerdict(version)) === 'false' ? { kind: 'warrant', evidence: [version] } : null;
+    return (await standingBroken(version, root)) === 'holds'
+      ? { kind: 'standing', evidence: [stubOf(version)] }
+      : null;
+  }
+
+  /**
+   * Writes down the proof a version gives against its account, unless the
+   * account has a warrant here already. Any member may; one that can't write
+   * leaves it to one that can.
+   */
+  async function warrantIfDue(version: Version): Promise<void> {
+    if (closed || (await cannotWrite())) return;
+    const violation = await violationIn(version);
+    if (!violation) return;
+    const root = (await judge(version)).root!;
+    const key = await warrantKey(root);
+    const held = await currentOf(key);
+    // Checked again: the space may have closed while the proof was being worked out.
+    if ((held && !held.deleted) || closed) return;
+    await upsert(WARRANT_COLLECTION, key, violation);
+  }
+
+  /** The accounts proven to have broken the protocol's rules here, by the warrants that stand */
+  async function flagged(): Promise<ReadonlyArray<FlaggedAccount>> {
+    const found: FlaggedAccount[] = [];
+    for (const version of await everyCurrent(WARRANT_COLLECTION)) {
+      if (version.deleted || !(await standingOf(version)).ok) continue;
+      const warrant = readWarrant((await openBody(version)).body);
+      const offending = warrant?.evidence[0];
+      const account = offending && (await accountable(offending));
+      if (!warrant || !offending || !account || !knownKind(warrant.kind)) continue;
+      found.push({
+        account,
+        key: offending.author,
+        kind: warrant.kind,
+        by: (await judge(version)).root ?? version.author,
+      });
+    }
+    return found;
   }
 
   /** Display order: when a record was created, then its key. It decides nothing. */
@@ -3067,6 +3227,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         keepers: state.keepers,
         copies: state.copies,
         forks: history.forks(),
+        flagged: await flagged(),
       });
     },
 

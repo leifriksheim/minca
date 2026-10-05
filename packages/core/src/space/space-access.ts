@@ -174,6 +174,13 @@ export const memberKey = (did: string) => hashedKey('member', did);
 export const inviteKey = (inviteDid: string) => hashedKey('invite', inviteDid);
 /** The key of the record revoking a note, from the note's CID */
 export const revokeKey = (noteCid: string) => hashedKey('revoke', noteCid);
+/**
+ * Where proof that an account broke the protocol's rules is kept, one record
+ * per account: `{ kind, evidence }` (spec 03 §6.6).
+ */
+export const WARRANT_COLLECTION = 'sys.warrant';
+/** The key of the warrant against an account */
+export const warrantKey = (accountDid: string) => hashedKey('warrant', accountDid);
 /** The key of the record proving a writer's log forked, from the writer's key */
 export const forkKey = (writerDid: string) => hashedKey('fork', writerDid);
 /** The key of a role's record */

@@ -1496,6 +1496,11 @@ A check can end four ways:
 | **later**     | it depends on something not held: its first version, the version its `prev` names, access changes named in `seen`, or a version its checks cite (§7.6) | Holds it aside and re-judges waiting versions whenever something new is stored. Nothing is reported.                                                                                |
 | **refused**   | any other failure                                                                                                                                      | Does not store it and does not pass it on. It may remember the refusal as (peer, id), only so it does not ask that peer again.                                                      |
 
+A refused version that its author's key validly signed, and that no honest
+writer could have signed, is also proof against that account: the refusing
+peer SHOULD write it down as a warrant ([03](03-spaces.md) §6.6). Withdrawn and
+later versions never are.
+
 A withdrawn version is kept so that every peer can judge a proof that cites
 it, however late the peer joins: a peer that refused it would make the proof
 wait forever, while peers that stored it before the change accept the proof.

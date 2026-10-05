@@ -71,6 +71,27 @@ The node does the protocol's key upkeep by itself, in each space it opens:
 
 _Source: `packages/core/src/node/space-runtime.ts` (`upkeep`, `rotateKey`, `nameRelays`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/space-relays.test.ts`._
 
+## Flagged accounts
+
+`spaces.access(id).flagged` lists accounts proven to have broken the protocol's
+rules in the space: a key of theirs signed something every peer refuses and no
+honest app would sign, such as writing in a collection their role may not,
+making themselves an owner, or offering false proof against someone else
+([spec 03 §6.6](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+Each entry is `{ account, key, kind, by }`: who, which of their keys, what they
+broke (`chain`, `standing`, `access` or `warrant`), and who brought the proof.
+
+The node does this itself. When it refuses such a version it writes the proof
+as a `sys.warrant` record, at most one per account, and every member's node
+checks it before showing the flag. Nothing is done to the account by itself.
+An app shows the flag to whoever manages the space, who may remove the person
+(`spaces.setMember(id, did, null)`). It also shows it to the account itself:
+a flag against your own account usually means a key of yours is being used
+somewhere it shouldn't be, and revoking that key's note
+(`spaces.revoke`) takes back what it signed.
+
+_Source: `packages/core/src/node/space-runtime.ts` (`warrantIfDue`, `flagged`). Tests: `packages/core/tests/warrants.test.ts`._
+
 ## Profiles
 
 The record format, and whose versions count, is protocol

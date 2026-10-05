@@ -692,6 +692,74 @@ covers the place it found.
 
 _Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork"), `packages/core/tests/access-convergence.test.ts`._
 
+### 6.6 Warrants
+
+A **warrant** is proof that an account's key signed something the protocol
+refuses and that no honest writer could have signed. It is judged as of what
+the version itself says it had seen, so no change elsewhere, made at the same
+time, can explain it. A warrant flags the account for every member. It takes
+nothing away by itself: what to do about it is a decision for whoever manages
+the space (§6.1), and an account whose key was stolen revokes its note (§6.4).
+
+```
+sys.warrant at warrant:<hex40(account DID)>
+{ kind, evidence: [<version>, <version>?] }        in the clear, retain: true
+```
+
+`evidence[0]` is the offending version, and its signer's root (02 §9.3) is the
+account. Only an account the history names (`named`, §3.4, §4.6) can be warranted, so
+a stranger minting keys and notes costs nobody a write. There is at most one
+warrant per account in a space. The kinds:
+
+| `kind`     | `evidence`                                        | Holds when                                                                                                                                                                               |
+| ---------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chain`    | `[v, p]`, both without bodies                     | `p.id = v.prev` and `v` does not follow `p` ([02](02-records.md) §4.7)                                                                                                                   |
+| `standing` | `[v]`, without its body; not an access collection | as of `at(v.seen)`: `v`'s root holds no role; or `v.seq > 0` and the rules in force say `final`; or `v.seq = 0` and the rule for `create` doesn't allow the root's role (§5.2 steps 6–7) |
+| `access`   | `[v]`, whole; an access collection                | `v`'s event, built as §3.3 says, is refused by its author's power as of `at(event.seen)` (§4.5): not a rival it hadn't seen, and not a change made later                                 |
+| `warrant`  | `[w]`, whole; a `sys.warrant`                     | `w` is a warrant of another kind whose proof does not hold                                                                                                                               |
+
+A `sys.warrant` version stands when its author may write in the space (§5.2)
+and its proof holds: it is well formed, its `evidence[0]` is validly signed
+(02 §3.3) in this space by a key whose root the history names, its record key
+is `warrant:<hex40(that root)>`, and its kind's check holds. A peer:
+
+- judges it **not yet** when what the check needs is not here (`at(seen)`
+  unknown);
+- lets it stand without judging it when the check needs rules it can't read,
+  or its `kind` is one it doesn't know (a lower-case word of at most 32
+  characters), and never flags anyone by it;
+- refuses it otherwise. A refused warrant is itself proof, of kind `warrant`,
+  against whoever wrote it.
+
+A peer that refuses a version that would be evidence of a kind above SHOULD
+write the warrant, unless the account has one in the space already. So does a
+peer that stores an access change whose author had no power for it as of what
+it saw.
+
+Example: Bob, an editor, signs a `sys.member` making himself owner, with
+`seen` naming the space's latest changes. Every peer drops the change (§4.5).
+Alice's node, which holds it, writes `sys.warrant` at `warrant:<hex40(Bob)>`
+with `{ "kind": "access", "evidence": [<that version>] }`. Every member's node
+checks the proof and shows Bob flagged; Alice decides whether to remove him.
+
+> Rationale: why only what an honest writer can't do. A version refused
+> because of something its writer had not seen, such as a removal or a rule
+> change made at the same time, is **withdrawn**, never refused (§5.1, §5.2),
+> so it never earns a warrant. A bad signature proves nothing about anyone,
+> since anyone can make one in anyone's name. A broken body or schema depends
+> on which definition a peer holds (02 §9.6). What remains is what every peer
+> decides the same way from signed data alone, and an honest client refuses
+> it before signing.
+
+> Rationale: why a warrant only flags. Taking something away because of a
+> warrant would make which records count depend on whether the warrant had
+> arrived, and peers would disagree. A stolen key could also get its owner
+> removed. The protocol already has signed ways to take away a key's writes
+> (§6.4) and a person's place (§6.1); a warrant puts the proof in front of the
+> people who can use them.
+
+_Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-runtime.ts` (`warrantVerdict`, `evidenceHolds`, `standingBroken`, `violationIn`, `warrantIfDue`, `flagged`, `admit`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`, `warrantKey`), `packages/core/src/space/roles.ts` (`refusal`). Tests: `packages/core/tests/warrants.test.ts`._
+
 ---
 
 ## 7. Invites

@@ -157,6 +157,23 @@ export interface SpaceAccess {
    * on no longer counts (spec 02 §4.10).
    */
   readonly forks: ReadonlyArray<{ readonly writer: string; readonly from: number }>;
+  /**
+   * Accounts proven, by a warrant every peer checked, to have signed something
+   * the protocol refuses and no honest writer could have (spec 03 §6.6). For
+   * whoever manages the space to see; nothing is done about it by itself.
+   */
+  readonly flagged: ReadonlyArray<FlaggedAccount>;
+}
+
+/** An account a warrant stands against */
+export interface FlaggedAccount {
+  readonly account: string;
+  /** The key that signed it: one device or app of theirs */
+  readonly key: string;
+  /** What it broke: `chain`, `standing`, `access` or `warrant` */
+  readonly kind: string;
+  /** The account that brought the proof */
+  readonly by: string;
 }
 
 /** A record, opened and checked — its current version, unless listed as history */

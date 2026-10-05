@@ -513,7 +513,7 @@ function mayTakeAway(event: AccessEvent): boolean {
  * Why a change is not allowed in a state, or null when it is. The one place
  * the rank rule lives.
  */
-function refusal(event: AccessEvent, state: AccessState): string | null {
+export function refusal(event: AccessEvent, state: AccessState): string | null {
   const author = roleOf(state, event.root);
   switch (event.kind) {
     case 'role': {
