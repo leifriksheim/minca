@@ -232,9 +232,8 @@ describe('rules: changing them', () => {
     );
     const early = await bob.node.records.put(space, 'app.board', { text: 'early' });
     await until(async () => (await alice.node.records.get(space, early.key)) !== null, 4000, 'Bob’s post');
-    const seenThen =
-      (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(early.version))!.seen ??
-      [];
+    // What a version Bob wrote now would name: read from his node, not a second copy of its store.
+    const seenThen = (await bob.node.spaces.access(space)).heads;
 
     // Only those who may post, now: Bob, an editor, may not.
     await alice.node.collections.define(space, { ...board, rules: { create: 'can:post' } });
