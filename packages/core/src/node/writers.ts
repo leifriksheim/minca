@@ -72,13 +72,23 @@ function readPlaces(bytes: Uint8Array | null): Places | null {
   }
 }
 
+/** Locks held in this process, by name, where there are no Web Locks */
+const held = new Map<string, Promise<unknown>>();
+
 /**
  * Runs `work` holding a lock every context of this origin shares — tabs,
- * workers — where there is one (the Web Locks API); in Node, one process.
+ * workers — where there are Web Locks. Where there are none (Node before 24),
+ * every node in the process shares this one instead: the only nodes that can
+ * share a key there are in one process, since the CLI locks its keys per
+ * process.
  */
 function exclusively<T>(name: string, work: () => Promise<T>): Promise<T> {
   const locks = globalThis.navigator?.locks;
-  return locks ? locks.request(name, work) : work();
+  if (locks) return locks.request(name, work);
+  const run = (held.get(name) ?? Promise.resolve()).catch(() => {}).then(work);
+  held.set(name, run);
+  void run.finally(() => held.get(name) === run && held.delete(name)).catch(() => {});
+  return run;
 }
 
 /** The next place after a head, or the first */
