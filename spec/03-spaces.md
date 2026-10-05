@@ -716,10 +716,13 @@ a stranger minting keys and notes costs nobody a write.
 
 A warrant is **its writer's own record**: its key names both the account and
 the account that wrote it, so only that writer can write any version of it.
-It is **written once**: only a `seq 0` version with `retain: true` can stand,
-so not even its writer can replace or delete it. Nobody warrants themselves.
-A writer has at most one warrant against each account, so warrants cost at
-most one record per member and accused account. The kinds:
+It is never replaced while it stands: a version with `seq > 0` stands only
+when its `prev` is the version before it at the same key and that version no
+longer stands, as when a removal withdrew it (§5.1). So not even its writer
+can take back a warrant that counts, and a witness who was removed and let
+back in can warrant the same account again. Every version is kept whole
+(`retain: true`), and a delete never stands. Nobody warrants themselves. At
+most one warrant stands per writer and accused account. The kinds:
 
 | `kind`     | `evidence`                                                 | Holds when                                                                                                                                                                               |
 | ---------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -732,9 +735,10 @@ A `sys.warrant` version stands when its author may write in the space (§5.2)
 and its proof holds: it is well formed, its `evidence[0]` is validly signed
 (02 §3.3) in this space by a key whose root the history names, its record key
 is `warrant:<hex40(that root + "|" + the warrant's own root)>`, the two roots
-differ, it is a `seq 0` version with `retain: true`, its `evidence` has
-exactly the versions its kind's row lists, and its kind's check holds. A
-delete of a warrant never stands. A peer:
+differ, it carries `retain: true`, a version with `seq > 0` follows one at
+its key that no longer stands, its `evidence` has exactly the versions its
+kind's row lists (with and without bodies as the row says), and its kind's
+check holds. A delete of a warrant never stands. A peer:
 
 - judges it **not yet** when what the check needs is not here (`at(seen)`
   unknown);
@@ -743,14 +747,16 @@ delete of a warrant never stands. A peer:
   and never flags anyone by it. An account is flagged only by a warrant whose
   proof this peer checked and found to hold;
 - refuses it otherwise. A refused warrant is itself proof, of kind `warrant`,
-  against whoever wrote it.
+  against whoever wrote it, unless it is of kind `warrant` itself: a
+  counter-warrant against a counter-warrant never holds, so nobody writes
+  one, and a false `warrant`-kind warrant is refused but earns no flag.
 
 A peer that refuses a version that would be evidence of a kind above SHOULD
-write the warrant, unless it has written one against that account already.
-So does a peer that stores an access change whose author had no power for it
-as of what it saw. It does not hold back because someone else's warrant
-stands: that warrant goes if its writer leaves or is removed, and the
-offending version, refused, is never seen again.
+write the warrant, unless a warrant of its own against that account stands
+already. So does a peer that stores an access change whose author had no
+power for it as of what it saw. It does not hold back because someone else's
+warrant stands: that warrant is withdrawn if its writer is removed without
+keeping it, and the offending version, refused, is never seen again.
 
 Example: Bob, an editor, signs a `sys.member` making himself owner, with
 `seen` naming the space's latest changes. Every peer drops the change (§4.5).

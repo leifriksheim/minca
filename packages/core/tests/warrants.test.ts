@@ -183,7 +183,7 @@ describe('warrants', () => {
       space,
       {
         collection: WARRANT_COLLECTION,
-        body: { kind: 'nothing-to-see', evidence: [stubOf((await bobStore.getVersion(own.version))!)] },
+        body: { kind: 'nothingtosee', evidence: [stubOf((await bobStore.getVersion(own.version))!)] },
         version: { key, seq: current.seq + 1, prev: current.id, genesis: current.genesis ?? current.id },
         retain: true,
       },
@@ -289,6 +289,64 @@ describe('warrants', () => {
     assert.ok(
       await aliceStore.getCurrent(await warrantKey(bob.node.did, alice.node.did)),
       'Alice wrote her own',
+    );
+  });
+
+  test('removing a witness withdraws their warrant, but doesn’t silence them: back in, they can warrant again', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    /** A version whose `prev` names a version of another record: a broken chain */
+    const crossed = async () => {
+      const mine = await alice.node.records.put(space, 'app.note', { text: 'mine' });
+      const other = await alice.node.records.put(space, 'app.note', { text: 'other' });
+      return forge(
+        alice,
+        space,
+        {
+          collection: 'app.note',
+          body: { text: 'x' },
+          version: { key: mine.key, seq: 1, prev: other.version, genesis: mine.version },
+        },
+        { keep: false },
+      );
+    };
+    const flaggedBy = async () =>
+      (await flaggedFor(bob, space)).some((f) => f.account === alice.node.did && f.by === bob.node.did);
+    await slip(alice, space, [await crossed()]);
+    await until(flaggedBy, 8000, 'Bob’s warrant');
+
+    // Alice removes Bob, keeping nothing: his warrant is withdrawn with the rest.
+    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    const membership = (await aliceStore.getCurrent(await memberKey(bob.node.did)))!;
+    const removal = await forge(
+      alice,
+      space,
+      {
+        collection: MEMBER_COLLECTION,
+        body: { did: bob.node.did, role: null },
+        version: {
+          key: membership.key,
+          seq: membership.seq + 1,
+          prev: membership.id,
+          genesis: membership.genesis ?? membership.id,
+        },
+        retain: true,
+      },
+      { keep: false },
+    );
+    await slip(alice, space, [removal]);
+    await until(async () => (await bob.node.spaces.access(space)).role === null, 8000, 'the removal');
+    await until(async () => !(await flaggedBy()), 4000, 'the warrant to be withdrawn');
+
+    // Back in, Bob sees her break a chain again, and writes the next version of his warrant.
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(bob.node, space);
+    await joined(bob.node, space, 15000);
+    await slip(alice, space, [await crossed()]);
+    await until(flaggedBy, 8000, 'Bob’s warrant again');
+    await until(
+      async () => (await flaggedFor(alice, space)).some((f) => f.account === alice.node.did),
+      8000,
+      'Alice to see it too',
     );
   });
 

@@ -2915,12 +2915,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const root = (await judge(offending)).root!;
     switch (kind) {
       case 'chain': {
-        if (!context || !(await judge(context)).verified || context.id !== offending.prev) return 'false';
+        if (!context || 'body' in offending || 'body' in context) return 'false';
+        if (!(await judge(context)).verified || context.id !== offending.prev) return 'false';
         return chainProblem(offending, context) ? 'holds' : 'false';
       }
       case 'standing':
         if (
           context ||
+          'body' in offending ||
           ACCESS_COLLECTIONS.has(offending.collection) ||
           offending.collection === WARRANT_COLLECTION
         )
@@ -2948,8 +2950,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
   async function warrantVerdict(version: Version): Promise<WarrantVerdict> {
-    // Written once and kept whole: no later version can take its place, and no delete.
-    if (version.deleted || version.seq !== 0 || !version.retain) return 'false';
+    // Kept whole, never deleted, and never replaced while it stands: a later version is its
+    // writer's again only once the one before stopped counting, as when a removal withdrew it.
+    if (version.deleted || !version.retain) return 'false';
+    if (version.seq > 0) {
+      const before = version.prev ? await storage.getVersion(version.prev) : null;
+      if (!before) return 'later';
+      if (before.key !== version.key || (await standingOf(before)).ok) return 'false';
+    }
     const warrant = readWarrant((await openBody(version)).body);
     if (!warrant) return 'false';
     const against = warrant.evidence[0] && (await accountable(warrant.evidence[0]));
@@ -2973,8 +2981,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ? { kind: 'access', evidence: [version] }
         : null;
     }
-    if (version.collection === WARRANT_COLLECTION)
+    if (version.collection === WARRANT_COLLECTION) {
+      // Proof against a `warrant`-kind warrant never holds (`evidenceHolds`), so there's nothing to write.
+      if (readWarrant((await openBody(version)).body)?.kind === 'warrant') return null;
       return (await warrantVerdict(version)) === 'false' ? { kind: 'warrant', evidence: [version] } : null;
+    }
     return (await standingBroken(version, root)) === 'holds'
       ? { kind: 'standing', evidence: [stubOf(version)] }
       : null;
@@ -2994,7 +3005,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (root === deps.rootDid) return;
     const key = await warrantKey(root, deps.rootDid);
     // Checked again: the space may have closed while the proof was being worked out.
-    if ((await storage.getCurrent(key)) || closed) return;
+    if ((await currentOf(key)) || closed) return;
     await upsert(WARRANT_COLLECTION, key, violation);
   }
 
