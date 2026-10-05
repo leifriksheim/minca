@@ -110,7 +110,8 @@ describe('signaling reconnects', () => {
     assert.ok(client.status().failures > 5);
 
     relayUp = true;
-    await pass(35_000);
+    // The longest wait between tries: 30 s, spread by up to a quarter either way (`backoff`).
+    await pass(40_000);
     assert.equal(client.status().state, 'open');
     assert.equal(client.status().failures, 0);
     // And the room is joined again on the new socket.

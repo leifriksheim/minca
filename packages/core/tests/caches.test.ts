@@ -195,7 +195,8 @@ describe('holding part of a space', () => {
       5000,
       'the first to be asked for, and the chat complete',
     );
-    assert.equal(await held(dave, space, 'app.chat'), 12);
+    // Complete only once it is stored: the query reads all twelve.
+    assert.equal((await chat()).records.length, 12);
   });
 
   test('a space that names no keeper is held whole, as before', async () => {

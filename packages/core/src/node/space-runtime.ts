@@ -1698,6 +1698,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * everything is.
    */
   const recordsChanged = (placed?: ReadonlyArray<Version>) => {
+    if (placed) noteArrived(placed);
     linkIndexCache = null;
     emit({ type: 'records', space: space.id });
     for (const mirror of mirrors) mirror.changed();
@@ -2416,22 +2417,31 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!cache || !version.log || version.collection.startsWith('sys.')) return;
     const { collection } = version;
     const missing = cacheState.missing[collection] ?? [];
-    let changed = false;
-    if (missing.includes(version.id)) {
-      cacheState.missing[collection] = missing.filter((id) => id !== version.id);
-      changed = true;
-    }
     const before = version.log.c.prev;
-    if (before && !missing.includes(before) && !(await storage.getVersion(before))) {
-      cacheState.missing[collection] = [...(cacheState.missing[collection] ?? []), before];
-      sync.ask(collection, [before]);
+    if (!before || missing.includes(before) || (await storage.getVersion(before))) return;
+    cacheState.missing[collection] = [...missing, before];
+    sync.ask(collection, [before]);
+    saveCache();
+    // A query that said "complete" says so no longer.
+    if (partial) emit({ type: 'records', space: space.id });
+  }
+
+  /**
+   * Takes versions just stored off what was missing — only once they are in
+   * the store, so a query never says "complete" for what it can't read yet.
+   */
+  function noteArrived(placed: ReadonlyArray<Version>): void {
+    if (!cache) return;
+    let changed = false;
+    for (const version of placed) {
+      const missing = cacheState.missing[version.collection];
+      if (!missing?.includes(version.id)) continue;
+      const left = missing.filter((id) => id !== version.id);
+      if (left.length) cacheState.missing[version.collection] = left;
+      else delete cacheState.missing[version.collection];
       changed = true;
     }
-    if (!changed) return;
-    if (!cacheState.missing[collection]?.length) delete cacheState.missing[collection];
-    saveCache();
-    // A query that said "complete", or not, may say otherwise now.
-    if (partial) emit({ type: 'records', space: space.id });
+    if (changed) saveCache();
   }
 
   /** A write of this node's, waiting for keepers — only on a node that may hold part of a space */
