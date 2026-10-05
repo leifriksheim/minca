@@ -222,7 +222,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   // ─── Session ───────────────────────────────────────────────────────
 
-  const sessionKeys = config.sessionKey ?? (await provider.generateKeyPair());
+  // A lasting key no other node signs with now, when the node was given somewhere to keep one.
+  const claimed = config.sessionKey ? null : ((await config.writerKey?.claim().catch(() => null)) ?? null);
+  const sessionKeys = config.sessionKey ?? claimed?.keys ?? (await provider.generateKeyPair());
   const sessionDid = await didOf(sessionKeys.publicKey, provider);
 
   const delegate = () =>
@@ -258,11 +260,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     key: sessionKeys.privateKey,
     proof: () => current.encoded,
   };
-  // A key made here dies with the node, and its places in each log with it; one
-  // handed in (an agent's) outlives it, so its places are kept (`node/writers.ts`).
-  const writers = createWriters(
-    await config.stores('writers'),
-    (did) => did !== sessionDid || config.sessionKey !== undefined,
+  // A key made here dies with the node, and its places in each log with it. A
+  // claimed key keeps them in its slot; one handed in (an agent's) in the
+  // node's stores (`node/writers.ts`).
+  const handedIn = await config.stores('writers');
+  const writers = createWriters((did) =>
+    did !== sessionDid ? handedIn : (claimed?.heads ?? (config.sessionKey ? handedIn : null)),
   );
   const mesh = meshFor(config.network, sessionDid);
   /**
@@ -2488,6 +2491,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // Let go of the registry too: an open database connection blocks the
       // browser from ever deleting it.
       await registryStore.close();
+      // Only now: until every space is closed, the key could still sign.
+      await claimed?.release();
       events.clear();
     },
   });

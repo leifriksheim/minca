@@ -23,7 +23,7 @@ import { createTransportSwitch, remoteTransport, serveTransport } from '../netwo
 import { isRecord } from '../utils/guards.js';
 import { createNode } from './node.js';
 import { remoteNode, remoteSigner, serveNode, serveSigner } from './remote.js';
-import { workerStores, type StoreFactory, type WorkerStores } from './stores.js';
+import { workerStores, writerKeysFor, type StoreFactory, type WorkerStores } from './stores.js';
 import type { NodeConfig, NodeNetworkConfig, P2PNode } from './types.js';
 
 /**
@@ -211,8 +211,15 @@ export async function startPageNode(
     : createNode({
         ...shared,
         stores: options.stores ?? workerStores(stores),
+        ...withWriterKey(stores),
         ...(network ? { network } : {}),
       });
+}
+
+/** The account's lasting writer key, kept in this origin beside its stores, when it names an account */
+function withWriterKey(stores: WorkerStores) {
+  const writerKey = writerKeysFor(stores);
+  return writerKey ? { writerKey } : {};
 }
 
 /** What `runNodeWorker` listens on: a dedicated worker's scope, or a shared worker's */
@@ -302,6 +309,7 @@ export function runNodeWorker(
         ...rest,
         signer: signers.signer,
         stores: openStores(stores),
+        ...withWriterKey(stores),
         ...(network
           ? {
               network: {

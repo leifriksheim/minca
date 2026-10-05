@@ -13,6 +13,7 @@ import type { StorageAdapter } from '../types.js';
 import { createIndexedDBAdapter } from '../storage/indexeddb-adapter.js';
 import { createFolderAdapter, type DirectoryHandleLike } from '../storage/folder-adapter.js';
 import { createEncryptedAdapter } from '../storage/encrypted-adapter.js';
+import { browserWriterKeys, type WriterKeySource } from './writer-keys.js';
 
 export interface StoreOptions {
   /**
@@ -70,6 +71,18 @@ export type WorkerStores =
       readonly basePath?: string;
       readonly vaultKey?: CryptoKey | null;
     };
+
+/**
+ * Where a node started from a description keeps its lasting writer key:
+ * this origin's IndexedDB, under the account's prefix, so signing out
+ * deletes it with the rest. Never the data folder, which other apps and
+ * devices share: a key there could sign in two places at once. A folder
+ * without an account path names no account to keep a key for.
+ */
+export function writerKeysFor(stores: WorkerStores): WriterKeySource | undefined {
+  if ('indexedDB' in stores) return browserWriterKeys(stores.indexedDB);
+  return stores.basePath ? browserWriterKeys(`weave:${stores.basePath.replace(/\//g, ':')}`) : undefined;
+}
 
 /** The store factory a description stands for */
 export function workerStores(stores: WorkerStores): StoreFactory {

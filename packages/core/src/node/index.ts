@@ -8,6 +8,8 @@ export { startNodeInWorker, runNodeWorker } from './worker.js';
 export type { WorkerNodeConfig, WorkerLike } from './worker.js';
 export { writeCapability, relayRoom } from './space-runtime.js';
 export { indexedDBStores, folderStores, workerStores } from './stores.js';
+export { browserWriterKeys } from './writer-keys.js';
+export type { ClaimedWriter, HeadStore, WriterKeySource } from './writer-keys.js';
 export { copyAccountData } from './copy.js';
 export { createCarrierNode } from './carrier.js';
 export { watchNotifications } from './watch-notifications.js';

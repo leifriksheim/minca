@@ -11,10 +11,11 @@
  *
  * A session key lives as long as the node that made it, so its places can be
  * kept in memory: when the node stops, the key is gone with them. A key that
- * outlives the node — an agent's, a host's — keeps its places in the store,
- * or a restart would hand out a place a second time.
+ * outlives the node — a claimed writer key, an agent's, a host's — keeps its
+ * places beside it, or a restart would hand out a place a second time.
  */
-import type { StorageAdapter, Version, WriterLog } from '../types.js';
+import type { Version, WriterLog } from '../types.js';
+import type { HeadStore } from './writer-keys.js';
 import { utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { isRecord } from '../utils/guards.js';
 
@@ -53,16 +54,19 @@ function readHead(bytes: Uint8Array | null): Head | null {
 
 /**
  * The logs of the keys one node signs with.
- * @param store Where places are kept for keys that outlive the node
- * @param durable Whether a key outlives the node. Others are kept in memory.
+ * @param storeOf Where a key's places are kept, for a key that outlives the
+ *   node; null for one that doesn't, whose places are kept in memory
  */
-export function createWriters(store: StorageAdapter | null, durable: (did: string) => boolean): Writers {
+export function createWriters(storeOf: (did: string) => HeadStore | null): Writers {
   const heads = new Map<string, Head | null>();
   const queues = new Map<string, Promise<unknown>>();
 
   async function headOf(did: string, spaceId: string): Promise<Head | null> {
     const key = headKey(did, spaceId);
-    if (!heads.has(key)) heads.set(key, store && durable(did) ? readHead(await store.get(key)) : null);
+    if (!heads.has(key)) {
+      const store = storeOf(did);
+      heads.set(key, store ? readHead(await store.get(key)) : null);
+    }
     return heads.get(key) ?? null;
   }
 
@@ -77,7 +81,7 @@ export function createWriters(store: StorageAdapter | null, durable: (did: strin
           const version = await sign(log);
           const next = { n: log.n, id: version.id };
           // Kept before the version can leave: a restart must never give this place again.
-          if (store && durable(did)) await store.put(key, utf8Encode(JSON.stringify(next)));
+          await storeOf(did)?.put(key, utf8Encode(JSON.stringify(next)));
           heads.set(key, next);
           return version;
         });

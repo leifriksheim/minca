@@ -26,6 +26,7 @@ conveniences.
 | `network`           | optional                    | `relays` (WebRTC signaling, browsers), `nodes` (always-on nodes to dial, `wss://host/peer#<DID>`; the fragment pins the node, spec 04 §5.2; `ws://` only on this machine), `iceServers`, `transports` (extra transports per space). Omitted: offline.                                                                 |
 | `sessionTtlSeconds` | number, optional            | Lifetime of each session note. Default `3600`.                                                                                                                                                                                                                                                                        |
 | `sessionKey`        | `CryptoKeyPair`, optional   | Sign with this key instead of a fresh one. Used when the signer's note names a specific key (an app's key, an agent's key, [spec 06 §2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md), [spec 06 §3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). |
+| `writerKey`         | `WriterKeySource`, optional | Keep a signing key across runs, so this device keeps one log in each space ([writer keys](#writer-keys)). Ignored with `sessionKey`.                                                                                                                                                                                  |
 | `watchIntervalMs`   | number, optional            | How often to look for writes another process made to a folder store. `0` disables. Default `2000`. _Implementation detail._                                                                                                                                                                                           |
 | `cache`             | `CacheConfig`, optional     | Hold only the collections used, in spaces that name a keeper ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                                   |
 | `mailbox`           | `MailboxClient`, optional   | How doors reach relays' mailboxes ([07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)). Default: a WebSocket to each relay.                                                                                                                                                                       |
@@ -160,14 +161,44 @@ What a path means is the factory's choice:
 Every version a node signs in a space takes the next place in its key's log
 there ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
 Writes by one key in one space go one at a time, and the place is remembered
-before the version leaves the node. A session key the node made itself lives
-only as long as the node, so its places are kept in memory. A key handed in
-(`config.sessionKey`, an agent's) or a carrier's own key outlives the node,
-so its places go in `writers`, and a restart carries on where it left off.
-Two nodes that sign with one handed-in key at once fork its log, and every
-peer then withdraws what it signed from the fork on: give each node its own key.
+before the version leaves the node. Where the places are kept depends on the key:
+
+- **A key made for this run** lives only as long as the node, so its places
+  are kept in memory.
+- **A claimed writer key** (`config.writerKey`) keeps them in its slot, beside
+  the key.
+- **A key handed in** (`config.sessionKey`, an agent's) or a carrier's own key
+  keeps them in the `writers` store, and a restart carries on where it left off.
+  Two nodes that sign with one handed-in key at once fork its log, and every
+  peer then withdraws what it signed from the fork on: give each node its own key.
 
 _Source: `packages/core/src/node/writers.ts` (`createWriters`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log")._
+
+### Writer keys
+
+A node given `writerKey` claims a lasting key at start and signs with it
+until it closes, so the device keeps one log in each space instead of a new
+one each run. The source hands a key to one node at a time; a node that
+finds every key taken, or a source that can't lock one, gets none, and the
+node makes a key for this run as it would without a source.
+
+- `browserWriterKeys(name)` keeps keys in this origin's IndexedDB, one
+  database per slot (`<name>:writer:<slot>`, up to 32), each claimed under a Web
+  Lock of the same name. A tab or worker that finds a slot taken tries the
+  next; one that closes, or crashes, frees its slot. The private key is
+  non-extractable: a script in the page can sign with it while it runs, but
+  can't take it away. Without IndexedDB or Web Locks it gives none.
+- A node started from a store description (`startPageNode`, a node in a
+  worker) claims from `browserWriterKeys` under the account's IndexedDB prefix,
+  whether its stores are in IndexedDB or a data folder, so signing out
+  (`deleteBrowserData`) deletes the keys too. The key never goes in the data
+  folder, which other apps and devices share.
+- The CLI keeps them in `~/.weave/writers/<account id>/slot-<n>/`: the key as
+  JWK sealed under the account's vault key (`key.sealed`, AES-GCM, mode 600),
+  so a copy of the files can't sign; its places in `heads/`; and a `lock` file
+  naming the process that holds it, taken over once that process is gone.
+
+_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts`._
 
 Sign-in ([sign-in](sign-in.md)) uses `storesFor(account)`: IndexedDB with prefix
 `weave:<dataPath with : for />` in the browser, or `folderStores(pod,
