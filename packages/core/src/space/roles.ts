@@ -367,6 +367,16 @@ export interface AccessHistory {
   /** Every key whose log forked, and from where */
   forks(): ReadonlyArray<{ readonly writer: string; readonly from: number }>;
   /**
+   * The applied changes to a collection's definition that a record seeing
+   * `seen` had not seen, in replay order — for a cited version, only those
+   * the citer, seeing `within`, had. Null when some of it is not here.
+   */
+  unseenDefinitions(
+    name: string,
+    seen: ReadonlyArray<string>,
+    within?: ReadonlyArray<string>,
+  ): ReadonlyArray<string> | null;
+  /**
    * Whether an account appears anywhere in the history — the creator, or
    * named by any member change, whatever became of it. Only grows as changes
    * arrive, so it can decide what to store without two peers ever disagreeing
@@ -1063,6 +1073,20 @@ function historyOf(r: Replay): AccessHistory {
     revoked: (note: string) => r.revokes.get(note) ?? null,
     forked: (writer: string) => r.forks.get(writer) ?? null,
     forks: () => [...r.forks].map(([writer, { from }]) => ({ writer, from })),
+    unseenDefinitions(name, ids, within) {
+      if (!seen(ids) || (within && !seen(within))) return null;
+      const cut = cutOf(r, ids);
+      const known = within ? cutOf(r, within) : null;
+      return r.order.filter((id) => {
+        const event = r.byId.get(id);
+        return (
+          event?.kind === 'definition' &&
+          event.name === name &&
+          !inCut(r, cut, id) &&
+          (!known || inCut(r, known, id))
+        );
+      });
+    },
     named: (did: string) => r.named.has(did),
     knownInvite: (key: string) => r.invites.has(key),
     extend(event: AccessEvent) {

@@ -511,6 +511,17 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
     revoked: (note: string) => revokes.get(note) ?? null,
     forked: (writer: string) => forks.get(writer) ?? null,
     forks: () => [...forks].map(([writer, { from }]) => ({ writer, from })),
+    unseenDefinitions(name, ids, within) {
+      if (!seen(ids) || (within && !seen(within))) return null;
+      const cut = cutOf(ids);
+      const known = within ? cutOf(within) : null;
+      return order.filter((id) => {
+        const event = byId.get(id);
+        return (
+          event?.kind === 'definition' && event.name === name && !cut.has(id) && (!known || known.has(id))
+        );
+      });
+    },
     named: (did: string) =>
       did === genesis.creator ||
       [...byId.values()].some((event) => event.kind === 'member' && event.did === did && event.role !== null),
@@ -808,6 +819,11 @@ function shape(history: ReferenceHistory, h: History): Record<string, string> {
   }
   for (const writer of WRITERS) out[`forked ${writer}`] = JSON.stringify(history.forked(writer));
   out.forks = JSON.stringify([...history.forks()].sort((a, b) => a.writer.localeCompare(b.writer)));
+  for (const record of h.records)
+    for (const name of ['app.x', 'app.y'])
+      out[`unseenDefinitions ${record.id} ${name}`] = JSON.stringify(
+        history.unseenDefinitions(name, record.seen, record.within),
+      );
   for (const did of PEOPLE) out[`named ${did}`] = String(history.named(did));
   for (const key of INVITES) out[`knownInvite ${key}`] = String(history.knownInvite(key));
   return out;

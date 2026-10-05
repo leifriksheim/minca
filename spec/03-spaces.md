@@ -187,7 +187,7 @@ Bodies are JSON objects; `keep` is optional everywhere it appears (§6.3).
 | `sys.member`     | `member:<hex40(account DID)>` | `{ did, role: string \| null, keep?, invite?: { key, signature } }`              | `member`     |
 | `sys.invite`     | `invite:<hex40(invite DID)>`  | `{ key: <invite DID>, role, open: boolean, keep? }`                              | `invite`     |
 | `sys.revoke`     | `revoke:<hex40(cid(note))>`   | `{ note: <encoded UCAN>, keep? }`                                                | `revoke`     |
-| `sys.collection` | `collection:<name>`           | a collection definition ([02](02-records.md)); may be encrypted                  | `definition` |
+| `sys.collection` | `collection:<name>`           | a collection definition ([02](02-records.md)), with `keep?`; may be encrypted    | `definition` |
 | `sys.key`        | `key:space`                   | `{ keyId, readKey, earlier }` (§9)                                               | `key`        |
 | `sys.relays`     | `relays:space`                | `{ relays: string[] }` (§10)                                                     | `relays`     |
 | `sys.keepers`    | `keepers:space`               | `{ keepers: [{ did, name }], copies: number \| null }` (§10)                     | `keepers`    |
@@ -544,14 +544,33 @@ A version outside the access collections **stands** when, in this order:
 7. `role(at(seen), root)` is non-null and satisfies `needs`;
 8. `judge(...)` (§5.1) passes;
 9. the [02](02-records.md) checks on topic tags, `onePer` keys and `fixed`
-   fields pass (skipped where the body cannot be opened).
+   fields pass (skipped where the body cannot be opened);
+10. for every applied change to its collection's definition that it had not
+    seen — not in `seen ∪ ancestors(seen)`, and (with `within`) in
+    `within ∪ ancestors(within)` — in replay order, whose body this peer can
+    read and whose `keep` does not list it: it keeps to that definition's
+    rules too, with `role(at(seen), root)` as in step 6: the rule for the
+    action, `final`, `onePer`, `fixed`, and checks, but not topic tags. If it
+    does not → **withdrawn**. A removed definition has no rules to break.
+
+So a record is judged by the rules it saw, and by any rules it had not seen
+that came to apply to it: a writer can't sign as of a point before the rules
+were narrowed and be judged by the old ones. Rules that loosened take nothing
+away, since what kept to the stricter rules keeps to these.
+
+> Rationale: as for a removal (§5.1 step 4), this does not ask whether a
+> change came "after" a record, which no peer can tell, but whether the
+> record saw it, which every peer can. An honest writer who was away when the
+> rules narrowed, and wrote under the old ones meanwhile, loses what it wrote
+> unless the change kept it, and writes it again under the new rules: the
+> price of not letting anyone look behind.
 
 An access record stands when its event's status is `applied`.
 
 A non-member — including someone holding only a view-only invite — can
 therefore write nothing at all in a space, not even `sys.profile`.
 
-_Source: `packages/core/src/space/roles.ts` (`judge`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `rulesAt`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts`._
+_Source: `packages/core/src/space/roles.ts` (`judge`, `unseenDefinitions`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `rulesAt`, `unseenRules`, `underRules`, `definitionIn`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts` ("rules: changing them"), `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
@@ -612,6 +631,14 @@ outside the access collections, written by the affected accounts that the
 writer has seen (at most 10 000). §5.1 step 4 lets those stand; anything else
 the affected account wrote that relied on the lost power and had not seen the
 change is withdrawn, whatever point in history it claims: kept, but never counted, except by a version that cites it and had not seen the change (§5.1).
+
+A change to a collection's definition **SHOULD** carry `keep` in its body
+([02](02-records.md) §6.1): the ids of the current versions in that
+collection the writer has seen (at most 10 000). §5.2 step 10 lets those stand
+under the new rules; anything else in the collection that had not seen the
+change, and breaks its rules, is withdrawn. A definition's body may be sealed
+in a private space, and so is its `keep`: only peers that can read the rules
+judge by them.
 
 `keep` on an `invite` event is parsed but has no effect on judging (only
 `member` and `role` events produce reductions); an invite close decides who
@@ -1323,10 +1350,10 @@ Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
 - That every peer reaches the same access state under any interleaving is
   pinned only by the conflict tests of §4; a randomized convergence test is
   [#10](https://github.com/leifriksheim/weave/issues/10).
-- How a record is judged when its collection's definition changes: today by
-  the definition in force as of its `seen` (§5.2). Content-addressed
-  definitions ([#11](https://github.com/leifriksheim/weave/issues/11)) would
-  pin each record to one; see [02](02-records.md).
+- Content-addressed definitions
+  ([#11](https://github.com/leifriksheim/weave/issues/11)), which would pin
+  each record to the definition it was written against, as well as judging
+  it by the rules in force (§5.2); see [02](02-records.md).
 - Any bound on how many events a history may hold, or on the replay's cost.
   Signed checkpoints a new peer starts from, replaying the full history in
   the background, are proposed in

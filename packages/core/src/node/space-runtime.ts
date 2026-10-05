@@ -855,7 +855,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // A definition a peer cannot read (a private space, no key) cannot be
   // judged by; members judge instead.
 
-  type Definition = { readonly definition: StoredCollection } | 'missing' | 'unreadable' | 'invalid';
+  type Definition =
+    | {
+        readonly definition: StoredCollection;
+        /** Records written under the rules before it that it lets stand, though they break its own (03 §6.3) */
+        readonly keep: ReadonlySet<string>;
+      }
+    | 'missing'
+    | 'unreadable'
+    | 'invalid';
   const definitions = new Map<string, Promise<Definition>>();
 
   /** The definition held in one version of `sys.collection` */
@@ -868,10 +876,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (version.collection !== CATALOG_COLLECTION || version.deleted) return 'invalid';
         const opened = await openBody(version);
         if (opened.body === null) return 'unreadable';
-        const definition = opened.body;
-        if (!isStoredCollection(definition) || version.key !== `collection:${definition.name}`)
-          return 'invalid';
-        return { definition };
+        const body = opened.body;
+        if (!isStoredCollection(body) || version.key !== `collection:${body.name}`) return 'invalid';
+        // The keep list rides on the record, not in the definition apps read.
+        const keep = isRecord(body) ? body.keep : undefined;
+        const definition: StoredCollection = { ...body };
+        Reflect.deleteProperty(definition, 'keep');
+        return { definition, keep: new Set(isStringList(keep) ? keep.slice(0, MAX_KEEP) : []) };
       })();
       definitions.set(id, found);
       // Something missing may turn up; only settled answers are worth keeping.
@@ -1039,7 +1050,73 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // is kept and others may cite it.
     if (!judged.ok && !judged.withdrawn) return judged;
     const content = await judgeContent(version, first, root, state, found);
+    if (judged.ok && content.ok) {
+      const narrowed = await unseenRules(version, first, root, role, state, seen, within);
+      if (narrowed) return narrowed;
+    }
     return judged.ok || !content.ok ? content : judged;
+  }
+
+  /**
+   * A change to its collection's rules that a version had not seen, and that
+   * did not keep it, takes it away if it breaks them: so a writer can't sign
+   * as of a point before the rules were narrowed and be judged by the old
+   * ones (03 §5.2). As for a removal, what that change's author had seen and
+   * kept stands. Null when nothing takes it away.
+   */
+  async function unseenRules(
+    version: Version,
+    first: Version,
+    root: string,
+    role: Role,
+    state: AccessState,
+    seen: ReadonlyArray<string>,
+    within?: ReadonlyArray<string>,
+  ): Promise<Standing | null> {
+    const { history } = await access();
+    const changes = history.unseenDefinitions(version.collection, seen, within);
+    if (!changes) return ACCESS_LATER;
+    for (const id of changes) {
+      const found = await definitionIn(id);
+      // Removed, or unreadable here: no rules to break, as with none in force.
+      if (typeof found === 'string' || found.keep.has(version.id)) continue;
+      const problem = await underRules(version, first, root, role, state, found.definition.rules ?? {});
+      if (problem.ok) continue;
+      return problem.later
+        ? problem
+        : { ok: false, reason: `${problem.reason}, under rules it had not seen`, withdrawn: true };
+    }
+    return null;
+  }
+
+  /**
+   * Whether a version keeps to one set of rules, with its author's role as of
+   * what it saw: who may, `final`, and what they ask of what it says. Not its
+   * topic tags, which follow the definition it saw.
+   */
+  async function underRules(
+    version: Version,
+    first: Version,
+    root: string,
+    role: Role,
+    state: AccessState,
+    rules: CollectionRules,
+  ): Promise<Standing> {
+    const action = version.seq === 0 ? 'create' : version.deleted ? 'delete' : 'edit';
+    const who = whoMay(rules, action);
+    const creator = action !== 'create' && (await judge(first)).root === root;
+    const can = (permission: string) => roleHolds(role, permissionName(version.collection, permission));
+    if (!allows(who, { member: true, creator, can }))
+      return {
+        ok: false,
+        reason:
+          action === 'create'
+            ? `Only ${describeWho(who)} can create ${version.collection} records`
+            : `Only ${describeWho(who)} can ${action} this ${version.collection} record`,
+      };
+    if (rules.final && version.seq > 0)
+      return { ok: false, reason: `A ${version.collection} record is final: it can't be edited or deleted` };
+    return judgeContent(version, first, root, state, { rules, topics: [] }, { tags: false });
   }
 
   /** The rest of a version's standing: what its definition's topics and rules ask of what it says */
@@ -1049,9 +1126,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     root: string,
     state: AccessState,
     found: Awaited<ReturnType<typeof rulesAt>>,
+    options: { readonly tags?: boolean } = {},
   ): Promise<Standing> {
     const rules = found?.rules;
-    if (found && !version.deleted) {
+    if (found && !version.deleted && options.tags !== false) {
       const problem = await tagProblem(version, found.topics);
       if (problem) return problem;
     }
@@ -2522,6 +2600,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           throw new Error(status?.status === 'dropped' ? status.reason : 'That change could not be made');
       } else {
         const stands = await standingOf(made);
+        // Taken away by a change to its rules that came in after it saw the history: try again.
+        if (!stands.ok && stands.withdrawn)
+          throw Object.assign(new Error(stands.reason), { rulesMoved: true });
         if (!stands.ok) throw new Error(stands.reason);
       }
       return made;
@@ -2636,6 +2717,51 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     await upsert(FORK_COLLECTION, await forkKey(writer), forkProof(a, b));
   }
 
+  /**
+   * Runs a write once more when its collection's rules changed while it was
+   * being made — it saw the history before the change, so the change takes
+   * it away (03 §5.2) — this time under the new rules: a key they derive,
+   * what they keep whole, all worked out again.
+   */
+  async function underCurrentRules<R>(run: () => Promise<R>): Promise<R> {
+    try {
+      return await run();
+    } catch (error) {
+      if (!(isRecord(error) && error.rulesMoved === true)) throw error;
+      return run();
+    }
+  }
+
+  async function putOnce<T>(
+    collection: string,
+    body: T,
+    options: { key?: string; links?: ReadonlyArray<Link>; as?: ActiveSession },
+  ): Promise<NodeRecord<T>> {
+    guard(collection);
+    if (options.key !== undefined && !RECORD_KEY_PATTERN.test(options.key)) {
+      throw new Error('A record key is 1–128 characters of a–z, 0–9 and : . _ -');
+    }
+    const links = options.links ?? [];
+    // One per something: the key is derived from it, so writing again is the next version of the same record.
+    const onePer = (await catalog()).get(collection)?.definition.rules?.onePer;
+    if (onePer && options.key === undefined) {
+      const derived = await onePerKey(collection, onePer, { root: deps.rootDid, links, body });
+      if (!derived)
+        throw new Error(`${collection} is one per ${onePer.join(' + ')} — give it every one of those`);
+      return view<T>(
+        await write(
+          collection,
+          body,
+          await after(derived),
+          false,
+          links,
+          options.as ? { as: options.as } : {},
+        ),
+      );
+    }
+    return view<T>(await writeFirst(collection, body, options.key ?? newRecordKey(), links, options.as));
+  }
+
   /** Display order: when a record was created, then its key. It decides nothing. */
   const createdAtOf = async (version: Version) => (await genesisOf(version))?.createdAt ?? version.createdAt;
 
@@ -2740,29 +2866,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       body: T,
       options: { key?: string; links?: ReadonlyArray<Link>; as?: ActiveSession } = {},
     ): Promise<NodeRecord<T>> {
-      guard(collection);
-      if (options.key !== undefined && !RECORD_KEY_PATTERN.test(options.key)) {
-        throw new Error('A record key is 1–128 characters of a–z, 0–9 and : . _ -');
-      }
-      const links = options.links ?? [];
-      // One per something: the key is derived from it, so writing again is the next version of the same record.
-      const onePer = (await catalog()).get(collection)?.definition.rules?.onePer;
-      if (onePer && options.key === undefined) {
-        const derived = await onePerKey(collection, onePer, { root: deps.rootDid, links, body });
-        if (!derived)
-          throw new Error(`${collection} is one per ${onePer.join(' + ')} — give it every one of those`);
-        return view<T>(
-          await write(
-            collection,
-            body,
-            await after(derived),
-            false,
-            links,
-            options.as ? { as: options.as } : {},
-          ),
-        );
-      }
-      return view<T>(await writeFirst(collection, body, options.key ?? newRecordKey(), links, options.as));
+      return underCurrentRules(() => putOnce(collection, body, options));
     },
 
     async can(action: 'create' | 'edit' | 'delete', target: string): Promise<boolean> {
@@ -2833,20 +2937,22 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       body: T,
       options: { links?: ReadonlyArray<Link>; as?: ActiveSession } = {},
     ): Promise<NodeRecord<T>> {
-      const current = await requireLive(recordKey);
-      guard(current.collection);
-      // Links carry over unless replaced: ticking a todo should not unhook it from anything.
-      const links = options.links ?? (await openBody(current)).links;
-      return view<T>(
-        await write(
-          current.collection,
-          body,
-          await after(recordKey),
-          false,
-          links,
-          options.as ? { as: options.as } : {},
-        ),
-      );
+      return underCurrentRules(async () => {
+        const current = await requireLive(recordKey);
+        guard(current.collection);
+        // Links carry over unless replaced: ticking a todo should not unhook it from anything.
+        const links = options.links ?? (await openBody(current)).links;
+        return view<T>(
+          await write(
+            current.collection,
+            body,
+            await after(recordKey),
+            false,
+            links,
+            options.as ? { as: options.as } : {},
+          ),
+        );
+      });
     },
 
     async linked<T>(
@@ -2870,7 +2976,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     async remove(recordKey: string, options: { as?: ActiveSession } = {}): Promise<void> {
       guard((await requireLive(recordKey)).collection);
-      await removeKey(recordKey, options.as);
+      await underCurrentRules(() => removeKey(recordKey, options.as));
     },
 
     /** For the node itself: deletes a record in a managed collection */
@@ -2918,7 +3024,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           `${input.name} is at version ${current.definition.version}; a new definition needs a higher one`,
         );
       }
-      await upsert(CATALOG_COLLECTION, recordKey, definition);
+      // What this node holds of it stays, though it breaks the new rules: like a
+      // removal, a change to the rules takes only what its author had not seen (03 §6.3).
+      const keep = (await everyCurrent(input.name)).map((held) => held.id).slice(0, MAX_KEEP);
+      await upsert(CATALOG_COLLECTION, recordKey, keep.length ? { ...definition, keep } : definition);
       const entry = (await catalog()).get(input.name) ?? null;
       const count = (await everyCurrent(input.name)).filter((e) => !e.deleted).length;
       return describe(input.name, entry, count);

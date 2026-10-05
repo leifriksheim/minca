@@ -303,13 +303,23 @@ Defining a collection again writes the next version of its definition, one
 higher unless you give a `version`. The node refuses a `version` that is not
 higher than the one in force; peers don't check it. Records don't name the
 version they were written under: each is judged by the definition in force
-as of the access changes it saw.
+as of the access changes it saw, and by any later definition it had not seen
+([spec 03 §5.2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md),
+step 10). So narrowing the rules can't be dodged by signing as of an older
+point.
+
+Defining again keeps what is there: the definition record carries `keep`,
+the ids of every current version in the collection this node holds, so those
+stand under the new rules even where they break them. A record that had not
+reached this node, written under the old rules, is withdrawn if it breaks the
+new ones. Its writer then writes it again; a write that races a change to its
+collection's rules is retried once, under the new ones.
 
 `node.collections.delete` removes a definition only once its collection has
 no records left, since records left behind would lose their shape and their
 rules.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts` ("redefining bumps the version, and only the definer or someone who can manage the space may", "a definition can be removed once its collection is empty, by whoever may change it")._
+_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts` ("redefining bumps the version, and only the definer or someone who can manage the space may", "a definition can be removed once its collection is empty, by whoever may change it"), `packages/core/tests/rules.test.ts` ("rules: changing them")._
 
 ## The standard library
 
