@@ -4,9 +4,11 @@
  *
  * Every key's writes in a space form one line. Two versions that one key
  * signed at one place in that line can't both be the key's honest next
- * write: the key was used in two places at once. The pair proves it to anyone,
- * with nothing to trust but the signatures, so a peer that finds one can hand
- * it to every other, and each checks it for itself.
+ * write: the key was used in two places at once — a **fork**. A version whose
+ * `prev` names anything but its key's version one place before can't be one
+ * either — a **break**. Either pair proves it to anyone, with nothing to trust
+ * but the signatures, so a peer that finds one can hand it to every other, and
+ * each checks it for itself.
  */
 import type { CryptoProvider, Version } from '../types.js';
 import { didToPublicKey } from '../identity/did.js';
@@ -23,6 +25,21 @@ function signedVersion(value: Record<string, unknown>): value is Record<string, 
     typeof value.signature === 'string' &&
     typeof value.collection === 'string' &&
     typeof value.createdAt === 'string'
+  );
+}
+
+/**
+ * Whether `next`, which names `previous` as the version before it in its
+ * key's log, can't follow it: another key's, another space's, or not one
+ * place before.
+ */
+export function breaksLine(next: Version, previous: Version): boolean {
+  return (
+    next.log?.prev === previous.id &&
+    (previous.author !== next.author ||
+      previous.space !== next.space ||
+      previous.log?.n === undefined ||
+      previous.log.n !== next.log.n - 1)
   );
 }
 
@@ -43,9 +60,11 @@ export function forkProof(a: Version, b: Version): { readonly a: Version; readon
 }
 
 /**
- * The fork two versions prove in a space, or why they prove none: both well
- * formed and validly signed, without bodies, by one key, in this space, at one
- * place in that key's log, and not the same version.
+ * What two versions prove in a space, or why they prove nothing: both well
+ * formed and validly signed, without bodies, in this space, and either a fork
+ * (one key, one place, two versions) or a break (one names the other as the
+ * place before it, and it isn't). A break is the naming version's key's, from
+ * its own place on.
  */
 export async function checkFork(
   a: unknown,
@@ -70,6 +89,12 @@ export async function checkFork(
   const [first, second] = versions;
   if (!first || !second) return 'A fork is proven by two versions';
   if (first.id === second.id) return 'A fork is proven by two different versions';
+  for (const [next, previous] of [
+    [first, second],
+    [second, first],
+  ] as const) {
+    if (next.log && breaksLine(next, previous)) return { writer: next.author, from: next.log.n };
+  }
   if (first.author !== second.author) return 'A fork is proven by versions one key signed';
   if (first.log?.n === undefined || first.log.n !== second.log?.n)
     return 'A fork is proven by versions at one place in their log';

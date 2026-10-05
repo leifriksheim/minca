@@ -295,7 +295,10 @@ until tomorrow. `--model` picks the model (default `claude-opus-5-5`, or
 `$WEAVE_AGENT_MODEL`); it must be one whose price it knows.
 
 Only one of `weave agent` and `weave mcp` can use an agent at a time: they sign
-with the same key, and the relay lets one in.
+with the same key, and two signing at once would fork its log, after which
+nothing more it signs counts. The second one to start says the agent is
+already running, and stops (a lock in the agent's folder, taken over once the
+process holding it is gone).
 
 It also runs your **rules** (`std.rule`, see
 `packages/core/docs/rules.md`): what to do when some records come to be a

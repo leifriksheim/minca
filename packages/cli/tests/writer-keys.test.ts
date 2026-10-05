@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { fileWriterKeys } from '../src/writer-keys.js';
+import { fileWriterKeys, holdLock } from '../src/writer-keys.js';
 import { openHome, createAccount, unlock, chooseAccount, nodeFor } from '../src/home.js';
 import { tempDir } from './helpers/nodes.js';
 
@@ -73,6 +73,17 @@ describe('writer keys on disk', () => {
       'decrypt',
     ]);
     await assert.rejects(fileWriterKeys(dir, other).claim());
+  });
+
+  test('a lock is held by one at a time, and let go of by the holder (as an agent holds its key)', async () => {
+    const file = path.join(await tempDir(), 'lock');
+    const release = await holdLock(file);
+    assert.ok(release);
+    assert.equal(await holdLock(file), null, 'held: a second agent is turned away');
+    await release();
+    const again = await holdLock(file);
+    assert.ok(again);
+    await again();
   });
 
   test('the private key can sign, and is not given out', async () => {

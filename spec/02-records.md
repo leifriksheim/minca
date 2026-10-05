@@ -574,6 +574,14 @@ the same `log.n`, with different ids, each validly signed (§3.3)**. Either may
 be a stub. Nothing else is needed to check one, so a fork proven by anyone is
 proven to everyone.
 
+A writer that names the wrong version as the place before breaks the line in
+the same way. That is what a **break** shows: **a version `v` whose
+`log.prev` is the id of a version `p` that is another key's (`p.author ≠
+v.author`), another space's, or not one place before (`p.log.n ≠ v.log.n − 1`),
+both validly signed**. It proves `v`'s key wrote a line that isn't one, from
+`v.log.n` on. A break is checked and proven exactly as a fork is, and below,
+"fork" means either.
+
 A peer that holds both versions of a fork SHOULD prove it to the space by
 writing `sys.fork` ([03](03-spaces.md) §6.5). Once a `sys.fork` for a key
 stands, every version that key signed in the space at the proven place or
@@ -598,13 +606,27 @@ peer, and `v1`, `w1` and anything K signed after them do not.
 > would fork honestly all the time. One key is one writer, so its line can be
 > kept exactly, and only a key used in two places breaks it.
 
-> **Planned:** checking the line. A version whose `prev` is not the key's version at
-> `n − 1`, or whose `seen` leaves out something the key's earlier version had
-> seen, would be proof too. Signed log heads, for completeness a reader can
-> check and proofs for a single record. Tracked in
+> Rationale: a key's line does not also require each version's `seen` to
+> include what the version before it had seen. It would stop one key from
+> writing as of an older point in the access history, but an account can
+> sign a note for a new key whenever it likes, and new keys are ordinary (a
+> new device, a new tab), so a writer who wants to look behind would only
+> change keys; and a device that lost its copy of the history would be
+> flagged for being honest. Writing as of an older point is answered where it
+> matters: for a removal or a demotion, by what the change keeps
+> ([03](03-spaces.md) §6.3).
+
+> **Planned:** rule changes that take away. Today a change to a collection's
+> rules takes nothing away, so a member can still sign as of a point before
+> the rules were narrowed and be judged under the old ones. A narrowing change
+> will take away, with a keep list, as a removal does. Tracked in
+> [#151](https://github.com/leifriksheim/weave/issues/151).
+
+> **Planned:** signed log heads, for completeness a reader can check and
+> proofs for a single record ([05](05-sync-and-storage.md) §9.1). Tracked in
 > [#13](https://github.com/leifriksheim/weave/issues/13).
 
-_Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/core/src/records/fork.ts` (`checkFork`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`write`, `placeInLog`, `reportFork`, `judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts`, `packages/cli/tests/writer-keys.test.ts`, `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/records/version.ts` (`checkVersionShape`, `checkLogShape`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`write`, `placeInLog`, `reportFork`, `judgeStanding`), `packages/core/src/space/roles.ts` (`judge`, `forked`). Tests: `packages/core/tests/writer-logs.test.ts`, `packages/cli/tests/writer-keys.test.ts`, `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
