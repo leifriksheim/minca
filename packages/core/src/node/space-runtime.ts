@@ -517,8 +517,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const verdicts = new Map<string, Verdict>();
   const verdictKey = (e: Version) => `${e.id}|${e.signature}`;
 
+  /** Copies whose body was checked against their signed hash: the cache is keyed by id and signature alone */
+  const bodiesChecked = new WeakSet<Version>();
+
   /** Whether a version is signed, and by a key whose note covers this space — and which account that is */
   async function judge(version: Version): Promise<Verdict> {
+    // A copy with the right id and signature but another body must not pass on the real one's verdict.
+    if (!bodiesChecked.has(version)) {
+      const problem = await bodyProblem(version);
+      if (problem) return { verified: false, root: null, reason: problem };
+      bodiesChecked.add(version);
+    }
     const cached = verdicts.get(verdictKey(version));
     if (cached) return cached;
 
@@ -2890,9 +2899,44 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     return (await access()).history.named(verdict.root) ? verdict.root : null;
   }
 
+  /** Views already replayed, by the changes they hold: a set of ids always replays to the same state */
+  const views = new Map<string, AccessState>();
+  const MAX_VIEWS = 256;
+
+  /**
+   * The access state a writer had when it signed: the changes it names as
+   * seen and everything they saw, replayed alone. Unlike `history.at`, no
+   * change outside them — a rival that arrives late, or a change made later —
+   * can alter it, so a verdict on misconduct judged by it is final. Null
+   * while one of them hasn't arrived.
+   */
+  async function ownView(seen: ReadonlyArray<string>): Promise<AccessState | null> {
+    const cacheKey = [...new Set(seen)].sort().join(',');
+    const known = views.get(cacheKey);
+    if (known) return known;
+    const { events } = await access();
+    const byId = new Map(events.map((event) => [event.id, event]));
+    const cut: AccessEvent[] = [];
+    const visited = new Set<string>([accessGenesis.id]);
+    const waiting = [...seen];
+    while (waiting.length > 0) {
+      const id = waiting.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const event = byId.get(id);
+      if (!event) return null;
+      cut.push(event);
+      waiting.push(...event.seen);
+    }
+    const state = replayAccess(accessGenesis, cut).current;
+    if (views.size >= MAX_VIEWS) views.delete(views.keys().next().value!);
+    views.set(cacheKey, state);
+    return state;
+  }
+
   /** Whether a version broke a rule of its standing, as of what it had seen: no place, or `who` or `final` against it */
   async function standingBroken(version: Version, root: string): Promise<WarrantVerdict> {
-    const state = (await access()).history.at(version.seen ?? []);
+    const state = await ownView(version.seen ?? []);
     if (!state) return 'later';
     const role = standing(state, root);
     if (!role) return 'holds';
@@ -2909,7 +2953,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Whether proof of one kind holds: the offending version first, then what checking it needs */
   async function evidenceHolds(kind: string, evidence: ReadonlyArray<Version>): Promise<WarrantVerdict> {
-    if (!knownKind(kind)) return 'unjudgeable';
+    // A kind this peer doesn't know is refused: kinds come with a new sync version (05 §4).
+    if (!knownKind(kind)) return 'false';
     const [offending, context] = evidence;
     if (!offending || !(await accountable(offending))) return 'false';
     const root = (await judge(offending)).root!;
@@ -2933,7 +2978,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           return 'false';
         const event = await buildEvent(offending);
         if (!event) return 'false';
-        const state = (await access()).history.at(event.seen);
+        const state = await ownView(event.seen);
         if (!state) return 'later';
         return refusal(event, state) ? 'holds' : 'false';
       }
@@ -2941,7 +2986,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (context || offending.collection !== WARRANT_COLLECTION || !('body' in offending)) return 'false';
         // A warrant against a warrant against a warrant proves nothing more: such a chain is never
         // proof, so an honest node's true counter-warrant can't be turned on its writer.
-        if (readWarrant((await openBody(offending)).body)?.kind === 'warrant') return 'false';
+        const kind = readWarrant((await openBody(offending)).body)?.kind;
+        // A counter-warrant, or a kind this peer doesn't know, is refused but proves nothing against its writer.
+        if (!kind || kind === 'warrant' || !knownKind(kind)) return 'false';
         const inner = await warrantVerdict(offending);
         return inner === 'false' ? 'holds' : inner === 'holds' ? 'false' : inner;
       }
@@ -2979,11 +3026,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ? { kind: 'access', evidence: [version] }
         : null;
     }
-    if (version.collection === WARRANT_COLLECTION) {
-      // Proof against a `warrant`-kind warrant never holds (`evidenceHolds`), so there's nothing to write.
-      if (readWarrant((await openBody(version)).body)?.kind === 'warrant') return null;
-      return (await warrantVerdict(version)) === 'false' ? { kind: 'warrant', evidence: [version] } : null;
-    }
+    if (version.collection === WARRANT_COLLECTION)
+      // Only what the proof itself would show: never for a stub, a delete, a counter-warrant or a kind unknown here.
+      return (await evidenceHolds('warrant', [version])) === 'holds'
+        ? { kind: 'warrant', evidence: [version] }
+        : null;
     return (await standingBroken(version, root)) === 'holds'
       ? { kind: 'standing', evidence: [stubOf(version)] }
       : null;
@@ -3001,7 +3048,22 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const violation = await violationIn(version);
     if (!violation) return;
     const root = (await judge(version)).root!;
-    if (root === deps.rootDid) return;
+    if (root === deps.rootDid || warranting.has(root)) return;
+    warranting.add(root);
+    try {
+      await warrantOnce(root, violation);
+    } finally {
+      warranting.delete(root);
+    }
+  }
+
+  /** Accounts this node is writing a warrant against now: offences that arrive meanwhile wait for the next */
+  const warranting = new Set<string>();
+
+  async function warrantOnce(
+    root: string,
+    violation: { kind: WarrantKind; evidence: Version[] },
+  ): Promise<void> {
     if ((await flagged()).some((flag) => flag.account === root && flag.by === deps.rootDid)) return;
     const key = await warrantKey(violation.evidence[0]!.id, deps.rootDid);
     // Checked again: the space may have closed while the proof was being worked out.

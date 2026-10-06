@@ -699,9 +699,13 @@ _Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkPr
 ### 6.6 Warrants
 
 A **warrant** is proof that an account's key signed something the protocol
-refuses and that no honest writer could have signed. It is judged as of what
-the version itself says it had seen, so no change elsewhere, made at the same
-time, can explain it. A warrant flags the account for every member. It takes
+refuses and that no honest writer could have signed. It is judged against the
+version's **own view**: the access changes its `seen` names and everything
+they saw, replayed alone (§4), as the writer's own node replayed them before
+signing. Nothing outside that view counts, neither a rival that arrives late
+nor a change made later, so an honest writer never fails it, and a verdict
+on a warrant never changes once every change in the view is here. A warrant
+flags the account for every member. It takes
 nothing away by itself: what to do about it is a decision for whoever manages
 the space (§6.1), and an account whose key was stolen revokes its note (§6.4).
 
@@ -729,32 +733,34 @@ So an accused who outranks every witness can withdraw their warrants
 ([#166](https://github.com/leifriksheim/weave/issues/166)), and a writer can
 take back their own ([#168](https://github.com/leifriksheim/weave/issues/168)). The kinds:
 
-| `kind`     | `evidence`                                                 | Holds when                                                                                                                                                                               |
-| ---------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chain`    | `[v, p]`, both without bodies                              | `p.id = v.prev` and `v` does not follow `p` ([02](02-records.md) §4.7)                                                                                                                   |
-| `standing` | `[v]`, without its body; not an access collection          | as of `at(v.seen)`: `v`'s root holds no role; or `v.seq > 0` and the rules in force say `final`; or `v.seq = 0` and the rule for `create` doesn't allow the root's role (§5.2 steps 6–7) |
-| `access`   | `[v]`, whole; an access collection                         | `v`'s event, built as §3.3 says, is refused by its author's power as of `at(event.seen)` (§4.5): not a rival it hadn't seen, and not a change made later                                 |
-| `warrant`  | `[w]`, whole; a `sys.warrant` not itself of kind `warrant` | `w`'s proof does not hold. A warrant against a `warrant`-kind warrant never holds, so a true counter-warrant can't be turned on its writer                                               |
+| `kind`     | `evidence`                                                 | Holds when                                                                                                                                                                              |
+| ---------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chain`    | `[v, p]`, both without bodies                              | `p.id = v.prev` and `v` does not follow `p` ([02](02-records.md) §4.7)                                                                                                                  |
+| `standing` | `[v]`, without its body; not an access collection          | in `v`'s own view: `v`'s root holds no role; or `v.seq > 0` and the rules in force say `final`; or `v.seq = 0` and the rule for `create` doesn't allow the root's role (§5.2 steps 6–7) |
+| `access`   | `[v]`, whole; an access collection                         | `v`'s event, built as §3.3 says, is refused by its author's power in its own view (§4.5)                                                                                                |
+| `warrant`  | `[w]`, whole; a `sys.warrant` not itself of kind `warrant` | `w`'s proof does not hold. A warrant against a `warrant`-kind warrant never holds, so a true counter-warrant can't be turned on its writer                                              |
 
 A `sys.warrant` version stands when its author may write in the space (§5.2)
 and its proof holds: it is well formed, its `evidence[0]` is validly signed
-(02 §3.3) in this space by a key whose root the history names, its record key
+(02 §3.3) in this space by a key whose root the history names, every whole
+version in its `evidence` has the body its signed `bodyHash` names (02 §3.2:
+a copy with the real id and signature and another body proves nothing), its record key
 is `warrant:<hex40(evidence[0].id + "|" + the warrant's own root)>`, the two
 roots differ, it is a `seq 0` version with `retain: true` and a body in the
 clear, its `evidence` has exactly the versions its kind's row lists (with and
 without bodies as the row says), and its kind's check holds. A delete of a
 warrant never stands. A peer:
 
-- judges it **not yet** when what the check needs is not here (`at(seen)`
-  unknown);
+- judges it **not yet** when a change in the own view is not here;
 - lets it stand without judging it when the check needs rules it can't read,
-  or its `kind` is one it doesn't know (1 to 32 lower-case letters, `a`–`z`),
   and never flags anyone by it. An account is flagged only by a warrant whose
   proof this peer checked and found to hold;
-- refuses it otherwise. A refused warrant is itself proof, of kind `warrant`,
-  against whoever wrote it, unless it is of kind `warrant` itself: a
-  counter-warrant against a counter-warrant never holds, so nobody writes
-  one, and a false `warrant`-kind warrant is refused but earns no flag.
+- refuses it otherwise, including when its `kind` is one this peer doesn't
+  know (1 to 32 lower-case letters, `a`–`z`): new kinds come with a new sync
+  version (05 §4), so an unknown one costs nothing to keep. A refused warrant
+  of a known kind other than `warrant` is itself proof, of kind `warrant`,
+  against whoever wrote it. A counter-warrant against a counter-warrant, or
+  against a kind this peer doesn't know, never holds, so nobody writes one.
 
 A peer that refuses a version that would be evidence of a kind above SHOULD
 write the warrant, unless a warrant of its own against that account stands
