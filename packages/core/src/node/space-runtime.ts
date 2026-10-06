@@ -2950,20 +2950,18 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
   async function warrantVerdict(version: Version): Promise<WarrantVerdict> {
-    // Kept whole, never deleted, and never replaced while it stands: a later version is its
-    // writer's again only once the one before stopped counting, as when a removal withdrew it.
-    if (version.deleted || !version.retain) return 'false';
-    if (version.seq > 0) {
-      const before = version.prev ? await storage.getVersion(version.prev) : null;
-      if (!before) return 'later';
-      if (before.key !== version.key || (await standingOf(before)).ok) return 'false';
-    }
+    // Written once, kept whole, in the clear, and never deleted. Its key names what it proves,
+    // so it never needs a second version, and its verdict never rests on another warrant's.
+    if (version.deleted || version.seq !== 0 || !version.retain || looksEncrypted(version.body))
+      return 'false';
     const warrant = readWarrant((await openBody(version)).body);
     if (!warrant) return 'false';
-    const against = warrant.evidence[0] && (await accountable(warrant.evidence[0]));
+    const offending = warrant.evidence[0];
+    const against = offending && (await accountable(offending));
     const by = (await judge(version)).root;
-    // Its key names both, so it is its writer's own; and nobody warrants themselves.
-    if (!against || !by || against === by || version.key !== (await warrantKey(against, by))) return 'false';
+    // Its key names the offending version and its writer; and nobody warrants themselves.
+    if (!offending || !against || !by || against === by) return 'false';
+    if (version.key !== (await warrantKey(offending.id, by))) return 'false';
     return evidenceHolds(warrant.kind, warrant.evidence);
   }
 
@@ -2993,9 +2991,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /**
    * Writes down, as this account's own record, the proof a version gives
-   * against its account, once. Every member that sees it may: a flag that
-   * leaned on someone else's warrant would go when that warrant's writer
-   * left. One that can't write leaves it to one that can.
+   * against its account — unless a warrant of its own against that account
+   * stands already, so one account's misconduct costs each member one record
+   * at a time. It doesn't lean on anyone else's warrant, which would go if
+   * its writer were removed. One that can't write leaves it to one that can.
    */
   async function warrantIfDue(version: Version): Promise<void> {
     if (closed || (await cannotWrite())) return;
@@ -3003,9 +3002,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!violation) return;
     const root = (await judge(version)).root!;
     if (root === deps.rootDid) return;
-    const key = await warrantKey(root, deps.rootDid);
+    if ((await flagged()).some((flag) => flag.account === root && flag.by === deps.rootDid)) return;
+    const key = await warrantKey(violation.evidence[0]!.id, deps.rootDid);
     // Checked again: the space may have closed while the proof was being worked out.
-    if ((await currentOf(key)) || closed) return;
+    if ((await storage.getCurrent(key)) || closed) return;
     await upsert(WARRANT_COLLECTION, key, violation);
   }
 

@@ -27,6 +27,12 @@ async function sharedWithBob() {
   await bob.node.spaces.join(await alice.node.spaces.invite(space));
   await hold(alice.node, space);
   await joined(bob.node, space);
+  // And Alice has his join: until then, to her he is no member.
+  await until(
+    async () => (await alice.node.spaces.access(space)).members.some((m) => m.did === bob.node.did),
+    4000,
+    'Alice to see Bob join',
+  );
   return { hub, alice, bob, space };
 }
 
@@ -142,7 +148,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [evidence] },
-        version: { key: await warrantKey(alice.node.did, bob.node.did), seq: 0 },
+        version: { key: await warrantKey(evidence.id, bob.node.did), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -165,9 +171,8 @@ describe('warrants', () => {
       rules: { create: 'can:post' },
     });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
-    await slip(bob, space, [
-      await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false }),
-    ]);
+    const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
+    await slip(bob, space, [bad]);
     await flaggedEverywhere([alice, bob], space, bob.node.did, 'standing');
 
     // Bob writes the next version of Alice's warrant against him: of a kind nobody knows, with one
@@ -175,7 +180,7 @@ describe('warrants', () => {
     const own = await bob.node.records.put(space, 'app.note', { text: 'mine' });
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
     const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
-    const key = await warrantKey(bob.node.did, alice.node.did);
+    const key = await warrantKey(bad.id, alice.node.did);
     await until(async () => (await bobStore.getCurrent(key)) !== null, 4000, 'Alice’s warrant at Bob’s');
     const current = (await bobStore.getCurrent(key))!;
     const overwrite = await forge(
@@ -211,20 +216,21 @@ describe('warrants', () => {
     const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
     await until(async () => (await aliceStore.getVersion(honest.version)) !== null, 4000, 'the note');
     // Bob accuses Alice falsely; her node writes, truly, that his warrant doesn't hold.
+    const evidence = stubOf((await aliceStore.getVersion(honest.version))!);
     const lie = await forge(
       bob,
       space,
       {
         collection: WARRANT_COLLECTION,
-        body: { kind: 'standing', evidence: [stubOf((await aliceStore.getVersion(honest.version))!)] },
-        version: { key: await warrantKey(alice.node.did, bob.node.did), seq: 0 },
+        body: { kind: 'standing', evidence: [evidence] },
+        version: { key: await warrantKey(evidence.id, bob.node.did), seq: 0 },
         retain: true,
       },
       { keep: false },
     );
     await slip(bob, space, [lie]);
     await flaggedEverywhere([alice, bob], space, bob.node.did, 'warrant');
-    const hers = (await aliceStore.getCurrent(await warrantKey(bob.node.did, alice.node.did)))!;
+    const hers = (await aliceStore.getCurrent(await warrantKey(lie.id, alice.node.did)))!;
     // Bob then warrants her warrant. A warrant against a warrant-kind warrant is never proof.
     const counter = await forge(
       bob,
@@ -232,7 +238,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'warrant', evidence: [hers] },
-        version: { key: await warrantKey(alice.node.did, bob.node.did), seq: 0 },
+        version: { key: await warrantKey(hers.id, bob.node.did), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -253,7 +259,7 @@ describe('warrants', () => {
       );
   });
 
-  test('the accused can’t get in first: a warrant against yourself is never proof, and can’t be replaced', async () => {
+  test('the accused can’t get in first: a warrant against yourself is never proof', async () => {
     const { alice, bob, space } = await sharedWithBob();
     await alice.node.collections.define(space, {
       name: 'app.notice',
@@ -270,7 +276,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: await warrantKey(bob.node.did, bob.node.did), seq: 0 },
+        version: { key: await warrantKey(bad.id, bob.node.did), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -286,13 +292,13 @@ describe('warrants', () => {
       );
     const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
     assert.equal(await aliceStore.getVersion(self.id), null, 'refused');
-    assert.ok(
-      await aliceStore.getCurrent(await warrantKey(bob.node.did, alice.node.did)),
-      'Alice wrote her own',
+    const hers = await Promise.all(
+      [self.id, bad.id].map(async (id) => aliceStore.getCurrent(await warrantKey(id, alice.node.did))),
     );
+    assert.ok(hers.some(Boolean), 'Alice wrote her own');
   });
 
-  test('removing a witness withdraws their warrant, but doesn’t silence them: back in, they can warrant again', async () => {
+  test('removing a witness withdraws their warrant, but doesn’t silence them: back in, they warrant the next offence', async () => {
     const { alice, bob, space } = await sharedWithBob();
     /** A version whose `prev` names a version of another record: a broken chain */
     const crossed = async () => {
@@ -337,10 +343,11 @@ describe('warrants', () => {
     await until(async () => (await bob.node.spaces.access(space)).role === null, 8000, 'the removal');
     await until(async () => !(await flaggedBy()), 4000, 'the warrant to be withdrawn');
 
-    // Back in, Bob sees her break a chain again, and writes the next version of his warrant.
-    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    // Alice gives him his place back (not by invite: #178), and he sees her break a chain again.
+    await alice.node.spaces.setMember(space, bob.node.did, 'editor');
+    await letGo(bob.node, space);
     await hold(bob.node, space);
-    await joined(bob.node, space, 15000);
+    await joined(bob.node, space, 8000);
     await slip(alice, space, [await crossed()]);
     await until(flaggedBy, 8000, 'Bob’s warrant again');
     await until(

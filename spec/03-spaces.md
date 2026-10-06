@@ -706,7 +706,7 @@ nothing away by itself: what to do about it is a decision for whoever manages
 the space (§6.1), and an account whose key was stolen revokes its note (§6.4).
 
 ```
-sys.warrant at warrant:<hex40(account DID + "|" + writer's account DID)>
+sys.warrant at warrant:<hex40(evidence[0].id + "|" + writer's account DID)>
 { kind, evidence: [<version>, <version>?] }        in the clear, retain: true
 ```
 
@@ -714,15 +714,20 @@ sys.warrant at warrant:<hex40(account DID + "|" + writer's account DID)>
 account. Only an account the history names (`named`, §3.4, §4.6) can be warranted, so
 a stranger minting keys and notes costs nobody a write.
 
-A warrant is **its writer's own record**: its key names both the account and
-the account that wrote it, so only that writer can write any version of it.
-It is never replaced while it stands: a version with `seq > 0` stands only
-when its `prev` is the version before it at the same key and that version no
-longer stands, as when a removal withdrew it (§5.1). So not even its writer
-can take back a warrant that counts, and a witness who was removed and let
-back in can warrant the same account again. Every version is kept whole
-(`retain: true`), and a delete never stands. Nobody warrants themselves. At
-most one warrant stands per writer and accused account. The kinds:
+A warrant is **its writer's own record about one offending version**: its key
+names both, so only that writer can write any version of it, and it never
+needs a second one. It is written once: only a `seq 0` version stands, kept
+whole (`retain: true`) and in the clear, and a delete never stands. Whether
+it stands never depends on whether any other warrant does. Nobody warrants
+themselves. A witness who was removed, and given a role again, warrants the
+next offence at that offence's own key.
+
+Like any record, a warrant is withdrawn when its writer is removed without
+keeping it (§5.1), when its writer revokes the note it was written under
+(§6.4), or when its writer's log is proven forked at or before it (§6.5).
+So an accused who outranks every witness can withdraw their warrants
+([#166](https://github.com/leifriksheim/weave/issues/166)), and a writer can
+take back their own ([#168](https://github.com/leifriksheim/weave/issues/168)). The kinds:
 
 | `kind`     | `evidence`                                                 | Holds when                                                                                                                                                                               |
 | ---------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -734,11 +739,11 @@ most one warrant stands per writer and accused account. The kinds:
 A `sys.warrant` version stands when its author may write in the space (§5.2)
 and its proof holds: it is well formed, its `evidence[0]` is validly signed
 (02 §3.3) in this space by a key whose root the history names, its record key
-is `warrant:<hex40(that root + "|" + the warrant's own root)>`, the two roots
-differ, it carries `retain: true`, a version with `seq > 0` follows one at
-its key that no longer stands, its `evidence` has exactly the versions its
-kind's row lists (with and without bodies as the row says), and its kind's
-check holds. A delete of a warrant never stands. A peer:
+is `warrant:<hex40(evidence[0].id + "|" + the warrant's own root)>`, the two
+roots differ, it is a `seq 0` version with `retain: true` and a body in the
+clear, its `evidence` has exactly the versions its kind's row lists (with and
+without bodies as the row says), and its kind's check holds. A delete of a
+warrant never stands. A peer:
 
 - judges it **not yet** when what the check needs is not here (`at(seen)`
   unknown);
@@ -753,7 +758,8 @@ check holds. A delete of a warrant never stands. A peer:
 
 A peer that refuses a version that would be evidence of a kind above SHOULD
 write the warrant, unless a warrant of its own against that account stands
-already. So does a peer that stores an access change whose author had no
+already, so one account's misconduct costs each member one standing warrant
+at a time. So does a peer that stores an access change whose author had no
 power for it as of what it saw. It does not hold back because someone else's
 warrant stands: that warrant is withdrawn if its writer is removed without
 keeping it, and the offending version, refused, is never seen again.
@@ -761,7 +767,7 @@ keeping it, and the offending version, refused, is never seen again.
 Example: Bob, an editor, signs a `sys.member` making himself owner, with
 `seen` naming the space's latest changes. Every peer drops the change (§4.5).
 Alice's node, which holds it, writes `sys.warrant` at
-`warrant:<hex40(Bob + "|" + Alice)>`
+`warrant:<hex40(<that version's id> + "|" + Alice)>`
 with `{ "kind": "access", "evidence": [<that version>] }`. Every member's node
 checks the proof and shows Bob flagged; Alice decides whether to remove him.
 
