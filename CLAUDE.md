@@ -10,7 +10,7 @@ the docs, a change touches before changing the code.
 
 | Folder                                        |                                                                                               |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07. Normative.                          |
+| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07 (normative), and its threat model.   |
 | `packages/core`                               | `@weaveprotocol/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`) |
 | `packages/cli`                                | `@weaveprotocol/cli`: `weave`, the always-on node, hosting, agents, MCP                       |
 | `packages/relay`                              | The signaling relay and its mailbox                                                           |
@@ -97,6 +97,39 @@ two implementations must read it the same way.
   `file:line` references must be kept current when the code moves.
 - Tests are the executable half of the spec. A rule a peer must check gets a
   test that shows a peer refusing the thing that breaks it.
+
+## Every protocol change is reviewed adversarially
+
+Tests show a change does what its author meant. They don't show it can't be
+turned against someone, so they aren't enough. A protocol change is one to
+`spec/`, or to code or tests any spec _Source:_ line cites
+(`packages/core/src`, `packages/core/tests`, `packages/relay`, the protocol
+parts of `packages/cli`, the grant in `apps/home`, the mini app contract in
+`apps/example`). Before one is called done or merged:
+
+1. Run the `protocol-reviewer` agent (`.claude/agents/protocol-reviewer.md`)
+   on the branch, with nothing about why the change is right. It works from
+   the diff, the spec and `spec/threat-model.md`, and proves each blocker with
+   a probe test.
+2. Fix every blocker, and keep its probe as a test that fails without the
+   fix. Answer every other finding: fixed, filed as an issue, or why it isn't
+   one. Run the review again after fixing a blocker; fixes open holes too.
+3. Put the findings and what was done about each under **Adversarial review**
+   in the PR description, and say under **Threat model** what changes there.
+   CI (`scripts/check-review.mjs`) fails a protocol PR without both.
+4. If a guarantee in `spec/threat-model.md` changes, or a new gap opens,
+   change that page in the same PR. A change to that page is reviewed against
+   every "Holds" claim on it, not only the ones it touches.
+
+Design against the threat model, not only against the issue at hand: ask its
+§5 questions while designing, not only at review.
+
+Diffs only show what changed. Before each release, and whenever the threat
+model changes, audit the whole spec for soundness: one reviewer per adversary
+in the threat model's §2, in parallel, each trying to break every "Holds"
+claim about it and every rule it could abuse, spec against spec and spec
+against code. File what they find. An audit that only looks for what went
+stale is not this one.
 
 ## Issues and pull requests
 
