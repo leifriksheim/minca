@@ -757,10 +757,13 @@ warrant never stands. A peer:
   proof this peer checked and found to hold;
 - refuses it otherwise, including when its `kind` is one this peer doesn't
   know (1 to 32 lower-case letters, `a`–`z`): new kinds come with a new sync
-  version (05 §4), so an unknown one costs nothing to keep. A refused warrant
-  of a known kind other than `warrant` is itself proof, of kind `warrant`,
-  against whoever wrote it. A counter-warrant against a counter-warrant, or
-  against a kind this peer doesn't know, never holds, so nobody writes one.
+  version (05 §4), so an unknown one costs nothing to keep. A warrant **in
+  shape** (written once, kept whole, in the clear, at its key, not against its
+  writer) of a known kind other than `warrant`, whose proof does not hold, is
+  itself proof, of kind `warrant`, against whoever wrote it. One out of
+  shape, a counter-warrant, or one of a kind this peer doesn't know is
+  refused but proves nothing: a counter-warrant against it never holds, so
+  nobody writes one. A warrant from an older version is out of shape.
 
 A peer that refuses a version that would be evidence of a kind above SHOULD
 write the warrant, unless a warrant of its own against that account stands

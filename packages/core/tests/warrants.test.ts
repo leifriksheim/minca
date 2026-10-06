@@ -533,6 +533,44 @@ describe('warrants', () => {
     assert.equal((await aliceStore.queryVersions(WARRANT_COLLECTION)).length, 1);
   });
 
+  test('a warrant out of shape, such as one from an older version, is refused but proves nothing against its writer', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    await alice.node.collections.define(space, {
+      name: 'app.notice',
+      schema: { type: 'object' },
+      permissions: ['post'],
+      rules: { create: 'can:post' },
+    });
+    await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
+    const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
+    // A true proof, at a key of another shape: the one protocol 8 used named only the account.
+    const misplaced = await forge(
+      alice,
+      space,
+      {
+        collection: WARRANT_COLLECTION,
+        body: { kind: 'standing', evidence: [stubOf(bad)] },
+        version: { key: await warrantKey(bob.node.did, alice.node.did), seq: 0 },
+        retain: true,
+      },
+      { keep: false },
+    );
+    await slip(alice, space, [misplaced]);
+    const after = await alice.node.records.put(space, 'app.note', { text: 'after' });
+    await until(
+      async () => (await bob.node.records.get(space, after.key)) !== null,
+      4000,
+      'Alice’s next note',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
+    assert.equal(await bobStore.getVersion(misplaced.id), null, 'refused');
+    assert.equal(
+      (await flaggedFor(bob, space)).some((f) => f.account === alice.node.did),
+      false,
+    );
+  });
+
   test('a race is not misconduct: a version withdrawn by a change it had not seen is never warranted', async () => {
     const { alice, bob, space } = await sharedWithBob();
     await bob.node.records.put(space, 'app.note', { text: 'before' });
