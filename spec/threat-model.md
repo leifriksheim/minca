@@ -84,7 +84,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - Misconduct is judged against the offending version's own view, the
     changes it had seen replayed alone, so no rival or later change can turn
     an honest write into proof against its writer, and a copy with another
-    body proves nothing (03 §6.6). This holds while an honest `seen` can name
+    envelope or body proves nothing (03 §6.6). This holds while an honest `seen` can name
     every head ([#183](https://github.com/leifriksheim/weave/issues/183)).
 - **Does not hold yet.**
   - It can freeze the space: more than 64 concurrent changes it has no power
