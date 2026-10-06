@@ -517,22 +517,31 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const verdicts = new Map<string, Verdict>();
   const verdictKey = (e: Version) => `${e.id}|${e.signature}`;
 
-  /** Copies checked to be what their id names, envelope and body: the cache is keyed by id and signature alone */
+  /** Copies checked to be what their id names, envelope and body: the caches are keyed by id and signature alone */
   const copiesChecked = new WeakSet<Version>();
+
+  /**
+   * Why a copy isn't what its id names, or null when it is: its id must be the
+   * hash of its own envelope, and its body the one its `bodyHash` names. Asked
+   * before any verdict cached by id and signature is used, so a copy with the
+   * real id and signature but another envelope or body never passes on the
+   * real one's.
+   */
+  async function copyProblem(version: Version): Promise<string | null> {
+    if (copiesChecked.has(version)) return null;
+    const problem =
+      (await bodyProblem(version)) ??
+      (version.id === (await getVersionId(signedPart(version)))
+        ? null
+        : 'Its id is not the hash of what it says');
+    if (!problem) copiesChecked.add(version);
+    return problem;
+  }
 
   /** Whether a version is signed, and by a key whose note covers this space — and which account that is */
   async function judge(version: Version): Promise<Verdict> {
-    // A copy with the right id and signature but another envelope or body must not pass on the
-    // real one's verdict: its id must be the hash of its own envelope, and its body the one that names.
-    if (!copiesChecked.has(version)) {
-      const problem =
-        (await bodyProblem(version)) ??
-        (version.id === (await getVersionId(signedPart(version)))
-          ? null
-          : 'Its id is not the hash of what it says');
-      if (problem) return { verified: false, root: null, reason: problem };
-      copiesChecked.add(version);
-    }
+    const problem = await copyProblem(version);
+    if (problem) return { verified: false, root: null, reason: problem };
     const cached = verdicts.get(verdictKey(version));
     if (cached) return cached;
 
@@ -640,6 +649,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const eventKey = (version: Version) => `${version.id}|${version.signature}`;
 
   async function toEvent(version: Version): Promise<AccessEvent | null> {
+    if (await copyProblem(version)) return null;
     const cacheKey = eventKey(version);
     if (events.has(cacheKey)) return events.get(cacheKey)!;
     const event = await buildEvent(version);
@@ -990,7 +1000,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * judged as of what the citing version saw, so a change that came after it
    * can't undo a proof that held when it was made (02 §7.6).
    */
-  function standingOf(version: Version, within?: ReadonlyArray<string>): Promise<Standing> {
+  async function standingOf(version: Version, within?: ReadonlyArray<string>): Promise<Standing> {
+    const problem = await copyProblem(version);
+    if (problem) return { ok: false, reason: problem };
     const cacheKey = within
       ? `${verdictKey(version)}|${[...new Set(within)].sort().join(',')}`
       : verdictKey(version);
@@ -1360,8 +1372,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   }
 
   async function admitOnce(version: Version): Promise<Standing> {
-    // Not cached with the signature's verdict: a copy with another body shares the id and signature.
-    const problem = await bodyProblem(version);
+    // Before any cached verdict: a copy with another envelope or body shares the id and signature.
+    const problem = await copyProblem(version);
     if (problem) return { ok: false, reason: problem };
     // Whatever its key signed takes a place in that key's log, allowed or not: a second at one place is a fork.
     if ((await judge(version)).verified) await placeInLog(version);

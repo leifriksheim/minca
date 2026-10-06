@@ -176,7 +176,9 @@ signatures, one valid and one not. A peer:
   seen before;
 - MUST NOT let a refused copy cause a later copy with the same id, from anyone,
   to be refused (see §9.5);
-- MAY cache a _passing_ verdict under the pair (`id`, `signature`).
+- MAY cache a _passing_ verdict under the pair (`id`, `signature`), and use it
+  only for a copy whose id it has recomputed from that copy's own signed part
+  (§3.3 step 1).
 
 ### 3.3 Signing and verifying
 
@@ -196,10 +198,13 @@ To verify, in this order:
 4. If `body` is present and the version is not a delete, recompute its content
    id. If it differs from `bodyHash`, the version is invalid.
 
-Step 4 MUST be made on every copy that carries a body, even one whose id and
-signature a peer has already verified: `id` and `signature` do not cover the
-body, so a copy with another body shares both. A peer MAY cache the verdict of
-steps 1–3 as §3.2 allows, but not of step 4.
+Steps 1 and 4 MUST be made on every copy, before any verdict cached by
+(`id`, `signature`) is applied to it, even one whose id and signature a peer
+has already verified: the pair is only a name. A copy with a rewritten
+envelope (another `seen`, `key` or `retain`, say) or another body can carry the
+real one's id and signature, and fails step 1 or step 4. A peer MAY cache the
+verdict of steps 2–3, and anything decided from a version that passed them,
+as §3.2 allows.
 
 Whether the author was _allowed_ to write is a separate question (§9.3–9.4).
 
@@ -1535,7 +1540,8 @@ must pass every rule and check as of what it claims to have seen.
 
 A peer MUST NOT remember a refusal by id alone, and MUST NOT cache a failing
 verdict: a copy with a mangled signature shares the genuine version's id
-(§3.2). A peer MAY cache passing verdicts by (`id`, `signature`).
+(§3.2). A peer MAY cache passing verdicts by (`id`, `signature`), applied
+only to a copy that passed §3.3 steps 1 and 4 itself.
 
 Whether a stored version stands can change as the access history grows (a
 removal, a revoked note — [03](03-spaces.md)); it is then withdrawn, and stays
