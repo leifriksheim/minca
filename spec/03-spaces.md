@@ -742,9 +742,11 @@ take back their own ([#168](https://github.com/leifriksheim/weave/issues/168)). 
 
 A `sys.warrant` version stands when its author may write in the space (§5.2)
 and its proof holds: it is well formed, its `evidence[0]` is validly signed
-(02 §3.3) in this space by a key whose root the history names, every whole
-version in its `evidence` has the body its signed `bodyHash` names (02 §3.2:
-a copy with the real id and signature and another body proves nothing), its record key
+(02 §3.3) in this space by a key whose root the history names, every version
+in its `evidence` is what its id names: its id is the hash of its own
+envelope, and a whole one has the body its `bodyHash` names (02 §3.2; a copy
+with the real id and signature and another envelope or body proves nothing),
+its record key
 is `warrant:<hex40(evidence[0].id + "|" + the warrant's own root)>`, the two
 roots differ, it is a `seq 0` version with `retain: true` and a body in the
 clear, its `evidence` has exactly the versions its kind's row lists (with and
@@ -758,8 +760,9 @@ warrant never stands. A peer:
 - refuses it otherwise, including when its `kind` is one this peer doesn't
   know (1 to 32 lower-case letters, `a`–`z`): new kinds come with a new sync
   version (05 §4), so an unknown one costs nothing to keep. A warrant **in
-  shape** (written once, kept whole, in the clear, at its key, not against its
-  writer) of a known kind other than `warrant`, whose proof does not hold, is
+  shape** (a well-formed body; `evidence[0]` validly signed in this space by a
+  root the history names; written once, kept whole, in the clear, at its key,
+  and not against its writer) of a known kind other than `warrant`, whose proof does not hold, is
   itself proof, of kind `warrant`, against whoever wrote it. One out of
   shape, a counter-warrant, or one of a kind this peer doesn't know is
   refused but proves nothing: a counter-warrant against it never holds, so
@@ -769,7 +772,9 @@ A peer that refuses a version that would be evidence of a kind above SHOULD
 write the warrant, unless a warrant of its own against that account stands
 already, so one account's misconduct costs each member one standing warrant
 at a time. So does a peer that stores an access change whose author had no
-power for it as of what it saw. It does not hold back because someone else's
+power for it as of what it saw. A peer may leave unwritten a warrant for a
+version it doesn't itself refuse: that misses a flag, and never raises a
+false one. It does not hold back because someone else's
 warrant stands: that warrant is withdrawn if its writer is removed without
 keeping it, and the offending version, refused, is never seen again.
 

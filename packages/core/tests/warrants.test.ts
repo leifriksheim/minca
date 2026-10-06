@@ -404,6 +404,43 @@ describe('warrants', () => {
       );
   });
 
+  test('a copy with the real id and signature but another envelope proves nothing against its author', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    const honest = await bob.node.records.put(space, 'app.note', { text: 'honest' });
+    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    await until(
+      async () => (await aliceStore.getVersion(honest.version)) !== null,
+      4000,
+      'the note at Alice’s',
+    );
+    // Every peer has judged the real one. Alice rewrites what its envelope says it had seen.
+    const rewritten = { ...stubOf((await aliceStore.getVersion(honest.version))!), seen: [] };
+    const lie = await forge(
+      alice,
+      space,
+      {
+        collection: WARRANT_COLLECTION,
+        body: { kind: 'standing', evidence: [rewritten] },
+        version: { key: await warrantKey(rewritten.id, alice.node.did), seq: 0 },
+        retain: true,
+      },
+      { keep: false },
+    );
+    await slip(alice, space, [lie]);
+    const after = await alice.node.records.put(space, 'app.note', { text: 'after' });
+    await until(
+      async () => (await bob.node.records.get(space, after.key)) !== null,
+      4000,
+      'Alice’s next note',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (const who of [alice, bob])
+      assert.equal(
+        (await flaggedFor(who, space)).some((f) => f.account === bob.node.did),
+        false,
+      );
+  });
+
   test('a rival change that arrives late can’t turn an honest write into proof against its writer', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);

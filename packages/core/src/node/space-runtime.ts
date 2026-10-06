@@ -29,7 +29,7 @@ import type { Capability } from '../identity/ucan.js';
 import { parseUCAN, resolveDelegationRoot } from '../identity/ucan.js';
 import { isAgentNote } from '../identity/agent-note.js';
 import { ACCESS_ABILITY, ACCOUNT_ABILITY, DEFINE_ABILITY, noteGrants } from '../identity/abilities.js';
-import { bodyProblem, createVersion, isStub, stubOf } from '../schema/version.js';
+import { bodyProblem, createVersion, getVersionId, isStub, signedPart, stubOf } from '../schema/version.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
 import { chainProblem, newRecordKey, nextVersion } from '../records/version.js';
 import { RECORD_KEY_PATTERN } from '../records/key.js';
@@ -517,16 +517,21 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const verdicts = new Map<string, Verdict>();
   const verdictKey = (e: Version) => `${e.id}|${e.signature}`;
 
-  /** Copies whose body was checked against their signed hash: the cache is keyed by id and signature alone */
-  const bodiesChecked = new WeakSet<Version>();
+  /** Copies checked to be what their id names, envelope and body: the cache is keyed by id and signature alone */
+  const copiesChecked = new WeakSet<Version>();
 
   /** Whether a version is signed, and by a key whose note covers this space — and which account that is */
   async function judge(version: Version): Promise<Verdict> {
-    // A copy with the right id and signature but another body must not pass on the real one's verdict.
-    if (!bodiesChecked.has(version)) {
-      const problem = await bodyProblem(version);
+    // A copy with the right id and signature but another envelope or body must not pass on the
+    // real one's verdict: its id must be the hash of its own envelope, and its body the one that names.
+    if (!copiesChecked.has(version)) {
+      const problem =
+        (await bodyProblem(version)) ??
+        (version.id === (await getVersionId(signedPart(version)))
+          ? null
+          : 'Its id is not the hash of what it says');
       if (problem) return { verified: false, root: null, reason: problem };
-      bodiesChecked.add(version);
+      copiesChecked.add(version);
     }
     const cached = verdicts.get(verdictKey(version));
     if (cached) return cached;
@@ -3077,14 +3082,18 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    */
   async function warrantIfDue(version: Version): Promise<void> {
     if (closed || (await cannotWrite())) return;
-    const root = (await judge(version)).root;
-    if (!root || root === deps.rootDid || warranting.has(root)) return;
+    // Only an account the history names can be warranted: anything else stops here, for free.
+    const root = await accountable(version);
+    if (!root || root === deps.rootDid) return;
+    // With a warrant of its own against that account standing, its next offences cost nothing to look at.
+    if ((await flagged()).some((flag) => flag.account === root && flag.by === deps.rootDid)) return;
+    const violation = await violationIn(version);
+    // Taken only once there is something to write, so a decoy can't hide an offence behind it.
+    if (!violation || warranting.has(root)) return;
     warranting.add(root);
     try {
-      // With a warrant of its own against that account standing, its next offences cost nothing to look at.
-      if ((await flagged()).some((flag) => flag.account === root && flag.by === deps.rootDid)) return;
-      const violation = await violationIn(version);
-      if (violation) await warrantOnce(violation);
+      if (!(await flagged()).some((flag) => flag.account === root && flag.by === deps.rootDid))
+        await warrantOnce(violation);
     } finally {
       warranting.delete(root);
     }
