@@ -1,12 +1,13 @@
 // Fails a pull request that changes the protocol without saying what the
 // adversarial review found (see CLAUDE.md). Reads the PR body from PR_BODY
-// and the changed files, one per line, from stdin.
+// and the changed files, one per line, from stdin: listed without renames
+// (so a moved file shows at both paths) and unquoted.
 import { readFileSync } from 'node:fs';
 
 // The spec, and the code and tests its Source lines cite. A change to the first
 // group is always a protocol change; one to the second may say it isn't.
 const PROTOCOL = [/^spec\//, /^packages\/core\/src\//, /^packages\/core\/tests\//, /^packages\/relay\//];
-const NEAR = [/^packages\/cli\/src\//, /^apps\/home\/src\//];
+const NEAR = [/^packages\/cli\/(src|tests)\//, /^apps\/(home|example)\/src\//];
 
 const changed = readFileSync(0, 'utf8').split('\n').filter(Boolean);
 const core = changed.filter((file) => PROTOCOL.some((pattern) => pattern.test(file)));
@@ -15,7 +16,7 @@ if (touched.length === 0) process.exit(0);
 
 /** A section's text, without HTML comments, up to the next heading */
 function section(body, title) {
-  const match = body.match(new RegExp(`^##\\s+${title}\\s*$([\\s\\S]*?)(?=^##\\s|(?![\\s\\S]))`, 'm'));
+  const match = body.match(new RegExp(`^##\\s+${title}\\s*$([\\s\\S]*?)(?=^##\\s|(?![\\s\\S]))`, 'im'));
   return match ? match[1].replace(/<!--[\s\S]*?-->/g, '').trim() : '';
 }
 
