@@ -76,9 +76,9 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     step 10).
   - Peers that hold the same access changes replay them to the same state:
     the order is a function of the signed changes alone (03 §4.3).
-  - A warrant against it, once written, can't be overwritten or deleted by it
-    or anyone but its writer, and its writer can't replace it while it stands
-    (03 §6.6).
+  - A warrant against it is written once, under a key naming the offending
+    version and its writer: neither it nor anyone else can overwrite or delete
+    it, and whether it stands never rests on another warrant (03 §6.6).
 - **Does not hold yet.**
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's clock, its keys, or the order it runs checks in ([#121](https://github.com/leifriksheim/weave/issues/121),
@@ -88,8 +88,10 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - Only four kinds of misconduct earn a warrant (03 §6.6); a bad note,
     `onePer`, `fixed` or `check` earn none, and a peer that can't read the
     rules flags no one ([#148](https://github.com/leifriksheim/weave/issues/148)).
-  - An accused who outranks every witness removes them without `keep`, and
-    their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
+  - A warrant is withdrawn like any record: an accused who outranks every
+    witness removes them without `keep`, and a writer can withdraw their own
+    by revoking its note or forking their log ([#168](https://github.com/leifriksheim/weave/issues/168)),
+    so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Fork proofs deter, but don't catch: a fork counts once a member holding
     both versions writes `sys.fork`, and a key can sign where its other branch
     never reaches ([#175](https://github.com/leifriksheim/weave/issues/175)).
