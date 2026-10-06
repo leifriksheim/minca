@@ -53,7 +53,7 @@ function looksSigned(value: unknown): value is Version {
 
 /** A warrant's body, if it is one: a kind, and one or two signed versions as evidence */
 export function readWarrant(body: unknown): Warrant | null {
-  if (!isRecord(body) || typeof body.kind !== 'string' || !/^[a-z][a-z-]{0,31}$/.test(body.kind)) return null;
+  if (!isRecord(body) || typeof body.kind !== 'string' || !/^[a-z]{1,32}$/.test(body.kind)) return null;
   const { evidence } = body;
   if (!Array.isArray(evidence) || evidence.length === 0 || evidence.length > MAX_EVIDENCE) return null;
   const versions: Version[] = [];

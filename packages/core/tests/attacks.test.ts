@@ -159,6 +159,39 @@ describe('attacks on a shared space', () => {
       'the real record',
     );
   });
+
+  test('a copy with the real id and signature but another envelope is refused, though the real one stands', async () => {
+    const { hub, alice, bob, space } = await setup();
+    // Bob writes, then edits: every peer has judged the first version, and keeps it as a stub.
+    const note = await bob.node.records.put(space, 'app.note', { text: 'honest' });
+    const first = (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(
+      note.version,
+    ))!;
+    await until(async () => (await alice.node.records.get(space, note.key)) !== null, 4000, 'the note');
+    await bob.node.records.update(space, note.key, { text: 'edited' });
+
+    const rejected: string[] = [];
+    alice.node.subscribe((event) => {
+      if (event.type === 'rejected') rejected.push(event.reason);
+    });
+    // The same id, signature and body, under a record key Bob never wrote.
+    const stranger = hub.transport('did:key:zstranger', space);
+    stranger.on('connected', (peer: string) => {
+      const payload = {
+        v: SYNC_PROTOCOL_VERSION,
+        type: 'push-update',
+        version: { ...first, key: 'planted' },
+      };
+      stranger.send(
+        peer,
+        new TextEncoder().encode(JSON.stringify({ type: 'sync', from: 'did:key:zstranger', payload })),
+      );
+    });
+    await stranger.connect();
+    await until(async () => rejected.length > 0, 4000, 'the copy to be refused');
+    assert.match(rejected.join(' '), /not the hash of what it says/);
+    assert.equal(await alice.node.records.get(space, 'planted'), null);
+  });
 });
 
 describe('attacks on contacts', () => {
