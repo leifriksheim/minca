@@ -81,14 +81,19 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - A warrant against it is written once, under a key naming the offending
     version and the warrant's writer: neither it nor anyone else can overwrite or delete
     it, and whether it stands never rests on another warrant (03 §6.6).
+  - Misconduct is judged against the offending version's own view, the
+    changes it had seen replayed alone, so no rival or later change can turn
+    an honest write into proof against its writer, and a copy with another
+    body proves nothing (03 §6.6).
 - **Does not hold yet.**
   - A narrowed rule and a demotion it had not seen, each harmless alone,
     together let it sign as of before both ([#179](https://github.com/leifriksheim/weave/issues/179)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's clock, its keys, or the order it runs checks in ([#121](https://github.com/leifriksheim/weave/issues/121),
     [#163](https://github.com/leifriksheim/weave/issues/163)).
-  - A change made later can reorder earlier concurrent ones: peers converge,
-    but verdicts are not final ([#137](https://github.com/leifriksheim/weave/issues/137)).
+  - A change made later can reorder earlier concurrent ones, and a rival that
+    arrives late can drop a change an honest write relied on, withdrawing it:
+    peers converge, but verdicts on ordinary records are not final ([#137](https://github.com/leifriksheim/weave/issues/137)).
   - Only four kinds of misconduct earn a warrant (03 §6.6), and a peer that
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
