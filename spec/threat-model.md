@@ -72,8 +72,8 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
 ### 3.2 Member
 
 - **Holds.**
-  - What it writes counts only if its role allowed it, as of what the version
-    says it saw. Claiming to have seen less does not escape any one change
+  - An ordinary record it writes counts only if its role allowed it, as of
+    what the version says it saw. Claiming to have seen less does not escape any one change
     that took power away: a removal, a demotion or a narrowed rule it had not
     seen also withdraws what it wrote (03 §5.1, §5.2 step 10).
   - Peers that hold the same access changes replay them to the same state:
@@ -116,15 +116,19 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - The top rank answers to no one, and no vote can bind a change to who may
     do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
 
-_Source: 03 §4, §5, §6.6. Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
+_Source: 03 §4, §5, §6.6. Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
 ### 3.3 Former member
 
 - **Holds.**
-  - What it writes claiming to have seen its removal does not count. Ordinary
-    records it writes claiming not to have seen it are withdrawn, unless the
-    removal kept them (03 §5.1).
+  - What it writes claiming to have seen its removal does not count, except
+    a revoke of its own note (below). Ordinary records it writes claiming not
+    to have seen it are withdrawn, unless the removal kept them (03 §5.1).
 - **Does not hold yet.**
+  - A revoke of its own note needs no role, so after its removal it can still
+    withdraw what the removal kept ([#168](https://github.com/leifriksheim/weave/issues/168)).
+  - A version it backdates is withdrawn, but a colluding member's `check` can
+    still cite and count it ([#184](https://github.com/leifriksheim/weave/issues/184)).
   - A key change made at the same moment as its removal, by someone who
     hadn't seen it, is boxed to it and clears the due key change. It then
     reads everything new until the next one ([#173](https://github.com/leifriksheim/weave/issues/173)).
@@ -143,7 +147,7 @@ _Source: 03 §4, §5, §6.6. Tests: `packages/core/tests/rules.test.ts`, `packag
   - Its removal withdraws what it wrote before, unless the remover's node held
     it and kept it ([#166](https://github.com/leifriksheim/weave/issues/166)).
 
-_Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-access.test.ts`, `packages/core/tests/key-change.test.ts`._
+_Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-access.test.ts` ("a removed member cannot write"), `packages/core/tests/roles.test.ts`, `packages/core/tests/key-change.test.ts`._
 
 ### 3.4 Key thief
 
@@ -182,9 +186,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
 - **Holds.** Its writes count only where its note covers them, and a home
   grants an app only the spaces chosen for it (01 §8, 06 §2).
 - **Does not hold yet.**
-  - A records-only grant can write the account's `sys.profile` and
-    `sys.memberkey`, and so have contact requests and new space keys sealed
-    to itself ([#169](https://github.com/leifriksheim/weave/issues/169)).
+  - A records-only grant can write the account's `sys.profile`, and so have
+    contact requests sealed to itself; and `sys.memberkey`, to have new space
+    keys sealed to itself _(traced)_ ([#169](https://github.com/leifriksheim/weave/issues/169)).
   - `scope: account` hands over the vault key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
     its grant expires ([#165](https://github.com/leifriksheim/weave/issues/165), [#169](https://github.com/leifriksheim/weave/issues/169)).
@@ -235,8 +239,10 @@ _Source: 03 §8; 02 §3; 06 §4. Tests: `packages/core/tests/carrier.test.ts`, `
 
 - **Holds.**
   - A connection to a node is authenticated by the node's session DID, and
-    bound to an expected node when its DID or account is pinned. Another node
-    at a pinned address is refused (04 §5.2, §6.1).
+    bound to an expected node when its DID or account is pinned: a node
+    answering in its own name at a pinned address is refused (04 §5.2, §6.1).
+    Nothing binds the handshake to the connection, so one that relays the
+    real node's handshake is kept out only by TLS.
   - A node URL must be `wss://`, or `ws://` only to the same machine (04 §5.2).
 - **Does not hold yet.**
   - An unpinned connection to a node accepts whichever node answers, and an

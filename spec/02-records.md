@@ -1281,10 +1281,10 @@ removal cannot count Bob's vote.
 > Rationale: a proof that a later change could undo is not a proof: two peers
 > that judged it before and after the change would disagree, and a result
 > would go back on itself. The cost: a writer chooses its `seen`, and can
-> leave a removal out of it to count a removed member's earlier versions. It
-> cannot count anything written after the removal (§9.4 judges those by their
-> own `seen`), and it must itself hold a role as of what it claims to have
-> seen.
+> leave a removal out of it to count a removed member's earlier versions, and
+> nothing tells those from versions the removed member backdated after its
+> removal ([#184](https://github.com/leifriksheim/weave/issues/184)). It must
+> itself hold a role as of what it claims to have seen.
 
 #### Outcomes
 

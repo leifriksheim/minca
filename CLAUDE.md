@@ -104,7 +104,8 @@ Tests show a change does what its author meant. They don't show it can't be
 turned against someone, so they aren't enough. A protocol change is one to
 `spec/`, or to code or tests any spec _Source:_ line cites
 (`packages/core/src`, `packages/core/tests`, `packages/relay`, the protocol
-parts of `packages/cli`, the grant in `apps/home`). Before one is called done or merged:
+parts of `packages/cli`, the grant in `apps/home`, the mini app contract in
+`apps/example`). Before one is called done or merged:
 
 1. Run the `protocol-reviewer` agent (`.claude/agents/protocol-reviewer.md`)
    on the branch, with nothing about why the change is right. It works from
