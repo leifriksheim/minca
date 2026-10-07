@@ -102,14 +102,49 @@ export function celMap(entries: ReadonlyArray<readonly [CelValue, CelValue]>): C
   return Object.freeze({ map });
 }
 
-/** JSON as CEL reads it: numbers are doubles, objects maps with string keys */
+/** How deep JSON may nest to be read: deeper, it reads as an error */
+const MAX_JSON_DEPTH = 64;
+
+/** A string with every lone surrogate made U+FFFD, as a UTF-8 decoder would: CEL strings are code points */
+function wellFormed(s: string): string {
+  return s.replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '\ufffd');
+}
+
+/** How deep JSON nests, counted without recursion, up to one past `limit` */
+function jsonDepth(value: unknown, limit: number): number {
+  let deepest = 0;
+  const stack: Array<readonly [unknown, number]> = [[value, 1]];
+  while (stack.length > 0) {
+    const [v, d] = stack.pop()!;
+    deepest = Math.max(deepest, d);
+    if (deepest > limit) return deepest;
+    if (Array.isArray(v)) for (const item of v) stack.push([item, d + 1]);
+    else if (typeof v === 'object' && v !== null)
+      for (const item of Object.values(v)) stack.push([item, d + 1]);
+  }
+  return deepest;
+}
+
+/**
+ * JSON as CEL reads it: numbers are doubles, objects maps with string keys,
+ * lone surrogates U+FFFD. JSON nested more than 64 deep is an error.
+ */
 export function fromJson(value: unknown): CelValue {
+  if (jsonDepth(value, MAX_JSON_DEPTH) > MAX_JSON_DEPTH) return err('nested too deeply');
+  return convert(value);
+}
+
+function convert(value: unknown): CelValue {
   if (value === null || value === undefined) return null;
-  if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') return value;
-  if (Array.isArray(value)) return value.map(fromJson);
+  if (typeof value === 'boolean' || typeof value === 'number') return value;
+  if (typeof value === 'string') return wellFormed(value);
+  if (Array.isArray(value)) return value.map(convert);
   if (typeof value === 'object') {
     const map = new Map<string, readonly [CelValue, CelValue]>();
-    for (const [k, v] of Object.entries(value)) map.set(`s:${k}`, [k, fromJson(v)]);
+    for (const [k, v] of Object.entries(value)) {
+      const key = wellFormed(k);
+      map.set(`s:${key}`, [key, convert(v)]);
+    }
     return Object.freeze({ map });
   }
   return null;
@@ -210,7 +245,7 @@ export type CelNode =
   | { readonly k: 'list'; readonly items: ReadonlyArray<CelNode> }
   | { readonly k: 'map'; readonly entries: ReadonlyArray<readonly [CelNode, CelNode]> }
   | { readonly k: 'cond'; readonly test: CelNode; readonly then: CelNode; readonly else: CelNode }
-  | { readonly k: 'and' | 'or'; readonly l: CelNode; readonly r: CelNode }
+  | { readonly k: 'and' | 'or'; readonly items: ReadonlyArray<CelNode> }
   | {
       readonly k: 'comp';
       readonly macro: 'all' | 'exists' | 'exists_one' | 'map' | 'filter';
@@ -226,12 +261,15 @@ type Token =
   | { readonly t: 'double'; readonly v: number }
   | { readonly t: 'str'; readonly v: string }
   | { readonly t: 'id'; readonly v: string }
+  | { readonly t: 'quoted'; readonly v: string }
   | { readonly t: 'op'; readonly v: string }
   | { readonly t: 'eof' };
 
 /** What the parser throws: the expression is malformed, or outside the subset */
-const problem = (message: string) => Object.assign(new Error(message), { celProblem: true });
-export const isCelProblem = (e: unknown): e is Error => e instanceof Error && 'celProblem' in e;
+const problem = (message: string, outside = false) =>
+  Object.assign(new Error(message), { celProblem: true, outside });
+export const isCelProblem = (e: unknown): e is Error & { readonly outside: boolean } =>
+  e instanceof Error && 'celProblem' in e;
 
 const RESERVED = new Set(
   'as break const continue else for function if import let loop package namespace return var void while'.split(
@@ -312,6 +350,7 @@ function lex(source: string): Token[] {
         }
       }
       const text = source.slice(start, i);
+      if (isDouble && !Number.isFinite(Number(text))) throw problem('a double literal out of range');
       if (isDouble) out.push({ t: 'double', v: Number(text) });
       else if (at() === 'u' || at() === 'U') {
         i++;
@@ -324,7 +363,7 @@ function lex(source: string): Token[] {
     const prefix = /^([rRbB]{1,2})?(['"])/.exec(source.slice(i, i + 3));
     if (prefix && (prefix[1] === undefined || /^(r|R|b|B|rb|rB|Rb|RB|br|bR|Br|BR)$/.test(prefix[1]))) {
       const flags = (prefix[1] ?? '').toLowerCase();
-      if (flags.includes('b')) throw problem('bytes are not in the subset');
+      if (flags.includes('b')) throw problem('bytes are not in the subset', true);
       const raw = flags.includes('r');
       i += flags.length;
       const q = at();
@@ -384,6 +423,14 @@ function lex(source: string): Token[] {
       out.push({ t: 'str', v: value });
       continue;
     }
+    if (c === '`') {
+      const end = source.indexOf('`', i + 1);
+      const name = end < 0 ? '' : source.slice(i + 1, end);
+      if (!/^[A-Za-z0-9_.\-/ ]+$/.test(name)) throw problem('a bad quoted field name');
+      out.push({ t: 'quoted', v: name });
+      i = end + 1;
+      continue;
+    }
     if (/[A-Za-z_]/.test(c)) {
       const start = i;
       while (/[A-Za-z0-9_]/.test(at())) i++;
@@ -391,7 +438,7 @@ function lex(source: string): Token[] {
       continue;
     }
     if ((c === '.' && at(1) === '?') || (c === '?' && at(1) === '.') || (c === '?' && at(1) === '['))
-      throw problem('optionals are not in the subset');
+      throw problem('optionals are not in the subset', true);
     const op = OPS.find((o) => source.startsWith(o, i));
     if (!op) throw problem(`unexpected "${c}"`);
     out.push({ t: 'op', v: op });
@@ -402,11 +449,12 @@ function lex(source: string): Token[] {
 }
 
 const MACROS = new Set(['all', 'exists', 'exists_one', 'map', 'filter']);
-/** How deeply brackets, calls and macros may nest */
-const MAX_CEL_DEPTH = 32;
+/** How deep an expression's tree may be: every part counts, and a chain of `&&` or `||` is one */
+const MAX_CEL_DEPTH = 64;
 
 /** Parses an expression, or throws a `CelProblem` */
 export function parseCel(source: string): CelNode {
+  if (wellFormed(source) !== source) throw problem('a lone surrogate');
   const tokens = lex(source);
   let p = 0;
   let depth = 0;
@@ -420,7 +468,7 @@ export function parseCel(source: string): CelNode {
     p++;
   };
   const nest = <T>(f: () => T): T => {
-    if (++depth > MAX_CEL_DEPTH) throw problem(`nested more than ${MAX_CEL_DEPTH} deep`);
+    if (++depth > MAX_CEL_DEPTH) throw problem(`nested more than ${MAX_CEL_DEPTH} deep`, true);
     const r = f();
     depth--;
     return r;
@@ -436,20 +484,20 @@ export function parseCel(source: string): CelNode {
     return { k: 'cond', test, then, else: otherwise };
   };
   const or = (): CelNode => {
-    let l = and();
+    const items = [and()];
     while (isOp('||')) {
       p++;
-      l = { k: 'or', l, r: and() };
+      items.push(and());
     }
-    return l;
+    return items.length === 1 ? items[0]! : { k: 'or', items };
   };
   const and = (): CelNode => {
-    let l = relation();
+    const items = [relation()];
     while (isOp('&&')) {
       p++;
-      l = { k: 'and', l, r: relation() };
+      items.push(relation());
     }
-    return l;
+    return items.length === 1 ? items[0]! : { k: 'and', items };
   };
   const relation = (): CelNode => {
     let l = calc();
@@ -563,7 +611,15 @@ export function parseCel(source: string): CelNode {
     for (;;) {
       if (isOp('.')) {
         p++;
-        const name = ident();
+        // After a dot any name will do, reserved words and quoted ones included.
+        const t = peek();
+        if (t.t !== 'id' && t.t !== 'quoted') throw problem('expected a name');
+        p++;
+        const name = t.v;
+        if (t.t === 'quoted') {
+          node = { k: 'select', on: node, field: name, test: false };
+          continue;
+        }
         if (isOp('(')) {
           p++;
           const list = nest(() => args(')'));
@@ -574,7 +630,7 @@ export function parseCel(source: string): CelNode {
         const at = nest(() => expr());
         take(']');
         node = { k: 'index', on: node, at };
-      } else if (isOp('{')) throw problem('messages are not in the subset');
+      } else if (isOp('{')) throw problem('messages are not in the subset', true);
       else return node;
     }
   };
@@ -612,7 +668,7 @@ export function parseCel(source: string): CelNode {
       }
       return { k: 'ident', name };
     }
-    if (isOp('.')) throw problem('a leading "." is not in the subset');
+    if (isOp('.')) throw problem('a leading "." is not in the subset', true);
     if (isOp('(')) {
       p++;
       const inner = nest(() => expr());
@@ -643,7 +699,47 @@ export function parseCel(source: string): CelNode {
 
   const node = expr();
   if (peek().t !== 'eof') throw problem('something follows the expression');
+  if (depthOf(node) > MAX_CEL_DEPTH) throw problem(`nested more than ${MAX_CEL_DEPTH} deep`, true);
   return node;
+}
+
+/** How deep a tree is, worked out without recursion */
+function depthOf(root: CelNode): number {
+  let deepest = 0;
+  const stack: Array<readonly [CelNode, number]> = [[root, 1]];
+  while (stack.length > 0) {
+    const [n, d] = stack.pop()!;
+    deepest = Math.max(deepest, d);
+    for (const child of childrenOf(n)) stack.push([child, d + 1]);
+  }
+  return deepest;
+}
+
+function childrenOf(n: CelNode): ReadonlyArray<CelNode> {
+  switch (n.k) {
+    case 'lit':
+    case 'ident':
+      return [];
+    case 'select':
+      return [n.on];
+    case 'index':
+      return [n.on, n.at];
+    case 'call':
+      return n.target && !(n.target.k === 'ident' && n.target.name === 'math')
+        ? [n.target, ...n.args]
+        : n.args;
+    case 'list':
+      return n.items;
+    case 'map':
+      return n.entries.flat();
+    case 'cond':
+      return [n.test, n.then, n.else];
+    case 'and':
+    case 'or':
+      return n.items;
+    case 'comp':
+      return [n.range, ...(n.pred ? [n.pred] : []), ...(n.out ? [n.out] : [])];
+  }
 }
 
 // -- Checking -----------------------------------------------------------------
@@ -725,7 +821,7 @@ export function checkCel(node: CelNode, scope: CelScope, count = { nodes: 0 }): 
         return walk(n.test, bound) ?? walk(n.then, bound) ?? walk(n.else, bound);
       case 'and':
       case 'or':
-        return walk(n.l, bound) ?? walk(n.r, bound);
+        return first(n.items.map((item) => () => walk(item, bound)));
       case 'comp': {
         const inner = new Set(bound).add(n.v);
         return (
@@ -804,17 +900,86 @@ export interface CelEnv {
   readonly author?: string;
 }
 
-/** Steps an evaluation may take: every node evaluated, and every element a macro goes through */
-export const MAX_CEL_STEPS = 10_000;
+/**
+ * Steps an evaluation may take: every part evaluated, every element a macro
+ * goes through, and for the calls in `CHARGED`, the size of what they are
+ * given (`sizeWithin`).
+ */
+export const MAX_CEL_STEPS = 100_000;
+/** The size an evaluation's calls may go through, together (`CHARGED`) */
+export const MAX_CEL_WORK = 4_000_000;
+
+/** Calls whose work grows with what they are given: each also takes the size of its operands in steps */
+const CHARGED = new Set([
+  '==',
+  '!=',
+  'in',
+  '<',
+  '<=',
+  '>',
+  '>=',
+  '+',
+  'size',
+  'contains',
+  'startsWith',
+  'endsWith',
+  'int',
+  'uint',
+  'double',
+  'string',
+  'bool',
+  'distinct',
+  'sum',
+  'greatest',
+  'least',
+  'hash',
+  'link',
+  'versions',
+]);
+
+/**
+ * A value's size: 1 for `null`, a bool or a number; 1 and its code points for
+ * a string; 1 and its elements' sizes for a list; 1 and its keys' and
+ * values' sizes for a map. Counted without recursion, and only up to `limit`:
+ * past it, `limit + 1`.
+ */
+function sizeWithin(value: CelValue, limit: number): number {
+  let total = 0;
+  const stack: CelValue[] = [value];
+  while (stack.length > 0) {
+    const v = stack.pop()!;
+    total++;
+    if (typeof v === 'string') {
+      // At least half as many code points as UTF-16 units: too long is known before counting.
+      if (total + v.length / 2 > limit) return limit + 1;
+      for (const _ of v) total++;
+    } else if (isList(v)) {
+      // Each element is at least 1: too long is known before going through it.
+      if (total + v.length > limit) return limit + 1;
+      for (const item of v) stack.push(item);
+    } else if (isMap(v)) {
+      if (total + 2 * v.map.size > limit) return limit + 1;
+      for (const [k, item] of v.map.values()) stack.push(k, item);
+    }
+    if (total > limit) return limit + 1;
+  }
+  return total;
+}
 
 /** Evaluates an expression. Throws a `CelStop`; any other failure is an error value. */
 export async function evaluateCel(
   node: CelNode,
   env: CelEnv,
-  budget = { steps: 0, max: MAX_CEL_STEPS },
+  budget = { steps: 0, max: MAX_CEL_STEPS, work: 0, maxWork: MAX_CEL_WORK },
 ): Promise<CelValue> {
   const step = () => {
     if (++budget.steps > budget.max) throw celStop('fail', 'took too many steps');
+  };
+  const charge = (values: ReadonlyArray<CelValue>) => {
+    for (const v of values) {
+      budget.work += sizeWithin(v, budget.maxWork - budget.work);
+      if (budget.work > budget.maxWork) throw celStop('fail', 'went through too much');
+    }
   };
   const ev = async (n: CelNode, scope: ReadonlyMap<string, CelValue>): Promise<CelValue> => {
     step();
@@ -884,16 +1049,16 @@ export async function evaluateCel(
       }
       case 'and':
       case 'or': {
-        // The left first; the right only when the left doesn't decide. An error gives way to a deciding side.
+        // In order, stopping at the first side that decides. An error gives way to a deciding side.
         const decides = n.k === 'or';
-        const l = await ev(n.l, scope);
-        if (l === decides) return decides;
-        const r = await ev(n.r, scope);
-        if (r === decides) return decides;
-        if (isCelError(l)) return l;
-        if (isCelError(r)) return r;
-        if (typeof l !== 'boolean' || typeof r !== 'boolean') return err('no matching overload');
-        return !decides;
+        let error: CelError | null = null;
+        for (const item of n.items) {
+          const v = await ev(item, scope);
+          if (v === decides) return decides;
+          if (isCelError(v)) error ??= v;
+          else if (typeof v !== 'boolean') error ??= err('no matching overload');
+        }
+        return error ?? !decides;
       }
       case 'comp': {
         const range = await ev(n.range, scope);
@@ -946,6 +1111,7 @@ export async function evaluateCel(
         if (n.target?.k === 'ident' && n.target.name === 'math' && !scope.has('math')) {
           const args = await evalArgs(n.args, scope);
           if (isCelError(args)) return args;
+          charge(args);
           return extreme(
             args.length === 1 && isList(args[0]!) ? args[0] : args,
             n.fn === 'greatest' ? 1 : -1,
@@ -959,6 +1125,7 @@ export async function evaluateCel(
         // Cited versions are looked up only when every argument came out.
         const args = await evalArgs(n.args, scope);
         if (isCelError(args)) return args;
+        if (CHARGED.has(n.fn)) charge(target === undefined ? args : [target, ...args]);
         return target === undefined ? callGlobal(n.fn, args, env) : callMethod(n.fn, target, args);
       }
     }
@@ -993,6 +1160,7 @@ function arith(op: string, a: CelValue, b: CelValue): CelValue {
     if (op === '-') return int(a - b);
     if (op === '*') return int(a * b);
     if (b === 0n) return err(op === '/' ? 'divide by zero' : 'modulus by zero');
+    if (a === INT_MIN && b === -1n) return err('integer overflow');
     return int(op === '/' ? a / b : a % b);
   }
   if (isUint(a) && isUint(b)) {
@@ -1070,7 +1238,7 @@ async function callGlobal(fn: string, args: ReadonlyArray<CelValue>, env: CelEnv
         if (!Number.isFinite(a) || a < 0 || a >= 2 ** 64) return err('range error');
         return toUint(BigInt(Math.trunc(a)));
       }
-      if (typeof a === 'string') return /^\+?\d+$/.test(a) ? toUint(BigInt(a)) : err('bad uint');
+      if (typeof a === 'string') return /^\d+$/.test(a) ? toUint(BigInt(a)) : err('bad uint');
       return err('no matching overload');
     case 'double':
       if (typeof a === 'number') return a;
@@ -1174,6 +1342,28 @@ function linkOf(links: CelValue, rel: CelValue): CelValue {
   return null;
 }
 
+let nans = 0;
+/** Text that two values share exactly when they are `==`: numbers by value, maps whatever their order */
+function equalityKey(v: CelValue): string {
+  if (v === null) return 'null';
+  if (typeof v === 'boolean') return String(v);
+  if (typeof v === 'bigint') return `n${v}`;
+  if (typeof v === 'number') {
+    // NaN equals nothing, itself included.
+    if (Number.isNaN(v)) return `nan${nans++}`;
+    return Number.isInteger(v) ? `n${BigInt(v)}` : `d${v}`;
+  }
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (isUint(v)) return `n${v.uint}`;
+  if (isList(v)) return `[${v.map(equalityKey).join(',')}]`;
+  if (isMap(v))
+    return `{${[...v.map.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, [, item]]) => `${key}=${equalityKey(item)}`)
+      .join(',')}}`;
+  return `e${nans++}`;
+}
+
 function callMethod(fn: string, target: CelValue, args: ReadonlyArray<CelValue>): CelValue {
   const a = args[0]!;
   switch (fn) {
@@ -1193,9 +1383,13 @@ function callMethod(fn: string, target: CelValue, args: ReadonlyArray<CelValue>)
           : target.endsWith(a);
     case 'distinct': {
       if (!isList(target)) return err('no matching overload');
-      const out: CelValue[] = [];
-      for (const item of target) if (!out.some((seen) => celEquals(seen, item))) out.push(item);
-      return out;
+      const seen = new Set<string>();
+      return target.filter((item) => {
+        const key = equalityKey(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
     case 'link':
       if (!isMap(target)) return err('no matching overload');

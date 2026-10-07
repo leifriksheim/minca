@@ -95,7 +95,7 @@ describe('checks: a definition', () => {
     assert.match(problem('can("approve")'), /declares/);
     assert.equal(problem('can("approve")', ['approve']), '');
     assert.match(problem('link(body.rel) == ""'), /literal link role/);
-    assert.match(problem(`${'['.repeat(40)}1${']'.repeat(40)} == 1`), /nested more than 32 deep/);
+    assert.match(problem(`${'['.repeat(70)}1${']'.repeat(70)} == 1`), /nested more than 64 deep/);
   });
 });
 
@@ -158,12 +158,50 @@ describe('checks: judging', () => {
   });
 
   test('always ends: a check that takes too many steps is refused', async () => {
+    const ten = '[0,1,2,3,4,5,6,7,8,9]';
     const outcome = await run(
-      '[0,1,2,3,4,5,6,7,8,9].all(a, [0,1,2,3,4,5,6,7,8,9].all(b, [0,1,2,3,4,5,6,7,8,9].all(c, [0,1,2,3,4,5,6,7,8,9].all(d, true))))',
+      `${ten}.all(a, ${ten}.all(b, ${ten}.all(c, ${ten}.all(d, ${ten}.all(e, true)))))`,
     );
     assert.equal(passed(outcome), false);
     assert.match(why(outcome), /too many steps/);
-    assert.equal(MAX_CHECK_STEPS, 10_000);
+    assert.equal(MAX_CHECK_STEPS, 100_000);
+  });
+
+  test('costs what it builds: a list or text grown by reuse runs out of steps, not memory', async () => {
+    // Each level makes a list eight times the last: without charging for size, 8^10 elements.
+    let grow = '[[1]]';
+    for (let i = 0; i < 10; i++) grow = `${grow}.map(a${i}, ${Array(8).fill(`a${i}`).join(' + ')})`;
+    assert.equal(checkChecks([{ that: `size(${grow}) > 0`, else: 'x' }]), null);
+    assert.match(why(await run(`size(${grow}) > 0`)), /too much/);
+    let text = `"${'a'.repeat(1000)}"`;
+    for (let i = 0; i < 13; i++) text = `[${text}].map(s${i}, s${i} + s${i})[0]`;
+    assert.match(why(await run(`size(${text}) > 0`)), /too much/);
+    // distinct is linear: 20,000 numbers in a body is quick, and within the steps.
+    const xs = Array.from({ length: 20_000 }, (_, i) => i);
+    const started = Date.now();
+    assert.equal(passed(await run('body.xs.distinct().size() == size(body.xs)', { body: { xs } })), true);
+    assert.ok(Date.now() - started < 2000);
+  });
+
+  test('never throws instead of judging: depth is bounded, whatever the chain', async () => {
+    for (const deep of ['!'.repeat(3994) + 'true', `has(body${'.a'.repeat(1990)})`, '1' + ' + 1'.repeat(900)])
+      assert.match(checkChecks([{ that: deep, else: 'x' }]) ?? '', /nested more than 64 deep/);
+    // A chain of && is one part, however long.
+    assert.equal(checkChecks([{ that: Array(200).fill('true').join(' && '), else: 'x' }]), null);
+    let body: unknown = 1;
+    for (let i = 0; i < 100; i++) body = [body];
+    assert.equal(passed(await run('body == body', { body })), false, 'JSON nested past 64 reads as an error');
+  });
+
+  test('syntax: quoted and reserved field names; a lone surrogate reads as U+FFFD', async () => {
+    for (const that of ['has(body.`content-type`)', 'has(body.as)', 'body.namespace == "x"'])
+      assert.equal(checkChecks([{ that, else: 'x' }]), null, that);
+    assert.deepEqual(await run('body.`content-type` == "a"', { body: { 'content-type': 'a' } }), {
+      passed: true,
+    });
+    const split = 'body.a.contains(body.b) || size(body.b) != 1 || body.b != "\\uFFFD"';
+    assert.equal(passed(await run(split, { body: { a: '\u{1F600}', b: '\ud83d' } })), false);
+    assert.deepEqual(await run('body.b == "\\uFFFD"', { body: { b: '\ud83d' } }), { passed: true });
   });
 
   test('hash is the content id of canonical JSON, the same as a body hash: commit, then reveal', async () => {

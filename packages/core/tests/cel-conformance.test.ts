@@ -15,6 +15,7 @@ import {
   checkCel,
   evaluateCel,
   isCelError,
+  isCelProblem,
   isCelStop,
   isMap,
   isUint,
@@ -277,8 +278,11 @@ test('the CEL subset passes, or refuses, every conformance test', async () => {
         let node;
         try {
           node = parseCel(expr);
-        } catch {
-          tally.refused++;
+        } catch (error) {
+          // Refusing is right only for what the subset leaves out, or what the suite expects to fail.
+          if (!isCelProblem(error)) throw error;
+          if (error.outside || expectsError) tally.refused++;
+          else failures.push(`${name}: ${expr}\n    refused: ${error.message}`);
           continue;
         }
         if (checkCel(node, { names: new Set(vars.keys()) })) {

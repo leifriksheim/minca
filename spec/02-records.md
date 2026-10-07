@@ -1155,14 +1155,25 @@ Where this section and CEL's specification differ, this section decides.
 
 **Values.** `null`, `bool`, `int` (64 bits), `uint` (64 bits), `double`,
 `string`, `list` and `map`. JSON is read as CEL reads it: a number is a
-`double`, an object a `map` with `string` keys, an array a `list`. So
+`double`, an object a `map` with `string` keys, an array a `list`; a lone
+surrogate in a string reads as U+FFFD, and JSON nested more than **64** deep
+reads as an error. So
 `body.n + 1` is an error and `body.n + 1.0` is not, while `body.n == 1` and
 `body.n < 1` compare across kinds (an `int` is converted to a `double` to
 compare with one).
 
-**Syntax.** All of CEL's, except: bytes literals (`b"…"`), messages
-(`T{…}`), names with a leading `.`, and optionals (`.?`, `?.`, `[?`).
-Parentheses, lists, maps, calls and indexes nest at most **32** deep.
+**Syntax.** All of CEL's, quoted field names (``body.`content-type` ``) and
+reserved words after a `.` included, except: bytes literals (`b"…"`),
+messages (`T{…}`), names with a leading `.`, optionals (`.?`, `?.`, `[?`),
+and a double literal too large to be finite. A condition with a lone
+surrogate in it is malformed.
+
+**Parts.** A condition is a tree of parts: a literal, a name, a field
+selection (`has()` included), an index, a call (an operator, a function or a
+method; `math.greatest` is one), a list, a map, a conditional, a macro, and
+a chain of `&&`, or of `||`, which is one part however long. A minus written
+right before a number literal is part of the literal; parentheses are not
+parts. The tree is at most **64** deep.
 
 **Names.** A condition reads these, and the variables of the macros that
 enclose it:
@@ -1214,14 +1225,21 @@ enclose it:
    exponent is below −4 or 6 and up, and as a plain decimal otherwise:
    `string(123.456)` is `"123.456"`, `string(1e6)` is `"1e+06"`. The special
    values are `"+Inf"`, `"-Inf"`, `"NaN"` and `"-0"`.
-4. **Errors** carry no text that matters: only whether a condition gave
+4. **Text to numbers.** `int(s)` takes an optional sign and decimal
+   digits; `uint(s)` decimal digits only; `double(s)` an optional sign and a
+   decimal number with an optional exponent, or `inf`, `infinity` or `nan`
+   in any case. Anything else, or a value out of range, is an error. So is
+   the least `int` `% -1`.
+5. **Errors** carry no text that matters: only whether a condition gave
    `true`.
 
-**Conformance.** On every test in CEL's conformance suite files `basic`,
-`comparisons`, `conversions`, `fields`, `fp_math`, `integer_math`, `lists`,
-`logic`, `macros`, `macros2`, `parse`, `plumbing` and `string`, an
-implementation either refuses the expression as outside the subset when
-checking a definition (below), or gives the result the test expects.
+**Conformance.** On CEL's conformance suite files `basic`, `comparisons`,
+`conversions`, `fields`, `fp_math`, `integer_math`, `lists`, `logic`,
+`macros`, `macros2`, `parse`, `plumbing` and `string`, an implementation
+gives the result each test expects, or refuses the expression for something
+this section leaves out, or refuses one the test expects to fail. Tests that
+need a container, type checking alone, macros turned off, or a value the
+subset lacks (bytes, types, messages, timestamps) don't apply.
 
 A **cited version** is a map:
 
@@ -1294,10 +1312,16 @@ cites one not held waits (§9.5), and is judged again when more arrives.
 
 Limits, counted across all of one version's checks:
 
-- **Steps.** Every part of a condition evaluated (a literal, a name, a
-  field, an index, a list, a map, an operator, a call, a macro) counts one,
-  and so does every element a macro goes through. Past **10,000** the check
-  fails.
+- **Steps.** Every part evaluated counts one, and so does every element a
+  macro goes through. Past **100,000** the check fails.
+- **Work.** A call to `==`, `!=`, `in`, `<`, `<=`, `>`, `>=`, `+`, `size`,
+  `contains`, `startsWith`, `endsWith`, `int`, `uint`, `double`, `string`,
+  `bool`, `distinct`, `sum`, `math.greatest`, `math.least`, `hash`, `link` or
+  `versions` counts the **size** of each of its operands (its receiver
+  included): 1 for `null`, a bool or a number; 1 and its code points for a
+  string; 1 and its elements' sizes for a list; 1 and its keys' and values'
+  sizes for a map. Past **4,000,000** the check fails. So what a check
+  builds, and every pass over it, is paid for.
 - **Citations.** At most **256** distinct versions; citing one more fails the
   check. Citing the same id again does not count again. A cited version that
   fails rule 2, 3 or 4 above fails the check, whatever `&&` or `||` around it
@@ -1327,8 +1351,8 @@ checks as above, and:
   takes;
 - `link` takes a literal link role, and `can` a literal permission the
   definition declares in `permissions`;
-- no condition nests more than **32** deep, and a collection's checks have at
-  most **2,000** parts in all.
+- no condition is more than **64** parts deep, and a collection's checks
+  have at most **2,000** parts in all.
 
 > Rationale: a check is a verifier, not a program that runs the space. It
 > always ends, and reads only what is fixed once written: its own version,
@@ -1576,7 +1600,7 @@ _Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`),
 | Topics per collection                       | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                  |
 | Tags per version                            | ≤ 64                                                                                 |
 | Permission name                             | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
-| Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 32 deep                                                |
+| Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 64 deep; ≤ 100,000 steps per version                   |
 | Steps judging one version's checks          | ≤ 10,000                                                                             |
 | Versions one version's checks cite          | ≤ 256 distinct                                                                       |
 | Future-dated `createdAt` (delegated writes) | ≤ 300 s ahead                                                                        |

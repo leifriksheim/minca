@@ -33,6 +33,7 @@ import {
   isCelProblem,
   isCelStop,
   MAX_CEL_STEPS,
+  MAX_CEL_WORK,
   parseCel,
   type CelNode,
   type CelValue,
@@ -189,7 +190,7 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
   }
   const author = scope.values.author;
   // Steps and citations are counted across all of a version's checks.
-  const budget = { steps: 0, max: MAX_CHECK_STEPS };
+  const budget = { steps: 0, max: MAX_CHECK_STEPS, work: 0, maxWork: MAX_CEL_WORK };
   const cited = new Map<string, CelValue>();
   const versions = async (ids: ReadonlyArray<string>): Promise<CelValue> => {
     const out: CelValue[] = [];
