@@ -3009,8 +3009,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const known = judgedWarrants.get(cacheKey);
     if (known) return known;
     const warrant = await warrantShape(version);
-    if (!warrant) return 'false';
-    const verdict = await evidenceHolds(warrant.kind, warrant.evidence);
+    if (warrant === 'unnamed') return 'false';
+    const verdict = warrant ? await evidenceHolds(warrant.kind, warrant.evidence) : 'false';
     // Judged in the offending version's own view, a proof that holds, or fails, always will.
     if (verdict === 'holds' || verdict === 'false') judgedWarrants.set(cacheKey, verdict);
     return verdict;
@@ -3024,14 +3024,16 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * not a delete, at the key naming what it proves and its writer, and not
    * against its writer. Anything else flags nobody.
    */
-  async function warrantShape(version: Version): Promise<Warrant | null> {
-    if (version.deleted || version.seq !== 0) return null;
+  async function warrantShape(version: Version): Promise<Warrant | 'unnamed' | null> {
+    if (version.deleted || version.seq !== 0 || !version.key.startsWith('warrant:')) return null;
     const warrant = readWarrant((await openBody(version)).body);
     const offending = warrant?.evidence[0];
-    if (!warrant || !offending) return null;
+    if (!warrant || !offending || !(await judge(offending)).verified) return null;
+    // The one answer that can change: the account may be named once more of the history arrives.
     const against = await accountable(offending);
+    if (!against) return 'unnamed';
     const by = (await judge(version)).root;
-    return against && by && against !== by && version.key.startsWith('warrant:') ? warrant : null;
+    return by && against !== by ? warrant : null;
   }
 
   /** The proof a version gives against its account, or null when it gives none */
