@@ -148,6 +148,9 @@ interface EventBase {
   readonly author: string;
   /** The latest access changes its author knew of */
   readonly seen: ReadonlyArray<string>;
+  /** Its place in its key's log here, and in its key's line for its collection: what forks and cutoffs reach */
+  readonly at?: number;
+  readonly line?: number;
   /**
    * What this change leaves standing of what it takes away: for each key of
    * the people it takes power from, and each collection, the end of the
@@ -407,9 +410,6 @@ export interface AccessHistory {
   extend(event: AccessEvent): AccessHistory | null;
 }
 
-/** A role's standing as rank; below everyone when there is none */
-const rankOf = (role: Role | null | undefined) => (role ? role.rank : -Infinity);
-
 interface MutableState {
   roles: Map<string, Role>;
   members: Map<string, string>;
@@ -436,17 +436,6 @@ function startState(genesis: AccessGenesis): MutableState {
   };
 }
 
-function cloneState(state: MutableState): MutableState {
-  return {
-    ...state,
-    roles: new Map(state.roles),
-    members: new Map(state.members),
-    invites: new Map(state.invites),
-    definitions: new Map(state.definitions),
-    keys: [...state.keys],
-  };
-}
-
 /** Everyone holding a role that exists — who can read, as far as the history is concerned */
 export function readers(state: AccessState): Set<string> {
   return new Set([...state.members].filter(([, role]) => state.roles.has(role)).map(([did]) => did));
@@ -465,60 +454,6 @@ export function holds(state: AccessState, did: string, permission: string): bool
 /** The role an account holds in a state, or null */
 export function standing(state: AccessState, did: string): Role | null {
   return roleOf(state, did);
-}
-
-/** Whether a change takes something away — those go first among changes that did not see each other */
-function takesAway(event: AccessEvent, state: AccessState): boolean {
-  switch (event.kind) {
-    case 'revoke':
-    case 'fork':
-      return true;
-    case 'invite':
-      return !event.open;
-    case 'member': {
-      if (event.role === null) return true;
-      const before = roleOf(state, event.did);
-      const after = state.roles.get(event.role) ?? null;
-      return !!before && rankOf(after) < before.rank;
-    }
-    case 'role': {
-      const before = state.roles.get(event.name);
-      if (!before) return false;
-      if (event.role === null) return true;
-      return (
-        event.role.rank < before.rank || before.permissions.some((p) => !event.role!.permissions.includes(p))
-      );
-    }
-    case 'definition':
-    case 'key':
-    case 'relays':
-    case 'keepers':
-      return false;
-  }
-}
-
-/**
- * Whether a change could take something away, judged from the change alone —
- * for changes not yet placed, whose effect depends on a state not reached yet.
- * Changing someone else's role, or any role, might lower it.
- */
-function mayTakeAway(event: AccessEvent): boolean {
-  switch (event.kind) {
-    case 'revoke':
-    case 'fork':
-      return true;
-    case 'invite':
-      return !event.open;
-    case 'member':
-      return event.role === null || (event.root !== event.did && event.viaInvite === undefined);
-    case 'role':
-      return true;
-    case 'definition':
-    case 'key':
-    case 'relays':
-    case 'keepers':
-      return false;
-  }
 }
 
 /**
@@ -620,31 +555,6 @@ function affected(event: AccessEvent, state: AccessState): ReadonlyArray<string>
   return [];
 }
 
-function apply(event: AccessEvent, state: MutableState): void {
-  const lost = losesReader(event, state);
-  change(event, state);
-  if (event.kind === 'key') state.keyDue = false;
-  else if (state.keys.length > 0 && lost) state.keyDue = true;
-}
-
-/**
- * Whether a change, about to be made, leaves someone who could read unable
- * to: the same as comparing `readers` before and after, without building
- * them. Only a member change, for that member, or a removed role, for whoever
- * holds it, can.
- */
-function losesReader(event: AccessEvent, state: AccessState): boolean {
-  if (event.kind === 'member') {
-    const was = state.members.get(event.did);
-    if (was === undefined || !state.roles.has(was)) return false;
-    return event.role === null || !state.roles.has(event.role);
-  }
-  if (event.kind === 'role' && event.role === null && state.roles.has(event.name)) {
-    for (const role of state.members.values()) if (role === event.name) return true;
-  }
-  return false;
-}
-
 function change(event: AccessEvent, state: MutableState): void {
   switch (event.kind) {
     case 'role':
@@ -683,245 +593,252 @@ function change(event: AccessEvent, state: MutableState): void {
   }
 }
 
+// ─── The convergent replay (spec/drafts/convergent-access.md) ──────────
+//
+// No order decides anything. A change is allowed when its author had the
+// power in the state its own view gives (the changes it saw that were
+// allowed, merged). A change that lowers someone, judged in its own view, is
+// a reduction; it strikes their changes it had not seen, past its cutoff.
+// Reductions that strike each other all stand. The state is a merge of the
+// valid changes: on each record, the latest wins, and of latest changes that
+// didn't see each other, the one that gives least.
+
+/** The kind's collection: where a change's place in its key's line is counted */
+const KIND_COLLECTION: Record<AccessEvent['kind'], string> = {
+  role: ROLE_COLLECTION,
+  member: MEMBER_COLLECTION,
+  invite: INVITE_COLLECTION,
+  revoke: REVOKE_COLLECTION,
+  definition: DEFINITION_COLLECTION,
+  key: KEY_COLLECTION,
+  relays: RELAYS_COLLECTION,
+  keepers: KEEPERS_COLLECTION,
+  fork: FORK_COLLECTION,
+};
+
 /**
- * The changes one change saw, directly or not, by the place each was given
- * in the replay: every one placed before `prefix`, and those in `extra`.
- * Changes are placed after everything they saw, so in a history without
- * much concurrency `extra` stays empty and this is one number, where a set
- * of ids would grow with the history.
+ * The changes one change saw, directly or not: every change placed before
+ * `prefix`, and those in `extra`, by their place in the replay. Changes are
+ * placed after everything they saw, so without much concurrency `extra`
+ * stays empty and this is one number, where a set of ids would grow with the
+ * history.
  */
-interface Ancestry {
-  readonly prefix: number;
-  readonly extra: ReadonlySet<number>;
+interface Seen extends Iterable<string> {
+  has(id: string): boolean;
+  readonly size: number;
 }
 
-const NONE: ReadonlySet<number> = new Set();
-
-/** How the replay orders changes ready at once: lowest first */
-type PriorityKey = readonly [number, number, number, string];
-
-const comesFirst = (a: PriorityKey, b: PriorityKey) =>
-  a[0] !== b[0] ? a[0] < b[0] : a[1] !== b[1] ? a[1] < b[1] : a[2] !== b[2] ? a[2] < b[2] : a[3] < b[3];
-
-/**
- * A point in the replay where more than one change was ready, and a change
- * that saw them all could still make it choose differently.
- *
- * Such a change leads on from every one of them, so if it may take
- * something away it lowers each one's first key to at most `e`, minus its
- * author's rank then. With `e` above the chosen change's first key the
- * choice stands. With `e` at or below it, every first key becomes `e`, and
- * the rest of the keys decide alone, the same way whatever `e` is. So a
- * choice is kept only when the rest of the keys would choose differently,
- * and `bound` is the chosen change's first key: an author whose `-rank` is
- * at most that, then, could reorder what is placed.
- */
-interface Choice {
-  /** How many changes had been applied: the state the choice was made in */
-  readonly applied: number;
-  readonly bound: number;
+function seenOf(
+  prefix: number,
+  extra: ReadonlySet<number>,
+  order: ReadonlyArray<string>,
+  index: ReadonlyMap<string, number>,
+): Seen & { readonly prefix: number; readonly extra: ReadonlySet<number> } {
+  return {
+    prefix,
+    extra,
+    size: prefix + extra.size,
+    has(id: string) {
+      const i = index.get(id);
+      return i !== undefined && (i < prefix || extra.has(i));
+    },
+    *[Symbol.iterator]() {
+      for (let i = 0; i < prefix; i++) yield order[i]!;
+      for (const i of extra) yield order[i]!;
+    },
+  };
 }
 
-/** Everything a replay knows. Never changed once a history is handed out: `extend` copies it. */
+/** Ordering by power: negative when `a` gives less than `b` */
+function lessPower(a: Role | null, b: Role | null): number {
+  if (!a || !b) return (a ? 1 : 0) - (b ? 1 : 0);
+  return a.rank - b.rank || a.permissions.length - b.permissions.length;
+}
+
 interface Replay {
   readonly genesis: AccessGenesis;
-  readonly byId: Map<string, AccessEvent>;
-  readonly waiting: Set<string>;
-  /** What the waiting changes saw: the arrivals that could let one be placed */
-  readonly waitingFor: Set<string>;
-  /** Every change placed, applied or dropped, by its place in the replay */
-  readonly placed: Map<string, number>;
-  readonly ancestry: Map<string, Ancestry>;
-  readonly heads: Set<string>;
-  /** The applied changes no applied change saw: what a writer names */
-  readonly appliedHeads: Set<string>;
-  readonly state: MutableState;
-  readonly statuses: Map<string, EventStatus>;
-  readonly order: string[];
-  readonly appliedByKey: Map<string, ReadonlyArray<string>>;
-  /** The changes to each account's standing, by account */
-  readonly reductions: Map<string, ReadonlyArray<string>>;
-  /** Every applied revoke of a key, by the key */
-  readonly revokes: Map<string, ReadonlyArray<{ readonly event: string; readonly root: string }>>;
-  /** Writers whose log forked: the lowest place proven, and the change that proved it */
-  readonly forks: Map<string, { readonly event: string; readonly from: number }>;
-  readonly cutoffOf: Map<string, Cutoff>;
-  /** Each account's role name as changes were applied, and each role's: to know a rank at a past choice */
-  readonly memberLog: Map<string, ReadonlyArray<{ readonly applied: number; readonly role: string | null }>>;
-  readonly roleLog: Map<string, ReadonlyArray<{ readonly applied: number; readonly role: Role | null }>>;
-  choices: ReadonlyArray<Choice>;
-  readonly named: Set<string>;
-  readonly invites: Set<string>;
-  /** States at cuts. Shared between a history and the ones extended from it: a cut's state never changes. */
-  readonly stateAtCache: Map<string, AccessState>;
+  readonly byId: ReadonlyMap<string, AccessEvent>;
+  readonly waiting: ReadonlySet<string>;
+  /** Placeable changes, ancestors first; ties by id. Only gives `status` an index. */
+  readonly order: ReadonlyArray<string>;
+  /** Every change each placeable change saw, directly or not */
+  readonly saw: ReadonlyMap<string, Seen>;
+  /** Allowed in their own view, with the reason when not */
+  readonly refused: ReadonlyMap<string, string>;
+  /** Valid: allowed, and not struck */
+  readonly valid: ReadonlySet<string>;
+  readonly struck: ReadonlyMap<string, string>;
+  /** Valid reductions, by the account they lowered */
+  readonly reductions: ReadonlyMap<string, ReadonlyArray<string>>;
+  readonly revokes: ReadonlyMap<string, ReadonlyArray<{ readonly event: string; readonly root: string }>>;
+  readonly forks: ReadonlyMap<string, { readonly event: string; readonly from: number }>;
+  readonly state: AccessState;
+  readonly named: ReadonlySet<string>;
+  readonly invites: ReadonlySet<string>;
+  readonly views: Map<string, AccessState>;
+  readonly allowedIds: ReadonlySet<string>;
+  /** Accounts each change took reading from, in its own view */
+  readonly lostReaders: ReadonlyMap<string, ReadonlyArray<string>>;
+  /** What each allowed member or invite change gives, by the roles its own view had */
+  readonly power: ReadonlyMap<string, Role | null>;
+  /** The merge of every allowed change: the view of a change that saw them all */
+  readonly allowedState: AccessState;
+  readonly index: ReadonlyMap<string, number>;
+  readonly ancestry: ReadonlyMap<string, Ancestry>;
 }
 
-function noteEvent(r: Replay, event: AccessEvent): void {
-  r.byId.set(event.id, event);
-  if (event.kind === 'member' && event.role !== null) r.named.add(event.did);
-  if (event.kind === 'invite') r.invites.add(event.inviteKey);
-}
+type Ancestry = ReturnType<typeof seenOf>;
 
-/** The changes these ids name, and every change they saw. Every id must be placed. */
-function cutOf(r: Replay, ids: ReadonlyArray<string>): Ancestry {
-  let prefix = 0;
-  for (const id of ids) if (id !== r.genesis.id) prefix = Math.max(prefix, r.ancestry.get(id)!.prefix);
-  let extra: Set<number> | null = null;
-  for (const id of ids) {
-    if (id === r.genesis.id) continue;
-    for (const n of [...r.ancestry.get(id)!.extra, r.placed.get(id)!]) {
-      if (n >= prefix) (extra ??= new Set()).add(n);
+/** The state a set of changes gives, merged: no order, only what saw what, and least power between rivals */
+function merge(
+  genesis: AccessGenesis,
+  events: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+  lostReaders: ReadonlyMap<string, ReadonlyArray<string>>,
+  power: ReadonlyMap<string, Role | null>,
+): AccessState {
+  const state = startState(genesis);
+  const byKey = new Map<string, AccessEvent[]>();
+  for (const event of events) byKey.set(event.key, [...(byKey.get(event.key) ?? []), event]);
+  /** The latest on a key: those no other on it saw */
+  const latest = (group: ReadonlyArray<AccessEvent>) =>
+    group.filter((event) => !group.some((other) => other !== event && saw.get(other.id)?.has(event.id)));
+  const byId = (a: AccessEvent, b: AccessEvent) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+  // Roles first: members' rivals are compared by the roles' rank.
+  for (const group of byKey.values()) {
+    const tops = latest(group).filter((event) => event.kind === 'role');
+    if (tops.length === 0) continue;
+    const role = (event: AccessEvent) => (event.kind === 'role' ? event.role : null);
+    const [win] = [...tops].sort((a, b) => lessPower(role(a), role(b)) || byId(a, b));
+    change(win!, state);
+  }
+  // What a change gives, by the roles as its own view had them: a later edit to a role can't reorder rivals.
+  const given = (event: AccessEvent) => power.get(event.id) ?? null;
+  let currentKey: AccessEvent | null = null;
+  const keyEvents: AccessEvent[] = [];
+  for (const group of byKey.values()) {
+    const tops = latest(group);
+    const kind = tops[0]?.kind;
+    if (!kind || kind === 'role') continue;
+    if (kind === 'key') {
+      keyEvents.push(...group);
+      currentKey = [...tops].sort(byId)[0]!;
+      continue;
     }
+    if (kind === 'revoke' || kind === 'fork') continue;
+    let win: AccessEvent;
+    if (kind === 'member')
+      win = [...tops].sort(
+        (a, b) =>
+          (a.kind === 'member' && b.kind === 'member' ? lessPower(given(a), given(b)) : 0) || byId(a, b),
+      )[0]!;
+    else if (kind === 'invite')
+      win = [...tops].sort(
+        (a, b) =>
+          (a.kind === 'invite' && b.kind === 'invite'
+            ? Number(a.open) - Number(b.open) || lessPower(given(a), given(b))
+            : 0) || byId(a, b),
+      )[0]!;
+    else win = [...tops].sort(byId)[0]!;
+    if (win.kind === 'definition' && !win.deleted) {
+      state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
+    } else change(win, state);
   }
-  if (!extra) return { prefix, extra: NONE };
-  while (extra.delete(prefix)) prefix++;
-  return { prefix, extra: extra.size > 0 ? extra : NONE };
-}
-
-function inCut(r: Replay, cut: Ancestry, id: string): boolean {
-  const n = r.placed.get(id);
-  return n !== undefined && (n < cut.prefix || cut.extra.has(n));
-}
-
-/** Whether a cut holds every change applied so far: then its state is where the replay stands, the usual case */
-function holdsAllApplied(r: Replay, cut: Ancestry): boolean {
-  for (let i = r.order.length - 1; i >= 0; i--) {
-    const n = r.placed.get(r.order[i]!)!;
-    if (n < cut.prefix) return true;
-    if (!cut.extra.has(n)) return false;
+  if (keyEvents.length > 0) {
+    // Every key stands; the current one goes last, the rest by id: only which is current matters.
+    const sorted = [...keyEvents].sort(byId);
+    const current = currentKey!;
+    for (const event of [...sorted.filter((e) => e !== current), current])
+      if (event.kind === 'key')
+        state.keys.push({ keyId: event.keyId, readKey: event.readKey, event: event.id });
   }
-  return true;
-}
-
-/** The state as of what `seen` names. Every id must be placed. */
-function stateAt(r: Replay, seen: ReadonlyArray<string>): AccessState {
-  const cacheKey = [...new Set(seen)].sort().join(',');
-  const cached = r.stateAtCache.get(cacheKey);
-  if (cached) return cached;
-  const cut = cutOf(r, seen);
-  let folded: MutableState;
-  if (holdsAllApplied(r, cut)) folded = cloneState(r.state);
-  else {
-    folded = startState(r.genesis);
-    for (const id of r.order) if (inCut(r, cut, id)) apply(r.byId.get(id)!, folded);
+  // Due: someone lost reading in a change the current key had not seen. They may hold it.
+  if (state.keys.length > 0) {
+    const seenByKey = currentKey ? (saw.get(currentKey.id) ?? new Set<string>()) : new Set<string>();
+    state.keyDue = events.some(
+      (event) =>
+        (lostReaders.get(event.id)?.length ?? 0) > 0 && !seenByKey.has(event.id) && event !== currentKey,
+    );
   }
-  r.stateAtCache.set(cacheKey, folded);
-  return folded;
+  return state;
 }
 
-/** The role an account held when `applied` changes had been applied */
-function roleAt(r: Replay, did: string, applied: number): Role | null {
-  const lastBefore = <T extends { readonly applied: number }>(log: ReadonlyArray<T> | undefined) => {
-    if (!log) return undefined;
-    for (let i = log.length - 1; i >= 0; i--) if (log[i]!.applied < applied) return log[i];
-    return undefined;
+/** A state with one change applied on top: the change saw all of it, so it is the latest on its record */
+function applied(state: AccessState, event: AccessEvent, genesisId: string): MutableState {
+  const next: MutableState = {
+    ...state,
+    roles: new Map(state.roles),
+    members: new Map(state.members),
+    invites: new Map(state.invites),
+    definitions: new Map(state.definitions),
+    keys: [...state.keys],
   };
-  const name = lastBefore(r.memberLog.get(did))?.role;
-  return name == null ? null : (lastBefore(r.roleLog.get(name))?.role ?? null);
+  change(event, next);
+  if (event.kind === 'key') {
+    next.keyDue = false;
+    // The keys before it in the order a merge gives: the space's own first, the rest by id.
+    const earlier = next.keys.slice(0, -1);
+    const own = earlier.filter((key) => key.event === genesisId);
+    const rest = earlier
+      .filter((key) => key.event !== genesisId)
+      .sort((a, b) => (a.event < b.event ? -1 : a.event > b.event ? 1 : 0));
+    next.keys = [...own, ...rest, next.keys.at(-1)!];
+  }
+  return next;
 }
 
-const appended = <K, V>(map: Map<K, ReadonlyArray<V>>, key: K, value: V) =>
-  map.set(key, [...(map.get(key) ?? []), value]);
+/** The role a member or invite change gives, by the roles as a state has them */
+function givenIn(state: AccessState, event: AccessEvent): Role | null {
+  if (event.kind === 'member' || event.kind === 'invite')
+    return event.role === null ? null : (state.roles.get(event.role) ?? null);
+  return null;
+}
 
-/** Places one change, whose turn it is: everything it saw is placed already */
-function place(r: Replay, event: AccessEvent): void {
-  r.ancestry.set(event.id, cutOf(r, event.seen));
-  r.placed.set(event.id, r.placed.size);
-  for (const parent of event.seen) r.heads.delete(parent);
-  r.heads.add(event.id);
-
-  // Of two changes to one thing that did not see each other, the first in the replay stands.
-  const saw = r.ancestry.get(event.id)!;
-  // Revokes only add up — every one applies — so they are never rivals.
-  const rival =
-    event.kind === 'revoke'
-      ? undefined
-      : (r.appliedByKey.get(event.key) ?? []).find((other) => !inCut(r, saw, other));
-  const reason =
-    (rival ? 'A change to the same thing that it had not seen came first' : null) ??
-    // Its author had to have the power as of what they saw…
-    // (read where the replay stands, without a copy, when that is what it saw)
-    refusal(event, holdsAllApplied(r, saw) ? r.state : stateAt(r, event.seen)) ??
-    // …and still have it at its turn.
-    refusal(event, r.state);
-  if (reason) {
-    r.statuses.set(event.id, { status: 'dropped', reason });
-    return;
-  }
-
-  const index = r.order.length;
-  const who = affected(event, r.state);
-  const before = who.map((did) => roleOf(r.state, did));
-  apply(event, r.state);
-  // Only a change that lowered someone's standing is a reduction: a promotion takes nothing away.
-  who.forEach((did, i) => {
-    if (lowered(before[i]!, roleOf(r.state, did))) appended(r.reductions, did, event.id);
-  });
-  if (event.kind === 'member') appended(r.memberLog, event.did, { applied: index, role: event.role });
-  if (event.kind === 'role') appended(r.roleLog, event.name, { applied: index, role: event.role });
-  // Every revoke applies, each with what its own author had seen: none can shield what another takes.
-  if (event.kind === 'revoke') appended(r.revokes, event.target, { event: event.id, root: event.root });
-  if (event.kind === 'fork' && event.from < (r.forks.get(event.writer)?.from ?? Infinity))
-    r.forks.set(event.writer, { event: event.id, from: event.from });
-  r.cutoffOf.set(event.id, event.cutoff);
-  r.statuses.set(event.id, { status: 'applied', index });
-  r.order.push(event.id);
-  // A revoke or a fork proof changes no one's standing: it applies whether or not a writer saw it,
-  // so it is never a head, and leaves the heads it saw as they were.
-  if (event.kind !== 'revoke' && event.kind !== 'fork') {
-    for (const head of r.appliedHeads) if (inCut(r, saw, head)) r.appliedHeads.delete(head);
-    r.appliedHeads.add(event.id);
-  }
-  appended(r.appliedByKey, event.key, event.id);
+/**
+ * Whoever defined a collection this time: of the definitions the winning one
+ * saw, and itself, those that saw every removal it saw; of those, one that
+ * saw no other, the lowest id if several.
+ */
+function definerOf(
+  win: AccessEvent,
+  group: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+): string {
+  const past = group.filter((event) => event === win || saw.get(win.id)?.has(event.id));
+  const removed = (event: AccessEvent) => event.kind === 'definition' && event.deleted;
+  const removals = past.filter(removed);
+  const life = past.filter(
+    (event) => !removed(event) && removals.every((removal) => saw.get(event.id)?.has(removal.id)),
+  );
+  const first = life
+    .filter((event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
+  return (first ?? win).root;
 }
 
 /** Replays a space's access history. */
 export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<AccessEvent>): AccessHistory {
-  const r: Replay = {
-    genesis,
-    byId: new Map(),
-    waiting: new Set(),
-    waitingFor: new Set(),
-    placed: new Map(),
-    ancestry: new Map(),
-    heads: new Set(),
-    appliedHeads: new Set(),
-    state: startState(genesis),
-    statuses: new Map(),
-    order: [],
-    appliedByKey: new Map(),
-    reductions: new Map(),
-    revokes: new Map(),
-    forks: new Map(),
-    cutoffOf: new Map(),
-    memberLog: new Map([[genesis.creator, [{ applied: -1, role: genesis.creatorRole }]]]),
-    roleLog: new Map(genesis.roles.map((role) => [role.name, [{ applied: -1, role }]])),
-    choices: [],
-    named: new Set([genesis.creator]),
-    invites: new Set(),
-    stateAtCache: new Map(),
-  };
-  for (const event of events) if (!r.byId.has(event.id)) noteEvent(r, event);
-  const { byId, waiting } = r;
+  const byId = new Map<string, AccessEvent>();
+  for (const event of events) if (!byId.has(event.id)) byId.set(event.id, event);
 
-  // A change waits until everything it saw is here — and so does anything that saw it.
-  const isKnown = (id: string) => id === genesis.id || byId.has(id);
+  // A change waits until everything it saw is here, and so does anything that saw it.
+  const waiting = new Set<string>();
+  const known = (id: string) => id === genesis.id || byId.has(id);
   let changed = true;
   while (changed) {
     changed = false;
     for (const event of byId.values()) {
       if (waiting.has(event.id)) continue;
-      if (event.seen.some((parent) => parent === event.id || !isKnown(parent) || waiting.has(parent))) {
+      if (event.seen.some((parent) => parent === event.id || !known(parent) || waiting.has(parent))) {
         waiting.add(event.id);
         changed = true;
       }
     }
   }
-  for (const id of waiting) for (const parent of byId.get(id)!.seen) r.waitingFor.add(parent);
-  // A cycle can only be forged — ids are hashes of what they saw — but must not hang the replay.
-  const placeable = [...byId.values()].filter((event) => !waiting.has(event.id));
 
-  // Kahn's order, choosing among the ready changes by the tie-break.
+  // Ancestors first (Kahn's order, ties by id): a cycle can only be forged, and must not hang it.
+  const placeable = [...byId.values()].filter((event) => !waiting.has(event.id));
   const children = new Map<string, string[]>();
   const pending = new Map<string, number>();
   for (const event of placeable) {
@@ -929,198 +846,416 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     pending.set(event.id, parents.length);
     for (const parent of parents) children.set(parent, [...(children.get(parent) ?? []), event.id]);
   }
-  const ready = new Set(placeable.filter((event) => pending.get(event.id) === 0).map((event) => event.id));
-
-  // What a change leads to: itself and everything that saw it, directly or not.
-  const descendantCache = new Map<string, ReadonlyArray<AccessEvent>>();
-  const leadsTo = (id: string): ReadonlyArray<AccessEvent> => {
-    const cached = descendantCache.get(id);
-    if (cached) return cached;
-    const found = new Set<string>([id]);
-    const stack = [id];
-    while (stack.length > 0) {
-      for (const child of children.get(stack.pop()!) ?? []) {
-        if (!found.has(child)) {
-          found.add(child);
-          stack.push(child);
-        }
-      }
-    }
-    const result = [...found].map((other) => byId.get(other)!);
-    descendantCache.set(id, result);
-    return result;
-  };
-
-  /**
-   * The order among changes ready to be placed. What matters is not only the
-   * change itself but the strongest taking-away it leads to: a removal that
-   * also saw something not yet placed must still come before a change it had
-   * not seen — so everything on its way gets its priority. Then: taking away
-   * before giving, the higher-ranked author, the lower id.
-   */
-  const priority = (event: AccessEvent): PriorityKey => {
-    const { state } = r;
-    let strongest = Infinity;
-    for (const step of leadsTo(event.id)) {
-      if (step === event ? takesAway(step, state) || mayTakeAway(step) : mayTakeAway(step)) {
-        strongest = Math.min(strongest, -rankOf(roleOf(state, step.root)));
-      }
-    }
-    return [strongest, takesAway(event, state) ? 0 : 1, -rankOf(roleOf(state, event.root)), event.id];
-  };
-
-  const choices: Choice[] = [];
-  while (ready.size > 0) {
-    let best: AccessEvent | null = null;
-    if (ready.size === 1) best = byId.get(ready.values().next().value!)!;
-    else {
-      let bestKey: PriorityKey | null = null;
-      const keys: PriorityKey[] = [];
-      for (const id of ready) {
-        const event = byId.get(id)!;
-        const key = priority(event);
-        keys.push(key);
-        if (!bestKey || comesFirst(key, bestKey)) {
-          best = event;
-          bestKey = key;
-        }
-      }
-      // The same keys with every first one equal: what decides if a later change lowers them all.
-      const rest = keys.reduce((a, b) => (comesFirst([0, b[1], b[2], b[3]], [0, a[1], a[2], a[3]]) ? b : a));
-      if (rest !== bestKey) choices.push({ applied: r.order.length, bound: bestKey![0] });
-    }
-    const event = best!;
-    ready.delete(event.id);
-    for (const child of children.get(event.id) ?? []) {
+  const ready = placeable.filter((event) => pending.get(event.id) === 0).map((event) => event.id);
+  const order: string[] = [];
+  while (ready.length > 0) {
+    ready.sort();
+    const id = ready.shift()!;
+    order.push(id);
+    for (const child of children.get(id) ?? []) {
       const left = pending.get(child)! - 1;
       pending.set(child, left);
-      if (left === 0) ready.add(child);
+      if (left === 0) ready.push(child);
     }
-    place(r, event);
   }
-  r.choices = choices;
-  for (const id of waiting) r.statuses.set(id, { status: 'waiting' });
-  return historyOf(r);
+  for (const event of placeable) if (!order.includes(event.id)) waiting.add(event.id);
+
+  const index = new Map(order.map((id, i) => [id, i]));
+  const saw = new Map<string, ReturnType<typeof seenOf>>();
+  for (const id of order) {
+    const parents = [...new Set(byId.get(id)!.seen.filter((parent) => parent !== genesis.id))];
+    let prefix = 0;
+    for (const parent of parents) prefix = Math.max(prefix, saw.get(parent)!.prefix);
+    const extra = new Set<number>();
+    for (const parent of parents)
+      for (const n of [...saw.get(parent)!.extra, index.get(parent)!]) if (n >= prefix) extra.add(n);
+    while (extra.delete(prefix)) prefix++;
+    saw.set(id, seenOf(prefix, extra, order, index));
+  }
+
+  // Allowed: by the state its own view gives, from the allowed changes it saw.
+  const lostReaders = new Map<string, string[]>();
+  const power = new Map<string, Role | null>();
+  const refused = new Map<string, string>();
+  const allowedIds = new Set<string>();
+  const lowers = new Map<string, string[]>();
+  const viewOf = (ids: Iterable<string>) =>
+    merge(
+      genesis,
+      [...ids].filter((id) => allowedIds.has(id)).map((id) => byId.get(id)!),
+      saw,
+      lostReaders,
+      power,
+    );
+  // A change naming one change saw what that one saw and that one: its view is that one's, with it
+  // applied on top, since it saw everything before it and so is the latest on its record. Only
+  // where branches meet does a view need merging whole.
+  const viewAt = new Map<string, AccessState>();
+  const afterOf = new Map<string, AccessState>();
+  const ownView = (event: AccessEvent): AccessState => {
+    const parents = [...new Set(event.seen.filter((parent) => parent !== genesis.id))];
+    if (parents.length === 0) return startState(genesis);
+    if (parents.length === 1) {
+      const parent = parents[0]!;
+      return afterOf.get(parent) ?? viewAt.get(parent)!;
+    }
+    return viewOf(saw.get(event.id)!);
+  };
+  for (const id of order) {
+    const event = byId.get(id)!;
+    const view = ownView(event);
+    viewAt.set(id, view);
+    const reason = refusal(event, view);
+    if (reason) {
+      refused.set(id, reason);
+      continue;
+    }
+    allowedIds.add(id);
+    power.set(id, givenIn(view, event));
+    // What it takes, judged in its own view: whom it lowers, and who stops reading.
+    const after = applied(view, event, genesis.id);
+    if (event.kind === 'definition' && !event.deleted) {
+      const group = [...saw.get(id)!]
+        .filter((other) => allowedIds.has(other) && byId.get(other)!.key === event.key)
+        .map((other) => byId.get(other)!)
+        .concat(event);
+      after.definitions.set(event.name, { event: id, definedBy: definerOf(event, group, saw) });
+    }
+    const lowered_ = affected(event, view).filter((did) => lowered(roleOf(view, did), roleOf(after, did)));
+    if (lowered_.length > 0) lowers.set(id, lowered_);
+    // Only the person a member change names, or the holders of a role, can stop reading.
+    const reads = (state: AccessState, did: string) => {
+      const role = state.members.get(did);
+      return role !== undefined && state.roles.has(role);
+    };
+    const lost = affected(event, view).filter((did) => reads(view, did) && !reads(after, did));
+    if (lost.length > 0) lostReaders.set(id, lost);
+    if (lost.length > 0 && after.keys.length > 0 && event.kind !== 'key') after.keyDue = true;
+    afterOf.set(id, after);
+  }
+
+  // Strikes: a valid reduction of an account strikes its changes it had not seen and does not cover.
+  const covers = (reduction: AccessEvent, event: AccessEvent) =>
+    saw.get(reduction.id)!.has(event.id) ||
+    (event.line !== undefined &&
+      (reduction.cutoff.get(event.author)?.get(KIND_COLLECTION[event.kind]) ?? -1) >= event.line);
+  const strikes = new Map<string, string[]>();
+  for (const reductionId of order) {
+    if (!allowedIds.has(reductionId)) continue;
+    const reduction = byId.get(reductionId)!;
+    const targets = (event: AccessEvent): boolean => {
+      if (reduction.kind === 'revoke')
+        return event.root === reduction.root && event.author === reduction.target;
+      if (reduction.kind === 'fork')
+        return event.author === reduction.writer && (event.at ?? 0) >= reduction.from;
+      // Closing an invite strikes joins through it that the close had not seen.
+      if (reduction.kind === 'invite')
+        return !reduction.open && event.kind === 'member' && event.viaInvite === reduction.inviteKey;
+      return (lowers.get(reductionId) ?? []).includes(event.root);
+    };
+    for (const id of order) {
+      if (id === reductionId || !allowedIds.has(id)) continue;
+      const event = byId.get(id)!;
+      if (!targets(event) || saw.get(id)!.has(reductionId) || covers(reduction, event)) continue;
+      strikes.set(reductionId, [...(strikes.get(reductionId) ?? []), id]);
+    }
+  }
+
+  // Components of the strike graph (Tarjan), visited sources first: strikes within one don't count.
+  const component = new Map<string, number>();
+  const components: string[][] = [];
+  {
+    let index = 0;
+    const indices = new Map<string, number>();
+    const low = new Map<string, number>();
+    const stack: string[] = [];
+    const onStack = new Set<string>();
+    const visit = (id: string) => {
+      indices.set(id, index);
+      low.set(id, index++);
+      stack.push(id);
+      onStack.add(id);
+      for (const next of strikes.get(id) ?? []) {
+        if (!indices.has(next)) {
+          visit(next);
+          low.set(id, Math.min(low.get(id)!, low.get(next)!));
+        } else if (onStack.has(next)) low.set(id, Math.min(low.get(id)!, indices.get(next)!));
+      }
+      if (low.get(id) === indices.get(id)) {
+        const members: string[] = [];
+        let top: string;
+        do {
+          top = stack.pop()!;
+          onStack.delete(top);
+          component.set(top, components.length);
+          members.push(top);
+        } while (top !== id);
+        components.push(members);
+      }
+    };
+    for (const id of order) if (allowedIds.has(id) && !indices.has(id)) visit(id);
+  }
+  const struckBy = new Map<string, string[]>();
+  for (const [from, targets] of strikes)
+    for (const to of targets)
+      if (component.get(from) !== component.get(to)) struckBy.set(to, [...(struckBy.get(to) ?? []), from]);
+  const valid = new Set<string>();
+  const struck = new Map<string, string>();
+  // Tarjan emits components sinks first: walking it backwards visits strikers before what they strike.
+  for (let c = components.length - 1; c >= 0; c--)
+    for (const id of components[c]!) {
+      const by = (struckBy.get(id) ?? []).find((from) => valid.has(from));
+      if (by) struck.set(id, `Its author's power was taken away by a change it had not seen (${by})`);
+      else valid.add(id);
+    }
+
+  const reductions = new Map<string, string[]>();
+  const revokes = new Map<string, Array<{ event: string; root: string }>>();
+  const forks = new Map<string, { event: string; from: number }>();
+  for (const id of order) {
+    if (!valid.has(id)) continue;
+    const event = byId.get(id)!;
+    for (const did of lowers.get(id) ?? []) reductions.set(did, [...(reductions.get(did) ?? []), id]);
+    if (event.kind === 'revoke')
+      revokes.set(event.target, [...(revokes.get(event.target) ?? []), { event: id, root: event.root }]);
+    if (event.kind === 'fork' && event.from < (forks.get(event.writer)?.from ?? Infinity))
+      forks.set(event.writer, { event: id, from: event.from });
+  }
+  const named = new Set<string>([genesis.creator]);
+  const invites = new Set<string>();
+  for (const event of byId.values()) {
+    if (event.kind === 'member' && event.role !== null) named.add(event.did);
+    if (event.kind === 'invite') invites.add(event.inviteKey);
+  }
+  const state = merge(
+    genesis,
+    order.filter((id) => valid.has(id)).map((id) => byId.get(id)!),
+    saw,
+    lostReaders,
+    power,
+  );
+  const allowedState = merge(
+    genesis,
+    order.filter((id) => allowedIds.has(id)).map((id) => byId.get(id)!),
+    saw,
+    lostReaders,
+    power,
+  );
+  return historyOf({
+    genesis,
+    byId,
+    waiting,
+    order,
+    saw,
+    ancestry: saw,
+    index,
+    allowedState,
+    refused,
+    valid,
+    struck,
+    reductions,
+    revokes,
+    forks,
+    state,
+    named,
+    invites,
+    views: new Map(),
+    allowedIds,
+    lostReaders,
+    power,
+  });
 }
 
 /**
- * The replay with one more change, or null when only replaying everything
- * again can say where it goes. That is so when it did not see every change
- * placed, when a waiting change saw it, or when it takes something away and,
- * counted among what earlier changes lead to, could have changed the order
- * chosen among changes ready at once. Otherwise it goes last, after the same
- * choices, exactly as a replay would place it.
+ * The replay with one more change that saw every change placed, or null for
+ * any other: then only replaying whole can say. Such a change can't be struck
+ * (it saw every reduction) and strikes nothing (it saw everything), so it is
+ * valid exactly when it is allowed, its view is every allowed change, and it
+ * is the latest on its record.
  */
 function extended(r: Replay, event: AccessEvent): Replay | null {
-  if (r.byId.has(event.id)) return r;
-  if (r.waitingFor.has(event.id)) return null;
   const { genesis } = r;
-  const waits = event.seen.some(
-    (parent) =>
-      parent === event.id || (parent !== genesis.id && !r.byId.has(parent)) || r.waiting.has(parent),
-  );
-  const parents = new Set(event.seen.filter((parent) => parent !== genesis.id));
-  if (!waits && (parents.size !== r.heads.size || [...parents].some((parent) => !r.heads.has(parent))))
-    return null;
+  const parents = [...new Set(event.seen.filter((parent) => parent !== genesis.id))];
+  if (parents.some((parent) => !r.ancestry.has(parent))) return null;
+  let prefix = 0;
+  for (const parent of parents) prefix = Math.max(prefix, r.ancestry.get(parent)!.prefix);
+  const extra = new Set<number>();
+  for (const parent of parents)
+    for (const n of [...r.ancestry.get(parent)!.extra, r.index.get(parent)!]) if (n >= prefix) extra.add(n);
+  while (extra.delete(prefix)) prefix++;
+  if (prefix !== r.order.length || extra.size > 0 || r.waiting.size > 0) return null;
 
-  // Lowering every first key above a choice's bound leaves it as it was, so the choices kept stay right.
-  if (!waits && mayTakeAway(event)) {
-    for (const choice of r.choices)
-      if (-rankOf(roleAt(r, event.root, choice.applied)) <= choice.bound) return null;
-  }
-
-  const copy: Replay = {
+  const order = [...r.order, event.id];
+  const index = new Map(r.index).set(event.id, r.order.length);
+  const mine = seenOf(prefix, extra, order, index);
+  const ancestry = new Map(r.ancestry).set(event.id, mine);
+  const byId = new Map(r.byId).set(event.id, event);
+  const named = new Set(r.named);
+  if (event.kind === 'member' && event.role !== null) named.add(event.did);
+  const invites = new Set(r.invites);
+  if (event.kind === 'invite') invites.add(event.inviteKey);
+  const base = {
     genesis,
-    byId: new Map(r.byId),
-    waiting: new Set(r.waiting),
-    waitingFor: new Set(r.waitingFor),
-    placed: new Map(r.placed),
-    ancestry: new Map(r.ancestry),
-    heads: new Set(r.heads),
-    appliedHeads: new Set(r.appliedHeads),
-    state: cloneState(r.state),
-    statuses: new Map(r.statuses),
-    order: [...r.order],
-    appliedByKey: new Map(r.appliedByKey),
-    reductions: new Map(r.reductions),
-    revokes: new Map(r.revokes),
-    forks: new Map(r.forks),
-    cutoffOf: new Map(r.cutoffOf),
-    memberLog: new Map(r.memberLog),
-    roleLog: new Map(r.roleLog),
-    choices: r.choices,
-    named: new Set(r.named),
-    invites: new Set(r.invites),
-    stateAtCache: r.stateAtCache,
+    byId,
+    waiting: r.waiting,
+    order,
+    saw: ancestry,
+    ancestry,
+    index,
+    named,
+    invites,
+    views: new Map<string, AccessState>(),
   };
-  noteEvent(copy, event);
-  if (waits) {
-    copy.waiting.add(event.id);
-    for (const parent of event.seen) copy.waitingFor.add(parent);
-    copy.statuses.set(event.id, { status: 'waiting' });
-  } else place(copy, event);
-  return copy;
+
+  const view = r.allowedState;
+  const reason = refusal(event, view);
+  if (reason) {
+    return {
+      ...r,
+      ...base,
+      refused: new Map(r.refused).set(event.id, reason),
+    };
+  }
+  const after = applied(view, event, genesis.id);
+  const lowered_ = affected(event, view).filter((did) => lowered(roleOf(view, did), roleOf(after, did)));
+  const reads = (state: AccessState, did: string) => {
+    const role = state.members.get(did);
+    return role !== undefined && state.roles.has(role);
+  };
+  const lost = affected(event, view).filter((did) => reads(view, did) && !reads(after, did));
+  if (lost.length > 0 && after.keys.length > 0 && event.kind !== 'key') after.keyDue = true;
+  const state = applied(r.state, event, genesis.id);
+  if (event.kind === 'definition' && !event.deleted) {
+    // Who defined it, by the same rule a merge uses: in the allowed changes for its view, the valid ones for the state.
+    const ancestryWith = new Map(r.ancestry).set(event.id, mine);
+    const group = (ids: ReadonlySet<string>) =>
+      [...r.byId.values()].filter((other) => other.key === event.key && ids.has(other.id)).concat(event);
+    after.definitions.set(event.name, {
+      event: event.id,
+      definedBy: definerOf(event, group(r.allowedIds), ancestryWith),
+    });
+    state.definitions.set(event.name, {
+      event: event.id,
+      definedBy: definerOf(event, group(r.valid), ancestryWith),
+    });
+  }
+  if (lost.length > 0 && state.keys.length > 0 && event.kind !== 'key') state.keyDue = true;
+  const reductions = new Map(r.reductions);
+  for (const did of lowered_) reductions.set(did, [...(reductions.get(did) ?? []), event.id]);
+  const revokes = new Map(r.revokes);
+  if (event.kind === 'revoke')
+    revokes.set(event.target, [...(revokes.get(event.target) ?? []), { event: event.id, root: event.root }]);
+  const forks = new Map(r.forks);
+  if (event.kind === 'fork' && event.from < (forks.get(event.writer)?.from ?? Infinity))
+    forks.set(event.writer, { event: event.id, from: event.from });
+  return {
+    ...r,
+    ...base,
+    valid: new Set(r.valid).add(event.id),
+    allowedIds: new Set(r.allowedIds).add(event.id),
+    lostReaders: lost.length > 0 ? new Map(r.lostReaders).set(event.id, lost) : r.lostReaders,
+    power: new Map(r.power).set(event.id, givenIn(view, event)),
+    allowedState: after,
+    state,
+    reductions,
+    revokes,
+    forks,
+  };
 }
 
 function historyOf(r: Replay): AccessHistory {
   const { genesis } = r;
   const seen = (ids: ReadonlyArray<string>) =>
     ids.every((id) => id === genesis.id || (r.byId.has(id) && !r.waiting.has(id)));
+  /** Everything these ids name, and everything they saw */
+  const cutOf = (ids: ReadonlyArray<string>) => {
+    const cut = new Set<string>();
+    for (const id of ids) {
+      if (id === genesis.id) continue;
+      cut.add(id);
+      for (const above of r.saw.get(id) ?? []) cut.add(above);
+    }
+    return cut;
+  };
+  const at = (ids: ReadonlyArray<string>): AccessState => {
+    const key = [...new Set(ids)].sort().join(',');
+    const cached = r.views.get(key);
+    if (cached) return cached;
+    const cut = cutOf(ids);
+    const view = merge(
+      genesis,
+      [...cut].filter((id) => r.allowedIds.has(id)).map((id) => r.byId.get(id)!),
+      r.saw,
+      r.lostReaders,
+      r.power,
+    );
+    r.views.set(key, view);
+    return view;
+  };
+  const index = new Map(r.order.map((id, i) => [id, i]));
+  const changesState = (id: string) => !['revoke', 'fork'].includes(r.byId.get(id)!.kind);
   let heads: ReadonlyArray<string> | null = null;
-  // A write checks its change by extending, then extends again once it is stored: the same answer.
-  let last: { readonly id: string; readonly next: AccessHistory | null } | null = null;
 
   const history: AccessHistory = Object.freeze({
     current: r.state,
-    status: (id: string) => r.statuses.get(id) ?? null,
-    heads: () => (heads ??= Object.freeze([...r.appliedHeads].sort())),
+    status(id: string): EventStatus | null {
+      if (r.waiting.has(id)) return { status: 'waiting' };
+      if (r.valid.has(id)) return { status: 'applied', index: index.get(id)! };
+      const reason = r.refused.get(id) ?? r.struck.get(id);
+      return reason ? { status: 'dropped', reason } : null;
+    },
+    heads() {
+      if (heads) return heads;
+      const live = r.order.filter((id) => r.valid.has(id) && changesState(id));
+      heads = Object.freeze(
+        live.filter((id) => !live.some((other) => other !== id && r.saw.get(other)!.has(id))).sort(),
+      );
+      return heads;
+    },
     headsFor(keys: ReadonlyArray<string>, max: number) {
       const all = history.heads();
       if (all.length <= max) return all;
-      const recent = [...all].sort((a, b) => r.placed.get(b)! - r.placed.get(a)!);
+      const recent = [...all].sort((a, b) => index.get(b)! - index.get(a)!);
+      const sawOrIs = (head: string, id: string) => head === id || r.saw.get(head)!.has(id);
       const chosen: string[] = [];
       for (const key of keys) {
-        const latest = r.appliedByKey.get(key)?.at(-1);
-        if (!latest || chosen.some((head) => head === latest || inCut(r, cutOf(r, [head]), latest))) continue;
-        const head = recent.find((id) => id === latest || inCut(r, cutOf(r, [id]), latest));
+        const mine = r.order.filter((id) => r.valid.has(id) && r.byId.get(id)!.key === key);
+        const latest = mine.at(-1);
+        if (!latest || chosen.some((head) => sawOrIs(head, latest))) continue;
+        const head = recent.find((id) => sawOrIs(id, latest));
         if (head && !chosen.includes(head)) chosen.push(head);
       }
       for (const id of recent) if (chosen.length < max && !chosen.includes(id)) chosen.push(id);
       return chosen.slice(0, max).sort();
     },
     at(ids: ReadonlyArray<string>) {
-      return seen(ids) ? stateAt(r, ids) : null;
+      return seen(ids) ? at(ids) : null;
     },
     judge(record, needs, within) {
       if (!seen(record.seen) || (within && !seen(within)))
         return { ok: false, reason: 'Access changes it depends on have not arrived yet', later: true };
       // For a cited version, only what the citer had seen can take it away (02 §7.6).
-      const known = within ? cutOf(r, within) : null;
-      const counts = (event: string) => !known || inCut(r, known, event);
-      // Covered: its place in its key's line for its collection is at or below what the change's author held.
+      const known = within ? cutOf(within) : null;
+      const counts = (event: string) => !known || known.has(event);
       const covered = (event: string) =>
         record.writer !== undefined &&
         record.collection !== undefined &&
         record.line !== undefined &&
-        (r.cutoffOf.get(event)?.get(record.writer)?.get(record.collection) ?? -1) >= record.line;
+        (r.byId.get(event)!.cutoff.get(record.writer)?.get(record.collection) ?? -1) >= record.line;
       if (record.writer !== undefined) {
         for (const revoke of r.revokes.get(record.writer) ?? [])
           if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))
             return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
       }
-      // A key that forked its log: nothing it signed from the fork on can be told from a forgery.
       const fork = record.writer === undefined ? undefined : r.forks.get(record.writer);
       if (fork && (record.at ?? 0) >= fork.from && counts(fork.event))
         return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
-
-      const cutState = stateAt(r, record.seen);
-      if (!needs(roleOf(cutState, record.root), cutState)) {
+      const own = at(record.seen);
+      if (!needs(roleOf(own, record.root), own))
         return { ok: false, reason: 'Its author was not allowed to, as of what it had seen' };
-      }
-      // Changes to its author's standing it had not seen, and that don't cover it.
-      const cut = cutOf(r, record.seen);
+      const cut = cutOf(record.seen);
       const unseen = (r.reductions.get(record.root) ?? []).filter(
-        (event) => !inCut(r, cut, event) && counts(event) && !covered(event),
+        (event) => !cut.has(event) && counts(event) && !covered(event),
       );
       return { ok: true, unseen };
     },
@@ -1131,11 +1266,9 @@ function historyOf(r: Replay): AccessHistory {
     named: (did: string) => r.named.has(did),
     knownInvite: (key: string) => r.invites.has(key),
     extend(event: AccessEvent) {
-      if (last?.id !== event.id) {
-        const next = extended(r, event);
-        last = { id: event.id, next: next === r ? history : next && historyOf(next) };
-      }
-      return last.next;
+      if (r.byId.has(event.id)) return history;
+      const next = extended(r, event);
+      return next && historyOf(next);
     },
   } satisfies AccessHistory);
   return history;

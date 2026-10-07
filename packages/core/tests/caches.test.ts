@@ -122,6 +122,12 @@ describe('holding part of a space', () => {
     const second = await erin.node.records.put(space, 'app.chat', { text: 'two' });
     await until(async () => (await bob.node.records.get(space, photo.key)) !== null, 5000, 'all at Bob’s');
     const dave = await app(hub, alice, space);
+    // Alice has his join first: a promotion that crossed it would lose to it, by least power.
+    await until(
+      async () => (await alice.node.spaces.access(space)).members.some((m) => m.did === dave.node.did),
+      5000,
+      'Dave’s join at Alice’s',
+    );
     await alice.node.spaces.setMember(space, dave.node.did, 'owner');
     await until(
       async () => (await dave.node.spaces.access(space)).role?.name === 'owner',

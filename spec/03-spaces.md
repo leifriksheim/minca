@@ -283,8 +283,9 @@ _Source: `packages/core/src/space/roles.ts` (collection constants), `packages/co
 ## 4. Replaying the access history
 
 Every peer runs the same pure function over the same events and gets the same
-state. This section is normative in full: a peer that orders differently will
-disagree about who may write.
+state, whatever order they arrived in. No order decides anything: whether a
+change counts follows from what saw what, and from what the changes are.
+This section is normative in full.
 
 ### 4.1 State
 
@@ -321,100 +322,72 @@ neither `G` nor a held event, or names a waiting event. Compute this to a
 fixed point. Waiting events are not placed; their status is `waiting`. All
 others are **placeable**.
 
-`ancestors(e)` is the transitive closure of `seen` from `e`, excluding `G`.
-`children(e)` are the placeable events whose `seen` names `e`;
-`leadsTo(e)` is `e` plus all its transitive children.
+`ancestors(e)` is the transitive closure of `seen` from `e`, excluding `G`:
+what `e` **saw**. Two events neither of which saw the other are
+**concurrent**.
 
-### 4.3 Order
+### 4.3 Allowed, struck, valid
 
-Placement is Kahn's topological sort over `seen` (ignoring `G` and duplicate
-parents): an event is **ready** once every parent has been placed (applied or
-dropped). While any event is ready, compute for each ready event `e`, against
-the **current** state `S`, the tuple:
+1. **Allowed.** An event `e` is allowed when `refusal(e, V(e))` (§4.5) is null,
+   where `V(e)`, its **own view**, is the merge (§4.4) of the allowed events in
+   `ancestors(e)`. That depends only on what `e` saw, so it never changes.
+2. **Reductions.** An allowed event is a **reduction** of an account when, in
+   its own view, it lowers that account's role (§4.5): a `member` event for
+   that account, or a `role` event for a role it holds. A `revoke` is a
+   reduction of the keys it names for its own account, a `fork` of the key
+   whose log forked, and closing an invite of the joins through it.
+3. **Strikes.** A reduction `r` **strikes** an allowed event `e` it reaches
+   (`e`'s root is the lowered account; for a revoke, `e`'s author is the key
+   and its root the revoke's; for a fork, `e`'s author is the key and its
+   `log.n` at least the fork's place; for a closed invite, `e` joins through
+   it) when `e` had not seen `r`, `r` had not seen `e`, and `r`'s cutoff does
+   not cover `e`: `r.cutoff[e.author][e's collection] ≥ e`'s place in that
+   collection's line (§6.3).
+4. **Valid.** Take the strongly connected components of the strike graph,
+   and visit them so that every component comes after the ones that strike
+   into it. An allowed event is **valid** unless a valid event from another
+   component strikes it. Strikes within one component don't count:
+   reductions that strike each other all stand, as concurrent revocations do
+   in Keyhive.
 
-```
-p1 = min over steps s in leadsTo(e) that "may take away" of  −rank(role(S, s.root))
-     (+∞ if there is none)
-     where s may take away if:  s = e and (takesAway(e, S) or mayTakeAway(e))
-                                s ≠ e and mayTakeAway(s)
-p2 = 0 if takesAway(e, S) else 1
-p3 = −rank(role(S, e.root))
-p4 = e.id
-```
+An event that is not allowed is **dropped** with its refusal; one that is
+allowed but not valid is dropped as struck. Valid events are **applied**.
 
-and place the ready event with the lexicographically smallest
-`(p1, p2, p3, p4)` (numbers ascending; `p4` by string comparison of ids).
+### 4.4 Merging
 
-`takesAway(e, S)`, judged against the state:
+The state of a set of events is the start state with, for each record key,
+the winning event among those **latest** on it (no other event on that key
+saw them) applied:
 
-| Kind                                     | Takes away when                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `revoke`, `fork`                         | always                                                                                                       |
-| `invite`                                 | `open` is false                                                                                              |
-| `member`                                 | `role` is null; or the person has a role now and the new role's rank (−∞ if the role doesn't exist) is lower |
-| `role`                                   | the role exists now and: it is removed, or its rank goes down, or it loses any permission string it had      |
-| `definition`, `key`, `relays`, `keepers` | never                                                                                                        |
+| Kind                              | Among latest events that didn't see each other, the winner is                                                                                                                                                  |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `member`, `invite`                | the one giving least: closed before open (invites), then the role giving least power — none, then the lowest rank, then the fewest permissions — by the roles as **its own view** had them; then the lowest id |
+| `role`                            | the one giving least, in the same order, by the role it sets                                                                                                                                                   |
+| `definition`, `relays`, `keepers` | the lowest id                                                                                                                                                                                                  |
+| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                |
+| `revoke`, `fork`                  | change no state                                                                                                                                                                                                |
 
-`mayTakeAway(e)`, judged from the event alone (for events not yet reachable):
+Applying sets `roles[name]`, `members[did]`, `invites[inviteDid]`,
+`relays`, `keepers` and `copies` as the event says, or removes the entry when
+its role is null. A `definition` sets `definitions[name] = { event,
+definedBy }`, where `definedBy` is the root of the definition, among the
+winner and those it saw, that saw every removal the winner saw and saw no
+other such definition (the lowest id if several); a deleted one removes the
+entry.
 
-| Kind     | May take away when                                                |
-| -------- | ----------------------------------------------------------------- |
-| `revoke` | always                                                            |
-| `fork`   | always                                                            |
-| `invite` | `open` is false                                                   |
-| `member` | `role` is null, or (`root ≠ did` and it is not joining by invite) |
-| `role`   | always                                                            |
-| others   | never                                                             |
+`keyDue` is true, in a private space, when some event in the set took
+reading from someone (in its own view, a reader before and not after) and the
+current key's event had not seen it.
 
-> Rationale: among changes that did not see each other, taking away goes first
-> — counting everything on the way to one, so a removal that also saw
-> something not yet placed still beats a change it had not seen. Then the
-> higher-ranked author, then the lower id.
+The **current state** is the merge of the valid events. A change's own view
+merges the allowed events it saw, so something done in good faith on a grant
+that a concurrent removal later strikes still counts; the grant gives no power
+from then on, since the current state leaves it out.
 
-> Note: `leadsTo(e)` counts every descendant, including ones that saw all of
-> the history. Such a change leads on from every placed event, so when it may
-> take something away it lowers `p1` of every candidate at every earlier
-> choice to at most its author's `−rank` then, and where the candidates then
-> tie on `p1` the rest of the tuple can choose differently. Adding one
-> change can therefore reorder earlier, concurrent ones. An implementation
-> that adds a change to an earlier replay instead of replaying everything
-> must detect this and replay; one that always replays from scratch need do
-> nothing.
-> Whether the rule should count such changes at all is open:
-> [#137](https://github.com/leifriksheim/weave/issues/137).
-
-### 4.4 Applying one event
-
-When event `e` is placed:
-
-1. **Rival.** If an event with the same `key` was already applied and is not
-   in `ancestors(e)`, drop `e` ("a change to the same thing that it had not
-   seen came first").
-2. **As of what it saw.** Let `S_seen` be the start state with every applied
-   event in `seen ∪ ancestors(seen)` (excluding `G`) applied again in replay
-   order. If `refusal(e, S_seen)` is non-null, drop `e`.
-3. **At its turn.** If `refusal(e, S)` is non-null, drop `e`.
-4. Otherwise, record the **reductions** (§4.5), apply `e` to `S`, mark it
-   `applied` with the next index, and remember it under its `key`.
-
-Dropped events stay placed: their children may still become ready.
-
-Applying (`apply`):
-
-| Kind         | Change to `S`                                                                                                                                        |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `role`       | set `roles[name] = role`, or delete it when `role` is null                                                                                           |
-| `member`     | set `members[did] = role`, or delete it when `role` is null                                                                                          |
-| `invite`     | `invites[inviteKey] = { role, open, event: id }`                                                                                                     |
-| `revoke`     | nothing (recorded separately: every applied revoke, by the key it names)                                                                             |
-| `fork`       | nothing (recorded separately: for each writer, the applied fork with the lowest `from`)                                                              |
-| `definition` | delete `definitions[name]` when `deleted`; else set it to `{ event: id, definedBy }` where `definedBy` is the existing `definedBy`, or `root` if new |
-| `key`        | append `{ keyId, readKey, event: id }` to `keys`; set `keyDue = false`                                                                               |
-| `relays`     | `relays = relays`                                                                                                                                    |
-| `keepers`    | `keepers`, `copies` as given                                                                                                                         |
-
-After any non-`key` event, if `keys` is non-empty and some account that was in
-`readers(S)` before is not after, set `keyDue = true`.
+> Rationale: least power wins, so a grant racing a restriction never beats
+> it, and an id decides only between two equally restrictive writes, where
+> either outcome is safe. Rivals are compared by the roles as each one's own
+> view had them, so a later edit to a role can't reorder them.
 
 ### 4.5 Refusals — the rank rule
 
@@ -484,20 +457,20 @@ nothing away and is not one. Reductions drive §5.
   what a writer puts in `seen`. A dropped event, a revoke and a fork proof are
   never heads: none changes the state, so a writer need not name them, and
   however many of them anyone makes, they can't fill `seen`.
-- `at(seen)` — `S_seen` as in §4.4, or null when anything in `seen` (other
-  than `G`) is missing or waiting.
+- `at(seen)` — the merge of the allowed events in what `seen` names and
+  everything they saw, or null when anything in `seen` (other than `G`) is
+  missing or waiting.
 - `revoked(key, account)` — every applied revoke of that key by that account.
 - `named(did)`, `knownInvite(inviteDid)` — as used in §3.4.
 
 **Example (a removal against a concurrent ban).** Admin Alice makes Bob a
 moderator and gives moderators `manage`, then adds Carol. Apart, Alice removes
-Bob and Bob removes Carol; both saw Carol's addition. Both are ready together.
-Alice's removal takes away with author rank 100 (`p1 = −100`); Bob's with rank
-50 (`p1 = −50`). Alice's is placed first; Bob then holds no role at his turn,
-so his removal of Carol is dropped. Every arrival order gives Bob: none,
-Carol: member.
+Bob and Bob removes Carol; both saw Carol's addition. Each is allowed in its
+own view. Alice's removal is a reduction of Bob that Bob's removal had not
+seen, and its cutoff doesn't cover it, so it strikes it; nothing strikes
+Alice's. Every arrival order gives Bob: none, Carol: member.
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `place`, `extended`, `takesAway`, `mayTakeAway`, `refusal`, `apply`, `losesReader`). Tests: `packages/core/tests/roles.test.ts` (all of "the rank rule", "invites", "offline conflicts"), `packages/core/tests/key-change.test.ts` ("when a new key is due"), `packages/core/tests/access-convergence.test.ts` (random histories: every arrival order, and adding one change at a time, against a reference replay)._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `merge`, `definerOf`, `extended`, `refusal`). Tests: `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/roles.test.ts` (all of "the rank rule", "invites", "offline conflicts"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
 
 ---
 
@@ -690,8 +663,7 @@ An account revokes one of its keys in a space by writing `sys.revoke` at
 `revoke:<hex40(key DID + "|" + account DID)>` with `{ key, cutoff? }`. From
 then on, every version that key signed for that account stands only if the
 revoke covers it (§5.1 step 2), whatever it saw; the rest are withdrawn. Every
-applied revoke applies, each with its own cutoff, and revokes are never rivals
-(§4.3), so no revoke can shield what another takes: a thief who revokes a stolen key first, covering what it signed
+applied revoke applies, each with its own cutoff (§4.3), so no revoke can shield what another takes: a thief who revokes a stolen key first, covering what it signed
 in advance, is still undone by the owner's own revoke. A revoke names a key,
 not a note, so every note to that key goes with it.
 
@@ -1060,9 +1032,10 @@ publish it again when it differs from what is published.
 
 ### 9.2 When a key change is due
 
-`keyDue` (§4.4) becomes true when any event leaves some former reader without
-a role that exists (removed, left, their role deleted) and becomes false with
-the next applied `key` event.
+`keyDue` (§4.4) is true while some applied event that took reading from
+someone (removed, left, their role deleted) was not seen by the current key's
+event. A key change made at the same time as a removal, not having seen it,
+leaves the key change due (#173).
 
 A **former member** is an account named by an applied `member` event that is
 not a reader now: removed, left, or holding a role that was removed. Peers
@@ -1081,9 +1054,9 @@ lost their place still reads what others write.
 3. write `sys.key` at `key:space`: `{ keyId: K'.id, readKey: <K' read DID>, earlier }`;
 4. seal `K'` to each member (§9.4).
 
-Because every change is a version of `key:space`, two changes made apart are
-rivals and one wins by replay order (§4.4 step 1). A key id or read key used
-before is refused.
+Two key changes made apart both stand: every key stays in `keys`, so what
+was sealed under either stays readable, and the current one is the lowest id
+of the latest (§4.4). A key id or read key used before is refused.
 
 A peer holding any key named by a `key` event opens its `earlier` and takes
 each raw key it contains (up to 1000); repeat until nothing new. So holding

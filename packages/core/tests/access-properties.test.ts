@@ -114,6 +114,8 @@ function generate(seed: number): Made {
       role,
       seen,
       cutoff: cutoff >= 0 ? new Map([[did, new Map([['sys.member', cutoff]])]]) : new Map(),
+      at: lineLength.get(author) ?? 0,
+      line: lineLength.get(author) ?? 0,
     };
     events.push(event);
     place.set(id, lineLength.get(author) ?? 0);
@@ -166,70 +168,58 @@ describe('access replay: properties', () => {
     });
   });
 
-  test(
-    'liveness: a change made after seeing everything, by someone with the power for it, applies',
-    { todo: '#137: the change reorders earlier concurrent ones, and loses to one it now follows' },
-    () => {
-      forHistories(({ events }) => {
-        const history = replayAccess(genesis, events);
-        const owner = 'p0';
-        if (!history.current.members.has(owner)) return;
-        const next: AccessEvent = {
-          id: 'zzz-last',
-          key: 'member:p5',
-          kind: 'member',
-          root: owner,
-          author: owner,
-          did: 'p5',
-          role: 'member',
-          seen: history.heads().length ? [...history.heads()] : [genesis.id],
-          cutoff: new Map(),
-        };
-        if (refusal(next, history.current) !== null) return;
-        assert.ok(applied(replayAccess(genesis, [...events, next]), next.id));
-      });
-    },
-  );
+  test('liveness: a change made after seeing everything, by someone with the power for it, applies', () => {
+    forHistories(({ events }) => {
+      const history = replayAccess(genesis, events);
+      const owner = 'p0';
+      if (!history.current.members.has(owner)) return;
+      const next: AccessEvent = {
+        id: 'zzz-last',
+        key: 'member:p5',
+        kind: 'member',
+        root: owner,
+        author: owner,
+        did: 'p5',
+        role: 'member',
+        seen: history.heads().length ? [...history.heads()] : [genesis.id],
+        cutoff: new Map(),
+      };
+      if (refusal(next, history.current) !== null) return;
+      assert.ok(applied(replayAccess(genesis, [...events, next]), next.id));
+    });
+  });
 
-  test(
-    'ids: renaming every change, keeping its content, changes no verdict',
-    { todo: '#137, #170: the replay breaks ties by id' },
-    () => {
-      forHistories(({ events }, r) => {
-        const rename = new Map(events.map((e) => [e.id, `r${String(r.int(1e9)).padStart(9, '0')}`]));
-        const renamed = events.map((e) => ({
-          ...e,
-          id: rename.get(e.id)!,
-          seen: e.seen.map((id) => rename.get(id) ?? id),
-        }));
-        const before = replayAccess(genesis, events);
-        const after = replayAccess(genesis, renamed);
-        for (const event of events)
-          assert.equal(applied(after, rename.get(event.id)!), applied(before, event.id), event.id);
-      });
-    },
-  );
+  test('ids: renaming every change, keeping its content, changes no verdict', () => {
+    forHistories(({ events }, r) => {
+      const rename = new Map(events.map((e) => [e.id, `r${String(r.int(1e9)).padStart(9, '0')}`]));
+      const renamed = events.map((e) => ({
+        ...e,
+        id: rename.get(e.id)!,
+        seen: e.seen.map((id) => rename.get(id) ?? id),
+      }));
+      const before = replayAccess(genesis, events);
+      const after = replayAccess(genesis, renamed);
+      for (const event of events)
+        assert.equal(applied(after, rename.get(event.id)!), applied(before, event.id), event.id);
+    });
+  });
 
-  test(
-    'reductions: no change by an account past a removal’s cutoff, that the removal hadn’t seen, applies',
-    { todo: '#167, #170: access changes are not judged against their author’s removals' },
-    () => {
-      forHistories(({ events, place, saw }) => {
-        const history = replayAccess(genesis, events);
-        for (const removal of events) {
-          if (removal.kind !== 'member' || removal.role !== null || removal.root === removal.did) continue;
-          if (!applied(history, removal.id)) continue;
-          const cutoff = removal.cutoff.get(removal.did)?.get('sys.member') ?? -1;
-          for (const event of events) {
-            if (event.root !== removal.did || !applied(history, event.id)) continue;
-            if (saw.get(removal.id)?.has(event.id) || saw.get(event.id)?.has(removal.id)) continue;
-            assert.ok(
-              (place.get(event.id) ?? 0) <= cutoff,
-              `${event.id} by ${event.root} applied past ${removal.id}'s cutoff`,
-            );
-          }
+  test('reductions: no change by an account past a removal’s cutoff, that the removal hadn’t seen, applies', () => {
+    forHistories(({ events, place, saw }) => {
+      const history = replayAccess(genesis, events);
+      for (const removal of events) {
+        if (removal.kind !== 'member' || removal.role !== null || removal.root === removal.did) continue;
+        if (!applied(history, removal.id)) continue;
+        const cutoff = removal.cutoff.get(removal.did)?.get('sys.member') ?? -1;
+        for (const event of events) {
+          if (event.root !== removal.did || !applied(history, event.id)) continue;
+          if (saw.get(removal.id)?.has(event.id) || saw.get(event.id)?.has(removal.id)) continue;
+          assert.ok(
+            (place.get(event.id) ?? 0) <= cutoff,
+            `${event.id} by ${event.root} applied past ${removal.id}'s cutoff`,
+          );
         }
-      });
-    },
-  );
+      }
+    });
+  });
 });
