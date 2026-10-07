@@ -654,7 +654,9 @@ orders each account's lines with defined collections first, then the rest,
 each in name order, and takes one line from each account in turn (accounts by
 DID), so no one's writing can crowd out anyone else's, and nobody can make
 themselves unremovable by writing into many collections. What is left out is
-judged with the change. A node covers only the collections it holds: one
+judged with the change. A change reaching more than 1024 accounts, such as a role
+with that many holders, can't cover them all; lower or remove the role's
+holders in smaller changes first. A node covers only the collections it holds: one
 holding part of a space, removing someone, leaves their writes elsewhere to be
 judged with the change ([#166](https://github.com/leifriksheim/weave/issues/166)).
 
