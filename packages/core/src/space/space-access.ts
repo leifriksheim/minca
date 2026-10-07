@@ -23,6 +23,7 @@
 import type { CryptoProvider, Space } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
 import { canonicalize } from '../schema/version.js';
+import { newRecordKey } from '../records/version.js';
 import { cidFromBytes, hashedKey } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
@@ -182,12 +183,10 @@ export const revokeKey = (noteCid: string) => hashedKey('revoke', noteCid);
  */
 export const WARRANT_COLLECTION = 'std.warrant';
 /**
- * The key of the warrant one account wrote about one offending version. The
- * key names both, so no one else — the accused least of all — can write a
- * version of it, and it never needs a second one.
+ * A fresh key for a warrant: random, so nobody can claim it before its writer
+ * does. What a warrant proves is in its body, not its key.
  */
-export const warrantKey = (evidenceId: string, byDid: string) =>
-  hashedKey('warrant', `${evidenceId}|${byDid}`);
+export const newWarrantKey = () => `warrant:${newRecordKey()}`;
 /** The key of the record proving a writer's log forked, from the writer's key */
 export const forkKey = (writerDid: string) => hashedKey('fork', writerDid);
 /** The key of a role's record */

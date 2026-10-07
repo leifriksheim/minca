@@ -93,7 +93,7 @@ import {
   verifyInvite,
   forkKey,
   WARRANT_COLLECTION,
-  warrantKey,
+  newWarrantKey,
 } from '../space/space-access.js';
 import {
   ACCESS_COLLECTIONS,
@@ -1357,7 +1357,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** Whether a version from outside — a peer, a folder — may be stored */
   async function admit(version: Version): Promise<Standing> {
     const verdict = await admitOnce(version);
-    // Refused for good, or a change to who may do what: perhaps proof of a broken rule (03 §6.6).
+    // Refused for good, or a change to who may do what: perhaps proof of a broken rule (docs/warrants.md).
     if ((!verdict.ok && !verdict.later && !verdict.withdrawn) || ACCESS_COLLECTIONS.has(version.collection))
       void warrantIfDue(version).catch(() => {});
     return verdict;
@@ -2897,7 +2897,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // A version the protocol refuses, that no honest writer could have signed —
   // judged as of what it says it had seen — is proof against the account
   // behind its key. A peer that refuses one writes it down for every member,
-  // once per account; every peer checks the proof itself (03 §6.6).
+  // once per account; every peer checks the proof itself (docs/warrants.md).
 
   type WarrantVerdict = 'holds' | 'false' | 'later' | 'unjudgeable';
 
@@ -2971,7 +2971,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Whether proof of one kind holds: the offending version first, then what checking it needs */
   async function evidenceHolds(kind: string, evidence: ReadonlyArray<Version>): Promise<WarrantVerdict> {
-    // A kind this peer doesn't know is refused: kinds come with a new sync version (05 §4).
+    // A kind this peer doesn't know flags nobody.
     if (!knownKind(kind)) return 'false';
     const [offending, context] = evidence;
     if (!offending || !(await accountable(offending))) return 'false';
@@ -3006,17 +3006,18 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
   async function warrantVerdict(version: Version): Promise<WarrantVerdict> {
     const cacheKey = verdictKey(version);
-    if (provenWarrants.has(cacheKey)) return 'holds';
+    const known = judgedWarrants.get(cacheKey);
+    if (known) return known;
     const warrant = await warrantShape(version);
     if (!warrant) return 'false';
     const verdict = await evidenceHolds(warrant.kind, warrant.evidence);
-    // Judged in the offending version's own view, a proof that holds always will.
-    if (verdict === 'holds') provenWarrants.add(cacheKey);
+    // Judged in the offending version's own view, a proof that holds, or fails, always will.
+    if (verdict === 'holds' || verdict === 'false') judgedWarrants.set(cacheKey, verdict);
     return verdict;
   }
 
-  /** Warrants whose proof held: checked once, not on every look at who is flagged */
-  const provenWarrants = new Set<string>();
+  /** Warrants already judged: each checked once, not on every look at who is flagged */
+  const judgedWarrants = new Map<string, WarrantVerdict>();
 
   /**
    * A warrant's body, if the version has a warrant's shape: a first version,
@@ -3030,8 +3031,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!warrant || !offending) return null;
     const against = await accountable(offending);
     const by = (await judge(version)).root;
-    if (!against || !by || against === by) return null;
-    return version.key === (await warrantKey(offending.id, by)) ? warrant : null;
+    return against && by && against !== by && version.key.startsWith('warrant:') ? warrant : null;
   }
 
   /** The proof a version gives against its account, or null when it gives none */
@@ -3092,10 +3092,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const warranting = new Set<string>();
 
   async function warrantOnce(violation: { kind: WarrantKind; evidence: Version[] }): Promise<void> {
-    const key = await warrantKey(violation.evidence[0]!.id, deps.rootDid);
     // Checked again: the space may have closed while the proof was being worked out.
-    if ((await storage.getCurrent(key)) || closed) return;
-    await upsert(WARRANT_COLLECTION, key, violation);
+    if (closed) return;
+    await upsert(WARRANT_COLLECTION, newWarrantKey(), violation);
   }
 
   /** The accounts proven to have broken the protocol's rules here, by the warrants that stand */
@@ -3115,12 +3114,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const offending = warrant?.evidence[0];
       const account = offending && (await accountable(offending));
       if (!warrant || !offending || !account || !knownKind(warrant.kind)) continue;
-      found.push({
-        account,
-        key: offending.author,
-        kind: warrant.kind,
-        by: (await judge(version)).root ?? version.author,
-      });
+      const by = (await judge(version)).root ?? version.author;
+      // One flag per offence and writer, however many records say it.
+      if (found.some((flag) => flag.offence === offending.id && flag.by === by)) continue;
+      found.push({ account, key: offending.author, kind: warrant.kind, by, offence: offending.id });
     }
     return found;
   }

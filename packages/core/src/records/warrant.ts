@@ -1,6 +1,6 @@
 /**
  * @module records/warrant
- * What a warrant is made of (spec 03 §6.6).
+ * What a warrant is made of (docs/warrants.md).
  *
  * A warrant is proof that an account's key signed something the protocol
  * refuses, that no honest writer could have signed: judged as of what the

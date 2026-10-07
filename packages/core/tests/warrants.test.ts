@@ -1,8 +1,8 @@
 /**
- * Warrants (spec 03 §6.6): a version no honest writer could have signed is
- * proof against its account. The peer that refuses it writes the proof down,
- * every peer checks it, and the account is flagged for every member. A proof
- * that doesn't hold is proof against whoever wrote it.
+ * Warrants (docs/warrants.md): a version no honest writer could have signed
+ * is proof against its account. The peer that refuses it writes the proof
+ * down, every peer checks it, and the account is flagged for every member. A
+ * proof that doesn't hold flags nobody.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,8 @@ import { stubOf } from '../src/schema/version.js';
 import { team } from '../src/space/presets.js';
 import { MEMBER_COLLECTION } from '../src/space/roles.js';
 import { isRecord } from '../src/utils/guards.js';
-import { memberKey, warrantKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
+import { readWarrant } from '../src/records/warrant.js';
+import { memberKey, newWarrantKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
 import type { Version } from '../src/types.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
@@ -44,6 +45,17 @@ async function slip(who: Person, space: string, versions: ReadonlyArray<Version>
   const store = createStorageProvider(await who.stores(`spaces/${space}`));
   for (const version of versions) await store.addVersion(version);
   await hold(who.node, space);
+}
+
+/** A warrant's first version in someone's copy, found by the offence it proves */
+async function warrantAbout(who: Person, space: string, offence: string): Promise<Version | null> {
+  const store = createStorageProvider(await who.stores(`spaces/${space}`));
+  for (const versions of (await store.histories('warrant:')).values())
+    for (const version of versions) {
+      const offending = readWarrant(version.body)?.evidence[0];
+      if (version.seq === 0 && offending?.id === offence) return version;
+    }
+  return null;
 }
 
 const flaggedFor = async (who: Person, space: string) => (await who.node.spaces.access(space)).flagged;
@@ -150,7 +162,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [evidence] },
-        version: { key: await warrantKey(evidence.id, bob.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -178,9 +190,13 @@ describe('warrants', () => {
     const own = await bob.node.records.put(space, 'app.note', { text: 'mine' });
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
     const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
-    const key = await warrantKey(bad.id, alice.node.did);
-    await until(async () => (await bobStore.getCurrent(key)) !== null, 4000, 'Alice’s warrant at Bob’s');
-    const current = (await bobStore.getCurrent(key))!;
+    await until(
+      async () => (await warrantAbout(bob, space, bad.id)) !== null,
+      4000,
+      'Alice’s warrant at Bob’s',
+    );
+    const current = (await warrantAbout(bob, space, bad.id))!;
+    const { key } = current;
     const overwrite = await forge(
       bob,
       space,
@@ -226,7 +242,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: await warrantKey(bad.id, bob.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -240,15 +256,12 @@ describe('warrants', () => {
         8000,
         'Bob to be flagged by Alice',
       );
-    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
     // His warrant against himself is a record like any other, and flags nobody.
     assert.equal(
       (await flaggedFor(alice, space)).some((f) => f.by === bob.node.did),
       false,
     );
-    const hers = await Promise.all(
-      [self.id, bad.id].map(async (id) => aliceStore.getCurrent(await warrantKey(id, alice.node.did))),
-    );
+    const hers = await Promise.all([self.id, bad.id].map((id) => warrantAbout(alice, space, id)));
     assert.ok(hers.some(Boolean), 'Alice wrote her own');
   });
 
@@ -336,7 +349,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'access', evidence: [counterfeit] },
-        version: { key: await warrantKey(real.id, mallory.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -373,7 +386,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [rewritten] },
-        version: { key: await warrantKey(rewritten.id, alice.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -461,7 +474,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(written)] },
-        version: { key: await warrantKey(written.id, mallory.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -487,7 +500,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'someday', evidence: [evidence] },
-        version: { key: await warrantKey(evidence.id, alice.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -533,14 +546,14 @@ describe('warrants', () => {
     });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
     const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
-    // A true proof, at a key of another shape: the one protocol 8 used named only the account.
+    // A true proof, at a key that isn't a warrant's.
     const misplaced = await forge(
       alice,
       space,
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: await warrantKey(bob.node.did, alice.node.did), seq: 0 },
+        version: { key: 'misplaced', seq: 0 },
         retain: true,
       },
       { keep: false },

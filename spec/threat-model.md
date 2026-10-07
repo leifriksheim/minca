@@ -89,8 +89,9 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - It can freeze the space: more than 64 concurrent changes it has no power
     for stay heads, and no honest write can name them all in `seen`
     ([#183](https://github.com/leifriksheim/weave/issues/183)).
-  - Each true warrant costs every peer a replay of the offending version's
-    view to admit; two colluding members can make that add up ([#33](https://github.com/leifriksheim/weave/issues/33)).
+  - Each warrant costs every member's node a replay of the offending
+    version's own view, once; nothing bounds how many warrants a member
+    writes, true or false ([#33](https://github.com/leifriksheim/weave/issues/33)).
   - A narrowed rule and a demotion it had not seen, each harmless alone,
     together let it sign as of before both ([#179](https://github.com/leifriksheim/weave/issues/179)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
