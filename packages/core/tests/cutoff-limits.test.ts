@@ -45,6 +45,8 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const seen = [...(await who.node.spaces.access(space)).heads];
+  // The writer goes offline: what is measured is the remover's work, not a thousand versions syncing back.
+  await letGo(who.node, space);
   const versions: Version[] = [];
   for (let i = 0; i < count; i++) {
     const prev = versions.at(-1);
@@ -87,6 +89,7 @@ describe('cutoff limits', () => {
     await joined(carol.node, space);
     const note = await carol.node.records.put(space, 'app.note', { text: 'honest' });
     await until(async () => (await alice.node.records.get(space, note.key)) !== null, 4000, 'the note');
+    await letGo(carol.node, space);
     await pad(bob, alice, space, 1030);
     await alice.node.spaces.removeRole(space, 'editor');
     await new Promise((resolve) => setTimeout(resolve, 300));
