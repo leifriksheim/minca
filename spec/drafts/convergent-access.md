@@ -28,12 +28,12 @@ This note replaces the order with structure.
 ## The rules
 
 **1. Allowed in its own view.** A change is **allowed** when its author had
-the power for it in its own view: the allowed changes it saw, merged (rule 4).
-That depends only on its past, so it never changes. (Built this way rather
-than "the valid changes it saw": validity can depend on strikes from outside
-the view, which would make a change's own verdict depend on what it never
-saw. Something done in good faith on a grant later struck still counts; the
-grant gives no power from then on.)
+the power for it in its own view: the changes it saw that are valid among
+what it saw (rules 2 and 3 applied to that set alone), merged (rule 4). That
+depends only on its past, so it never changes, and a grant struck by a
+removal it saw gives it no power. (A first build used the allowed changes it
+saw; review showed a removed member's concurrent grant to a sock then gave
+the sock power for good.)
 
 **2. Unseen reductions.** A change `e` by account `a` is **struck** when a
 valid reduction of `a` exists that `e` had not seen and whose cutoff does not

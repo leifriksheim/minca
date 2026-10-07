@@ -329,8 +329,10 @@ what `e` **saw**. Two events neither of which saw the other are
 ### 4.3 Allowed, struck, valid
 
 1. **Allowed.** An event `e` is allowed when `refusal(e, V(e))` (§4.5) is null,
-   where `V(e)`, its **own view**, is the merge (§4.4) of the allowed events in
-   `ancestors(e)`. That depends only on what `e` saw, so it never changes.
+   where `V(e)`, its **own view**, is the merge (§4.4) of the events in
+   `ancestors(e)` that are valid among `ancestors(e)` (steps 2–4, applied to
+   that set alone). That depends only on what `e` saw, so it never changes, and
+   a grant that a removal it saw struck gives it no power.
 2. **Reductions.** An allowed event is a **reduction** of an account when, in
    its own view, it lowers that account's role (§4.5): a `member` event for
    that account, or a `role` event for a role it holds. A `revoke` is a
@@ -340,15 +342,18 @@ what `e` **saw**. Two events neither of which saw the other are
    (`e`'s root is the lowered account; for a revoke, `e`'s author is the key
    and its root the revoke's; for a fork, `e`'s author is the key and its
    `log.n` at least the fork's place; for a closed invite, `e` joins through
-   it) when `e` had not seen `r`, `r` had not seen `e`, and `r`'s cutoff does
-   not cover `e`: `r.cutoff[e.author][e's collection] ≥ e`'s place in that
-   collection's line (§6.3).
-4. **Valid.** Take the strongly connected components of the strike graph,
-   and visit them so that every component comes after the ones that strike
-   into it. An allowed event is **valid** unless a valid event from another
-   component strikes it. Strikes within one component don't count:
-   reductions that strike each other all stand, as concurrent revocations do
-   in Keyhive.
+   it) when `r`'s cutoff does not cover `e` (`r.cutoff[e.author][e's
+collection] ≥ e`'s place in that collection's line, §6.3) and, unless `r`
+   is a revoke or a fork, neither had seen the other. A revoke or a fork proof
+   reaches its key's events whatever either saw: an owner reacting to a thief
+   has seen what the thief did.
+4. **Valid among a set.** Take the strongly connected components of the
+   strikes between allowed events in the set, and visit them so that every
+   component comes after the ones that strike into it. An allowed event is
+   **valid** unless a valid event from another component strikes it. Strikes
+   within one component don't count: reductions that strike each other all
+   stand, as concurrent revocations do in Keyhive. The history's valid events
+   are those valid among all placeable events.
 
 An event that is not allowed is **dropped** with its refusal; one that is
 allowed but not valid is dropped as struck. Valid events are **applied**.
@@ -359,13 +364,13 @@ The state of a set of events is the start state with, for each record key,
 the winning event among those **latest** on it (no other event on that key
 saw them) applied:
 
-| Kind                              | Among latest events that didn't see each other, the winner is                                                                                                                                                  |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `member`, `invite`                | the one giving least: closed before open (invites), then the role giving least power — none, then the lowest rank, then the fewest permissions — by the roles as **its own view** had them; then the lowest id |
-| `role`                            | the one giving least, in the same order, by the role it sets                                                                                                                                                   |
-| `definition`, `relays`, `keepers` | the lowest id                                                                                                                                                                                                  |
-| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                |
-| `revoke`, `fork`                  | change no state                                                                                                                                                                                                |
+| Kind                              | Among latest events that didn't see each other, the winner is                                                                                                                                                                                                                             |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `member`, `invite`                | the one giving least: closed before open (invites), then one whose role gives no more than any other's — none, or no higher rank and every permission covered by the other's — by the roles as **its own view** had them; where two can't be compared, the lower rank, then the lowest id |
+| `role`                            | the one giving least, by coverage in the same way, by the role it sets                                                                                                                                                                                                                    |
+| `definition`, `relays`, `keepers` | the lowest id                                                                                                                                                                                                                                                                             |
+| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                                                           |
+| `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                                                           |
 
 Applying sets `roles[name]`, `members[did]`, `invites[inviteDid]`,
 `relays`, `keepers` and `copies` as the event says, or removes the entry when
@@ -377,12 +382,11 @@ entry.
 
 `keyDue` is true, in a private space, when some event in the set took
 reading from someone (in its own view, a reader before and not after) and the
-current key's event had not seen it.
+current key's event had not seen it; and, for the current state, when anyone
+who held the current key (a reader as it was made, or made a reader by a
+change it had not seen) reads no more, however that came about.
 
-The **current state** is the merge of the valid events. A change's own view
-merges the allowed events it saw, so something done in good faith on a grant
-that a concurrent removal later strikes still counts; the grant gives no power
-from then on, since the current state leaves it out.
+The **current state** is the merge of the valid events.
 
 > Rationale: least power wins, so a grant racing a restriction never beats
 > it, and an id decides only between two equally restrictive writes, where
@@ -457,7 +461,7 @@ nothing away and is not one. Reductions drive §5.
   what a writer puts in `seen`. A dropped event, a revoke and a fork proof are
   never heads: none changes the state, so a writer need not name them, and
   however many of them anyone makes, they can't fill `seen`.
-- `at(seen)` — the merge of the allowed events in what `seen` names and
+- `at(seen)` — the merge of the events valid among what `seen` names and
   everything they saw, or null when anything in `seen` (other than `G`) is
   missing or waiting.
 - `revoked(key, account)` — every applied revoke of that key by that account.
@@ -470,7 +474,7 @@ own view. Alice's removal is a reduction of Bob that Bob's removal had not
 seen, and its cutoff doesn't cover it, so it strikes it; nothing strikes
 Alice's. Every arrival order gives Bob: none, Carol: member.
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `merge`, `definerOf`, `extended`, `refusal`). Tests: `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/roles.test.ts` (all of "the rank rule", "invites", "offline conflicts"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `componentsOf`, `merge`, `least`, `definerOf`, `extended`, `refusal`). Tests: `packages/core/tests/access-attacks.test.ts`, `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/roles.test.ts` (all of "the rank rule", "invites", "offline conflicts"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
 
 ---
 

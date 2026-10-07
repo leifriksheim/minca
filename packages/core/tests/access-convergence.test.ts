@@ -368,7 +368,7 @@ describe('access replay converges', () => {
       if (h.events.filter((event) => !parents.has(event.id)).length > 1) concurrent++;
       for (const record of h.records) if (!history.judge(record, NEEDS[0]!).ok) refused++;
     });
-    assert.ok(applied > RUNS * 5, `applied ${applied}`);
+    assert.ok(applied > RUNS * 3, `applied ${applied}`);
     assert.ok(dropped > RUNS, `dropped ${dropped}`);
     assert.ok(waiting > 0, `waiting ${waiting}`);
     assert.ok(concurrent > RUNS / 4, `concurrent ${concurrent}`);

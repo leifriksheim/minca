@@ -140,6 +140,9 @@ _Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/te
   - Hosts and carriers can't read the member list, so they keep syncing with
     it until the key changes ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_. A peer that never says who it is
     is never let go ([#173](https://github.com/leifriksheim/weave/issues/173)).
+  - A key change made at the same moment as its removal is boxed to it. The
+    change stays due, so the next key leaves it out, but until then it reads
+    ([#173](https://github.com/leifriksheim/weave/issues/173)).
   - It can keep adding to the history every peer must store and replay
     ([#161](https://github.com/leifriksheim/weave/issues/161)).
   - Its removal withdraws what it wrote before, unless the remover's node held
