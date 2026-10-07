@@ -741,19 +741,18 @@ space's access history ([03 — Spaces](03-spaces.md)): it carries `retain: true
 and `seen`, and which definition is in force is decided by replaying that
 history. In a private space its body is encrypted like any other record's.
 
-| Field         | Type                  | Req. | Meaning                                                                                                                                                                                            |
-| ------------- | --------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | string                | yes  | Lower case, at least one dot (local to the space, §6.4): `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`. MUST NOT start with `sys.`. The record's key MUST be `collection:` + this.                       |
-| `title`       | string                | no   | Display name                                                                                                                                                                                       |
-| `description` | string                | no   | The author's words                                                                                                                                                                                 |
-| `schema`      | object                | yes  | JSON Schema for a record's `body`, in the subset of §6.2                                                                                                                                           |
-| `version`     | integer ≥ 1           | yes  | Shape version (§6.3)                                                                                                                                                                               |
-| `history`     | `"latest"` \| `"all"` | no   | Default `"latest"`. `"all"`: writers mark every version `retain` (§4.5).                                                                                                                           |
-| `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                                           |
-| `permissions` | string[]              | no   | Permissions its rules may name, each `^[a-z][a-zA-Z0-9]{0,39}$` (§7.1)                                                                                                                             |
-| `rules`       | object                | no   | §7                                                                                                                                                                                                 |
-| `topics`      | string[]              | no   | §8                                                                                                                                                                                                 |
-| `keep`        | string[]              | no   | Ids of versions written under the rules before this definition that stay though they break its rules ([03](03-spaces.md) §6.3). At most 10 000. Not part of the definition: a reader takes it off. |
+| Field         | Type                  | Req. | Meaning                                                                                                                                                                      |
+| ------------- | --------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | string                | yes  | Lower case, at least one dot (local to the space, §6.4): `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`. MUST NOT start with `sys.`. The record's key MUST be `collection:` + this. |
+| `title`       | string                | no   | Display name                                                                                                                                                                 |
+| `description` | string                | no   | The author's words                                                                                                                                                           |
+| `schema`      | object                | yes  | JSON Schema for a record's `body`, in the subset of §6.2                                                                                                                     |
+| `version`     | integer ≥ 1           | yes  | Shape version (§6.3)                                                                                                                                                         |
+| `history`     | `"latest"` \| `"all"` | no   | Default `"latest"`. `"all"`: writers mark every version `retain` (§4.5).                                                                                                     |
+| `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                     |
+| `permissions` | string[]              | no   | Permissions its rules may name, each `^[a-z][a-zA-Z0-9]{0,39}$` (§7.1)                                                                                                       |
+| `rules`       | object                | no   | §7                                                                                                                                                                           |
+| `topics`      | string[]              | no   | §8                                                                                                                                                                           |
 
 A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
@@ -1272,7 +1271,7 @@ citations never form a cycle.
 
 "As of the citing version's `seen`" means that only access changes the citing
 version had seen (named in its `seen`, or seen by those) can take a cited
-version away: a removal of its author, or a revoke of its note. A change that
+version away: a removal of its author, or a revoke of its key. A change that
 came later, or apart, does not. So a check that passed when it was written
 passes for every peer, at any time, whatever the access history grows into.
 A cited version withdrawn by a later change is still held for this (§9.5).
@@ -1508,11 +1507,11 @@ Given a valid signature and root, whether the version _stands_ in this space:
       checks the second for every collection, the access history's included,
       before the rest of this step.
    2. The access state as of `seen` is known ([03](03-spaces.md)).
-   3. The root holds a role as of `seen`, and the rule for the action allows it (§7.2), and the access history's own judgement of the writer passes (revoked notes, removals — [03](03-spaces.md)).
+   3. The root holds a role as of `seen`, and the rule for the action allows it (§7.2), and the access history's own judgement of the writer passes (revoked keys, removals — [03](03-spaces.md)).
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed`, and on every version under `check` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`; then `check` (§7.6), which may make the version wait for versions it cites.
 
-   When step 3 fails only on the access history's judgement of a change that came after the version (a removal it had not seen, its note revoked, its key's log proven forked at or before it, or rules it had not seen that it breaks: [03](03-spaces.md) §5.1 steps 2 and 4, §5.2 step 10, §4.10), the peer still judges step 5, and the version is **withdrawn** if that passes.
+   When step 3 fails only on the access history's judgement of a change that came after the version (a change to its author's standing it had not seen, with what that change saw, its key revoked, or its key's log proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges step 5, and the version is **withdrawn** if that passes.
 
 ### 9.5 What a peer does with a refused version
 
@@ -1543,7 +1542,7 @@ verdict: a copy with a mangled signature shares the genuine version's id
 only to a copy that passed §3.3 steps 1 and 4 itself.
 
 Whether a stored version stands can change as the access history grows (a
-removal, a revoked note — [03](03-spaces.md)); it is then withdrawn, and stays
+removal, a revoked key — [03](03-spaces.md)); it is then withdrawn, and stays
 stored. When reading, a peer uses the
 current version if it stands; otherwise the newest held version of that record
 that does; otherwise the record is absent.

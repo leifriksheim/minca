@@ -221,9 +221,18 @@ describe('rules: who may edit and delete', () => {
 });
 
 describe('rules: changing them', () => {
-  test('narrowed rules can’t be dodged by writing as of before the change; what was there is kept', async () => {
+  /** Bob may post on a board with no rules; the rules then narrow to those who may post */
+  async function narrowing() {
     const { alice, bob, space } = await pollSpace();
     const board = { name: 'app.board', schema: { type: 'object' }, permissions: ['post'] };
+    // Editors may post, viewers not: what a demotion will take away.
+    await alice.node.spaces.putRole(space, {
+      name: 'editor',
+      title: 'Editor',
+      rank: 10,
+      permissions: ['invite', 'define', 'app.board/post'],
+    });
+    await alice.node.spaces.putRole(space, { name: 'viewer', title: 'Viewer', rank: 5, permissions: [] });
     await alice.node.collections.define(space, board);
     await until(
       async () => (await bob.node.collections.list(space)).some((c) => c.name === 'app.board'),
@@ -234,25 +243,45 @@ describe('rules: changing them', () => {
     await until(async () => (await alice.node.records.get(space, early.key)) !== null, 4000, 'Bob’s post');
     // What a version Bob wrote now would name: read from his node, not a second copy of its store.
     const seenThen = (await bob.node.spaces.access(space)).heads;
-
-    // Only those who may post, now: Bob, an editor, may not.
     await alice.node.collections.define(space, { ...board, rules: { create: 'can:post' } });
     await until(
-      async () => !(await bob.node.records.can(space, 'create', 'app.board')),
+      async () => (await bob.node.collections.list(space)).some((c) => !!c.rules?.create),
       4000,
       'the narrowed rules to reach Bob',
     );
+    /** Signs, as Bob, a post that claims to have been written before the change, and sends it */
+    const backdate = async (text: string) => {
+      const backdated = await forge(
+        bob,
+        space,
+        { collection: 'app.board', body: { text }, seen: seenThen },
+        { keep: false },
+      );
+      await letGo(bob.node, space);
+      await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(backdated);
+      await hold(bob.node, space);
+      return backdated;
+    };
+    return { alice, bob, space, early, backdate };
+  }
 
-    // He signs one that claims to have been written before the change.
-    const backdated = await forge(
-      bob,
-      space,
-      { collection: 'app.board', body: { text: 'backdated' }, seen: seenThen },
-      { keep: false },
+  test('a narrowed rule alone binds what saw it: a write that names an older point counts if it could have then', async () => {
+    const { alice, space, backdate } = await narrowing();
+    // Nobody can tell this from a post written offline before the change, and Bob could post then.
+    const backdated = await backdate('backdated');
+    await until(async () => (await alice.node.records.get(space, backdated.key)) !== null, 4000, 'the post');
+  });
+
+  test('a narrowed rule binds a backdated write through a demotion that saw it (#179)', async () => {
+    const { alice, bob, space, early, backdate } = await narrowing();
+    // Each harmless alone: the narrowing, which an editor still passes, and a demotion to viewer.
+    await alice.node.spaces.setMember(space, bob.node.did, 'viewer');
+    await until(
+      async () => (await bob.node.spaces.access(space)).role?.name === 'viewer',
+      4000,
+      'the demotion',
     );
-    await letGo(bob.node, space);
-    await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(backdated);
-    await hold(bob.node, space);
+    const backdated = await backdate('backdated');
     await until(
       async () => (await (await stored(alice.stores, space)).getVersion(backdated.id)) !== null,
       4000,
@@ -261,12 +290,10 @@ describe('rules: changing them', () => {
     assert.equal(
       await alice.node.records.get(space, backdated.key),
       null,
-      'judged by the rules it had not seen',
+      'judged with the demotion and what it saw',
     );
-    assert.equal(await bob.node.records.get(space, backdated.key), null);
-    // What Alice had seen when she narrowed them stays.
+    // What Alice had seen of Bob when she demoted him stays.
     assert.notEqual(await alice.node.records.get(space, early.key), null);
-    assert.notEqual(await bob.node.records.get(space, early.key), null);
   });
 });
 

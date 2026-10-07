@@ -31,7 +31,7 @@ import { isAgentNote } from '../identity/agent-note.js';
 import { ACCESS_ABILITY, ACCOUNT_ABILITY, DEFINE_ABILITY, noteGrants } from '../identity/abilities.js';
 import { bodyProblem, createVersion, getVersionId, isStub, signedPart, stubOf } from '../schema/version.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
-import { chainProblem, newRecordKey, nextVersion } from '../records/version.js';
+import { chainProblem, MAX_SEEN, newRecordKey, nextVersion } from '../records/version.js';
 import { RECORD_KEY_PATTERN } from '../records/key.js';
 import { checkLinks } from '../records/links.js';
 import { runChecks, type Check, type CheckedVersion, type Uncited } from '../records/checks.js';
@@ -201,8 +201,23 @@ const ACCESS_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['fork:', FORK_COLLECTION],
 ];
 
-/** How many records a keep list may name */
-const MAX_KEEP = 10_000;
+/** How many keys a cutoff may name */
+const MAX_CUTOFF = 1024;
+
+/** A cutoff from a record's body: key DID → the highest place kept, or null when it isn't one */
+function readCutoff(value: unknown): ReadonlyMap<string, number> | null {
+  if (value === undefined) return new Map();
+  if (!isRecord(value)) return null;
+  const entries = Object.entries(value);
+  if (entries.length > MAX_CUTOFF) return null;
+  const cutoff = new Map<string, number>();
+  for (const [key, n] of entries) {
+    if (!key.startsWith('did:key:') || typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0)
+      return null;
+    cutoff.set(key, n);
+  }
+  return cutoff;
+}
 
 /** Freezes a value and everything inside it, in place */
 function deepFreeze(value: unknown): void {
@@ -663,36 +678,43 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const verdict = await judge(version);
     if (!verdict.verified || !verdict.root) return null;
     const seen = version.seen ?? [];
-    const base = { id: version.id, key: version.key, root: verdict.root, seen };
+    const base = {
+      id: version.id,
+      key: version.key,
+      root: verdict.root,
+      author: version.author,
+      seen,
+      cutoff: new Map<string, number>(),
+    };
 
     if (version.collection === DEFINITION_COLLECTION) {
       if (!version.key.startsWith('collection:')) return null;
       return {
         ...base,
-        keep: [],
         kind: 'definition',
         name: version.key.slice('collection:'.length),
         deleted: !!version.deleted,
       };
     }
-    // Everything else in the history is taken away by a change, never deleted: a delete has no body to carry a keep list.
+    // Everything else in the history is taken away by a change, never deleted: a delete has no body to carry a cutoff.
     if (version.deleted || looksEncrypted(version.body)) return null;
     const body = version.body;
     if (!isRecord(body)) return null;
-    const keep = isStringList(body.keep) ? body.keep.slice(0, MAX_KEEP) : [];
+    const cutoff = readCutoff(body.cutoff);
+    if (!cutoff) return null;
 
     switch (version.collection) {
       case ROLE_COLLECTION: {
         const name = typeof body.name === 'string' ? body.name : '';
         if (version.key !== roleKey(name)) return null;
-        if (body.removed === true) return { ...base, keep, kind: 'role', name, role: null };
+        if (body.removed === true) return { ...base, cutoff, kind: 'role', name, role: null };
         const role = {
           name,
           ...(typeof body.title === 'string' ? { title: body.title } : {}),
           rank: body.rank,
           permissions: body.permissions,
         };
-        return isRole(role) ? { ...base, keep, kind: 'role', name, role } : null;
+        return isRole(role) ? { ...base, cutoff, kind: 'role', name, role } : null;
       }
       case MEMBER_COLLECTION: {
         const did = body.did;
@@ -709,7 +731,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         }
         return {
           ...base,
-          keep,
+          cutoff,
           kind: 'member',
           did,
           role,
@@ -721,13 +743,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (typeof inviteDid !== 'string' || typeof body.role !== 'string' || typeof body.open !== 'boolean')
           return null;
         if (version.key !== (await inviteRecordKey(inviteDid))) return null;
-        return { ...base, keep, kind: 'invite', inviteKey: inviteDid, role: body.role, open: body.open };
+        return { ...base, cutoff, kind: 'invite', inviteKey: inviteDid, role: body.role, open: body.open };
       }
       case KEY_COLLECTION: {
         if (version.key !== SPACE_KEY_RECORD || typeof body.keyId !== 'string' || body.keyId.length > 64)
           return null;
         if (typeof body.readKey !== 'string' || !body.readKey.startsWith('did:key:')) return null;
-        return { ...base, keep: [], kind: 'key', keyId: body.keyId, readKey: body.readKey };
+        return { ...base, kind: 'key', keyId: body.keyId, readKey: body.readKey };
       }
       case RELAYS_COLLECTION: {
         if (
@@ -736,13 +758,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           body.relays.length > MAX_RELAYS
         )
           return null;
-        return { ...base, keep: [], kind: 'relays', relays: body.relays };
+        return { ...base, kind: 'relays', relays: body.relays };
       }
       case FORK_COLLECTION: {
         // The proof stands on its own: every peer checks both signatures itself.
         const fork = await checkFork(body.a, body.b, space.id, provider);
         if (typeof fork === 'string' || version.key !== (await forkKey(fork.writer))) return null;
-        return { ...base, keep: [], kind: 'fork', writer: fork.writer, from: fork.from };
+        return { ...base, kind: 'fork', writer: fork.writer, from: fork.from };
       }
       case KEEPERS_COLLECTION: {
         const { keepers } = body;
@@ -754,19 +776,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           !(copies === null || typeof copies === 'number')
         )
           return null;
-        return { ...base, keep: [], kind: 'keepers', keepers, copies };
+        return { ...base, kind: 'keepers', keepers, copies };
       }
       case REVOKE_COLLECTION: {
-        if (typeof body.note !== 'string') return null;
-        let issuer: string;
-        try {
-          issuer = parseUCAN(body.note).payload.iss;
-        } catch {
-          return null;
-        }
-        const note = await noteCid(body.note);
-        if (version.key !== (await revokeKey(note))) return null;
-        return { ...base, keep, kind: 'revoke', note, issuer };
+        // An account's revoke of one of its keys sits at a key naming both, so no one else's can take its place.
+        if (typeof body.key !== 'string' || !body.key.startsWith('did:key:')) return null;
+        if (version.key !== (await revokeKey(body.key, verdict.root))) return null;
+        return { ...base, cutoff, kind: 'revoke', target: body.key };
       }
     }
     return null;
@@ -894,7 +910,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   }
 
   /** The note a version was written under, when it was delegated */
-  const noteOf = async (version: Version) => (version.proof ? noteCid(version.proof) : undefined);
 
   // ─── Rules ─────────────────────────────────────────────────────────
   //
@@ -903,15 +918,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // A definition a peer cannot read (a private space, no key) cannot be
   // judged by; members judge instead.
 
-  type Definition =
-    | {
-        readonly definition: StoredCollection;
-        /** Records written under the rules before it that it lets stand, though they break its own (03 §6.3) */
-        readonly keep: ReadonlySet<string>;
-      }
-    | 'missing'
-    | 'unreadable'
-    | 'invalid';
+  type Definition = { readonly definition: StoredCollection } | 'missing' | 'unreadable' | 'invalid';
   const definitions = new Map<string, Promise<Definition>>();
 
   /** The definition held in one version of `sys.collection` */
@@ -926,11 +933,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (opened.body === null) return 'unreadable';
         const body = opened.body;
         if (!isStoredCollection(body) || version.key !== `collection:${body.name}`) return 'invalid';
-        // The keep list rides on the record, not in the definition apps read.
-        const keep = isRecord(body) ? body.keep : undefined;
-        const definition: StoredCollection = { ...body };
-        Reflect.deleteProperty(definition, 'keep');
-        return { definition, keep: new Set(isStringList(keep) ? keep.slice(0, MAX_KEEP) : []) };
+        return { definition: body };
       })();
       definitions.set(id, found);
       // Something missing may turn up; only settled answers are worth keeping.
@@ -1089,7 +1092,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         id: version.id,
         root,
         seen,
-        note: await noteOf(version),
         writer: version.author,
         ...(version.log ? { at: version.log.n } : {}),
       },
@@ -1100,43 +1102,38 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // is kept and others may cite it.
     if (!judged.ok && !judged.withdrawn) return judged;
     const content = await judgeContent(version, first, root, state, found);
-    if (judged.ok && content.ok) {
-      const narrowed = await unseenRules(version, first, root, role, state, seen, within);
-      if (narrowed) return narrowed;
+    if (judged.ok && content.ok && judged.unseen.length > 0) {
+      const taken = await underUnseen(version, first, root, seen, judged.unseen);
+      if (taken) return taken;
     }
     return judged.ok || !content.ok ? content : judged;
   }
 
   /**
-   * A change to its collection's rules that a version had not seen, and that
-   * did not keep it, takes it away if it breaks them: so a writer can't sign
-   * as of a point before the rules were narrowed and be judged by the old
-   * ones (03 §5.2). As for a removal, what that change's author had seen and
-   * kept stands. Null when nothing takes it away.
+   * Changes to its author's standing that a version had not seen, and that
+   * don't cover it, take it away if, with them and everything they saw — the
+   * rules they saw included — it would not have been allowed (03 §5.1): so a
+   * writer can't sign as of a point before its standing, or the rules over
+   * it, were narrowed. Null when nothing takes it away.
    */
-  async function unseenRules(
+  async function underUnseen(
     version: Version,
     first: Version,
     root: string,
-    role: Role,
-    state: AccessState,
     seen: ReadonlyArray<string>,
-    within?: ReadonlyArray<string>,
+    unseen: ReadonlyArray<string>,
   ): Promise<Standing | null> {
     const { history } = await access();
-    const changes = history.unseenDefinitions(version.collection, seen, within);
-    if (!changes) return ACCESS_LATER;
-    for (const id of changes) {
-      const found = await definitionIn(id);
-      // Removed, or unreadable here: no rules to break, as with none in force.
-      if (typeof found === 'string' || found.keep.has(version.id)) continue;
-      const problem = await underRules(version, first, root, role, state, found.definition.rules ?? {});
-      if (problem.ok) continue;
-      return problem.later
-        ? problem
-        : { ok: false, reason: `${problem.reason}, under rules it had not seen`, withdrawn: true };
-    }
-    return null;
+    const state = history.at([...seen, ...unseen]);
+    if (!state) return ACCESS_LATER;
+    const role = standing(state, root);
+    if (!role) return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
+    const found = await rulesAt(state, version.collection);
+    const problem = await underRules(version, first, root, role, state, found?.rules ?? {});
+    if (problem.ok) return null;
+    return problem.later
+      ? problem
+      : { ok: false, reason: `${problem.reason}, after a change it had not seen`, withdrawn: true };
   }
 
   /**
@@ -1335,8 +1332,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!history.at(event.seen)) return ACCESS_LATER;
     const known =
       history.named(event.root) ||
-      (event.kind === 'member' && event.viaInvite !== undefined && history.knownInvite(event.viaInvite)) ||
-      (event.kind === 'revoke' && history.named(event.issuer));
+      (event.kind === 'member' && event.viaInvite !== undefined && history.knownInvite(event.viaInvite));
     return known ? STANDS : { ok: false, reason: 'Its author has never been a member of this space' };
   }
 
@@ -2684,7 +2680,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           version,
           retain,
           deleted,
-          seen: history.heads(),
+          // At most what a version may name: naming fewer heads is safe, since what it leaves out still applies (03 §3.2).
+          seen: history.heads().slice(-MAX_SEEN),
           // In the clear only where the body is: a private space sealed them above.
           ...(space.visibility === 'public' && !deleted && links.length ? { links } : {}),
           ...(tags.length ? { tags } : {}),
@@ -2782,6 +2779,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** `log/<author>/<n>` → the id of the version that took that place */
   const LOG_PREFIX = 'log/';
+  /** Key DID → the account it writes for here */
+  const KEY_ROOT_PREFIX = 'keyroot/';
   /** `next/<id>` → the id of a version naming that one as the place before it */
   const NEXT_PREFIX = 'next/';
   /** The same two, for each key's line in each collection */
@@ -2791,6 +2790,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function placeInLog(version: Version): Promise<void> {
     if (version.space !== space.id || !version.log) return;
     const { log } = version;
+    // Which account each key writes for: what a cutoff is worked out from.
+    const root = (await judge(version)).root;
+    if (root && !(await adapter.get(`${KEY_ROOT_PREFIX}${version.author}`)))
+      await adapter.put(`${KEY_ROOT_PREFIX}${version.author}`, utf8Encode(root));
     // Two lines: everything the key wrote here, and what it wrote in this collection.
     const lines = [
       {
@@ -3133,14 +3136,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const was = standing(history.current, did);
     const next = role === null ? null : history.current.roles.get(role);
     if (role !== null && !next) throw new Error(`There is no role "${role}" in "${space.name}"`);
-    // Taking power away keeps what this node has seen them write.
+    // Taking power away leaves what this node has seen them write.
     const lowers =
       was && (!next || next.rank < was.rank || was.permissions.some((p) => !next.permissions.includes(p)));
-    const keep = lowers ? await keepFrom(new Set([did])) : [];
+    const cutoff = lowers ? await cutoffFor(did) : {};
     const written = await upsert(MEMBER_COLLECTION, await memberKey(did), {
       did,
       role,
-      ...(keep.length ? { keep } : {}),
+      ...(Object.keys(cutoff).length ? { cutoff } : {}),
     });
     await changeKeyNow();
     return written;
@@ -3156,18 +3159,37 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (space.visibility === 'private' && (await access()).history.current.keyDue) await keepingUp();
   }
 
+  /** The same for several accounts at once, up to what a cutoff may name */
+  async function cutoffForAll(dids: ReadonlySet<string>): Promise<Record<string, number>> {
+    const all: Record<string, number> = {};
+    for (const did of dids) Object.assign(all, await cutoffFor(did));
+    return Object.fromEntries(Object.entries(all).slice(0, MAX_CUTOFF));
+  }
+
   /**
-   * What a change taking power from these people keeps: every record of
-   * theirs that counts now — what this node has seen them write.
+   * What a change taking power from an account leaves standing: for each of
+   * its keys, the highest place in that key's log this node holds here.
    */
-  async function keepFrom(dids: ReadonlySet<string>): Promise<string[]> {
-    const keep: string[] = [];
+  async function cutoffFor(did: string, only?: string): Promise<Record<string, number>> {
+    const cutoff: Record<string, number> = {};
+    // What it holds of theirs, whatever way it came: the log's places are kept only for what arrived by sync.
     for (const version of await everyCurrent()) {
-      if (ACCESS_COLLECTIONS.has(version.collection)) continue;
-      const root = (await judge(version)).root;
-      if (root && dids.has(root)) keep.push(version.id);
+      if (!version.log || (only && version.author !== only) || version.space !== space.id) continue;
+      if ((await judge(version)).root !== did) continue;
+      cutoff[version.author] = Math.max(cutoff[version.author] ?? -1, version.log.n);
     }
-    return keep.slice(0, MAX_KEEP);
+    for (const name of await adapter.list(KEY_ROOT_PREFIX)) {
+      const key = name.slice(KEY_ROOT_PREFIX.length);
+      if ((only && key !== only) || utf8Decode((await adapter.get(name)) ?? new Uint8Array()) !== did)
+        continue;
+      let highest = -1;
+      for (const place of await adapter.list(`${LOG_PREFIX}${key}/`)) {
+        const n = Number(place.slice(`${LOG_PREFIX}${key}/`.length));
+        if (Number.isSafeInteger(n) && n > highest) highest = n;
+      }
+      if (highest >= 0) cutoff[key] = Math.max(cutoff[key] ?? -1, highest);
+    }
+    return cutoff;
   }
 
   /** The rules and standing that decide whether this account may do something now */
@@ -3386,10 +3408,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           `${input.name} is at version ${current.definition.version}; a new definition needs a higher one`,
         );
       }
-      // What this node holds of it stays, though it breaks the new rules: like a
-      // removal, a change to the rules takes only what its author had not seen (03 §6.3).
-      const keep = (await everyCurrent(input.name)).map((held) => held.id).slice(0, MAX_KEEP);
-      await upsert(CATALOG_COLLECTION, recordKey, keep.length ? { ...definition, keep } : definition);
+      // Not retroactive: a change to the rules binds what saw it, and what a change to its author's standing that saw it reaches (03 §5).
+      await upsert(CATALOG_COLLECTION, recordKey, definition);
       const entry = (await catalog()).get(input.name) ?? null;
       const count = (await everyCurrent(input.name)).filter((e) => !e.deleted).length;
       return describe(input.name, entry, count);
@@ -3492,13 +3512,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const holders = new Set(
         [...history.current.members].filter(([, name]) => name === role.name).map(([did]) => did),
       );
-      const keep = lowers && holders.size ? await keepFrom(holders) : [];
+      const cutoff = lowers ? await cutoffForAll(holders) : {};
       await upsert(ROLE_COLLECTION, roleKey(role.name), {
         name: role.name,
         ...(role.title !== undefined ? { title: role.title } : {}),
         rank: role.rank,
         permissions: [...role.permissions],
-        ...(keep.length ? { keep } : {}),
+        ...(Object.keys(cutoff).length ? { cutoff } : {}),
       });
       await changeKeyNow();
     },
@@ -3509,8 +3529,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const holders = new Set(
         [...history.current.members].filter(([, held]) => held === name).map(([did]) => did),
       );
-      const keep = holders.size ? await keepFrom(holders) : [];
-      await upsert(ROLE_COLLECTION, roleKey(name), { name, removed: true, ...(keep.length ? { keep } : {}) });
+      const cutoff = await cutoffForAll(holders);
+      await upsert(ROLE_COLLECTION, roleKey(name), {
+        name,
+        removed: true,
+        ...(Object.keys(cutoff).length ? { cutoff } : {}),
+      });
       await changeKeyNow();
     },
 
@@ -3534,19 +3558,16 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     async revoke(token: string) {
-      const cid = await noteCid(token);
-      const keep: string[] = [];
-      for (const version of await everyCurrent()) {
-        if (version.proof && (await noteCid(version.proof)) === cid) keep.push(version.id);
-      }
-      await upsert(REVOKE_COLLECTION, await revokeKey(cid), {
-        note: token,
-        ...(keep.length ? { keep: keep.slice(0, MAX_KEEP) } : {}),
+      const key = parseUCAN(token).payload.aud;
+      const cutoff = await cutoffFor(deps.rootDid, key);
+      await upsert(REVOKE_COLLECTION, await revokeKey(key, deps.rootDid), {
+        key,
+        ...(Object.keys(cutoff).length ? { cutoff } : {}),
       });
     },
 
     async isRevoked(token: string) {
-      return (await access()).history.revoked(await noteCid(token)) !== null;
+      return (await access()).history.revoked(parseUCAN(token).payload.aud, deps.rootDid).length > 0;
     },
 
     async versionsOf(keys: ReadonlyArray<string>) {

@@ -144,10 +144,16 @@ interface EventBase {
   readonly key: string;
   /** The account behind the key that signed it */
   readonly root: string;
+  /** The key that signed it */
+  readonly author: string;
   /** The latest access changes its author knew of */
   readonly seen: ReadonlyArray<string>;
-  /** Records by the people this takes power from, that the author had seen and that stay */
-  readonly keep: ReadonlyArray<string>;
+  /**
+   * What this change leaves standing of what it takes away: for each key of
+   * the people it takes power from, the highest place in that key's log its
+   * author had seen. Versions at or below it are covered.
+   */
+  readonly cutoff: ReadonlyMap<string, number>;
 }
 
 export type AccessEvent = EventBase &
@@ -168,8 +174,8 @@ export type AccessEvent = EventBase &
     | { readonly kind: 'invite'; readonly inviteKey: string; readonly role: string; readonly open: boolean }
     | {
         readonly kind: 'revoke';
-        /** The note's CID */ readonly note: string;
-        /** Who signed the note */ readonly issuer: string;
+        /** The key revoked: every version it signed for this change's account, past the cutoff, stops counting */
+        readonly target: string;
       }
     | { readonly kind: 'definition'; readonly name: string; readonly deleted: boolean }
     | {
@@ -307,23 +313,22 @@ export type EventStatus =
   | { readonly status: 'dropped'; readonly reason: string }
   | { readonly status: 'waiting' };
 
-/** How one change took power from one person: their role before and after */
-interface Reduction {
-  readonly event: string;
-  readonly did: string;
-  readonly before: Role | null;
-  readonly after: Role | null;
-}
-
 export type RecordVerdict =
-  | { readonly ok: true }
+  | {
+      readonly ok: true;
+      /**
+       * Applied changes to its author's standing that it had not seen and that
+       * do not cover it. It must also be allowed as of what it saw plus these.
+       */
+      readonly unseen: ReadonlyArray<string>;
+    }
   | {
       readonly ok: false;
       readonly reason: string;
       readonly later?: boolean;
       /**
        * Allowed when written, and refused only because a later change took
-       * its author's access away or revoked its note. It is kept, so a
+       * its author's access away or revoked its key. It is kept, so a
        * version that cites it, and had not seen that change, can count it.
        */
       readonly withdrawn?: true;
@@ -334,15 +339,19 @@ export interface AccessHistory {
   readonly current: AccessState;
   /** What became of one change */
   status(id: string): EventStatus | null;
-  /** The latest changes — what a new record's `seen` names */
+  /**
+   * The latest applied changes — what a new record's `seen` names. A dropped
+   * change is never a head: it changes nothing, and a writer need not name it.
+   */
   heads(): ReadonlyArray<string>;
   /** The state as of what `seen` names, or null when some of it is not here */
   at(seen: ReadonlyArray<string>): AccessState | null;
   /**
-   * Whether a record stands: its author's standing, as of what it saw, must
-   * satisfy `needs`; and no later change it had not seen took that away —
-   * unless that change kept it.
-   * @param record The record's id, its account, what it saw, and the note it was written under
+   * Whether a record stands as of what it saw: its key not revoked or forked
+   * past where the change that did so covers it, and its author's standing
+   * satisfying `needs`. The changes to its author's standing it had not seen,
+   * and that don't cover it, are returned: it must also be allowed with them.
+   * @param record The record's id, its account, what it saw, and the key that signed it
    * @param needs What the record requires of its author's role
    * @param within For a version another cites: what the citing version saw.
    *   Only changes among those, and what they saw, can take it away.
@@ -352,7 +361,6 @@ export interface AccessHistory {
       readonly id: string;
       readonly root: string;
       readonly seen: ReadonlyArray<string>;
-      readonly note?: string;
       /** The key that signed it, and its place in that key's log here */
       readonly writer?: string;
       readonly at?: number;
@@ -360,22 +368,12 @@ export interface AccessHistory {
     needs: (role: Role | null, state: AccessState) => boolean,
     within?: ReadonlyArray<string>,
   ): RecordVerdict;
-  /** The applied change that revoked a note, if any */
-  revoked(note: string): { readonly event: string; readonly keep: ReadonlySet<string> } | null;
+  /** The applied changes by an account that revoked one of its keys */
+  revoked(key: string, root: string): ReadonlyArray<string>;
   /** Where a key's log forked, as the lowest place any applied change proves, if it did */
   forked(writer: string): { readonly event: string; readonly from: number } | null;
   /** Every key whose log forked, and from where */
   forks(): ReadonlyArray<{ readonly writer: string; readonly from: number }>;
-  /**
-   * The applied changes to a collection's definition that a record seeing
-   * `seen` had not seen, in replay order — for a cited version, only those
-   * the citer, seeing `within`, had. Null when some of it is not here.
-   */
-  unseenDefinitions(
-    name: string,
-    seen: ReadonlyArray<string>,
-    within?: ReadonlyArray<string>,
-  ): ReadonlyArray<string> | null;
   /**
    * Whether an account appears anywhere in the history — the creator, or
    * named by any member change, whatever became of it. Only grows as changes
@@ -559,8 +557,9 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
       if (!role) return `There is no role "${event.role}"`;
       return role.rank > author!.rank ? 'Its author may only invite up to their own rank' : null;
     }
+    // An account revokes its own keys: what a revoke takes away is only ever its own account's.
     case 'revoke':
-      return event.root === event.issuer ? null : 'Only whoever signed a note may revoke it';
+      return author ? null : 'Only a member may revoke a key here';
     // The proof stands on its own (checked before it got here); a member only has to bring it.
     case 'fork':
       return author ? null : 'Only a member may report a fork';
@@ -713,16 +712,19 @@ interface Replay {
   readonly placed: Map<string, number>;
   readonly ancestry: Map<string, Ancestry>;
   readonly heads: Set<string>;
+  /** The applied changes no applied change saw: what a writer names */
+  readonly appliedHeads: Set<string>;
   readonly state: MutableState;
   readonly statuses: Map<string, EventStatus>;
   readonly order: string[];
   readonly appliedByKey: Map<string, ReadonlyArray<string>>;
-  /** How changes took power from people, by whom */
-  readonly reductions: Map<string, ReadonlyArray<Reduction>>;
-  readonly revokes: Map<string, { readonly event: string; readonly keep: ReadonlySet<string> }>;
+  /** The changes to each account's standing, by account */
+  readonly reductions: Map<string, ReadonlyArray<string>>;
+  /** Every applied revoke of a key, by the key */
+  readonly revokes: Map<string, ReadonlyArray<{ readonly event: string; readonly root: string }>>;
   /** Writers whose log forked: the lowest place proven, and the change that proved it */
   readonly forks: Map<string, { readonly event: string; readonly from: number }>;
-  readonly keepOf: Map<string, ReadonlySet<string>>;
+  readonly cutoffOf: Map<string, ReadonlyMap<string, number>>;
   /** Each account's role name as changes were applied, and each role's: to know a rank at a past choice */
   readonly memberLog: Map<string, ReadonlyArray<{ readonly applied: number; readonly role: string | null }>>;
   readonly roleLog: Map<string, ReadonlyArray<{ readonly applied: number; readonly role: Role | null }>>;
@@ -823,21 +825,19 @@ function place(r: Replay, event: AccessEvent): void {
   }
 
   const index = r.order.length;
-  const who = affected(event, r.state);
-  const before = who.map((did) => roleOf(r.state, did));
+  for (const did of affected(event, r.state)) appended(r.reductions, did, event.id);
   apply(event, r.state);
-  who.forEach((did, i) =>
-    appended(r.reductions, did, { event: event.id, did, before: before[i]!, after: roleOf(r.state, did) }),
-  );
   if (event.kind === 'member') appended(r.memberLog, event.did, { applied: index, role: event.role });
   if (event.kind === 'role') appended(r.roleLog, event.name, { applied: index, role: event.role });
-  if (event.kind === 'revoke' && !r.revokes.has(event.note))
-    r.revokes.set(event.note, { event: event.id, keep: new Set(event.keep) });
+  // Every revoke applies, each with what its own author had seen: none can shield what another takes.
+  if (event.kind === 'revoke') appended(r.revokes, event.target, { event: event.id, root: event.root });
   if (event.kind === 'fork' && event.from < (r.forks.get(event.writer)?.from ?? Infinity))
     r.forks.set(event.writer, { event: event.id, from: event.from });
-  r.keepOf.set(event.id, new Set(event.keep));
+  r.cutoffOf.set(event.id, event.cutoff);
   r.statuses.set(event.id, { status: 'applied', index });
   r.order.push(event.id);
+  for (const head of r.appliedHeads) if (inCut(r, saw, head)) r.appliedHeads.delete(head);
+  r.appliedHeads.add(event.id);
   appended(r.appliedByKey, event.key, event.id);
 }
 
@@ -851,6 +851,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     placed: new Map(),
     ancestry: new Map(),
     heads: new Set(),
+    appliedHeads: new Set(),
     state: startState(genesis),
     statuses: new Map(),
     order: [],
@@ -858,7 +859,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     reductions: new Map(),
     revokes: new Map(),
     forks: new Map(),
-    keepOf: new Map(),
+    cutoffOf: new Map(),
     memberLog: new Map([[genesis.creator, [{ applied: -1, role: genesis.creatorRole }]]]),
     roleLog: new Map(genesis.roles.map((role) => [role.name, [{ applied: -1, role }]])),
     choices: [],
@@ -1002,6 +1003,7 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     placed: new Map(r.placed),
     ancestry: new Map(r.ancestry),
     heads: new Set(r.heads),
+    appliedHeads: new Set(r.appliedHeads),
     state: cloneState(r.state),
     statuses: new Map(r.statuses),
     order: [...r.order],
@@ -1009,7 +1011,7 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     reductions: new Map(r.reductions),
     revokes: new Map(r.revokes),
     forks: new Map(r.forks),
-    keepOf: new Map(r.keepOf),
+    cutoffOf: new Map(r.cutoffOf),
     memberLog: new Map(r.memberLog),
     roleLog: new Map(r.roleLog),
     choices: r.choices,
@@ -1037,7 +1039,7 @@ function historyOf(r: Replay): AccessHistory {
   const history: AccessHistory = Object.freeze({
     current: r.state,
     status: (id: string) => r.statuses.get(id) ?? null,
-    heads: () => (heads ??= Object.freeze([...r.heads].sort())),
+    heads: () => (heads ??= Object.freeze([...r.appliedHeads].sort())),
     at(ids: ReadonlyArray<string>) {
       return seen(ids) ? stateAt(r, ids) : null;
     },
@@ -1046,47 +1048,37 @@ function historyOf(r: Replay): AccessHistory {
         return { ok: false, reason: 'Access changes it depends on have not arrived yet', later: true };
       // For a cited version, only what the citer had seen can take it away (02 §7.6).
       const known = within ? cutOf(r, within) : null;
-      const revoked = record.note ? r.revokes.get(record.note) : undefined;
-      if (revoked && !revoked.keep.has(record.id) && (!known || inCut(r, known, revoked.event)))
-        return { ok: false, reason: 'The note it was written under was revoked', withdrawn: true };
+      const counts = (event: string) => !known || inCut(r, known, event);
+      // Covered: its key's place is at or below what the change's author had seen of that key.
+      const covered = (event: string) =>
+        record.writer !== undefined &&
+        record.at !== undefined &&
+        (r.cutoffOf.get(event)?.get(record.writer) ?? -1) >= record.at;
+      if (record.writer !== undefined) {
+        for (const revoke of r.revokes.get(record.writer) ?? [])
+          if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))
+            return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
+      }
       // A key that forked its log: nothing it signed from the fork on can be told from a forgery.
       const fork = record.writer === undefined ? undefined : r.forks.get(record.writer);
-      if (fork && (record.at ?? 0) >= fork.from && (!known || inCut(r, known, fork.event)))
+      if (fork && (record.at ?? 0) >= fork.from && counts(fork.event))
         return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
 
       const cutState = stateAt(r, record.seen);
       if (!needs(roleOf(cutState, record.root), cutState)) {
         return { ok: false, reason: 'Its author was not allowed to, as of what it had seen' };
       }
-      // A change it had not seen, that took this power away, stands unless it kept the record.
+      // Changes to its author's standing it had not seen, and that don't cover it.
       const cut = cutOf(r, record.seen);
-      for (const reduction of r.reductions.get(record.root) ?? []) {
-        if (inCut(r, cut, reduction.event)) continue;
-        if (known && !inCut(r, known, reduction.event)) continue;
-        if (r.keepOf.get(reduction.event)?.has(record.id)) continue;
-        if (needs(reduction.before, cutState) && !needs(reduction.after, cutState)) {
-          return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
-        }
-      }
-      return { ok: true };
+      const unseen = (r.reductions.get(record.root) ?? []).filter(
+        (event) => !inCut(r, cut, event) && counts(event) && !covered(event),
+      );
+      return { ok: true, unseen };
     },
-    revoked: (note: string) => r.revokes.get(note) ?? null,
+    revoked: (key: string, root: string) =>
+      (r.revokes.get(key) ?? []).filter((revoke) => revoke.root === root).map((revoke) => revoke.event),
     forked: (writer: string) => r.forks.get(writer) ?? null,
     forks: () => [...r.forks].map(([writer, { from }]) => ({ writer, from })),
-    unseenDefinitions(name, ids, within) {
-      if (!seen(ids) || (within && !seen(within))) return null;
-      const cut = cutOf(r, ids);
-      const known = within ? cutOf(r, within) : null;
-      return r.order.filter((id) => {
-        const event = r.byId.get(id);
-        return (
-          event?.kind === 'definition' &&
-          event.name === name &&
-          !inCut(r, cut, id) &&
-          (!known || inCut(r, known, id))
-        );
-      });
-    },
     named: (did: string) => r.named.has(did),
     knownInvite: (key: string) => r.invites.has(key),
     extend(event: AccessEvent) {

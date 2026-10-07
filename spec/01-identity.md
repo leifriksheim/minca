@@ -256,14 +256,14 @@ this one own the use; this table is the registry.
 | `weave/pairing-room/v2`                 | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                               | room id                    | Pairing room                                                 | `identity/pairing.ts:22`           | 01     |
 | `weave/pairing-key/v2\|<O>\|<P>`        | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                       | AES-256-GCM key            | Pairing handover                                             | `identity/pairing.ts:23`           | 01     |
 | `weave/pairing-code/v2\|<O>\|<P>`       | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                       | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:24`           | 01     |
-| `weave/space-invite/v1`                 | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                | P-256 key                  | Invite key                                                   | `space/space-access.ts:33`         | 03     |
-| `weave/space-read/v1`                   | HKDF, L=32 → `P256KeyFrom`                | raw 32-byte space key                                                                | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:32`         | 03     |
+| `weave/space-invite/v1`                 | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                | P-256 key                  | Invite key                                                   | `space/space-access.ts:34`         | 03     |
+| `weave/space-read/v1`                   | HKDF, L=32 → `P256KeyFrom`                | raw 32-byte space key                                                                | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:33`         | 03     |
 | `weave/account-registry/nonce/v1`       | HKDF, L=32, first 12 bytes, base64url     | vault key bytes                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:80,104` | 03     |
 | `weave/account-registry/key/v1`         | HKDF, L=32                                | vault key bytes                                                                      | AES-256-GCM space key      | Account registry space                                       | `space/account-registry.ts:80,105` | 03     |
 | `weave/contacts/nonce/v1`               | as above                                  | vault key bytes                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:93,104` | 03     |
 | `weave/contacts/key/v1`                 | as above                                  | vault key bytes                                                                      | AES-256-GCM space key      | Contacts space                                               | `space/account-registry.ts:93,105` | 03     |
 | `weave/topic-tags/v1`                   | HKDF → HMAC-SHA256 key                    | raw space key (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:233`        | 04     |
+| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:246`        | 04     |
 | `weave-agent-link-room-v1`              | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                          | room id                    | Agent link room                                              | `session/agent-link.ts:26`         | 06     |
 | `weave-agent-link-key-v1`               | HKDF, L=32                                | 16-byte connect-code secret                                                          | AES-256-GCM key            | Agent link messages                                          | `session/agent-link.ts:27`         | 06     |
 
@@ -273,10 +273,10 @@ by a convention built on the protocol (`packages/core/docs/`), not by it:
 
 | String                                                 | Kind                                             | Defined in                                                    | Part   |
 | ------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- | ------ |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:215`                                   | 03     |
-| `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:213`                                   | 03     |
-| `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:200`                                   | 03     |
-| `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:202`                                   | 03, 04 |
+| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:222`                                   | 03     |
+| `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:220`                                   | 03     |
+| `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:207`                                   | 03     |
+| `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:209`                                   | 03, 04 |
 | `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1549`                                           | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>`           | Sealing context (the text)                       | `privacy/direct.ts:37`                                        | docs   |
 | `weave/direct/v1\|<spaceId>\|<from>\|<to,…>\|<reader>` | `sealFor` context (one reader's box)             | `privacy/direct.ts:41`                                        | docs   |
@@ -492,15 +492,14 @@ an `iss` whose multicodec is not `p256-pub` (§4).
 
 The cost: `createdAt` is whatever the writer typed, so a leaked session key
 can sign records backdated into its token's old window, for good. Only a
-`sys.revoke` of the note closes that window ([03 — Spaces](03-spaces.md)
+`sys.revoke` of the key closes that window ([03 — Spaces](03-spaces.md)
 §5.1, §6.4), and today nothing writes one when a session ends.
 
 > **Planned: revoking a session's note when it ends.** Signing out, and
-> removing a device, revoke the session's note in every space it could write
-> in, with a `keep` list naming the versions it wrote, the way disconnecting
-> an app already does. _Open:_ whether the issuer's key is at hand at sign-out,
-> how large the keep list gets, and whether the device key's note is revoked
-> too. Tracked in [#26](https://github.com/leifriksheim/weave/issues/26).
+> removing a device, revoke the session's key in every space it could write
+> in, with a cutoff at what it wrote, the way disconnecting an app already
+> does. _Open:_ whether a key of the account is at hand at sign-out, and
+> whether the device key is revoked too. Tracked in [#26](https://github.com/leifriksheim/weave/issues/26).
 
 ### 7.5 Delegation chains
 

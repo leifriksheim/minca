@@ -64,8 +64,6 @@ reference implementation, or any implementation, honestly.
     ([#33](https://github.com/leifriksheim/weave/issues/33)). That includes knocks on doors and contact requests (07),
     whose mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
   - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
-  - It can make every peer store revokes naming notes it made up, without
-    limit ([#180](https://github.com/leifriksheim/weave/issues/180)).
 
 _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 
@@ -84,16 +82,11 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     another envelope or body, turns an honest write into proof against its
     writer. Warrants are a standard collection, not protocol
     ([warrants](../packages/core/docs/warrants.md)). This holds while an
-    honest `seen` can name every head ([#183](https://github.com/leifriksheim/weave/issues/183)).
+    head ever needs leaving out: a dropped change is never a head.
 - **Does not hold yet.**
-  - It can freeze the space: more than 64 concurrent changes it has no power
-    for stay heads, and no honest write can name them all in `seen`
-    ([#183](https://github.com/leifriksheim/weave/issues/183)).
   - Each warrant costs every member's node a replay of the offending
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/weave/issues/33)).
-  - A narrowed rule and a demotion it had not seen, each harmless alone,
-    together let it sign as of before both ([#179](https://github.com/leifriksheim/weave/issues/179)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's clock, its keys, or the order it runs checks in ([#121](https://github.com/leifriksheim/weave/issues/121),
     [#163](https://github.com/leifriksheim/weave/issues/163)).
@@ -103,14 +96,14 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - Only three kinds of misconduct earn a warrant, and a peer that
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
-    witness removes them without `keep`, and a writer can withdraw their own
+    witness removes them with a cutoff below their warrants, and a writer can withdraw their own
     by revoking its note or forking their log ([#168](https://github.com/leifriksheim/weave/issues/168)),
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Fork proofs deter, but don't catch: a fork counts once a member holding
     both versions writes `sys.fork`, and a key can sign where its other branch
     never reaches ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_.
   - It can disown its own history, withdrawing votes and agreements others
-    relied on, by revoking its own note with an empty `keep`, or forking its
+    relied on, by revoking its own key with a cutoff of 0, or forking its
     own log at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
   - A `seq 0` for someone else's key can take over "creator" ([#72](https://github.com/leifriksheim/weave/issues/72)).
   - The top rank answers to no one, and no vote can bind a change to who may
@@ -121,12 +114,10 @@ _Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/te
 ### 3.3 Former member
 
 - **Holds.**
-  - What it writes claiming to have seen its removal does not count, except
-    a revoke of its own note (below). Ordinary records it writes claiming not
-    to have seen it are withdrawn, unless the removal kept them (03 §5.1).
+  - What it writes claiming to have seen its removal does not count, a
+    revoke included, since a revoke needs a role. Ordinary records it writes claiming not
+    to have seen it are withdrawn, unless the removal's cutoff covers them (03 §5.1, §6.3).
 - **Does not hold yet.**
-  - A revoke of its own note needs no role, so after its removal it can still
-    withdraw what the removal kept ([#168](https://github.com/leifriksheim/weave/issues/168)).
   - A version it backdates is withdrawn, but a colluding member's `check` can
     still cite and count it ([#184](https://github.com/leifriksheim/weave/issues/184)).
   - A key change made at the same moment as its removal, by someone who
@@ -154,13 +145,14 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
 - **Holds.**
   - Once a fork of the key's log is proven, the ordinary records it signed from
     the proven place on stop counting (02 §4.10, 03 §6.5).
+  - Once the owner revokes the key, the ordinary records it signed past what
+    the owner had seen of it stop counting, under every note to that key. A
+    revoke the thief writes first, covering what it signed in advance, doesn't
+    shield it: every revoke applies (03 §6.4).
 - **Does not hold yet.**
-  - The owner's revoke may never apply: the first applied revoke of a note
-    wins, so a thief revokes the stolen note first, keeping what it signed in
-    advance, or revokes the owner's other notes with an empty `keep`
+  - It can revoke the owner's other keys, with a cutoff of its choosing: a key
+    whose note grants `*` is the account while it lasts
     ([#168](https://github.com/leifriksheim/weave/issues/168)).
-  - The key's other notes still work: a session key gets a new note every
-    hour, and the older ones are public ([#174](https://github.com/leifriksheim/weave/issues/174)).
   - Neither a revoke nor a fork proof stops its **access changes**: it can
     still add members, change roles or change the key ([#167](https://github.com/leifriksheim/weave/issues/167)).
   - It decides whether it forks the owner's line at all ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_. And a fork
@@ -169,7 +161,7 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
   - It can keep signing versions dated inside a note's old validity window,
     and a revocation does not reach spaces created after it ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
-_Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts`._
+_Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…")._
 
 ### 3.5 Root thief
 
@@ -195,7 +187,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - Any key the account granted can pose as the account's node to a client
     that pinned the account ([#177](https://github.com/leifriksheim/weave/issues/177)) _(traced)_.
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
-    [#168](https://github.com/leifriksheim/weave/issues/168), [#174](https://github.com/leifriksheim/weave/issues/174)).
+    [#168](https://github.com/leifriksheim/weave/issues/168)).
 
 _Source: 01 §8; 06 §2. Tests: `packages/core/tests/connect.test.ts`, `packages/core/tests/agents.test.ts`, `packages/core/tests/ucan.test.ts`._
 
