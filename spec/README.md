@@ -11,15 +11,41 @@ the code disagree, that is a bug in one of them: open an issue, and say which.
 
 ## Parts
 
-| Part                                                      | Covers                                                                                                                                                                       |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [01 — Identity](01-identity.md)                           | Seeds and recovery codes, key derivation, DIDs, the account vault, root and session signers, UCAN delegations, what a note lets a key do, device keys, contact keys, pairing |
-| [02 — Records](02-records.md)                             | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules and checks, topics, the validation pipeline |
-| [03 — Spaces](03-spaces.md)                               | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                   |
-| [04 — Network](04-network.md)                             | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN        |
-| [05 — Sync and storage](05-sync-and-storage.md)           | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                              |
-| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, agents, carriers and hosts                                                                      |
-| [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock                                            |
+**The core.** What every peer implements to sync with others, store what they
+store, and judge every record the same way:
+
+| Part                                            | Covers                                                                                                                                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, the account vault, root and session signers, UCAN delegations, what a note lets a key do, device keys, contact keys, pairing |
+| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules and checks, topics, the validation pipeline |
+| [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                   |
+| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN        |
+| [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                              |
+
+**Built on the core.** Exchanges between two parties that a peer needs only
+if it takes part in them; a peer that doesn't still syncs, stores and judges
+everything the same:
+
+| Part                                                      | Covers                                                                                                                            |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, agents, carriers                                     |
+| [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock |
+| [08 — Hosting](08-hosting.md)                             | Hosts: subscriptions and payment, a space's own fund, bots a host runs                                                            |
+
+### A minimal peer
+
+A peer that joins spaces and syncs them needs, from the core:
+
+- 01 §1–8: keys, DIDs, UCAN notes, and what a note lets a key do;
+- 02 whole;
+- 03 §1–7, and §8–9 for private spaces;
+- 04 §1–2, one transport from §5, §6–7 and §9;
+- 05 §1–10.
+
+The rest of the core is shared between the devices of one account (the vault,
+device keys, pairing, the data folder, sealing at rest) or optional (several
+relays, introductions, blobs and mirrors). An implementation can add it
+later and still interoperate.
 
 What it defends, against whom, and where it does not yet, is in the
 [threat model](threat-model.md). Every part answers to it, and every change to
@@ -110,40 +136,40 @@ belongs. Issues track the larger ones. Known defects link their issue where
 they are described; the smaller ones share
 [#20](https://github.com/leifriksheim/weave/issues/20).
 
-| Planned                                                                                           | Where                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                                         |
-| One spelling per key; one valid form per token; strict token shape                                | [01 §4, §7](01-identity.md)                                                                                                                             |
-| Proof chains that travel (fixes a known defect)                                                   | [01 §7.5](01-identity.md), [#17](https://github.com/leifriksheim/weave/issues/17)                                                                       |
-| Delegations as UCAN 1.0                                                                           | [01 §7](01-identity.md), [#19](https://github.com/leifriksheim/weave/issues/19)                                                                         |
-| Grants narrower than a space                                                                      | [01 §7.1](01-identity.md), [06 §2](06-nodes-and-sessions.md), [#19](https://github.com/leifriksheim/weave/issues/19)                                    |
-| Revoking a session's note when it ends                                                            | [01 §7.4](01-identity.md), [#26](https://github.com/leifriksheim/weave/issues/26)                                                                       |
-| Sealing with HPKE (RFC 9180)                                                                      | [01 §9.4](01-identity.md), [#24](https://github.com/leifriksheim/weave/issues/24)                                                                       |
-| Wraps bound to their account                                                                      | [01 §10](01-identity.md)                                                                                                                                |
-| Keys that belong to their creator                                                                 | [02 §4.7](02-records.md), [#72](https://github.com/leifriksheim/weave/issues/72)                                                                        |
-| Merging inside one record                                                                         | [02 §4.8](02-records.md)                                                                                                                                |
-| Forgetting in blob stores                                                                         | [02 §4.9](02-records.md)                                                                                                                                |
-| References to records in other spaces                                                             | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/weave/issues/38)                                                                        |
-| `pattern` and `format` in definitions                                                             | [02 §6](02-records.md)                                                                                                                                  |
-| Private `onePer` keys; uniqueness that cannot be a key                                            | [02 §7.3](02-records.md), [#87](https://github.com/leifriksheim/weave/issues/87)                                                                        |
-| Asking for what a version cites                                                                   | [02 §7.6](02-records.md), [#79](https://github.com/leifriksheim/weave/issues/79)                                                                        |
-| Keep lists past the cap; deleted access records can't leave access standing                       | [03 §6.3, §7.2](03-spaces.md)                                                                                                                           |
-| What a private space still shows (hashed keys and collection names)                               | [03 §8.6](03-spaces.md)                                                                                                                                 |
-| Access-control convergence                                                                        | [05 §8](05-sync-and-storage.md), [#10](https://github.com/leifriksheim/weave/issues/10)                                                                 |
-| Limits on what one peer can cost another                                                          | [04 §7.4](04-network.md), [05 §6.4, §8](05-sync-and-storage.md), [#33](https://github.com/leifriksheim/weave/issues/33)                                 |
-| Binary sync messages                                                                              | [05 §4](05-sync-and-storage.md)                                                                                                                         |
-| Caches that fetch by record key; subsets smaller than a collection                                | [05 §9.1](05-sync-and-storage.md), [#27](https://github.com/leifriksheim/weave/issues/27)                                                               |
-| Mirrors: restoring an account, absorbing a quiet writer                                           | [05 §16.5](05-sync-and-storage.md)                                                                                                                      |
-| Files: blob references, bytes synced by hash                                                      | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/weave/issues/37)                                                              |
-| A wallet as the account home                                                                      | [06 §2](06-nodes-and-sessions.md)                                                                                                                       |
-| Agents: renewing notes, agents that can't run a program                                           | [06 §3.3](06-nodes-and-sessions.md)                                                                                                                     |
-| Subscriptions that match any of several topic values                                              | [06 §4.4](06-nodes-and-sessions.md), [#141](https://github.com/leifriksheim/weave/issues/141)                                                           |
-| Web Push through carriers, to an app that is closed                                               | [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/weave/issues/60)                                                             |
-| Subscriptions delivered per device, through receiver records                                      | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#30](https://github.com/leifriksheim/weave/issues/30)                                     |
-| More kinds of warrant                                                                             | [03 §6.6](03-spaces.md), [#148](https://github.com/leifriksheim/weave/issues/148)                                                                       |
-| Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [06 §4.8](06-nodes-and-sessions.md), [#117](https://github.com/leifriksheim/weave/issues/117), [#128](https://github.com/leifriksheim/weave/issues/128) |
-| Names: handles that lead to a door                                                                | [07 §9](07-doors.md)                                                                                                                                    |
-| Content-addressed definitions; definition tiers, additive-only                                    | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/weave/issues/11), [#12](https://github.com/leifriksheim/weave/issues/12)                |
+| Planned                                                                                           | Where                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                            |
+| One spelling per key; one valid form per token; strict token shape                                | [01 §4, §7](01-identity.md)                                                                                                                |
+| Proof chains that travel (fixes a known defect)                                                   | [01 §7.5](01-identity.md), [#17](https://github.com/leifriksheim/weave/issues/17)                                                          |
+| Delegations as UCAN 1.0                                                                           | [01 §7](01-identity.md), [#19](https://github.com/leifriksheim/weave/issues/19)                                                            |
+| Grants narrower than a space                                                                      | [01 §7.1](01-identity.md), [06 §2](06-nodes-and-sessions.md), [#19](https://github.com/leifriksheim/weave/issues/19)                       |
+| Revoking a session's note when it ends                                                            | [01 §7.4](01-identity.md), [#26](https://github.com/leifriksheim/weave/issues/26)                                                          |
+| Sealing with HPKE (RFC 9180)                                                                      | [01 §9.4](01-identity.md), [#24](https://github.com/leifriksheim/weave/issues/24)                                                          |
+| Wraps bound to their account                                                                      | [01 §10](01-identity.md)                                                                                                                   |
+| Keys that belong to their creator                                                                 | [02 §4.7](02-records.md), [#72](https://github.com/leifriksheim/weave/issues/72)                                                           |
+| Merging inside one record                                                                         | [02 §4.8](02-records.md)                                                                                                                   |
+| Forgetting in blob stores                                                                         | [02 §4.9](02-records.md)                                                                                                                   |
+| References to records in other spaces                                                             | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/weave/issues/38)                                                           |
+| `pattern` and `format` in definitions                                                             | [02 §6](02-records.md)                                                                                                                     |
+| Private `onePer` keys; uniqueness that cannot be a key                                            | [02 §7.3](02-records.md), [#87](https://github.com/leifriksheim/weave/issues/87)                                                           |
+| Asking for what a version cites                                                                   | [02 §7.6](02-records.md), [#79](https://github.com/leifriksheim/weave/issues/79)                                                           |
+| Keep lists past the cap; deleted access records can't leave access standing                       | [03 §6.3, §7.2](03-spaces.md)                                                                                                              |
+| What a private space still shows (hashed keys and collection names)                               | [03 §8.6](03-spaces.md)                                                                                                                    |
+| Access-control convergence                                                                        | [05 §8](05-sync-and-storage.md), [#10](https://github.com/leifriksheim/weave/issues/10)                                                    |
+| Limits on what one peer can cost another                                                          | [04 §7.4](04-network.md), [05 §6.4, §8](05-sync-and-storage.md), [#33](https://github.com/leifriksheim/weave/issues/33)                    |
+| Binary sync messages                                                                              | [05 §4](05-sync-and-storage.md)                                                                                                            |
+| Caches that fetch by record key; subsets smaller than a collection                                | [05 §9.1](05-sync-and-storage.md), [#27](https://github.com/leifriksheim/weave/issues/27)                                                  |
+| Mirrors: restoring an account, absorbing a quiet writer                                           | [05 §16.5](05-sync-and-storage.md)                                                                                                         |
+| Files: blob references, bytes synced by hash                                                      | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/weave/issues/37)                                                 |
+| A wallet as the account home                                                                      | [06 §2](06-nodes-and-sessions.md)                                                                                                          |
+| Agents: renewing notes, agents that can't run a program                                           | [06 §3.3](06-nodes-and-sessions.md)                                                                                                        |
+| Subscriptions that match any of several topic values                                              | [06 §4.4](06-nodes-and-sessions.md), [#141](https://github.com/leifriksheim/weave/issues/141)                                              |
+| Web Push through carriers, to an app that is closed                                               | [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/weave/issues/60)                                                |
+| Subscriptions delivered per device, through receiver records                                      | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#30](https://github.com/leifriksheim/weave/issues/30)                        |
+| More kinds of warrant                                                                             | [03 §6.6](03-spaces.md), [#148](https://github.com/leifriksheim/weave/issues/148)                                                          |
+| Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#117](https://github.com/leifriksheim/weave/issues/117), [#128](https://github.com/leifriksheim/weave/issues/128) |
+| Names: handles that lead to a door                                                                | [07 §9](07-doors.md)                                                                                                                       |
+| Content-addressed definitions; definition tiers, additive-only                                    | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/weave/issues/11), [#12](https://github.com/leifriksheim/weave/issues/12)   |
 
 Proposed in an issue but not yet designed into the spec, so listed under
 **Not yet specified** in their part: key rotation, KERI-style pre-rotation
