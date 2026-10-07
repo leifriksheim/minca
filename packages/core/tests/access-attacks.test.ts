@@ -57,6 +57,42 @@ describe('attacks on the access history', () => {
     );
   });
 
+  test('a struck grant gives no power downstream, even to a change that never cites the removal', () => {
+    const made = member('b1', 'alice', 'mallory', 'mod', ['space']);
+    const removed = member('br', 'alice', 'mallory', null, ['b1']);
+    // Mallory backdates a grant to a sock; the sock cites only that grant.
+    const sock = member('bm1', 'mallory', 'eve', 'mod', ['b1']);
+    const proxy = member('bm3', 'eve', 'frank', 'mod', ['bm1']);
+    const history = replayAccess(genesis, [made, removed, sock, proxy]);
+    assert.equal(status(history, 'bm1'), 'dropped');
+    assert.equal(status(history, 'bm3'), 'dropped', 'it rested on a struck grant');
+    assert.equal(history.current.members.has('frank'), false);
+  });
+
+  test('a thief’s grant, struck by a revoke, gives the thief’s sock nothing', () => {
+    const theft = member('tt1', 'alice', 'eve', 'owner', ['space'], {
+      author: 'aliceLaptop',
+      at: 5,
+      line: 5,
+    });
+    const revoke: AccessEvent = {
+      id: 'trv',
+      key: 'revoke:x',
+      kind: 'revoke',
+      root: 'alice',
+      author: 'alicePhone',
+      target: 'aliceLaptop',
+      seen: ['tt1'],
+      cutoff: new Map(),
+      at: 0,
+      line: 0,
+    };
+    const proxy = member('tp', 'eve', 'frank', 'owner', ['tt1']);
+    const history = replayAccess(genesis, [theft, revoke, proxy]);
+    assert.equal(status(history, 'tp'), 'dropped');
+    assert.equal(history.current.members.has('frank'), false);
+  });
+
   test('a revoke or a fork proof undoes a thief’s change to who may do what, whatever it saw', () => {
     const theft = member('t1', 'alice', 'eve', 'owner', ['space'], { author: 'aliceLaptop', at: 5, line: 5 });
     const revoke: AccessEvent = {
@@ -133,9 +169,13 @@ describe('attacks on the access history', () => {
     const history = replayAccess(space, [bob, moved, deleted]);
     assert.equal(history.current.roles.has('x'), false);
     assert.equal(history.current.keyDue, true);
+    // Extending gives what replaying whole does.
+    const back = member('back', 'alice', 'bob', 'member', ['mv', 'del']);
+    const extended = history.extend(back) ?? replayAccess(space, [bob, moved, deleted, back]);
+    assert.equal(extended.current.keyDue, replayAccess(space, [bob, moved, deleted, back]).current.keyDue);
   });
 
-  test('cost: a plain member’s braided revokes, and many rival changes on one record, stay cheap', () => {
+  test('cost: a plain member’s braided revokes, of any key or its own, stay cheap', () => {
     const events: AccessEvent[] = [member('m', 'alice', 'mallory', 'member', ['space'])];
     // Each revoke names the two before it, so branches meet at every one.
     for (let i = 0; i < 1500; i++) {
@@ -151,8 +191,24 @@ describe('attacks on the access history', () => {
         cutoff: new Map(),
       });
     }
+    // And a member revoking the very key that signs it, over and over: revokes strike no revoke.
+    const self: AccessEvent[] = [events[0]!];
+    for (let i = 0; i < 1500; i++)
+      self.push({
+        id: `sv${String(i).padStart(5, '0')}`,
+        key: 'revoke:self|mallory',
+        kind: 'revoke',
+        root: 'mallory',
+        author: 'did:key:zMal',
+        target: 'did:key:zMal',
+        seen: self.slice(-2).map((event) => event.id),
+        cutoff: new Map(),
+        at: i,
+        line: i,
+      });
     const started = Date.now();
     replayAccess(genesis, events);
+    replayAccess(genesis, self);
     assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
   });
 });

@@ -156,13 +156,30 @@ describe('access replay: properties', () => {
     });
   });
 
-  test('safety: no change applies whose author lacked the power in its own view', () => {
+  test('safety: no change applies whose author lacked the power, given the valid changes it saw', () => {
     forHistories(({ events }) => {
       const history = replayAccess(genesis, events);
+      const byId = new Map(events.map((event) => [event.id, event]));
       for (const event of events) {
         if (!applied(history, event.id)) continue;
-        const view = history.at(event.seen);
-        assert.ok(view, event.id);
+        // Everything it saw, with what doesn't apply made powerless (kept, so nothing waits on
+        // it): valid changes never strike each other but in turn, so this gives their merge.
+        const ancestors = new Set<string>();
+        const stack = [...event.seen];
+        while (stack.length > 0) {
+          const id = stack.pop()!;
+          if (ancestors.has(id) || !byId.has(id)) continue;
+          ancestors.add(id);
+          stack.push(...byId.get(id)!.seen);
+        }
+        const view = replayAccess(
+          genesis,
+          events
+            .filter((other) => ancestors.has(other.id))
+            .map((other) =>
+              applied(history, other.id) ? other : { ...other, root: 'nobody', author: 'nobody' },
+            ),
+        ).current;
         assert.equal(refusal(event, view), null, `${event.id} applied without the power for it`);
       }
     });

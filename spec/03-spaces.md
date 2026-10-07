@@ -329,10 +329,8 @@ what `e` **saw**. Two events neither of which saw the other are
 ### 4.3 Allowed, struck, valid
 
 1. **Allowed.** An event `e` is allowed when `refusal(e, V(e))` (§4.5) is null,
-   where `V(e)`, its **own view**, is the merge (§4.4) of the events in
-   `ancestors(e)` that are valid among `ancestors(e)` (steps 2–4, applied to
-   that set alone). That depends only on what `e` saw, so it never changes, and
-   a grant that a removal it saw struck gives it no power.
+   where `V(e)`, its **own view**, is the merge (§4.4) of the allowed events
+   in `ancestors(e)`. That depends only on what `e` saw, so it never changes.
 2. **Reductions.** An allowed event is a **reduction** of an account when, in
    its own view, it lowers that account's role (§4.5): a `member` event for
    that account, or a `role` event for a role it holds. A `revoke` is a
@@ -346,14 +344,20 @@ what `e` **saw**. Two events neither of which saw the other are
 collection] ≥ e`'s place in that collection's line, §6.3) and, unless `r`
    is a revoke or a fork, neither had seen the other. A revoke or a fork proof
    reaches its key's events whatever either saw: an owner reacting to a thief
-   has seen what the thief did.
-4. **Valid among a set.** Take the strongly connected components of the
-   strikes between allowed events in the set, and visit them so that every
-   component comes after the ones that strike into it. An allowed event is
-   **valid** unless a valid event from another component strikes it. Strikes
-   within one component don't count: reductions that strike each other all
-   stand, as concurrent revocations do in Keyhive. The history's valid events
-   are those valid among all placeable events.
+   has seen what the thief did. Revokes and forks are never struck.
+4. **Valid among a set** `S` (closed under `ancestors`), in two passes:
+   1. Take the strongly connected components of the strikes between allowed
+      events in `S`, and visit them so that every component comes after the
+      ones that strike into it. An allowed event is **unstruck** unless an
+      unstruck event from another component strikes it. Strikes within one
+      component don't count: reductions that strike each other all stand, as
+      concurrent revocations do in Keyhive.
+   2. Then, ancestors first, an unstruck event is **valid** when
+      `refusal(e, W(e))` is null, where `W(e)` is the merge of the valid
+      events in `ancestors(e)`. So a struck grant gives no power to anything
+      that rests on it, whether or not that cited the removal.
+
+   The history's valid events are those valid among all placeable events.
 
 An event that is not allowed is **dropped** with its refusal; one that is
 allowed but not valid is dropped as struck. Valid events are **applied**.
@@ -388,9 +392,10 @@ change it had not seen) reads no more, however that came about.
 
 The **current state** is the merge of the valid events.
 
-> Rationale: least power wins, so a grant racing a restriction never beats
-> it, and an id decides only between two equally restrictive writes, where
-> either outcome is safe. Rivals are compared by the roles as each one's own
+> Rationale: least power wins, so a grant racing a restriction beats it only
+> when neither role covers the other, and then by lower rank: a grant its
+> author could have made anyway. An id decides only between two equally
+> restrictive writes, where either outcome is safe. Rivals are compared by the roles as each one's own
 > view had them, so a later edit to a role can't reorder them.
 
 ### 4.5 Refusals — the rank rule

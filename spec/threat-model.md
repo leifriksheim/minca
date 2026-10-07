@@ -129,7 +129,13 @@ _Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/te
   - What it writes claiming to have seen its removal does not count, a
     revoke included, since a revoke needs a role. Ordinary records it writes claiming not
     to have seen it are withdrawn, unless the removal's cutoff covers them (03 §5.1, §6.3).
+  - A grant it makes concurrently with its removal, or backdates, is struck,
+    and gives no power to anything resting on it, whether or not that cites
+    the removal (03 §4.3; `packages/core/tests/access-attacks.test.ts`).
 - **Does not hold yet.**
+  - A change by a sock it granted, though dropped, still strikes changes made
+    concurrently by those the sock outranked
+    ([#191](https://github.com/leifriksheim/weave/issues/191)).
   - A version it backdates is withdrawn, but a colluding member's `check` can
     still cite and count it ([#184](https://github.com/leifriksheim/weave/issues/184)).
   - It can rejoin through any open role invite it saw: removal closes none
