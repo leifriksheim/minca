@@ -18,9 +18,8 @@ import { isRecord } from '../utils/guards.js';
  *   as of its own `seen` (03 §5.2);
  * - `access`: a change to who may do what its author had no power to make, as
  *   of its own `seen` (03 §4.5);
- * - `warrant`: a warrant whose proof doesn't hold — against whoever wrote it.
  */
-const WARRANT_KINDS = ['chain', 'standing', 'access', 'warrant'] as const;
+const WARRANT_KINDS = ['chain', 'standing', 'access'] as const;
 export type WarrantKind = (typeof WARRANT_KINDS)[number];
 
 /** A warrant's body */

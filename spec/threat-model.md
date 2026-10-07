@@ -78,14 +78,13 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     seen also withdraws what it wrote (03 §5.1, §5.2 step 10).
   - Peers that hold the same access changes replay them to the same state:
     the order is a function of the signed changes alone (03 §4.3).
-  - A warrant against it is written once, under a key naming the offending
-    version and the warrant's writer: neither it nor anyone else can overwrite or delete
-    it, and whether it stands never rests on another warrant (03 §6.6).
-  - Misconduct is judged against the offending version's own view, the
-    changes it had seen replayed alone, so no rival or later change can turn
-    an honest write into proof against its writer, and a copy with another
-    envelope or body proves nothing (03 §6.6). This holds while an honest `seen` can name
-    every head ([#183](https://github.com/leifriksheim/weave/issues/183)).
+  - What it signs that every peer refuses, and no honest client signs, can
+    be shown to every member as proof each checks for itself, judged in the
+    offending version's own view: no rival or later change, and no copy with
+    another envelope or body, turns an honest write into proof against its
+    writer. Warrants are a standard collection, not protocol
+    ([warrants](../packages/core/docs/warrants.md)). This holds while an
+    honest `seen` can name every head ([#183](https://github.com/leifriksheim/weave/issues/183)).
 - **Does not hold yet.**
   - It can freeze the space: more than 64 concurrent changes it has no power
     for stay heads, and no honest write can name them all in `seen`
@@ -100,7 +99,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - A change made later can reorder earlier concurrent ones, and a rival that
     arrives late can drop a change an honest write relied on, withdrawing it:
     peers converge, but verdicts on ordinary records are not final ([#137](https://github.com/leifriksheim/weave/issues/137)).
-  - Only four kinds of misconduct earn a warrant (03 §6.6), and a peer that
+  - Only three kinds of misconduct earn a warrant, and a peer that
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
     witness removes them without `keep`, and a writer can withdraw their own
@@ -116,7 +115,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - The top rank answers to no one, and no vote can bind a change to who may
     do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
 
-_Source: 03 §4, §5, §6.6. Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
+_Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
 ### 3.3 Former member
 

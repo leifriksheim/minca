@@ -176,9 +176,11 @@ export const inviteKey = (inviteDid: string) => hashedKey('invite', inviteDid);
 export const revokeKey = (noteCid: string) => hashedKey('revoke', noteCid);
 /**
  * Where proof that an account broke the protocol's rules is kept, one record
- * per offending version and writer, written once: `{ kind, evidence }` (spec 03 §6.6).
+ * per offending version and writer: `{ kind, evidence }`. A standard
+ * collection, not protocol: a warrant stands like any record, and each peer
+ * checks its proof only to decide whether to show a flag (docs/warrants.md).
  */
-export const WARRANT_COLLECTION = 'sys.warrant';
+export const WARRANT_COLLECTION = 'std.warrant';
 /**
  * The key of the warrant one account wrote about one offending version. The
  * key names both, so no one else — the accused least of all — can write a
