@@ -26,7 +26,7 @@ who made it:
       "collection": "std.channel",
       "include": { "messages": { "rel": "channel", "from": "std.message", "count": true } }
     },
-    "holds": { ">=": [{ "var": "included.messages" }, 100] }
+    "holds": "included.messages >= 100"
   },
   "then": {
     "kind": "add",
@@ -60,7 +60,7 @@ weekday 0 or 7 is Sunday; a day and a weekday both given means either. At
 those times the rule acts once, about no record: `$it` links nothing and
 `{title}` stays as written, so a rule that changes a record needs a `when`.
 
-`holds` is a condition in the language of checks
+`holds` is a CEL condition, as a check is
 ([spec 02 §7.6](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)),
 read as a record condition (`checkRecordCondition`): `body`, `links`, `key`,
 `collection`, `author` (the record's creator) and `createdAt`, and also

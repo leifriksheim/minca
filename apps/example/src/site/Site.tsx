@@ -305,10 +305,7 @@ const CHECK_OWN = `
 // Or write your own. A score only goes up by one:
 rules: {
   check: [{
-    that: { '==': [
-      { var: 'body.score' },
-      { '+': [{ var: 'prev.body.score' }, 1] },
-    ] },
+    that: 'body.score == prev.body.score + 1.0',
     else: 'The score goes up by one',
   }],
 }

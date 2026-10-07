@@ -13,6 +13,7 @@ import {
 } from '@weaveprotocol/core/schemas';
 import { attachable, isObject, quickAddBody } from './derive/schema-ui';
 import {
+  celLiteral,
   clausesWords,
   clauseFields,
   filterFrom,
@@ -109,7 +110,7 @@ export function compile(picked: Picked): RuleWhen {
   const own = whereOf(picked.clauses, ME);
   if (own !== undefined) parts.push(own);
   const count = picked.count;
-  if (count) parts.push({ [COUNT_OPERATOR[count.op]]: [{ var: `included.${COUNTED}` }, count.value] });
+  if (count) parts.push(`included.${COUNTED} ${COUNT_OPERATOR[count.op]} ${celLiteral(count.value)}`);
   const only = count ? filterFrom(count.clauses ?? [], ME) : undefined;
   // Where a record is, as the query's filter: `link:channel` is also a topic a carrier can match.
   const inside = (picked.within ?? []).map((w) => ({ [`link:${w.rel}`]: w.to }));
@@ -130,7 +131,7 @@ export function compile(picked: Picked): RuleWhen {
           }
         : {}),
     },
-    ...(parts.length ? { holds: parts.length === 1 ? parts[0] : { and: parts } } : {}),
+    ...(parts.length ? { holds: parts.map((part) => `(${part})`).join(' && ') } : {}),
   };
 }
 

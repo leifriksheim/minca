@@ -63,75 +63,76 @@ const run = (that: Condition, values?: Record<string, unknown>, held?: ReadonlyA
   runChecks([{ that, else: 'No' }], scope(values, held));
 
 describe('checks: a definition', () => {
-  test('takes a list of { that, else }', () => {
-    assert.equal(checkChecks([{ that: { '>': [{ var: 'body.amount' }, 0] }, else: 'Give something' }]), null);
+  test('takes a list of { that, else }, each a CEL expression', () => {
+    assert.equal(checkChecks([{ that: 'body.amount > 0', else: 'Give something' }]), null);
     assert.equal(
-      checkRules({ check: [{ that: true, else: 'Always' }] }),
+      checkRules({ check: [{ that: 'true', else: 'Always' }] }),
       null,
       'rules take check alongside the rest',
     );
     assert.match(checkChecks([]) ?? '', /1 to 16 checks/);
-    assert.match(checkChecks([{ that: true }]) ?? '', /else says why/);
-    assert.match(checkChecks([{ that: true, else: 'x', also: 1 }]) ?? '', /only "that" and "else"/);
+    assert.match(checkChecks([{ that: 'true' }]) ?? '', /else says why/);
+    assert.match(checkChecks([{ that: 'true', else: 'x', also: 1 }]) ?? '', /only "that" and "else"/);
+    assert.match(checkChecks([{ that: true, else: 'x' }]) ?? '', /CEL expression/);
   });
 
   test('refuses what no peer could judge the same way', () => {
-    const problem = (that: unknown, permissions: string[] = []) =>
+    const problem = (that: string, permissions: string[] = []) =>
       checkChecks([{ that, else: 'x' }], 'rules.check', permissions) ?? '';
-    assert.match(problem({ eval: 'x' }), /"eval" is not an operator/);
-    assert.match(problem({ '==': [1] }), /takes 2 arguments/);
-    assert.match(problem({ '==': [1, 2], '!=': [1, 2] }), /one member/);
-    assert.match(problem({ var: 'window.location' }), /"window" is not something a check can read/);
-    assert.match(problem({ var: 'it.body' }), /"it" is not something/, '`it` only inside a list operation');
-    assert.equal(problem({ all: [{ var: 'body.items' }, { '>': [{ var: 'it.price' }, 0] }] }), '');
-    assert.match(problem({ var: 'body..x' }), /takes a path/);
-    assert.match(problem({ can: 'approve' }), /does not declare it/);
-    assert.equal(problem({ can: 'approve' }, ['approve']), '');
-    let deep: unknown = true;
-    for (let i = 0; i < 40; i++) deep = { not: deep };
-    assert.match(problem(deep), /nested more than 32 deep/);
+    assert.match(problem('eval(1)'), /eval\(\) is not in the subset/);
+    assert.match(problem('size(1, 2)'), /takes 1 arguments/);
+    assert.match(problem('body.x =='), /unexpected end/);
+    assert.match(problem('window.location'), /"window" is not something it can read/);
+    assert.match(problem('it.body'), /"it" is not something/, '`it` only inside a macro that binds it');
+    assert.equal(problem('body.items.all(it, it.price > 0)'), '');
+    assert.match(
+      problem('body.name.matches("a+")'),
+      /matches\(\) is not in the subset/,
+      'regular expressions differ',
+    );
+    assert.match(problem('b"bytes" == b"bytes"'), /bytes/);
+    assert.match(problem('type(1) == int'), /type\(\) is not in the subset/);
+    assert.match(problem('can("approve")'), /declares/);
+    assert.equal(problem('can("approve")', ['approve']), '');
+    assert.match(problem('link(body.rel) == ""'), /literal link role/);
+    assert.match(problem(`${'['.repeat(40)}1${']'.repeat(40)} == 1`), /nested more than 32 deep/);
   });
 });
 
 describe('checks: judging', () => {
   test('reads the version: its body, the version before, who wrote it', async () => {
-    assert.deepEqual(await run({ '==': [{ var: 'body.n' }, 2] }, { body: { n: 2 } }), { passed: true });
-    assert.deepEqual(await run({ '==': [{ var: 'body.n' }, 3] }, { body: { n: 2 } }), {
-      passed: false,
-      reason: 'No',
-    });
-    const next = { '==': [{ var: 'body.n' }, { '+': [{ var: 'prev.body.n' }, 1] }] };
+    assert.deepEqual(await run('body.n == 2', { body: { n: 2 } }), { passed: true });
+    assert.deepEqual(await run('body.n == 3', { body: { n: 2 } }), { passed: false, reason: 'No' });
+    const next = 'body.n == prev.body.n + 1.0';
     assert.deepEqual(await run(next, { body: { n: 3 }, prev: version('p', { body: { n: 2 } }) }), {
       passed: true,
     });
-    assert.deepEqual(await run({ '==': [{ var: 'author' }, ALICE] }), { passed: true });
-    // Missing is null, and a list position is a path segment.
-    assert.deepEqual(await run({ '==': [{ var: 'body.nothing.here' }, null] }, { body: {} }), {
-      passed: true,
-    });
-    assert.deepEqual(await run({ '==': [{ var: 'body.list.1' }, 'b'] }, { body: { list: ['a', 'b'] } }), {
-      passed: true,
-    });
+    assert.deepEqual(await run(`author == "${ALICE}"`), { passed: true });
+    assert.deepEqual(await run('seq == 0 && prev == null', { seq: 0 }), { passed: true });
+    // A missing field is an error, not null: has() asks.
+    assert.equal(passed(await run('body.nothing == null', { body: {} })), false);
+    assert.deepEqual(await run('!has(body.nothing)', { body: {} }), { passed: true });
+    assert.deepEqual(await run('body.list[1] == "b"', { body: { list: ['a', 'b'] } }), { passed: true });
     // Only a body's own members: nothing JavaScript adds to every object.
-    assert.deepEqual(await run({ '==': [{ var: 'body.constructor' }, null] }, { body: {} }), {
-      passed: true,
-    });
+    assert.deepEqual(await run('!has(body.constructor)', { body: {} }), { passed: true });
   });
 
   test('no truthiness: a condition is true, or the version is refused', async () => {
-    assert.equal(passed(await run(1)), false);
-    assert.equal(passed(await run('yes')), false);
-    assert.match(
-      why(await run({ and: [true, 1] })),
-      /"and" needs true or false/,
-      'the reason says what went wrong',
-    );
-    assert.match(why(await run({ '<': [1, 'two'] })), /compares two numbers or two texts/);
-    assert.match(why(await run({ '/': [1, 0] })), /by zero/);
-    assert.match(why(await run({ '+': [{ var: 'body.n' }, 1] }, { body: { n: '1' } })), /needs numbers/);
+    assert.equal(passed(await run('1')), false);
+    assert.equal(passed(await run('"yes"')), false);
+    assert.equal(passed(await run('true && 1')), false);
+    assert.equal(passed(await run('1 < "two"')), false);
+    assert.equal(passed(await run('1 / 0 == 0')), false);
+    // JSON numbers are doubles: add a double, or convert.
+    assert.equal(passed(await run('body.n + 1 == 2.0', { body: { n: 1 } })), false);
+    assert.deepEqual(await run('body.n + 1.0 == 2.0 && int(body.n) + 1 == 2', { body: { n: 1 } }), {
+      passed: true,
+    });
+    // An error gives way where the other side decides, as in CEL.
+    assert.deepEqual(await run('body.missing || true', { body: {} }), { passed: true });
   });
 
-  test('lists: all, some, count, sum, map, filter, distinct, in', async () => {
+  test('lists: all, exists, filter, map, distinct, sum, in, math', async () => {
     const body = {
       items: [
         { price: 3, by: ALICE },
@@ -142,43 +143,34 @@ describe('checks: judging', () => {
       b: { y: [2, 3], x: 1 },
     };
     const yes = async (that: Condition) =>
-      assert.deepEqual(await run(that, { body }), { passed: true }, JSON.stringify(that));
-    await yes({ all: [{ var: 'body.items' }, { '>': [{ var: 'it.price' }, 0] }] });
-    await yes({ some: [{ var: 'body.items' }, { '==': [{ var: 'it.price' }, 4] }] });
-    await yes({ '==': [{ count: [{ var: 'body.items' }, { '==': [{ var: 'it.by' }, ALICE] }] }, 2] });
-    await yes({ '==': [{ sum: [{ var: 'body.items' }, { var: 'it.price' }] }, 12] });
-    await yes({ '==': [{ size: { distinct: { map: [{ var: 'body.items' }, { var: 'it.by' }] } } }, 2] });
-    await yes({
-      '==': [{ size: { filter: [{ var: 'body.items' }, { '>': [{ var: 'it.price' }, 3] }] } }, 2],
-    });
-    await yes({ in: [BOB, { map: [{ var: 'body.items' }, { var: 'it.by' }] }] });
-    await yes({ all: [[], false] });
-    await yes({ not: { some: [[], true] } });
-    await yes({ '==': [{ max: [1, 7, 3] }, 7] });
-    await yes({ '==': [{ '%': [7, 3] }, 1] });
-    await yes({ '==': [{ '-': [3] }, -3] });
-    await yes({ '==': [{ get: [{ var: 'body.items' }, '2.price'] }, 5] });
-    // Equality is of canonical JSON: member order doesn't matter.
-    await yes({ '==': [{ var: 'body.a' }, { var: 'body.b' }] });
+      assert.deepEqual(await run(that, { body }), { passed: true }, that);
+    await yes('body.items.all(it, it.price > 0)');
+    await yes('body.items.exists(it, it.price == 4)');
+    await yes(`body.items.filter(it, it.by == "${ALICE}").size() == 2`);
+    await yes('sum(body.items.map(it, it.price)) == 12.0');
+    await yes('body.items.map(it, it.by).distinct().size() == 2');
+    await yes(`"${BOB}" in body.items.map(it, it.by)`);
+    await yes('[].all(it, false) && ![].exists(it, true)');
+    await yes('math.greatest([1, 7, 3]) == 7 && 7 % 3 == 1 && -(3) == -3');
+    await yes('body.items[2].price == 5');
+    // Maps are equal by content, whatever the order.
+    await yes('body.a == body.b');
   });
 
   test('always ends: a check that takes too many steps is refused', async () => {
-    const many = Array.from({ length: 200 }, (_, i) => i);
-    // 200 × 200 elements, more than the limit
-    const that = { all: [many, { all: [many, true] }] };
-    const outcome = await run(that);
+    const outcome = await run(
+      '[0,1,2,3,4,5,6,7,8,9].all(a, [0,1,2,3,4,5,6,7,8,9].all(b, [0,1,2,3,4,5,6,7,8,9].all(c, [0,1,2,3,4,5,6,7,8,9].all(d, true))))',
+    );
     assert.equal(passed(outcome), false);
-    assert.match(why(outcome), new RegExp(`more than ${MAX_CHECK_STEPS} steps`));
+    assert.match(why(outcome), /too many steps/);
+    assert.equal(MAX_CHECK_STEPS, 10_000);
   });
 
   test('hash is the content id of canonical JSON, the same as a body hash: commit, then reveal', async () => {
     const secret = { roll: 4, salt: 'k3j9x' };
     const commitment = await bodyHashOf(secret);
     assert.deepEqual(
-      await run(
-        { '==': [{ hash: { var: 'body.reveal' } }, commitment] },
-        { body: { reveal: { salt: 'k3j9x', roll: 4 } } },
-      ),
+      await run(`hash(body.reveal) == "${commitment}"`, { body: { reveal: { salt: 'k3j9x', roll: 4 } } }),
       { passed: true },
     );
   });
@@ -188,31 +180,8 @@ describe('checks: judging', () => {
       version('v1', { author: ALICE, body: { choice: 'yes' }, links: [{ rel: 'about', to: 'prop' }] }),
       version('v2', { author: BOB, body: { choice: 'yes' }, links: [{ rel: 'about', to: 'prop' }] }),
     ];
-    const enough = {
-      '>=': [
-        {
-          size: {
-            distinct: {
-              map: [
-                {
-                  filter: [
-                    { versions: { var: 'body.votes' } },
-                    {
-                      and: [
-                        { '==': [{ link: ['about', { var: 'it' }] }, { link: ['about'] }] },
-                        { '==': [{ var: 'it.body.choice' }, 'yes'] },
-                      ],
-                    },
-                  ],
-                },
-                { var: 'it.author' },
-              ],
-            },
-          },
-        },
-        2,
-      ],
-    };
+    const enough =
+      'versions(body.votes).filter(it, it.link("about") == link("about") && it.body.choice == "yes").map(it, it.author).distinct().size() >= 2';
     const links = [{ rel: 'about', to: 'prop' }];
     assert.deepEqual(await run(enough, { body: { votes: ['v1', 'v2'] }, links }, held), { passed: true });
     assert.equal(passed(await run(enough, { body: { votes: ['v1', 'v1'] }, links }, held)), false);
@@ -220,17 +189,17 @@ describe('checks: judging', () => {
   });
 
   test('can and member: roles as of what the version saw', async () => {
-    assert.deepEqual(await run({ can: 'approve' }), { passed: true });
-    assert.deepEqual(await run({ can: ['approve', BOB] }), { passed: false, reason: 'No' });
-    assert.deepEqual(await run({ member: BOB }), { passed: true });
-    assert.equal(passed(await run({ member: 'not a did' })), false);
+    assert.deepEqual(await run('can("approve")'), { passed: true });
+    assert.deepEqual(await run(`can("approve", "${BOB}")`), { passed: false, reason: 'No' });
+    assert.deepEqual(await run(`member("${BOB}")`), { passed: true });
+    assert.equal(passed(await run('member("not a did")')), false);
   });
 
   test('the first check that is not true decides', async () => {
     const checks: Check[] = [
-      { that: true, else: 'First' },
-      { that: false, else: 'Second' },
-      { that: false, else: 'Third' },
+      { that: 'true', else: 'First' },
+      { that: 'false', else: 'Second' },
+      { that: 'false', else: 'Third' },
     ];
     assert.deepEqual(await runChecks(checks, scope()), { passed: false, reason: 'Second' });
   });
@@ -240,44 +209,13 @@ describe('checks: judging', () => {
 
 /** "Passed" cites at least two distinct members' yes votes on the same proposal */
 const TWO_YES: Check = {
-  that: {
-    '>=': [
-      {
-        size: {
-          distinct: {
-            map: [
-              {
-                filter: [
-                  { versions: { var: 'body.votes' } },
-                  {
-                    and: [
-                      { '==': [{ var: 'it.collection' }, 'app.proposal.vote'] },
-                      { '==': [{ link: ['about', { var: 'it' }] }, { link: ['about'] }] },
-                      { '==': [{ var: 'it.body.choice' }, 'yes'] },
-                    ],
-                  },
-                ],
-              },
-              { var: 'it.author' },
-            ],
-          },
-        },
-      },
-      2,
-    ],
-  },
+  that: 'versions(body.votes).filter(it, it.collection == "app.proposal.vote" && it.link("about") == link("about") && it.body.choice == "yes").map(it, it.author).distinct().size() >= 2',
   else: 'A proposal passes with yes votes from at least two members',
 };
 
 /** A counter counts up by one: the version before decides what comes next */
 const BY_ONE: Check = {
-  that: {
-    if: [
-      { '==': [{ var: 'prev' }, null] },
-      { '==': [{ var: 'body.n' }, 0] },
-      { '==': [{ var: 'body.n' }, { '+': [{ var: 'prev.body.n' }, 1] }] },
-    ],
-  },
+  that: 'prev == null ? body.n == 0.0 : body.n == prev.body.n + 1.0',
   else: 'A counter starts at 0 and counts up by one',
 };
 

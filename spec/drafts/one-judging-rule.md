@@ -122,12 +122,11 @@ Finality (a quorum-signed checkpoint) can follow for governance (#137, #160).
 
 ## Rules in CEL
 
-A space's rules (`who`, `onePer`, `final`, `check`) become CEL (Common
-Expression Language) expressions over a small, fixed set of variables: the
-author's role, the version, the version before it, and what it cites. That
-replaces most of 02 §7. Every peer must reach the same verdict, so the CEL
-used is pinned to a version of the CEL spec and tested against its
-conformance suite.
+Built (protocol 12): a check's condition, a subscription's `where` and a
+rule's `holds` are CEL, a subset of it pinned to a commit of the CEL spec and
+tested against its conformance suite (02 §7.6). `who`, `onePer`, `fixed` and
+`final` stay declarative: they are short, and a peer reads them for more than
+a verdict (`onePer` makes a key).
 
 ## Warrants leave the protocol
 

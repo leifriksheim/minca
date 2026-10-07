@@ -8,7 +8,14 @@ import {
 } from '@weaveprotocol/core';
 import { useAccount, useNode } from '@weaveprotocol/core/react';
 import { Modal } from '@weave/app-shared/Modal';
-import { clauseFields, clausesWords, subscriptionOf, whereOf, type Clause } from '../../derive/conditions';
+import {
+  celLiteral,
+  clauseFields,
+  clausesWords,
+  subscriptionOf,
+  whereOf,
+  type Clause,
+} from '../../derive/conditions';
 import { collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { nameOf } from '../../derive/people';
 import { ago } from '../../derive/time';
@@ -22,11 +29,11 @@ type Who = 'others' | 'anyone';
 type Where = 'space' | 'all';
 
 /** "Linked to this record by `rel`", as a condition over a record */
-const linkedTo = (w: Within): Condition => ({ '==': [{ link: [w.rel] }, w.to] });
+const linkedTo = (w: Within): Condition => `link(${celLiteral(w.rel)}) == ${celLiteral(w.to)}`;
 
 /** Every condition, all of which must hold; undefined when there are none */
-const allOf = (parts: ReadonlyArray<Condition>): Condition =>
-  parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : { and: [...parts] };
+const allOf = (parts: ReadonlyArray<Condition>): Condition | undefined =>
+  parts.length === 0 ? undefined : parts.map((part) => `(${part})`).join(' && ');
 
 /** How many of the newest records the preview looks through */
 const LOOK_BACK = 50;

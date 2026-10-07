@@ -45,7 +45,7 @@ const busyChannels = (n: number, since: string): Rule => ({
       collection: channel.name,
       include: { messages: { rel: 'channel', from: message.name, count: true } },
     },
-    holds: { '>': [{ var: 'included.messages' }, n] },
+    holds: `included.messages > ${n}`,
   },
   then: {
     kind: 'add',
@@ -64,9 +64,9 @@ describe('rules', () => {
     assert.match(
       checkRule({
         ...busyChannels(10, since),
-        when: { query: { collection: 'std.channel' }, holds: { var: 'seq' } },
+        when: { query: { collection: 'std.channel' }, holds: 'seq' },
       })!,
-      /not something a record condition can read/,
+      /not something it can read/,
     );
     assert.match(checkRule({ ...busyChannels(10, since), then: { kind: 'shout', text: 'x' } })!, /then.kind/);
     // Actions name no collection of their own: a message is added like anything else.
@@ -82,11 +82,8 @@ describe('rules', () => {
       /then.links/,
     );
     // A subscription's where reads the record alone: what a query included is not its to read.
-    assert.match(checkRecordCondition({ '>': [{ var: 'included.messages' }, 1] })!, /not something/);
-    assert.equal(
-      checkRecordCondition({ '>': [{ var: 'included.messages' }, 1] }, 'holds', { included: true }),
-      null,
-    );
+    assert.match(checkRecordCondition('included.messages > 1')!, /not something/);
+    assert.equal(checkRecordCondition('included.messages > 1', 'holds', { included: true }), null);
   });
 
   test('“a channel with more than 3 messages” counts the messages linked to it, and acts once', async () => {

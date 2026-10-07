@@ -34,38 +34,27 @@ const ids = (max: number, description: string) => ({
   description,
 });
 
-// Conditions for the checks below, built here so they read as what they say.
-// What they build is plain JSON, stored with the definition.
+// Conditions for the checks below, in CEL, built here so they read as what
+// they say. What they build is CEL text, stored with the definition.
 
-const read = (path: string) => ({ var: path });
-const is = (a: unknown, b: unknown) => ({ '==': [a, b] });
-/** A field of the one version cited by the id at `path` */
-const citedOne = (path: string, field: string) => ({ get: [{ versions: [[read(path)]] }, `0.${field}`] });
+/** The one version cited by the id at `path`, or a field of it */
+const citedOne = (path: string, field: string) => `versions([${path}])[0].${field}`;
+/** The one version cited by the id at `path` has that field */
+const citedHas = (path: string, field: string) => `has(${citedOne(path, field)})`;
 /** Half of a count, rounded down */
-const half = (n: unknown) => ({ '/': [{ '-': [n, { '%': [n, 2] }] }, 2] });
+const half = (n: string) => `(${n} / 2)`;
 /** `n` × `top` / `bottom`, rounded up */
-const share = (n: unknown, top: number, bottom: number) => {
-  const over = { '+': [{ '*': [n, top] }, bottom - 1] };
-  return { '/': [{ '-': [over, { '%': [over, bottom] }] }, bottom] };
-};
+const share = (n: string, top: number, bottom: number) => `((${n} * ${top} + ${bottom - 1}) / ${bottom})`;
 /** How many different people wrote the versions cited at `path` */
-const authorsOf = (path: string) => ({
-  size: { distinct: { map: [{ versions: read(path) }, read('it.author')] } },
-});
+const authorsOf = (path: string) => `versions(${path}).map(it, it.author).distinct().size()`;
 /** Every version cited at `path` is a first version of `collection`, about what this record is about */
-const allAbout = (path: string, collection: string, also: ReadonlyArray<unknown>) => ({
-  all: [
-    { versions: read(path) },
-    {
-      and: [
-        is(read('it.collection'), collection),
-        is({ link: ['about', read('it')] }, { link: ['about'] }),
-        is(read('it.seq'), 0),
-        ...also,
-      ],
-    },
-  ],
-});
+const allAbout = (path: string, collection: string, also: ReadonlyArray<string>) =>
+  `versions(${path}).all(it, ${[
+    `it.collection == "${collection}"`,
+    'it.link("about") == link("about")',
+    'it.seq == 0',
+    ...also,
+  ].join(' && ')})`;
 
 /** What an assembly may vote on, sorted into topics. Only moderators set them. */
 export const topic = typed<Topic>()({
@@ -122,35 +111,11 @@ export const proposal = typed<Proposal>()({
     fixed: ['voters', 'toPass'],
     check: [
       {
-        that: {
-          if: [
-            is(read('seq'), 0),
-            {
-              and: [
-                { '>=': [{ size: read('body.voters') }, 1] },
-                { '<=': [{ size: read('body.voters') }, MAX_VOTERS] },
-                is({ size: { distinct: read('body.voters') } }, { size: read('body.voters') }),
-                { all: [read('body.voters'), { member: read('it') }] },
-              ],
-            },
-            true,
-          ],
-        },
+        that: `seq != 0 || (size(body.voters) >= 1 && size(body.voters) <= ${MAX_VOTERS} && body.voters.distinct().size() == size(body.voters) && body.voters.all(it, member(it)))`,
         else: `A proposal's voters are members, each once, from 1 to ${MAX_VOTERS} of them`,
       },
       {
-        that: {
-          if: [
-            is(read('body.toPass'), null),
-            true,
-            {
-              and: [
-                { '<=': [read('body.toPass'), { size: read('body.voters') }] },
-                { '<=': [{ '-': [{ size: read('body.voters') }, read('body.toPass')] }, MAX_CITED - 1] },
-              ],
-            },
-          ],
-        },
+        that: `!has(body.toPass) || (body.toPass <= size(body.voters) && size(body.voters) - int(body.toPass) <= ${MAX_CITED - 1})`,
         else: `A proposal can't need more votes for than it has voters, nor more than ${MAX_CITED} votes either way`,
       },
     ],
@@ -235,13 +200,8 @@ interface Delegation {
 }
 
 /** How many votes for the proposal a decision cites needs: its `toPass`, else more than half */
-const toPassOf = (path: string) => ({
-  if: [
-    is(citedOne(path, 'body.toPass'), null),
-    { '+': [half({ size: read('body.voters') }), 1] },
-    citedOne(path, 'body.toPass'),
-  ],
-});
+const toPassOf = (path: string) =>
+  `(${citedHas(path, 'body.toPass')} ? int(${citedOne(path, 'body.toPass')}) : ${half('size(body.voters)')} + 1)`;
 
 /**
  * Settles a proposal: it cites the proposal (any version: its voters and
@@ -271,41 +231,22 @@ export const decision = typed<Decision>()({
     final: true,
     check: [
       {
-        that: {
-          and: [
-            is(citedOne('body.proposal', 'collection'), 'liquid.proposal'),
-            is(citedOne('body.proposal', 'key'), { link: ['about'] }),
-            is(citedOne('body.proposal', 'body.voters'), read('body.voters')),
-          ],
-        },
+        that: [
+          `${citedOne('body.proposal', 'collection')} == "liquid.proposal"`,
+          `${citedOne('body.proposal', 'key')} == link("about")`,
+          `${citedOne('body.proposal', 'body.voters')} == body.voters`,
+        ].join(' && '),
         else: 'A decision cites the proposal it decides, and its voters',
       },
       {
         that: allAbout('body.votes', 'liquid.vote', [
-          { in: [read('it.author'), read('body.voters')] },
-          {
-            if: [
-              is(read('body.outcome'), 'passed'),
-              is(read('it.body.choice'), 'for'),
-              { '!=': [read('it.body.choice'), 'for'] },
-            ],
-          },
+          'it.author in body.voters',
+          '(body.outcome == "passed" ? it.body.choice == "for" : it.body.choice != "for")',
         ]),
         else: 'A decision counts only votes on its proposal, by its voters, for its outcome',
       },
       {
-        that: {
-          if: [
-            is(read('body.outcome'), 'passed'),
-            { '>=': [authorsOf('body.votes'), toPassOf('body.proposal')] },
-            {
-              '>': [
-                { '+': [authorsOf('body.votes'), toPassOf('body.proposal')] },
-                { size: read('body.voters') },
-              ],
-            },
-          ],
-        },
+        that: `(body.outcome == "passed" ? ${authorsOf('body.votes')} >= ${toPassOf('body.proposal')} : ${authorsOf('body.votes')} + ${toPassOf('body.proposal')} > size(body.voters))`,
         else: 'A proposal passes once as many voters as it needs voted for, and fails once that can’t happen',
       },
     ] satisfies ReadonlyArray<Check>,
@@ -318,8 +259,11 @@ interface Decision {
   readonly votes: ReadonlyArray<string>;
 }
 
-/** A field of one of the two versions a conflict cites, by path: `0.body.choice` */
-const both = (path: string) => ({ get: [{ versions: read('body.versions') }, path] });
+/** The two versions a conflict cites differ in `field` of their bodies, one of them lacking it counts */
+const differs = (field: string) => {
+  const [a, b] = ['0', '1'].map((i) => `versions(body.versions)[${i}].body.${field}`);
+  return `(has(${a}) ? (!has(${b}) || ${a} != ${b}) : has(${b}))`;
+};
 
 /**
  * Proof that one record was written twice, two ways: two first versions of
@@ -345,34 +289,11 @@ export const conflict = typed<Conflict>()({
     final: true,
     check: [
       {
-        that: {
-          and: [
-            is({ size: read('body.versions') }, 2),
-            {
-              all: [
-                { versions: read('body.versions') },
-                {
-                  and: [
-                    { in: [read('it.collection'), ['liquid.vote', 'liquid.party-roll']] },
-                    is(read('it.key'), read('body.record')),
-                    is(read('it.seq'), 0),
-                    is({ link: ['about', read('it')] }, { link: ['about'] }),
-                  ],
-                },
-              ],
-            },
-            {
-              or: [
-                {
-                  '!=': [both('0.body.choice'), both('1.body.choice')],
-                },
-                {
-                  '!=': [both('0.body.members'), both('1.body.members')],
-                },
-              ],
-            },
-          ],
-        },
+        that: [
+          'size(body.versions) == 2',
+          'versions(body.versions).all(it, it.collection in ["liquid.vote", "liquid.party-roll"] && it.key == body.record && it.seq == 0 && it.link("about") == link("about"))',
+          `(${differs('choice')} || ${differs('members')})`,
+        ].join(' && '),
         else: 'A conflict cites two first versions of one vote or party roll that say different things',
       },
     ] satisfies ReadonlyArray<Check>,
@@ -397,20 +318,16 @@ export const PARTY_RULES = [
 ] as const;
 export type PartyRule = (typeof PARTY_RULES)[number];
 
-/** How many of `n` members a party's rule needs, as a condition; the default is more than half */
-const sharePerRule = (rule: unknown, n: unknown) => ({
-  if: [
-    is(rule, 'two-thirds'),
-    share(n, 2, 3),
-    {
-      if: [
-        is(rule, 'three-quarters'),
-        share(n, 3, 4),
-        { if: [is(rule, 'everyone'), n, { '+': [half(n), 1] }] },
-      ],
-    },
-  ],
-});
+/** The cited party decides this way */
+const decidesIs = (rule: string) =>
+  `${citedHas('body.party', 'body.decides')} && ${citedOne('body.party', 'body.decides')} == "${rule}"`;
+
+/** How many of `n` members (a count) a party's rule needs, as a condition; the default is more than half */
+const sharePerRule = (n: string) => {
+  const rule = citedOne('body.party', 'body.decides');
+  const fallback = `${half(n)} + 1`;
+  return `(!${citedHas('body.party', 'body.decides')} ? ${fallback} : ${rule} == "two-thirds" ? ${share(n, 2, 3)} : ${rule} == "three-quarters" ? ${share(n, 3, 4)} : ${rule} == "everyone" ? ${n} : ${fallback})`;
+};
 
 /**
  * A party: a name, what it stands for, who is in it, its stewards, who keep
@@ -440,29 +357,11 @@ export const party = typed<Party>()({
     delete: ['creator', 'can:moderate'],
     check: [
       {
-        that: {
-          and: [
-            { '>=': [{ size: read('body.stewards') }, 1] },
-            { all: [read('body.stewards'), { in: [read('it'), read('body.members')] }] },
-            {
-              if: [
-                is(read('prev'), null),
-                { in: [read('author'), read('body.stewards')] },
-                { in: [read('author'), read('prev.body.stewards')] },
-              ],
-            },
-          ],
-        },
+        that: 'size(body.stewards) >= 1 && body.stewards.all(it, it in body.members) && (prev == null ? author in body.stewards : author in prev.body.stewards)',
         else: 'Only a party’s stewards change it, and it always has a steward, who is a member',
       },
       {
-        that: {
-          if: [
-            is(read('body.decides'), 'representative'),
-            { in: [read('body.representative'), read('body.members')] },
-            is(read('body.representative'), null),
-          ],
-        },
+        that: '(has(body.decides) && body.decides == "representative") ? (has(body.representative) && body.representative in body.members) : !has(body.representative)',
         else: 'A party that decides by representative names one of its members, and only then',
       },
     ] satisfies ReadonlyArray<Check>,
@@ -518,46 +417,16 @@ export const partyRoll = typed<PartyRoll>()({
     final: true,
     check: [
       {
-        that: {
-          and: [
-            is(citedOne('body.party', 'collection'), 'liquid.party'),
-            is(citedOne('body.party', 'key'), { link: ['party'] }),
-            { in: [read('author'), citedOne('body.party', 'body.stewards')] },
-            { all: [read('body.members'), { in: [read('it'), citedOne('body.party', 'body.members')] }] },
-          ],
-        },
+        that: [
+          `${citedOne('body.party', 'collection')} == "liquid.party"`,
+          `${citedOne('body.party', 'key')} == link("party")`,
+          `author in ${citedOne('body.party', 'body.stewards')}`,
+          `body.members.all(it, it in ${citedOne('body.party', 'body.members')})`,
+        ].join(' && '),
         else: 'A party roll is written by a steward, from the party’s own member list',
       },
       {
-        that: {
-          if: [
-            is(citedOne('body.party', 'body.decides'), 'representative'),
-            {
-              and: [
-                is(read('body.representative'), citedOne('body.party', 'body.representative')),
-                { in: [read('body.representative'), read('body.members')] },
-                is(read('body.toTake'), null),
-              ],
-            },
-            {
-              and: [
-                is(read('body.representative'), null),
-                {
-                  or: [
-                    // Rolls from before parties chose: more than half
-                    {
-                      and: [is(citedOne('body.party', 'body.decides'), null), is(read('body.toTake'), null)],
-                    },
-                    is(
-                      read('body.toTake'),
-                      sharePerRule(citedOne('body.party', 'body.decides'), { size: read('body.members') }),
-                    ),
-                  ],
-                },
-              ],
-            },
-          ],
-        },
+        that: `(${decidesIs('representative')}) ? (has(body.representative) && body.representative == ${citedOne('body.party', 'body.representative')} && body.representative in body.members && !has(body.toTake)) : (!has(body.representative) && ((!${citedHas('body.party', 'body.decides')} && !has(body.toTake)) || (has(body.toTake) && body.toTake == ${sharePerRule('size(body.members)')})))`,
         else: 'A party roll freezes how the party decides, as the party says, and its representative is a member',
       },
     ] satisfies ReadonlyArray<Check>,
@@ -571,7 +440,7 @@ interface PartyRoll {
 }
 
 /** The party roll a party's position cites */
-const rollItself = { get: [{ versions: [[read('body.roll')]] }, '0'] };
+const rollItself = 'versions([body.roll])[0]';
 
 /**
  * A party's position on a proposal: as many of its frozen members as its
@@ -603,53 +472,24 @@ export const partyBallot = typed<PartyBallot>()({
     final: true,
     check: [
       {
-        that: {
-          and: [
-            is(citedOne('body.roll', 'collection'), 'liquid.party-roll'),
-            is({ link: ['party', rollItself] }, { link: ['party'] }),
-            is({ link: ['about', rollItself] }, { link: ['about'] }),
-            is(citedOne('body.roll', 'body.members'), read('body.members')),
-          ],
-        },
+        that: [
+          `${citedOne('body.roll', 'collection')} == "liquid.party-roll"`,
+          `${rollItself}.link("party") == link("party")`,
+          `${rollItself}.link("about") == link("about")`,
+          `${citedOne('body.roll', 'body.members')} == body.members`,
+        ].join(' && '),
         else: 'A party’s position cites its roll for the proposal',
       },
       {
         that: allAbout('body.votes', 'liquid.vote', [
-          { in: [read('it.author'), read('body.members')] },
-          is(read('it.body.choice'), read('body.choice')),
-          is(read('it.body.via'), null),
+          'it.author in body.members',
+          'it.body.choice == body.choice',
+          '!has(it.body.via)',
         ]),
         else: 'A party’s position counts only its members’ own votes, for that choice',
       },
       {
-        that: {
-          if: [
-            is(citedOne('body.roll', 'body.representative'), null),
-            {
-              '>=': [
-                authorsOf('body.votes'),
-                {
-                  if: [
-                    is(citedOne('body.roll', 'body.toTake'), null),
-                    { '+': [half({ size: read('body.members') }), 1] },
-                    citedOne('body.roll', 'body.toTake'),
-                  ],
-                },
-              ],
-            },
-            {
-              and: [
-                { '>=': [authorsOf('body.votes'), 1] },
-                {
-                  all: [
-                    { versions: read('body.votes') },
-                    is(read('it.author'), citedOne('body.roll', 'body.representative')),
-                  ],
-                },
-              ],
-            },
-          ],
-        },
+        that: `!${citedHas('body.roll', 'body.representative')} ? ${authorsOf('body.votes')} >= (${citedHas('body.roll', 'body.toTake')} ? ${citedOne('body.roll', 'body.toTake')} : ${half('size(body.members)')} + 1) : (${authorsOf('body.votes')} >= 1 && versions(body.votes).all(it, it.author == ${citedOne('body.roll', 'body.representative')}))`,
         else: 'A party takes a position once as many members as its roll needs voted that way, or its representative did',
       },
     ] satisfies ReadonlyArray<Check>,

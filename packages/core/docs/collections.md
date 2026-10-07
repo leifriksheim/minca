@@ -162,32 +162,9 @@ export const passed = collection({
     check: [
       {
         // At least three members' yes votes on this proposal, among those cited
-        that: {
-          '>=': [
-            {
-              size: {
-                distinct: {
-                  map: [
-                    {
-                      filter: [
-                        { versions: { var: 'body.votes' } },
-                        {
-                          and: [
-                            { '==': [{ var: 'it.collection' }, 'app.proposal.vote'] },
-                            { '==': [{ link: ['about', { var: 'it' }] }, { link: ['about'] }] },
-                            { '==': [{ var: 'it.body.choice' }, 'yes'] },
-                          ],
-                        },
-                      ],
-                    },
-                    { var: 'it.author' },
-                  ],
-                },
-              },
-            },
-            3,
-          ],
-        },
+        that: `versions(body.votes)
+          .filter(v, v.collection == "app.proposal.vote" && v.link("about") == link("about") && v.body.choice == "yes")
+          .map(v, v.author).distinct().size() >= 3`,
         else: 'A proposal passes with yes votes from at least three members',
       },
     ],
@@ -211,17 +188,31 @@ it. A version that fails is refused everywhere, with the check's `else` as
 the reason, and your own node refuses it before signing. A version citing
 one that hasn't arrived yet waits until it does.
 
-A condition is JSON: literals, lists, and `{ "<operator>": [arguments] }`.
-It reads `body`, `links`, `key`, `seq`, `author` (the account),
-`creator`, `createdAt`, `prev` (the version before, or `null`) and, inside
-list operators, `it`. The operators are `==` `!=` `<` `<=` `>` `>=` `in`,
-`and` `or` `not` `if`, `+` `-` `*` `/` `%` `min` `max`, `size` `map`
-`filter` `all` `some` `count` `sum` `distinct`, `get` `link` `hash`, and
-three that ask the space: `versions` (read cited versions by id), `can`
-(does someone hold a permission) and `member`. There are no loops except over
-lists already in hand, a check always ends, and a value is never "truthy": a
-condition is `true` or the version is refused. The exact rules are in the
-spec, `spec/02-records.md` §7.6.
+A condition is a [CEL](https://cel.dev) expression: the Common Expression
+Language that Kubernetes, Firebase and Envoy use for policies. It reads `body`,
+`links`, `key`, `seq`, `collection`, `author` (the account), `creator`,
+`createdAt` and `prev` (the version before, or `null`). It has CEL's
+operators, `has()`, the macros `all` `exists` `exists_one` `filter` `map`,
+`size`, `contains` `startsWith` `endsWith`, the conversions `int` `uint`
+`double` `string` `bool`, and from CEL's extensions `distinct()`,
+`math.greatest` and `math.least`. Weave adds `sum(list)`, `hash(x)`,
+`link("rel")` and `v.link("rel")`, and three that ask the space:
+`versions(ids)` (read cited versions by id), `can("permission")` and
+`member(did)`.
+
+Some things to know:
+
+- A body's numbers are doubles, as JSON's are, and a literal like `1` is an
+  int. They compare with each other freely, but don't mix in arithmetic:
+  write `body.n + 1.0`, or `int(body.n) + 1`.
+- Reading a field that isn't there is an error, not `null`: ask
+  `has(body.note)` first. `&&` and `||` let an error pass when the other side
+  decides.
+- A condition holds only when it gives `true`, and a check always ends: its
+  only loops are over lists in hand, and there is a step limit.
+
+Bytes, timestamps, durations, regular expressions and types as values are
+left out. The exact subset is in the spec, `spec/02-records.md` §7.6.
 
 **What can be cited.** Only versions kept whole, so every device reads the
 same thing however late it joins: any version in a collection with
@@ -245,7 +236,7 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 **Patterns.**
 
 - **Quorums and multisig.** "Three admins approved": cite the approvals, and
-  check `distinct` authors with `{ can: ['approve', { var: 'it.author' }] }`.
+  check `distinct()` authors with `can("approve", v.author)`.
 - **State machines.** Check each version against `prev`: a task moves from
   `open` to `done` only, a counter goes up by one, a chess move is legal from
   the board before. Each step is small, and there is no limit on steps.
@@ -253,7 +244,7 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
   that they are the sender's and add up. Two spends of one balance are two
   versions of it, which everyone sees.
 - **Commit, then reveal.** A player first writes `hash` of a secret, then
-  reveals it: `{ '==': [{ hash: { var: 'body.secret' } }, <the commitment>] }`.
+  reveals it: `hash(body.secret) == "<the commitment>"`.
   Shared dice, lotteries and sealed bids need nothing else.
 - **Closing a set.** A check can prove that something exists, not that nothing
   else does. For "a majority" or "nobody objected", someone with a permission
