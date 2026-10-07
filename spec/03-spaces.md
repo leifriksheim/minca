@@ -514,7 +514,8 @@ A change that took power from someone **covers** a version when the change's
 above the version's place in that key's line for that collection (`log.c.n`). What a covering change's author had seen of that key stands,
 whatever the change took away.
 
-Given a record's `id`, its root, its `seen`, its `author` and `log.n`, a
+Given a record's `id`, its root, its `seen`, its `author`, `log.n`, collection
+and `log.c.n`, a
 predicate `needs(role, state)`, and optionally `within`, the `seen` of a
 version that cites this one ([02](02-records.md) §7.6):
 
@@ -648,8 +649,12 @@ writer holds of that key's versions in that collection ([02](02-records.md)
 as `c.prev`. A place held past a gap covers nothing, so one planted far ahead
 can't stretch a cutoff over what its writer signs later. A node holding part
 of a space keeps the lines of the collections it holds whole
-([05](05-sync-and-storage.md) §9), so it covers all it holds. At most 1024
-places in all.
+([05](05-sync-and-storage.md) §9), so it covers all it holds. At most 1024 places in all: past that, a writer
+names defined collections first, then the rest, each in name order, so
+writing into many collections can't make anyone unremovable; what is left out
+is judged with the change. A node covers only the collections it holds: one
+holding part of a space, removing someone, leaves their writes elsewhere to be
+judged with the change ([#166](https://github.com/leifriksheim/weave/issues/166)).
 
 ```json
 {

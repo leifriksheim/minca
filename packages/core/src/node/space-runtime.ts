@@ -121,6 +121,7 @@ import {
   type AccessGenesis,
   type AccessHistory,
   type AccessState,
+  permissionMatches,
   type Cutoff,
   type Role,
 } from '../space/roles.js';
@@ -3166,7 +3167,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (role !== null && !next) throw new Error(`There is no role "${role}" in "${space.name}"`);
     // Taking power away leaves what this node has seen them write.
     const lowers =
-      was && (!next || next.rank < was.rank || was.permissions.some((p) => !next.permissions.includes(p)));
+      was &&
+      (!next ||
+        next.rank < was.rank ||
+        was.permissions.some((p) => !next.permissions.some((q) => permissionMatches(q, p))));
     const cutoff = lowers ? await cutoffFor(did) : {};
     const written = await upsert(MEMBER_COLLECTION, await memberKey(did), {
       did,
@@ -3233,7 +3237,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (version?.author === key) add(version);
       }
     }
-    const cutoff: Record<string, Record<string, number>> = {};
+    const ends: Version[] = [];
     for (const held of placed.values()) {
       let end: Version | null = null;
       for (let n = 0; ; n++) {
@@ -3241,8 +3245,19 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (!version || (n > 0 && version.log?.c.prev !== end?.id)) break;
         end = version;
       }
-      if (end) (cutoff[end.author] ??= {})[end.collection] = end.log!.c.n;
+      if (end) ends.push(end);
     }
+    // Never more than a change may carry, or anyone could make themselves unremovable by writing
+    // into enough collections: defined collections first, then the rest, each in name order. What
+    // is left out is judged with the change — padding costs only whoever padded.
+    const defined = new Set((await catalog()).keys());
+    ends.sort(
+      (a, b) =>
+        Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
+        (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
+    );
+    const cutoff: Record<string, Record<string, number>> = {};
+    for (const end of ends.slice(0, MAX_CUTOFF)) (cutoff[end.author] ??= {})[end.collection] = end.log!.c.n;
     return cutoff;
   }
 
@@ -3562,7 +3577,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const { history } = await access();
       const was = history.current.roles.get(role.name);
       const lowers =
-        was && (role.rank < was.rank || was.permissions.some((p) => !role.permissions.includes(p)));
+        was &&
+        (role.rank < was.rank ||
+          was.permissions.some((p) => !role.permissions.some((q) => permissionMatches(q, p))));
       const holders = new Set(
         [...history.current.members].filter(([, name]) => name === role.name).map(([did]) => did),
       );
