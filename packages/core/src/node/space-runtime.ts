@@ -3193,15 +3193,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** The same for several accounts at once, up to what a cutoff may name */
   async function cutoffForAll(dids: ReadonlySet<string>): Promise<Record<string, Record<string, number>>> {
-    const all: Record<string, Record<string, number>> = {};
-    let entries = 0;
-    for (const did of dids)
-      for (const [key, lines] of Object.entries(await cutoffFor(did))) {
-        entries += Object.keys(lines).length;
-        if (entries > MAX_CUTOFF) return all;
-        all[key] = lines;
-      }
-    return all;
+    return packCutoff(await Promise.all([...dids].sort().map((did) => linesOf(did))));
   }
 
   /**
@@ -3214,6 +3206,31 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * all it holds.
    */
   async function cutoffFor(did: string, only?: string): Promise<Record<string, Record<string, number>>> {
+    return packCutoff([await linesOf(did, only)]);
+  }
+
+  /**
+   * At most what a change may carry, shared among the accounts it reaches: one
+   * line from each in turn, so no one's writing can use up anyone else's
+   * share. What is left out is judged with the change.
+   */
+  function packCutoff(
+    accounts: ReadonlyArray<ReadonlyArray<Version>>,
+  ): Record<string, Record<string, number>> {
+    const cutoff: Record<string, Record<string, number>> = {};
+    let named = 0;
+    for (let round = 0; named < MAX_CUTOFF && accounts.some((lines) => round < lines.length); round++)
+      for (const lines of accounts) {
+        const end = lines[round];
+        if (!end || named >= MAX_CUTOFF) continue;
+        (cutoff[end.author] ??= {})[end.collection] = end.log!.c.n;
+        named++;
+      }
+    return cutoff;
+  }
+
+  /** The ends of one account's unbroken lines this node holds: defined collections first, then the rest, each in name order */
+  async function linesOf(did: string, only?: string): Promise<Version[]> {
     // What it holds of theirs, whatever way it came: the lines' places are kept only for what arrived by sync.
     const placed = new Map<string, Map<number, Version>>();
     const add = (version: Version) => {
@@ -3247,18 +3264,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
       if (end) ends.push(end);
     }
-    // Never more than a change may carry, or anyone could make themselves unremovable by writing
-    // into enough collections: defined collections first, then the rest, each in name order. What
-    // is left out is judged with the change — padding costs only whoever padded.
+    // Defined collections first: writing into many undefined ones costs only whoever did.
     const defined = new Set((await catalog()).keys());
     ends.sort(
       (a, b) =>
         Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
         (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
     );
-    const cutoff: Record<string, Record<string, number>> = {};
-    for (const end of ends.slice(0, MAX_CUTOFF)) (cutoff[end.author] ??= {})[end.collection] = end.log!.c.n;
-    return cutoff;
+    return ends;
   }
 
   /** The rules and standing that decide whether this account may do something now */
