@@ -3193,7 +3193,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** The same for several accounts at once, up to what a cutoff may name */
   async function cutoffForAll(dids: ReadonlySet<string>): Promise<Record<string, Record<string, number>>> {
-    return packCutoff(await Promise.all([...dids].sort().map((did) => linesOf(did))));
+    const lines = await linesOf(dids);
+    return packCutoff([...dids].sort().map((did) => lines.get(did) ?? []));
   }
 
   /**
@@ -3206,7 +3207,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * all it holds.
    */
   async function cutoffFor(did: string, only?: string): Promise<Record<string, Record<string, number>>> {
-    return packCutoff([await linesOf(did, only)]);
+    return packCutoff([(await linesOf(new Set([did]), only)).get(did) ?? []]);
   }
 
   /**
@@ -3229,49 +3230,55 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     return cutoff;
   }
 
-  /** The ends of one account's unbroken lines this node holds: defined collections first, then the rest, each in name order */
-  async function linesOf(did: string, only?: string): Promise<Version[]> {
+  /**
+   * The ends of each account's unbroken lines this node holds: defined
+   * collections first, then the rest, each in name order. One pass over what
+   * it holds, however many accounts.
+   */
+  async function linesOf(dids: ReadonlySet<string>, only?: string): Promise<Map<string, Version[]>> {
     // What it holds of theirs, whatever way it came: the lines' places are kept only for what arrived by sync.
-    const placed = new Map<string, Map<number, Version>>();
-    const add = (version: Version) => {
+    const placed = new Map<string, { readonly did: string; readonly held: Map<number, Version> }>();
+    const add = (did: string, version: Version) => {
       if (!version.log) return;
       const line = `${version.author} ${version.collection}`;
-      const held = placed.get(line) ?? new Map<number, Version>();
-      if (!held.has(version.log.c.n)) held.set(version.log.c.n, version);
-      placed.set(line, held);
+      const entry = placed.get(line) ?? { did, held: new Map<number, Version>() };
+      if (!entry.held.has(version.log.c.n)) entry.held.set(version.log.c.n, version);
+      placed.set(line, entry);
     };
     for (const version of await everyCurrent()) {
       if (!version.log || (only && version.author !== only) || version.space !== space.id) continue;
-      if ((await judge(version)).root === did) add(version);
+      const root = (await judge(version)).root;
+      if (root && dids.has(root)) add(root, version);
     }
     for (const name of await adapter.list(KEY_ROOT_PREFIX)) {
       const key = name.slice(KEY_ROOT_PREFIX.length);
-      if ((only && key !== only) || utf8Decode((await adapter.get(name)) ?? new Uint8Array()) !== did)
-        continue;
+      const did = utf8Decode((await adapter.get(name)) ?? new Uint8Array());
+      if ((only && key !== only) || !dids.has(did)) continue;
       for (const place of await adapter.list(`${COLLECTION_LOG_PREFIX}${key}/`)) {
         const id = await adapter.get(place);
         const version = id ? await storage.getVersion(utf8Decode(id)) : null;
-        if (version?.author === key) add(version);
+        if (version?.author === key) add(did, version);
       }
     }
-    const ends: Version[] = [];
-    for (const held of placed.values()) {
+    const byAccount = new Map<string, Version[]>();
+    for (const { did, held } of placed.values()) {
       let end: Version | null = null;
       for (let n = 0; ; n++) {
         const version = held.get(n);
         if (!version || (n > 0 && version.log?.c.prev !== end?.id)) break;
         end = version;
       }
-      if (end) ends.push(end);
+      if (end) byAccount.set(did, [...(byAccount.get(did) ?? []), end]);
     }
     // Defined collections first: writing into many undefined ones costs only whoever did.
     const defined = new Set((await catalog()).keys());
-    ends.sort(
-      (a, b) =>
-        Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
-        (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
-    );
-    return ends;
+    for (const ends of byAccount.values())
+      ends.sort(
+        (a, b) =>
+          Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
+          (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
+      );
+    return byAccount;
   }
 
   /** The rules and standing that decide whether this account may do something now */
