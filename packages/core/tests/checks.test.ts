@@ -200,6 +200,12 @@ describe('checks: judging', () => {
       /too much/,
     );
     assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms`);
+    // contains is linear: text made to slow a naive search costs no more than it is charged.
+    const t = 'a'.repeat(1_200_000);
+    const pattern = `${'a'.repeat(50_000)}b${'a'.repeat(50_000)}`;
+    started = Date.now();
+    assert.deepEqual(await run('!body.t.contains(body.p)', { body: { t, p: pattern } }), { passed: true });
+    assert.ok(Date.now() - started < 2000, `${Date.now() - started} ms`);
     // distinct compares numbers exactly, so every peer keeps the same elements.
     assert.deepEqual(await run('[9007199254740993, 9007199254740992.0].distinct().size() == 2'), {
       passed: true,

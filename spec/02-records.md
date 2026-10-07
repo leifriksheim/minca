@@ -1322,7 +1322,10 @@ Limits, counted across all of one version's checks:
   macro over a map (the map, whose keys it puts in order): 1 for `null`, a bool or a number; 1 and its code points for a
   string; 1 and its elements' sizes for a list; 1 and its keys' and values'
   sizes for a map. Past **4,000,000** the check fails. So what a check
-  builds, and every pass over it, is paid for.
+  builds, and every pass over it, is paid for. An implementation must do each
+  counted call in time near linear in what it counts (`contains` too). Reading
+  the judged and cited versions into values is linear in what the peer
+  already holds, and is not counted.
 - **Citations.** At most **256** distinct versions; citing one more fails the
   check. Citing the same id again does not count again. A cited version that
   fails rule 2, 3 or 4 above fails the check, whatever `&&` or `||` around it

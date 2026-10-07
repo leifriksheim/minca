@@ -1347,6 +1347,27 @@ function linkOf(links: CelValue, rel: CelValue): CelValue {
   return null;
 }
 
+/**
+ * Whether `text` contains `pattern`, in time linear in both (Knuth–Morris–Pratt):
+ * an engine's own search can take their product on text made to slow it.
+ * Strings here are well formed, so matching UTF-16 units matches code points.
+ */
+function includesLinear(text: string, pattern: string): boolean {
+  if (pattern.length === 0) return true;
+  const fail = new Int32Array(pattern.length);
+  for (let i = 1, k = 0; i < pattern.length; i++) {
+    while (k > 0 && pattern.charCodeAt(i) !== pattern.charCodeAt(k)) k = fail[k - 1]!;
+    if (pattern.charCodeAt(i) === pattern.charCodeAt(k)) k++;
+    fail[i] = k;
+  }
+  for (let i = 0, k = 0; i < text.length; i++) {
+    while (k > 0 && text.charCodeAt(i) !== pattern.charCodeAt(k)) k = fail[k - 1]!;
+    if (text.charCodeAt(i) === pattern.charCodeAt(k)) k++;
+    if (k === pattern.length) return true;
+  }
+  return false;
+}
+
 let nans = 0;
 /** Text that two values share exactly when they are `==`: numbers by value, maps whatever their order */
 function equalityKey(v: CelValue): string {
@@ -1382,7 +1403,7 @@ function callMethod(fn: string, target: CelValue, args: ReadonlyArray<CelValue>)
     case 'endsWith':
       if (typeof target !== 'string' || typeof a !== 'string') return err('no matching overload');
       return fn === 'contains'
-        ? target.includes(a)
+        ? includesLinear(target, a)
         : fn === 'startsWith'
           ? target.startsWith(a)
           : target.endsWith(a);
