@@ -1197,7 +1197,7 @@ enclose it:
 | `==` `!=` `<` `<=` `>` `>=` `in` `+` `-` `*` `/` `%` `!` `&&` `\|\|` `? :`                                           | CEL        | As CEL defines them                                                                                                                                                           |
 | `has(e.f)`, `e.all(x, p)`, `e.exists(x, p)`, `e.exists_one(x, p)`, `e.map(x, t)`, `e.map(x, p, t)`, `e.filter(x, p)` | CEL macros | As CEL defines them                                                                                                                                                           |
 | `size`, `contains`, `startsWith`, `endsWith`, `int`, `uint`, `double`, `string`, `bool`, `dyn`                       | CEL        | As CEL defines them                                                                                                                                                           |
-| `l.distinct()`                                                                                                       | CEL lists  | The list without the elements `==` an earlier one                                                                                                                             |
+| `l.distinct()`                                                                                                       | CEL lists  | The list without the elements equal to an earlier one, as `==` says but with numbers compared by exact value: `[9007199254740993, 9007199254740992.0]` stays two              |
 | `math.greatest(…)`, `math.least(…)`                                                                                  | CEL math   | Of one list, or of one or more numbers: the greatest or least, the first of equals. An error on `NaN` or anything but a number                                                |
 | `sum(l)`                                                                                                             | Weave      | The elements added in order: all `int`s, all `uint`s or all `double`s, else an error; `0` for `[]`                                                                            |
 | `hash(x)`                                                                                                            | Weave      | The content id (§2) of the canonical JSON of `x`; of a body, its `bodyHash`. An error for a non-finite `double`, an integer past ±2⁵³, or a map key that is not a `string`    |
@@ -1318,7 +1318,8 @@ Limits, counted across all of one version's checks:
   `contains`, `startsWith`, `endsWith`, `int`, `uint`, `double`, `string`,
   `bool`, `distinct`, `sum`, `math.greatest`, `math.least`, `hash`, `link` or
   `versions` counts the **size** of each of its operands (its receiver
-  included): 1 for `null`, a bool or a number; 1 and its code points for a
+  included), and so do an index (its key), a map literal (each key) and a
+  macro over a map (the map, whose keys it puts in order): 1 for `null`, a bool or a number; 1 and its code points for a
   string; 1 and its elements' sizes for a list; 1 and its keys' and values'
   sizes for a map. Past **4,000,000** the check fails. So what a check
   builds, and every pass over it, is paid for.
@@ -1601,7 +1602,7 @@ _Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`),
 | Tags per version                            | ≤ 64                                                                                 |
 | Permission name                             | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
 | Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 64 deep; ≤ 100,000 steps per version                   |
-| Steps judging one version's checks          | ≤ 10,000                                                                             |
+| Steps judging one version's checks          | ≤ 100,000 steps, ≤ 4,000,000 work (§7.6)                                             |
 | Versions one version's checks cite          | ≤ 256 distinct                                                                       |
 | Future-dated `createdAt` (delegated writes) | ≤ 300 s ahead                                                                        |
 | Size of a body or a version                 | _Not yet specified_ — no limit is enforced                                           |

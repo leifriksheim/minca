@@ -183,6 +183,29 @@ describe('checks: judging', () => {
     assert.ok(Date.now() - started < 2000);
   });
 
+  test('a macro over a map, a lookup and a map literal pay for the keys they go through', async () => {
+    const forty = `[${Array.from({ length: 40 }, (_, i) => i).join(',')}]`;
+    const m = Object.fromEntries(Array.from({ length: 20_000 }, (_, i) => [`k${i}`, i]));
+    let started = Date.now();
+    const sorted = await run(`[body.m].all(m, ${forty}.all(i, ${forty}.all(j, m.exists(x, true))))`, {
+      body: { m },
+    });
+    assert.match(why(sorted), /too much/);
+    assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms`);
+    let text = `"${'a'.repeat(1000)}"`;
+    for (let i = 0; i < 10; i++) text = `[${text}].map(s${i}, s${i} + s${i})[0]`;
+    started = Date.now();
+    assert.match(
+      why(await run(`[${text}].all(s, ${forty}.all(i, ${forty}.all(j, {s: true}[s])))`)),
+      /too much/,
+    );
+    assert.ok(Date.now() - started < 3000, `${Date.now() - started} ms`);
+    // distinct compares numbers exactly, so every peer keeps the same elements.
+    assert.deepEqual(await run('[9007199254740993, 9007199254740992.0].distinct().size() == 2'), {
+      passed: true,
+    });
+  });
+
   test('never throws instead of judging: depth is bounded, whatever the chain', async () => {
     for (const deep of ['!'.repeat(3994) + 'true', `has(body${'.a'.repeat(1990)})`, '1' + ' + 1'.repeat(900)])
       assert.match(checkChecks([{ that: deep, else: 'x' }]) ?? '', /nested more than 64 deep/);

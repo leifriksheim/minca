@@ -480,7 +480,7 @@ export function parseCel(source: string): CelNode {
     p++;
     const then = or();
     take(':');
-    const otherwise = expr();
+    const otherwise = nest(() => expr());
     return { k: 'cond', test, then, else: otherwise };
   };
   const or = (): CelNode => {
@@ -1001,6 +1001,8 @@ export async function evaluateCel(
         if (isCelError(on)) return on;
         const at = await ev(n.at, scope);
         if (isCelError(at)) return at;
+        // Looking a key up goes through the key.
+        charge([at]);
         if (isList(on)) {
           const i =
             typeof at === 'bigint'
@@ -1035,6 +1037,7 @@ export async function evaluateCel(
         for (const [kn, vn] of n.entries) {
           const k = await ev(kn, scope);
           if (isCelError(k)) return k;
+          charge([k]);
           const v = await ev(vn, scope);
           if (isCelError(v)) return v;
           entries.push([k, v]);
@@ -1063,6 +1066,8 @@ export async function evaluateCel(
       case 'comp': {
         const range = await ev(n.range, scope);
         if (isCelError(range)) return range;
+        // Going through a map puts its keys in order first, which goes through them all.
+        if (isMap(range)) charge([range]);
         const items = isList(range) ? range : isMap(range) ? keysInOrder(range) : null;
         if (!items) return err('no matching overload');
         const inner = new Map(scope);
