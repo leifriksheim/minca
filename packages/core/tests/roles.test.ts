@@ -35,7 +35,7 @@ function setRole(
   did: string,
   role: string | null,
   seen: string[],
-  extra: Partial<{ keep: string[]; viaInvite: string; id: string }> = {},
+  extra: Partial<{ cutoff: Record<string, Record<string, number>>; viaInvite: string; id: string }> = {},
 ): AccessEvent {
   return {
     id: extra.id ?? id('m'),
@@ -45,7 +45,10 @@ function setRole(
     did,
     role,
     seen,
-    keep: extra.keep ?? [],
+    author: 'k',
+    cutoff: new Map(
+      Object.entries(extra.cutoff ?? {}).map(([key, lines]) => [key, new Map(Object.entries(lines))]),
+    ),
     ...(extra.viaInvite ? { viaInvite: extra.viaInvite } : {}),
   };
 }
@@ -128,7 +131,8 @@ describe('the rank rule', () => {
       name: 'helper',
       role: { name: 'helper', rank: 10, permissions: ['manage'] },
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     assert.equal(
       replayAccess(genesis, [bob, bobManages]).status(bobManages.id)?.status,
@@ -144,7 +148,8 @@ describe('the rank rule', () => {
       name: 'moderator',
       role: { ...moderator, permissions: [...moderator.permissions, 'manage'] },
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const bobMakes: AccessEvent = {
       id: id('r'),
@@ -154,7 +159,8 @@ describe('the rank rule', () => {
       name: 'x',
       role: { name: 'x', rank: 10, permissions: ['define'] },
       seen: [promote.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const history = replayAccess(genesis, [bob, promote, bobMakes]);
     assert.equal(
@@ -176,7 +182,8 @@ describe('invites', () => {
       role: 'member',
       open: true,
       seen: [],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const join = setRole('bob', 'bob', 'member', [invite.id], { viaInvite: 'k' });
     const greedy = setRole('carol', 'carol', 'admin', [invite.id], { viaInvite: 'k' });
@@ -195,7 +202,8 @@ describe('invites', () => {
       role: 'member',
       open: true,
       seen: [],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const bobJoins = setRole('bob', 'bob', 'member', [invite.id], { viaInvite: 'k' });
     const close: AccessEvent = { ...invite, id: id('i'), open: false, seen: [bobJoins.id] };
@@ -221,7 +229,8 @@ describe('invites', () => {
       role: 'admin',
       open: true,
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const toMember: AccessEvent = {
       id: id('i'),
@@ -232,7 +241,8 @@ describe('invites', () => {
       role: 'member',
       open: true,
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const history = replayAccess(genesis, [bob, toAdmin, toMember]);
     assert.equal(history.status(toAdmin.id)?.status, 'dropped');
@@ -251,7 +261,8 @@ describe('offline conflicts', () => {
       name: 'moderator',
       role: { ...moderator, permissions: [...moderator.permissions, 'manage'] },
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const carol = setRole('alice', 'carol', 'member', [promote.id]);
     // Apart: Alice removes Bob; Bob, not knowing, removes Carol.
@@ -302,7 +313,8 @@ describe('offline conflicts', () => {
       role: 'member',
       open: true,
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const history = replayAllOrders([bob, promote, bobInvites]);
     assert.equal(history.status(bobInvites.id)?.status, 'dropped');
@@ -320,7 +332,8 @@ describe('offline conflicts', () => {
       role: 'member',
       open: true,
       seen: [],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const bobJoins = setRole('bob', 'bob', 'member', [first.id], { viaInvite: '1', id: 'z-bob' });
     const second: AccessEvent = {
@@ -332,7 +345,8 @@ describe('offline conflicts', () => {
       role: 'member',
       open: true,
       seen: [first.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const carolJoins = setRole('carol', 'carol', 'member', [second.id], { viaInvite: '2', id: 'c-carol' });
     const close: AccessEvent = { ...second, id: 'y-close-2', open: false, seen: [second.id, bobJoins.id] };
@@ -351,7 +365,8 @@ describe('offline conflicts', () => {
       name: 'moderator',
       role: { ...moderator, permissions: [...moderator.permissions, 'manage'] },
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const carol = setRole('alice', 'carol', 'member', [promote.id], { id: 'c-carol' });
     const dave = setRole('alice', 'dave', 'member', [carol.id], { id: 'z-dave' });
@@ -385,65 +400,110 @@ describe('records against the history', () => {
 
   test('a removed member cannot write by claiming an old point in history', () => {
     const bob = setRole('alice', 'bob', 'member', []);
-    const remove = setRole('alice', 'bob', null, [bob.id], { keep: ['honest'] });
+    // The remover had seen Bob's key up to place 3.
+    const remove = setRole('alice', 'bob', null, [bob.id], { cutoff: { wb: { 'app.note': 3 } } });
     const history = replayAccess(genesis, [bob, remove]);
-    assert.ok(
-      history.judge({ id: 'honest', root: 'bob', seen: [bob.id] }, isMember).ok,
-      'what the remover had seen stays',
+    const honest = history.judge(
+      { id: 'honest', root: 'bob', seen: [bob.id], writer: 'wb', at: 3, collection: 'app.note', line: 3 },
+      isMember,
     );
-    const forged = history.judge({ id: 'forged', root: 'bob', seen: [bob.id] }, isMember);
-    assert.ok(!forged.ok && /taken away/.test(forged.reason));
+    assert.deepEqual(honest, { ok: true, unseen: [] }, 'what the remover had seen is covered');
+    const forged = history.judge(
+      { id: 'forged', root: 'bob', seen: [bob.id], writer: 'wb', at: 4, collection: 'app.note', line: 4 },
+      isMember,
+    );
+    assert.deepEqual(
+      forged,
+      { ok: true, unseen: [remove.id] },
+      'past the cutoff: judged with the removal too',
+    );
     assert.ok(
       !history.judge({ id: 'after', root: 'bob', seen: [remove.id] }, isMember).ok,
       'nor having seen the removal',
     );
   });
 
-  test('a demoted moderator keeps their past moderation; new moderation with an old point in history is refused', () => {
+  test('a demoted moderator keeps their past moderation; new moderation with an old point in history is judged with the demotion', () => {
     const bob = setRole('alice', 'bob', 'moderator', []);
-    const demote = setRole('alice', 'bob', 'member', [bob.id], { keep: ['past'] });
+    const demote = setRole('alice', 'bob', 'member', [bob.id], { cutoff: { wb: { 'app.note': 1 } } });
     const history = replayAccess(genesis, [bob, demote]);
-    assert.ok(history.judge({ id: 'past', root: 'bob', seen: [bob.id] }, canModerate).ok);
-    assert.ok(!history.judge({ id: 'new', root: 'bob', seen: [bob.id] }, canModerate).ok);
-    assert.ok(
-      history.judge({ id: 'plain', root: 'bob', seen: [bob.id] }, isMember).ok,
-      'still a member: ordinary writes stand',
-    );
+    const judge = (at: number) =>
+      history.judge(
+        { id: `r${at}`, root: 'bob', seen: [bob.id], writer: 'wb', at, collection: 'app.note', line: at },
+        canModerate,
+      );
+    assert.deepEqual(judge(1), { ok: true, unseen: [] });
+    assert.deepEqual(judge(2), { ok: true, unseen: [demote.id] });
   });
 
-  test('a revoked note: records under it stand only if kept', () => {
-    const revoke: AccessEvent = {
+  test('a revoked key: what it signed stands up to the cutoff; every revoke applies', () => {
+    const revoke = (cutoff: number): AccessEvent => ({
       id: id('v'),
-      key: 'revoke:n',
+      key: 'revoke:wa|alice',
       kind: 'revoke',
       root: 'alice',
-      note: 'note-1',
-      issuer: 'alice',
+      author: 'k',
+      target: 'wa',
       seen: [],
-      keep: ['kept'],
-    };
-    const history = replayAccess(genesis, [revoke]);
-    assert.ok(history.judge({ id: 'kept', root: 'alice', seen: [], note: 'note-1' }, isMember).ok);
-    assert.ok(!history.judge({ id: 'other', root: 'alice', seen: [revoke.id], note: 'note-1' }, isMember).ok);
-    assert.ok(
-      history.judge({ id: 'own', root: 'alice', seen: [], note: 'note-2' }, isMember).ok,
-      'other notes are untouched',
-    );
+      cutoff: new Map([['wa', new Map([['app.note', cutoff]])]]),
+    });
+    // A thief's revoke, keeping all it signed in advance, and the owner's own.
+    const thief = revoke(9);
+    // At the same record key: concurrent revokes are never rivals.
+    const owner = { ...revoke(2), id: id('v') };
+    const history = replayAccess(genesis, [thief, owner]);
+    const judge = (at: number, writer = 'wa') =>
+      history.judge(
+        { id: `r${at}`, root: 'alice', seen: [], writer, at, collection: 'app.note', line: at },
+        isMember,
+      );
+    assert.ok(judge(2).ok, 'covered by both');
+    assert.ok(!judge(5).ok, "past the owner's cutoff: the thief's revoke doesn't shield it");
+    assert.ok(judge(5, 'wz').ok, 'other keys are untouched');
   });
 
-  test('only whoever signed a note may revoke it', () => {
+  test('a promotion takes nothing away', () => {
+    const bob = setRole('alice', 'bob', 'member', []);
+    const promote = setRole('alice', 'bob', 'moderator', [bob.id]);
+    const history = replayAccess(genesis, [bob, promote]);
+    assert.deepEqual(history.judge({ id: 'r', root: 'bob', seen: [bob.id], writer: 'wb', at: 9 }, isMember), {
+      ok: true,
+      unseen: [],
+    });
+  });
+
+  test('revokes are never heads: any number of them leaves what a writer names as it was', () => {
+    const bob = setRole('alice', 'bob', 'member', []);
+    const junk = Array.from({ length: 70 }, (_, i): AccessEvent => ({
+      id: id('v'),
+      key: `revoke:junk${i}|bob`,
+      kind: 'revoke',
+      root: 'bob',
+      author: 'k',
+      target: `did:key:zJunk${i}`,
+      seen: [bob.id],
+      cutoff: new Map(),
+    }));
+    const history = replayAccess(genesis, [bob, ...junk]);
+    assert.ok(junk.every((event) => history.status(event.id)?.status === 'applied'));
+    assert.deepEqual(history.heads(), [bob.id]);
+  });
+
+  test("a revoke reaches only its own account's keys", () => {
     const bob = setRole('alice', 'bob', 'admin', []);
     const revoke: AccessEvent = {
       id: id('v'),
-      key: 'revoke:n',
+      key: 'revoke:wa|bob',
       kind: 'revoke',
       root: 'bob',
-      note: 'note-1',
-      issuer: 'alice',
+      author: 'k',
+      target: 'wa',
       seen: [bob.id],
-      keep: [],
+      cutoff: new Map(),
     };
-    assert.equal(replayAccess(genesis, [bob, revoke]).revoked('note-1'), null);
+    const history = replayAccess(genesis, [bob, revoke]);
+    assert.deepEqual(history.revoked('wa', 'alice'), []);
+    assert.ok(history.judge({ id: 'r', root: 'alice', seen: [], writer: 'wa', at: 5 }, isMember).ok);
   });
 
   test('definitions: define to create, the definer or a manager to change', () => {
@@ -456,7 +516,8 @@ describe('records against the history', () => {
       name: 'app.poll',
       deleted: false,
       seen: [bob.id],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     assert.equal(
       replayAccess(genesis, [bob, bobDefines]).status(bobDefines.id)?.status,

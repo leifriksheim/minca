@@ -41,7 +41,8 @@ const named = (root: string, relays: string[], seen: string[] = []): AccessEvent
   root,
   relays,
   seen,
-  keep: [],
+  author: 'k',
+  cutoff: new Map(),
 });
 
 describe('a space’s relays, in its history', () => {
@@ -54,7 +55,8 @@ describe('a space’s relays, in its history', () => {
       did: 'bob',
       role: 'member',
       seen: [],
-      keep: [],
+      author: 'k',
+      cutoff: new Map(),
     };
     const byAlice = named('alice', ['wss://relay.one.test'], [bob.id]);
     const byBob = named('bob', ['wss://relay.bob.test'], [byAlice.id]);

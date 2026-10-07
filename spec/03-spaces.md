@@ -179,21 +179,22 @@ space itself. These records form the **access history**.
 ### 3.1 The access collections
 
 Each access record lives at a fixed record key, derived from what it changes.
-Bodies are JSON objects; `keep` is optional everywhere it appears (§6.3).
+Bodies are JSON objects; `cutoff` is optional everywhere it appears (§6.3).
 
-| Collection       | Record key                    | Body                                                                             | Event kind   |
-| ---------------- | ----------------------------- | -------------------------------------------------------------------------------- | ------------ |
-| `sys.role`       | `role:<name>`                 | `{ name, title?, rank, permissions, keep? }` or `{ name, removed: true, keep? }` | `role`       |
-| `sys.member`     | `member:<hex40(account DID)>` | `{ did, role: string \| null, keep?, invite?: { key, signature } }`              | `member`     |
-| `sys.invite`     | `invite:<hex40(invite DID)>`  | `{ key: <invite DID>, role, open: boolean, keep? }`                              | `invite`     |
-| `sys.revoke`     | `revoke:<hex40(cid(note))>`   | `{ note: <encoded UCAN>, keep? }`                                                | `revoke`     |
-| `sys.collection` | `collection:<name>`           | a collection definition ([02](02-records.md)), with `keep?`; may be encrypted    | `definition` |
-| `sys.key`        | `key:space`                   | `{ keyId, readKey, earlier }` (§9)                                               | `key`        |
-| `sys.relays`     | `relays:space`                | `{ relays: string[] }` (§10)                                                     | `relays`     |
-| `sys.keepers`    | `keepers:space`               | `{ keepers: [{ did, name }], copies: number \| null }` (§10)                     | `keepers`    |
-| `sys.fork`       | `fork:<hex40(writer DID)>`    | `{ a, b }`: two versions without bodies (§6.5)                                   | `fork`       |
+| Collection       | Record key                                     | Body                                                                                 | Event kind   |
+| ---------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------ | ------------ |
+| `sys.role`       | `role:<name>`                                  | `{ name, title?, rank, permissions, cutoff? }` or `{ name, removed: true, cutoff? }` | `role`       |
+| `sys.member`     | `member:<hex40(account DID)>`                  | `{ did, role: string \| null, cutoff?, invite?: { key, signature } }`                | `member`     |
+| `sys.invite`     | `invite:<hex40(invite DID)>`                   | `{ key: <invite DID>, role, open: boolean }`                                         | `invite`     |
+| `sys.revoke`     | `revoke:<hex40(key DID + "\|" + account DID)>` | `{ key: <key DID>, cutoff? }`                                                        | `revoke`     |
+| `sys.collection` | `collection:<name>`                            | a collection definition ([02](02-records.md)); may be encrypted                      | `definition` |
+| `sys.key`        | `key:space`                                    | `{ keyId, readKey, earlier }` (§9)                                                   | `key`        |
+| `sys.relays`     | `relays:space`                                 | `{ relays: string[] }` (§10)                                                         | `relays`     |
+| `sys.keepers`    | `keepers:space`                                | `{ keepers: [{ did, name }], copies: number \| null }` (§10)                         | `keepers`    |
+| `sys.fork`       | `fork:<hex40(writer DID)>`                     | `{ a, b }`: two versions without bodies (§6.5)                                       | `fork`       |
 
-`cid(note)` is `cid` of the UTF-8 bytes of the encoded note string.
+A `sys.revoke` key names the key revoked and the account revoking it, so no
+other account's revoke can sit where it belongs.
 
 > Rationale: record keys are lower case and DIDs are not, so a key names a
 > hash of the thing and the body names the thing itself.
@@ -205,9 +206,12 @@ for the invite DID `did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
 ### 3.2 Every record names what it saw
 
 Every version written in a space — access record or not — carries `seen`: the
-ids of the **heads** of the access history as its writer knew them (§4.6). A
-writer **SHOULD** set `seen` to its current heads. The space id itself may
-appear in `seen` and stands for the genesis. Access records **MUST** carry
+ids of **heads** of the access history as its writer knew them (§4.6), at most 64. A writer **SHOULD** name its current heads, and MAY name fewer: what it
+leaves out it is judged as not having seen, which can only take something
+away from it (§5.1). One with more than 64 names first those its own standing
+rests on (its `member:` and `role:` records, its collection's definition),
+then the most recently applied. The space id itself may appear in `seen` and stands for
+the genesis. Access records **MUST** carry
 `retain: true` ([02](02-records.md)); a version without it is not an access
 event.
 
@@ -233,9 +237,11 @@ A version yields no event when any of these hold:
   encrypted, or its body is not an object;
 - the fields below do not check out.
 
-Otherwise the event is `{ id: version.id, key: version.key, root, seen: version.seen ?? [], keep, kind, … }`,
-where `keep` is `body.keep` if it is a list of strings (first 10 000 taken),
-else `[]` (always `[]` for `definition`, `key`, `relays`, `keepers`, `fork`), and:
+Otherwise the event is `{ id: version.id, key: version.key, root, author: version.author, seen: version.seen ?? [], cutoff, kind, … }`,
+where `cutoff` is `body.cutoff` read as a map from key DID to a map from
+collection to a non-negative integer (absent: empty; anything else, or more
+than 1024 places in all: no event),
+always empty for `definition`, `key`, `relays`, `keepers` and `fork`, and:
 
 | Kind         | Checks                                                                                                                                                | Event fields                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -246,7 +252,7 @@ else `[]` (always `[]` for `definition`, `key`, `relays`, `keepers`, `fork`), an
 | `key`        | record key `key:space`, `keyId` string ≤ 64 chars, `readKey` starts with `did:key:`                                                                   | `keyId`, `readKey`                                                                                          |
 | `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                              | `relays`                                                                                                    |
 | `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                      | `keepers`, `copies`                                                                                         |
-| `revoke`     | `note` string parsing as a UCAN; key = `revoke:<hex40(cid(note))>`                                                                                    | `note` = `cid(note)`, `issuer` = the note's `iss`                                                           |
+| `revoke`     | `key` a `did:key`; record key = `revoke:<hex40(key + "\|" + root)>`                                                                                   | `target` = `key`                                                                                            |
 | `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                          | `writer` = their `author`, `from` = their `log.n`                                                           |
 
 A deleted version in any access collection other than `sys.collection` is
@@ -264,7 +270,7 @@ access version from outside (a peer, a folder) unless:
 4. its root is **named** by the history — the creator, or the `did` of any
    `member` event with a non-null role, whatever became of it — or it is a
    `member` event joining by an invite key that some held `invite` event
-   names, or it is a `revoke` whose issuer is named.
+   names.
 
 > Rationale: a stranger who knows a space's id can mint signed records for
 > free. Only accounts the history has heard of can get anything stored, and
@@ -400,7 +406,7 @@ Applying (`apply`):
 | `role`       | set `roles[name] = role`, or delete it when `role` is null                                                                                           |
 | `member`     | set `members[did] = role`, or delete it when `role` is null                                                                                          |
 | `invite`     | `invites[inviteKey] = { role, open, event: id }`                                                                                                     |
-| `revoke`     | nothing (recorded separately: the first applied revoke of each note, with its keep list)                                                             |
+| `revoke`     | nothing (recorded separately: every applied revoke, by the key it names)                                                                             |
 | `fork`       | nothing (recorded separately: for each writer, the applied fork with the lowest `from`)                                                              |
 | `definition` | delete `definitions[name]` when `deleted`; else set it to `{ event: id, definedBy }` where `definedBy` is the existing `definedBy`, or `root` if new |
 | `key`        | append `{ keyId, readKey, event: id }` to `keys`; set `keyDue = false`                                                                               |
@@ -441,7 +447,8 @@ After any non-`key` event, if `keys` is non-empty and some account that was in
 - closing (`open: false`) requires the invite to exist;
 - opening requires the role to exist with rank at most `A.rank`.
 
-**`revoke`** — `root` must equal the note's issuer.
+**`revoke`** — `A` must hold a role. A revoke only ever reaches versions its
+own account signed (§5.1), so a member may revoke only its own keys in effect.
 
 **`fork`** — `A` must be non-null: any member may bring the proof, which
 stands on its own.
@@ -462,21 +469,24 @@ stands on its own.
 A consequence of the rank rule: two accounts of equal rank can never remove or
 demote each other, only themselves.
 
-**Reductions.** Before applying an applied `member` or `role` event, for each
-_affected_ account — the `did` of a `member` event; every current holder of the
-role for a `role` event — record `{ event: id, did, before: role(S, did), after: role(S', did) }`
-where `S'` is the state after applying. Reductions drive §5.
+**Reductions.** When an applied `member` or `role` event lowers an affected
+account's role — the `did` of a `member` event; every current holder of the
+role for a `role` event — it is a **reduction** of that account. Lowered means
+the role is gone, ranked lower, or lacks a permission it had. A promotion takes
+nothing away and is not one. Reductions drive §5.
 
 ### 4.6 What the replay exposes
 
 - `current` — the final state.
 - `status(id)` — `applied` (with index), `dropped` (with reason), `waiting`, or unknown.
-- `heads()` — the ids of placeable events (applied **or** dropped) that no
-  placeable event's `seen` names, sorted ascending. This is what a writer puts
-  in `seen`.
+- `heads()` — the ids of applied events other than `revoke` and `fork` that no
+  other such event saw, directly or through others, sorted ascending. This is
+  what a writer puts in `seen`. A dropped event, a revoke and a fork proof are
+  never heads: none changes the state, so a writer need not name them, and
+  however many of them anyone makes, they can't fill `seen`.
 - `at(seen)` — `S_seen` as in §4.4, or null when anything in `seen` (other
   than `G`) is missing or waiting.
-- `revoked(noteCid)` — the first applied revoke of that note, and its keep set.
+- `revoked(key, account)` — every applied revoke of that key by that account.
 - `named(did)`, `knownInvite(inviteDid)` — as used in §3.4.
 
 **Example (a removal against a concurrent ban).** Admin Alice makes Bob a
@@ -495,34 +505,52 @@ _Source: `packages/core/src/space/roles.ts` (`replayAccess`, `place`, `extended`
 
 ### 5.1 `judge`
 
-Given a record's `id`, its root, its `seen`, the CID of the note it was
-written under (if any), its `author` and `log.n`, a predicate `needs(role, state)`, and optionally
-`within`, the `seen` of a version that cites this one
-([02](02-records.md) §7.6):
+A record is judged in its **own view**, the access changes its `seen` names
+and everything they saw, and then against the changes to its author's
+standing it had not seen. Those are the only two inputs.
+
+A change that took power from someone **covers** a version when the change's
+`cutoff` (§6.3) names the version's key and collection with a place at or
+above the version's place in that key's line for that collection (`log.c.n`). What a covering change's author had seen of that key stands,
+whatever the change took away.
+
+Given a record's `id`, its root, its `seen`, its `author`, `log.n`, collection
+and `log.c.n`, a
+predicate `needs(role, state)`, and optionally `within`, the `seen` of a
+version that cites this one ([02](02-records.md) §7.6):
 
 1. If anything in `seen`, or in `within`, is missing or waiting → not yet
    (retry later).
-2. If the note has been revoked (§6.4), the revoke's `keep` does not list
-   this record's id, and (with `within`) the revoke is in
-   `within ∪ ancestors(within)` → withdrawn.
+2. If an applied `revoke` by the record's own root names its `author`
+   (§6.4), and does not cover it, and (with `within`) is in
+   `within ∪ ancestors(within)` → withdrawn. Every such revoke applies, each
+   with its own cutoff.
    The same for a fork: if a fork of `author` is recorded (§6.5) whose `from`
    is at most `log.n`, and (with `within`) its event is in
    `within ∪ ancestors(within)` → withdrawn.
 3. `S_seen = at(seen)`. If `needs(role(S_seen, root), S_seen)` is false → refused.
-4. For every reduction of `root` whose event is **not** in `seen ∪ ancestors(seen)`,
-   (with `within`) **is** in `within ∪ ancestors(within)`, and whose event's
-   `keep` does not list this record's id: if `needs(before)` and not
-   `needs(after)` → withdrawn ("its author's access was taken away").
+4. Let `U` be the reductions of `root` (§4.5) whose events are **not** in
+   `seen ∪ ancestors(seen)`, that do not cover it, and (with `within`) **are**
+   in `within ∪ ancestors(within)`. If `U` is not empty, let
+   `S' = at(seen ∪ U)`, the record's own view with those changes and everything
+   they saw, the rules included. If the record would not stand by §5.2
+   steps 6–9 with `S'` in place of `at(seen)` → withdrawn ("its author's access
+   was taken away").
 5. Otherwise it stands.
 
-So a record stands if its author was allowed as of what it saw, and nothing it
-had not seen took that away — unless that change kept it. For a version that
-another cites, only what the citer had seen can take it away.
+So a record stands if its author was allowed as of what it saw, and still is
+once every change to its standing it had not seen is added, along with what
+those changes saw, unless the change covers it. A writer can't escape a
+removal, a demotion, or the rules a demotion saw, by naming an older point. A
+narrowed rule on its own binds what saw it: without trusted time, a version
+naming an older point can't be told from one written offline then, and it
+counts if its author could have written it then. For a version that another
+cites, only what the citer had seen can take it away.
 
 Withdrawn is a refusal for every purpose but two: the version is still
 stored, and a version that cites it can count it ([02](02-records.md) §9.5).
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `cutOf`). Tests: `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `cutOf`), `packages/core/src/node/space-runtime.ts` (`underUnseen`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/rules.test.ts` ("a narrowed rule…"), `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
 
 ### 5.2 Standing of an ordinary record
 
@@ -546,32 +574,19 @@ A version outside the access collections **stands** when, in this order:
 8. `judge(...)` (§5.1) passes;
 9. the [02](02-records.md) checks on topic tags, `onePer` keys and `fixed`
    fields pass (skipped where the body cannot be opened);
-10. for every applied change to its collection's definition that it had not
-    seen — not in `seen ∪ ancestors(seen)`, and (with `within`) in
-    `within ∪ ancestors(within)` — in replay order, whose body this peer can
-    read and whose `keep` does not list it: it keeps to that definition's
-    rules too, with `role(at(seen), root)` as in step 6: the rule for the
-    action, `final`, `onePer`, `fixed`, and checks, but not topic tags. If it
-    does not → **withdrawn**. A removed definition has no rules to break.
+10. §5.1 step 4 holds: with the changes to its author's standing it had not
+    seen, and what they saw, it would still have stood.
 
-So a record is judged by the rules it saw, and by any rules it had not seen
-that came to apply to it: a writer can't sign as of a point before the rules
-were narrowed and be judged by the old ones. Rules that loosened take nothing
-away, since what kept to the stricter rules keeps to these.
-
-> Rationale: as for a removal (§5.1 step 4), this does not ask whether a
-> change came "after" a record, which no peer can tell, but whether the
-> record saw it, which every peer can. An honest writer who was away when the
-> rules narrowed, and wrote under the old ones meanwhile, loses what it wrote
-> unless the change kept it, and writes it again under the new rules: the
-> price of not letting anyone look behind.
+So a record is judged by the rules it saw, and by any rules that a change to
+its author's standing it had not seen had seen. Rules that loosened take
+nothing away, since what kept to the stricter rules keeps to these.
 
 An access record stands when its event's status is `applied`.
 
 A non-member — including someone holding only a view-only invite — can
 therefore write nothing at all in a space, not even `sys.profile`.
 
-_Source: `packages/core/src/space/roles.ts` (`judge`, `unseenDefinitions`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `rulesAt`, `unseenRules`, `underRules`, `definitionIn`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts` ("rules: changing them"), `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/space/roles.ts` (`judge`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `rulesAt`, `underUnseen`, `underRules`, `definitionIn`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts` ("rules: changing them"), `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
@@ -624,41 +639,63 @@ What the library does, and how long it waits for a peer, is in
 
 _Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry")._
 
-### 6.3 Keep lists
+### 6.3 Cutoffs
 
 A change that takes power from people — lowering or removing a member, lowering
-or removing a role — **SHOULD** carry `keep`: the ids of the current versions,
-outside the access collections, written by the affected accounts that the
-writer has seen (at most 10 000). §5.1 step 4 lets those stand; anything else
-the affected account wrote that relied on the lost power and had not seen the
-change is withdrawn, whatever point in history it claims: kept, but never counted, except by a version that cites it and had not seen the change (§5.1).
+or removing a role, revoking a key — **SHOULD** carry `cutoff`: for each key of
+the affected accounts and each collection, the end of the unbroken line its
+writer holds of that key's versions in that collection ([02](02-records.md)
+§4.10): from place 0 of `log.c`, each place held and naming the one before it
+as `c.prev`. A place held past a gap covers nothing, so one planted far ahead
+can't stretch a cutoff over what its writer signs later. A node holding part
+of a space keeps the lines of the collections it holds whole
+([05](05-sync-and-storage.md) §9), so it covers all it holds. At most 1024 places in all: past that, a writer
+orders each account's lines with defined collections first, then the rest,
+each in name order, and takes one line from each account in turn (accounts by
+DID), so no one's writing can crowd out anyone else's, and nobody can make
+themselves unremovable by writing into many collections. What is left out is
+judged with the change. A change reaching more than 1024 accounts, such as a role
+with that many holders, can't cover them all; lower or remove the role's
+holders in smaller changes first. A node covers only the collections it holds: one
+holding part of a space, removing someone, leaves their writes elsewhere to be
+judged with the change ([#166](https://github.com/leifriksheim/weave/issues/166)).
 
-A change to a collection's definition **SHOULD** carry `keep` in its body
-([02](02-records.md) §6.1): the ids of the current versions in that
-collection the writer has seen (at most 10 000). §5.2 step 10 lets those stand
-under the new rules; anything else in the collection that had not seen the
-change, and breaks its rules, is withdrawn. A definition's body may be sealed
-in a private space, and so is its `keep`: only peers that can read the rules
-judge by them.
+```json
+{
+  "did": "did:key:zDnae…bob",
+  "role": null,
+  "cutoff": {
+    "did:key:zDnae…bobLaptop": { "app.chat": 41, "app.photos": 3 },
+    "did:key:zDnae…bobPhone": { "app.chat": 7 }
+  }
+}
+```
 
-`keep` on an `invite` event is parsed but has no effect on judging (only
-`member` and `role` events produce reductions); an invite close decides who
-got in by replay order alone (§4.3).
+Everything a covered key signed in a covered collection at or below its place stands, as far as this
+change goes. Anything else the affected account wrote that had not seen the
+change, whatever point in history it claims, is judged with it (§5.1 step 4):
+later places, and keys the change's writer had never seen. A cutoff names a
+place, not a branch: a second version at a covered place is a fork of that
+key's log, and a fork proof (§6.5) withdraws both. A change to a collection's definition carries no cutoff: it binds what
+saw it.
 
-> **Planned:** keep lists past the cap. Someone removed after years of
-> writing may need more than 10 000 ids. If that cap is ever reached, `keep`
-> becomes the hash of the sorted list, with the list itself carried
-> separately. Not designed further; nothing needs it yet.
+> Rationale: a cutoff is exact and small, one number per key, and doesn't
+> depend on which records the writer's node happens to hold, as a list of ids
+> did. A writer that sets it lower than it saw takes away what it may take
+> away anyway.
 
-### 6.4 Revoking a note
+### 6.4 Revoking a key
 
-Whoever signed a note (UCAN) may revoke it in a space by writing `sys.revoke`
-at `revoke:<hex40(cid(note))>` with `{ note, keep? }`; `keep` lists the
-versions written under that note that the revoker has seen and wants to stand.
-From the first applied revoke on, every version written under that note
-stands only if kept (§5.1 step 2) — whatever it saw; the rest are withdrawn.
+An account revokes one of its keys in a space by writing `sys.revoke` at
+`revoke:<hex40(key DID + "|" + account DID)>` with `{ key, cutoff? }`. From
+then on, every version that key signed for that account stands only if the
+revoke covers it (§5.1 step 2), whatever it saw; the rest are withdrawn. Every
+applied revoke applies, each with its own cutoff, and revokes are never rivals
+(§4.3), so no revoke can shield what another takes: a thief who revokes a stolen key first, covering what it signed
+in advance, is still undone by the owner's own revoke. A revoke names a key,
+not a note, so every note to that key goes with it.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `removeRole`, `revoke`, `keepFrom`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("handing over…", "a revoked note…"), `packages/core/tests/space-access.test.ts` ("taking it back")._
+_Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `removeRole`, `revoke`, `cutoffFor`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("handing over…", "a revoked key…"), `packages/core/tests/space-access.test.ts` ("taking it back")._
 
 ### 6.5 Proving a fork
 
@@ -690,8 +727,8 @@ A peer writes the proof only when no applied fork of that writer already
 covers the place it found.
 
 > Rationale: the proof names a key, not an account. A copied or stolen key
-> is the account's problem, and the owner's way out is to revoke the key's
-> note (§6.4) and go on with another; the account's place in the space is a
+> is the account's problem, and the owner's way out is to revoke the key
+> (§6.4) and go on with another; the account's place in the space is a
 > person's decision to change (§6.1).
 
 _Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork"), `packages/core/tests/access-convergence.test.ts`._

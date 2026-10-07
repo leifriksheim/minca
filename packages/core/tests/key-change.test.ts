@@ -57,7 +57,8 @@ const setRole = (root: string, did: string, role: string | null, seen: string[])
   did,
   role,
   seen,
-  keep: [],
+  author: 'k',
+  cutoff: new Map(),
 });
 const newKey = (root: string, keyId: string, seen: string[], eventId = id('k')): AccessEvent => ({
   id: eventId,
@@ -67,7 +68,8 @@ const newKey = (root: string, keyId: string, seen: string[], eventId = id('k')):
   keyId,
   readKey: `did:key:r-${keyId}`,
   seen,
-  keep: [],
+  author: 'k',
+  cutoff: new Map(),
 });
 
 describe('when a new key is due', () => {

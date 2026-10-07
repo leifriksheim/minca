@@ -173,8 +173,9 @@ export async function checkSpace(space: Space): Promise<string | null> {
 export const memberKey = (did: string) => hashedKey('member', did);
 /** The key of an invite's record, from its public key */
 export const inviteKey = (inviteDid: string) => hashedKey('invite', inviteDid);
-/** The key of the record revoking a note, from the note's CID */
-export const revokeKey = (noteCid: string) => hashedKey('revoke', noteCid);
+/** The key of an account's record revoking one of its keys: naming both, so no one else's can take its place */
+export const revokeKey = (keyDid: string, accountDid: string) =>
+  hashedKey('revoke', `${keyDid}|${accountDid}`);
 /**
  * Where proof that an account broke the protocol's rules is kept, one record
  * per offending version and writer: `{ kind, evidence }`. A standard

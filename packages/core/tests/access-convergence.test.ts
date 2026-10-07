@@ -39,7 +39,8 @@ import {
 // ─── The reference: replayAccess as it was before it was optimised ─────
 
 /** What the reference answers: everything but `extend`, which came later */
-type ReferenceHistory = Omit<AccessHistory, 'extend'>;
+// `headsFor` only chooses what a writer names; peers never compare it.
+type ReferenceHistory = Omit<AccessHistory, 'extend' | 'headsFor'>;
 //
 // Copied verbatim from packages/core/src/space/roles.ts at 4a224d1. Do not
 // change it to match a new replay: that defeats the point. If the protocol's
@@ -63,8 +64,6 @@ function covers(granted: ReadonlyArray<string>, permission: string): boolean {
 interface Reduction {
   readonly event: string;
   readonly did: string;
-  readonly before: Role | null;
-  readonly after: Role | null;
 }
 
 /** A role's standing as rank; below everyone when there is none */
@@ -211,7 +210,7 @@ function refusal(event: AccessEvent, state: AccessState): string | null {
       return role.rank > author!.rank ? 'Its author may only invite up to their own rank' : null;
     }
     case 'revoke':
-      return event.root === event.issuer ? null : 'Only whoever signed a note may revoke it';
+      return author ? null : 'Only a member may revoke a key here';
     case 'fork':
       return author ? null : 'Only a member may report a fork';
     case 'definition': {
@@ -352,7 +351,7 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
   const order: string[] = [];
   const appliedByKey = new Map<string, string[]>();
   const reductions: Reduction[] = [];
-  const revokes = new Map<string, { event: string; keep: ReadonlySet<string> }>();
+  const revokes = new Map<string, ReadonlyArray<{ event: string; root: string }>>();
   const forks = new Map<string, { event: string; from: number }>();
 
   const stateAtCache = new Map<string, AccessState>();
@@ -431,7 +430,10 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
     }
 
     // Of two changes to one thing that did not see each other, the first in the replay stands.
-    const rival = (appliedByKey.get(event.key) ?? []).find((other) => !ancestors(event.id).has(other));
+    const rival =
+      event.kind === 'revoke'
+        ? undefined
+        : (appliedByKey.get(event.key) ?? []).find((other) => !ancestors(event.id).has(other));
     const reason =
       (rival ? 'A change to the same thing that it had not seen came first' : null) ??
       // Its author had to have the power as of what they saw…
@@ -443,14 +445,20 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
       continue;
     }
 
-    const who = affected(event, state);
-    const before = who.map((did) => roleOf(state, did));
+    const who = affected(event, state).map((did) => ({ did, before: roleOf(state, did) }));
     apply(event, state);
-    who.forEach((did, i) =>
-      reductions.push({ event: event.id, did, before: before[i]!, after: roleOf(state, did) }),
-    );
-    if (event.kind === 'revoke' && !revokes.has(event.note))
-      revokes.set(event.note, { event: event.id, keep: new Set(event.keep) });
+    for (const { did, before } of who) {
+      const after = roleOf(state, did);
+      const lower =
+        !!before &&
+        (!after || after.rank < before.rank || before.permissions.some((p) => !covers(after.permissions, p)));
+      if (lower) reductions.push({ event: event.id, did });
+    }
+    if (event.kind === 'revoke')
+      revokes.set(event.target, [
+        ...(revokes.get(event.target) ?? []),
+        { event: event.id, root: event.root },
+      ]);
     if (event.kind === 'fork' && event.from < (forks.get(event.writer)?.from ?? Infinity))
       forks.set(event.writer, { event: event.id, from: event.from });
 
@@ -460,16 +468,15 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
   }
   for (const id of waiting) statuses.set(id, { status: 'waiting' });
 
-  const keepOf = new Map(order.map((id) => [id, new Set(byId.get(id)!.keep)]));
+  const cutoffOf = new Map(order.map((id) => [id, byId.get(id)!.cutoff]));
 
-  const heads = (): ReadonlyArray<string> => {
-    const parents = new Set<string>();
-    for (const event of placeable) for (const parent of event.seen) parents.add(parent);
-    return placeable
-      .map((event) => event.id)
-      .filter((id) => !parents.has(id))
+  // The applied changes no other applied change saw: a dropped change is never a head.
+  const changesState = (id: string) => !['revoke', 'fork'].includes(byId.get(id)!.kind);
+  const heads = (): ReadonlyArray<string> =>
+    order
+      .filter(changesState)
+      .filter((id) => !order.some((other) => other !== id && changesState(other) && cutOf([other]).has(id)))
       .sort();
-  };
 
   return Object.freeze({
     current: state,
@@ -485,43 +492,33 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
         return { ok: false, reason: 'Access changes it depends on have not arrived yet', later: true };
       // For a cited version, only what the citer had seen can take it away (02 §7.6).
       const known = within ? cutOf(within) : null;
-      const revoked = record.note ? revokes.get(record.note) : undefined;
-      if (revoked && !revoked.keep.has(record.id) && (!known || known.has(revoked.event)))
-        return { ok: false, reason: 'The note it was written under was revoked', withdrawn: true };
+      const counts = (event: string) => !known || known.has(event);
+      const covered = (event: string) =>
+        record.writer !== undefined &&
+        record.collection !== undefined &&
+        record.line !== undefined &&
+        (cutoffOf.get(event)?.get(record.writer)?.get(record.collection) ?? -1) >= record.line;
+      for (const revoke of record.writer === undefined ? [] : (revokes.get(record.writer) ?? []))
+        if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))
+          return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
       const fork = record.writer === undefined ? undefined : forks.get(record.writer);
-      if (fork && (record.at ?? 0) >= fork.from && (!known || known.has(fork.event)))
+      if (fork && (record.at ?? 0) >= fork.from && counts(fork.event))
         return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
 
       const cutState = stateAt(record.seen);
       if (!needs(roleOf(cutState, record.root), cutState)) {
         return { ok: false, reason: 'Its author was not allowed to, as of what it had seen' };
       }
-      // A change it had not seen, that took this power away, stands unless it kept the record.
       const cut = cutOf(record.seen);
-      for (const reduction of reductions) {
-        if (reduction.did !== record.root || cut.has(reduction.event)) continue;
-        if (known && !known.has(reduction.event)) continue;
-        if (keepOf.get(reduction.event)?.has(record.id)) continue;
-        if (needs(reduction.before, cutState) && !needs(reduction.after, cutState)) {
-          return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
-        }
-      }
-      return { ok: true };
+      const unseen = reductions
+        .filter((r) => r.did === record.root && !cut.has(r.event) && counts(r.event) && !covered(r.event))
+        .map((r) => r.event);
+      return { ok: true, unseen: [...new Set(unseen)] };
     },
-    revoked: (note: string) => revokes.get(note) ?? null,
+    revoked: (key: string, root: string) =>
+      (revokes.get(key) ?? []).filter((revoke) => revoke.root === root).map((revoke) => revoke.event),
     forked: (writer: string) => forks.get(writer) ?? null,
     forks: () => [...forks].map(([writer, { from }]) => ({ writer, from })),
-    unseenDefinitions(name, ids, within) {
-      if (!seen(ids) || (within && !seen(within))) return null;
-      const cut = cutOf(ids);
-      const known = within ? cutOf(within) : null;
-      return order.filter((id) => {
-        const event = byId.get(id);
-        return (
-          event?.kind === 'definition' && event.name === name && !cut.has(id) && (!known || known.has(id))
-        );
-      });
-    },
     named: (did: string) =>
       did === genesis.creator ||
       [...byId.values()].some((event) => event.kind === 'member' && event.did === did && event.role !== null),
@@ -580,8 +577,8 @@ const ROLES: ReadonlyArray<Role> = [
 const ROLE_NAMES = ['admin', 'mod', 'helper', 'member', 'extra'];
 const PEOPLE = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
 const PERMISSIONS = [MANAGE, INVITE, DEFINE, 'app.x/moderate', 'app.x/*', '*'];
-const NOTES = ['n1', 'n2', 'n3'];
 const WRITERS = ['w1', 'w2'];
+const COLLECTIONS = ['app.x', 'app.y'];
 const INVITES = ['i1', 'i2', 'i3'];
 const RECORDS = 16;
 
@@ -635,16 +632,6 @@ function generate(seed: number): History {
   };
   const powerful = new Set(['p0']);
   const author = () => (r.chance(0.75) ? r.pick([...powerful]) : r.pick(PEOPLE));
-  const someKeep = (): string[] =>
-    r.chance(0.25)
-      ? [
-          ...new Set(
-            Array.from({ length: 1 + r.int(3) }, () =>
-              r.chance(0.5) && events.length > 0 ? r.pick(events).id : `rec-${r.int(RECORDS)}`,
-            ),
-          ),
-        ]
-      : [];
 
   const length = 5 + r.int(56);
   for (let n = 0; n < length; n++) {
@@ -652,10 +639,16 @@ function generate(seed: number): History {
     // Now and then a change that saw something that never arrives: it, and all after it, wait.
     if (r.chance(0.03)) seen = [...seen, `missing-${r.int(3)}`];
     const roll = r.int(100);
-    // Changes that take power away keep records more often: that is where keep lists matter.
-    const keep =
-      roll < 55 && r.chance(0.5) ? Array.from({ length: 4 }, () => `rec-${r.int(RECORDS)}`) : someKeep();
-    const base = { id: newId(), root: author(), seen, keep: [...new Set(keep)] };
+    // Changes that take power away leave places more often: that is where cutoffs matter.
+    const cutoff = new Map(
+      roll < 72 && r.chance(0.6)
+        ? Array.from(
+            { length: 1 + r.int(3) },
+            () => [r.pick(WRITERS), new Map([[r.pick(COLLECTIONS), r.int(6)]])] as const,
+          )
+        : [],
+    );
+    const base = { id: newId(), root: author(), author: r.pick(WRITERS), seen, cutoff };
     let event: AccessEvent;
     if (roll < 40) {
       const did = r.pick(PEOPLE);
@@ -700,16 +693,8 @@ function generate(seed: number): History {
       const role = r.pick(ROLE_NAMES);
       event = { ...base, kind: 'invite', key: `invite:${inviteKey}`, inviteKey, role, open: r.chance(0.7) };
     } else if (roll < 72) {
-      const note = r.pick(NOTES);
-      const issuer = r.pick(PEOPLE);
-      event = {
-        ...base,
-        root: r.chance(0.8) ? issuer : base.root,
-        kind: 'revoke',
-        key: `revoke:${note}`,
-        note,
-        issuer,
-      };
+      const key = r.pick(WRITERS);
+      event = { ...base, kind: 'revoke', key: `revoke:${key}|${base.root}`, target: key };
     } else if (roll < 75) {
       const writer = r.pick(WRITERS);
       event = { ...base, kind: 'fork', key: `fork:${writer}`, writer, from: r.int(5) };
@@ -758,8 +743,9 @@ function generate(seed: number): History {
     id: `rec-${i}`,
     root: r.chance(0.8) ? r.pick([...powerful]) : r.pick(PEOPLE),
     seen: someSeen(),
-    ...(r.chance(0.3) ? { note: r.pick(NOTES) } : {}),
-    ...(r.chance(0.5) ? { writer: r.pick(WRITERS), at: r.int(6) } : {}),
+    ...(r.chance(0.5)
+      ? { writer: r.pick(WRITERS), at: r.int(6), collection: r.pick(COLLECTIONS), line: r.int(6) }
+      : {}),
     ...(r.chance(0.3) ? { within: someSeen() } : {}),
   }));
   return { genesis, events, cuts, records };
@@ -811,19 +797,10 @@ function shape(history: ReferenceHistory, h: History): Record<string, string> {
       out[`judge ${record.id} needs#${i}`] = JSON.stringify(history.judge(record, needs, record.within));
     });
   }
-  for (const note of NOTES) {
-    const revoked = history.revoked(note);
-    out[`revoked ${note}`] = JSON.stringify(
-      revoked && { event: revoked.event, keep: [...revoked.keep].sort() },
-    );
-  }
+  for (const writer of WRITERS)
+    for (const did of PEOPLE) out[`revoked ${writer} ${did}`] = JSON.stringify(history.revoked(writer, did));
   for (const writer of WRITERS) out[`forked ${writer}`] = JSON.stringify(history.forked(writer));
   out.forks = JSON.stringify([...history.forks()].sort((a, b) => a.writer.localeCompare(b.writer)));
-  for (const record of h.records)
-    for (const name of ['app.x', 'app.y'])
-      out[`unseenDefinitions ${record.id} ${name}`] = JSON.stringify(
-        history.unseenDefinitions(name, record.seen, record.within),
-      );
   for (const did of PEOPLE) out[`named ${did}`] = String(history.named(did));
   for (const key of INVITES) out[`knownInvite ${key}`] = String(history.knownInvite(key));
   return out;

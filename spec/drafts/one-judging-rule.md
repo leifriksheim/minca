@@ -1,6 +1,6 @@
 # Draft: one judging rule
 
-Status: proposal, for review before any spec or code changes.
+Status: accepted, October 2026. Rules 2 and 3 are built (protocol 11); rule 1, a convergent access history, is next, behind a model-checking harness.
 
 Today a version can stand, be withdrawn, be refused or wait. It is judged as
 of `at(seen)` from a global replay, plus a pile of special cases:
@@ -70,10 +70,10 @@ own cutoff.
 - **`seen` may name any subset of the heads, up to 64.** Naming less is safe:
   a reduction the writer left out still applies, through rule 2. This fixes
   #183, the freeze.
-- **`seen` only grows along a key's log.** A version's own view must contain
-  the own view of the version before it in its writer's log. A writer can
-  claim to have seen less only as far back as its last write, and after a
-  reduction, by rule 2, not at all.
+- **Dropped by implementation: "`seen` only grows along a key's log".** An
+  account can mint a fresh key whenever it likes, and the new key's log is
+  empty, so the rule bound nothing an attacker couldn't step around. Only a
+  reduction of the author, with its cutoff, binds a write it hadn't seen.
 
 ## What it gives up, on purpose
 

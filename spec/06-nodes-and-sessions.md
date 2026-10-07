@@ -382,7 +382,7 @@ The home remembers each connection it grants: the app's origin, audience,
 access, scope and the spaces granted. Connecting the same origin again replaces
 its connection; an agent's connection is its own, apart from the app's.
 
-**Disconnecting** an app or agent revokes the note of each connection removed
+**Disconnecting** an app or agent revokes the key of each connection removed
 that has `access: write`:
 
 - `scope: spaces`: in every space it was granted;
@@ -392,11 +392,11 @@ that has `access: write`:
 Disconnecting an app (not only its agents) also removes every subscription
 whose `app.origin` is its origin (§2.11, §4.4).
 
-Revoking writes a `sys.revoke` record naming the note ([03](03-spaces.md)).
-From then on nothing written under the note counts, except versions the revoker
-had already seen. What the app could already read, it keeps. How the reference
+Revoking writes a `sys.revoke` record naming the key ([03](03-spaces.md) §6.4).
+From then on nothing that key signed counts, except what the revoker had
+already seen of it. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
-note revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
+key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
 _Source: `packages/core/src/session/auth.ts` (`disconnect`, `connections`), `packages/core/src/node/node.ts` (`checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …")._
 

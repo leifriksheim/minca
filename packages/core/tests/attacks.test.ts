@@ -24,6 +24,10 @@ import { contactPublicKey, deriveContactKeyBytes } from '../src/identity/contact
 import { profileKey } from '../src/node/space-runtime.js';
 import { contactRequest } from '../src/schemas/contacts.js';
 import { until } from './helpers/until.js';
+import type { Version } from '../src/types.js';
+import { seenBy } from './helpers/as-member.js';
+import { memberKey } from '../src/space/space-access.js';
+import { MEMBER_COLLECTION } from '../src/space/roles.js';
 import { forge, open, person, settle } from './helpers/person.js';
 
 /** Alice owns a shared space with a creator-only poll collection; Bob is a member. */
@@ -191,6 +195,43 @@ describe('attacks on a shared space', () => {
     await until(async () => rejected.length > 0, 4000, 'the copy to be refused');
     assert.match(rejected.join(' '), /not the hash of what it says/);
     assert.equal(await alice.node.records.get(space, 'planted'), null);
+  });
+
+  test('changes nobody had the power for never freeze a space, however many (#183)', async () => {
+    const { alice, bob, space } = await setup();
+    const seen = [...(await seenBy(bob.node, space))];
+    // More concurrent changes than a version may name, each dropped: none is a head.
+    const flood: Version[] = [];
+    for (let w = 0; w < 65; w++) {
+      const did = `did:key:zWide${w}`;
+      flood.push(
+        await forge(
+          bob,
+          space,
+          {
+            collection: MEMBER_COLLECTION,
+            body: { did, role: 'owner' },
+            version: { key: await memberKey(did), seq: 0 },
+            retain: true,
+            seen,
+          },
+          { keep: false },
+        ),
+      );
+    }
+    await letGo(bob.node, space);
+    const store = createStorageProvider(await bob.stores(`spaces/${space}`));
+    for (const version of flood) await store.addVersion(version);
+    await hold(bob.node, space);
+    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    await until(
+      async () => (await Promise.all(flood.map((v) => aliceStore.getVersion(v.id)))).every(Boolean),
+      20000,
+      'the flood at Alice',
+    );
+    assert.ok((await alice.node.spaces.access(space)).heads.length <= 2);
+    await alice.node.records.put(space, 'app.note', { text: 'still here' });
+    await alice.node.spaces.setMember(space, bob.node.did, null);
   });
 });
 
