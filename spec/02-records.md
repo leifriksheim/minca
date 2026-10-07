@@ -1129,17 +1129,7 @@ prove it by id. Every peer confirms it from exactly what was cited.
   "onePer": ["link:about"],
   "check": [
     {
-      "that": { ">=": [{ "size": { "distinct": { "map": [
-        { "filter": [
-          { "versions": { "var": "body.votes" } },
-          { "and": [
-            { "==": [{ "var": "it.collection" }, "std.vote"] },
-            { "==": [{ "link": ["about", { "var": "it" }] }, { "link": ["about"] }] },
-            { "==": [{ "var": "it.body.choice" }, 0] }
-          ] }
-        ] },
-        { "var": "it.author" }
-      ] } } }, 10] },
+      "that": "versions(body.votes).filter(v, v.collection == \"std.vote\" && v.link(\"about\") == link(\"about\") && v.body.choice == 0.0).map(v, v.author).distinct().size() >= 10",
       "else": "A proposal passes with yes votes from at least ten members"
     }
   ]
@@ -1151,46 +1141,107 @@ prove it by id. Every peer confirms it from exactly what was cited.
 `check` is a list of 1 to **16** checks. A check is an object with exactly two
 members:
 
-- `that`: a **condition** (below);
+- `that`: a **condition**, a CEL expression (below) of 1 to **4,000**
+  characters;
 - `else`: a string of 1 to 200 characters, not only white space: why a version
   that fails the check is refused.
 
-A condition is JSON:
+#### The language
 
-- `null`, a boolean, a number or a string is that value. A string is always
-  text, never a path.
-- A list is the list of the values of its elements.
-- An object with exactly one member is an **operation**: the member's name is
-  the operator, and its value the arguments. A list value is the list of
-  arguments; any other value is the one argument. So a single argument that is
-  itself a list is written inside a list: `{ "size": [[1, 2]] }`.
-- Any other object is malformed.
+A condition is an expression in **CEL**, the Common Expression Language,
+as its specification defines it (github.com/google/cel-spec, at commit
+`40a3c9007a9305d1f2638d5f538a4e011732cace`), restricted to the subset below.
+Where this section and CEL's specification differ, this section decides.
 
-A **path** is 1 to 8 segments joined by `.`, each a name
-`^[A-Za-z_][A-Za-z0-9_]{0,63}$` or a list position `^(0|[1-9][0-9]{0,8})$`.
-Reading a path goes one segment at a time: a name reads an object's own
-member, a position reads a list's element. Anything else (a missing member, a
-position past the end, a name on a list, any segment on text, a number, a
-boolean or `null`) gives `null`.
+**Values.** `null`, `bool`, `int` (64 bits), `uint` (64 bits), `double`,
+`string`, `list` and `map`. JSON is read as CEL reads it: a number is a
+`double`, an object a `map` with `string` keys, an array a `list`; a lone
+surrogate in a string reads as U+FFFD, and JSON nested more than **64** deep
+reads as an error. So
+`body.n + 1` is an error and `body.n + 1.0` is not, while `body.n == 1` and
+`body.n < 1` compare across kinds (an `int` is converted to a `double` to
+compare with one).
 
-#### What a check reads
+**Syntax.** All of CEL's, quoted field names (``body.`content-type` ``) and
+reserved words after a `.` included, except: bytes literals (`b"…"`),
+messages (`T{…}`), names with a leading `.`, optionals (`.?`, `?.`, `[?`),
+and a double literal too large to be finite. A condition with a lone
+surrogate in it is malformed.
 
-`{ "var": "<path>" }` reads a path whose first segment is one of these:
+**Parts.** A condition is a tree of parts: a literal, a name, a field
+selection (`has()` included), an index, a call (an operator, a function or a
+method; `math.greatest` is one), a list, a map, a conditional, a macro, and
+a chain of `&&`, or of `||`, which is one part however long. A minus written
+right before a number literal is part of the literal; parentheses are not
+parts. The tree is at most **64** deep.
 
-| Name         | Value                                                                                                                                            |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `body`       | The version's body (opened, in a private space)                                                                                                  |
-| `links`      | Its links, as `[{ "rel", "to" }]` (§5)                                                                                                           |
-| `key`        | Its `key`                                                                                                                                        |
-| `seq`        | Its `seq`                                                                                                                                        |
-| `collection` | Its `collection`                                                                                                                                 |
-| `author`     | Its writer's **root** DID (the account, not the session key)                                                                                     |
-| `creator`    | The root DID of the record's first version (§4.6); on a create, the same as `author`                                                             |
-| `createdAt`  | Its `createdAt`: what the writer's clock said, which nothing checks                                                                              |
-| `prev`       | The version its `prev` names, as a _cited version_ (below), or `null` on a `seq 0`                                                               |
-| `it`         | Only inside the second argument of `map`, `filter`, `all`, `some`, `count` and `sum`: the element being judged. An inner one hides an outer one. |
+**Names.** A condition reads these, and the variables of the macros that
+enclose it:
 
-A **cited version** is an object:
+| Name         | Value                                                                                |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `body`       | The version's body (opened, in a private space)                                      |
+| `links`      | Its links, as a list of maps `{ "rel", "to" }` (§5)                                  |
+| `key`        | Its `key`                                                                            |
+| `seq`        | Its `seq`, an `int`                                                                  |
+| `collection` | Its `collection`                                                                     |
+| `author`     | Its writer's **root** DID (the account, not the session key)                         |
+| `creator`    | The root DID of the record's first version (§4.6); on a create, the same as `author` |
+| `createdAt`  | Its `createdAt`: what the writer's clock said, which nothing checks                  |
+| `prev`       | The version its `prev` names, as a _cited version_ (below), or `null` on a `seq 0`   |
+
+**Functions.** Only these:
+
+| Function                                                                                                             | From       | Value                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `==` `!=` `<` `<=` `>` `>=` `in` `+` `-` `*` `/` `%` `!` `&&` `\|\|` `? :`                                           | CEL        | As CEL defines them                                                                                                                                                           |
+| `has(e.f)`, `e.all(x, p)`, `e.exists(x, p)`, `e.exists_one(x, p)`, `e.map(x, t)`, `e.map(x, p, t)`, `e.filter(x, p)` | CEL macros | As CEL defines them                                                                                                                                                           |
+| `size`, `contains`, `startsWith`, `endsWith`, `int`, `uint`, `double`, `string`, `bool`, `dyn`                       | CEL        | As CEL defines them                                                                                                                                                           |
+| `l.distinct()`                                                                                                       | CEL lists  | The list without the elements equal to an earlier one, as `==` says but with numbers compared by exact value: `[9007199254740993, 9007199254740992.0]` stays two              |
+| `math.greatest(…)`, `math.least(…)`                                                                                  | CEL math   | Of one list, or of one or more numbers: the greatest or least, the first of equals. An error on `NaN` or anything but a number                                                |
+| `sum(l)`                                                                                                             | Weave      | The elements added in order: all `int`s, all `uint`s or all `double`s, else an error; `0` for `[]`                                                                            |
+| `hash(x)`                                                                                                            | Weave      | The content id (§2) of the canonical JSON of `x`; of a body, its `bodyHash`. An error for a non-finite `double`, an integer past ±2⁵³, or a map key that is not a `string`    |
+| `link(rel)`, `v.link(rel)`                                                                                           | Weave      | The `to` of the first link with that `rel` in this version's links, or in `v`'s `links`; `null` when there is none. `rel` is a literal link role (§5.1)                       |
+| `versions(ids)`                                                                                                      | Weave      | The cited version for each id in a list of strings, in order (below)                                                                                                          |
+| `can(p)`, `can(p, did)`                                                                                              | Weave      | Whether the account (default: `author`) holds `<collection>/<p>` as of this version's `seen` ([03](03-spaces.md)). `p` is a literal permission the definition declares (§7.1) |
+| `member(did)`                                                                                                        | Weave      | Whether the account holds any role as of this version's `seen`                                                                                                                |
+
+`can` and `member` give an error for a value that is not a string starting
+`did:`.
+
+**What CEL leaves open**, which every peer must do the same way:
+
+1. **Order.** Everything is evaluated left to right. `&&` and `||` evaluate
+   their right side only when the left does not decide; an error on one side
+   gives way to a side that decides, as CEL says. `all` and `exists` stop at
+   the first element that decides; `map`, `filter` and `exists_one` stop at
+   the first error. A call evaluates its arguments in order and stops at the
+   first error.
+2. **Maps in macros** go through their keys in this order: `false`, `true`,
+   numbers rising, then strings by UTF-16 code units, as canonical JSON (§1)
+   orders them.
+3. **`string` of a `double`** is the shortest decimal that reads back as the
+   same double, written `d.ddde±XX` (at least two exponent digits) when its
+   exponent is below −4 or 6 and up, and as a plain decimal otherwise:
+   `string(123.456)` is `"123.456"`, `string(1e6)` is `"1e+06"`. The special
+   values are `"+Inf"`, `"-Inf"`, `"NaN"` and `"-0"`.
+4. **Text to numbers.** `int(s)` takes an optional sign and decimal
+   digits; `uint(s)` decimal digits only; `double(s)` an optional sign and a
+   decimal number with an optional exponent, or `inf`, `infinity` or `nan`
+   in any case. Anything else, or a value out of range, is an error. So is
+   the least `int` `% -1`.
+5. **Errors** carry no text that matters: only whether a condition gave
+   `true`.
+
+**Conformance.** On CEL's conformance suite files `basic`, `comparisons`,
+`conversions`, `fields`, `fp_math`, `integer_math`, `lists`, `logic`,
+`macros`, `macros2`, `parse`, `plumbing` and `string`, an implementation
+gives the result each test expects, or refuses the expression for something
+this section leaves out, or refuses one the test expects to fail. Tests that
+need a container, type checking alone, macros turned off, or a value the
+subset lacks (bytes, types, messages, timestamps) don't apply.
+
+A **cited version** is a map:
 
 ```json
 {
@@ -1206,50 +1257,12 @@ A **cited version** is an object:
 }
 ```
 
-`author` is the version's root DID. `body` and `links` are its content, as
-for the version judged; `body` is `null` on a delete. For `prev` only: when
-the version before does **not** carry `retain`, its `body` is `null` and its
-`links` are its envelope's `links` (none, in a private space), whether or not
-a peer happens to hold its body. What `retain` says is signed, so every peer
-reads the same thing.
-
-#### Operators
-
-Below, _fails_ means the check fails at once (see Outcomes). Numbers are IEEE
-754 doubles, as JSON is read; every arithmetic result MUST be finite, or the
-check fails. Text compares by UTF-16 code units. An operator that expects a
-boolean fails on anything else: there is no truthiness.
-
-| Operator             | Arguments          | Value                                                                                                                                                                            |
-| -------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `var`                | path               | The path read from a name above. The path is a literal string.                                                                                                                   |
-| `get`                | value, path        | The path read from a value. The path is a literal string.                                                                                                                        |
-| `and`, `or`          | 1–64 booleans      | Left to right, stopping at the first `false` (`and`) or `true` (`or`)                                                                                                            |
-| `not`                | boolean            | Its negation                                                                                                                                                                     |
-| `if`                 | boolean, a, b      | `a` if true, else `b`; only the one chosen is evaluated                                                                                                                          |
-| `==`, `!=`           | a, b               | Whether the canonical JSON (§1) of `a` and `b` is (not) the same: member order doesn't matter, and `1` and `"1"` differ                                                          |
-| `<`, `<=`, `>`, `>=` | a, b               | Two numbers or two strings; fails on anything else                                                                                                                               |
-| `in`                 | a, list            | Whether some element `==` `a`                                                                                                                                                    |
-| `+`, `*`             | 1–64 numbers       | Sum, product                                                                                                                                                                     |
-| `-`                  | a, or a and b      | `−a`, or `a − b`                                                                                                                                                                 |
-| `/`, `%`             | a, b               | `a / b`, and the remainder with the sign of `a` (C's `fmod`). Fails when `b` is 0.                                                                                               |
-| `min`, `max`         | 1–64 numbers       | The least, the greatest                                                                                                                                                          |
-| `size`               | list               | Its length                                                                                                                                                                       |
-| `map`                | list, condition    | The condition's value for each element, as `it`                                                                                                                                  |
-| `filter`             | list, condition    | The elements for which the condition is `true`                                                                                                                                   |
-| `all`, `some`        | list, condition    | In order, stopping at the first `false` (`all`) or `true` (`some`). `all` of `[]` is `true`; `some` of `[]` is `false`.                                                          |
-| `count`              | list [, condition] | Its length; with a condition, how many elements it is `true` for                                                                                                                 |
-| `sum`                | list [, condition] | The sum of the elements, or of the condition's value for each, added in order                                                                                                    |
-| `distinct`           | list               | The list without the elements `==` an earlier one                                                                                                                                |
-| `hash`               | a                  | The content id (§2) of the canonical JSON of `a`; of a body, its `bodyHash`                                                                                                      |
-| `link`               | rel [, a]          | The `to` of the first link with that `rel` in this version's links, or in `a`'s `links`; `null` when there is none. `rel` is a literal link role (§5.1).                         |
-| `versions`           | list of ids        | The cited version for each id, in order (below)                                                                                                                                  |
-| `can`                | permission [, did] | Whether the account (default: `author`) holds `<collection>/<permission>` as of this version's `seen` ([03](03-spaces.md)). A literal permission the definition declares (§7.1). |
-| `member`             | did                | Whether the account holds any role as of this version's `seen`                                                                                                                   |
-
-Arguments are evaluated left to right, except where the table says an
-operator stops or chooses. `can` and `member` fail on a value that is not a
-string starting `did:`. An operator that takes a list fails on anything else.
+`seq` is an `int`. `author` is the version's root DID. `body` and `links` are
+its content, as for the version judged; `body` is `null` on a delete. For
+`prev` only: when the version before does **not** carry `retain`, its `body`
+is `null` and its `links` are its envelope's `links` (none, in a private
+space), whether or not a peer happens to hold its body. What `retain` says is
+signed, so every peer reads the same thing.
 
 #### Citing a version
 
@@ -1293,17 +1306,30 @@ removal cannot count Bob's vote.
 #### Outcomes
 
 A peer judges a version's checks in order, and the first that is not `true`
-decides. A check whose condition's value is anything but `true`, or that
-fails, refuses the version, with its `else` as the reason. A version that
+decides. A check whose condition gives anything but `true` (an error
+included), or that fails, refuses the version, with its `else` as the reason. A version that
 cites one not held waits (§9.5), and is judged again when more arrives.
 
 Limits, counted across all of one version's checks:
 
-- **Steps.** Every literal, list and operation evaluated counts one, and so
-  does every element that `map`, `filter`, `all`, `some`, `count`, `sum`,
-  `distinct` or `versions` goes through. Past **10,000** the check fails.
+- **Steps.** Every part evaluated counts one, and so does every element a
+  macro goes through. Past **100,000** the check fails.
+- **Work.** A call to `==`, `!=`, `in`, `<`, `<=`, `>`, `>=`, `+`, `size`,
+  `contains`, `startsWith`, `endsWith`, `int`, `uint`, `double`, `string`,
+  `bool`, `distinct`, `sum`, `math.greatest`, `math.least`, `hash`, `link` or
+  `versions` counts the **size** of each of its operands (its receiver
+  included), and so do an index (its key), a map literal (each key) and a
+  macro over a map (the map, whose keys it puts in order): 1 for `null`, a bool or a number; 1 and its code points for a
+  string; 1 and its elements' sizes for a list; 1 and its keys' and values'
+  sizes for a map. Past **4,000,000** the check fails. So what a check
+  builds, and every pass over it, is paid for. An implementation must do each
+  counted call in time near linear in what it counts (`contains` too). Reading
+  the judged and cited versions into values is linear in what the peer
+  already holds, and is not counted.
 - **Citations.** At most **256** distinct versions; citing one more fails the
-  check. Citing the same id again does not count again.
+  check. Citing the same id again does not count again. A cited version that
+  fails rule 2, 3 or 4 above fails the check, whatever `&&` or `||` around it
+  would decide.
 
 A peer that cannot read the version's body, the version before it (when that
 carries `retain`), or a version it cites, because it is sealed with a key the
@@ -1322,15 +1348,15 @@ any version of the collection can be cited.
 A definition's `check` is invalid (§6.1) unless it is a list of 1 to 16
 checks as above, and:
 
-- every operation names an operator in the table, with a number of arguments
-  it takes;
-- `var` and `get` take a literal path, and `var`'s first segment is a name
-  above (`it` only where it is bound);
+- every condition parses as CEL within the subset's syntax;
+- every name is one in the table above, or a macro's variable where the
+  macro binds it;
+- every call is to a function in the table, with a number of arguments it
+  takes;
 - `link` takes a literal link role, and `can` a literal permission the
   definition declares in `permissions`;
-- every number is finite;
-- no condition nests more than **32** deep, and a collection's checks have at
-  most **2,000** parts (literals, lists and operations) in all.
+- no condition is more than **64** parts deep, and a collection's checks
+  have at most **2,000** parts in all.
 
 > Rationale: a check is a verifier, not a program that runs the space. It
 > always ends, and reads only what is fixed once written: its own version,
@@ -1357,7 +1383,7 @@ checks as above, and:
 What checks build, and patterns for them, are in the
 [collections guide](../packages/core/docs/collections.md#checks).
 
-_Source: `packages/core/src/records/checks.ts` (`checkChecks`, `runChecks`, `MAX_CHECKS`, `MAX_CHECK_STEPS`, `MAX_CITED`, `MAX_CHECK_DEPTH`, `MAX_CHECK_NODES`, `CHECK_NAMES`), `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `checkStanding`, `checkedVersion`, `cited`, `write`). Tests: `packages/core/tests/checks.test.ts` (all)._
+_Source: `packages/core/src/records/cel.ts` (`parseCel`, `checkCel`, `evaluateCel`, `MAX_CEL_DEPTH`, `MAX_CEL_STEPS`), `packages/core/src/records/checks.ts` (`checkChecks`, `runChecks`, `MAX_CHECKS`, `MAX_CONDITION_LENGTH`, `MAX_CITED`, `MAX_CHECK_NODES`, `CHECK_NAMES`), `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `checkStanding`, `checkedVersion`, `cited`, `write`). Tests: `packages/core/tests/checks.test.ts` (all), `packages/core/tests/cel-conformance.test.ts` (CEL's conformance suite)._
 
 ---
 
@@ -1578,8 +1604,8 @@ _Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`),
 | Topics per collection                       | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                  |
 | Tags per version                            | ≤ 64                                                                                 |
 | Permission name                             | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
-| Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 32 deep                                                |
-| Steps judging one version's checks          | ≤ 10,000                                                                             |
+| Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 64 deep; ≤ 100,000 steps per version                   |
+| Steps judging one version's checks          | ≤ 100,000 steps, ≤ 4,000,000 work (§7.6)                                             |
 | Versions one version's checks cite          | ≤ 256 distinct                                                                       |
 | Future-dated `createdAt` (delegated writes) | ≤ 300 s ahead                                                                        |
 | Size of a body or a version                 | _Not yet specified_ — no limit is enforced                                           |

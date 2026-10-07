@@ -59,8 +59,8 @@ export interface NotifyWhen {
   /** Only records other people wrote. Default true. */
   readonly others?: boolean;
   /**
-   * Only records this condition holds for: a check's language over the
-   * record alone (`checkRecordCondition`) — `{ "==": [{ "var": "body.status" }, "done"] }`.
+   * Only records this condition holds for: CEL, as a check is, over the
+   * record alone (`checkRecordCondition`) — `body.status == "done"`.
    * Judged by an app, which can read the body; never carried.
    */
   readonly where?: Condition;

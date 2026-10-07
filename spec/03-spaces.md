@@ -1273,7 +1273,7 @@ For example, urgent tasks assigned to the account:
   "collection": "std.task",
   "spaces": "all",
   "topic": { "field": "assignees", "value": "did:key:zDnae…" },
-  "where": { ">=": [{ "var": "body.priority" }, 3] },
+  "where": "body.priority >= 3",
   "since": "2026-09-29T12:00:00.000Z"
 }
 ```

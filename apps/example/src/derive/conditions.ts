@@ -156,39 +156,45 @@ const EMPTY = [null, '', []];
 
 /** One condition in the language of checks, reading the record's body. `me` becomes this DID. */
 function conditionOf(clause: Clause, me: string): Condition {
-  const at = { var: `body.${clause.field}` };
-  const value = clause.me ? me : clause.value;
+  const name = JSON.stringify(clause.field);
+  const at = `body[${name}]`;
+  const value = celLiteral(clause.me ? me : clause.value);
+  const empty = `(!(${name} in body) || ${at} in ${celLiteral(EMPTY)})`;
   switch (clause.op) {
     case 'is':
-      return { '==': [at, value] };
+      return `${at} == ${value}`;
     case 'isNot':
-      return { '!=': [at, value] };
+      return `${at} != ${value}`;
     case 'more':
-      return { '>': [at, value] };
+      return `${at} > ${value}`;
     case 'less':
-      return { '<': [at, value] };
+    case 'before':
+      return `${at} < ${value}`;
     case 'atLeast':
     case 'after':
-      return { '>=': [at, value] };
+      return `${at} >= ${value}`;
     case 'atMost':
-      return { '<=': [at, value] };
-    case 'before':
-      return { '<': [at, value] };
+      return `${at} <= ${value}`;
     case 'includes':
       // Only a list here: text is searched in a query alone.
-      return { in: [value, at] };
+      return `${value} in ${at}`;
     case 'filled':
-      return { not: { in: [at, EMPTY] } };
+      return `!${empty}`;
     case 'empty':
-      return { in: [at, EMPTY] };
+      return empty;
   }
 }
 
+/** A value as a CEL literal: JSON's strings, numbers, lists and null read the same in CEL */
+export function celLiteral(value: unknown): string {
+  return JSON.stringify(value ?? null);
+}
+
 /** Every complete condition, all of which must hold; undefined when there are none */
-export function whereOf(clauses: ReadonlyArray<Clause>, me: string): Condition {
+export function whereOf(clauses: ReadonlyArray<Clause>, me: string): Condition | undefined {
   const parts = clauses.filter(complete).map((clause) => conditionOf(clause, me));
   if (parts.length === 0) return undefined;
-  return parts.length === 1 ? parts[0] : { and: parts };
+  return parts.map((part) => `(${part})`).join(' && ');
 }
 
 /** One condition as a query's filter, on the body field it names */

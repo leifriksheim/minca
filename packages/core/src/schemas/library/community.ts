@@ -101,33 +101,17 @@ export type Proposal = BodyOf<typeof proposal>;
 
 // ─── Proven outcomes ───────────────────────────────────────────────
 //
-// Conditions for the checks below, built here so they read as what they
-// say. What they build is plain JSON, stored with the definition.
+// Conditions for the checks below, in CEL, built here so they read as what
+// they say. What they build is text, stored with the definition.
 
-const read = (path: string) => ({ var: path });
 /** The one version cited by the id at `path`, or a field of it */
-const citedOne = (path: string, field: string) => ({ get: [{ versions: [[read(path)]] }, `0.${field}`] });
+const citedOne = (path: string, field: string) => `versions([${path}])[0].${field}`;
 /** The versions cited at `path` that are records of `collection` about the same thing as this one */
-const citedAbout = (path: string, collection: string, also: ReadonlyArray<unknown> = []) => ({
-  filter: [
-    { versions: read(path) },
-    {
-      and: [
-        { '==': [read('it.collection'), collection] },
-        { '==': [{ link: ['about', read('it')] }, { link: ['about'] }] },
-        ...also,
-      ],
-    },
-  ],
-});
+const citedAbout = (path: string, collection: string, also = '') =>
+  `versions(${path}).filter(it, it.collection == "${collection}" && it.link("about") == link("about")${also ? ` && ${also}` : ''})`;
 /** The version cited at `path` is the first version of the record this one is about, in `collection` */
-const citesWhatItIsAbout = (path: string, collection: string) => ({
-  and: [
-    { '==': [citedOne(path, 'collection'), collection] },
-    { '==': [citedOne(path, 'key'), { link: ['about'] }] },
-    { '==': [citedOne(path, 'seq'), 0] },
-  ],
-});
+const citesWhatItIsAbout = (path: string, collection: string) =>
+  `${citedOne(path, 'collection')} == "${collection}" && ${citedOne(path, 'key')} == link("about") && ${citedOne(path, 'seq')} == 0`;
 
 /**
  * One person's final say on a proposal: the position of their choice in its
@@ -158,27 +142,11 @@ const DECIDES: ReadonlyArray<Check> = [
     else: 'A decision cites the proposal it decides, as it was first put',
   },
   {
-    that: { '<': [read('body.outcome'), { size: citedOne('body.proposal', 'body.options') }] },
+    that: `body.outcome < size(${citedOne('body.proposal', 'body.options')})`,
     else: 'A decision picks one of the proposal’s options',
   },
   {
-    that: {
-      '>=': [
-        {
-          size: {
-            distinct: {
-              map: [
-                citedAbout('body.ballots', 'std.ballot', [
-                  { '==': [read('it.body.choice'), read('body.outcome')] },
-                ]),
-                read('it.author'),
-              ],
-            },
-          },
-        },
-        citedOne('body.proposal', 'body.quorum'),
-      ],
-    },
+    that: `${citedAbout('body.ballots', 'std.ballot', 'it.body.choice == body.outcome')}.map(it, it.author).distinct().size() >= ${citedOne('body.proposal', 'body.quorum')}`,
     else: 'A decision cites ballots for its outcome from as many people as the proposal’s quorum',
   },
 ];
@@ -268,15 +236,11 @@ const REACHES: ReadonlyArray<Check> = [
   },
   {
     // One pledge per person: two first versions under one key would count twice.
-    that: {
-      '==': [{ size: { distinct: { map: [PLEDGES, read('it.author')] } } }, { size: { distinct: PLEDGES } }],
-    },
+    that: `${PLEDGES}.map(it, it.author).distinct().size() == ${PLEDGES}.distinct().size()`,
     else: 'Each person’s pledge counts once',
   },
   {
-    that: {
-      '>=': [{ sum: [{ distinct: PLEDGES }, read('it.body.amount')] }, citedOne('body.goal', 'body.target')],
-    },
+    that: `sum(${PLEDGES}.distinct().map(it, it.body.amount)) >= ${citedOne('body.goal', 'body.target')}`,
     else: 'The pledges it cites add up to the goal’s target',
   },
 ];

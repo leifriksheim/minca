@@ -617,7 +617,7 @@ describe('a subscription’s where', () => {
       label: 'Urgent task',
       collection: task.name,
       spaces: 'all' as const,
-      where: { '>=': [{ var: 'body.priority' }, 3] },
+      where: 'body.priority >= 3',
       since,
     };
     assert.equal(checkNotify(when), null);
@@ -638,11 +638,11 @@ describe('a subscription’s where', () => {
       spaces: 'all' as const,
       since: new Date().toISOString(),
     };
-    assert.match(checkNotify({ ...base, where: { member: [{ var: 'author' }] } })!, /asks the space/);
-    assert.match(checkNotify({ ...base, where: { '==': [{ var: 'prev.body' }, null] } })!, /prev/);
-    assert.match(checkNotify({ ...base, where: { '~': [1, 2] } })!, /not an operator/);
+    assert.match(checkNotify({ ...base, where: 'member(author)' })!, /asks the space/);
+    assert.match(checkNotify({ ...base, where: 'prev.body == null' })!, /prev/);
+    assert.match(checkNotify({ ...base, where: '1 ~ 2' })!, /unexpected/);
     assert.match(
-      checkProposal({ label: 'x', collection: 'std.task', where: { versions: [[]] } })!,
+      checkProposal({ label: 'x', collection: 'std.task', where: 'versions([]).size() == 0' })!,
       /asks the space/,
     );
     assert.equal(
@@ -650,7 +650,7 @@ describe('a subscription’s where', () => {
         label: 'Assigned to me, urgent',
         collection: 'std.task',
         topic: { field: 'assignees', me: true },
-        where: { and: [{ '>=': [{ var: 'body.priority' }, 3] }, { '!=': [{ var: 'body.status' }, 'done'] }] },
+        where: 'body.priority >= 3 && body.status != "done"',
       }),
       null,
     );

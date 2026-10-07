@@ -169,7 +169,7 @@ await connection.propose([
     label: 'Urgent task for me',
     collection: 'std.task',
     topic: { field: 'assignees', me: true },
-    where: { '>=': [{ var: 'body.priority' }, 3] },
+    where: 'body.priority >= 3',
   },
 ]);
 ```
