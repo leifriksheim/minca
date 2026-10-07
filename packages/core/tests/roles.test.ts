@@ -35,7 +35,7 @@ function setRole(
   did: string,
   role: string | null,
   seen: string[],
-  extra: Partial<{ cutoff: Record<string, number>; viaInvite: string; id: string }> = {},
+  extra: Partial<{ cutoff: Record<string, Record<string, number>>; viaInvite: string; id: string }> = {},
 ): AccessEvent {
   return {
     id: extra.id ?? id('m'),
@@ -46,7 +46,9 @@ function setRole(
     role,
     seen,
     author: 'k',
-    cutoff: new Map(Object.entries(extra.cutoff ?? {})),
+    cutoff: new Map(
+      Object.entries(extra.cutoff ?? {}).map(([key, lines]) => [key, new Map(Object.entries(lines))]),
+    ),
     ...(extra.viaInvite ? { viaInvite: extra.viaInvite } : {}),
   };
 }
@@ -399,15 +401,15 @@ describe('records against the history', () => {
   test('a removed member cannot write by claiming an old point in history', () => {
     const bob = setRole('alice', 'bob', 'member', []);
     // The remover had seen Bob's key up to place 3.
-    const remove = setRole('alice', 'bob', null, [bob.id], { cutoff: { wb: 3 } });
+    const remove = setRole('alice', 'bob', null, [bob.id], { cutoff: { wb: { 'app.note': 3 } } });
     const history = replayAccess(genesis, [bob, remove]);
     const honest = history.judge(
-      { id: 'honest', root: 'bob', seen: [bob.id], writer: 'wb', at: 3 },
+      { id: 'honest', root: 'bob', seen: [bob.id], writer: 'wb', at: 3, collection: 'app.note', line: 3 },
       isMember,
     );
     assert.deepEqual(honest, { ok: true, unseen: [] }, 'what the remover had seen is covered');
     const forged = history.judge(
-      { id: 'forged', root: 'bob', seen: [bob.id], writer: 'wb', at: 4 },
+      { id: 'forged', root: 'bob', seen: [bob.id], writer: 'wb', at: 4, collection: 'app.note', line: 4 },
       isMember,
     );
     assert.deepEqual(
@@ -423,10 +425,13 @@ describe('records against the history', () => {
 
   test('a demoted moderator keeps their past moderation; new moderation with an old point in history is judged with the demotion', () => {
     const bob = setRole('alice', 'bob', 'moderator', []);
-    const demote = setRole('alice', 'bob', 'member', [bob.id], { cutoff: { wb: 1 } });
+    const demote = setRole('alice', 'bob', 'member', [bob.id], { cutoff: { wb: { 'app.note': 1 } } });
     const history = replayAccess(genesis, [bob, demote]);
     const judge = (at: number) =>
-      history.judge({ id: `r${at}`, root: 'bob', seen: [bob.id], writer: 'wb', at }, canModerate);
+      history.judge(
+        { id: `r${at}`, root: 'bob', seen: [bob.id], writer: 'wb', at, collection: 'app.note', line: at },
+        canModerate,
+      );
     assert.deepEqual(judge(1), { ok: true, unseen: [] });
     assert.deepEqual(judge(2), { ok: true, unseen: [demote.id] });
   });
@@ -440,7 +445,7 @@ describe('records against the history', () => {
       author: 'k',
       target: 'wa',
       seen: [],
-      cutoff: new Map([['wa', cutoff]]),
+      cutoff: new Map([['wa', new Map([['app.note', cutoff]])]]),
     });
     // A thief's revoke, keeping all it signed in advance, and the owner's own.
     const thief = revoke(9);
@@ -448,7 +453,10 @@ describe('records against the history', () => {
     const owner = { ...revoke(2), id: id('v') };
     const history = replayAccess(genesis, [thief, owner]);
     const judge = (at: number, writer = 'wa') =>
-      history.judge({ id: `r${at}`, root: 'alice', seen: [], writer, at }, isMember);
+      history.judge(
+        { id: `r${at}`, root: 'alice', seen: [], writer, at, collection: 'app.note', line: at },
+        isMember,
+      );
     assert.ok(judge(2).ok, 'covered by both');
     assert.ok(!judge(5).ok, "past the owner's cutoff: the thief's revoke doesn't shield it");
     assert.ok(judge(5, 'wz').ok, 'other keys are untouched');

@@ -88,8 +88,10 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     tell it from one written offline. Pairing the narrowing with a demotion
     binds it (03 §5.1).
   - It can make every peer store revokes of keys that never wrote here, and
-    other changes it may make, without limit; they can't fill `seen`, since a
-    writer names first the heads its standing rests on
+    other changes it may make, without limit. Revokes are never heads; changes
+    it has the power for can outnumber what `seen` holds, and a writer then
+    names first heads that saw the latest change to its own place, role and
+    collection
     ([#180](https://github.com/leifriksheim/weave/issues/180), [#33](https://github.com/leifriksheim/weave/issues/33)).
   - Each warrant costs every member's node a replay of the offending
     version's own view, once; nothing bounds how many warrants a member

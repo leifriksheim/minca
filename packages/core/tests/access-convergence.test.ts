@@ -39,7 +39,8 @@ import {
 // ─── The reference: replayAccess as it was before it was optimised ─────
 
 /** What the reference answers: everything but `extend`, which came later */
-type ReferenceHistory = Omit<AccessHistory, 'extend'>;
+// `headsFor` only chooses what a writer names; peers never compare it.
+type ReferenceHistory = Omit<AccessHistory, 'extend' | 'headsFor'>;
 //
 // Copied verbatim from packages/core/src/space/roles.ts at 4a224d1. Do not
 // change it to match a new replay: that defeats the point. If the protocol's
@@ -450,9 +451,7 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
       const after = roleOf(state, did);
       const lower =
         !!before &&
-        (!after ||
-          after.rank < before.rank ||
-          before.permissions.some((p) => !after.permissions.includes(p)));
+        (!after || after.rank < before.rank || before.permissions.some((p) => !covers(after.permissions, p)));
       if (lower) reductions.push({ event: event.id, did });
     }
     if (event.kind === 'revoke')
@@ -496,8 +495,9 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
       const counts = (event: string) => !known || known.has(event);
       const covered = (event: string) =>
         record.writer !== undefined &&
-        record.at !== undefined &&
-        (cutoffOf.get(event)?.get(record.writer) ?? -1) >= record.at;
+        record.collection !== undefined &&
+        record.line !== undefined &&
+        (cutoffOf.get(event)?.get(record.writer)?.get(record.collection) ?? -1) >= record.line;
       for (const revoke of record.writer === undefined ? [] : (revokes.get(record.writer) ?? []))
         if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))
           return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
@@ -578,6 +578,7 @@ const ROLE_NAMES = ['admin', 'mod', 'helper', 'member', 'extra'];
 const PEOPLE = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
 const PERMISSIONS = [MANAGE, INVITE, DEFINE, 'app.x/moderate', 'app.x/*', '*'];
 const WRITERS = ['w1', 'w2'];
+const COLLECTIONS = ['app.x', 'app.y'];
 const INVITES = ['i1', 'i2', 'i3'];
 const RECORDS = 16;
 
@@ -641,7 +642,10 @@ function generate(seed: number): History {
     // Changes that take power away leave places more often: that is where cutoffs matter.
     const cutoff = new Map(
       roll < 72 && r.chance(0.6)
-        ? Array.from({ length: 1 + r.int(3) }, () => [r.pick(WRITERS), r.int(6)] as const)
+        ? Array.from(
+            { length: 1 + r.int(3) },
+            () => [r.pick(WRITERS), new Map([[r.pick(COLLECTIONS), r.int(6)]])] as const,
+          )
         : [],
     );
     const base = { id: newId(), root: author(), author: r.pick(WRITERS), seen, cutoff };
@@ -739,7 +743,9 @@ function generate(seed: number): History {
     id: `rec-${i}`,
     root: r.chance(0.8) ? r.pick([...powerful]) : r.pick(PEOPLE),
     seen: someSeen(),
-    ...(r.chance(0.5) ? { writer: r.pick(WRITERS), at: r.int(6) } : {}),
+    ...(r.chance(0.5)
+      ? { writer: r.pick(WRITERS), at: r.int(6), collection: r.pick(COLLECTIONS), line: r.int(6) }
+      : {}),
     ...(r.chance(0.3) ? { within: someSeen() } : {}),
   }));
   return { genesis, events, cuts, records };

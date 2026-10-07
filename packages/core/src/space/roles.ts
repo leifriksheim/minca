@@ -150,11 +150,15 @@ interface EventBase {
   readonly seen: ReadonlyArray<string>;
   /**
    * What this change leaves standing of what it takes away: for each key of
-   * the people it takes power from, the highest place in that key's log its
-   * author had seen. Versions at or below it are covered.
+   * the people it takes power from, and each collection, the end of the
+   * unbroken line of that key's versions in that collection its author held.
+   * Versions at or below it are covered.
    */
-  readonly cutoff: ReadonlyMap<string, number>;
+  readonly cutoff: Cutoff;
 }
+
+/** Key DID → collection → the place in that key's line for that collection, at and below which is covered */
+export type Cutoff = ReadonlyMap<string, ReadonlyMap<string, number>>;
 
 export type AccessEvent = EventBase &
   (
@@ -345,6 +349,12 @@ export interface AccessHistory {
    * none changes the state, and a writer need not name them.
    */
   heads(): ReadonlyArray<string>;
+  /**
+   * At most `max` heads, chosen so that what they saw holds the latest applied
+   * change to each of `keys` (the records a writer's standing rests on), then
+   * the most recently applied: what a writer names when there are more.
+   */
+  headsFor(keys: ReadonlyArray<string>, max: number): ReadonlyArray<string>;
   /** The state as of what `seen` names, or null when some of it is not here */
   at(seen: ReadonlyArray<string>): AccessState | null;
   /**
@@ -365,6 +375,9 @@ export interface AccessHistory {
       /** The key that signed it, and its place in that key's log here */
       readonly writer?: string;
       readonly at?: number;
+      /** Its collection, and its place in its key's line for that collection */
+      readonly collection?: string;
+      readonly line?: number;
     },
     needs: (role: Role | null, state: AccessState) => boolean,
     within?: ReadonlyArray<string>,
@@ -596,7 +609,7 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
 function lowered(before: Role | null, after: Role | null): boolean {
   if (!before) return false;
   if (!after) return true;
-  return after.rank < before.rank || before.permissions.some((p) => !after.permissions.includes(p));
+  return after.rank < before.rank || before.permissions.some((p) => !covers(after.permissions, p));
 }
 
 /** The people whose standing a change may lower */
@@ -732,7 +745,7 @@ interface Replay {
   readonly revokes: Map<string, ReadonlyArray<{ readonly event: string; readonly root: string }>>;
   /** Writers whose log forked: the lowest place proven, and the change that proved it */
   readonly forks: Map<string, { readonly event: string; readonly from: number }>;
-  readonly cutoffOf: Map<string, ReadonlyMap<string, number>>;
+  readonly cutoffOf: Map<string, Cutoff>;
   /** Each account's role name as changes were applied, and each role's: to know a rank at a past choice */
   readonly memberLog: Map<string, ReadonlyArray<{ readonly applied: number; readonly role: string | null }>>;
   readonly roleLog: Map<string, ReadonlyArray<{ readonly applied: number; readonly role: Role | null }>>;
@@ -1061,6 +1074,20 @@ function historyOf(r: Replay): AccessHistory {
     current: r.state,
     status: (id: string) => r.statuses.get(id) ?? null,
     heads: () => (heads ??= Object.freeze([...r.appliedHeads].sort())),
+    headsFor(keys: ReadonlyArray<string>, max: number) {
+      const all = history.heads();
+      if (all.length <= max) return all;
+      const recent = [...all].sort((a, b) => r.placed.get(b)! - r.placed.get(a)!);
+      const chosen: string[] = [];
+      for (const key of keys) {
+        const latest = r.appliedByKey.get(key)?.at(-1);
+        if (!latest || chosen.some((head) => head === latest || inCut(r, cutOf(r, [head]), latest))) continue;
+        const head = recent.find((id) => id === latest || inCut(r, cutOf(r, [id]), latest));
+        if (head && !chosen.includes(head)) chosen.push(head);
+      }
+      for (const id of recent) if (chosen.length < max && !chosen.includes(id)) chosen.push(id);
+      return chosen.slice(0, max).sort();
+    },
     at(ids: ReadonlyArray<string>) {
       return seen(ids) ? stateAt(r, ids) : null;
     },
@@ -1070,11 +1097,12 @@ function historyOf(r: Replay): AccessHistory {
       // For a cited version, only what the citer had seen can take it away (02 §7.6).
       const known = within ? cutOf(r, within) : null;
       const counts = (event: string) => !known || inCut(r, known, event);
-      // Covered: its key's place is at or below what the change's author had seen of that key.
+      // Covered: its place in its key's line for its collection is at or below what the change's author held.
       const covered = (event: string) =>
         record.writer !== undefined &&
-        record.at !== undefined &&
-        (r.cutoffOf.get(event)?.get(record.writer) ?? -1) >= record.at;
+        record.collection !== undefined &&
+        record.line !== undefined &&
+        (r.cutoffOf.get(event)?.get(record.writer)?.get(record.collection) ?? -1) >= record.line;
       if (record.writer !== undefined) {
         for (const revoke of r.revokes.get(record.writer) ?? [])
           if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))

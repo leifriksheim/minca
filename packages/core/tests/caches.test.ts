@@ -112,6 +112,43 @@ async function app(hub: FakeHub, alice: Person, space: string, cache: CacheConfi
 }
 
 describe('holding part of a space', () => {
+  test('removing someone from an app that holds only the chat leaves their whole chat standing: its lines are whole', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const { alice, bob, space } = await spaceWithKeepers(hub);
+    const erin = await app(hub, alice, space);
+    // Chat, then a photo, then chat: the photo leaves a gap in her key's log at a node without photos.
+    const first = await erin.node.records.put(space, 'app.chat', { text: 'one' });
+    const photo = await erin.node.records.put(space, 'app.photos', { title: 'p' });
+    const second = await erin.node.records.put(space, 'app.chat', { text: 'two' });
+    await until(async () => (await bob.node.records.get(space, photo.key)) !== null, 5000, 'all at Bob’s');
+    const dave = await app(hub, alice, space);
+    await alice.node.spaces.setMember(space, dave.node.did, 'owner');
+    await until(
+      async () => (await dave.node.spaces.access(space)).role?.name === 'owner',
+      5000,
+      'Dave an owner',
+    );
+    await until(
+      async () =>
+        (await dave.node.records.query(space, { collection: 'app.chat' })).complete &&
+        (await dave.node.records.get(space, second.key)) !== null,
+      5000,
+      'the chat at Dave’s',
+    );
+    await dave.node.spaces.setMember(space, erin.node.did, null);
+    await until(
+      async () => !(await bob.node.spaces.access(space)).members.some((m) => m.did === erin.node.did),
+      5000,
+      'the removal at Bob’s',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.ok(await bob.node.records.get(space, first.key));
+    assert.ok(
+      await bob.node.records.get(space, second.key),
+      'a gap in the photos doesn’t cut the chat short',
+    );
+  });
+
   test('with keepers named, an app holds only what it uses, and says when a query is complete', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const { alice, space } = await spaceWithKeepers(hub);

@@ -238,8 +238,9 @@ A version yields no event when any of these hold:
 - the fields below do not check out.
 
 Otherwise the event is `{ id: version.id, key: version.key, root, author: version.author, seen: version.seen ?? [], cutoff, kind, … }`,
-where `cutoff` is `body.cutoff` read as a map from key DID to a non-negative
-integer (absent: empty; anything else, or more than 1024 entries: no event),
+where `cutoff` is `body.cutoff` read as a map from key DID to a map from
+collection to a non-negative integer (absent: empty; anything else, or more
+than 1024 places in all: no event),
 always empty for `definition`, `key`, `relays`, `keepers` and `fork`, and:
 
 | Kind         | Checks                                                                                                                                                | Event fields                                                                                                |
@@ -508,9 +509,9 @@ A record is judged in its **own view**, the access changes its `seen` names
 and everything they saw, and then against the changes to its author's
 standing it had not seen. Those are the only two inputs.
 
-A change that took power from someone **covers** a version when the version's
-key appears in the change's `cutoff` (§6.3) with a place at or above the
-version's `log.n`. What a covering change's author had seen of that key stands,
+A change that took power from someone **covers** a version when the change's
+`cutoff` (§6.3) names the version's key and collection with a place at or
+above the version's place in that key's line for that collection (`log.c.n`). What a covering change's author had seen of that key stands,
 whatever the change took away.
 
 Given a record's `id`, its root, its `seen`, its `author` and `log.n`, a
@@ -641,21 +642,27 @@ _Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `recon
 
 A change that takes power from people — lowering or removing a member, lowering
 or removing a role, revoking a key — **SHOULD** carry `cutoff`: for each key of
-the affected accounts, the end of the unbroken line its writer holds of that
-key's log here ([02](02-records.md) §4.10): from place 0, each place held and
-naming the one before it as `prev`. A place held past a gap covers nothing, so
-one planted far ahead can't stretch a cutoff over what its writer signs later.
-At most 1024 keys.
+the affected accounts and each collection, the end of the unbroken line its
+writer holds of that key's versions in that collection ([02](02-records.md)
+§4.10): from place 0 of `log.c`, each place held and naming the one before it
+as `c.prev`. A place held past a gap covers nothing, so one planted far ahead
+can't stretch a cutoff over what its writer signs later. A node holding part
+of a space keeps the lines of the collections it holds whole
+([05](05-sync-and-storage.md) §9), so it covers all it holds. At most 1024
+places in all.
 
 ```json
 {
   "did": "did:key:zDnae…bob",
   "role": null,
-  "cutoff": { "did:key:zDnae…bobLaptop": 41, "did:key:zDnae…bobPhone": 7 }
+  "cutoff": {
+    "did:key:zDnae…bobLaptop": { "app.chat": 41, "app.photos": 3 },
+    "did:key:zDnae…bobPhone": { "app.chat": 7 }
+  }
 }
 ```
 
-Everything a covered key signed at or below its place stands, as far as this
+Everything a covered key signed in a covered collection at or below its place stands, as far as this
 change goes. Anything else the affected account wrote that had not seen the
 change, whatever point in history it claims, is judged with it (§5.1 step 4):
 later places, and keys the change's writer had never seen. A cutoff names a

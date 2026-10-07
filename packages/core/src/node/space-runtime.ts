@@ -121,6 +121,7 @@ import {
   type AccessGenesis,
   type AccessHistory,
   type AccessState,
+  type Cutoff,
   type Role,
 } from '../space/roles.js';
 import { createSyncEngine, type Holds } from '../sync/sync-engine.js';
@@ -204,17 +205,23 @@ const ACCESS_KEYS: ReadonlyArray<readonly [string, string]> = [
 /** How many keys a cutoff may name */
 const MAX_CUTOFF = 1024;
 
-/** A cutoff from a record's body: key DID → the highest place kept, or null when it isn't one */
-function readCutoff(value: unknown): ReadonlyMap<string, number> | null {
+/** A change that takes nothing away covers nothing */
+const NO_CUTOFF: Cutoff = new Map();
+
+/** A cutoff from a record's body — key DID → collection → the place covered up to — or null when it isn't one */
+function readCutoff(value: unknown): Cutoff | null {
   if (value === undefined) return new Map();
   if (!isRecord(value)) return null;
-  const entries = Object.entries(value);
-  if (entries.length > MAX_CUTOFF) return null;
-  const cutoff = new Map<string, number>();
-  for (const [key, n] of entries) {
-    if (!key.startsWith('did:key:') || typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0)
-      return null;
-    cutoff.set(key, n);
+  const cutoff = new Map<string, Map<string, number>>();
+  let entries = 0;
+  for (const [key, lines] of Object.entries(value)) {
+    if (!key.startsWith('did:key:') || !isRecord(lines)) return null;
+    const byCollection = new Map<string, number>();
+    for (const [collection, n] of Object.entries(lines)) {
+      if (typeof n !== 'number' || !Number.isSafeInteger(n) || n < 0 || ++entries > MAX_CUTOFF) return null;
+      byCollection.set(collection, n);
+    }
+    cutoff.set(key, byCollection);
   }
   return cutoff;
 }
@@ -684,7 +691,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       root: verdict.root,
       author: version.author,
       seen,
-      cutoff: new Map<string, number>(),
+      cutoff: NO_CUTOFF,
     };
 
     if (version.collection === DEFINITION_COLLECTION) {
@@ -1093,7 +1100,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         root,
         seen,
         writer: version.author,
-        ...(version.log ? { at: version.log.n } : {}),
+        collection: version.collection,
+        ...(version.log ? { at: version.log.n, line: version.log.c.n } : {}),
       },
       needs,
       within,
@@ -2575,27 +2583,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * is safe: what it leaves out it is judged as not having seen (03 §3.2).
    */
   async function seenFor(history: AccessHistory, collection: string): Promise<ReadonlyArray<string>> {
-    const heads = history.heads();
-    if (heads.length <= MAX_SEEN) return heads;
     const role = history.current.members.get(deps.rootDid);
-    const mine = new Set([
+    const mine = [
       await memberKey(deps.rootDid),
       ...(role ? [roleKey(role)] : []),
       `collection:${collection}`,
-    ]);
-    const keyed = await Promise.all(
-      heads.map(async (id) => ({ id, key: (await storage.getVersion(id))?.key })),
-    );
-    const index = (id: string) => {
-      const status = history.status(id);
-      return status?.status === 'applied' ? status.index : -1;
-    };
-    return [...keyed]
-      .sort(
-        (a, b) => Number(mine.has(b.key ?? '')) - Number(mine.has(a.key ?? '')) || index(b.id) - index(a.id),
-      )
-      .slice(0, MAX_SEEN)
-      .map((head) => head.id);
+    ];
+    return history.headsFor(mine, MAX_SEEN);
   }
 
   /** Signs and stores one version. A delete carries no body. */
@@ -3194,27 +3188,36 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   }
 
   /** The same for several accounts at once, up to what a cutoff may name */
-  async function cutoffForAll(dids: ReadonlySet<string>): Promise<Record<string, number>> {
-    const all: Record<string, number> = {};
-    for (const did of dids) Object.assign(all, await cutoffFor(did));
-    return Object.fromEntries(Object.entries(all).slice(0, MAX_CUTOFF));
+  async function cutoffForAll(dids: ReadonlySet<string>): Promise<Record<string, Record<string, number>>> {
+    const all: Record<string, Record<string, number>> = {};
+    let entries = 0;
+    for (const did of dids)
+      for (const [key, lines] of Object.entries(await cutoffFor(did))) {
+        entries += Object.keys(lines).length;
+        if (entries > MAX_CUTOFF) return all;
+        all[key] = lines;
+      }
+    return all;
   }
 
   /**
    * What a change taking power from an account leaves standing: for each of
-   * its keys, the end of the unbroken line this node holds from the key's
-   * first place here, each version naming the one before it. A place held
-   * past a gap, or off the line, covers nothing: otherwise one planted far
-   * ahead would cover everything its writer signed after.
+   * its keys and each collection, the end of the unbroken line this node
+   * holds of that key's versions in that collection, from its first place,
+   * each naming the one before. A place held past a gap covers nothing, so
+   * one planted far ahead can't cover what its writer signs after; and a node
+   * holding some collections keeps their lines whole (05 §9), so it covers
+   * all it holds.
    */
-  async function cutoffFor(did: string, only?: string): Promise<Record<string, number>> {
-    // What it holds of theirs, whatever way it came: the log's places are kept only for what arrived by sync.
+  async function cutoffFor(did: string, only?: string): Promise<Record<string, Record<string, number>>> {
+    // What it holds of theirs, whatever way it came: the lines' places are kept only for what arrived by sync.
     const placed = new Map<string, Map<number, Version>>();
     const add = (version: Version) => {
       if (!version.log) return;
-      const line = placed.get(version.author) ?? new Map<number, Version>();
-      if (!line.has(version.log.n)) line.set(version.log.n, version);
-      placed.set(version.author, line);
+      const line = `${version.author} ${version.collection}`;
+      const held = placed.get(line) ?? new Map<number, Version>();
+      if (!held.has(version.log.c.n)) held.set(version.log.c.n, version);
+      placed.set(line, held);
     };
     for (const version of await everyCurrent()) {
       if (!version.log || (only && version.author !== only) || version.space !== space.id) continue;
@@ -3224,21 +3227,21 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const key = name.slice(KEY_ROOT_PREFIX.length);
       if ((only && key !== only) || utf8Decode((await adapter.get(name)) ?? new Uint8Array()) !== did)
         continue;
-      for (const place of await adapter.list(`${LOG_PREFIX}${key}/`)) {
+      for (const place of await adapter.list(`${COLLECTION_LOG_PREFIX}${key}/`)) {
         const id = await adapter.get(place);
         const version = id ? await storage.getVersion(utf8Decode(id)) : null;
         if (version?.author === key) add(version);
       }
     }
-    const cutoff: Record<string, number> = {};
-    for (const [key, line] of placed) {
-      let end = -1;
+    const cutoff: Record<string, Record<string, number>> = {};
+    for (const held of placed.values()) {
+      let end: Version | null = null;
       for (let n = 0; ; n++) {
-        const version = line.get(n);
-        if (!version || (n > 0 && version.log?.prev !== line.get(n - 1)!.id)) break;
-        end = n;
+        const version = held.get(n);
+        if (!version || (n > 0 && version.log?.c.prev !== end?.id)) break;
+        end = version;
       }
-      if (end >= 0) cutoff[key] = end;
+      if (end) (cutoff[end.author] ??= {})[end.collection] = end.log!.c.n;
     }
     return cutoff;
   }
