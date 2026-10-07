@@ -1,6 +1,6 @@
 # Draft: a convergent access history
 
-Status: proposal, for review before any spec or code changes. It follows
+Status: accepted and built, October 2026 (03 §4). It follows
 [one judging rule](one-judging-rule.md), whose rules 2 and 3 are built.
 
 Today a change to who may do what is placed in one global order: take-away
@@ -27,9 +27,13 @@ This note replaces the order with structure.
 
 ## The rules
 
-**1. Valid in its own view.** A change is **allowed** when its author had the
-power for it in its own view: the changes its `seen` names and everything they
-saw, merged (rule 4). That depends only on its past, so it never changes.
+**1. Allowed in its own view.** A change is **allowed** when its author had
+the power for it in its own view: the allowed changes it saw, merged (rule 4).
+That depends only on its past, so it never changes. Validity then cascades: a
+change stays valid only if the valid changes it saw still give its author the
+power, so a struck grant gives nothing downstream. (Review showed that judging
+only by a change's own view let a removed member's backdated grant to a sock
+give the sock power for good.)
 
 **2. Unseen reductions.** A change `e` by account `a` is **struck** when a
 valid reduction of `a` exists that `e` had not seen and whose cutoff does not

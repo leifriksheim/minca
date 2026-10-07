@@ -112,7 +112,7 @@ describe('when a new key is due', () => {
     assert.equal(replayAccess(open, [bob, setRole('alice', 'bob', null, [bob.id])]).current.keyDue, false);
   });
 
-  test('two new keys made apart: one wins, the same on every peer', () => {
+  test('two new keys made apart: both stand, and every peer takes the same one as current (#164)', () => {
     const carol = setRole('alice', 'carol', 'admin', []);
     const first = newKey('alice', 'ka', [carol.id], 'k-a');
     const second = newKey('carol', 'kb', [carol.id], 'k-b');
@@ -122,7 +122,8 @@ describe('when a new key is due', () => {
     ];
     const current = orders.map((order) => replayAccess(genesis, order).current.keys.at(-1)!.keyId);
     assert.equal(current[0], current[1]);
-    assert.equal(replayAccess(genesis, orders[0]!).current.keys.length, 2, 'the other is dropped');
+    // Records sealed under either stay readable: both keys stand.
+    assert.equal(replayAccess(genesis, orders[0]!).current.keys.length, 3);
   });
 });
 

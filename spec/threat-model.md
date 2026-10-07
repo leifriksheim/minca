@@ -75,7 +75,9 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     removal or demotion of it it had not seen, nor the rules that change had
     seen: past the change's cutoff, it is judged with them (03 §5.1, §6.3).
   - Peers that hold the same access changes replay them to the same state:
-    the order is a function of the signed changes alone (03 §4.3).
+    no order decides anything: whether a change counts follows from what
+    saw what, and the same changes give the same result in any arrival order
+    (03 §4).
   - What it signs that every peer refuses, and no honest client signs, can
     be shown to every member as proof each checks for itself, judged in the
     offending version's own view: no rival or later change, and no copy with
@@ -99,9 +101,10 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's clock, its keys, or the order it runs checks in ([#121](https://github.com/leifriksheim/weave/issues/121),
     [#163](https://github.com/leifriksheim/weave/issues/163)).
-  - A change made later can reorder earlier concurrent ones, and a rival that
-    arrives late can drop a change an honest write relied on, withdrawing it:
-    peers converge, but verdicts on ordinary records are not final ([#137](https://github.com/leifriksheim/weave/issues/137)).
+  - A removal or demotion signed offline can arrive at any time and withdraw
+    what its cutoff doesn't cover: peers converge, but no verdict is final
+    until members witness each other's heads
+    ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Only three kinds of misconduct earn a warrant, and a peer that
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
@@ -126,12 +129,15 @@ _Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/te
   - What it writes claiming to have seen its removal does not count, a
     revoke included, since a revoke needs a role. Ordinary records it writes claiming not
     to have seen it are withdrawn, unless the removal's cutoff covers them (03 §5.1, §6.3).
+  - A grant it makes concurrently with its removal, or backdates, is struck,
+    and gives no power to anything resting on it, whether or not that cites
+    the removal (03 §4.3; `packages/core/tests/access-attacks.test.ts`).
 - **Does not hold yet.**
+  - A change by a sock it granted, though dropped, still strikes changes made
+    concurrently by those the sock outranked
+    ([#191](https://github.com/leifriksheim/weave/issues/191)).
   - A version it backdates is withdrawn, but a colluding member's `check` can
     still cite and count it ([#184](https://github.com/leifriksheim/weave/issues/184)).
-  - A key change made at the same moment as its removal, by someone who
-    hadn't seen it, is boxed to it and clears the due key change. It then
-    reads everything new until the next one ([#173](https://github.com/leifriksheim/weave/issues/173)).
   - It can rejoin through any open role invite it saw: removal closes none
     ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_.
   - A key change is only a SHOULD, and only a member with `manage` can make
@@ -140,8 +146,9 @@ _Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/te
   - Hosts and carriers can't read the member list, so they keep syncing with
     it until the key changes ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_. A peer that never says who it is
     is never let go ([#173](https://github.com/leifriksheim/weave/issues/173)).
-  - An access change it signs tied with its own leave can sort before it, and
-    apply with its old role ([#170](https://github.com/leifriksheim/weave/issues/170)).
+  - A key change made at the same moment as its removal is boxed to it. The
+    change stays due, so the next key leaves it out, but until then it reads
+    ([#173](https://github.com/leifriksheim/weave/issues/173)).
   - It can keep adding to the history every peer must store and replay
     ([#161](https://github.com/leifriksheim/weave/issues/161)).
   - Its removal withdraws what it wrote before, unless the remover's node held
@@ -152,18 +159,17 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
 ### 3.4 Key thief
 
 - **Holds.**
-  - Once a fork of the key's log is proven, the ordinary records it signed from
-    the proven place on stop counting (02 §4.10, 03 §6.5).
-  - Once the owner revokes the key, the ordinary records it signed past what
-    the owner had seen of it stop counting, under every note to that key. A
+  - Once a fork of the key's log is proven, what it signed from the proven
+    place on stops counting, records and changes to who may do what alike
+    (02 §4.10, 03 §4.3, §6.5).
+  - Once the owner revokes the key, what it signed past what the owner had
+    seen of it stops counting, records and changes to who may do what alike, under every note to that key. A
     revoke the thief writes first, covering what it signed in advance, doesn't
     shield it: every revoke applies (03 §6.4).
 - **Does not hold yet.**
   - It can revoke the owner's other keys, with a cutoff of its choosing: a key
     whose note grants `*` is the account while it lasts
     ([#168](https://github.com/leifriksheim/weave/issues/168)).
-  - Neither a revoke nor a fork proof stops its **access changes**: it can
-    still add members, change roles or change the key ([#167](https://github.com/leifriksheim/weave/issues/167)).
   - It decides whether it forks the owner's line at all ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_. And a fork
     it makes at the start of the line withdraws everything the owner's device
     wrote ([#166](https://github.com/leifriksheim/weave/issues/166)).

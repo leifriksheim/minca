@@ -63,6 +63,12 @@ async function sharedWithBob() {
   await bob.node.spaces.join(await alice.node.spaces.invite(space));
   await hold(alice.node, space);
   await joined(bob.node, space);
+  // And Alice has his join: a change to his place made before would race it, and least power wins.
+  await until(
+    async () => (await alice.node.spaces.access(space)).members.some((m) => m.did === bob.node.did),
+    4000,
+    'Alice to see Bob join',
+  );
   return { hub, alice, bob, space };
 }
 

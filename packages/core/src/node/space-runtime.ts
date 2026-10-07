@@ -693,6 +693,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       author: version.author,
       seen,
       cutoff: NO_CUTOFF,
+      ...(version.log ? { at: version.log.n, line: version.log.c.n } : {}),
     };
 
     if (version.collection === DEFINITION_COLLECTION) {
