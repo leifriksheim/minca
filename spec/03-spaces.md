@@ -696,122 +696,6 @@ covers the place it found.
 
 _Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork"), `packages/core/tests/access-convergence.test.ts`._
 
-### 6.6 Warrants
-
-A **warrant** is proof that an account's key signed something the protocol
-refuses and that no honest writer could have signed. It is judged against the
-version's **own view**: the access changes its `seen` names and everything
-they saw, replayed alone (§4), as the writer's own node replayed them before
-signing. Nothing outside that view counts, neither a rival that arrives late
-nor a change made later, so an honest writer never fails it, and a verdict
-on a warrant never changes once every change in the view is here. A warrant
-flags the account for every member. It takes
-nothing away by itself: what to do about it is a decision for whoever manages
-the space (§6.1), and an account whose key was stolen revokes its note (§6.4).
-
-```
-sys.warrant at warrant:<hex40(evidence[0].id + "|" + writer's account DID)>
-{ kind, evidence: [<version>, <version>?] }        in the clear, retain: true
-```
-
-`evidence[0]` is the offending version, and its signer's root (02 §9.3) is the
-account. Only an account the history names (`named`, §3.4, §4.6) can be warranted, so
-a stranger minting keys and notes costs nobody a write.
-
-A warrant is **its writer's own record about one offending version**: its key
-names both, so only that writer can write any version of it, and it never
-needs a second one. It is written once: only a `seq 0` version stands, kept
-whole (`retain: true`) and in the clear, and a delete never stands. Whether
-it stands never depends on whether any other warrant does. Nobody warrants
-themselves. A witness who was removed, and given a role again, warrants the
-next offence at that offence's own key.
-
-Like any record, a warrant is withdrawn when its writer is removed without
-keeping it (§5.1), when its writer revokes the note it was written under
-(§6.4), or when its writer's log is proven forked at or before it (§6.5).
-So an accused who outranks every witness can withdraw their warrants
-([#166](https://github.com/leifriksheim/weave/issues/166)), and a writer can
-take back their own ([#168](https://github.com/leifriksheim/weave/issues/168)). The kinds:
-
-| `kind`     | `evidence`                                                 | Holds when                                                                                                                                                                              |
-| ---------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chain`    | `[v, p]`, both without bodies                              | `p.id = v.prev` and `v` does not follow `p` ([02](02-records.md) §4.7)                                                                                                                  |
-| `standing` | `[v]`, without its body; not an access collection          | in `v`'s own view: `v`'s root holds no role; or `v.seq > 0` and the rules in force say `final`; or `v.seq = 0` and the rule for `create` doesn't allow the root's role (§5.2 steps 6–7) |
-| `access`   | `[v]`, whole; an access collection                         | `v`'s event, built as §3.3 says, is refused by its author's power in its own view (§4.5)                                                                                                |
-| `warrant`  | `[w]`, whole; a `sys.warrant` not itself of kind `warrant` | `w`'s proof does not hold. A warrant against a `warrant`-kind warrant never holds, so a true counter-warrant can't be turned on its writer                                              |
-
-A `sys.warrant` version stands when its author may write in the space (§5.2)
-and its proof holds: it is well formed, its `evidence[0]` is validly signed
-(02 §3.3) in this space by a key whose root the history names, every version
-in its `evidence` is what its id names: its id is the hash of its own
-envelope, and a whole one has the body its `bodyHash` names (02 §3.2; a copy
-with the real id and signature and another envelope or body proves nothing),
-its record key
-is `warrant:<hex40(evidence[0].id + "|" + the warrant's own root)>`, the two
-roots differ, it is a `seq 0` version with `retain: true` and a body in the
-clear, its `evidence` has exactly the versions its kind's row lists (with and
-without bodies as the row says), and its kind's check holds. A delete of a
-warrant never stands. A peer:
-
-- judges it **not yet** when a change in the own view is not here;
-- lets it stand without judging it when the check needs rules it can't read,
-  and never flags anyone by it. An account is flagged only by a warrant whose
-  proof this peer checked and found to hold;
-- refuses it otherwise, including when its `kind` is one this peer doesn't
-  know (1 to 32 lower-case letters, `a`–`z`): new kinds come with a new sync
-  version (05 §4), so an unknown one costs nothing to keep. A warrant **in
-  shape** (a well-formed body; `evidence[0]` validly signed in this space by a
-  root the history names; written once, kept whole, in the clear, at its key,
-  and not against its writer) of a known kind other than `warrant`, whose proof does not hold, is
-  itself proof, of kind `warrant`, against whoever wrote it. One out of
-  shape, a counter-warrant, or one of a kind this peer doesn't know is
-  refused but proves nothing: a counter-warrant against it never holds, so
-  nobody writes one. A warrant from an older version is out of shape.
-
-A peer that refuses a version that would be evidence of a kind above SHOULD
-write the warrant, unless a warrant of its own against that account stands
-already, so one account's misconduct costs each member one standing warrant
-at a time. So does a peer that stores an access change whose author had no
-power for it as of what it saw. A peer may leave unwritten a warrant for a
-version it doesn't itself refuse: that misses a flag, and never raises a
-false one. It does not hold back because someone else's
-warrant stands: that warrant is withdrawn if its writer is removed without
-keeping it, and the offending version, refused, is never seen again.
-
-Example: Bob, an editor, signs a `sys.member` making himself owner, with
-`seen` naming the space's latest changes. Every peer drops the change (§4.5).
-Alice's node, which holds it, writes `sys.warrant` at
-`warrant:<hex40(<that version's id> + "|" + Alice)>`
-with `{ "kind": "access", "evidence": [<that version>] }`. Every member's node
-checks the proof and shows Bob flagged; Alice decides whether to remove him.
-
-> Rationale: why only what an honest writer can't do. A version refused
-> because of something its writer had not seen, such as a removal or a rule
-> change made at the same time, is **withdrawn**, never refused (§5.1, §5.2),
-> so it never earns a warrant. A bad signature proves nothing about anyone,
-> since anyone can make one in anyone's name. A broken body or schema depends
-> on which definition a peer holds (02 §9.6). What remains is what every peer
-> decides the same way from signed data alone, and an honest client refuses
-> it before signing.
-
-> Rationale: why a warrant only flags. Taking something away because of a
-> warrant would make which records count depend on whether the warrant had
-> arrived, and peers would disagree. A stolen key could also get its owner
-> removed. The protocol already has signed ways to take away a key's writes
-> (§6.4) and a person's place (§6.1); a warrant puts the proof in front of the
-> people who can use them. Since it can't be taken back, a flag earned by a
-> stolen key stays after the owner revokes its note; it names the key, and
-> the revoke explains it.
-
-> **Planned:** more kinds. A `note` kind (a version under a note made out to
-> another key, or not covering what it writes) once there is an account to
-> hold to it; and kinds for keys that belong to their creator
-> ([#72](https://github.com/leifriksheim/weave/issues/72)) and chains that
-> travel ([#17](https://github.com/leifriksheim/weave/issues/17)). Tracked in
-> [#148](https://github.com/leifriksheim/weave/issues/148).
-
-_Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-runtime.ts` (`warrantVerdict`, `evidenceHolds`, `standingBroken`, `violationIn`, `warrantIfDue`, `flagged`, `admit`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`, `warrantKey`), `packages/core/src/space/roles.ts` (`refusal`). Tests: `packages/core/tests/warrants.test.ts`._
-
 ---
 
 ## 7. Invites
@@ -995,8 +879,7 @@ In a private space, the body of every version is encrypted **before signing**,
 except in these collections, which stay in the clear:
 
 `sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.key`, `sys.box`,
-`sys.memberkey`, `sys.relays`, `sys.keepers`, `sys.fork` (§6.5) and
-`sys.warrant` (§6.6): proof every peer must check, holding signed envelopes
+`sys.memberkey`, `sys.relays`, `sys.keepers` and `sys.fork` (§6.5): proof every peer must check, holding signed envelopes
 rather than anyone's words.
 
 Everything else is encrypted — application records, `sys.collection`

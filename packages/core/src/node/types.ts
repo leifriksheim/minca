@@ -170,10 +170,12 @@ export interface FlaggedAccount {
   readonly account: string;
   /** The key that signed it: one device or app of theirs */
   readonly key: string;
-  /** What it broke: `chain`, `standing`, `access` or `warrant` */
+  /** What it broke: `chain`, `standing` or `access` */
   readonly kind: string;
   /** The account that brought the proof */
   readonly by: string;
+  /** The id of the offending version */
+  readonly offence: string;
 }
 
 /** A record, opened and checked — its current version, unless listed as history */

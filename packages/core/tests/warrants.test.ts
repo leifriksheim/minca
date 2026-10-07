@@ -1,8 +1,8 @@
 /**
- * Warrants (spec 03 §6.6): a version no honest writer could have signed is
- * proof against its account. The peer that refuses it writes the proof down,
- * every peer checks it, and the account is flagged for every member. A proof
- * that doesn't hold is proof against whoever wrote it.
+ * Warrants (docs/warrants.md): a version no honest writer could have signed
+ * is proof against its account. The peer that refuses it writes the proof
+ * down, every peer checks it, and the account is flagged for every member. A
+ * proof that doesn't hold flags nobody.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,8 @@ import { stubOf } from '../src/schema/version.js';
 import { team } from '../src/space/presets.js';
 import { MEMBER_COLLECTION } from '../src/space/roles.js';
 import { isRecord } from '../src/utils/guards.js';
-import { memberKey, warrantKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
+import { readWarrant } from '../src/records/warrant.js';
+import { memberKey, newWarrantKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
 import type { Version } from '../src/types.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
@@ -44,6 +45,17 @@ async function slip(who: Person, space: string, versions: ReadonlyArray<Version>
   const store = createStorageProvider(await who.stores(`spaces/${space}`));
   for (const version of versions) await store.addVersion(version);
   await hold(who.node, space);
+}
+
+/** A warrant's first version in someone's copy, found by the offence it proves */
+async function warrantAbout(who: Person, space: string, offence: string): Promise<Version | null> {
+  const store = createStorageProvider(await who.stores(`spaces/${space}`));
+  for (const versions of (await store.histories('warrant:')).values())
+    for (const version of versions) {
+      const offending = readWarrant(version.body)?.evidence[0];
+      if (version.seq === 0 && offending?.id === offence) return version;
+    }
+  return null;
 }
 
 const flaggedFor = async (who: Person, space: string) => (await who.node.spaces.access(space)).flagged;
@@ -137,7 +149,7 @@ describe('warrants', () => {
     await flaggedEverywhere([alice, bob], space, bob.node.did, 'chain');
   });
 
-  test('a warrant whose proof does not hold is proof against whoever wrote it', async () => {
+  test('a warrant whose proof does not hold is stored like any record, and flags nobody', async () => {
     const { alice, bob, space } = await sharedWithBob();
     // Alice's honest note, offered as "proof" that she had no place.
     const honest = await alice.node.records.put(space, 'app.note', { text: 'honest' });
@@ -150,18 +162,14 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [evidence] },
-        version: { key: await warrantKey(evidence.id, bob.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
     );
     await slip(bob, space, [lie]);
-    await flaggedEverywhere([alice], space, bob.node.did, 'warrant');
-    assert.equal(
-      (await flaggedFor(alice, space)).some((f) => f.account === alice.node.did),
-      false,
-      'Alice is not flagged',
-    );
+    await until(async () => (await store.getVersion(lie.id)) !== null, 4000, 'the lie at Alice’s');
+    for (const who of [alice, bob]) assert.deepEqual(await flaggedFor(who, space), [], 'nobody is flagged');
   });
 
   test('the accused can’t overwrite the proof against them: a warrant is its writer’s own record', async () => {
@@ -182,9 +190,13 @@ describe('warrants', () => {
     const own = await bob.node.records.put(space, 'app.note', { text: 'mine' });
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
     const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
-    const key = await warrantKey(bad.id, alice.node.did);
-    await until(async () => (await bobStore.getCurrent(key)) !== null, 4000, 'Alice’s warrant at Bob’s');
-    const current = (await bobStore.getCurrent(key))!;
+    await until(
+      async () => (await warrantAbout(bob, space, bad.id)) !== null,
+      4000,
+      'Alice’s warrant at Bob’s',
+    );
+    const current = (await warrantAbout(bob, space, bad.id))!;
+    const { key } = current;
     const overwrite = await forge(
       bob,
       space,
@@ -204,60 +216,12 @@ describe('warrants', () => {
       'Bob’s next note',
     );
     await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.equal(await aliceStore.getVersion(overwrite.id), null, 'refused: not his to write');
+    // Any member may write a record's next version; the proof is the first, kept whole.
+    await until(async () => (await aliceStore.getVersion(overwrite.id)) !== null, 4000, 'the overwrite');
     for (const who of [alice, bob])
       assert.ok(
         (await flaggedFor(who, space)).some((f) => f.account === bob.node.did && f.kind === 'standing'),
         'Bob is still flagged',
-      );
-  });
-
-  test('an honest warrant against a false one can’t be turned on its writer', async () => {
-    const { alice, bob, space } = await sharedWithBob();
-    const honest = await alice.node.records.put(space, 'app.note', { text: 'honest' });
-    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
-    await until(async () => (await aliceStore.getVersion(honest.version)) !== null, 4000, 'the note');
-    // Bob accuses Alice falsely; her node writes, truly, that his warrant doesn't hold.
-    const evidence = stubOf((await aliceStore.getVersion(honest.version))!);
-    const lie = await forge(
-      bob,
-      space,
-      {
-        collection: WARRANT_COLLECTION,
-        body: { kind: 'standing', evidence: [evidence] },
-        version: { key: await warrantKey(evidence.id, bob.node.did), seq: 0 },
-        retain: true,
-      },
-      { keep: false },
-    );
-    await slip(bob, space, [lie]);
-    await flaggedEverywhere([alice, bob], space, bob.node.did, 'warrant');
-    const hers = (await aliceStore.getCurrent(await warrantKey(lie.id, alice.node.did)))!;
-    // Bob then warrants her warrant. A warrant against a warrant-kind warrant is never proof.
-    const counter = await forge(
-      bob,
-      space,
-      {
-        collection: WARRANT_COLLECTION,
-        body: { kind: 'warrant', evidence: [hers] },
-        version: { key: await warrantKey(hers.id, bob.node.did), seq: 0 },
-        retain: true,
-      },
-      { keep: false },
-    );
-    await slip(bob, space, [counter]);
-    const after = await bob.node.records.put(space, 'app.note', { text: 'after' });
-    await until(
-      async () => (await alice.node.records.get(space, after.key)) !== null,
-      4000,
-      'Bob’s next note',
-    );
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.equal(await aliceStore.getVersion(counter.id), null, 'refused');
-    for (const who of [alice, bob])
-      assert.equal(
-        (await flaggedFor(who, space)).some((f) => f.account === alice.node.did),
-        false,
       );
   });
 
@@ -278,7 +242,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: await warrantKey(bad.id, bob.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -292,11 +256,12 @@ describe('warrants', () => {
         8000,
         'Bob to be flagged by Alice',
       );
-    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
-    assert.equal(await aliceStore.getVersion(self.id), null, 'refused');
-    const hers = await Promise.all(
-      [self.id, bad.id].map(async (id) => aliceStore.getCurrent(await warrantKey(id, alice.node.did))),
+    // His warrant against himself is a record like any other, and flags nobody.
+    assert.equal(
+      (await flaggedFor(alice, space)).some((f) => f.by === bob.node.did),
+      false,
     );
+    const hers = await Promise.all([self.id, bad.id].map((id) => warrantAbout(alice, space, id)));
     assert.ok(hers.some(Boolean), 'Alice wrote her own');
   });
 
@@ -384,7 +349,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'access', evidence: [counterfeit] },
-        version: { key: await warrantKey(real.id, mallory.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -421,7 +386,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [rewritten] },
-        version: { key: await warrantKey(rewritten.id, alice.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -509,21 +474,22 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(written)] },
-        version: { key: await warrantKey(written.id, mallory.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
     );
     await slip(mallory, space, [accusation]);
-    // As of what her note saw, Carol was an editor, whatever came after: it is Mallory who is flagged.
-    await flaggedEverywhere([alice, carol], space, mallory.node.did, 'warrant');
+    // As of what her note saw, Carol was an editor, whatever came after: the accusation flags nobody.
+    const alicesStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    await until(async () => (await alicesStore.getVersion(accusation.id)) !== null, 8000, 'the accusation');
     assert.equal(
       (await flaggedFor(alice, space)).some((f) => f.account === carol.node.did),
       false,
     );
   });
 
-  test('a warrant of a kind this peer doesn’t know is refused, and costs nothing to keep', async () => {
+  test('a warrant of a kind this peer doesn’t know flags nobody', async () => {
     const { alice, bob, space } = await sharedWithBob();
     const own = await bob.node.records.put(space, 'app.note', { text: 'mine' });
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
@@ -534,7 +500,7 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'someday', evidence: [evidence] },
-        version: { key: await warrantKey(evidence.id, alice.node.did), seq: 0 },
+        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -547,7 +513,7 @@ describe('warrants', () => {
       'Alice’s next note',
     );
     await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.equal(await bobStore.getVersion(unknown.id), null, 'refused');
+    assert.ok(await bobStore.getVersion(unknown.id), 'stored like any record');
     assert.equal((await flaggedFor(bob, space)).length, 0, 'and nobody is flagged for it');
   });
 
@@ -570,7 +536,7 @@ describe('warrants', () => {
     assert.equal((await aliceStore.queryVersions(WARRANT_COLLECTION)).length, 1);
   });
 
-  test('a warrant out of shape, such as one from an older version, is refused but proves nothing against its writer', async () => {
+  test('a warrant out of shape, such as one from an older version, flags nobody', async () => {
     const { alice, bob, space } = await sharedWithBob();
     await alice.node.collections.define(space, {
       name: 'app.notice',
@@ -580,14 +546,14 @@ describe('warrants', () => {
     });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
     const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
-    // A true proof, at a key of another shape: the one protocol 8 used named only the account.
+    // A true proof, at a key that isn't a warrant's.
     const misplaced = await forge(
       alice,
       space,
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: await warrantKey(bob.node.did, alice.node.did), seq: 0 },
+        version: { key: 'misplaced', seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -601,11 +567,8 @@ describe('warrants', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 500));
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
-    assert.equal(await bobStore.getVersion(misplaced.id), null, 'refused');
-    assert.equal(
-      (await flaggedFor(bob, space)).some((f) => f.account === alice.node.did),
-      false,
-    );
+    assert.ok(await bobStore.getVersion(misplaced.id), 'stored like any record');
+    assert.deepEqual(await flaggedFor(bob, space), []);
   });
 
   test('a race is not misconduct: a version withdrawn by a change it had not seen is never warranted', async () => {
