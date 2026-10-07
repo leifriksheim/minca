@@ -71,9 +71,9 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
 
 - **Holds.**
   - An ordinary record it writes counts only if its role allowed it, as of
-    what the version says it saw. Claiming to have seen less does not escape any one change
-    that took power away: a removal, a demotion or a narrowed rule it had not
-    seen also withdraws what it wrote (03 §5.1, §5.2 step 10).
+    what the version says it saw. Claiming to have seen less does not escape a
+    removal or demotion of it it had not seen, nor the rules that change had
+    seen: past the change's cutoff, it is judged with them (03 §5.1, §6.3).
   - Peers that hold the same access changes replay them to the same state:
     the order is a function of the signed changes alone (03 §4.3).
   - What it signs that every peer refuses, and no honest client signs, can
@@ -81,9 +81,16 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     offending version's own view: no rival or later change, and no copy with
     another envelope or body, turns an honest write into proof against its
     writer. Warrants are a standard collection, not protocol
-    ([warrants](../packages/core/docs/warrants.md)). This holds while an
-    head ever needs leaving out: a dropped change is never a head.
+    ([warrants](../packages/core/docs/warrants.md)).
 - **Does not hold yet.**
+  - A narrowed rule alone binds only what saw it: a version naming an older
+    point counts if its author could have written it then, since nobody can
+    tell it from one written offline. Pairing the narrowing with a demotion
+    binds it (03 §5.1).
+  - It can make every peer store revokes of keys that never wrote here, and
+    other changes it may make, without limit; they can't fill `seen`, since a
+    writer names first the heads its standing rests on
+    ([#180](https://github.com/leifriksheim/weave/issues/180), [#33](https://github.com/leifriksheim/weave/issues/33)).
   - Each warrant costs every member's node a replay of the offending
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/weave/issues/33)).

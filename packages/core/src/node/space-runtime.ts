@@ -2568,6 +2568,36 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       : `"${space.name}" was shared with you to view — you can't change it`;
   }
 
+  /**
+   * The heads a new version names: all of them, or past what a version may
+   * name, first those its own standing rests on (its author's place, its
+   * role, its collection's definition), then the latest applied. Naming fewer
+   * is safe: what it leaves out it is judged as not having seen (03 §3.2).
+   */
+  async function seenFor(history: AccessHistory, collection: string): Promise<ReadonlyArray<string>> {
+    const heads = history.heads();
+    if (heads.length <= MAX_SEEN) return heads;
+    const role = history.current.members.get(deps.rootDid);
+    const mine = new Set([
+      await memberKey(deps.rootDid),
+      ...(role ? [roleKey(role)] : []),
+      `collection:${collection}`,
+    ]);
+    const keyed = await Promise.all(
+      heads.map(async (id) => ({ id, key: (await storage.getVersion(id))?.key })),
+    );
+    const index = (id: string) => {
+      const status = history.status(id);
+      return status?.status === 'applied' ? status.index : -1;
+    };
+    return [...keyed]
+      .sort(
+        (a, b) => Number(mine.has(b.key ?? '')) - Number(mine.has(a.key ?? '')) || index(b.id) - index(a.id),
+      )
+      .slice(0, MAX_SEEN)
+      .map((head) => head.id);
+  }
+
   /** Signs and stores one version. A delete carries no body. */
   async function write<T>(
     collection: string,
@@ -2680,8 +2710,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           version,
           retain,
           deleted,
-          // At most what a version may name: naming fewer heads is safe, since what it leaves out still applies (03 §3.2).
-          seen: history.heads().slice(-MAX_SEEN),
+          seen: await seenFor(history, collection),
           // In the clear only where the body is: a private space sealed them above.
           ...(space.visibility === 'public' && !deleted && links.length ? { links } : {}),
           ...(tags.length ? { tags } : {}),
@@ -2792,7 +2821,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const { log } = version;
     // Which account each key writes for: what a cutoff is worked out from.
     const root = (await judge(version)).root;
-    if (root && !(await adapter.get(`${KEY_ROOT_PREFIX}${version.author}`)))
+    // Only an account a valid chain names: a key whose note failed falls back to itself, and isn't anyone's.
+    if (
+      root &&
+      (root !== version.author || !version.proof) &&
+      !(await adapter.get(`${KEY_ROOT_PREFIX}${version.author}`))
+    )
       await adapter.put(`${KEY_ROOT_PREFIX}${version.author}`, utf8Encode(root));
     // Two lines: everything the key wrote here, and what it wrote in this collection.
     const lines = [
@@ -3168,26 +3202,43 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /**
    * What a change taking power from an account leaves standing: for each of
-   * its keys, the highest place in that key's log this node holds here.
+   * its keys, the end of the unbroken line this node holds from the key's
+   * first place here, each version naming the one before it. A place held
+   * past a gap, or off the line, covers nothing: otherwise one planted far
+   * ahead would cover everything its writer signed after.
    */
   async function cutoffFor(did: string, only?: string): Promise<Record<string, number>> {
-    const cutoff: Record<string, number> = {};
     // What it holds of theirs, whatever way it came: the log's places are kept only for what arrived by sync.
+    const placed = new Map<string, Map<number, Version>>();
+    const add = (version: Version) => {
+      if (!version.log) return;
+      const line = placed.get(version.author) ?? new Map<number, Version>();
+      if (!line.has(version.log.n)) line.set(version.log.n, version);
+      placed.set(version.author, line);
+    };
     for (const version of await everyCurrent()) {
       if (!version.log || (only && version.author !== only) || version.space !== space.id) continue;
-      if ((await judge(version)).root !== did) continue;
-      cutoff[version.author] = Math.max(cutoff[version.author] ?? -1, version.log.n);
+      if ((await judge(version)).root === did) add(version);
     }
     for (const name of await adapter.list(KEY_ROOT_PREFIX)) {
       const key = name.slice(KEY_ROOT_PREFIX.length);
       if ((only && key !== only) || utf8Decode((await adapter.get(name)) ?? new Uint8Array()) !== did)
         continue;
-      let highest = -1;
       for (const place of await adapter.list(`${LOG_PREFIX}${key}/`)) {
-        const n = Number(place.slice(`${LOG_PREFIX}${key}/`.length));
-        if (Number.isSafeInteger(n) && n > highest) highest = n;
+        const id = await adapter.get(place);
+        const version = id ? await storage.getVersion(utf8Decode(id)) : null;
+        if (version?.author === key) add(version);
       }
-      if (highest >= 0) cutoff[key] = Math.max(cutoff[key] ?? -1, highest);
+    }
+    const cutoff: Record<string, number> = {};
+    for (const [key, line] of placed) {
+      let end = -1;
+      for (let n = 0; ; n++) {
+        const version = line.get(n);
+        if (!version || (n > 0 && version.log?.prev !== line.get(n - 1)!.id)) break;
+        end = n;
+      }
+      if (end >= 0) cutoff[key] = end;
     }
     return cutoff;
   }

@@ -444,13 +444,41 @@ describe('records against the history', () => {
     });
     // A thief's revoke, keeping all it signed in advance, and the owner's own.
     const thief = revoke(9);
-    const owner = { ...revoke(2), id: id('v'), key: 'revoke:wa|alice#2' };
+    // At the same record key: concurrent revokes are never rivals.
+    const owner = { ...revoke(2), id: id('v') };
     const history = replayAccess(genesis, [thief, owner]);
     const judge = (at: number, writer = 'wa') =>
       history.judge({ id: `r${at}`, root: 'alice', seen: [], writer, at }, isMember);
     assert.ok(judge(2).ok, 'covered by both');
     assert.ok(!judge(5).ok, "past the owner's cutoff: the thief's revoke doesn't shield it");
     assert.ok(judge(5, 'wz').ok, 'other keys are untouched');
+  });
+
+  test('a promotion takes nothing away', () => {
+    const bob = setRole('alice', 'bob', 'member', []);
+    const promote = setRole('alice', 'bob', 'moderator', [bob.id]);
+    const history = replayAccess(genesis, [bob, promote]);
+    assert.deepEqual(history.judge({ id: 'r', root: 'bob', seen: [bob.id], writer: 'wb', at: 9 }, isMember), {
+      ok: true,
+      unseen: [],
+    });
+  });
+
+  test('revokes are never heads: any number of them leaves what a writer names as it was', () => {
+    const bob = setRole('alice', 'bob', 'member', []);
+    const junk = Array.from({ length: 70 }, (_, i): AccessEvent => ({
+      id: id('v'),
+      key: `revoke:junk${i}|bob`,
+      kind: 'revoke',
+      root: 'bob',
+      author: 'k',
+      target: `did:key:zJunk${i}`,
+      seen: [bob.id],
+      cutoff: new Map(),
+    }));
+    const history = replayAccess(genesis, [bob, ...junk]);
+    assert.ok(junk.every((event) => history.status(event.id)?.status === 'applied'));
+    assert.deepEqual(history.heads(), [bob.id]);
   });
 
   test("a revoke reaches only its own account's keys", () => {

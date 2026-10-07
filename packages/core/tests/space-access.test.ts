@@ -466,6 +466,60 @@ describe('space access: taking it back', () => {
     assert.deepEqual(await shape(again.node), kept);
   });
 
+  test('a place planted far ahead in a log covers nothing: a cutoff follows the unbroken line', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    await alice.node.collections.define(space, { name: 'app.board', schema: { type: 'object' } });
+    await until(
+      async () => (await bob.node.collections.list(space)).some((c) => c.name === 'app.board'),
+      4000,
+      'the definition',
+    );
+    const seenThen = [...(await bob.node.spaces.access(space)).heads];
+    // A key of Bob's, signing by hand.
+    const pair = await provider.generateKeyPair();
+    const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
+    const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
+      audience: keyDid,
+      capabilities: [{ with: `space:${space}`, can: '*' }],
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const sign = (text: string, log: Version['log']) =>
+      createSigner(provider).sign(
+        createVersion({
+          author: keyDid,
+          collection: 'app.board',
+          space,
+          body: { text },
+          proof: note.encoded,
+          seen: seenThen,
+          ...(log ? { log } : {}),
+        }),
+        pair.privateKey,
+      );
+    const first = await sign('honest', { n: 0, c: { n: 0 } });
+    // Planted before the removal, far past anything real.
+    const planted = await sign('plant', { n: 1e12, prev: 'bnothing', c: { n: 1e12, prev: 'bnothing' } });
+    await letGo(bob.node, space);
+    for (const version of [first, planted])
+      await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(version);
+    await hold(bob.node, space);
+    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
+    await until(
+      async () =>
+        (await Promise.all([first, planted].map((v) => aliceStore.getVersion(v.id)))).every(Boolean),
+      6000,
+      'both at Alice',
+    );
+    await alice.node.spaces.setMember(space, bob.node.did, null);
+    // After the removal, the next place in Bob's real line, naming the old point.
+    const after = await sign('after removal', { n: 1, prev: first.id, c: { n: 1, prev: first.id } });
+    await letGo(alice.node, space);
+    await aliceStore.addVersion(after);
+    await hold(alice.node, space);
+    await until(async () => (await alice.node.records.get(space, after.key)) === null, 4000, 'not counted');
+    assert.notEqual(await alice.node.records.get(space, first.key), null, 'what Alice had seen stays');
+  });
+
   test('a revoked note: nothing more under it counts, what was seen stays', async () => {
     const { alice, bob, space } = await sharedWithBob();
     // An app of Bob's, writing under a note Bob signed for its key.

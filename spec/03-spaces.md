@@ -208,7 +208,9 @@ for the invite DID `did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
 Every version written in a space — access record or not — carries `seen`: the
 ids of **heads** of the access history as its writer knew them (§4.6), at most 64. A writer **SHOULD** name its current heads, and MAY name fewer: what it
 leaves out it is judged as not having seen, which can only take something
-away from it (§5.1). The space id itself may appear in `seen` and stands for
+away from it (§5.1). One with more than 64 names first those its own standing
+rests on (its `member:` and `role:` records, its collection's definition),
+then the most recently applied. The space id itself may appear in `seen` and stands for
 the genesis. Access records **MUST** carry
 `retain: true` ([02](02-records.md)); a version without it is not an access
 event.
@@ -466,19 +468,21 @@ stands on its own.
 A consequence of the rank rule: two accounts of equal rank can never remove or
 demote each other, only themselves.
 
-**Reductions.** Before applying an applied `member` or `role` event, for each
-_affected_ account — the `did` of a `member` event; every current holder of the
-role for a `role` event — record that the event changed that account's
-standing. These drive §5.
+**Reductions.** When an applied `member` or `role` event lowers an affected
+account's role — the `did` of a `member` event; every current holder of the
+role for a `role` event — it is a **reduction** of that account. Lowered means
+the role is gone, ranked lower, or lacks a permission it had. A promotion takes
+nothing away and is not one. Reductions drive §5.
 
 ### 4.6 What the replay exposes
 
 - `current` — the final state.
 - `status(id)` — `applied` (with index), `dropped` (with reason), `waiting`, or unknown.
-- `heads()` — the ids of applied events that no other applied event saw,
-  directly or through others, sorted ascending. This is what a writer puts in
-  `seen`. A dropped event is never a head: it changes nothing, so a writer
-  need not name it, and changes nobody had the power for can't fill `seen`.
+- `heads()` — the ids of applied events other than `revoke` and `fork` that no
+  other such event saw, directly or through others, sorted ascending. This is
+  what a writer puts in `seen`. A dropped event, a revoke and a fork proof are
+  never heads: none changes the state, so a writer need not name them, and
+  however many of them anyone makes, they can't fill `seen`.
 - `at(seen)` — `S_seen` as in §4.4, or null when anything in `seen` (other
   than `G`) is missing or waiting.
 - `revoked(key, account)` — every applied revoke of that key by that account.
@@ -637,8 +641,11 @@ _Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `recon
 
 A change that takes power from people — lowering or removing a member, lowering
 or removing a role, revoking a key — **SHOULD** carry `cutoff`: for each key of
-the affected accounts, the highest place in that key's log here
-([02](02-records.md) §4.10) that its writer holds. At most 1024 keys.
+the affected accounts, the end of the unbroken line its writer holds of that
+key's log here ([02](02-records.md) §4.10): from place 0, each place held and
+naming the one before it as `prev`. A place held past a gap covers nothing, so
+one planted far ahead can't stretch a cutoff over what its writer signs later.
+At most 1024 keys.
 
 ```json
 {
@@ -651,8 +658,9 @@ the affected accounts, the highest place in that key's log here
 Everything a covered key signed at or below its place stands, as far as this
 change goes. Anything else the affected account wrote that had not seen the
 change, whatever point in history it claims, is judged with it (§5.1 step 4):
-later places, another branch of a log, and keys the change's writer had never
-seen. A change to a collection's definition carries no cutoff: it binds what
+later places, and keys the change's writer had never seen. A cutoff names a
+place, not a branch: a second version at a covered place is a fork of that
+key's log, and a fork proof (§6.5) withdraws both. A change to a collection's definition carries no cutoff: it binds what
 saw it.
 
 > Rationale: a cutoff is exact and small, one number per key, and doesn't
@@ -666,8 +674,8 @@ An account revokes one of its keys in a space by writing `sys.revoke` at
 `revoke:<hex40(key DID + "|" + account DID)>` with `{ key, cutoff? }`. From
 then on, every version that key signed for that account stands only if the
 revoke covers it (§5.1 step 2), whatever it saw; the rest are withdrawn. Every
-applied revoke applies, each with its own cutoff, so no revoke can shield what
-another takes: a thief who revokes a stolen key first, covering what it signed
+applied revoke applies, each with its own cutoff, and revokes are never rivals
+(§4.3), so no revoke can shield what another takes: a thief who revokes a stolen key first, covering what it signed
 in advance, is still undone by the owner's own revoke. A revoke names a key,
 not a note, so every note to that key goes with it.
 

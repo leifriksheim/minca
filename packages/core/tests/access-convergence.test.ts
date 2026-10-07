@@ -429,7 +429,10 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
     }
 
     // Of two changes to one thing that did not see each other, the first in the replay stands.
-    const rival = (appliedByKey.get(event.key) ?? []).find((other) => !ancestors(event.id).has(other));
+    const rival =
+      event.kind === 'revoke'
+        ? undefined
+        : (appliedByKey.get(event.key) ?? []).find((other) => !ancestors(event.id).has(other));
     const reason =
       (rival ? 'A change to the same thing that it had not seen came first' : null) ??
       // Its author had to have the power as of what they saw…
@@ -441,8 +444,17 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
       continue;
     }
 
-    for (const did of affected(event, state)) reductions.push({ event: event.id, did });
+    const who = affected(event, state).map((did) => ({ did, before: roleOf(state, did) }));
     apply(event, state);
+    for (const { did, before } of who) {
+      const after = roleOf(state, did);
+      const lower =
+        !!before &&
+        (!after ||
+          after.rank < before.rank ||
+          before.permissions.some((p) => !after.permissions.includes(p)));
+      if (lower) reductions.push({ event: event.id, did });
+    }
     if (event.kind === 'revoke')
       revokes.set(event.target, [
         ...(revokes.get(event.target) ?? []),
@@ -460,8 +472,12 @@ function replayAccessReference(genesis: AccessGenesis, events: ReadonlyArray<Acc
   const cutoffOf = new Map(order.map((id) => [id, byId.get(id)!.cutoff]));
 
   // The applied changes no other applied change saw: a dropped change is never a head.
+  const changesState = (id: string) => !['revoke', 'fork'].includes(byId.get(id)!.kind);
   const heads = (): ReadonlyArray<string> =>
-    order.filter((id) => !order.some((other) => other !== id && cutOf([other]).has(id))).sort();
+    order
+      .filter(changesState)
+      .filter((id) => !order.some((other) => other !== id && changesState(other) && cutOf([other]).has(id)))
+      .sort();
 
   return Object.freeze({
     current: state,

@@ -340,8 +340,9 @@ export interface AccessHistory {
   /** What became of one change */
   status(id: string): EventStatus | null;
   /**
-   * The latest applied changes — what a new record's `seen` names. A dropped
-   * change is never a head: it changes nothing, and a writer need not name it.
+   * The latest applied changes to who holds what — what a new record's `seen`
+   * names. A dropped change is never a head, nor a revoke or a fork proof:
+   * none changes the state, and a writer need not name them.
    */
   heads(): ReadonlyArray<string>;
   /** The state as of what `seen` names, or null when some of it is not here */
@@ -591,7 +592,14 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
   }
 }
 
-/** The people whose standing a change may lower — for keep lists */
+/** Whether a role is lower than the one before it: gone, ranked lower, or missing a permission it had */
+function lowered(before: Role | null, after: Role | null): boolean {
+  if (!before) return false;
+  if (!after) return true;
+  return after.rank < before.rank || before.permissions.some((p) => !after.permissions.includes(p));
+}
+
+/** The people whose standing a change may lower */
 function affected(event: AccessEvent, state: AccessState): ReadonlyArray<string> {
   if (event.kind === 'member') return [event.did];
   if (event.kind === 'role')
@@ -811,7 +819,11 @@ function place(r: Replay, event: AccessEvent): void {
 
   // Of two changes to one thing that did not see each other, the first in the replay stands.
   const saw = r.ancestry.get(event.id)!;
-  const rival = (r.appliedByKey.get(event.key) ?? []).find((other) => !inCut(r, saw, other));
+  // Revokes only add up — every one applies — so they are never rivals.
+  const rival =
+    event.kind === 'revoke'
+      ? undefined
+      : (r.appliedByKey.get(event.key) ?? []).find((other) => !inCut(r, saw, other));
   const reason =
     (rival ? 'A change to the same thing that it had not seen came first' : null) ??
     // Its author had to have the power as of what they saw…
@@ -825,8 +837,13 @@ function place(r: Replay, event: AccessEvent): void {
   }
 
   const index = r.order.length;
-  for (const did of affected(event, r.state)) appended(r.reductions, did, event.id);
+  const who = affected(event, r.state);
+  const before = who.map((did) => roleOf(r.state, did));
   apply(event, r.state);
+  // Only a change that lowered someone's standing is a reduction: a promotion takes nothing away.
+  who.forEach((did, i) => {
+    if (lowered(before[i]!, roleOf(r.state, did))) appended(r.reductions, did, event.id);
+  });
   if (event.kind === 'member') appended(r.memberLog, event.did, { applied: index, role: event.role });
   if (event.kind === 'role') appended(r.roleLog, event.name, { applied: index, role: event.role });
   // Every revoke applies, each with what its own author had seen: none can shield what another takes.
@@ -836,8 +853,12 @@ function place(r: Replay, event: AccessEvent): void {
   r.cutoffOf.set(event.id, event.cutoff);
   r.statuses.set(event.id, { status: 'applied', index });
   r.order.push(event.id);
-  for (const head of r.appliedHeads) if (inCut(r, saw, head)) r.appliedHeads.delete(head);
-  r.appliedHeads.add(event.id);
+  // A revoke or a fork proof changes no one's standing: it applies whether or not a writer saw it,
+  // so it is never a head, and leaves the heads it saw as they were.
+  if (event.kind !== 'revoke' && event.kind !== 'fork') {
+    for (const head of r.appliedHeads) if (inCut(r, saw, head)) r.appliedHeads.delete(head);
+    r.appliedHeads.add(event.id);
+  }
   appended(r.appliedByKey, event.key, event.id);
 }
 
