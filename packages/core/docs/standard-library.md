@@ -246,7 +246,7 @@ _Source: `packages/core/src/schemas/library/community.ts` (`ballot`, `decision`,
 
 `std.host` names a host the space pays to keep it online, which anyone in it
 may chip in for; members' devices hand it the space's pass
-([node](node.md#a-space-paying-for-itself), [spec 06 §4.6](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([node](node.md#a-space-paying-for-itself), [spec 08 §2](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)).
 Naming a host sends it every member's pass, so only those who may manage the
 space do it; in the `community` preset, admins and moderators.
 

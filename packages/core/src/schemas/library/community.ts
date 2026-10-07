@@ -371,7 +371,7 @@ export type Setting = BodyOf<typeof setting>;
 
 /**
  * A host the space pays to keep it online: its own subscription there
- * (`space:<id>`, spec 06 §4.6), which anyone in the space may chip in for.
+ * (`space:<id>`, spec 08 §2), which anyone in the space may chip in for.
  * Members' devices hand that host the space's pass once someone has paid, so
  * it carries the space without being able to read it. Only those who may
  * manage it choose the host: naming one sends it every member's pass.
