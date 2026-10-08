@@ -965,14 +965,22 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function rulesAt(
     state: AccessState,
     collection: string,
-  ): Promise<{ rules: CollectionRules; topics: ReadonlyArray<string> } | null> {
+  ): Promise<{
+    rules: CollectionRules;
+    topics: ReadonlyArray<string>;
+    permissions: ReadonlyArray<string>;
+  } | null> {
     if (collection.startsWith('sys.')) return null;
     const entry = state.definitions.get(collection);
     if (!entry) return null;
     const found = await definitionIn(entry.event);
     return typeof found === 'string'
       ? null
-      : { rules: found.definition.rules ?? {}, topics: found.definition.topics ?? [] };
+      : {
+          rules: found.definition.rules ?? {},
+          topics: found.definition.topics ?? [],
+          permissions: found.definition.permissions ?? [],
+        };
   }
 
   // ─── Topic tags ────────────────────────────────────────────────────
@@ -1184,7 +1192,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       };
     if (rules.final && version.seq > 0)
       return { ok: false, reason: `A ${version.collection} record is final: it can't be edited or deleted` };
-    return judgeContent(version, first, root, { rules, topics: [] }, { tags: false });
+    return judgeContent(version, first, root, { rules, topics: [], permissions: [] }, { tags: false });
   }
 
   /** The rest of a version's standing: what its definition's topics and rules ask of what it says */
@@ -1314,8 +1322,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (!first || !root) return NO_CHECKS;
       const state = (await access()).history.at(version.seen ?? []);
       if (!state) return { pending: true };
-      const checks = (await rulesAt(state, version.collection))?.rules?.check;
-      if (!checks?.length) return NO_CHECKS;
+      const defined = await rulesAt(state, version.collection);
+      const checks: unknown = defined?.rules.check;
+      if (checks === undefined || (Array.isArray(checks) && checks.length === 0)) return NO_CHECKS;
+      // Peers keep any list; one its author's node would have refused can't be read, so nothing passes it.
+      if (checkChecks(checks, 'rules.check', defined?.permissions ?? []) !== null || !Array.isArray(checks))
+        return { passes: false, reason: `The checks of ${version.collection} can't be read` };
+      // What this node can't open, it can't judge: it counts on the rest, as a peer without the key does.
+      const opened = await openBody(version);
+      if (opened.body === null && opened.encrypted) return NO_CHECKS;
       const outcome = await checkStanding(version, first, root, state, checks);
       if (outcome.ok) return { passes: true };
       return outcome.later ? { pending: true } : { passes: false, reason: outcome.reason };
