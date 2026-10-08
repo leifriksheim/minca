@@ -57,8 +57,20 @@ reader confirms it from exactly what was cited.
 - **Unreadable.** A node that can't open the version's body, the version
   before it (when that is kept whole), or a version it cites, because it
   doesn't hold the key, can't tell, and counts it on the rest.
-- **What can be cited.** A cited version must stand, and pass its own checks,
-  as of the citing version's `seen` ([below](#citing-a-version)).
+- **What can be cited.** A cited version must stand as of the citing
+  version's `seen`, and pass its own checks as of its own
+  ([below](#citing-a-version)).
+- **A chain counts only while every step does.** A version that follows one
+  failing its checks fails too, so a forged step can't be laundered by the
+  next. Writing a key again continues from the newest version that counts, or
+  starts it afresh when none does: a version that fails can't make others build
+  on it, or hold a `onePer` key against the real record.
+- **Every read path.** `get`, `list`, `linked`, queries and their counts, rules
+  and notifications count only versions that pass; `history` lists every
+  version and gives a failing one its reason.
+- **A check this node can't parse** (a newer function, say) fails every
+  version under it, so an older library hides that collection rather than
+  count what it can't judge.
 
 Checks read the version before, and versions cited by id, so they need those
 kept whole. The node sets `retain` on every version of a collection under
@@ -215,7 +227,7 @@ not resolve decides:
 4. It does not stand **as of the citing version's `seen`** (spec 02 §9.4,
    with spec 03 §5.1 judged `within` that `seen`): the check fails; or the
    citing version is pending, if judging it waits.
-5. It fails its own checks, judged as of the citing version's `seen`: the
+5. It fails its own checks, judged as of its own `seen`: the
    check fails; or the citing version is pending, if those are pending.
 6. Sealed with a key the node does not hold: the node can't judge
    ([below](#outcomes)).

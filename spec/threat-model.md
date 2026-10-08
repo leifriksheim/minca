@@ -119,7 +119,10 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - A `seq 0` for someone else's key can take over "creator" ([#72](https://github.com/leifriksheim/weave/issues/72)).
   - A collection's checks bind only readers that judge them: peers keep and
     sync a version that fails them, and only the library leaves it out of
-    what it counts ([checks](../packages/core/docs/checks.md)). Another
+    what it counts, on every read path, along a record's chain, and without
+    letting it hold a `onePer` key ([checks](../packages/core/docs/checks.md);
+    `packages/core/tests/checks-reads.test.ts`, `checks-squat.test.ts`,
+    `checks-pending.test.ts`). Another
     implementation that doesn't judge checks shows it. Every such version
     costs every peer storage, like any record it may write
     ([#33](https://github.com/leifriksheim/weave/issues/33)).

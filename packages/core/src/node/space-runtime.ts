@@ -416,6 +416,8 @@ type ChecksVerdict =
   /** A version it cites hasn't arrived */
   | { readonly pending: true };
 const NO_CHECKS: ChecksVerdict = { passes: null };
+/** Checks this node can't judge yet: what they read can't be opened here. Never cached. */
+const UNJUDGED: ChecksVerdict = Object.freeze({ passes: null });
 
 const storable = (standing: Standing): boolean => standing.ok || !!standing.withdrawn;
 
@@ -1021,6 +1023,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const standings = new Map<string, Promise<Standing>>();
   /** Checks verdicts, by version and the view it was judged in */
   const checkVerdicts = new Map<string, Promise<ChecksVerdict>>();
+  /** Records whose newest version waits on a version it cites: read again when anything arrives */
+  const pendingKeys = new Set<string>();
 
   /**
    * Whether a version stands: signed, in this space, consistent with its first
@@ -1330,14 +1334,32 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         return { passes: false, reason: `The checks of ${version.collection} can't be read` };
       // What this node can't open, it can't judge: it counts on the rest, as a peer without the key does.
       const opened = await openBody(version);
-      if (opened.body === null && opened.encrypted) return NO_CHECKS;
+      if (opened.body === null && opened.encrypted) return UNJUDGED;
+      // It continues the version before: one that follows a version failing its checks fails too,
+      // or a forged step would be laundered by the next.
+      const previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
+      if (previous && !isStub(previous)) {
+        if (previous.retain && !previous.deleted) {
+          const before = await openBody(previous);
+          if (before.body === null && before.encrypted) return UNJUDGED;
+        }
+        if (!(await standingOf(previous)).ok)
+          return { passes: false, reason: 'It follows a version that does not stand' };
+        const before = await checksOf(previous);
+        if ('pending' in before) return { pending: true };
+        if (before.passes === false)
+          return { passes: false, reason: `It follows a version that fails its checks: ${before.reason}` };
+      }
       const outcome = await checkStanding(version, first, root, state, checks);
       if (outcome.ok) return { passes: true };
       return outcome.later ? { pending: true } : { passes: false, reason: outcome.reason };
     })();
     checkVerdicts.set(cacheKey, verdict);
-    // Only what can't change is kept: a pending verdict changes when what it cites arrives.
-    void verdict.then((found) => 'pending' in found && checkVerdicts.delete(cacheKey));
+    // Only what can't change is kept: a pending verdict changes when what it cites arrives,
+    // and one this node couldn't judge may change once it can open what it needs.
+    void verdict.then(
+      (found) => ('pending' in found || found === UNJUDGED) && checkVerdicts.delete(cacheKey),
+    );
     return verdict;
   }
 
@@ -1345,6 +1367,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function counts(version: Version): Promise<boolean> {
     if (!(await standingOf(version)).ok) return false;
     const passes = await checksOf(version);
+    if ('pending' in passes) pendingKeys.add(version.key);
     return !('pending' in passes) && passes.passes !== false;
   }
 
@@ -1491,7 +1514,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const index = new Map<string, Counted>();
     for (const version of await storage.listCurrent()) {
       const counted =
-        !isStub(version) && (await standingOf(version)).ok && (await consistent(version))
+        !isStub(version) && (await counts(version)) && (await consistent(version))
           ? version
           : await currentOf(version.key);
       if (counted) index.set(counted.key, await countedEntry(counted));
@@ -1538,7 +1561,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     deepFreeze(links);
     const issues =
       body === null || version.deleted ? null : await contentIssues(version.collection, body, links);
-    const reason = !verdict.verified ? verdict.reason : !stands.ok ? stands.reason : undefined;
+    const failing = verdict.verified && stands.ok ? await checksOf(version) : NO_CHECKS;
+    const reason = !verdict.verified
+      ? verdict.reason
+      : !stands.ok
+        ? stands.reason
+        : 'passes' in failing && failing.passes === false
+          ? `It fails its checks: ${failing.reason}`
+          : undefined;
     return Object.freeze({
       key: version.key,
       version: version.id,
@@ -1792,6 +1822,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     for (const mirror of mirrors) mirror.changed();
     if (placed && placed.every((version) => !version.collection.startsWith('sys.'))) {
       for (const version of placed) staleKeys.add(version.key);
+      // A record waiting on a version it cites may count now.
+      for (const key of pendingKeys) staleKeys.add(key);
+      pendingKeys.clear();
       return;
     }
     countedIndex = null;
@@ -1800,6 +1833,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     memberKeysCache = null;
     accessCache = placed && accessCache ? extendAccess(accessCache, placed) : null;
     standings.clear();
+    checkVerdicts.clear();
     keepUp();
     // The access history may name keepers now, or none.
     void refreshHolds().catch(() => {});
@@ -2839,10 +2873,20 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     return current;
   }
 
-  /** The fields for writing a key again: the version after whatever the store holds, counted or not */
+  /**
+   * The fields for writing a key again: the version after the one that counts.
+   * Where the store's newest version fails its checks, after the newest that
+   * counts, or afresh as a first version when none does: a version that fails
+   * can't make others build on it, or claim a key (a `onePer` key) for good.
+   * Otherwise after whatever the store holds, counted or not.
+   */
   async function after(recordKey: string): Promise<VersionFields> {
     const held = await storage.getCurrent(recordKey);
-    return held ? nextVersion(held) : { key: recordKey, seq: 0 };
+    if (!held) return { key: recordKey, seq: 0 };
+    const verdict = (await standingOf(held)).ok ? await checksOf(held) : NO_CHECKS;
+    if (!('passes' in verdict) || verdict.passes !== false) return nextVersion(held);
+    const counted = await currentOf(recordKey);
+    return counted ? nextVersion(counted) : { key: recordKey, seq: 0 };
   }
 
   async function writeFirst<T>(
