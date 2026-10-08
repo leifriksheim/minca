@@ -1,6 +1,6 @@
 # Draft: a space's constitution
 
-Status: proposed, October 2026. Not normative. It restructures the core along
+Status: exploring, October 2026. Not normative. The fixed tiers below are one candidate; the authority model is open, see [four ways to say who may do what](authority-models.md). It restructures the core along
 the line below, replaces numeric ranks with a small ladder of tiers, and
 makes who holds power in a space something the space decides for itself.
 
