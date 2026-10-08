@@ -23,7 +23,7 @@
  * What the others can't say, `check` can: conditions over the body, the
  * version before and versions it cites (`records/checks.ts`).
  */
-import { checkChecks, PERMISSION_PATTERN, type Check } from './checks.js';
+import { PERMISSION_PATTERN, type Check } from './checks.js';
 import { hashedKey } from '../utils/hash.js';
 import { isList, isRecord, readField } from '../utils/guards.js';
 import type { Link } from '../types.js';
@@ -114,7 +114,9 @@ export function checkRules(
       return `${at}.${list} must be a non-empty list of names`;
     }
   }
-  if (r.check !== undefined) return checkChecks(r.check, `${at}.check`, permissions);
+  // Checks are read by the library, not judged by peers (packages/core/docs/checks.md):
+  // a peer keeps whatever list a definition carries, and its author's node checks it.
+  if (r.check !== undefined && !Array.isArray(r.check)) return `${at}.check must be a list`;
   return null;
 }
 

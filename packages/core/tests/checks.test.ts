@@ -383,7 +383,7 @@ describe('checks: between peers', () => {
     });
   }
 
-  test('a claim with too little evidence, signed anyway, is refused by every peer that receives it', async () => {
+  test('a claim with too little evidence, signed anyway, reaches every peer and counts for no reader', async () => {
     const { alice, bob, space } = await proposalSpace();
     const proposal = await alice.node.records.put(space, 'app.proposal', { title: 'A new logo' });
     const about = [{ rel: 'about', to: proposal.key }];
@@ -405,16 +405,18 @@ describe('checks: between peers', () => {
       retain: true,
       version: { key, seq: 0 },
     });
-    const rejected: string[] = [];
-    alice.node.subscribe((event) => {
-      if (event.type === 'rejected') rejected.push(event.reason);
-    });
     await hold(bob.node, space);
-    await until(async () => rejected.some((r) => /at least two members/.test(r)), 4000, 'Alice to refuse it');
+    // Kept and synced, as any version that stands; failing its check, shown as such and counted by no one.
+    await until(
+      async () => (await alice.node.records.checks(space, key))?.passes === false,
+      4000,
+      'Alice to hold it, failing its check',
+    );
+    assert.match((await alice.node.records.checks(space, key))?.reason ?? '', /at least two members/);
     assert.equal(await alice.node.records.get(space, key), null);
   });
 
-  test('a version under a check must be kept whole, or every peer refuses it', async () => {
+  test('keeping versions under a check whole is the writer’s part: peers take one that isn’t', async () => {
     const { alice, bob, space } = await proposalSpace();
     await letGo(bob.node, space);
     await forge(bob, space, {
@@ -423,12 +425,12 @@ describe('checks: between peers', () => {
       body: { n: 0 },
       version: { key: 'forgotten', seq: 0 },
     });
-    const rejected: string[] = [];
-    alice.node.subscribe((event) => {
-      if (event.type === 'rejected') rejected.push(event.reason);
-    });
     await hold(bob.node, space);
-    await until(async () => rejected.some((r) => /must be kept whole/.test(r)), 4000, 'Alice to refuse it');
+    await until(
+      async () => (await alice.node.records.get(space, 'forgotten')) !== null,
+      4000,
+      'Alice to take it',
+    );
   });
 
   test('a record whose versions are checked against the one before is a state machine', async () => {
@@ -597,7 +599,7 @@ describe('checks: std.decision and std.goal-reached', () => {
     );
   });
 
-  test('a decision without its quorum, signed anyway, is refused by every peer that receives it', async () => {
+  test('a decision without its quorum, signed anyway, reaches every peer and counts for no reader', async () => {
     const { alice, bob, space } = await governedSpace();
     const put = await alice.node.records.put(space, proposal, {
       title: 'Paint it red?',
@@ -618,12 +620,13 @@ describe('checks: std.decision and std.goal-reached', () => {
       retain: true,
       version: { key, seq: 0 },
     });
-    const rejected: string[] = [];
-    alice.node.subscribe((event) => {
-      if (event.type === 'rejected') rejected.push(event.reason);
-    });
     await hold(bob.node, space);
-    await until(async () => rejected.some((r) => /quorum/.test(r)), 4000, 'Alice to refuse it');
+    await until(
+      async () => (await alice.node.records.checks(space, key))?.passes === false,
+      4000,
+      'Alice to hold it, failing its check',
+    );
+    assert.match((await alice.node.records.checks(space, key))?.reason ?? '', /quorum/);
     assert.equal(await alice.node.records.get(space, key), null);
   });
 });

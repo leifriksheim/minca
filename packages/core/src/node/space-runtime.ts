@@ -34,7 +34,7 @@ import { createStorageProvider, type StorageProvider } from '../storage/storage-
 import { chainProblem, MAX_SEEN, newRecordKey, nextVersion } from '../records/version.js';
 import { RECORD_KEY_PATTERN } from '../records/key.js';
 import { checkLinks } from '../records/links.js';
-import { runChecks, type Check, type CheckedVersion, type Uncited } from '../records/checks.js';
+import { checkChecks, runChecks, type Check, type CheckedVersion, type Uncited } from '../records/checks.js';
 import {
   allows,
   changedFixedField,
@@ -406,6 +406,17 @@ const whoMay = (rules: CollectionRules, action: 'create' | 'edit' | 'delete') =>
   action === 'create' ? rules.create : action === 'delete' ? (rules.delete ?? rules.edit) : rules.edit;
 
 /** Whether a version goes in the store: it stands, or stood until a later change withdrew it */
+/** How a version fares under its collection's checks, as this node reads them */
+import type { RecordChecks } from './types.js';
+type ChecksVerdict =
+  | { readonly passes: true }
+  | { readonly passes: false; readonly reason: string }
+  /** No checks, or none this node can judge */
+  | { readonly passes: null }
+  /** A version it cites hasn't arrived */
+  | { readonly pending: true };
+const NO_CHECKS: ChecksVerdict = { passes: null };
+
 const storable = (standing: Standing): boolean => standing.ok || !!standing.withdrawn;
 
 function looksEncrypted(body: unknown): boolean {
@@ -1000,6 +1011,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   }
 
   const standings = new Map<string, Promise<Standing>>();
+  /** Checks verdicts, by version and the view it was judged in */
+  const checkVerdicts = new Map<string, Promise<ChecksVerdict>>();
 
   /**
    * Whether a version stands: signed, in this space, consistent with its first
@@ -1110,7 +1123,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // Withdrawn by a later change: still judged on everything else, since it
     // is kept and others may cite it.
     if (!judged.ok && !judged.withdrawn) return judged;
-    const content = await judgeContent(version, first, root, state, found);
+    const content = await judgeContent(version, first, root, found);
     if (judged.ok && content.ok && judged.unseen.length > 0) {
       const taken = await underUnseen(version, first, root, seen, judged.unseen);
       if (taken) return taken;
@@ -1138,7 +1151,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const role = standing(state, root);
     if (!role) return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
     const found = await rulesAt(state, version.collection);
-    const problem = await underRules(version, first, root, role, state, found?.rules ?? {});
+    const problem = await underRules(version, first, root, role, found?.rules ?? {});
     if (problem.ok) return null;
     return problem.later
       ? problem
@@ -1155,7 +1168,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     first: Version,
     root: string,
     role: Role,
-    state: AccessState,
     rules: CollectionRules,
   ): Promise<Standing> {
     const action = version.seq === 0 ? 'create' : version.deleted ? 'delete' : 'edit';
@@ -1172,7 +1184,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       };
     if (rules.final && version.seq > 0)
       return { ok: false, reason: `A ${version.collection} record is final: it can't be edited or deleted` };
-    return judgeContent(version, first, root, state, { rules, topics: [] }, { tags: false });
+    return judgeContent(version, first, root, { rules, topics: [] }, { tags: false });
   }
 
   /** The rest of a version's standing: what its definition's topics and rules ask of what it says */
@@ -1180,7 +1192,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     version: Version,
     first: Version,
     root: string,
-    state: AccessState,
     found: Awaited<ReturnType<typeof rulesAt>>,
     options: { readonly tags?: boolean } = {},
   ): Promise<Standing> {
@@ -1196,13 +1207,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       return {
         ok: false,
         reason: `A new ${version.collection} record must be kept whole: its rules are checked against it`,
-      };
-    // A check reads the version before, and may be cited by another's: every
-    // version is kept whole, so every peer reads the same thing, however late.
-    if (rules.check?.length && !version.retain)
-      return {
-        ok: false,
-        reason: `A ${version.collection} version must be kept whole: its checks read it`,
       };
     if (version.seq === 0 && rules.onePer) {
       const opened = await openBody(version);
@@ -1232,7 +1236,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           };
       }
     }
-    if (rules.check?.length) return checkStanding(version, first, root, state, rules.check);
     return STANDS;
   }
 
@@ -1280,7 +1283,54 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const stands = await standingOf(version, within);
     if (!stands.ok)
       return stands.later ? { later: true } : { refused: `it cites ${id}, which does not stand` };
+    // Its own checks too, as of what the citing version saw.
+    const passes = await checksOf(version, within);
+    if ('pending' in passes) return { later: true };
+    if (passes.passes === false) return { refused: `it cites ${id}, which fails its checks` };
     return checkedVersion(version, true);
+  }
+
+  /**
+   * Whether a version passes its collection's checks: the library reads them,
+   * peers don't enforce them (packages/core/docs/checks.md). `passes: null`
+   * when there are none, or this node can't read what they need; `pending`
+   * while a version it cites hasn't arrived. Judged as of what it saw, or, for
+   * a version another cites, as of what that one saw (`within`).
+   */
+  async function checksOf(version: Version, within?: ReadonlyArray<string>): Promise<ChecksVerdict> {
+    if (
+      version.deleted ||
+      ACCESS_COLLECTIONS.has(version.collection) ||
+      version.collection.startsWith('sys.')
+    )
+      return NO_CHECKS;
+    const cacheKey = `${version.id}|${within ? [...new Set(within)].sort().join(',') : ''}`;
+    const cached = checkVerdicts.get(cacheKey);
+    if (cached) return cached;
+    const verdict = (async (): Promise<ChecksVerdict> => {
+      const first =
+        version.seq === 0 ? version : version.genesis ? await storage.getVersion(version.genesis) : null;
+      const root = (await judge(version)).root;
+      if (!first || !root) return NO_CHECKS;
+      const state = (await access()).history.at(version.seen ?? []);
+      if (!state) return { pending: true };
+      const checks = (await rulesAt(state, version.collection))?.rules?.check;
+      if (!checks?.length) return NO_CHECKS;
+      const outcome = await checkStanding(version, first, root, state, checks);
+      if (outcome.ok) return { passes: true };
+      return outcome.later ? { pending: true } : { passes: false, reason: outcome.reason };
+    })();
+    checkVerdicts.set(cacheKey, verdict);
+    // Only what can't change is kept: a pending verdict changes when what it cites arrives.
+    void verdict.then((found) => 'pending' in found && checkVerdicts.delete(cacheKey));
+    return verdict;
+  }
+
+  /** Whether a version counts for this node's reader: it stands, and passes its checks */
+  async function counts(version: Version): Promise<boolean> {
+    if (!(await standingOf(version)).ok) return false;
+    const passes = await checksOf(version);
+    return !('pending' in passes) && passes.passes !== false;
   }
 
   async function checkStanding(
@@ -1389,10 +1439,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const current = await storage.getCurrent(recordKey);
     if (!current || !(await consistent(current))) return null;
     // A stub on top: the body of the version after it is on its way.
-    if (!isStub(current) && (await standingOf(current)).ok) return current;
+    if (!isStub(current) && (await counts(current))) return current;
     for (const version of await storage.history(recordKey)) {
       if (version.id === current.id || isStub(version) || !(await consistent(version))) continue;
-      if ((await standingOf(version)).ok) return version;
+      if (await counts(version)) return version;
     }
     return null;
   }
@@ -2731,6 +2781,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (!stands.ok && stands.withdrawn)
           throw Object.assign(new Error(stands.reason), { rulesMoved: true });
         if (!stands.ok) throw new Error(stands.reason);
+        // Its checks, here, before anyone else sees it: peers would keep it, but no reader would count it.
+        const passes = await checksOf(made);
+        if ('pending' in passes) throw new Error('Versions it cites have not arrived yet');
+        if (passes.passes === false) throw new Error(passes.reason);
       }
       return made;
     });
@@ -2741,6 +2795,21 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     sync.onLocalChange(signed);
     recordsChanged([signed]);
     return signed;
+  }
+
+  /**
+   * How a record's newest version that stands fares under its checks: kept and
+   * synced by every peer either way, counted by a reader only when it passes.
+   */
+  async function checksFor(recordKey: string): Promise<RecordChecks | null> {
+    for (const version of await storage.history(recordKey)) {
+      if (isStub(version) || !(await consistent(version)) || !(await standingOf(version)).ok) continue;
+      const verdict = await checksOf(version);
+      return 'pending' in verdict
+        ? { version: version.id, passes: null, pending: true }
+        : { version: version.id, ...verdict };
+    }
+    return null;
   }
 
   async function get<T>(recordKey: string): Promise<NodeRecord<T> | null> {
@@ -3330,6 +3399,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     get,
+    checks: checksFor,
 
     /** The note a record's current version was signed under; null when its account signed it itself */
     noteOf: async (recordKey: string): Promise<string | null> => (await currentOf(recordKey))?.proof ?? null,
@@ -3490,7 +3560,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ...(input.rules !== undefined ? { rules: input.rules } : {}),
         ...(input.topics !== undefined ? { topics: input.topics } : {}),
       };
-      const problem = checkStoredCollection(definition);
+      const problem =
+        checkStoredCollection(definition) ??
+        (definition.rules?.check !== undefined
+          ? checkChecks(definition.rules.check, 'rules.check', definition.permissions ?? [])
+          : null);
       if (problem) throw new Error(problem);
       if (current && version <= current.definition.version) {
         throw new Error(

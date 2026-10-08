@@ -57,6 +57,7 @@ export const API = Object.freeze({
   records: {
     list: 'scoped',
     get: 'scoped',
+    checks: 'scoped',
     put: 'scoped',
     update: 'scoped',
     linked: 'scoped',
