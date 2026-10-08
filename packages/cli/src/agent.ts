@@ -20,7 +20,7 @@ import {
 } from '@weaveprotocol/core';
 import { profile } from '@weaveprotocol/core/schemas';
 import { grantSigner, type Grant } from '@weaveprotocol/core/session';
-import { acceptAgentLink, checkAgentGrant } from '@weaveprotocol/core/session';
+import { acceptAgentLink, checkAgentGrant, keyProof } from '@weaveprotocol/core/session';
 import { base64UrlDecode } from '@weaveprotocol/core';
 import { openFsDirectory } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
@@ -128,11 +128,13 @@ export async function connectAgent(params: {
   readonly log: (line: string) => void;
 }): Promise<Grant> {
   await enableWebRTC();
-  const { did } = await agentKey(params.home);
+  const key = await agentKey(params.home);
+  const did = key.did;
   params.log('Looking for the app…');
   const grant = await acceptAgentLink({
     code: params.code,
     did,
+    proof: await keyProof({ keys: key.keys, did }, true),
     name: params.name,
     network: { relays: params.relays },
     onWaiting: () => params.log('Found it. Allow the agent in the app — it opens your account home.'),

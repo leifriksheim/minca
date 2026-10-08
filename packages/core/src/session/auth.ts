@@ -6,6 +6,8 @@
  * hands it to a new device. The seed stays inside this object, and signs only
  * the note that lets a session key write.
  */
+import { parseUCAN } from '../identity/ucan.js';
+import { unref } from '../utils/guards.js';
 import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
 import { AGENT_FACT } from '../identity/agent-note.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
@@ -76,6 +78,7 @@ import {
   type GrantedSpace,
   type ProposeRequest,
   type Proposed,
+  checkKeyProof,
 } from './connect.js';
 import {
   fromProposal,
@@ -447,6 +450,9 @@ async function addSubscriptions(
   return added;
 }
 
+/** How often a signed-in device looks for app connections whose chosen time has passed */
+const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
+
 /** Creates the sign-in flow for this page. */
 export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   const rpId = config.rpId ?? globalThis.location?.hostname ?? 'localhost';
@@ -491,6 +497,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   let seed: Uint8Array | null = null;
   let vaultKey: CryptoKey | null = null;
   let stopFollowingName: (() => void) | null = null;
+  let expiryTimer: ReturnType<typeof setInterval> | null = null;
   let started: Promise<void> | null = null;
 
   const browserPlace = async (): Promise<Place> => ({
@@ -558,9 +565,61 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   async function stopNode(node = state.session?.node): Promise<void> {
     stopFollowingName?.();
     stopFollowingName = null;
+    if (expiryTimer) clearInterval(expiryTimer);
+    expiryTimer = null;
     seed = null;
     vaultKey = null;
     await node?.close();
+  }
+
+  /**
+   * Why a key can't be given a note here, or null: it must prove it holds
+   * itself, and be no key this home already uses for something else, since
+   * disconnecting later revokes it (the node's own, or another connection's).
+   */
+  async function audienceProblem(
+    request: ConnectRequest,
+    origin: string,
+    agent: boolean,
+  ): Promise<string | null> {
+    if (!(await checkKeyProof(request.audience, request.proof, agent)))
+      return 'The app did not show it holds the key it named.';
+    if (request.audience === state.session?.node.sessionDid) return 'That key is this home’s own.';
+    const elsewhere = auth
+      .connections()
+      .some(
+        (known) =>
+          known.audience === request.audience && (known.origin !== origin || !!known.agent !== agent),
+      );
+    return elsewhere ? 'That key is already connected for something else.' : null;
+  }
+
+  /** Revokes the key a connection was given, where it could write; never this node's own */
+  async function revokeConnection(node: P2PNode, connection: Connection): Promise<void> {
+    if (!connection.token || connection.access !== 'write') return;
+    if (parseUCAN(connection.token).payload.aud === node.sessionDid) return;
+    const contactsSpace = await node.contacts.space();
+    const covered =
+      connection.scope === 'account'
+        ? [
+            ...(await node.spaces.list()).filter((space) => space.writable).map((space) => space.id),
+            ...(contactsSpace ? [contactsSpace] : []),
+          ]
+        : connection.spaces.map((space) => space.id);
+    // Every space at once: each is its own store. A space that is gone, or
+    // that this account no longer writes in, has nothing to revoke.
+    const token = connection.token;
+    await Promise.all(covered.map((spaceId) => node.spaces.revoke(spaceId, token).catch(() => {})));
+    // A whole-account app could also add spaces to the account's list, and rename it.
+    if (connection.scope === 'account') await node.account.revoke(token).catch(() => {});
+  }
+
+  /** Disconnects every app connected here whose chosen time has passed */
+  async function letExpiredGo(): Promise<void> {
+    const now = Math.floor(Date.now() / 1000);
+    for (const known of auth.connections())
+      if (known.expiresAt > 0 && known.expiresAt <= now)
+        await auth.disconnect(known.origin, { audience: known.audience }).catch(() => {});
   }
 
   /** Starts the node for an unlocked account. */
@@ -608,6 +667,13 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       if (event.type === 'account') void adopt();
     });
     void adopt();
+
+    // An app connected for a while: once its time has passed, this device
+    // disconnects it, revoking its key, so what it writes after stops counting
+    // too, not only its note.
+    void letExpiredGo();
+    expiryTimer = setInterval(() => void letExpiredGo(), EXPIRY_SWEEP_MS);
+    unref(expiryTimer);
 
     return session;
   }
@@ -1205,6 +1271,8 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         throw new Error('A carrier is given passes, not a note — use grantCarry.');
       const access = request.access;
       const agent = request.agent === true;
+      const problem = await audienceProblem(request, choice.origin, agent);
+      if (problem) throw new Error(problem);
       if (agent && request.create?.length)
         throw new Error('An agent works in spaces that exist — none are made for it.');
       if (agent && request.contacts) throw new Error('An agent is not given your contacts.');
@@ -1263,6 +1331,9 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       // Connecting again replaces the old note. An agent is its own key: connecting one replaces only that one.
       const replaced = (known: Connection) =>
         agent ? known.audience === request.audience : known.origin === choice.origin && !known.agent;
+      // A note it replaces stops too: no time ends it, so revoking does (unless it is the same key, still in use).
+      for (const known of auth.connections().filter(replaced))
+        if (known.audience !== connection.audience) await revokeConnection(node, known);
       writeConnections([connection, ...auth.connections().filter((known) => !replaced(known))]);
 
       return {
@@ -1327,6 +1398,8 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const session = state.session;
       if (!session || !seed) throw new Error('Sign in first.');
       const { node } = session;
+      const problem = await audienceProblem(request, origin, false);
+      if (problem) throw new Error(problem);
       // Connecting again replaces the old one: one carrier per origin.
       const previous = auth.connections().find((known) => known.origin === origin);
       if (previous?.carrySpace) await node.carriers.remove(previous.carrySpace).catch(() => {});
@@ -1387,22 +1460,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       for (const connection of going) {
         // Like a revoke below: one that can't be done must not keep the rest from happening.
         if (connection.carrySpace && node) await node.carriers.remove(connection.carrySpace).catch(() => {});
-        if (connection.token && connection.access === 'write' && node) {
-          const contactsSpace = await node.contacts.space();
-          const covered =
-            connection.scope === 'account'
-              ? [
-                  ...(await node.spaces.list()).filter((space) => space.writable).map((space) => space.id),
-                  ...(contactsSpace ? [contactsSpace] : []),
-                ]
-              : connection.spaces.map((space) => space.id);
-          // Every space at once: each is its own store. A space that is gone, or
-          // that this account no longer writes in, has nothing to revoke.
-          const token = connection.token;
-          await Promise.all(covered.map((spaceId) => node.spaces.revoke(spaceId, token).catch(() => {})));
-          // A whole-account app could also add spaces to the account's list, and rename it.
-          if (connection.scope === 'account') await node.account.revoke(connection.token).catch(() => {});
-        }
+        if (node) await revokeConnection(node, connection);
         // The app's own subscriptions go with it, and a carrier's: what they look for is theirs to know.
         if (!connection.agent && node) {
           for (const sub of await node.notifications.list()) {
@@ -1423,6 +1481,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     async signOut() {
       await stay.forget();
       const leaving = state.session?.node;
+      // Before going: let apps whose time has passed go, and revoke this device's
+      // session key, so a key left behind here can't write for the account again.
+      await letExpiredGo().catch(() => {});
+      await leaving?.revokeSelf().catch(() => {});
       update({
         stage: 'starting',
         session: null,

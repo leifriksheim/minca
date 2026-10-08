@@ -43,7 +43,7 @@ export interface WeaveConnectionConfig {
   /** The account home to suggest — the person can use their own instead */
   readonly home: string;
   /** What to ask for */
-  readonly request: Omit<ConnectRequest, 'v' | 'audience'>;
+  readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof'>;
   /** Relays and always-on nodes the node connects to. Omit to stay offline. */
   readonly network?: NodeNetworkConfig;
   /** Where the grant is kept. Default `localStorage`. */

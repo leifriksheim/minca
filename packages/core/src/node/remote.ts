@@ -37,7 +37,7 @@ interface NodeState {
 const TAG = 'weave-node';
 
 /** The node's own methods that cross; every namespace's do (`node/api.ts`) */
-const OWN_METHODS = Object.freeze({ iceServers: true, delegate: true });
+const OWN_METHODS = Object.freeze({ iceServers: true, delegate: true, revokeSelf: true });
 
 /** How often the served side checks for a renewed delegation between calls */
 const DELEGATION_CHECK_MS = 60_000;
@@ -391,6 +391,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
       delegation: () => state().delegation,
       iceServers: () => ask<ReadonlyArray<RTCIceServer>>(handle, 'iceServers', []),
       delegate: (params) => ask(handle, 'delegate', [params]),
+      revokeSelf: () => ask(handle, 'revokeSelf', []),
       async asAgent(agent) {
         const started = await ask<{ handle: number; state: NodeState }>(handle, 'asAgent', [agent]);
         return build(started.handle, started.state);

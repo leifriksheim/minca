@@ -231,6 +231,9 @@ describe('access replay: properties', () => {
         for (const event of events) {
           if (event.root !== removal.did || !applied(history, event.id)) continue;
           if (saw.get(removal.id)?.has(event.id) || saw.get(event.id)?.has(removal.id)) continue;
+          // A change by the removed account that itself changes the remover strikes back:
+          // reductions that strike each other all stand (03 §4.3 step 4).
+          if (event.kind === 'member' && event.did === removal.root) continue;
           assert.ok(
             (place.get(event.id) ?? 0) <= cutoff,
             `${event.id} by ${event.root} applied past ${removal.id}'s cutoff`,

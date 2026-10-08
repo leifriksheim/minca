@@ -41,6 +41,8 @@ export interface AgentAsking {
   readonly did: string;
   /** What the terminal calls itself, e.g. "Agent on leifs-macbook". Shown, not trusted. */
   readonly name: string;
+  /** The agent key's proof that it holds itself, for the connect request (`keyProof`) */
+  readonly proof: string;
 }
 
 /** What the app tells the terminal */
@@ -189,7 +191,9 @@ export async function offerAgentLink(
           typeof said.name === 'string' && said.name.trim()
             ? said.name.trim().slice(0, MAX_NAME)
             : 'An agent';
-        const agent = { did: said.did, name };
+        // Without its proof the home would refuse the request anyway.
+        if (typeof said.proof !== 'string') return;
+        const agent = { did: said.did, name, proof: said.proof };
         const peer = message.from;
         asked = { peer, agent };
         // So the terminal knows the code was right, and the person is deciding.
@@ -251,6 +255,8 @@ export async function checkAgentGrant(grant: Grant, audience: string): Promise<v
 export async function acceptAgentLink(params: {
   readonly code: string;
   readonly did: string;
+  /** The agent key's {@link keyProof} */
+  readonly proof: string;
   readonly name: string;
   readonly network: LinkNetwork;
   readonly onWaiting?: () => void;
@@ -265,7 +271,11 @@ export async function acceptAgentLink(params: {
     const failWith = (reason: string) => settle(() => reject(new Error(reason)));
 
     room.net.on('peer-connected', (peer: PeerInfo) => {
-      void room.send(peer.did, ASK, { did: params.did, name: params.name.slice(0, MAX_NAME) });
+      void room.send(peer.did, ASK, {
+        did: params.did,
+        proof: params.proof,
+        name: params.name.slice(0, MAX_NAME),
+      });
     });
 
     let heard = false;

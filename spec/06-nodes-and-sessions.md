@@ -76,12 +76,16 @@ lets the session key do everything the account can, everywhere:
 Every record this node signs carries the current note as its `proof`, and every
 live connection opens with it (the `who` message, [04](04-network.md)).
 
-The node asks for a new note before the one it holds runs out. Once the held
-note expires, peers refuse what the node writes under it. Records written under
-an earlier note stay valid after that note expires: expiry limits when a note
-may be _used to write_, not how long its records count ([01](01-identity.md),
-[02](02-records.md)). An app's note from an account home is never renewed in
-place (§2.9).
+The node asks for a new note before the one it holds runs out. A note's time
+bounds only live checks: knocks, live messages, a peer's proof when it
+connects ([01](01-identity.md) §7.4). Records are judged with no time at all,
+so what a key signed counts until the key is revoked ([02](02-records.md)
+§9.3). Signing out writes a revoke of the session key in every space the node writes in,
+its carry spaces, the contacts space and the account registry, with a cutoff
+at what it wrote, and a device that kept the key forgets it (`revokeSelf`).
+The revokes reach other peers as this device next syncs: one that never goes
+online again never delivers them. An app's note from an account home is never
+renewed in place (§2.9).
 
 > Rationale: one root signature an hour, never one per write. The root — a seed
 > in a page, an account home, anything — can stay out of reach of the code that
@@ -197,18 +201,19 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 
 `ConnectRequest`:
 
-| Field          | Type                            | Meaning                                                                                                                                                 |
-| -------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v`            | `1`                             |                                                                                                                                                         |
-| `audience`     | string                          | The app's key, `did:key:…`. The note is made out to it.                                                                                                 |
-| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                        |
-| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                  |
-| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.        |
-| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given. |
-| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                 |
-| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                   |
-| `agent`        | boolean, optional               | The audience is an agent's key (§3): its note grants records only.                                                                                      |
-| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                             |
+| Field          | Type                            | Meaning                                                                                                                                                                                                                                            |
+| -------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v`            | `1`                             |                                                                                                                                                                                                                                                    |
+| `audience`     | string                          | The app's key, `did:key:…`. The note is made out to it.                                                                                                                                                                                            |
+| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"agent":<agent>,"audience":<audience>,"proof":"weave-connect-key/v1"}`, where `agent` is `true` for an agent's request and `false` otherwise (below). |
+| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                                                                                                   |
+| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                                                                                                             |
+| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                                                                                                   |
+| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.                                                                                            |
+| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                                                                                                            |
+| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                                                                                                              |
+| `agent`        | boolean, optional               | The audience is an agent's key (§3): its note grants records only.                                                                                                                                                                                 |
+| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                        |
 
 A home MUST refuse a request (as in §2.3 step 4) unless: `v` is `1`; `audience`
 starts with `did:key:`; `access` is one of the three; `scope`, `name`,
@@ -229,6 +234,7 @@ Example:
   "request": {
     "v": 1,
     "audience": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
+    "proof": "<base64url signature>",
     "name": "Todo",
     "access": "write",
     "scope": "spaces",
@@ -238,7 +244,22 @@ Example:
 }
 ```
 
+The bytes a key signs for `proof`, for an app's request with the key above:
+
+```
+{"agent":false,"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","proof":"weave-connect-key/v1"}
+```
+
+Naming the kind means an agent's proof, which it hands to the app that links
+it, can't ask for an app's connection.
+
 ### 2.5 The grant
+
+A home MUST refuse a request whose `proof` does not verify with the
+`audience` key, whose `audience` is the home's own session key, or whose
+`audience` another connection of a different origin (or kind: app or agent)
+already holds. Disconnecting revokes the audience key (§2.10), so a request
+must never be able to name a key its sender doesn't hold.
 
 When the person approves, the home:
 
@@ -359,7 +380,9 @@ _Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSig
 | Member keys           | one per granted private space                                      | derived from the account key            |
 
 Either way the app never gets the seed: it cannot sign in as the account, change
-its password or passkeys, or keep access past `expiresAt`.
+its password or passkeys. Its note stops working for live checks at
+`expiresAt`, and its records stop counting once the account disconnects it
+(§2.9, §2.10).
 
 > **Planned: grants narrower than a space.** A note is per space, and reading
 > a private space is holding its key, so an app or agent granted a private
@@ -372,9 +395,18 @@ its password or passkeys, or keep access past `expiresAt`.
 
 ### 2.9 Expiry and renewal
 
-A note is never renewed in place. When `expiresAt` passes, the app's writes stop
-counting everywhere. To continue, the app connects again, which produces a new
-note (and, at the home, replaces the old connection record).
+A note is never renewed in place. When `expiresAt` passes, the app's note
+stops working for live checks everywhere: knocks, live messages, connecting
+to peers. Its records are judged with no time (02 §9.3), so they stop counting
+when its key is revoked: the home that granted it disconnects it once the
+time has passed, while it is signed in, and at sign-out (§2.10). To continue,
+the app connects again, which produces a new note (and, at the home, replaces
+the old connection record).
+
+> **Known defect:** connections are kept in the browser that granted them,
+> so only that home revokes an app whose time has passed, and only while it
+> is signed in. Until it does, the app's records still count. Tracked in
+> [#26](https://github.com/leifriksheim/weave/issues/26).
 
 ### 2.10 Connections and revocation
 
@@ -383,7 +415,8 @@ access, scope and the spaces granted. Connecting the same origin again replaces
 its connection; an agent's connection is its own, apart from the app's.
 
 **Disconnecting** an app or agent revokes the key of each connection removed
-that has `access: write`:
+that has `access: write` (never the home's own session key), and connecting
+the same app again with a new key revokes the old one the same way:
 
 - `scope: spaces`: in every space it was granted;
 - `scope: account`: in every space the account can write in, the contacts
@@ -580,12 +613,12 @@ key for its DID on the link.
 sent as a JSON array of byte values. A message that does not open with the link
 key is ignored.
 
-| `type`              | From                              | Sealed body                                                              |
-| ------------------- | --------------------------------- | ------------------------------------------------------------------------ |
-| `agent-link:ask`    | terminal, on connecting to a peer | `{ "did": "<agent key>", "name": "Agent on leifs-macbook" }` (name ≤ 80) |
-| `agent-link:heard`  | app                               | `{ "heard": true }`                                                      |
-| `agent-link:answer` | app                               | `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                     |
-| `agent-link:done`   | terminal                          | `{ "ok": true }`                                                         |
+| `type`              | From                              | Sealed body                                                                                                                                      |
+| ------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent-link:ask`    | terminal, on connecting to a peer | `{ "did": "<agent key>", "proof": "<its proof, agent: true>", "name": "Agent on leifs-macbook" }` (name ≤ 80); an ask without `proof` is ignored |
+| `agent-link:heard`  | app                               | `{ "heard": true }`                                                                                                                              |
+| `agent-link:answer` | app                               | `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                             |
+| `agent-link:done`   | terminal                          | `{ "ok": true }`                                                                                                                                 |
 
 **Flow.**
 

@@ -55,7 +55,7 @@ import { nextVersion } from '../src/records/version.js';
 import { hold, letGo } from './helpers/hold.js';
 import { isRecord } from '../src/utils/guards.js';
 import { until } from './helpers/until.js';
-import { open, person, settle, type Person } from './helpers/person.js';
+import { asked, open, person, settle, testAppKey, type Person } from './helpers/person.js';
 
 /**
  * An agent key for this person, and a note from their account saying it is an
@@ -776,12 +776,12 @@ describe('an agent connected through the account home', () => {
 
     const app = await auth.grant({
       origin,
-      request: { v: 1, audience: 'did:key:zApp', access: 'write' },
+      request: await asked({ v: 1, audience: 'did:key:zApp', access: 'write' }),
       spaceIds: [gym.id],
     });
     const agent = await auth.grant({
       origin,
-      request: { v: 1, audience: 'did:key:zAgent', access: 'write', agent: true },
+      request: await asked({ v: 1, audience: 'did:key:zAgent', access: 'write', agent: true }),
       spaceIds: [gym.id],
     });
     assert.equal(isAgentNote(app.token), false);
@@ -794,16 +794,16 @@ describe('an agent connected through the account home', () => {
     assert.equal(auth.connections().length, 2, 'the agent does not replace the app');
 
     await assert.rejects(
-      () =>
+      async () =>
         auth.grant({
           origin,
-          request: {
+          request: await asked({
             v: 1,
             audience: 'did:key:zAgent',
             access: 'write',
             agent: true,
             create: [{ name: 'Mine', visibility: 'private' }],
-          },
+          }),
           spaceIds: [],
         }),
       /spaces that exist/,
@@ -812,11 +812,11 @@ describe('an agent connected through the account home', () => {
     await auth.disconnect(origin, { agent: true });
     assert.deepEqual(
       auth.connections().map((c) => c.audience),
-      ['did:key:zApp'],
+      [(await testAppKey('did:key:zApp')).did],
     );
     await auth.grant({
       origin,
-      request: { v: 1, audience: 'did:key:zAgent2', access: 'write', agent: true },
+      request: await asked({ v: 1, audience: 'did:key:zAgent2', access: 'write', agent: true }),
       spaceIds: [gym.id],
     });
     await auth.disconnect(origin);
@@ -830,12 +830,12 @@ describe('an agent connected through the account home', () => {
 
     const laptop = await auth.grant({
       origin,
-      request: { ...whole, audience: 'did:key:zLaptop', name: 'Agent on laptop', days: 30 },
+      request: await asked({ ...whole, audience: 'did:key:zLaptop', name: 'Agent on laptop', days: 30 }),
       spaceIds: [],
     });
     const desk = await auth.grant({
       origin,
-      request: { ...whole, audience: 'did:key:zDesk', name: 'Agent on desk', days: 1 },
+      request: await asked({ ...whole, audience: 'did:key:zDesk', name: 'Agent on desk', days: 1 }),
       spaceIds: [],
     });
     assert.ok(laptop.accountKey, 'it follows the account, so spaces made later reach it');
@@ -848,7 +848,7 @@ describe('an agent connected through the account home', () => {
     );
     const app = await auth.grant({
       origin: 'https://whole.test',
-      request: { v: 1, access: 'write', scope: 'account', audience: 'did:key:zWholeApp' },
+      request: await asked({ v: 1, access: 'write', scope: 'account', audience: 'did:key:zWholeApp' }),
       spaceIds: [],
     });
     assert.ok(app.contactKey, 'an app given the whole account does get it');
@@ -859,7 +859,7 @@ describe('an agent connected through the account home', () => {
     assert.ok(Math.abs(desk.expiresAt - (now + day)) < 60);
     assert.equal(auth.connections().length, 2, 'a second agent does not replace the first');
 
-    await auth.disconnect(origin, { audience: 'did:key:zLaptop' });
+    await auth.disconnect(origin, { audience: (await testAppKey('did:key:zLaptop')).did });
     assert.deepEqual(
       auth.connections().map((c) => c.name),
       ['Agent on desk'],
@@ -1054,6 +1054,7 @@ describe('connecting an agent with a code', () => {
         acceptAgentLink({
           code: newAgentCode(),
           did: 'did:key:zStranger',
+          proof: 'unchecked here: the home checks it',
           name: 'x',
           network,
           findTimeoutMs: 300,
@@ -1064,6 +1065,7 @@ describe('connecting an agent with a code', () => {
     const grant = await acceptAgentLink({
       code: `npx weave connect ${offer.code}`,
       did,
+      proof: 'unchecked here: the home checks it',
       name: 'Agent on laptop',
       network,
     });
@@ -1081,7 +1083,14 @@ describe('connecting an agent with a code', () => {
     });
     open.push({ close: async () => offer.stop() });
     await assert.rejects(
-      () => acceptAgentLink({ code: offer.code, did: 'did:key:zLaptop', name: 'Agent', network }),
+      () =>
+        acceptAgentLink({
+          code: offer.code,
+          did: 'did:key:zLaptop',
+          proof: 'unchecked',
+          name: 'Agent',
+          network,
+        }),
       /Not today/,
     );
     assert.throws(() => readAgentCode('wv_short'), /not a connect code/);

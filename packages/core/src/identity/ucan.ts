@@ -169,6 +169,12 @@ export interface VerifyOptions {
    * would refuse all of it.
    */
   readonly at?: number;
+  /**
+   * Judge no time at all: for a record, whose standing every peer must agree
+   * on, so no clock may decide it (spec 01 §7.4). Live checks — a knock, a
+   * live message, a handshake — are one node's own, and use the time.
+   */
+  readonly untimed?: boolean;
 }
 
 /** Tokens whose signature checked out, the oldest let go first */
@@ -209,8 +215,8 @@ export async function verifyUCAN(
     ) {
       return invalid('Token must say when it starts and ends', payload);
     }
-    if (payload.exp <= now) return invalid('Token has expired', payload);
-    if (payload.nbf > now) return invalid('Token not yet valid', payload);
+    if (!options.untimed && payload.exp <= now) return invalid('Token has expired', payload);
+    if (!options.untimed && payload.nbf > now) return invalid('Token not yet valid', payload);
 
     // The signature is part of the token, so a token that checked out once
     // always does; only its time bounds, above, depend on when.

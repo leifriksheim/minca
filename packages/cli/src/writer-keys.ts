@@ -142,6 +142,12 @@ export function fileWriterKeys(dir: string, vaultKey: CryptoKey): WriterKeySourc
             async release() {
               await rm(lockFile, { force: true });
             },
+            // A revoked key: the slot's next claim makes a new one, with lines of its own.
+            async forget() {
+              await rm(path.join(where, 'key.sealed'), { force: true });
+              await rm(path.join(where, 'heads'), { recursive: true, force: true });
+              await mkdir(path.join(where, 'heads'), { recursive: true, mode: 0o700 });
+            },
           });
         } catch (error) {
           await rm(lockFile, { force: true });

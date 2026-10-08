@@ -130,7 +130,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `author`     | string   | yes        | The `did:key` of the P-256 key that signed ([01 — Identity](01-identity.md)).                                                                                                                                                                     |
 | `collection` | string   | yes        | The collection the record is in, e.g. `app.todo.item`.                                                                                                                                                                                            |
 | `space`      | string   | in a space | Id of the space it belongs to. Signed, so it cannot be replayed into another space. A peer MUST refuse a version whose `space` is not the space it arrived for.                                                                                   |
-| `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3); used for judging the delegation (§9.3), for display, and as a sync hint ([05](05-sync-and-storage.md)).                                       |
+| `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3) and no standing (§9.3); for display, and as a sync hint ([05](05-sync-and-storage.md)).                                                        |
 | `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, an encryption envelope `{ "ciphertext", "iv", "keyId" }` ([03 — Spaces](03-spaces.md)).                 |
 | `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                                        |
 | `proof`      | string   | no         | Encoded UCAN delegating to `author` the right to write here ([01 — Identity](01-identity.md)). Absent when the author signs for itself.                                                                                                           |
@@ -1525,11 +1525,13 @@ The capability every write in space `S` needs is
 
 - No `proof`: the author signs for itself; its root is `author`.
 - With `proof`:
-  1. `createdAt` MUST parse as a time; else refuse. The checking peer's own
-     clock is not consulted: a version dated ahead stands if its chain was
-     valid then, so every peer judges it the same whenever it arrives.
-  2. The UCAN chain MUST be valid **at `createdAt`** (not now) — so records
-     outlive the session that signed them ([01 — Identity](01-identity.md)).
+  1. `createdAt` MUST parse as a time, which sync orders by (05); else
+     refuse. It decides nothing else here.
+  2. The UCAN chain MUST be valid, judged with no time at all
+     ([01 — Identity](01-identity.md) §7.4): not the note's `exp` or `nbf`,
+     not `createdAt`, by no one's clock. So records outlive the session that
+     signed them, and every peer judges a version the same whenever it
+     arrives. What ends a key's writes is a revoke ([03](03-spaces.md) §6.4).
   3. The chain's audience MUST equal `author`.
   4. Some capability in the chain MUST cover the one required.
   5. The root is the chain's root issuer.

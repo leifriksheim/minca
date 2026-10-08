@@ -55,6 +55,13 @@ A node acts for one account (`node.did`) and signs with one session key
 (`node.sessionDid`) for its whole lifetime. To act for another account, start
 another node.
 
+`revokeSelf()` revokes the node's session key in every space it writes in,
+its carry spaces, the contacts space and the account registry, each with a
+cutoff at what it wrote, and forgets a lasting key at once; the account
+home's sign-out calls it ([spec 01 §7.4](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+A record is judged with no time, so this, not the note running out, is what
+ends what a key can write. An agent's view refuses it.
+
 `close()` stops renewal, closes every open space (flushing what each keeps,
 stopping sync and disconnecting its transports), closes the registry store,
 and drops all event listeners. After `close()`, any call that needs a space
@@ -123,8 +130,9 @@ The note format, and that every record carries it, are protocol
   `0.75 × ttl` later.
 - If the signer refuses or cannot be reached, the node keeps the note it has
   and asks again after `min(60, ttl / 4)` seconds, repeating until it succeeds
-  or the node closes. Once the held note expires, peers (and the node's own
-  gates) refuse what it writes.
+  or the node closes. Once the held note expires, live checks (knocks, live
+  messages, connecting to peers) refuse it; records it signs are judged with
+  no time, so they count until its key is revoked.
 
 A signer need not be able to sign. `grantSigner(grant)` answers every
 `delegate` call with the one note an account home granted, unchanged, and

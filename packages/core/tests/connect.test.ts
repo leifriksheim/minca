@@ -35,6 +35,7 @@ import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { until } from './helpers/until.js';
 import { watchNotifications, type NotifyMatch } from '../src/node/watch-notifications.js';
+import { asked, testAppKey } from './helpers/person.js';
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -92,7 +93,10 @@ describe('connecting an app to an account home', () => {
     await node.spaces.create({ name: 'Diary', visibility: 'private' });
     const key = await appKey();
 
-    const request: ConnectRequest = { v: 1, audience: key.did, name: 'Todo', access: 'write' };
+    const request: ConnectRequest = await asked(
+      { v: 1, audience: key.did, name: 'Todo', access: 'write' },
+      key,
+    );
     const grant = await auth.grant({ origin: 'https://todo.test', request, spaceIds: [groceries.id] });
 
     const { payload } = parseUCAN(grant.token);
@@ -115,7 +119,7 @@ describe('connecting an app to an account home', () => {
 
     const grant = await auth.grant({
       origin: 'https://todo.test',
-      request: { v: 1, audience: key.did, access: 'write' },
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
       spaceIds: [groceries.id],
     });
     const todo = await app(hub, grant, key);
@@ -144,12 +148,15 @@ describe('connecting an app to an account home', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
-      request: {
-        v: 1,
-        audience: key.did,
-        access: 'write',
-        create: [{ name: 'Todos', visibility: 'private' }],
-      },
+      request: await asked(
+        {
+          v: 1,
+          audience: key.did,
+          access: 'write',
+          create: [{ name: 'Todos', visibility: 'private' }],
+        },
+        key,
+      ),
       spaceIds: [],
     });
     assert.equal(grant.spaces[0]?.name, 'Todos');
@@ -172,7 +179,7 @@ describe('connecting an app to an account home', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://viewer.test',
-      request: { v: 1, audience: key.did, access: 'read' },
+      request: await asked({ v: 1, audience: key.did, access: 'read' }, key),
       spaceIds: [shared.id],
     });
     const viewer = await app(hub, grant, key);
@@ -187,7 +194,7 @@ describe('connecting an app to an account home', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://browser.test',
-      request: { v: 1, audience: key.did, access: 'write', scope: 'account' },
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
       spaceIds: [],
     });
     assert.equal(grant.scope, 'account');
@@ -218,11 +225,76 @@ describe('connecting an app to an account home', () => {
     const key = await appKey();
     await auth.grant({
       origin: 'https://todo.test',
-      request: { v: 1, audience: key.did, access: 'read' },
+      request: await asked({ v: 1, audience: key.did, access: 'read' }, key),
       spaceIds: [],
     });
     await auth.disconnect('https://todo.test');
     assert.deepEqual(auth.connections(), []);
+  });
+
+  test('an app can only ask for a key it holds, and none the home already uses for something else', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node } = auth.getState().session!;
+    const space = await node.spaces.create({ name: 'Notes', visibility: 'private' });
+    const ask = (origin: string, request: ConnectRequest) =>
+      auth.grant({ origin, request, spaceIds: [space.id] });
+    const mine = await testAppKey('mine');
+    const theirs = await testAppKey('theirs');
+    // Naming a key without holding it: its proof is another key's.
+    const forged: ConnectRequest = {
+      ...(await asked({ v: 1, audience: theirs.did, access: 'write' } as const, mine)),
+      audience: theirs.did,
+    };
+    await assert.rejects(ask('https://evil.test', forged), /holds the key/);
+    // Even with a proof, never the home's own key: disconnecting would revoke the home.
+    await assert.rejects(
+      ask('https://evil.test', { v: 1, audience: node.sessionDid, proof: 'x', access: 'write' }),
+      /holds the key|this home’s own/,
+    );
+    // An agent's proof, handed to an app in the agent link, can't ask for an app's connection.
+    const agentKey = await testAppKey('agent');
+    const agentAsk = await asked(
+      { v: 1, audience: agentKey.did, access: 'write', agent: true } as const,
+      agentKey,
+    );
+    await assert.rejects(ask('https://evil.test', { ...agentAsk, agent: false }), /holds the key/);
+    // Nor a key another app was given.
+    await ask('https://good.test', await asked({ v: 1, audience: theirs.did, access: 'write' }, theirs));
+    await assert.rejects(
+      ask('https://evil.test', await asked({ v: 1, audience: theirs.did, access: 'write' }, theirs)),
+      /already connected/,
+    );
+  });
+
+  test('connecting again with a new key revokes the old one: no time ends a note, so revoking does', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const first = await testAppKey('first');
+    const grant = await auth.grant({
+      origin: 'https://todo.test',
+      request: await asked({ v: 1, audience: first.did, access: 'write' }, first),
+      spaceIds: [shared.id],
+    });
+    const todo = await app(hub, grant, first);
+    await todo.records.put(shared.id, 'app.todo.item', { text: 'with the first key' });
+    const second = await testAppKey('second');
+    await auth.grant({
+      origin: 'https://todo.test',
+      request: await asked({ v: 1, audience: second.did, access: 'write' }, second),
+      spaceIds: [shared.id],
+    });
+    await until(
+      async () =>
+        todo.records.put(shared.id, 'app.todo.item', { text: 'after' }).then(
+          () => false,
+          (error: Error) => /revoked/.test(error.message),
+        ),
+      3000,
+      'the old key to be revoked',
+    );
   });
 
   test('disconnecting revokes the note: the app stops counting at once, and what it wrote before stays', async () => {
@@ -233,7 +305,7 @@ describe('connecting an app to an account home', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
-      request: { v: 1, audience: key.did, access: 'write' },
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
       spaceIds: [shared.id],
     });
     // The app holds no secret of the space's: what lets it write is the note alone.
@@ -273,7 +345,7 @@ describe('connecting an app to an account home', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://browser.test',
-      request: { v: 1, audience: key.did, access: 'write', scope: 'account' },
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
       spaceIds: [],
     });
     const browser = await app(hub, grant, key);
@@ -338,7 +410,7 @@ describe('giving an app the contacts', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://people.test',
-      request: { v: 1, audience: key.did, access: 'write', contacts: true },
+      request: await asked({ v: 1, audience: key.did, access: 'write', contacts: true }, key),
       spaceIds: [club.id],
     });
     const contactsSpace = await homeNode.contacts.space();
@@ -375,7 +447,7 @@ describe('giving an app the contacts', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
-      request: { v: 1, audience: key.did, access: 'write' },
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
       spaceIds: [club.id],
     });
     assert.equal(grant.contactKey, undefined);
@@ -427,7 +499,7 @@ describe('an account home typed by a person', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://todo.test',
-      request: { v: 1, audience: key.did, access: 'read' },
+      request: await asked({ v: 1, audience: key.did, access: 'read' }, key),
       spaceIds: [],
     });
     assert.deepEqual(grant.relays, ['wss://relay.of-the-home.test']);
@@ -442,7 +514,10 @@ describe('connecting a carrier to an account home', () => {
     await node.spaces.create({ name: 'Notes', visibility: 'private' });
     const key = await appKey();
 
-    const request: ConnectRequest = { v: 1, audience: key.did, name: 'Weave for Chrome', access: 'carry' };
+    const request: ConnectRequest = await asked(
+      { v: 1, audience: key.did, name: 'Weave for Chrome', access: 'carry' },
+      key,
+    );
     const grant = await auth.grantCarry({ origin: 'chrome-extension://abcdef', request });
 
     assert.equal(grant.kind, 'carry');
@@ -477,13 +552,13 @@ describe('connecting asks for no subscriptions', () => {
     const { node } = auth.getState().session!;
     await node.spaces.create({ name: 'Club', visibility: 'private' });
     // An app written before connecting stopped carrying them: the field is ignored, never offered.
-    const request = {
+    const request = await asked({
       v: 1 as const,
-      audience: (await appKey()).did,
+      audience: 'did:key:zChat',
       access: 'write' as const,
       scope: 'account' as const,
       notify: [{ label: 'New message', collection: 'app.chat.message' }],
-    };
+    });
     const grant = await auth.grant({ origin: 'https://chat.test', request, spaceIds: [] });
     assert.ok(!('notify' in grant));
     assert.deepEqual(await node.notifications.list(), []);
@@ -499,7 +574,7 @@ describe('an app proposing subscriptions', () => {
   ) =>
     auth.grant({
       origin: 'https://chat.test',
-      request: { v: 1, audience: (await appKey()).did, access: 'write', ...request },
+      request: await asked({ v: 1, audience: (await appKey()).did, access: 'write', ...request }),
       spaceIds,
     });
 
@@ -569,7 +644,7 @@ describe('an app proposing subscriptions', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://chat.test',
-      request: { v: 1, audience: key.did, access: 'write', scope: 'account' },
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
       spaceIds: [],
     });
     // A hub of its own: the home's window closes before the two ever meet.
@@ -596,7 +671,7 @@ describe('an app proposing subscriptions', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://chat.test',
-      request: { v: 1, audience: key.did, access: 'write', scope: 'account' },
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
       spaceIds: [],
     });
     const chat = await app(createFakeHub({ latencyMs: 1 }), grant, key);
@@ -642,11 +717,22 @@ describe('an app proposing subscriptions', () => {
     const extension = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
     await auth.grantCarry({
       origin: extension,
-      request: { v: 1, audience: (await appKey()).did, name: 'Weave for Chrome', access: 'carry' },
+      request: await asked({
+        v: 1,
+        audience: (await appKey()).did,
+        name: 'Weave for Chrome',
+        access: 'carry',
+      }),
     });
     await auth.grant({
       origin: 'https://agent.test',
-      request: { v: 1, audience: (await appKey()).did, access: 'write', scope: 'account', agent: true },
+      request: await asked({
+        v: 1,
+        audience: (await appKey()).did,
+        access: 'write',
+        scope: 'account',
+        agent: true,
+      }),
       spaceIds: [],
     });
 
@@ -676,7 +762,7 @@ describe('an app proposing subscriptions', () => {
     await connect(auth, { scope: 'account' });
     await auth.grant({
       origin: 'https://todo.test',
-      request: { v: 1, audience: (await appKey()).did, access: 'write', scope: 'account' },
+      request: await asked({ v: 1, audience: (await appKey()).did, access: 'write', scope: 'account' }),
       spaceIds: [],
     });
     const request = propose([
@@ -725,7 +811,7 @@ describe('an app showing its own notifications', () => {
     const key = await appKey();
     const grant = await auth.grant({
       origin: 'https://chat.test',
-      request: { v: 1, audience: key.did, access: 'write', scope: 'account' },
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
       spaceIds: [],
     });
     await auth.propose({
@@ -846,7 +932,7 @@ describe('the home receiving a request', () => {
       const received = receiveConnectRequest(1000);
       popup.send({
         type: 'weave:request',
-        request: { v: 1, audience: 'did:key:zApp', access: 'something-new' },
+        request: await asked({ v: 1, audience: 'did:key:zApp', access: 'something-new' }),
       });
       assert.equal(await received, null);
       const denied = popup.sent.find((m) => isDenied(m.message));
@@ -908,7 +994,12 @@ describe('the home receiving a request', () => {
       popup.send(
         {
           type: 'weave:request',
-          request: { v: 1, audience: 'did:key:zCarrier', access: 'carry', name: 'Weave for Chrome' },
+          request: await asked({
+            v: 1,
+            audience: 'did:key:zCarrier',
+            access: 'carry',
+            name: 'Weave for Chrome',
+          }),
         },
         'chrome-extension://abc',
       );

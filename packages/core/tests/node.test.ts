@@ -404,6 +404,18 @@ describe('the account registry', () => {
 });
 
 describe('session', () => {
+  test('signing out revokes the session key: what it signed stands, nothing after does', async () => {
+    const node = await startNode();
+    const { id: space } = await node.spaces.create({ name: 'Todos', visibility: 'public' });
+    const before = await node.records.put(space, 'app.todo.item', { text: 'before', done: false });
+    await node.revokeSelf();
+    assert.equal((await node.records.get(space, before.key))?.verified, true, 'covered by the cutoff');
+    await assert.rejects(
+      node.records.put(space, 'app.todo.item', { text: 'after', done: false }),
+      /revoked|taken away|not allowed|refused/i,
+    );
+  });
+
   test('the delegation is renewed before it expires', async () => {
     // Expiry is whole seconds, so a delegation for 2 s expires between 1 and 2 s
     // from now, and its renewal (at 1.5 s) lasts until at least 2.5 s. Writing at

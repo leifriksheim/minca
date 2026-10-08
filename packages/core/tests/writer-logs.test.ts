@@ -209,7 +209,12 @@ function memoryWriterKeys(): WriterKeySource & { readonly claimed: () => number 
         get: async (key) => taken.heads.get(key) ?? null,
         put: async (key, value) => void taken.heads.set(key, value),
       };
-      return { keys: taken.keys, heads, release: async () => void (taken.held = false) };
+      return {
+        keys: taken.keys,
+        heads,
+        release: async () => void (taken.held = false),
+        forget: async () => void taken.heads.clear(),
+      };
     },
   };
 }

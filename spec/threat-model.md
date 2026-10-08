@@ -173,8 +173,14 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
   - It decides whether it forks the owner's line at all ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_. And a fork
     it makes at the start of the line withdraws everything the owner's device
     wrote ([#166](https://github.com/leifriksheim/weave/issues/166)).
-  - It can keep signing versions dated inside a note's old validity window,
-    and a revocation does not reach spaces created after it ([#165](https://github.com/leifriksheim/weave/issues/165)).
+  - Records are judged with no time, so what it signs counts until the owner
+    revokes the key, however long ago its note ran out; only live use (knocks,
+    live messages, connecting) ends with the note (01 §7.4). Signing out
+    writes a revoke of the session key, delivered when that device next
+    syncs, but a device lost while signed in has to be
+    revoked from another device, which needs a list of the account's session
+    keys ([#26](https://github.com/leifriksheim/weave/issues/26)). A revocation does not reach spaces created after it
+    ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
 _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…")._
 
@@ -191,7 +197,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
 ### 3.6 App or agent
 
 - **Holds.** Its writes count only where its note covers them, and a home
-  grants an app only the spaces chosen for it (01 §8, 06 §2).
+  grants an app only the spaces chosen for it (01 §8, 06 §2). It can be given
+  a note only for a key it shows it holds, never the home's own or another
+  connection's, so disconnecting it revokes nobody else (06 §2.5).
 - **Does not hold yet.**
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
@@ -201,6 +209,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
     its grant expires ([#165](https://github.com/leifriksheim/weave/issues/165), [#169](https://github.com/leifriksheim/weave/issues/169)).
   - Any key the account granted can pose as the account's node to a client
     that pinned the account ([#177](https://github.com/leifriksheim/weave/issues/177)) _(traced)_.
+  - Its records count until its key is revoked, not until `expiresAt`: only
+    the home that granted it revokes it, while signed in there (06 §2.9,
+    [#26](https://github.com/leifriksheim/weave/issues/26)).
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
     [#168](https://github.com/leifriksheim/weave/issues/168)).
 

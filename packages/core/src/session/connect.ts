@@ -7,10 +7,11 @@
  * each checking the other's origin as the browser reports it.
  */
 import { createP256Provider } from '../identity/crypto-p256.js';
-import { didOf } from '../identity/did.js';
+import { didOf, didToPublicKey } from '../identity/did.js';
+import { canonicalize } from '../schema/version.js';
 import { idbOnce } from '../identity/idb.js';
 import { cidFromBytes } from '../utils/hash.js';
-import { base64UrlDecode, utf8Encode } from '../utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { verifyUCAN, parseUCAN, type Capability, type UCANToken } from '../identity/ucan.js';
 import { isAgentNote } from '../identity/agent-note.js';
 import type { RootSigner } from '../identity/root-signer.js';
@@ -35,6 +36,12 @@ export interface ConnectRequest {
   readonly v: 1;
   /** The app's key — the note is made out to it */
   readonly audience: string;
+  /**
+   * That key's signature over `{"proof":"weave-connect-key/v1","audience":…}`
+   * (canonical JSON), so a request can only name a key its sender holds:
+   * disconnecting revokes that key, and must never revoke someone else's.
+   */
+  readonly proof: string;
   /** What the app calls itself. Shown, but never trusted: the home shows the origin too. */
   readonly name?: string;
   /**
@@ -241,6 +248,32 @@ export function grantCapabilities(
 // ─── The app's side ──────────────────────────────────────────────────
 
 /** The app's own key, and its DID */
+/** What a key signs to show it is the one a connect request names */
+const KEY_PROOF = 'weave-connect-key/v1';
+/** The statement, kind included: an agent's proof can never ask for an app's connection, nor the other way */
+const keyStatement = (audience: string, agent: boolean) =>
+  utf8Encode(canonicalize({ agent, audience, proof: KEY_PROOF }));
+
+/** A key's proof that it holds itself, for a connect request (`ConnectRequest.proof`) */
+export async function keyProof(
+  key: { readonly keys: CryptoKeyPair; readonly did: string },
+  agent = false,
+): Promise<string> {
+  return base64UrlEncode(await createP256Provider().sign(key.keys.privateKey, keyStatement(key.did, agent)));
+}
+
+/** Whether `proof` was made by the key `audience` names, for a request of this kind */
+export async function checkKeyProof(audience: string, proof: unknown, agent = false): Promise<boolean> {
+  if (typeof proof !== 'string') return false;
+  try {
+    const provider = createP256Provider();
+    const publicKey = await provider.importPublicKey(didToPublicKey(audience).publicKeyBytes);
+    return await provider.verify(publicKey, base64UrlDecode(proof), keyStatement(audience, agent));
+  } catch {
+    return false;
+  }
+}
+
 export interface AppKey {
   readonly keys: CryptoKeyPair;
   readonly did: string;
@@ -276,8 +309,8 @@ export async function forgetAppKey(name = 'default'): Promise<void> {
 export interface ConnectOptions {
   /** The home's connect page, e.g. `https://weave.example/connect` */
   readonly home: string;
-  /** What to ask for; `audience` is filled in with this app's key */
-  readonly request: Omit<ConnectRequest, 'v' | 'audience'>;
+  /** What to ask for; `audience` and `proof` are filled in with this app's key */
+  readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof'>;
   /** The key to ask for. Default: {@link appKey} under `keyName`. */
   readonly key?: AppKey;
   /** Which of this app's keys to use when `key` is not given. Default `default`. */
@@ -287,6 +320,8 @@ export interface ConnectOptions {
    * an agent's, which lives on another computer (`offerAgentLink`).
    */
   readonly audience?: string;
+  /** With `audience`: that key's {@link keyProof}, which only its holder can make */
+  readonly audienceProof?: string;
   /** How long to wait for the person. Default 10 minutes. */
   readonly timeoutMs?: number;
 }
@@ -302,11 +337,21 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   // Opened before anything is awaited, so it still counts as the click's.
   const popup = openHome(homeUrl);
-  const audience = options.audience ?? (options.key ?? (await appKey(options.keyName))).did;
+  let audience: string;
+  let proof: string;
+  if (options.audience !== undefined) {
+    if (!options.audienceProof) throw new Error('Asking for another key needs its proof (keyProof).');
+    audience = options.audience;
+    proof = options.audienceProof;
+  } else {
+    const key = options.key ?? (await appKey(options.keyName));
+    audience = key.did;
+    proof = await keyProof(key, options.request.agent === true);
+  }
   const grant = await askHome<Grant>(
     popup,
     homeUrl.origin,
-    { v: 1, audience, ...options.request },
+    { v: 1, audience, proof, ...options.request },
     options.timeoutMs,
   );
   await checkGrant(grant, audience);
@@ -338,6 +383,7 @@ export async function connectCarrier(options: {
   const request: ConnectRequest = {
     v: 1,
     audience: options.key.did,
+    proof: await keyProof(options.key),
     access: 'carry',
     ...(options.name ? { name: options.name } : {}),
   };
@@ -642,6 +688,8 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
     request.v === 1 &&
     typeof request.audience === 'string' &&
     request.audience.startsWith('did:key:') &&
+    typeof request.proof === 'string' &&
+    request.proof.length <= 200 &&
     (request.access === 'read' || request.access === 'write' || request.access === 'carry') &&
     (request.scope === undefined || request.scope === 'spaces' || request.scope === 'account') &&
     (request.name === undefined || (typeof request.name === 'string' && request.name.length <= 80)) &&
