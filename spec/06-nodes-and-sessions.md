@@ -201,19 +201,19 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 
 `ConnectRequest`:
 
-| Field          | Type                            | Meaning                                                                                                                                                          |
-| -------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v`            | `1`                             |                                                                                                                                                                  |
-| `audience`     | string                          | The app's key, `did:key:…`. The note is made out to it.                                                                                                          |
-| `proof`        | string                          | base64url signature by the `audience` key over the canonical JSON `{"proof":"weave-connect-key/v1","audience":<audience>}`: that the app holds the key it names. |
-| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                 |
-| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                           |
-| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                 |
-| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.          |
-| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                          |
-| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                            |
-| `agent`        | boolean, optional               | The audience is an agent's key (§3): its note grants records only.                                                                                               |
-| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                      |
+| Field          | Type                            | Meaning                                                                                                                                                                                                                                            |
+| -------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v`            | `1`                             |                                                                                                                                                                                                                                                    |
+| `audience`     | string                          | The app's key, `did:key:…`. The note is made out to it.                                                                                                                                                                                            |
+| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"agent":<agent>,"audience":<audience>,"proof":"weave-connect-key/v1"}`, where `agent` is `true` for an agent's request and `false` otherwise (below). |
+| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                                                                                                   |
+| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                                                                                                             |
+| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                                                                                                   |
+| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.                                                                                            |
+| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                                                                                                            |
+| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                                                                                                              |
+| `agent`        | boolean, optional               | The audience is an agent's key (§3): its note grants records only.                                                                                                                                                                                 |
+| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                        |
 
 A home MUST refuse a request (as in §2.3 step 4) unless: `v` is `1`; `audience`
 starts with `did:key:`; `access` is one of the three; `scope`, `name`,
@@ -243,6 +243,15 @@ Example:
   }
 }
 ```
+
+The bytes a key signs for `proof`, for an app's request with the key above:
+
+```
+{"agent":false,"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","proof":"weave-connect-key/v1"}
+```
+
+Naming the kind means an agent's proof, which it hands to the app that links
+it, can't ask for an app's connection.
 
 ### 2.5 The grant
 
@@ -604,12 +613,12 @@ key for its DID on the link.
 sent as a JSON array of byte values. A message that does not open with the link
 key is ignored.
 
-| `type`              | From                              | Sealed body                                                              |
-| ------------------- | --------------------------------- | ------------------------------------------------------------------------ |
-| `agent-link:ask`    | terminal, on connecting to a peer | `{ "did": "<agent key>", "name": "Agent on leifs-macbook" }` (name ≤ 80) |
-| `agent-link:heard`  | app                               | `{ "heard": true }`                                                      |
-| `agent-link:answer` | app                               | `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                     |
-| `agent-link:done`   | terminal                          | `{ "ok": true }`                                                         |
+| `type`              | From                              | Sealed body                                                                                                                                      |
+| ------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent-link:ask`    | terminal, on connecting to a peer | `{ "did": "<agent key>", "proof": "<its proof, agent: true>", "name": "Agent on leifs-macbook" }` (name ≤ 80); an ask without `proof` is ignored |
+| `agent-link:heard`  | app                               | `{ "heard": true }`                                                                                                                              |
+| `agent-link:answer` | app                               | `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                             |
+| `agent-link:done`   | terminal                          | `{ "ok": true }`                                                                                                                                 |
 
 **Flow.**
 

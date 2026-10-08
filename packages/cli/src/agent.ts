@@ -134,7 +134,7 @@ export async function connectAgent(params: {
   const grant = await acceptAgentLink({
     code: params.code,
     did,
-    proof: await keyProof({ keys: key.keys, did }),
+    proof: await keyProof({ keys: key.keys, did }, true),
     name: params.name,
     network: { relays: params.relays },
     onWaiting: () => params.log('Found it. Allow the agent in the app — it opens your account home.'),

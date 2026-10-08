@@ -250,20 +250,25 @@ export function grantCapabilities(
 /** The app's own key, and its DID */
 /** What a key signs to show it is the one a connect request names */
 const KEY_PROOF = 'weave-connect-key/v1';
-const keyStatement = (audience: string) => utf8Encode(canonicalize({ proof: KEY_PROOF, audience }));
+/** The statement, kind included: an agent's proof can never ask for an app's connection, nor the other way */
+const keyStatement = (audience: string, agent: boolean) =>
+  utf8Encode(canonicalize({ agent, audience, proof: KEY_PROOF }));
 
 /** A key's proof that it holds itself, for a connect request (`ConnectRequest.proof`) */
-export async function keyProof(key: { readonly keys: CryptoKeyPair; readonly did: string }): Promise<string> {
-  return base64UrlEncode(await createP256Provider().sign(key.keys.privateKey, keyStatement(key.did)));
+export async function keyProof(
+  key: { readonly keys: CryptoKeyPair; readonly did: string },
+  agent = false,
+): Promise<string> {
+  return base64UrlEncode(await createP256Provider().sign(key.keys.privateKey, keyStatement(key.did, agent)));
 }
 
-/** Whether `proof` was made by the key `audience` names */
-export async function checkKeyProof(audience: string, proof: unknown): Promise<boolean> {
+/** Whether `proof` was made by the key `audience` names, for a request of this kind */
+export async function checkKeyProof(audience: string, proof: unknown, agent = false): Promise<boolean> {
   if (typeof proof !== 'string') return false;
   try {
     const provider = createP256Provider();
     const publicKey = await provider.importPublicKey(didToPublicKey(audience).publicKeyBytes);
-    return await provider.verify(publicKey, base64UrlDecode(proof), keyStatement(audience));
+    return await provider.verify(publicKey, base64UrlDecode(proof), keyStatement(audience, agent));
   } catch {
     return false;
   }
@@ -341,7 +346,7 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   } else {
     const key = options.key ?? (await appKey(options.keyName));
     audience = key.did;
-    proof = await keyProof(key);
+    proof = await keyProof(key, options.request.agent === true);
   }
   const grant = await askHome<Grant>(
     popup,

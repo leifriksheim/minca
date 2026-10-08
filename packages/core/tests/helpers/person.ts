@@ -133,10 +133,10 @@ export function testAppKey(name: string): Promise<{ keys: CryptoKeyPair; did: st
 }
 
 /** A connect request as an app would send it: the named key swapped for a real one, with its proof */
-export async function asked<T extends { readonly audience: string }>(
+export async function asked<T extends { readonly audience: string; readonly agent?: boolean }>(
   request: T,
   key?: { readonly keys: CryptoKeyPair; readonly did: string },
 ): Promise<T & { readonly proof: string }> {
   const signer = key ?? (await testAppKey(request.audience));
-  return { ...request, audience: signer.did, proof: await keyProof(signer) };
+  return { ...request, audience: signer.did, proof: await keyProof(signer, request.agent === true) };
 }

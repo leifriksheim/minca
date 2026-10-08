@@ -582,7 +582,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     origin: string,
     agent: boolean,
   ): Promise<string | null> {
-    if (!(await checkKeyProof(request.audience, request.proof)))
+    if (!(await checkKeyProof(request.audience, request.proof, agent)))
       return 'The app did not show it holds the key it named.';
     if (request.audience === state.session?.node.sessionDid) return 'That key is this home’s own.';
     const elsewhere = auth

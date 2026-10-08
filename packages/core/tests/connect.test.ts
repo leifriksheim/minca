@@ -252,6 +252,13 @@ describe('connecting an app to an account home', () => {
       ask('https://evil.test', { v: 1, audience: node.sessionDid, proof: 'x', access: 'write' }),
       /holds the key|this home’s own/,
     );
+    // An agent's proof, handed to an app in the agent link, can't ask for an app's connection.
+    const agentKey = await testAppKey('agent');
+    const agentAsk = await asked(
+      { v: 1, audience: agentKey.did, access: 'write', agent: true } as const,
+      agentKey,
+    );
+    await assert.rejects(ask('https://evil.test', { ...agentAsk, agent: false }), /holds the key/);
     // Nor a key another app was given.
     await ask('https://good.test', await asked({ v: 1, audience: theirs.did, access: 'write' }, theirs));
     await assert.rejects(
