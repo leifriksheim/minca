@@ -446,6 +446,7 @@ export { checkRules, onePerKey } from './records/rules.js';
 export { describeCollection } from './records/describe.js';
 export type { CollectionRules, Who } from './records/rules.js';
 export type { Check, Condition } from './records/checks.js';
+export { checkCostHints } from './records/checks.js';
 /** Conditions over one record, in a check's language: a subscription's `where`, and an app's own filters */
 
 // Hosting: a subscription key, signed requests to a host, and a client for one

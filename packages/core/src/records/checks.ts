@@ -25,6 +25,7 @@ import { isObject } from '../utils/guards.js';
 import type { Link } from '../types.js';
 import { LINK_REL_PATTERN } from './links.js';
 import {
+  celChildren,
   celMap,
   celStop,
   checkCel,
@@ -240,4 +241,38 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
 
 function isCheckedVersion(value: unknown): value is CheckedVersion {
   return isObject(value) && typeof value.id === 'string' && typeof value.seq === 'number';
+}
+
+/**
+ * Advice on a collection's checks, for whoever writes them: patterns whose
+ * cost grows fast with the records they read, so a check that passes on
+ * small records may run out of steps or work on large ones. Not protocol:
+ * a verdict never depends on it.
+ */
+export function checkCostHints(checks: ReadonlyArray<Check>): string[] {
+  const hints: string[] = [];
+  checks.forEach((check, i) => {
+    const node = parse(check.that, `check[${i}]`);
+    if (typeof node === 'string') return;
+    let deepest = 0;
+    let citesInLoop = false;
+    const walk = (n: CelNode, loops: number) => {
+      if (n.k === 'comp') {
+        deepest = Math.max(deepest, loops + 1);
+        walk(n.range, loops);
+        if (n.pred) walk(n.pred, loops + 1);
+        if (n.out) walk(n.out, loops + 1);
+        return;
+      }
+      if (n.k === 'call' && n.fn === 'versions' && !n.target && loops > 0) citesInLoop = true;
+      for (const child of celChildren(n)) walk(child, loops);
+    };
+    walk(node, 0);
+    if (deepest >= 3)
+      hints.push(
+        `check[${i}]: macros nest ${deepest} deep, so its cost grows with the ${deepest}th power of list sizes`,
+      );
+    if (citesInLoop) hints.push(`check[${i}]: calls versions() inside a macro, citing once per element`);
+  });
+  return hints;
 }

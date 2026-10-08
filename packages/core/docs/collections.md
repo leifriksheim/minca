@@ -211,6 +211,11 @@ Some things to know:
 - A condition holds only when it gives `true`, and a check always ends: its
   only loops are over lists in hand, and there is a step limit.
 
+`checkCostHints(checks)` flags what makes a check costly as records grow:
+macros nested three deep, or `versions()` called inside a macro. A check
+over more than its limits is refused, so a check that passes on small
+records can fail on large ones; the hints say where to look.
+
 Bytes, timestamps, durations, regular expressions and types as values are
 left out. The exact subset is in the spec, `spec/02-records.md` §7.6.
 

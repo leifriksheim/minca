@@ -9,6 +9,7 @@ import { bodyHashOf } from '../src/schema/version.js';
 import { checkRules, onePerKey } from '../src/records/rules.js';
 import {
   checkChecks,
+  checkCostHints,
   runChecks,
   MAX_CHECK_STEPS,
   type Check,
@@ -96,6 +97,18 @@ describe('checks: a definition', () => {
     assert.equal(problem('can("approve")', ['approve']), '');
     assert.match(problem('link(body.rel) == ""'), /literal link role/);
     assert.match(problem(`${'['.repeat(70)}1${']'.repeat(70)} == 1`), /nested more than 64 deep/);
+  });
+});
+
+describe('checks: cost hints, for whoever writes them', () => {
+  test('flag macros three deep, and citing inside a loop; plain checks get none', () => {
+    assert.deepEqual(checkCostHints([{ that: 'body.items.all(it, it.price > 0)', else: 'x' }]), []);
+    const [deep] = checkCostHints([
+      { that: 'body.a.all(x, body.b.all(y, body.c.all(z, x == y)))', else: 'x' },
+    ]);
+    assert.match(deep ?? '', /nest 3 deep/);
+    const [cites] = checkCostHints([{ that: 'body.ids.all(i, versions([i])[0].seq == 0)', else: 'x' }]);
+    assert.match(cites ?? '', /versions\(\) inside a macro/);
   });
 });
 
