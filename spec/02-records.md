@@ -140,7 +140,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `genesis`    | string   | seq > 0    | Id of the record's first version.                                                                                                                                                                                                                 |
 | `retain`     | `true`   | no         | Keep this version after it is superseded (§4.5).                                                                                                                                                                                                  |
 | `log`        | object   | in a space | Its place in its writer's log for this space, and in that log's line for its collection: `{ "n", "prev"?, "c": { "n", "prev"? } }`. `n` counts from 0, and `prev` names the key's version one place before in the same line, absent at 0 (§4.10). |
-| `seen`       | string[] | no         | Ids of the latest changes to the space's access history the writer knew of; the version is judged as of those ([03 — Spaces](03-spaces.md)). At most 64, each 1–128 characters.                                                                   |
+| `seen`       | string[] | no         | Ids of the latest changes to the space's access history the writer knew of; the version is judged as of those ([03 — Spaces](03-spaces.md) §3.2). At most 64, each 1–128 characters. Absent, it is judged as having seen nothing but the genesis. |
 | `deleted`    | `true`   | no         | This version deletes the record; `body` MUST be `null`.                                                                                                                                                                                           |
 | `links`      | Link[]   | no         | What this record points at (§5). Public spaces only; in a private space links are sealed inside the body and this member is absent.                                                                                                               |
 | `tags`       | string[] | no         | Blind topic tags (§8).                                                                                                                                                                                                                            |
@@ -303,6 +303,8 @@ are ASCII, so this is also byte order). The **current version** of a record is
 the one no other held version supersedes.
 
 - Every peer MUST use exactly this rule. `createdAt` MUST NOT affect it.
+- Access records are the exception: which of them takes effect is decided
+  by the access history's merge ([03](03-spaces.md) §4.4), not by this rule.
 - Consequences: a replayed old version loses to the current one; a delete
   (which has a higher `seq`) stays deleted when an older version turns up; two
   devices that edited apart pick the same winner; the same set of versions,
@@ -338,9 +340,23 @@ When a version is superseded, a peer keeps it:
 
 Nothing a peer has taken in is dropped. A stub says who wrote a version and
 where it sits in its record (§4.7). A first version kept as a stub still
-decides who created the record (§7.1). If several `seq 0` versions exist for
-one key (two devices chose the same key), the one with the lowest id is the
-first version.
+decides who created the record (§7.1).
+
+**The first version.** Usually a record has one `seq 0`. If it has several
+(two devices chose the same key), two rules use them:
+
+- **Judging a later version** uses the `seq 0` its `genesis` names, which must
+  be of the same key and collection (§4.6). Its chain leads there (§4.7), and
+  the `creator` rule (§7.1) and the rules checked against a first version
+  (§7.3, §7.4) are judged against it.
+- **Reading a record** uses the `seq 0` with the lowest id held: it gives
+  `@createdBy`, and the collection a later version must share to be shown
+  (§4.6).
+
+The two differ only when a key has several `seq 0` versions. Since any
+member can write one for someone else's key, and grind its id lower, either
+rule lets a member take over a key it did not create. Closing that is planned
+in §4.7 ([#72](https://github.com/leifriksheim/weave/issues/72)).
 
 Forgetting holds whoever sends what:
 
@@ -415,7 +431,7 @@ Checks that depend on what else a peer holds are **not** shape checks:
   otherwise the version is refused ("the first version it names is not this
   record's"). If it is not held yet, judging waits (§9.5).
 - A current version whose `collection` differs from the record's held first
-  version is ignored when reading, as if absent.
+  version (the lowest id, §4.5) is ignored when reading, as if absent.
 
 _Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/version.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`, `firstOf`, `consistent`, `write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
 
@@ -434,7 +450,7 @@ arrival, a peer looks that version up, whole or as a stub (§4.5):
   4. `genesis` equals `P.id` if `P.seq == 0`, else `P.genesis`.
 
 Every version held passed the same check when it came in, so a chain that
-holds link by link reaches the record's first version.
+holds link by link reaches the first version its `genesis` names (§4.5).
 
 Example: a record's versions `A` (`seq 0`) and `B` (`seq 1`, `prev: A`,
 `genesis: A`). A version with `seq: 2, prev: B, genesis: A` follows `B`. One
@@ -524,11 +540,13 @@ collection, in the access history, and a first version under `onePer` or
 > the first peer. Tags are the one body check a stub escapes that `retain`
 > does not cover. A fix will either check tags on the version that is current,
 > or carry what they are checked against in the envelope.
+> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
 
 > **Planned: forgetting in blob stores.** Segments never change and only
-> their writer compacts them ([05 §16.4](05-sync-and-storage.md)). A writer's
-> compaction writes the stubs its store holds, but a body superseded by
-> someone else stays in the bucket until that writer compacts. Readers keep
+> their store writer compacts them ([05 §16.4](05-sync-and-storage.md)). A
+> store writer's compaction writes the stubs its store holds, but a body
+> superseded by someone else stays in the bucket until that store writer
+> compacts. Readers keep
 > only the stub on the way in; the bytes remain. Crypto-shredding, a key per
 > record destroyed on delete, would reach immutable storage too; the key
 > record then has the same keep-or-drop question, so it is a later addition,
@@ -837,6 +855,7 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > (§6.1), so that peer would enforce none of its rules. Either the publishing
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
+> Tracked in [#163](https://github.com/leifriksheim/weave/issues/163).
 
 ### 6.3 A definition's version number
 
@@ -865,11 +884,13 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   `sys.*` collections have no schema, rules or topics from a definition; their
   formats and checks are specified where they are used:
   `sys.collection` (here); the access history, keys, profiles and the account
-  registry — `sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.key`,
-  `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`, `sys.profile`,
-  `sys.joined` — in [03 — Spaces](03-spaces.md); carriers, passes, hosting and
-  notifications — `sys.carrier`, `sys.pass`, `sys.hosting`, `sys.notify`,
-  `sys.subscription` — in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md)
+  registry — `sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.fork`,
+  `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
+  `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
+  passes and notifications — `sys.carrier`, `sys.pass`, `sys.notify`,
+  `sys.subscription` — in [03](03-spaces.md) §13–15, and how a node uses them
+  in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; hosting —
+  `sys.hosting` — in [08 — Hosting](08-hosting.md)
   (`sys.relays` and `sys.keepers` also in [05](05-sync-and-storage.md)).
 - **`std.*`** is **not reserved**: it names the optional
   [standard library](../packages/core/docs/standard-library.md), a
@@ -928,8 +949,8 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 > may point at more). That leaves new optional fields, new optional link
 > roles, and changes to `title`, `description` and other annotations.
 > Anything else needs a new name. A keyword the check has no rule for is a
-> break. Rules (`create`, `edit`, `delete`, `onePer`, `fixed`,
-> `permissions`) are the space's governance, not shape: under the same name
+> break. Rules (`create`, `edit`, `delete`, `onePer`, `fixed`, `final`,
+> `check`, `permissions`) are the space's governance, not shape: under the same name
 > they may tighten, never loosen. Why this line, after oasdiff:
 > [blueprints and guides](../packages/core/docs/blueprints-and-guides.md#what-additive-means).
 
@@ -1504,14 +1525,14 @@ The capability every write in space `S` needs is
 
 - No `proof`: the author signs for itself; its root is `author`.
 - With `proof`:
-  1. `createdAt` MUST parse as a time; else refuse.
-  2. `createdAt` MUST NOT be more than **300 seconds** ahead of the checking
-     peer's clock; else refuse.
-  3. The UCAN chain MUST be valid **at `createdAt`** (not now) — so records
+  1. `createdAt` MUST parse as a time; else refuse. The checking peer's own
+     clock is not consulted: a version dated ahead stands if its chain was
+     valid then, so every peer judges it the same whenever it arrives.
+  2. The UCAN chain MUST be valid **at `createdAt`** (not now) — so records
      outlive the session that signed them ([01 — Identity](01-identity.md)).
-  4. The chain's audience MUST equal `author`.
-  5. Some capability in the chain MUST cover the one required.
-  6. The root is the chain's root issuer.
+  3. The chain's audience MUST equal `author`.
+  4. Some capability in the chain MUST cover the one required.
+  5. The root is the chain's root issuer.
 
 > **Known defect:** a chain deeper than one link never validates here, because
 > no proof resolver is wired and a record carries only its leaf token
@@ -1537,7 +1558,7 @@ Given a valid signature and root, whether the version _stands_ in this space:
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed`, and on every version under `check` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`; then `check` (§7.6), which may make the version wait for versions it cites.
 
-   When step 3 fails only on the access history's judgement of a change that came after the version (a change to its author's standing it had not seen, with what that change saw, its key revoked, or its key's log proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges step 5, and the version is **withdrawn** if that passes.
+   When step 3 fails only on the access history's judgement of a change that came after the version (a change to its author's standing it had not seen, with what that change saw, its key revoked, or its key's log proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges steps 4 and 5, and the version is **withdrawn** if they pass, **refused** if they don't. So every peer that can read the body stores the same withdrawn versions, whatever order it checks in; a peer without the key skips what it can't read (§7.3, §7.6, §8.4).
 
 ### 9.5 What a peer does with a refused version
 
@@ -1589,24 +1610,23 @@ hold, and refusing would leave peers disagreeing forever. A reader may flag
 such a record instead. A writer
 checks them before signing and SHOULD NOT write what does not conform.
 
-_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/ucan.ts` (`UCAN_CLOCK_SKEW_SECONDS`), `packages/core/src/node/space-runtime.ts` (`writeCapability`, `judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/checks.test.ts` ("between peers"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/node/space-runtime.ts` (`writeCapability`, `judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/checks.test.ts` ("between peers"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
 
 ---
 
 ## 10. Limits
 
-| Limit                                       | Value                                                                                |
-| ------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Record key                                  | 1–128 chars of `[a-z0-9:._-]`                                                        |
-| `seen`                                      | ≤ 64 ids, each 1–128 chars                                                           |
-| Links per version                           | ≤ 32                                                                                 |
-| Link role                                   | `^[a-z][a-zA-Z0-9]{0,63}$`                                                           |
-| Topics per collection                       | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                  |
-| Tags per version                            | ≤ 64                                                                                 |
-| Permission name                             | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
-| Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 64 deep; ≤ 100,000 steps per version                   |
-| Steps judging one version's checks          | ≤ 100,000 steps, ≤ 4,000,000 work (§7.6)                                             |
-| Versions one version's checks cite          | ≤ 256 distinct                                                                       |
-| Future-dated `createdAt` (delegated writes) | ≤ 300 s ahead                                                                        |
-| Size of a body or a version                 | _Not yet specified_ — no limit is enforced                                           |
-| Collection name on a record                 | _Not yet specified_ — only definitions constrain names; a record may name any string |
+| Limit                              | Value                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Record key                         | 1–128 chars of `[a-z0-9:._-]`                                                        |
+| `seen`                             | ≤ 64 ids, each 1–128 chars                                                           |
+| Links per version                  | ≤ 32                                                                                 |
+| Link role                          | `^[a-z][a-zA-Z0-9]{0,63}$`                                                           |
+| Topics per collection              | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                  |
+| Tags per version                   | ≤ 64                                                                                 |
+| Permission name                    | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
+| Checks per collection              | ≤ 16; ≤ 2,000 parts in all, ≤ 64 deep; ≤ 100,000 steps per version                   |
+| Steps judging one version's checks | ≤ 100,000 steps, ≤ 4,000,000 work (§7.6)                                             |
+| Versions one version's checks cite | ≤ 256 distinct                                                                       |
+| Size of a body or a version        | _Not yet specified_ — no limit is enforced                                           |
+| Collection name on a record        | _Not yet specified_ — only definitions constrain names; a record may name any string |

@@ -5,7 +5,6 @@ import {
   resolveDelegationRoot,
   type Capability,
   type ProofResolver,
-  UCAN_CLOCK_SKEW_SECONDS,
 } from '../identity/ucan.js';
 
 export interface CapabilityGateConfig {
@@ -45,8 +44,9 @@ const fail = (reason: string): GateResult => ({ passed: false, gate: 'capability
  * `createdAt`. A record stays valid after its session ends, which is what lets a
  * peer that shows up next week accept last week's data. The cost is that a
  * leaked session key could backdate records into its own window — which is why
- * session keys live in memory and are short-lived. A record dated in the future
- * is refused outright.
+ * session keys live in memory and are short-lived. The receiver's own clock
+ * decides nothing: a record dated ahead stands if its note was valid then,
+ * so every peer reaches the same verdict whenever it receives it.
  */
 export function createCapabilityGate(config: CapabilityGateConfig): CapabilityGate {
   const { provider, requiredCapability, resolveProof = () => null, isTrustedRoot } = config;
@@ -68,10 +68,6 @@ export function createCapabilityGate(config: CapabilityGateConfig): CapabilityGa
         if (!Number.isFinite(signedAt)) {
           return fail('Version has no valid creation time');
         }
-        if (signedAt > Math.floor(Date.now() / 1000) + UCAN_CLOCK_SKEW_SECONDS) {
-          return fail('Version is dated in the future');
-        }
-
         const chain = await resolveDelegationRoot(version.proof, resolveProof, provider, { at: signedAt });
         if (!chain.valid || chain.rootDid === null) {
           return fail(chain.reason ?? 'Invalid delegation chain');

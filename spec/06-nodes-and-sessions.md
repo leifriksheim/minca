@@ -416,8 +416,9 @@ pause and remove what they kept, not add to it. The app uses the exchange of
 | `name`   | string, ≤ 80, optional | What it calls itself. Shown, never trusted.                  |
 | `notify` | `NotifyProposal[]`     | 1 to 8 subscriptions to offer the person.                    |
 
-`NotifyProposal` is `{ label, collection, topic?, others?, spaces?, open? }`,
-where `topic` is `{ field, value }` or `{ field, me: true }` (`me` stands for
+`NotifyProposal` is `{ label, collection, topic?, others?, where?, spaces?, open? }`,
+each field as in `NotifyWhen` ([03](03-spaces.md) §15), except that `topic`
+is `{ field, value }` or `{ field, me: true }` (`me` stands for
 the account's DID, which an app given only some spaces does not know). It looks
 at the spaces the app may reach (step 2 below), or with `spaces` only those of
 them; it cannot widen them.
@@ -639,8 +640,12 @@ read them. It holds:
 - the records of each carried space exactly as they travel.
 
 It holds no seed, no space key, no invite secret and no note: it signs nothing,
-writes nothing, and every record it takes in passes the same gates as at any
-member's node. On the wire it shows no note, so peers see it as `from: null`.
+and writes nothing. It runs every record it takes in through the same gates
+as a member's node, but in a private space it cannot read bodies, so it
+skips the checks that read them: `onePer`, `fixed`, tags and `check`
+([02](02-records.md) §7.3, §7.4, §8.4, §7.6). It accepts what passes the
+rest, as any peer without the key does; peers that hold the key still judge
+those checks. On the wire it shows no note, so peers see it as `from: null`.
 
 It can see: which spaces exist, their size and when they change, every record's
 outer details (author, collection, times, topic tags; [02](02-records.md)), and
@@ -739,8 +744,8 @@ _Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGr
 ### 4.4 Subscriptions, and carriers
 
 "Let me know when…" subscriptions are kept in the account registry as `sys.notify` records, key
-`notify:<base32 of 10 random bytes>`, body `NotifyWhen`:
-`{ label (≤ 120), collection (not sys.*), spaces ("all" or 1–256 ids), topic?: { field, value }, others? (default true), open? (https URL), paused?, since (ISO date), app?: { origin, name? } }`.
+`notify:<base32 of 10 random bytes>`, body `NotifyWhen`, defined in
+[03](03-spaces.md) §15.
 
 An app proposes them when the person asks it to, and the home adds the ones
 the person keeps, naming the app (§2.11). Disconnecting an app removes its
@@ -770,59 +775,48 @@ _Source: `packages/core/src/space/notify.ts`, `packages/core/src/node/node.ts` (
 > space, so carriers change only in computing one tag per value. Tracked in
 > [#141](https://github.com/leifriksheim/weave/issues/141).
 
-> **Planned: Web Push, to a closed app or a phone.** Issue:
-> [#60](https://github.com/leifriksheim/weave/issues/60). Today only an app that
-> is running shows a match (§2.11), so nothing reaches a device where it is
-> closed, and an app with `scope: spaces`, which cannot read the registry,
-> shows nothing. The plan:
+> **Planned: devices deliver subscriptions, by Web Push.** Issue:
+> [#60](https://github.com/leifriksheim/weave/issues/60). Subscriptions are
+> the account's and apps propose them (above); which device shows a match is
+> not modeled yet. Today only an app that is running shows a match (§2.11),
+> so nothing reaches a device where it is closed, and an app with
+> `scope: spaces`, which cannot read the registry, shows nothing. The plan:
 >
-> - A device registers its Web Push subscription as a **receiver** (the plan
->   below): `push: { endpoint, p256dh, auth }` (the browser's
->   `PushSubscription`) and `device` (a name for people). Subscription
->   records hold none of it.
+> - Each device registers as a **receiver** in its own record, apart from
+>   subscriptions: `push: { endpoint, p256dh, auth }` (the browser's
+>   `PushSubscription`, for the app that proposed the subscription) and
+>   `device` (a name for people). Subscription records hold no device or
+>   endpoint data.
+> - By default every receiver gets every subscription; a device can opt out
+>   on its own. A removed device's receiver record goes with it.
 > - A carrier that stores a new version matching a subscription (the rules
->   above) sends a Web Push to its endpoint: one HTTPS POST, VAPID-signed
->   (RFC 8292), payload encrypted to the device (RFC 8291). The payload is the
->   version as the carrier holds it (private body still encrypted) when it fits
->   in about 3 KB, otherwise its id and space.
+>   above) sends a Web Push to each receiver's endpoint: one HTTPS POST,
+>   VAPID-signed (RFC 8292), payload encrypted to the device (RFC 8291). The
+>   payload is the version as the carrier holds it (private body still
+>   encrypted) when it fits in about 3 KB, otherwise its id and space.
 > - The push carries RFC 8030's `Topic` header, derived from the version id,
 >   so when several carriers send the same record the push service replaces
 >   undelivered copies. The notification's `tag` is the record key, so
 >   duplicates that get through replace each other.
 > - The app's service worker (installed as a PWA on a phone: Android, and
 >   iOS 16.4 or later from the home screen) opens the space key from its own storage,
->   decrypts, checks the rest of the filter, and shows the notification.
->   Browsers require every push to show one (`userVisibleOnly`), so a device
->   cannot quietly drop most of a stream: a subscription whose carrier-side
->   part is only a busy collection with no topic tag SHOULD be refused when
->   made, naming the fields to mark as topics.
+>   decrypts, checks the rest of the filter (`where` included), and shows the
+>   notification. Browsers require every push to show one (`userVisibleOnly`),
+>   so a device cannot quietly drop most of a stream: a subscription whose
+>   carrier-side part is only a busy collection with no topic tag SHOULD be
+>   refused when made, naming the fields to mark as topics.
 >
 > The push service (chosen by the browser) sees timing and size, never
 > content. A carrier learns a device's endpoint and how often a tag matches.
 > Depends on nothing else in this part.
 >
-> Open: a push subscription is bound to one sender's VAPID key
+> _Open:_ a push subscription is bound to one sender's VAPID key
 > (`applicationServerKey`). Several carriers pushing to one device need either
 > one subscription per carrier (the device subscribes with each carrier's key;
 > a host's description would list it as `vapid`) or carriers sharing a key.
-
-> **Planned: devices deliver subscriptions.** Issue:
-> [#30](https://github.com/leifriksheim/weave/issues/30). Subscriptions are
-> the account's and apps propose them (above); which device shows a match is
-> not modeled yet. Every device copies every subscription into every carry
-> space, and every copy of the app that is open shows what it matches. The
-> plan:
->
-> - Each device registers as a **receiver** in its own record, apart from
->   subscriptions: a browser through Web Push, for the app that proposed the
->   subscription. Subscription records hold no device or endpoint data.
-> - By default every receiver gets every subscription; a device can opt out
->   on its own.
-> - A removed device's receiver record goes with it.
->
-> _Open:_ which device copies subscriptions into carry spaces; where receiver
-> records live and which carrier sends to which endpoint (with the VAPID
-> question above); whether "not on this device" syncs.
+> Also open: which device copies subscriptions into carry spaces; where
+> receiver records live and which carrier sends to which endpoint; whether
+> "not on this device" syncs.
 
 ## 5. Calls
 
