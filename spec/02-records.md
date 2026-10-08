@@ -1525,14 +1525,14 @@ The capability every write in space `S` needs is
 
 - No `proof`: the author signs for itself; its root is `author`.
 - With `proof`:
-  1. `createdAt` MUST parse as a time; else refuse.
-  2. `createdAt` MUST NOT be more than **300 seconds** ahead of the checking
-     peer's clock; else refuse.
-  3. The UCAN chain MUST be valid **at `createdAt`** (not now) — so records
+  1. `createdAt` MUST parse as a time; else refuse. The checking peer's own
+     clock is not consulted: a version dated ahead stands if its chain was
+     valid then, so every peer judges it the same whenever it arrives.
+  2. The UCAN chain MUST be valid **at `createdAt`** (not now) — so records
      outlive the session that signed them ([01 — Identity](01-identity.md)).
-  4. The chain's audience MUST equal `author`.
-  5. Some capability in the chain MUST cover the one required.
-  6. The root is the chain's root issuer.
+  3. The chain's audience MUST equal `author`.
+  4. Some capability in the chain MUST cover the one required.
+  5. The root is the chain's root issuer.
 
 > **Known defect:** a chain deeper than one link never validates here, because
 > no proof resolver is wired and a record carries only its leaf token
@@ -1616,18 +1616,17 @@ _Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`),
 
 ## 10. Limits
 
-| Limit                                       | Value                                                                                |
-| ------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Record key                                  | 1–128 chars of `[a-z0-9:._-]`                                                        |
-| `seen`                                      | ≤ 64 ids, each 1–128 chars                                                           |
-| Links per version                           | ≤ 32                                                                                 |
-| Link role                                   | `^[a-z][a-zA-Z0-9]{0,63}$`                                                           |
-| Topics per collection                       | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                  |
-| Tags per version                            | ≤ 64                                                                                 |
-| Permission name                             | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
-| Checks per collection                       | ≤ 16; ≤ 2,000 parts in all, ≤ 64 deep; ≤ 100,000 steps per version                   |
-| Steps judging one version's checks          | ≤ 100,000 steps, ≤ 4,000,000 work (§7.6)                                             |
-| Versions one version's checks cite          | ≤ 256 distinct                                                                       |
-| Future-dated `createdAt` (delegated writes) | ≤ 300 s ahead                                                                        |
-| Size of a body or a version                 | _Not yet specified_ — no limit is enforced                                           |
-| Collection name on a record                 | _Not yet specified_ — only definitions constrain names; a record may name any string |
+| Limit                              | Value                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Record key                         | 1–128 chars of `[a-z0-9:._-]`                                                        |
+| `seen`                             | ≤ 64 ids, each 1–128 chars                                                           |
+| Links per version                  | ≤ 32                                                                                 |
+| Link role                          | `^[a-z][a-zA-Z0-9]{0,63}$`                                                           |
+| Topics per collection              | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                  |
+| Tags per version                   | ≤ 64                                                                                 |
+| Permission name                    | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
+| Checks per collection              | ≤ 16; ≤ 2,000 parts in all, ≤ 64 deep; ≤ 100,000 steps per version                   |
+| Steps judging one version's checks | ≤ 100,000 steps, ≤ 4,000,000 work (§7.6)                                             |
+| Versions one version's checks cite | ≤ 256 distinct                                                                       |
+| Size of a body or a version        | _Not yet specified_ — no limit is enforced                                           |
+| Collection name on a record        | _Not yet specified_ — only definitions constrain names; a record may name any string |

@@ -221,7 +221,7 @@ describe('capability gate', () => {
     assert.equal((await gate.validate(version)).passed, false);
   });
 
-  test('rejects a record dated in the future', async () => {
+  test('a record dated ahead stands while its note covers that time; the receiver’s clock decides nothing', async () => {
     const root = await makeKey();
     const session = await makeKey();
     const now = Math.floor(Date.now() / 1000);
@@ -236,9 +236,16 @@ describe('capability gate', () => {
       proof: ucan.encoded,
       createdAt: new Date((now + 3600) * 1000).toISOString(),
     });
-    const result = await gate.validate(await signer.sign(unsigned, session.privateKey));
-    assert.equal(result.passed, false);
-    assert.match(result.reason ?? '', /future/);
+    assert.equal((await gate.validate(await signer.sign(unsigned, session.privateKey))).passed, true);
+    // Past the note's expiry, it is refused at every peer alike.
+    const late = createVersion({
+      author: session.did,
+      collection: COLLECTION,
+      body: { text: 'after the note' },
+      proof: ucan.encoded,
+      createdAt: new Date((now + 2 * 86_400) * 1000).toISOString(),
+    });
+    assert.equal((await gate.validate(await signer.sign(late, session.privateKey))).passed, false);
   });
 
   test('honours an application trust policy', async () => {
