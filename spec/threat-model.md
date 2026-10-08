@@ -99,8 +99,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/weave/issues/33)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
-    peer's clock, its keys, or the order it runs checks in ([#121](https://github.com/leifriksheim/weave/issues/121),
-    [#163](https://github.com/leifriksheim/weave/issues/163)).
+    peer's keys, or the order it runs checks in ([#163](https://github.com/leifriksheim/weave/issues/163)).
   - A removal or demotion signed offline can arrive at any time and withdraw
     what its cutoff doesn't cover: peers converge, but no verdict is final
     until members witness each other's heads

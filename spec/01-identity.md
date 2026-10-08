@@ -488,8 +488,8 @@ an `iss` whose multicodec is not `p256-pub` (§4).
 
 - for a record's `proof`, the record's own signing time,
   `floor(Date.parse(createdAt) / 1000)` — so a record stays valid after the
-  session's token expires ([02 — Records](02-records.md) bounds how far in the
-  future `createdAt` may be);
+  session's token expires. The checking peer's own clock is not consulted
+  ([02 — Records](02-records.md) §9.3);
 - for anything else (an app checking its grant, an agent's note), the current
   time.
 
