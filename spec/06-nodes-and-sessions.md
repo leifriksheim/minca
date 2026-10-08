@@ -76,12 +76,14 @@ lets the session key do everything the account can, everywhere:
 Every record this node signs carries the current note as its `proof`, and every
 live connection opens with it (the `who` message, [04](04-network.md)).
 
-The node asks for a new note before the one it holds runs out. Once the held
-note expires, peers refuse what the node writes under it. Records written under
-an earlier note stay valid after that note expires: expiry limits when a note
-may be _used to write_, not how long its records count ([01](01-identity.md),
-[02](02-records.md)). An app's note from an account home is never renewed in
-place (§2.9).
+The node asks for a new note before the one it holds runs out. A note's time
+bounds only live checks: knocks, live messages, a peer's proof when it
+connects ([01](01-identity.md) §7.4). Records are judged with no time at all,
+so what a key signed counts until the key is revoked ([02](02-records.md)
+§9.3). Signing out revokes the session key in every space the node writes in,
+its carry spaces, the contacts space and the account registry, with a cutoff
+at what it wrote, and a device that kept the key forgets it (`revokeSelf`).
+An app's note from an account home is never renewed in place (§2.9).
 
 > Rationale: one root signature an hour, never one per write. The root — a seed
 > in a page, an account home, anything — can stay out of reach of the code that
@@ -372,9 +374,18 @@ its password or passkeys, or keep access past `expiresAt`.
 
 ### 2.9 Expiry and renewal
 
-A note is never renewed in place. When `expiresAt` passes, the app's writes stop
-counting everywhere. To continue, the app connects again, which produces a new
-note (and, at the home, replaces the old connection record).
+A note is never renewed in place. When `expiresAt` passes, the app's note
+stops working for live checks everywhere: knocks, live messages, connecting
+to peers. Its records are judged with no time (02 §9.3), so they stop counting
+when its key is revoked: the home that granted it disconnects it once the
+time has passed, while it is signed in, and at sign-out (§2.10). To continue,
+the app connects again, which produces a new note (and, at the home, replaces
+the old connection record).
+
+> **Known defect:** connections are kept in the browser that granted them,
+> so only that home revokes an app whose time has passed, and only while it
+> is signed in. Until it does, the app's records still count. Tracked in
+> [#26](https://github.com/leifriksheim/weave/issues/26).
 
 ### 2.10 Connections and revocation
 

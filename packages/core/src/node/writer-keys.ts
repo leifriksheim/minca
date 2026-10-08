@@ -29,6 +29,8 @@ export interface ClaimedWriter {
   readonly heads: HeadStore;
   /** Lets another node claim the slot. The node calls it when it closes. */
   release(): Promise<void>;
+  /** Forgets the key, so the slot's next claim makes a new one: for a key that was revoked */
+  forget(): Promise<void>;
 }
 
 /**
@@ -112,6 +114,9 @@ export function browserWriterKeys(
             async release() {
               db.close();
               unlock();
+            },
+            async forget() {
+              await idbRun(db, STORE, 'readwrite', (store) => store.clear());
             },
           });
         } catch {

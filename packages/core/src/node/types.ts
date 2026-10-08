@@ -809,5 +809,12 @@ export interface P2PNode {
    */
   asAgent(agent: { readonly keys: CryptoKeyPair; readonly note: string }): Promise<P2PNode>;
   subscribe(listener: (event: NodeEvent) => void): () => void;
+  /**
+   * Revokes this node's own session key in every space it writes in, its
+   * carry spaces, the contacts space and the account registry included, each
+   * with a cutoff at what it wrote; a lasting key is forgotten at once, so the
+   * next session signs with a new one. For signing out.
+   */
+  revokeSelf(): Promise<void>;
   close(): Promise<void>;
 }

@@ -6,6 +6,7 @@
  * hands it to a new device. The seed stays inside this object, and signs only
  * the note that lets a session key write.
  */
+import { unref } from '../utils/guards.js';
 import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
 import { AGENT_FACT } from '../identity/agent-note.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
@@ -447,6 +448,9 @@ async function addSubscriptions(
   return added;
 }
 
+/** How often a signed-in device looks for app connections whose chosen time has passed */
+const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
+
 /** Creates the sign-in flow for this page. */
 export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   const rpId = config.rpId ?? globalThis.location?.hostname ?? 'localhost';
@@ -491,6 +495,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   let seed: Uint8Array | null = null;
   let vaultKey: CryptoKey | null = null;
   let stopFollowingName: (() => void) | null = null;
+  let expiryTimer: ReturnType<typeof setInterval> | null = null;
   let started: Promise<void> | null = null;
 
   const browserPlace = async (): Promise<Place> => ({
@@ -558,9 +563,19 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   async function stopNode(node = state.session?.node): Promise<void> {
     stopFollowingName?.();
     stopFollowingName = null;
+    if (expiryTimer) clearInterval(expiryTimer);
+    expiryTimer = null;
     seed = null;
     vaultKey = null;
     await node?.close();
+  }
+
+  /** Disconnects every app connected here whose chosen time has passed */
+  async function letExpiredGo(): Promise<void> {
+    const now = Math.floor(Date.now() / 1000);
+    for (const known of auth.connections())
+      if (known.expiresAt > 0 && known.expiresAt <= now)
+        await auth.disconnect(known.origin, { audience: known.audience }).catch(() => {});
   }
 
   /** Starts the node for an unlocked account. */
@@ -608,6 +623,13 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       if (event.type === 'account') void adopt();
     });
     void adopt();
+
+    // An app connected for a while: once its time has passed, this device
+    // disconnects it, revoking its key, so what it writes after stops counting
+    // too, not only its note.
+    void letExpiredGo();
+    expiryTimer = setInterval(() => void letExpiredGo(), EXPIRY_SWEEP_MS);
+    unref(expiryTimer);
 
     return session;
   }
@@ -1423,6 +1445,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     async signOut() {
       await stay.forget();
       const leaving = state.session?.node;
+      // Before going: let apps whose time has passed go, and revoke this device's
+      // session key, so a key left behind here can't write for the account again.
+      await letExpiredGo().catch(() => {});
+      await leaving?.revokeSelf().catch(() => {});
       update({
         stage: 'starting',
         session: null,

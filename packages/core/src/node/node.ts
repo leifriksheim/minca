@@ -2432,6 +2432,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       iceServers: () => node.iceServers(),
       delegate: person('pass its access on'),
       asAgent: person('start another agent'),
+      revokeSelf: person('sign the account out'),
       subscribe: (listener: (event: NodeEvent) => void) =>
         node.subscribe((event) => {
           if (!('space' in event) || allowed(event.space)) listener(event);
@@ -2480,6 +2481,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     subscribe: events.subscribe,
+
+    async revokeSelf() {
+      const token = current.encoded;
+      // Every space it may write in: the listed ones, its carry spaces and the contacts space.
+      const ids = new Set([
+        ...(await spaces.list()).filter((space) => space.writable).map((space) => space.id),
+        ...carrySpaces,
+        ...(contactsSpaceId ? [contactsSpaceId] : []),
+      ]);
+      // Each its own store: one that can't be done must not keep the rest from happening.
+      await Promise.all([...ids].map((spaceId) => spaces.revoke(spaceId, token).catch(() => {})));
+      await node.account.revoke(token).catch(() => {});
+      // Forgotten now, not at close: a crash before closing must not leave a revoked key to be claimed again.
+      await claimed?.forget().catch(() => {});
+    },
 
     async close() {
       if (closed) return;

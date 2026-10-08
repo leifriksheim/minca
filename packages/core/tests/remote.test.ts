@@ -86,6 +86,14 @@ describe('a node across a port', () => {
     assert.deepEqual(updated.body, { text: 'Milk', done: true });
   });
 
+  test('signing out across the port revokes the node’s key, as it does in process', async () => {
+    const { remote } = await served();
+    const { id: space } = await remote.spaces.create({ name: 'Notes', visibility: 'public' });
+    await remote.records.put(space, 'app.todo.item', { text: 'before', done: false });
+    await remote.revokeSelf();
+    await assert.rejects(remote.records.put(space, 'app.todo.item', { text: 'after', done: false }));
+  });
+
   test('typed collections and validators cross as their names and JSON Schema', async () => {
     const { remote } = await served();
     const { id: space } = await remote.spaces.create({ name: 'Todo', ...team, visibility: 'private' });

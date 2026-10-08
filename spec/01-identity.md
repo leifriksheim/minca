@@ -484,25 +484,26 @@ an `iss` whose multicodec is not `p256-pub` (§4).
 > `iss` and `aud` DIDs, `fct` (when present) an array of objects. A malformed
 > token is refused rather than failing somewhere later.
 
-`at` is the moment the token is being relied on:
+Which time step 2 uses depends on what the token is relied on for:
 
-- for a record's `proof`, the record's own signing time,
-  `floor(Date.parse(createdAt) / 1000)` — so a record stays valid after the
-  session's token expires. The checking peer's own clock is not consulted
-  ([02 — Records](02-records.md) §9.3);
-- for anything else (an app checking its grant, an agent's note), the current
-  time.
+- **A record's `proof`: no time at all.** Step 2 is skipped. Whether a
+  record stands is something every peer must agree on whenever it looks, so
+  no one's clock, and no time the writer claims, may decide it
+  ([02 — Records](02-records.md) §9.3). A record stays valid after its note
+  runs out. What ends a key's writes is a revoke of the key, with a cutoff
+  at what it signed ([03 — Spaces](03-spaces.md) §6.4).
+- **Anything live** (a knock, a live message, a peer's proof when it
+  connects, an app checking its grant): the checking node's own clock. These
+  are one node's decisions in the moment, not verdicts peers share, so a
+  note that has run out stops working there on time, with no revoke needed.
 
-The cost: `createdAt` is whatever the writer typed, so a leaked session key
-can sign records backdated into its token's old window, for good. Only a
-`sys.revoke` of the key closes that window ([03 — Spaces](03-spaces.md)
-§5.1, §6.4), and today nothing writes one when a session ends.
-
-> **Planned: revoking a session's note when it ends.** Signing out, and
-> removing a device, revoke the session's key in every space it could write
-> in, with a cutoff at what it wrote, the way disconnecting an app already
-> does. _Open:_ whether a key of the account is at hand at sign-out, and
-> whether the device key is revoked too. Tracked in [#26](https://github.com/leifriksheim/weave/issues/26).
+So a leaked key's live use ends when its note runs out, and its records end
+when its key is revoked. Signing out revokes the session key in every space
+the node writes in, its carry spaces, the contacts space and the account
+registry, with a cutoff at what it wrote, and a device that kept the key
+forgets it (`revokeSelf`). _Open:_ removing a device from another one, which
+needs the list of the account's session keys
+([#26](https://github.com/leifriksheim/weave/issues/26)).
 
 ### 7.5 Delegation chains
 

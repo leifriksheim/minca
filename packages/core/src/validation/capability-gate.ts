@@ -37,16 +37,13 @@ const fail = (reason: string): GateResult => ({ passed: false, gate: 'capability
  * The crypto gate proves a version came from the key it claims. This one
  * answers the next question: may that key write here? A version signed by a
  * delegated key carries a UCAN in `proof`, and the gate walks it back to a root
- * identity, refusing anything that is expired, misaddressed, over-broad, or
- * rooted in an identity the application does not trust.
+ * identity, refusing anything misaddressed, over-broad, or rooted in an
+ * identity the application does not trust.
  *
- * "Expired" means expired **when the record was signed**, judged by its
- * `createdAt`. A record stays valid after its session ends, which is what lets a
- * peer that shows up next week accept last week's data. The cost is that a
- * leaked session key could backdate records into its own window — which is why
- * session keys live in memory and are short-lived. The receiver's own clock
- * decides nothing: a record dated ahead stands if its note was valid then,
- * so every peer reaches the same verdict whenever it receives it.
+ * No time is judged: not the note's `exp` or `nbf`, not the record's
+ * `createdAt`, by no one's clock. A record's standing is something every peer
+ * must agree on whenever it looks. What ends a key's writes is a revoke, with
+ * its cutoff (spec 03 §6.4); a note's time bounds only live checks.
  */
 export function createCapabilityGate(config: CapabilityGateConfig): CapabilityGate {
   const { provider, requiredCapability, resolveProof = () => null, isTrustedRoot } = config;
@@ -64,11 +61,10 @@ export function createCapabilityGate(config: CapabilityGateConfig): CapabilityGa
           return { passed: true, gate: 'capability' };
         }
 
-        const signedAt = Math.floor(Date.parse(version.createdAt) / 1000);
-        if (!Number.isFinite(signedAt)) {
+        // A date sync can order by, though it decides nothing here.
+        if (!Number.isFinite(Date.parse(version.createdAt)))
           return fail('Version has no valid creation time');
-        }
-        const chain = await resolveDelegationRoot(version.proof, resolveProof, provider, { at: signedAt });
+        const chain = await resolveDelegationRoot(version.proof, resolveProof, provider, { untimed: true });
         if (!chain.valid || chain.rootDid === null) {
           return fail(chain.reason ?? 'Invalid delegation chain');
         }

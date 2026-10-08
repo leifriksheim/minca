@@ -155,97 +155,33 @@ describe('capability gate', () => {
     assert.match(result.reason ?? '', /does not grant/i);
   });
 
-  test('rejects a record signed after its proof expired', async () => {
-    const root = await makeKey();
-    const session = await makeKey();
-    const ucan = await issueUCAN(
-      {
-        issuer: root,
-        audience: session.did,
-        capabilities: [ALL],
-        expiration: Math.floor(Date.now() / 1000) - 5,
-      },
-      provider,
-    );
-
-    const version = await signNote(session, 'stale', ucan.encoded);
-    const result = await gate.validate(version);
-    assert.equal(result.passed, false);
-    assert.match(result.reason ?? '', /expired/i);
-  });
-
-  test('accepts a record signed while its proof was valid, long after it expired', async () => {
-    // A peer that turns up next week must still accept last week's data.
+  test('a record’s standing judges no time: an expired note, and any date it claims, all stand', async () => {
     const root = await makeKey();
     const session = await makeKey();
     const now = Math.floor(Date.now() / 1000);
+    // A note that ran out an hour ago: live checks refuse it, but what its key signed is judged without a clock.
     const ucan = await issueUCAN(
       {
         issuer: root,
         audience: session.did,
         capabilities: [ALL],
-        notBefore: now - 10_800,
+        notBefore: now - 7200,
         expiration: now - 3600,
       },
       provider,
     );
-
-    const signedAt = new Date((now - 7200) * 1000).toISOString();
-    const unsigned = createVersion({
-      author: session.did,
-      collection: COLLECTION,
-      body: { text: 'written two hours ago' },
-      proof: ucan.encoded,
-      createdAt: signedAt,
-    });
-    const version = await signer.sign(unsigned, session.privateKey);
-    const result = await gate.validate(version);
-    assert.equal(result.passed, true, result.reason ?? 'no reason given');
-  });
-
-  test('rejects a record dated before its delegation began', async () => {
-    // A leaked session key must not be able to write "last year".
-    const root = await makeKey();
-    const session = await makeKey();
-    const now = Math.floor(Date.now() / 1000);
-    const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
-
-    const unsigned = createVersion({
-      author: session.did,
-      collection: COLLECTION,
-      body: { text: 'backdated' },
-      proof: ucan.encoded,
-      createdAt: new Date((now - 86_400 * 365) * 1000).toISOString(),
-    });
-    const version = await signer.sign(unsigned, session.privateKey);
-    assert.equal((await gate.validate(version)).passed, false);
-  });
-
-  test('a record dated ahead stands while its note covers that time; the receiver’s clock decides nothing', async () => {
-    const root = await makeKey();
-    const session = await makeKey();
-    const now = Math.floor(Date.now() / 1000);
-    const ucan = await issueUCAN(
-      { issuer: root, audience: session.did, capabilities: [ALL], expiration: now + 86_400 },
-      provider,
-    );
-    const unsigned = createVersion({
-      author: session.did,
-      collection: COLLECTION,
-      body: { text: 'from tomorrow' },
-      proof: ucan.encoded,
-      createdAt: new Date((now + 3600) * 1000).toISOString(),
-    });
-    assert.equal((await gate.validate(await signer.sign(unsigned, session.privateKey))).passed, true);
-    // Past the note's expiry, it is refused at every peer alike.
-    const late = createVersion({
-      author: session.did,
-      collection: COLLECTION,
-      body: { text: 'after the note' },
-      proof: ucan.encoded,
-      createdAt: new Date((now + 2 * 86_400) * 1000).toISOString(),
-    });
-    assert.equal((await gate.validate(await signer.sign(late, session.privateKey))).passed, false);
+    for (const when of [now - 86_400 * 365, now - 5000, now, now + 86_400 * 365]) {
+      const unsigned = createVersion({
+        author: session.did,
+        collection: COLLECTION,
+        body: { text: `dated ${when}` },
+        proof: ucan.encoded,
+        createdAt: new Date(when * 1000).toISOString(),
+      });
+      const result = await gate.validate(await signer.sign(unsigned, session.privateKey));
+      assert.equal(result.passed, true, result.reason ?? 'no reason given');
+    }
+    // What ends a key's writes is a revoke of the key, with its cutoff (03 §6.4).
   });
 
   test('honours an application trust policy', async () => {

@@ -571,9 +571,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!result.passed) {
       verdict = { verified: false, root: null, ...(result.reason ? { reason: result.reason } : {}) };
     } else {
-      const at = Math.floor(Date.parse(version.createdAt) / 1000);
       const chain = version.proof
-        ? await resolveDelegationRoot(version.proof, () => null, provider, { at })
+        ? await resolveDelegationRoot(version.proof, () => null, provider, { untimed: true })
         : null;
       verdict = { verified: true, root: chain?.valid ? chain.rootDid : version.author };
       verdicts.set(verdictKey(version), verdict);

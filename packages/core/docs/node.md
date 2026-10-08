@@ -55,6 +55,13 @@ A node acts for one account (`node.did`) and signs with one session key
 (`node.sessionDid`) for its whole lifetime. To act for another account, start
 another node.
 
+`revokeSelf()` revokes the node's session key in every space it writes in,
+its carry spaces, the contacts space and the account registry, each with a
+cutoff at what it wrote, and forgets a lasting key at once; the account
+home's sign-out calls it ([spec 01 §7.4](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+A record is judged with no time, so this, not the note running out, is what
+ends what a key can write. An agent's view refuses it.
+
 `close()` stops renewal, closes every open space (flushing what each keeps,
 stopping sync and disconnecting its transports), closes the registry store,
 and drops all event listeners. After `close()`, any call that needs a space
