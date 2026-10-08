@@ -155,7 +155,7 @@ export function checkNotify(when: unknown): string | null {
   if (String(w.collection).startsWith('sys.')) return 'collection must be one of the space’s collections';
   if (isObject(w.topic) && checkTopics([w.topic.field]) !== null) return 'topic.field must be a field name';
   if (w.where !== undefined) {
-    const problem = checkFilter(w.where);
+    const problem = checkFilter(w.where, 'where', { meta: WHERE_FIELDS });
     if (problem) return problem;
   }
   if (w.open !== undefined) {
@@ -397,6 +397,9 @@ export function matchesSubscription(
   }
   return true;
 }
+
+/** The record's own fields a subscription's `where` reads: what an app sees of any record */
+const WHERE_FIELDS = ['@key', '@collection', '@createdBy', '@createdAt'];
 
 /** What an app sees of a record, enough to match a subscription: its outside and, where it can open it, its body */
 export interface ReadableRecord {

@@ -52,7 +52,10 @@ const OPERATORS = new Set([
  * into its body otherwise.
  */
 export function fieldValue(record: FilterSubject, path: string): unknown {
-  if (path.startsWith('include:')) return record.included?.[path.slice('include:'.length)];
+  if (path.startsWith('include:')) {
+    const name = path.slice('include:'.length);
+    return record.included && Object.hasOwn(record.included, name) ? record.included[name] : undefined;
+  }
   if (path.startsWith('link:')) {
     if (!LINK_FIELD_PATTERN.test(path)) throw new Error(`"${path}" is not a link role, like "link:channel"`);
     const rel = path.slice('link:'.length);
@@ -65,7 +68,12 @@ export function fieldValue(record: FilterSubject, path: string): unknown {
   }
   let value: unknown = record.body;
   for (const part of path.split('.')) {
-    // Own members only: nothing a runtime adds to every object.
+    // Own members only, nothing a runtime adds to every object; and of a list, only its positions.
+    if (Array.isArray(value)) {
+      const items: ReadonlyArray<unknown> = value;
+      value = /^(0|[1-9][0-9]*)$/.test(part) ? items[Number(part)] : undefined;
+      continue;
+    }
     if (!isObject(value) || !Object.hasOwn(value, part)) return undefined;
     value = value[part];
   }
@@ -158,7 +166,11 @@ const MAX_FILTER_DEPTH = 16;
 export function checkFilter(
   filter: unknown,
   at = 'where',
-  options: { readonly include?: boolean } = {},
+  options: {
+    readonly include?: boolean;
+    /** The `@` fields it may read, when not all of them: a subscription sees only a record's outside */
+    readonly meta?: ReadonlyArray<string>;
+  } = {},
   depth = 1,
 ): string | null {
   if (!isRecord(filter)) return `${at} must be an object`;
@@ -179,8 +191,8 @@ export function checkFilter(
     }
     if (field.startsWith('$'))
       return `${at}: "${field}" is not a field or a logical operator ($and, $or, $not)`;
-    if (field.startsWith('@') && !META[field])
-      return `${at}: unknown record field "${field}" — use one of ${Object.keys(META).join(', ')}`;
+    if (field.startsWith('@') && !(options.meta ?? Object.keys(META)).includes(field))
+      return `${at}: unknown record field "${field}" — use one of ${(options.meta ?? Object.keys(META)).join(', ')}`;
     if (
       field.startsWith('include:') &&
       !(options.include && /^include:[A-Za-z][A-Za-z0-9_]{0,63}$/.test(field))

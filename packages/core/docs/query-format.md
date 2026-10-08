@@ -97,7 +97,7 @@ never `null`.
 | `@collection`    | `collection`                                                                                                                                                                                                                                 |
 | `link:<rel>`     | the `to` of the record's first link with that `rel`, as checks' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel. |
 | `include:<name>` | in a [rule](rules.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                                     |
-| body path        | Walk the body: at each segment, the current value must be a non-null object or array, and the segment one of its own member names (or an array index, as a string); otherwise the value is _missing_.                                        |
+| body path        | Walk the body: at each segment, the current value must be a non-null object or array, and the segment one of its own member names, or of an array a position (`0`, `1`, …; nothing else, not `length`); otherwise the value is _missing_.    |
 
 ## Operators
 
@@ -123,6 +123,8 @@ means deep equality: same JSON type; objects with the same member names
 > (specified here only as query syntax and result order) or something peers
 > share; and, for private spaces, that the index holds plaintext and must be
 > kept like the bodies it came from ([05](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
+
+`$and`, `$or` and `$not` nest at most 16 deep.
 
 Several operators on one field must all hold; several fields in one filter
 must all hold. `$and`: all subfilters hold; `$or`: at least one; `$not`: the

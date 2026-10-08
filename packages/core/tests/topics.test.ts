@@ -642,6 +642,12 @@ describe('a subscription’s where', () => {
     assert.match(checkNotify({ ...base, where: { '@prev': 1 } })!, /unknown record field/);
     assert.match(checkNotify({ ...base, where: { priority: { $near: 1 } } })!, /unknown operator/);
     assert.match(checkNotify({ ...base, where: { 'include:messages': 1 } })!, /what a rule's query included/);
+    // A subscription sees a record's outside: who signed this version, and the rest, are not its to read.
+    for (const field of ['@author', '@root', '@updatedAt', '@seq'])
+      assert.match(checkNotify({ ...base, where: { [field]: 'x' } })!, /unknown record field/, field);
+    let deep: Record<string, unknown> = { priority: 1 };
+    for (let i = 0; i < 16; i++) deep = { $not: deep };
+    assert.match(checkNotify({ ...base, where: deep })!, /nest at most 16 deep/);
     assert.match(
       checkProposal({ label: 'x', collection: 'std.task', where: { $where: 'x' } })!,
       /not a field/,
