@@ -53,8 +53,8 @@ Two costs are mixed in those numbers:
 - Every peer holding the same versions and checkpoints keeps the same set, so
   Negentropy converges.
 - Nothing changes for retained versions (`retain: true`): the access history,
-  `history: "all"`, first versions under `onePer` and `fixed`, versions under
-  `check`. Only stubs are ever dropped.
+  `history: "all"`, first versions under `onePer` and `fixed`, and versions
+  the writer keeps whole for checks. Only stubs are ever dropped.
 
 Not goals: compacting the access history (that is #25, access-state
 checkpoints); dropping first versions (§7.3); merging concurrent edits.
@@ -107,7 +107,8 @@ may edit, the creator could fence off everyone else's concurrent edits
 withdrawn, like a record whose author was removed by a change they had not
 seen (03 §5), the stubs it let peers drop could not come back, and newcomers
 could no longer check what sits on the anchor. So a checkpoint stands or
-falls on arrival, as of what it saw, like a citation in 02 §7.6. What a
+falls on arrival, as of what it saw, like a version a check cites
+(`packages/core/docs/checks.md`). What a
 rogue manager can do with this is bounded: they can drop history and fence
 off concurrent branches (§4.2), but they cannot make any version count that
 the chain check would have refused, because they can only anchor at a

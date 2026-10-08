@@ -460,7 +460,10 @@ What the node does with each is its own:
 - A withdrawn version (allowed when written, then taken away by a removal or
   a revoke it had not seen) is stored and passed on like one that stands,
   emits no `rejected` event, and never shows as a record: `records.get` and queries skip
-  it. It is there for proofs that cite it.
+  it. It is there for proofs that cite it ([checks](checks.md#citing-a-version)).
+- A version that fails its collection's checks stands: it is stored and
+  passed on, emits no `rejected` event, and `records.get` and queries skip
+  it ([checks](checks.md)).
 - A refused version emits a `rejected` event with the peer and the reason,
   and is remembered as (peer, id), at most 10,000, so it is not asked of that
   peer again. Never by id alone: a copy with a mangled signature has the

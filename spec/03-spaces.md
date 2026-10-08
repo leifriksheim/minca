@@ -506,7 +506,9 @@ whatever the change took away.
 Given a record's `id`, its root, its `seen`, its `author`, `log.n`, collection
 and `log.c.n`, a
 predicate `needs(role, state)`, and optionally `within`, the `seen` of a
-version that cites this one ([02](02-records.md) §7.6):
+version that cites this one. Peers never pass `within` when judging a
+version's standing; the library's checks do, to judge a version they cite as
+of what the citer saw ([checks](../packages/core/docs/checks.md#citing-a-version)):
 
 1. If anything in `seen`, or in `within`, is missing or waiting → not yet
    (retry later).
@@ -534,10 +536,11 @@ removal, a demotion, or the rules a demotion saw, by naming an older point. A
 narrowed rule on its own binds what saw it: without trusted time, a version
 naming an older point can't be told from one written offline then, and it
 counts if its author could have written it then. For a version that another
-cites, only what the citer had seen can take it away.
+cites, judged `within` the citer's `seen`, only what the citer had seen can take it away.
 
 Withdrawn is a refusal for every purpose but two: the version is still
-stored, and a version that cites it can count it ([02](02-records.md) §9.5).
+stored, and the library's checks can count it as evidence cited by a version
+that had not seen what withdrew it ([02](02-records.md) §9.5).
 
 _Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `cutOf`), `packages/core/src/node/space-runtime.ts` (`underUnseen`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/rules.test.ts` ("a narrowed rule…"), `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
 
