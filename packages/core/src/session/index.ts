@@ -32,6 +32,8 @@ export type {
 export {
   connectToHome,
   connectCarrier,
+  keyProof,
+  checkKeyProof,
   proposeToHome,
   isProposeRequest,
   homeAddress,

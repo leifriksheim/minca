@@ -130,8 +130,9 @@ The note format, and that every record carries it, are protocol
   `0.75 × ttl` later.
 - If the signer refuses or cannot be reached, the node keeps the note it has
   and asks again after `min(60, ttl / 4)` seconds, repeating until it succeeds
-  or the node closes. Once the held note expires, peers (and the node's own
-  gates) refuse what it writes.
+  or the node closes. Once the held note expires, live checks (knocks, live
+  messages, connecting to peers) refuse it; records it signs are judged with
+  no time, so they count until its key is revoked.
 
 A signer need not be able to sign. `grantSigner(grant)` answers every
 `delegate` call with the one note an account home granted, unchanged, and

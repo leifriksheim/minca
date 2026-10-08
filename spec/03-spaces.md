@@ -33,14 +33,14 @@ How peers connect and prove they may read is in [04 — Network](04-network.md).
 
 Terms used throughout:
 
-| Term                  | Meaning                                                                                                                                                                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **account**           | An identity's root DID (`did:key:zDn…`, [01](01-identity.md)). What a role is held by.                                                                                                                                        |
-| **root** of a version | The account the signing key speaks for: the issuer at the root of the version's note chain, resolved as of the version's `createdAt`, or the author itself when there is no note ([01](01-identity.md), [02](02-records.md)). |
-| **member**            | An account that holds a role that still exists, in a given state of the history.                                                                                                                                              |
-| **reader**            | Same as member, as far as key distribution is concerned (`readers()`).                                                                                                                                                        |
-| **hex40(x)**          | The first 20 bytes of SHA-256(UTF-8 `x`), as 40 lower-case hex characters.                                                                                                                                                    |
-| **cid(x)**            | `"b"` + lower-case RFC 4648 base32 (no padding) of SHA-256(`x`). The id format of [02](02-records.md).                                                                                                                        |
+| Term                  | Meaning                                                                                                                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **account**           | An identity's root DID (`did:key:zDn…`, [01](01-identity.md)). What a role is held by.                                                                                                                                                 |
+| **root** of a version | The account the signing key speaks for: the issuer at the root of the version's note chain, resolved with no time ([01](01-identity.md) §7.4), or the author itself when there is no note ([01](01-identity.md), [02](02-records.md)). |
+| **member**            | An account that holds a role that still exists, in a given state of the history.                                                                                                                                                       |
+| **reader**            | Same as member, as far as key distribution is concerned (`readers()`).                                                                                                                                                                 |
+| **hex40(x)**          | The first 20 bytes of SHA-256(UTF-8 `x`), as 40 lower-case hex characters.                                                                                                                                                             |
+| **cid(x)**            | `"b"` + lower-case RFC 4648 base32 (no padding) of SHA-256(`x`). The id format of [02](02-records.md).                                                                                                                                 |
 
 ---
 

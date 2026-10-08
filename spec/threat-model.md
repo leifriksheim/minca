@@ -176,7 +176,8 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
     live messages, connecting) ends with the note (01 §7.4). Signing out
-    revokes the session key, but a device lost while signed in has to be
+    writes a revoke of the session key, delivered when that device next
+    syncs, but a device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
     keys ([#26](https://github.com/leifriksheim/weave/issues/26)). A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
@@ -196,7 +197,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
 ### 3.6 App or agent
 
 - **Holds.** Its writes count only where its note covers them, and a home
-  grants an app only the spaces chosen for it (01 §8, 06 §2).
+  grants an app only the spaces chosen for it (01 §8, 06 §2). It can be given
+  a note only for a key it shows it holds, never the home's own or another
+  connection's, so disconnecting it revokes nobody else (06 §2.5).
 - **Does not hold yet.**
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space

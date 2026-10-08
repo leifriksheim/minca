@@ -77,6 +77,7 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
       connectToHome({
         home: state.home,
         audience: stage.agent.did,
+        audienceProof: stage.agent.proof,
         request: {
           name: stage.agent.name,
           access: 'write',

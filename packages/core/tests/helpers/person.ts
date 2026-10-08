@@ -9,7 +9,8 @@ import { createIdentityManager } from '../../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../src/identity/root-signer.js';
 import { createP256Provider } from '../../src/identity/crypto-p256.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
-import { publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
+import { didOf, publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
+import { keyProof } from '../../src/session/connect.js';
 import { deriveVaultKeyBytes } from '../../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../../src/identity/contact-key.js';
 import { createSigner } from '../../src/schema/signer.js';
@@ -114,4 +115,28 @@ export async function makeKey() {
   const pair = await provider.generateKeyPair();
   const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
   return { did, privateKey: pair.privateKey, publicKey: pair.publicKey };
+}
+
+const namedKeys = new Map<string, Promise<{ keys: CryptoKeyPair; did: string }>>();
+
+/** A real key for a name a test uses as an app's or agent's key, the same one each time */
+export function testAppKey(name: string): Promise<{ keys: CryptoKeyPair; did: string }> {
+  let key = namedKeys.get(name);
+  if (!key) {
+    key = (async () => {
+      const keys = await createP256Provider().generateKeyPair();
+      return { keys, did: await didOf(keys.publicKey) };
+    })();
+    namedKeys.set(name, key);
+  }
+  return key;
+}
+
+/** A connect request as an app would send it: the named key swapped for a real one, with its proof */
+export async function asked<T extends { readonly audience: string }>(
+  request: T,
+  key?: { readonly keys: CryptoKeyPair; readonly did: string },
+): Promise<T & { readonly proof: string }> {
+  const signer = key ?? (await testAppKey(request.audience));
+  return { ...request, audience: signer.did, proof: await keyProof(signer) };
 }

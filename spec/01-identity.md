@@ -498,10 +498,11 @@ Which time step 2 uses depends on what the token is relied on for:
   note that has run out stops working there on time, with no revoke needed.
 
 So a leaked key's live use ends when its note runs out, and its records end
-when its key is revoked. Signing out revokes the session key in every space
+when its key is revoked. Signing out writes a revoke of the session key in every space
 the node writes in, its carry spaces, the contacts space and the account
 registry, with a cutoff at what it wrote, and a device that kept the key
-forgets it (`revokeSelf`). _Open:_ removing a device from another one, which
+forgets it (`revokeSelf`); the revokes reach other peers as that device next
+syncs. _Open:_ removing a device from another one, which
 needs the list of the account's session keys
 ([#26](https://github.com/leifriksheim/weave/issues/26)).
 
