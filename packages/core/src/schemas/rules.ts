@@ -23,9 +23,15 @@
  * records like any other. See `packages/core/docs/rules.md`.
  */
 import type { NodeRecord, P2PNode, SpaceAccess } from '../node/types.js';
-import { nameOf, plainQuery, type BodyOf, type Query, type QueryRecord } from '../query/types.js';
-import { checkQuery } from '../query/filter.js';
-import { checkRecordCondition, recordHolds, type Condition } from '../records/checks.js';
+import {
+  nameOf,
+  plainQuery,
+  type BodyOf,
+  type Filter,
+  type Query,
+  type QueryRecord,
+} from '../query/types.js';
+import { checkFilter, checkQuery, matches } from '../query/filter.js';
 import { quickAddBody } from '../schema/quick-add.js';
 import { schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { roleHolds } from '../space/roles.js';
@@ -61,8 +67,8 @@ export type RuleAction =
 export interface RuleWhen {
   /** `records.query`'s format; `include` is how a rule counts or reads what points at a record */
   readonly query: Query;
-  /** A record condition over each result, which may also read `included` (`checkRecordCondition`) */
-  readonly holds?: Condition;
+  /** A filter over each result, which may also read `include:<name>`, what the query included (`checkFilter`) */
+  readonly holds?: Filter;
   /** Only records by someone holding one of these roles: a role name, or `member` for any */
   readonly from?: ReadonlyArray<string>;
 }
@@ -250,9 +256,7 @@ export function checkRule(value: unknown): string | null {
     const query = checkQuery(value.when.query);
     if (query) return `when.query: ${query}`;
     const holds =
-      value.when.holds === undefined
-        ? null
-        : checkRecordCondition(value.when.holds, 'when.holds', { included: true });
+      value.when.holds === undefined ? null : checkFilter(value.when.holds, 'when.holds', { include: true });
     if (holds) return holds;
   }
   const every = typeof value.every === 'string' ? checkCron(value.every) : null;
@@ -330,11 +334,7 @@ export async function matching(
       for (const one of value) latest = Math.max(latest, Date.parse(one.createdAt));
       included[name] = counted.has(name) ? value.length : value;
     }
-    if (
-      when.holds !== undefined &&
-      !(await recordHolds(when.holds, { ...record, author: record.createdBy, included }))
-    )
-      continue;
+    if (when.holds !== undefined && !matches({ ...record, included }, when.holds)) continue;
     found.push({ record, included, moment: latest });
   }
   return found;

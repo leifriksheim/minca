@@ -34,7 +34,8 @@ import type { Version, Link } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
 import { parseUCAN } from '../identity/ucan.js';
 import { checkTopics, topicKey, topicTag, topicValues } from '../records/topics.js';
-import { checkRecordCondition, recordHolds, type Condition } from '../records/checks.js';
+import { checkFilter, matches } from '../query/filter.js';
+import type { Filter } from '../query/types.js';
 import { canonicalize } from '../schema/version.js';
 import { COLLECTION_NAME, schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { isObject } from '../utils/guards.js';
@@ -59,11 +60,11 @@ export interface NotifyWhen {
   /** Only records other people wrote. Default true. */
   readonly others?: boolean;
   /**
-   * Only records this condition holds for: CEL, as a check is, over the
-   * record alone (`checkRecordCondition`) — `body.status == "done"`.
+   * Only records this filter matches: a query's filter over the record alone
+   * (`checkFilter`) — `{ "status": "done" }`.
    * Judged by an app, which can read the body; never carried.
    */
-  readonly where?: Condition;
+  readonly where?: Filter;
   /** Where clicking the notification goes: an app's address. Default: the account home. */
   readonly open?: string;
   /** Kept, but quiet */
@@ -95,7 +96,7 @@ export interface NotifyProposal {
     | { readonly field: string; readonly me: true };
   readonly others?: boolean;
   /** Only records this condition holds for (`NotifyWhen.where`) */
-  readonly where?: Condition;
+  readonly where?: Filter;
   /** Only these of the spaces the app may reach. Default: all of them. */
   readonly spaces?: ReadonlyArray<string>;
   /** Must be on the app's own origin. Default: the app's origin. */
@@ -154,7 +155,7 @@ export function checkNotify(when: unknown): string | null {
   if (String(w.collection).startsWith('sys.')) return 'collection must be one of the space’s collections';
   if (isObject(w.topic) && checkTopics([w.topic.field]) !== null) return 'topic.field must be a field name';
   if (w.where !== undefined) {
-    const problem = checkRecordCondition(w.where);
+    const problem = checkFilter(w.where);
     if (problem) return problem;
   }
   if (w.open !== undefined) {
@@ -199,7 +200,7 @@ export interface AppNotify {
   readonly collection: string;
   readonly topic?: NotifyProposal['topic'];
   readonly others?: boolean;
-  readonly where?: Condition;
+  readonly where?: Filter;
 }
 
 /** Why an app's `notify` entry can't be offered, or null */
@@ -437,14 +438,17 @@ export function matchesRecord(
  * A carrier never has it, so it may wake an app for a record this then
  * turns down — better an app woken for nothing than a record missed.
  */
-export function whereHolds(when: NotifyWhen, record: ReadableRecord): Promise<boolean> {
-  if (when.where === undefined) return Promise.resolve(true);
-  return recordHolds(when.where, {
-    body: record.body,
-    links: record.links ?? [],
-    key: record.key,
-    collection: record.collection,
-    author: record.createdBy,
-    createdAt: record.createdAt,
-  });
+export function whereHolds(when: NotifyWhen, record: ReadableRecord): boolean {
+  if (when.where === undefined) return true;
+  return matches(
+    {
+      key: record.key,
+      collection: record.collection,
+      body: record.body,
+      links: record.links ?? [],
+      createdBy: record.createdBy,
+      createdAt: record.createdAt,
+    },
+    when.where,
+  );
 }

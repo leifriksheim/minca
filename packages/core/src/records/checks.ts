@@ -39,7 +39,7 @@ import {
   type CelValue,
 } from './cel.js';
 
-/** A condition: a CEL expression, like `body.status == "done"`. Checked by `checkChecks` or `checkRecordCondition`. */
+/** A check's condition: a CEL expression, like `body.amount > 0.0`. Checked by `checkChecks`. */
 export type Condition = string;
 
 /** One check a collection's records must pass: `that` must be true, else the version is refused and `else` says why */
@@ -240,66 +240,4 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
 
 function isCheckedVersion(value: unknown): value is CheckedVersion {
   return isObject(value) && typeof value.id === 'string' && typeof value.seq === 'number';
-}
-
-/** What a record condition reads: a record as it stands, without the space or anything cited */
-const RECORD_NAMES = ['body', 'links', 'key', 'collection', 'author', 'createdAt'];
-
-/**
- * Why a condition over one record can't be kept, or null. CEL, as a check
- * is, reading only `body`, `links`, `key`, `collection`, `author` and
- * `createdAt`, and asking the space nothing: what a subscription's `where`
- * holds, judged by an app with the record in hand. With `included`, it may
- * also read `included`: what a query's `include` found for the record, as a
- * rule's condition does (`packages/core/docs/rules.md`).
- */
-export function checkRecordCondition(
-  condition: unknown,
-  at = 'where',
-  options: { readonly included?: boolean } = {},
-): string | null {
-  const node = parse(condition, at);
-  if (typeof node === 'string') return node;
-  const names = new Set(options.included ? [...RECORD_NAMES, 'included'] : RECORD_NAMES);
-  const count = { nodes: 0 };
-  const problem = checkCel(node, { names, linkRel: LINK_REL_PATTERN }, count);
-  if (problem) return `${at}: ${problem}`;
-  return count.nodes > MAX_CHECK_NODES ? `${at} is too large (at most ${MAX_CHECK_NODES} parts)` : null;
-}
-
-/**
- * Whether a condition that passed `checkRecordCondition` holds for a record.
- * Only `true` holds: an error, or anything else, is simply not a match.
- */
-export async function recordHolds(
-  condition: Condition,
-  record: {
-    readonly body: unknown;
-    readonly links: ReadonlyArray<Link>;
-    readonly key: string;
-    readonly collection: string;
-    readonly author: string | null;
-    readonly createdAt: string;
-    /** What a query's `include` found for it, for a condition checked with `included` */
-    readonly included?: Readonly<Record<string, unknown>>;
-  },
-): Promise<boolean> {
-  const node = parse(condition, 'where');
-  if (typeof node === 'string') return false;
-  const links = fromJson(record.links);
-  const vars = new Map<string, CelValue>([
-    ['body', fromJson(record.body)],
-    ['links', links],
-    ['key', record.key],
-    ['collection', record.collection],
-    ['author', record.author],
-    ['createdAt', record.createdAt],
-    ['included', fromJson(record.included ?? {})],
-  ]);
-  try {
-    return (await evaluateCel(node, { vars, links })) === true;
-  } catch (error) {
-    if (isCelStop(error)) return false;
-    throw error;
-  }
 }

@@ -42,7 +42,7 @@ import { Person } from './Person';
 import { useDraft } from './useDraft';
 import { QueryBuilder, PAGE_SIZES } from './QueryBuilder';
 import { NEWEST_FIRST, type Sort } from '../derive/filters';
-import { clauseFields, filterFrom, type Clause } from '../derive/conditions';
+import { clauseFields, whereOf, type Clause } from '../derive/conditions';
 
 const LAYOUTS = ['list', 'table', 'board'] as const;
 type Layout = (typeof LAYOUTS)[number];
@@ -133,7 +133,7 @@ export function CollectionView({
   // Choices that live in a linked record (a vote's poll) need that record to show their label.
   const needsLinked = [...columnsOf(schema), ...metaFields(schema)].some((f) => choicesFrom(f.schema));
   const fields = clauseFields({ schema, topics: [] }, { query: true });
-  const picked = filterFrom(clauses, did);
+  const picked = whereOf(clauses, did);
   const parts: Filter[] = [
     ...(search.trim() && title ? [{ [title]: { $contains: search.trim() } }] : []),
     ...(picked ? [picked] : []),

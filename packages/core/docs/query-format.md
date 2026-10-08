@@ -39,10 +39,11 @@ Operators  = { 1*( "$eq": Value | "$ne": Value
                  | "$exists": boolean
                  | "$contains": Value ) }
 
-Field      = MetaField | LinkField | BodyPath
+Field      = MetaField | LinkField | IncludeField | BodyPath
 MetaField  = "@key" | "@author" | "@root" | "@createdBy" | "@createdAt"
            | "@updatedAt" | "@seq" | "@collection"
 LinkField  = "link:" rel                  ; rel as spec 02 §5.1
+IncludeField = "include:" name            ; in a rule's `holds` only: what its query included
 BodyPath   = segment *( "." segment )     ; not starting with "@", "$" or "link:"
 
 IncludeMap = { *( Name: Include ) }
@@ -84,18 +85,19 @@ never `null`.
 
 ## Field values
 
-| Field         | Value                                                                                                                                                                                                                                        |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@key`        | the record key                                                                                                                                                                                                                               |
-| `@author`     | the DID that signed this version                                                                                                                                                                                                             |
-| `@root`       | the account it acted for                                                                                                                                                                                                                     |
-| `@createdBy`  | the root of the record's first version (or null)                                                                                                                                                                                             |
-| `@createdAt`  | `createdAt` of the record's first version (the creator's clock)                                                                                                                                                                              |
-| `@updatedAt`  | `createdAt` of this version                                                                                                                                                                                                                  |
-| `@seq`        | `seq`                                                                                                                                                                                                                                        |
-| `@collection` | `collection`                                                                                                                                                                                                                                 |
-| `link:<rel>`  | the `to` of the record's first link with that `rel`, as checks' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel. |
-| body path     | Walk the body: at each segment, the current value must be a non-null object or array, and the segment is a member name (or array index, as a string); otherwise the value is _missing_.                                                      |
+| Field            | Value                                                                                                                                                                                                                                        |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@key`           | the record key                                                                                                                                                                                                                               |
+| `@author`        | the DID that signed this version                                                                                                                                                                                                             |
+| `@root`          | the account it acted for                                                                                                                                                                                                                     |
+| `@createdBy`     | the root of the record's first version (or null)                                                                                                                                                                                             |
+| `@createdAt`     | `createdAt` of the record's first version (the creator's clock)                                                                                                                                                                              |
+| `@updatedAt`     | `createdAt` of this version                                                                                                                                                                                                                  |
+| `@seq`           | `seq`                                                                                                                                                                                                                                        |
+| `@collection`    | `collection`                                                                                                                                                                                                                                 |
+| `link:<rel>`     | the `to` of the record's first link with that `rel`, as checks' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel. |
+| `include:<name>` | in a [rule](rules.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                                     |
+| body path        | Walk the body: at each segment, the current value must be a non-null object or array, and the segment one of its own member names (or an array index, as a string); otherwise the value is _missing_.                                        |
 
 ## Operators
 

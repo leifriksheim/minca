@@ -1,7 +1,7 @@
 /** Rules picked from the space's collections, kept with what was picked so they can be shown in words; run by `startRules` while this app is open. */
 import { useEffect } from 'react';
 import { useAccount, useNode } from '@weaveprotocol/core/react';
-import type { Condition, NodeCollection, QueryRecord } from '@weaveprotocol/core';
+import type { Filter, NodeCollection, QueryRecord } from '@weaveprotocol/core';
 import {
   IT,
   ME,
@@ -12,15 +12,7 @@ import {
   type RuleWhen,
 } from '@weaveprotocol/core/schemas';
 import { attachable, isObject, quickAddBody } from './derive/schema-ui';
-import {
-  celLiteral,
-  clausesWords,
-  clauseFields,
-  filterFrom,
-  whereOf,
-  type Clause,
-  type ClauseField,
-} from './derive/conditions';
+import { clausesWords, clauseFields, whereOf, type Clause, type ClauseField } from './derive/conditions';
 import { collectionLabel } from './derive/schema-ui';
 
 /** "…has more than 10 votes": how many records point at it, of one collection, perhaps only some of them */
@@ -97,21 +89,21 @@ export function pickedOf(rule: Rule): Picked | null {
 }
 
 const COUNT_OPERATOR: Readonly<Record<CountClause['op'], string>> = {
-  more: '>',
-  atLeast: '>=',
-  less: '<',
-  atMost: '<=',
-  is: '==',
+  more: '$gt',
+  atLeast: '$gte',
+  less: '$lt',
+  atMost: '$lte',
+  is: '$eq',
 };
 
 /** What was picked, as the rule runs it: a query, counts as includes, and the conditions; "me" is `$me`, whoever runs it */
 export function compile(picked: Picked): RuleWhen {
-  const parts: Condition[] = [];
+  const parts: Filter[] = [];
   const own = whereOf(picked.clauses, ME);
   if (own !== undefined) parts.push(own);
   const count = picked.count;
-  if (count) parts.push(`included.${COUNTED} ${COUNT_OPERATOR[count.op]} ${celLiteral(count.value)}`);
-  const only = count ? filterFrom(count.clauses ?? [], ME) : undefined;
+  if (count) parts.push({ [`include:${COUNTED}`]: { [COUNT_OPERATOR[count.op]]: count.value } });
+  const only = count ? whereOf(count.clauses ?? [], ME) : undefined;
   // Where a record is, as the query's filter: `link:channel` is also a topic a carrier can match.
   const inside = (picked.within ?? []).map((w) => ({ [`link:${w.rel}`]: w.to }));
   return {
@@ -131,7 +123,7 @@ export function compile(picked: Picked): RuleWhen {
           }
         : {}),
     },
-    ...(parts.length ? { holds: parts.map((part) => `(${part})`).join(' && ') } : {}),
+    ...(parts.length ? { holds: parts.length === 1 ? parts[0] : { $and: parts } } : {}),
   };
 }
 

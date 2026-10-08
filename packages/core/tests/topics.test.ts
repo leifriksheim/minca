@@ -617,13 +617,13 @@ describe('a subscription’s where', () => {
       label: 'Urgent task',
       collection: task.name,
       spaces: 'all' as const,
-      where: 'body.priority >= 3',
+      where: { priority: { $gte: 3 } },
       since,
     };
     assert.equal(checkNotify(when), null);
     const told: string[] = [];
     for (const record of [urgent, later, unset])
-      if (matchesRecord(when, record, bob) && (await whereHolds(when, record))) told.push(record.key);
+      if (matchesRecord(when, record, bob) && whereHolds(when, record)) told.push(record.key);
     // A missing priority is not compared: it is simply not a match.
     assert.deepEqual(told, [urgent.key]);
 
@@ -631,26 +631,27 @@ describe('a subscription’s where', () => {
     assert.equal('where' in carried, false);
   });
 
-  test('is refused when it asks the space, reads what a record doesn’t have, or is not a condition', () => {
+  test('is refused when it is not a filter, or reads what a record doesn’t have', () => {
     const base = {
       label: 'x',
       collection: 'std.task',
       spaces: 'all' as const,
       since: new Date().toISOString(),
     };
-    assert.match(checkNotify({ ...base, where: 'member(author)' })!, /asks the space/);
-    assert.match(checkNotify({ ...base, where: 'prev.body == null' })!, /prev/);
-    assert.match(checkNotify({ ...base, where: '1 ~ 2' })!, /unexpected/);
+    assert.match(checkNotify({ ...base, where: 'priority >= 3' })!, /must be an object/);
+    assert.match(checkNotify({ ...base, where: { '@prev': 1 } })!, /unknown record field/);
+    assert.match(checkNotify({ ...base, where: { priority: { $near: 1 } } })!, /unknown operator/);
+    assert.match(checkNotify({ ...base, where: { 'include:messages': 1 } })!, /what a rule's query included/);
     assert.match(
-      checkProposal({ label: 'x', collection: 'std.task', where: 'versions([]).size() == 0' })!,
-      /asks the space/,
+      checkProposal({ label: 'x', collection: 'std.task', where: { $where: 'x' } })!,
+      /not a field/,
     );
     assert.equal(
       checkProposal({
         label: 'Assigned to me, urgent',
         collection: 'std.task',
         topic: { field: 'assignees', me: true },
-        where: 'body.priority >= 3 && body.status != "done"',
+        where: { priority: { $gte: 3 }, status: { $ne: 'done' } },
       }),
       null,
     );

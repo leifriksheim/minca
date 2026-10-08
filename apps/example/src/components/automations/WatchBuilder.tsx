@@ -1,21 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  recordHolds,
-  type Condition,
+  matches,
+  type Filter,
   type NodeCollection,
   type NodeRecord,
   type SpaceSummary,
 } from '@weaveprotocol/core';
 import { useAccount, useNode } from '@weaveprotocol/core/react';
 import { Modal } from '@weave/app-shared/Modal';
-import {
-  celLiteral,
-  clauseFields,
-  clausesWords,
-  subscriptionOf,
-  whereOf,
-  type Clause,
-} from '../../derive/conditions';
+import { clauseFields, clausesWords, subscriptionOf, whereOf, type Clause } from '../../derive/conditions';
 import { collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { nameOf } from '../../derive/people';
 import { ago } from '../../derive/time';
@@ -29,11 +22,11 @@ type Who = 'others' | 'anyone';
 type Where = 'space' | 'all';
 
 /** "Linked to this record by `rel`", as a condition over a record */
-const linkedTo = (w: Within): Condition => `link(${celLiteral(w.rel)}) == ${celLiteral(w.to)}`;
+const linkedTo = (w: Within): Filter => ({ [`link:${w.rel}`]: w.to });
 
 /** Every condition, all of which must hold; undefined when there are none */
-const allOf = (parts: ReadonlyArray<Condition>): Condition | undefined =>
-  parts.length === 0 ? undefined : parts.map((part) => `(${part})`).join(' && ');
+const allOf = (parts: ReadonlyArray<Filter>): Filter | undefined =>
+  parts.length === 0 ? undefined : parts.length === 1 ? parts[0] : { $and: [...parts] };
 
 /** How many of the newest records the preview looks through */
 const LOOK_BACK = 50;
@@ -105,11 +98,7 @@ export function WatchBuilder({
         for (const record of records) {
           if (!record.verified || record.body === null) continue;
           if (who === 'others' && record.createdBy === did) continue;
-          if (
-            condition !== undefined &&
-            !(await recordHolds(condition, { ...record, author: record.createdBy }))
-          )
-            continue;
+          if (condition !== undefined && !matches(record, condition)) continue;
           matched.push(record);
         }
         if (live) setFound({ for: looking, matched, looked: records.length });

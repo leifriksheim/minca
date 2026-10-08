@@ -2,7 +2,7 @@
 
 "When a channel has more than 100 messages, say so in it." "When a poll has
 10 votes, close it." "When someone mentions the bot, answer them." A rule
-finds records with a query, keeps those a condition holds for, and does one
+finds records with a query, keeps those a filter matches, and does one
 thing for each, once; or does it at set times.
 
 One kind of record for all of these, whoever runs it: a person's app, their
@@ -26,7 +26,7 @@ who made it:
       "collection": "std.channel",
       "include": { "messages": { "rel": "channel", "from": "std.message", "count": true } }
     },
-    "holds": "included.messages >= 100"
+    "holds": { "include:messages": { "$gte": 100 } }
   },
   "then": {
     "kind": "add",
@@ -41,7 +41,7 @@ who made it:
 | Field    | Meaning                                                                                                                                                        |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`   | What people call it                                                                                                                                            |
-| `when`   | `query`: a query in [the query format](query-format.md). `holds`, optional: a condition over each result that must be true. `from`, optional: below.           |
+| `when`   | `query`: a query in [the query format](query-format.md). `holds`, optional: a filter each result must match. `from`, optional: below.                          |
 | `every`  | Optional. Five cron fields, minute hour day month weekday, in the runner's local time: the rule also runs by itself then. A rule has `when`, `every`, or both. |
 | `then`   | What it does, below                                                                                                                                            |
 | `by`     | Optional. The DID of the bot that runs it; without it, its maker's own devices and agent do ([Who runs a rule](#who-runs-a-rule))                              |
@@ -60,13 +60,11 @@ weekday 0 or 7 is Sunday; a day and a weekday both given means either. At
 those times the rule acts once, about no record: `$it` links nothing and
 `{title}` stays as written, so a rule that changes a record needs a `when`.
 
-`holds` is a CEL condition, as a check is
-([spec 02 §7.6](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)),
-read as a record condition (`checkRecordCondition`): `body`, `links`, `key`,
-`collection`, `author` (the record's creator) and `createdAt`, and also
-`included`, what the query's `include` found for the record: a number for an
-include with `count`, else the list of records. Asking the space
-(`versions`, `can`, `member`) is refused, as in a subscription's `where`.
+`holds` is a filter in [the query format](query-format.md) over each result,
+which may also read `include:<name>`: what the query's `include` of that name
+found for the record, a number for an include with `count`, else the list of
+records. Use it for what a query's own `where` can't say, like "more than 100
+messages".
 
 Anything a query can find, a rule can act on. What points at a record is
 counted by following links, so a relation must be a link to be counted
@@ -164,4 +162,4 @@ the earlier claim acts, and the later is taken back. Nothing runs while every
 runner is closed: to keep rules running with every device off, run
 `weave agent --no-chat`, or a bot on a host.
 
-_Source: `packages/core/src/schemas/rules.ts` (`rule`, `ruleRun`, `checkRule`, `matching`, `act`, `rulesFor`, `runRules`, `startRules`, `fillRuleText`, `IT`, `ME`), `packages/core/src/schemas/cron.ts`, `packages/core/src/schema/quick-add.ts` (`quickAddBody`), `packages/core/src/records/checks.ts` (`checkRecordCondition`, `recordHolds`), `packages/cli/src/main.ts` (`runAgent`), `packages/cli/src/agent-rules.ts` (`triggerPrompt`), `apps/example/src/rules.ts` (`compile`, `useRunRules`). Tests: `packages/core/tests/rule-records.test.ts`, `packages/core/tests/rule-runners.test.ts` (all)._
+_Source: `packages/core/src/schemas/rules.ts` (`rule`, `ruleRun`, `checkRule`, `matching`, `act`, `rulesFor`, `runRules`, `startRules`, `fillRuleText`, `IT`, `ME`), `packages/core/src/schemas/cron.ts`, `packages/core/src/schema/quick-add.ts` (`quickAddBody`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/cli/src/main.ts` (`runAgent`), `packages/cli/src/agent-rules.ts` (`triggerPrompt`), `apps/example/src/rules.ts` (`compile`, `useRunRules`). Tests: `packages/core/tests/rule-records.test.ts`, `packages/core/tests/rule-runners.test.ts` (all)._
