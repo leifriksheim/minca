@@ -7,7 +7,20 @@ import { LINK_FIELD_PATTERN } from '../records/links.js';
 /** Nested `include` beyond this is refused rather than quietly slow. */
 export const MAX_INCLUDE_DEPTH = 3;
 
-const META: Record<string, (r: NodeRecord) => unknown> = {
+/**
+ * What a filter reads of a record: a query's results have all of it; a
+ * subscription matching a record an app just saw has its outside and body;
+ * a rule's results also have what the query's `include` found.
+ */
+export type FilterSubject = Pick<
+  NodeRecord,
+  'key' | 'collection' | 'body' | 'links' | 'createdBy' | 'createdAt'
+> &
+  Partial<Pick<NodeRecord, 'author' | 'root' | 'updatedAt' | 'seq'>> & {
+    readonly included?: Readonly<Record<string, unknown>>;
+  };
+
+const META: Record<string, (r: FilterSubject) => unknown> = {
   '@key': (r) => r.key,
   '@author': (r) => r.author,
   '@root': (r) => r.root,
@@ -38,7 +51,11 @@ const OPERATORS = new Set([
  * first link of that role points (missing when it has none), a dotted path
  * into its body otherwise.
  */
-export function fieldValue(record: NodeRecord, path: string): unknown {
+export function fieldValue(record: FilterSubject, path: string): unknown {
+  if (path.startsWith('include:')) {
+    const name = path.slice('include:'.length);
+    return record.included && Object.hasOwn(record.included, name) ? record.included[name] : undefined;
+  }
   if (path.startsWith('link:')) {
     if (!LINK_FIELD_PATTERN.test(path)) throw new Error(`"${path}" is not a link role, like "link:channel"`);
     const rel = path.slice('link:'.length);
@@ -51,7 +68,13 @@ export function fieldValue(record: NodeRecord, path: string): unknown {
   }
   let value: unknown = record.body;
   for (const part of path.split('.')) {
-    if (!isObject(value)) return undefined;
+    // Own members only, nothing a runtime adds to every object; and of a list, only its positions.
+    if (Array.isArray(value)) {
+      const items: ReadonlyArray<unknown> = value;
+      value = /^(0|[1-9][0-9]*)$/.test(part) ? items[Number(part)] : undefined;
+      continue;
+    }
+    if (!isObject(value) || !Object.hasOwn(value, part)) return undefined;
     value = value[part];
   }
   return value;
@@ -122,7 +145,7 @@ function conditionHolds(value: unknown, condition: unknown): boolean {
 }
 
 /** Whether a record matches a filter. */
-export function matches(record: NodeRecord, filter: Filter): boolean {
+export function matches(record: FilterSubject, filter: Filter): boolean {
   return Object.entries(filter).every(([field, condition]) => {
     if (field === '$and') return (filter.$and ?? []).every((f) => matches(record, f));
     if (field === '$or') return (filter.$or ?? []).some((f) => matches(record, f));
@@ -133,26 +156,48 @@ export function matches(record: NodeRecord, filter: Filter): boolean {
 
 // ─── Checking a query before running it ─────────────────────────────
 
-function checkFilter(filter: unknown, at: string): string | null {
+/** Filters nest at most this deep: a subscription's or rule's, judged on records as they arrive */
+const MAX_FILTER_DEPTH = 16;
+
+/**
+ * Why a filter can't be used, or null. `include` lets it read `include:<name>`,
+ * what a rule's query included.
+ */
+export function checkFilter(
+  filter: unknown,
+  at = 'where',
+  options: {
+    readonly include?: boolean;
+    /** The `@` fields it may read, when not all of them: a subscription sees only a record's outside */
+    readonly meta?: ReadonlyArray<string>;
+  } = {},
+  depth = 1,
+): string | null {
   if (!isRecord(filter)) return `${at} must be an object`;
+  if (depth > MAX_FILTER_DEPTH) return `${at}: filters nest at most ${MAX_FILTER_DEPTH} deep`;
   for (const [field, condition] of Object.entries(filter)) {
     if (field === '$and' || field === '$or') {
       if (!Array.isArray(condition)) return `${at}.${field} must be a list of filters`;
       for (const [i, sub] of condition.entries()) {
-        const problem = checkFilter(sub, `${at}.${field}[${i}]`);
+        const problem = checkFilter(sub, `${at}.${field}[${i}]`, options, depth + 1);
         if (problem) return problem;
       }
       continue;
     }
     if (field === '$not') {
-      const problem = checkFilter(condition, `${at}.$not`);
+      const problem = checkFilter(condition, `${at}.$not`, options, depth + 1);
       if (problem) return problem;
       continue;
     }
     if (field.startsWith('$'))
       return `${at}: "${field}" is not a field or a logical operator ($and, $or, $not)`;
-    if (field.startsWith('@') && !META[field])
-      return `${at}: unknown record field "${field}" — use one of ${Object.keys(META).join(', ')}`;
+    if (field.startsWith('@') && !(options.meta ?? Object.keys(META)).includes(field))
+      return `${at}: unknown record field "${field}" — use one of ${(options.meta ?? Object.keys(META)).join(', ')}`;
+    if (
+      field.startsWith('include:') &&
+      !(options.include && /^include:[A-Za-z][A-Za-z0-9_]{0,63}$/.test(field))
+    )
+      return `${at}: "${field}" reads what a rule's query included, like "include:messages"`;
     if (field.startsWith('link:') && !LINK_FIELD_PATTERN.test(field))
       return `${at}: "${field}" is not a link role, like "link:channel"`;
     if (isRecord(condition) && Object.keys(condition).some((k) => k.startsWith('$'))) {

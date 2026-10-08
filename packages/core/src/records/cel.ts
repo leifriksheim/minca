@@ -710,12 +710,13 @@ function depthOf(root: CelNode): number {
   while (stack.length > 0) {
     const [n, d] = stack.pop()!;
     deepest = Math.max(deepest, d);
-    for (const child of childrenOf(n)) stack.push([child, d + 1]);
+    for (const child of celChildren(n)) stack.push([child, d + 1]);
   }
   return deepest;
 }
 
-function childrenOf(n: CelNode): ReadonlyArray<CelNode> {
+/** The parts directly inside a part */
+export function celChildren(n: CelNode): ReadonlyArray<CelNode> {
   switch (n.k) {
     case 'lit':
     case 'ident':

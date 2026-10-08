@@ -64,7 +64,7 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
       if (first) continue;
       for (const subscription of subscriptions) {
         if (stopped) return;
-        if (matchesRecord(subscription, record, node.did) && (await whereHolds(subscription, record)))
+        if (matchesRecord(subscription, record, node.did) && whereHolds(subscription, record))
           options.onNotify({ subscription, record });
       }
     }

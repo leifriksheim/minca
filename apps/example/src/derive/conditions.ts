@@ -1,5 +1,5 @@
-/** Conditions picked from a collection's schema, for filters, notifications and rules: kept as picked, turned into checks or a query's `where` when used. */
-import type { Condition, Filter, NodeCollection } from '@weaveprotocol/core';
+/** Conditions picked from a collection's schema, for filters, notifications and rules: kept as picked, turned into a filter when used. */
+import type { Filter, NodeCollection } from '@weaveprotocol/core';
 import { choicesOf, fieldsOf, type Choice } from './schema-ui';
 import { fieldTypeOf, type FieldTypeName } from './field-types';
 
@@ -154,49 +154,6 @@ function complete(clause: Clause): boolean {
 
 const EMPTY = [null, '', []];
 
-/** One condition in the language of checks, reading the record's body. `me` becomes this DID. */
-function conditionOf(clause: Clause, me: string): Condition {
-  const name = JSON.stringify(clause.field);
-  const at = `body[${name}]`;
-  const value = celLiteral(clause.me ? me : clause.value);
-  const empty = `(!(${name} in body) || ${at} in ${celLiteral(EMPTY)})`;
-  switch (clause.op) {
-    case 'is':
-      return `${at} == ${value}`;
-    case 'isNot':
-      return `${at} != ${value}`;
-    case 'more':
-      return `${at} > ${value}`;
-    case 'less':
-    case 'before':
-      return `${at} < ${value}`;
-    case 'atLeast':
-    case 'after':
-      return `${at} >= ${value}`;
-    case 'atMost':
-      return `${at} <= ${value}`;
-    case 'includes':
-      // Only a list here: text is searched in a query alone.
-      return `${value} in ${at}`;
-    case 'filled':
-      return `!${empty}`;
-    case 'empty':
-      return empty;
-  }
-}
-
-/** A value as a CEL literal: JSON's strings, numbers, lists and null read the same in CEL */
-export function celLiteral(value: unknown): string {
-  return JSON.stringify(value ?? null);
-}
-
-/** Every complete condition, all of which must hold; undefined when there are none */
-export function whereOf(clauses: ReadonlyArray<Clause>, me: string): Condition | undefined {
-  const parts = clauses.filter(complete).map((clause) => conditionOf(clause, me));
-  if (parts.length === 0) return undefined;
-  return parts.map((part) => `(${part})`).join(' && ');
-}
-
 /** One condition as a query's filter, on the body field it names */
 function filterOf(clause: Clause, me: string): Filter {
   const value = clause.me ? me : clause.value;
@@ -225,8 +182,8 @@ function filterOf(clause: Clause, me: string): Filter {
   }
 }
 
-/** Every complete condition as a query's `where`; undefined when there are none */
-export function filterFrom(clauses: ReadonlyArray<Clause>, me: string): Filter | undefined {
+/** Every complete condition as a filter, for a query's, a subscription's or a rule's `where`; undefined when there are none */
+export function whereOf(clauses: ReadonlyArray<Clause>, me: string): Filter | undefined {
   const parts = clauses.filter(complete).map((clause) => filterOf(clause, me));
   if (parts.length === 0) return undefined;
   return parts.length === 1 ? parts[0] : { $and: parts };
@@ -239,7 +196,7 @@ export function subscriptionOf(
   me: string,
 ): {
   topic?: { field: string; me: true } | { field: string; value: string | number | boolean };
-  where?: Condition;
+  where?: Filter;
 } {
   const ready = clauses.filter(complete);
   const carried = ready.find(

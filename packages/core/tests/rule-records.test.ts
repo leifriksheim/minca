@@ -12,7 +12,7 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
-import { checkRecordCondition } from '../src/records/checks.js';
+import { checkFilter, matches } from '../src/query/filter.js';
 import { isRecord } from '../src/utils/guards.js';
 import { channel, message } from '../src/schemas/library/publishing.js';
 import { IT, checkRule, matching, rule, ruleRun, runRules, type Rule } from '../src/schemas/rules.js';
@@ -45,7 +45,7 @@ const busyChannels = (n: number, since: string): Rule => ({
       collection: channel.name,
       include: { messages: { rel: 'channel', from: message.name, count: true } },
     },
-    holds: `included.messages > ${n}`,
+    holds: { 'include:messages': { $gt: n } },
   },
   then: {
     kind: 'add',
@@ -66,7 +66,7 @@ describe('rules', () => {
         ...busyChannels(10, since),
         when: { query: { collection: 'std.channel' }, holds: 'seq' },
       })!,
-      /not something it can read/,
+      /must be an object/,
     );
     assert.match(checkRule({ ...busyChannels(10, since), then: { kind: 'shout', text: 'x' } })!, /then.kind/);
     // Actions name no collection of their own: a message is added like anything else.
@@ -82,8 +82,20 @@ describe('rules', () => {
       /then.links/,
     );
     // A subscription's where reads the record alone: what a query included is not its to read.
-    assert.match(checkRecordCondition('included.messages > 1')!, /not something/);
-    assert.equal(checkRecordCondition('included.messages > 1', 'holds', { included: true }), null);
+    assert.match(checkFilter({ 'include:messages': { $gt: 1 } })!, /what a rule's query included/);
+    assert.equal(checkFilter({ 'include:messages': { $gt: 1 } }, 'holds', { include: true }), null);
+    // Only what the query included, own members alone, and of a list only its positions.
+    const record = {
+      key: 'k',
+      collection: 'c',
+      body: { tags: ['a'] },
+      links: [],
+      createdBy: null,
+      createdAt: '',
+    };
+    assert.equal(matches({ ...record, included: {} }, { 'include:constructor': { $exists: true } }), false);
+    assert.equal(matches(record, { 'tags.length': { $exists: true } }), false);
+    assert.equal(matches(record, { 'tags.0': 'a' }), true);
   });
 
   test('“a channel with more than 3 messages” counts the messages linked to it, and acts once', async () => {
