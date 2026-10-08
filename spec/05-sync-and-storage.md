@@ -285,7 +285,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 11,
+  "v": 13,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -596,13 +596,14 @@ access rules of [03 — Spaces](03-spaces.md), and MUST NOT store it unless it
 passes. Shape (schema conformance) is **not** a reason to refuse a version on
 arrival; see 02.
 
-The gatekeeper gives one of three answers:
+The gatekeeper gives one of the four answers of [02](02-records.md) §9.5:
 
-| Answer  | Meaning                                                                                                                                           | What happens                                                                                                                                                                                                                                                       |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| valid   | passes                                                                                                                                            | stored (§10)                                                                                                                                                                                                                                                       |
-| later   | depends on something not here yet: the record's first version, the version its `prev` names, the definition or access change it was written under | held and tried again whenever another version is stored; asked for again on the next round if still waiting. If it names a first version (`genesis`) or a previous version (`prev`) this node does not hold, that version is asked of the same peer at once (§6.3) |
-| invalid | refused                                                                                                                                           | dropped; remembered as refused **from that peer** and not asked of that peer again                                                                                                                                                                                 |
+| Answer    | Meaning                                                                                                                                           | What happens                                                                                                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| stands    | passes                                                                                                                                            | stored (§10)                                                                                                                                                                                                                                                       |
+| withdrawn | passes, but a later access change took it away, or its key's log forked                                                                           | stored (§10) and passed on, as for one that stands; it never counts as a record                                                                                                                                                                                    |
+| later     | depends on something not here yet: the record's first version, the version its `prev` names, the definition or access change it was written under | held and tried again whenever another version is stored; asked for again on the next round if still waiting. If it names a first version (`genesis`) or a previous version (`prev`) this node does not hold, that version is asked of the same peer at once (§6.3) |
+| refused   | fails                                                                                                                                             | dropped; remembered as refused **from that peer** and not asked of that peer again                                                                                                                                                                                 |
 
 How many versions a node keeps waiting, and how many refusals it remembers,
 is its own ([Sync and storage in the library](../packages/core/docs/storage.md#pacing-sync)).
@@ -631,7 +632,7 @@ taken. A `versions` without `id` is limited to its first 200 entries.
 > **Planned: bounding waiting versions.** This library caps the waiting set
 > by count ([1,000](../packages/core/docs/storage.md#pacing-sync)) but not by
 > size, and every version stored retries all of it. A peer
-> can fill it with large versions that never become valid. A node will cap
+> can fill it with large versions that never stand. A node will cap
 > the total bytes held waiting, and the retries done per version stored. Open:
 > the numbers, and whether waiting versions are counted per peer so one peer
 > cannot push out another's. Tracked in [#33](https://github.com/leifriksheim/weave/issues/33).
@@ -702,7 +703,7 @@ _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space")
   collection. Today it finds only what the node already holds. A cache will
   fetch the linked records by record key, keep them, and not keep them in
   sync; the next run asks again. Sync has no way to ask for a record by key
-  (`want` takes version ids), so this needs a message, or `prove` above.
+  (`want` takes version ids), so this needs a new message.
 - **Subsets smaller than a collection**, by topic tag ("only the channels I
   opened"), which a blind keeper can serve ([02 — Records](02-records.md),
   topics), or by count: the most recent by each keeper's own arrival order,
@@ -814,10 +815,10 @@ adapter:
 | ------------------------ | ---------------------------------------------------------------- | -------------------------------- |
 | `registry`               | the spaces this node holds, and their keys                       | yes, on a node given a vault key |
 | `spaces/<space id>`      | one space: §10 entries and bodies, and what the node keeps on it | no                               |
-| `mirrors/<space id>/<n>` | a mirror's writer state (§16.4); `n` is the mirror's index       | no                               |
+| `mirrors/<space id>/<n>` | a mirror's store writer state (§16.4); `n` is the mirror's index | no                               |
 
-Other entries a node keeps in a space's store, and what a mirror's writer
-keeps in its store, are the node's own (the library's are in
+Other entries a node keeps in a space's store, and what a mirror's store
+writer keeps in its store, are the node's own (the library's are in
 [the node](../packages/core/docs/node.md#holding-part-of-a-space) and
 [mirrors](../packages/core/docs/storage.md#mirrors)).
 
@@ -1034,13 +1035,14 @@ to get, put, delete and list keys under a prefix. How a node talks to one
   <other writer id>/…
 ```
 
-A **writer** is one store on one device, with its own random id: 32
-lower-case hex characters (128 random bits), never a DID. A writer MUST only
-create files under its own `<space id>/<writer id>/` prefix, so nothing is
-written twice, overwritten, or needs a lock.
+A **store writer** is one store on one device, with its own random id: 32
+lower-case hex characters (128 random bits), never a DID. It is not a writer
+in the sense of [02](02-records.md) §4.10, a key that signs. A store writer
+MUST only create files under its own `<space id>/<writer id>/` prefix, so
+nothing is written twice, overwritten, or needs a lock.
 
 A host keeps its subscriptions in the same bucket, outside any space, under
-`host/subscriptions/` ([06](06-nodes-and-sessions.md)). A mirror carries
+`host/subscriptions/` ([08](08-hosting.md)). A mirror carries
 spaces and nothing else: never an account file, whose wraps could be attacked
 offline by anyone holding the store.
 
@@ -1057,7 +1059,7 @@ reader MUST treat bytes that are not JSON, or `v` other than `1`, or a
 missing `versions` array, as holding nothing; entries that are not objects
 with a string `id` are skipped.
 
-Its name is `<counter>-<hash>.seg`: the writer's counter (from 1, decimal,
+Its name is `<counter>-<hash>.seg`: the store writer's counter (from 1, decimal,
 zero-padded to 6 digits) and the first 8 bytes of SHA-256 of the segment's
 bytes, as 16 lower-case hex. The empty segment `{"v":1,"versions":[]}` written
 first is `000001-ca1cf99cf9ccaa1b.seg`. Only names ending `.seg` are segments.
@@ -1067,7 +1069,7 @@ first is `000001-ca1cf99cf9ccaa1b.seg`. Only names ending `.seg` are segments.
 
 ### 16.4 Push, pull, compaction
 
-A writer keeps what it needs to remember (its writer id, its counter, the
+A store writer keeps what it needs to remember (its writer id, its counter, the
 segments it has read, the versions it knows are in the blob store) in its own
 store (§12); the library's keys are in
 [Sync and storage in the library](../packages/core/docs/storage.md#mirrors).
@@ -1075,12 +1077,12 @@ store (§12); the library's keys are in
 **Push.** After local changes, and on close: collect every version the store
 keeps (§10) that is not known to be in the blob store; pack them into
 segments; upload each; mark its versions known. "Known" is everything this
-writer uploaded **or read**, so nobody re-uploads everyone else's versions.
-When and how big is the writer's own.
+store writer uploaded **or read**, so nobody re-uploads everyone else's versions.
+When and how big is the store writer's own.
 
-**Pull.** List `<space id>/`; for every segment not under the writer's own
+**Pull.** List `<space id>/`; for every segment not under the store writer's own
 prefix and not yet read, in name order: fetch it (skip it if it is gone —
-its writer compacted it), and run every version through the gatekeeper (§8),
+its store writer compacted it), and run every version through the gatekeeper (§8),
 passing over the remainder repeatedly while any go in (versions depend on
 each other). Mark each judged version known. Mark the segment read only if
 none are still waiting; otherwise it is read again next time.
@@ -1088,7 +1090,7 @@ none are still waiting; otherwise it is read again next time.
 The blob store is untrusted: it can hide versions (the mesh fills the gap)
 but not forge them.
 
-**Compaction.** A writer may rewrite its own segments: read them all, keep
+**Compaction.** A store writer may rewrite its own segments: read them all, keep
 only versions its store still keeps, write its store's copy of each into new
 segments (a stub where the store holds one, so a superseded body is not
 carried forward), **then** delete the old ones. A reader in between sees
@@ -1104,7 +1106,7 @@ _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirr
 ### 16.5 Planned: mirrors in your own storage
 
 > **Planned.** Not normative. The rest of the mirror design that other
-> writers must agree on. Mirrors on any node, change feeds, more drivers and
+> store writers must agree on. Mirrors on any node, change feeds, more drivers and
 > the request budget they must fit are the library's, planned in
 > [Sync and storage in the library](../packages/core/docs/storage.md#planned-mirrors-in-your-own-storage).
 
@@ -1112,18 +1114,18 @@ _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirr
   seed, so it mirrors like any other. Recovery code, then connect storage, and
   every space comes back. Segments are **not** sealed with the space key: a
   blind host that must read the store to restart would then need the key.
-- **Absorbing a quiet writer.** A lost phone leaves its folder forever. Any
-  writer MAY absorb a writer whose newest segment is older than
+- **Absorbing a quiet store writer.** A lost phone leaves its folder forever.
+  Any store writer MAY absorb one whose newest segment is older than
   `absorbAfterDays` (default 30): copy the versions its own store still keeps
-  from one of that writer's segments into a new segment of its own, then
-  delete that segment. Safe because segments never change; two writers
+  from one of that store writer's segments into a new segment of its own, then
+  delete that segment. Safe because segments never change; two store writers
   absorbing the same segment write the same versions, which is harmless.
   Together with compaction, this is the only deleting there is. Open: how to
   date a segment without trusting the store's modified times, which services
   report differently.
 - **Files and avatars** fit the same store later, as
-  `<space id>/files/<hash>`: content-addressed and immutable, so any writer
-  may write the same one. Not designed further.
+  `<space id>/files/<hash>`: content-addressed and immutable, so any store
+  writer may write the same one. Not designed further.
 
 Open: mirrors laid out per collection, so a node holding part of a space
 (§9) could read only what it holds; today only whole-space nodes mirror.
@@ -1132,10 +1134,11 @@ Open: mirrors laid out per collection, so a node holding part of a space
 
 > **Planned.** Not normative. Issue:
 > [#37](https://github.com/leifriksheim/weave/issues/37). Records cannot
-> carry file bytes today; `std.attachment` has only a `url`, outside the
-> space's access rules and sync. The plan is a **blob reference** in a body,
+> carry file bytes today. `std.attachment` has a `url`, outside the space's
+> access rules and sync, and a `blob`: a **blob reference** in the body,
 > `{ hash, size, mime, name? }`, where `hash` is the SHA-256 of the bytes as
-> stored. The bytes are stored and synced by hash, apart from records, and
+> stored ([standard library](../packages/core/docs/standard-library.md)). No
+> peer can store or send those bytes yet. The plan: the bytes are stored and synced by hash, apart from records, and
 > fetched only when wanted; the fetcher checks the hash. In a private space
 > they are encrypted under the space key before hashing, so keepers and
 > mirrors hold ciphertext. Bytes no current record references may be dropped.
@@ -1152,7 +1155,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 8                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 13                           | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

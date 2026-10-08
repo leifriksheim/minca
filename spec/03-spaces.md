@@ -205,8 +205,10 @@ for the invite DID `did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
 
 ### 3.2 Every record names what it saw
 
-Every version written in a space — access record or not — carries `seen`: the
-ids of **heads** of the access history as its writer knew them (§4.6), at most 64. A writer **SHOULD** name its current heads, and MAY name fewer: what it
+Every version written in a space — access record or not — is judged as of
+its `seen`: the ids of **heads** of the access history as its writer knew
+them (§4.6), at most 64. `seen` is optional ([02](02-records.md) §3.1): a
+version without it is judged as having seen nothing but the genesis. A writer **SHOULD** name its current heads, and MAY name fewer: what it
 leaves out it is judged as not having seen, which can only take something
 away from it (§5.1). One with more than 64 names first those its own standing
 rests on (its `member:` and `role:` records, its collection's definition),
@@ -541,8 +543,7 @@ A version outside the access collections **stands** when, in this order:
 1. its `space` equals the space id;
 2. its signature and note chain verify ([02](02-records.md)) — giving `root`;
 3. in the account's own spaces (registry, contacts, carry spaces) its note
-   grants `account/write` ([01](01-identity.md) §8; _implementation detail_:
-   `accountOnly`);
+   grants `account/write` ([01](01-identity.md) §8);
 4. its first version is present, is `seq` 0, has the same key and collection;
 5. `at(seen)` is available (else: not yet);
 6. with `rules` = the rules of the definition in force for its collection in
@@ -558,6 +559,14 @@ A version outside the access collections **stands** when, in this order:
    fields pass (skipped where the body cannot be opened);
 10. §5.1 step 4 holds: with the changes to its author's standing it had not
     seen, and what they saw, it would still have stood.
+
+> **Known defect:** a peer applies step 3 only where it knows the space is
+> one of the account's own (`accountOnly` in
+> `packages/core/src/node/space-runtime.ts`). The account's devices know,
+> since they derive those ids (§13.1). A peer without the vault key, such as
+> a carrier, a host or a mirror reader, may not be able to tell those spaces
+> from any other, and then lets stand a version the account's devices refuse.
+> Tracked in [#90](https://github.com/leifriksheim/weave/issues/90).
 
 So a record is judged by the rules it saw, and by any rules that a change to
 its author's standing it had not seen had seen. Rules that loosened take
@@ -762,7 +771,8 @@ view-only invite (§7.5) has no record and cannot be closed; only a key change
 > `sys.role` yields a removal), or a peer refuses to store a deleted version
 > in any access collection other than `sys.collection` (§3.4). The second is
 > simpler and keeps "access is taken away by writing a change" as the only
-> rule. Fixes the known defect above.
+> rule. Fixes the known defect above, tracked in
+> [#20](https://github.com/leifriksheim/weave/issues/20).
 
 ### 7.3 Joining with a secret
 
@@ -972,7 +982,8 @@ _Source: `packages/core/src/privacy/space-encryption.ts`, `packages/core/src/nod
 
 Encrypting bodies leaves the envelope readable to anyone holding the
 ciphertext: a relay-side peer, a carrier, a host, a mirror's storage
-provider. Two parts of it give away more than they need to.
+provider. Two parts of it give away more than they need to. Tracked in
+[#87](https://github.com/leifriksheim/weave/issues/87).
 
 **Record keys that name people.** `onePer` keys ([02](02-records.md)) are
 plain hashes of the collection, the author, the link target and body fields,
@@ -1031,10 +1042,19 @@ sys.memberkey at memberkey:<hex40(accountDid)>
 { key: <compressed P-256 point, 33 bytes, base64url> }
 ```
 
-A member key record counts only if it stands, its root's `hex40` matches its
-record key, and `key` is a valid point; the newest such version of each
-account wins. A member that can write **SHOULD** publish its member key, and
+A member key record counts only if it is not a delete, it stands, its root's
+`hex40` matches its record key, and `key` is a valid point. Of the versions
+held at that record key (current, first and retained), the one that wins by
+§4.3 of [02](02-records.md) (highest `seq`, then lowest id) among those that
+count is the account's member key; versions by anyone else at that key are
+passed over. A member that can write **SHOULD** publish its member key, and
 publish it again when it differs from what is published.
+
+> **Known defect:** any key whose note lets it write records for the account,
+> an app's or an agent's included, can publish a member key of its own, and
+> it wins as the newest. The next space key is then boxed to it
+> ([01](01-identity.md) §8 asks for more only on access collections).
+> Tracked in [#169](https://github.com/leifriksheim/weave/issues/169).
 
 > Rationale: one per space, so an account home can hand an app the member keys
 > of exactly the spaces it grants.
@@ -1044,7 +1064,7 @@ publish it again when it differs from what is published.
 `keyDue` (§4.4) is true while some applied event that took reading from
 someone (removed, left, their role deleted) was not seen by the current key's
 event. A key change made at the same time as a removal, not having seen it,
-leaves the key change due (#173).
+leaves the key change due ([#173](https://github.com/leifriksheim/weave/issues/173)).
 
 A **former member** is an account named by an applied `member` event that is
 not a reader now: removed, left, or holding a role that was removed. Peers
@@ -1205,7 +1225,7 @@ account is ignored by readers), and nothing written under a note without
 | `sys.joined`  | `space:<spaceId>`                    | `{ space: spaceId, invite }`          | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
 | `sys.carrier` | `carrier:<hex40(carrySpaceId)>`      | `{ space, invite, did, name, since }` | A carrier the account uses (§14).                                                                                                |
 | `sys.notify`  | `notify:<base32 of 10 random bytes>` | `NotifyWhen` (§15)                    | A subscription.                                                                                                                  |
-| `sys.hosting` | —                                    | —                                     | Hosting; see [06](06-nodes-and-sessions.md).                                                                                     |
+| `sys.hosting` | —                                    | —                                     | Hosting; see [08](08-hosting.md).                                                                                                |
 
 A membership counts only if it verifies, its root is the account, and (unless
 deleted) its key is `space:<body.space>`.
@@ -1327,8 +1347,8 @@ what a carrier needs to wake an app that is closed ([06](06-nodes-and-sessions.m
 
 _Source: `packages/core/src/space/notify.ts` (`checkNotify`, `whereHolds`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/core/src/node/node.ts` (`notifications`, `syncPasses`), `packages/core/src/node/carrier.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/topics.test.ts` ("a subscription’s where", "names a collection the way a definition must…")._
 
-> **Planned: devices deliver subscriptions.** Issue:
-> [#30](https://github.com/leifriksheim/weave/issues/30). Delivery moves to
+> **Planned: devices deliver subscriptions, by Web Push.** Issue:
+> [#60](https://github.com/leifriksheim/weave/issues/60). Delivery moves to
 > per-device receiver records, apart from subscriptions. Specified in
 > [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4.4.
 

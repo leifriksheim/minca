@@ -71,8 +71,9 @@ identical everywhere:
 | `position` | string 1–200 that sorts where a record goes (Positions, below)                                                                                                                                            |
 
 Until the dialect has `format` ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), `when` and `day` are checked only for
-length. How a `blob`'s bytes are stored and fetched is planned (A.4); the
-reference to them is not.
+length. How a `blob`'s bytes are stored and fetched is planned
+([Planned: what the library still waits on](#planned-what-the-library-still-waits-on));
+the reference to them is not.
 
 ## The definitions
 

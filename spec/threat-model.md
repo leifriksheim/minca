@@ -94,7 +94,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     it has the power for can outnumber what `seen` holds, and a writer then
     names first heads that saw the latest change to its own place, role and
     collection
-    ([#180](https://github.com/leifriksheim/weave/issues/180), [#33](https://github.com/leifriksheim/weave/issues/33)).
+    ([#33](https://github.com/leifriksheim/weave/issues/33)).
   - Each warrant costs every member's node a replay of the offending
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/weave/issues/33)).
@@ -109,7 +109,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
-    by revoking its note or forking their log ([#168](https://github.com/leifriksheim/weave/issues/168)),
+    by revoking its key or forking their log ([#168](https://github.com/leifriksheim/weave/issues/168)),
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Fork proofs deter, but don't catch: a fork counts once a member holding
     both versions writes `sys.fork`, and a key can sign where its other branch
@@ -151,8 +151,9 @@ _Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/te
     ([#173](https://github.com/leifriksheim/weave/issues/173)).
   - It can keep adding to the history every peer must store and replay
     ([#161](https://github.com/leifriksheim/weave/issues/161)).
-  - Its removal withdraws what it wrote before, unless the remover's node held
-    it and kept it ([#166](https://github.com/leifriksheim/weave/issues/166)).
+  - Its removal withdraws what it wrote before that the removal's cutoff
+    doesn't cover: the remover's node covers only the lines it holds unbroken,
+    in the collections it holds, up to 1024 places (03 §6.3) ([#166](https://github.com/leifriksheim/weave/issues/166)).
 
 _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-access.test.ts` ("a removed member cannot write"), `packages/core/tests/roles.test.ts`, `packages/core/tests/key-change.test.ts`._
 

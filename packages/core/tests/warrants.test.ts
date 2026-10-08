@@ -310,7 +310,7 @@ describe('warrants', () => {
     await until(async () => (await bob.node.spaces.access(space)).role === null, 8000, 'the removal');
     await until(async () => !(await flaggedBy()), 4000, 'the warrant to be withdrawn');
 
-    // Alice gives him his place back (not by invite: #178), and he sees her break a chain again.
+    // Alice gives him his place back, and he sees her break a chain again.
     await alice.node.spaces.setMember(space, bob.node.did, 'editor');
     await letGo(bob.node, space);
     await hold(bob.node, space);

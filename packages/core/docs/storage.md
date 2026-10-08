@@ -199,11 +199,11 @@ _Source: `packages/core/src/storage/blob-store.ts`,
 
 ## Mirrors
 
-A mirror's segments, where a writer may write and how it pulls and compacts
+A mirror's segments, where a store writer may write and how it pulls and compacts
 are protocol ([spec 05 §16](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
 Today carriers and hosts mirror.
 
-A writer keeps its state in the store `mirrors/<space id>/<n>`, where `n` is
+A store writer keeps its state in the store `mirrors/<space id>/<n>`, where `n` is
 the mirror's index:
 
 | Key                         | Value                                          |
@@ -213,10 +213,10 @@ the mirror's index:
 | `mirror:read:<segment key>` | `1`, for each segment read or written          |
 | `mirror:known:<version id>` | `1`, for each version known to be in the store |
 
-"Known" is everything this writer uploaded **or read**, so nobody re-uploads
+"Known" is everything this store writer uploaded **or read**, so nobody re-uploads
 everyone else's versions.
 
-A writer pushes 5 s after the first change and on close, packing what is not
+A store writer pushes 5 s after the first change and on close, packing what is not
 yet known into segments of about 256 KiB (a segment is closed once it reaches
 that size). Once it has 32 or more segments of its own, it compacts them.
 
@@ -227,7 +227,7 @@ _Source: `packages/core/src/storage/mirror.ts`,
 ### Planned: mirrors in your own storage
 
 > **Planned.** Mirrors on any node, in storage the person already has. What
-> a mirror holds, and absorbing a writer that went quiet, are protocol and
+> a mirror holds, and absorbing a store writer that went quiet, are protocol and
 > planned in [spec 05 §16.5](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md).
 
 - **Any node, several mirrors.** A node will take a list of blob stores

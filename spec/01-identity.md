@@ -285,7 +285,7 @@ by a convention built on the protocol (`packages/core/docs/`), not by it:
 | `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                     | `doors/doors.ts` (`signAnswer`)                               | docs   |
 | `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:190,192`                                | 04     |
 | `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:302`                                    | 04     |
-| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                | `session/hosting.ts:78,340`                                   | 06     |
+| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                | `session/hosting.ts:78,340`                                   | 08     |
 
 Notes:
 
@@ -353,8 +353,9 @@ Weave uses a subset of UCAN 0.10.
 > `att`, invocations that carry their chain in `prf`, and specified
 > revocation. `space:<id>` becomes a policy on `.space`, which also gives
 > grants narrower than a space (§7.1) and proof chains that travel (§7.5)
-> without new syntax. Issuers switch outright; verifiers keep a read-only 0.10
-> path for versions already stored. Not normative until built.
+> without new syntax. Issuers and verifiers switch outright, with a sync
+> version bump ([05](05-sync-and-storage.md) §4): before v1 a clean break is
+> preferred to a transition path. Not normative until built.
 
 ### 7.1 Format
 
@@ -434,15 +435,17 @@ peer checks them, is §8.
 
 ### 7.2 The token's CID
 
-A token is referred to (in `prf`, and by revocations) by
+A token is referred to (in `prf`) by
 `CID(UTF-8(token))` — the hash of the whole encoded string, signature
 included.
 
 > **Planned: one valid form per token.** ECDSA signatures are malleable: from
 > a valid `(r, s)` anyone can make `(r, n − s)`, which WebCrypto also accepts,
 > and a lenient base64url decoder accepts more than one spelling of the same
-> bytes. Either gives a token that still verifies under a different CID, so it
-> slips past a revocation that names the original CID. The plan: verifiers
+> bytes. Either gives a token that still verifies under a different CID.
+> Revocation names a key, not a token ([03](03-spaces.md) §6.4), so a second
+> form does not slip past one; but whatever names or counts a token by its
+> CID, a `prf` link or a cache, sees two tokens where there is one. The plan: verifiers
 > refuse a signature with `s > n/2` (high-S), issuers produce low-S only, and
 > every base64url field is decoded strictly (no padding, no characters outside
 > the alphabet, no non-zero trailing bits).
@@ -569,7 +572,9 @@ Open questions:
   one note signs many records.
 - Whether the chain depth limit of 10 (§7.5) stays, given the bytes each link
   adds to every record.
-- How revocation (by CID, [03](03-spaces.md)) treats an intermediate token.
+- How revocation, which names a key ([03](03-spaces.md) §6.4), treats a key
+  in the middle of a chain: whether revoking it withdraws what keys it
+  delegated to signed.
 
 ### 7.6 Capability coverage
 

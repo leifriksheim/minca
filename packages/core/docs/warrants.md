@@ -66,11 +66,11 @@ refused, so it earns no warrant.
 An app shows the flag to whoever manages the space, who may remove the person
 (`spaces.setMember(id, did, null)`). It also shows it to the account itself: a
 flag against your own account usually means one of your keys is being used
-somewhere it shouldn't be, and revoking that key's note (`spaces.revoke`)
-takes back what it signed.
+somewhere it shouldn't be, and revoking that key (`spaces.revoke`) takes
+back what it signed.
 
-Like any record, a warrant is withdrawn when its writer is removed without
-keeping it, or revokes the note it was written under ([#166](https://github.com/leifriksheim/weave/issues/166),
+Like any record, a warrant is withdrawn when its writer is removed by a
+change whose cutoff doesn't cover it, or revokes the key that signed it ([#166](https://github.com/leifriksheim/weave/issues/166),
 [#168](https://github.com/leifriksheim/weave/issues/168)). More kinds are planned in
 [#148](https://github.com/leifriksheim/weave/issues/148).
 

@@ -140,7 +140,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `genesis`    | string   | seq > 0    | Id of the record's first version.                                                                                                                                                                                                                 |
 | `retain`     | `true`   | no         | Keep this version after it is superseded (§4.5).                                                                                                                                                                                                  |
 | `log`        | object   | in a space | Its place in its writer's log for this space, and in that log's line for its collection: `{ "n", "prev"?, "c": { "n", "prev"? } }`. `n` counts from 0, and `prev` names the key's version one place before in the same line, absent at 0 (§4.10). |
-| `seen`       | string[] | no         | Ids of the latest changes to the space's access history the writer knew of; the version is judged as of those ([03 — Spaces](03-spaces.md)). At most 64, each 1–128 characters.                                                                   |
+| `seen`       | string[] | no         | Ids of the latest changes to the space's access history the writer knew of; the version is judged as of those ([03 — Spaces](03-spaces.md) §3.2). At most 64, each 1–128 characters. Absent, it is judged as having seen nothing but the genesis. |
 | `deleted`    | `true`   | no         | This version deletes the record; `body` MUST be `null`.                                                                                                                                                                                           |
 | `links`      | Link[]   | no         | What this record points at (§5). Public spaces only; in a private space links are sealed inside the body and this member is absent.                                                                                                               |
 | `tags`       | string[] | no         | Blind topic tags (§8).                                                                                                                                                                                                                            |
@@ -303,6 +303,8 @@ are ASCII, so this is also byte order). The **current version** of a record is
 the one no other held version supersedes.
 
 - Every peer MUST use exactly this rule. `createdAt` MUST NOT affect it.
+- Access records are the exception: which of them takes effect is decided
+  by the access history's merge ([03](03-spaces.md) §4.4), not by this rule.
 - Consequences: a replayed old version loses to the current one; a delete
   (which has a higher `seq`) stays deleted when an older version turns up; two
   devices that edited apart pick the same winner; the same set of versions,
@@ -338,9 +340,23 @@ When a version is superseded, a peer keeps it:
 
 Nothing a peer has taken in is dropped. A stub says who wrote a version and
 where it sits in its record (§4.7). A first version kept as a stub still
-decides who created the record (§7.1). If several `seq 0` versions exist for
-one key (two devices chose the same key), the one with the lowest id is the
-first version.
+decides who created the record (§7.1).
+
+**The first version.** Usually a record has one `seq 0`. If it has several
+(two devices chose the same key), two rules use them:
+
+- **Judging a later version** uses the `seq 0` its `genesis` names, which must
+  be of the same key and collection (§4.6). Its chain leads there (§4.7), and
+  the `creator` rule (§7.1) and the rules checked against a first version
+  (§7.3, §7.4) are judged against it.
+- **Reading a record** uses the `seq 0` with the lowest id held: it gives
+  `@createdBy`, and the collection a later version must share to be shown
+  (§4.6).
+
+The two differ only when a key has several `seq 0` versions. Since any
+member can write one for someone else's key, and grind its id lower, either
+rule lets a member take over a key it did not create. Closing that is planned
+in §4.7 ([#72](https://github.com/leifriksheim/weave/issues/72)).
 
 Forgetting holds whoever sends what:
 
@@ -415,7 +431,7 @@ Checks that depend on what else a peer holds are **not** shape checks:
   otherwise the version is refused ("the first version it names is not this
   record's"). If it is not held yet, judging waits (§9.5).
 - A current version whose `collection` differs from the record's held first
-  version is ignored when reading, as if absent.
+  version (the lowest id, §4.5) is ignored when reading, as if absent.
 
 _Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/version.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`, `firstOf`, `consistent`, `write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
 
@@ -434,7 +450,7 @@ arrival, a peer looks that version up, whole or as a stub (§4.5):
   4. `genesis` equals `P.id` if `P.seq == 0`, else `P.genesis`.
 
 Every version held passed the same check when it came in, so a chain that
-holds link by link reaches the record's first version.
+holds link by link reaches the first version its `genesis` names (§4.5).
 
 Example: a record's versions `A` (`seq 0`) and `B` (`seq 1`, `prev: A`,
 `genesis: A`). A version with `seq: 2, prev: B, genesis: A` follows `B`. One
@@ -524,11 +540,13 @@ collection, in the access history, and a first version under `onePer` or
 > the first peer. Tags are the one body check a stub escapes that `retain`
 > does not cover. A fix will either check tags on the version that is current,
 > or carry what they are checked against in the envelope.
+> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
 
 > **Planned: forgetting in blob stores.** Segments never change and only
-> their writer compacts them ([05 §16.4](05-sync-and-storage.md)). A writer's
-> compaction writes the stubs its store holds, but a body superseded by
-> someone else stays in the bucket until that writer compacts. Readers keep
+> their store writer compacts them ([05 §16.4](05-sync-and-storage.md)). A
+> store writer's compaction writes the stubs its store holds, but a body
+> superseded by someone else stays in the bucket until that store writer
+> compacts. Readers keep
 > only the stub on the way in; the bytes remain. Crypto-shredding, a key per
 > record destroyed on delete, would reach immutable storage too; the key
 > record then has the same keep-or-drop question, so it is a later addition,
@@ -837,6 +855,7 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > (§6.1), so that peer would enforce none of its rules. Either the publishing
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
+> Tracked in [#163](https://github.com/leifriksheim/weave/issues/163).
 
 ### 6.3 A definition's version number
 
@@ -865,11 +884,13 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   `sys.*` collections have no schema, rules or topics from a definition; their
   formats and checks are specified where they are used:
   `sys.collection` (here); the access history, keys, profiles and the account
-  registry — `sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.key`,
-  `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`, `sys.profile`,
-  `sys.joined` — in [03 — Spaces](03-spaces.md); carriers, passes, hosting and
-  notifications — `sys.carrier`, `sys.pass`, `sys.hosting`, `sys.notify`,
-  `sys.subscription` — in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md)
+  registry — `sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.fork`,
+  `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
+  `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
+  passes and notifications — `sys.carrier`, `sys.pass`, `sys.notify`,
+  `sys.subscription` — in [03](03-spaces.md) §13–15, and how a node uses them
+  in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; hosting —
+  `sys.hosting` — in [08 — Hosting](08-hosting.md)
   (`sys.relays` and `sys.keepers` also in [05](05-sync-and-storage.md)).
 - **`std.*`** is **not reserved**: it names the optional
   [standard library](../packages/core/docs/standard-library.md), a
@@ -928,8 +949,8 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 > may point at more). That leaves new optional fields, new optional link
 > roles, and changes to `title`, `description` and other annotations.
 > Anything else needs a new name. A keyword the check has no rule for is a
-> break. Rules (`create`, `edit`, `delete`, `onePer`, `fixed`,
-> `permissions`) are the space's governance, not shape: under the same name
+> break. Rules (`create`, `edit`, `delete`, `onePer`, `fixed`, `final`,
+> `check`, `permissions`) are the space's governance, not shape: under the same name
 > they may tighten, never loosen. Why this line, after oasdiff:
 > [blueprints and guides](../packages/core/docs/blueprints-and-guides.md#what-additive-means).
 
