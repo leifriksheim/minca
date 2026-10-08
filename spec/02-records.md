@@ -1558,7 +1558,7 @@ Given a valid signature and root, whether the version _stands_ in this space:
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed`, and on every version under `check` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`; then `check` (§7.6), which may make the version wait for versions it cites.
 
-   When step 3 fails only on the access history's judgement of a change that came after the version (a change to its author's standing it had not seen, with what that change saw, its key revoked, or its key's log proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges step 5, and the version is **withdrawn** if that passes.
+   When step 3 fails only on the access history's judgement of a change that came after the version (a change to its author's standing it had not seen, with what that change saw, its key revoked, or its key's log proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges steps 4 and 5, and the version is **withdrawn** if they pass, **refused** if they don't. So every peer stores the same withdrawn versions, whatever order it checks in.
 
 ### 9.5 What a peer does with a refused version
 

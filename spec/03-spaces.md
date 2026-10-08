@@ -493,6 +493,11 @@ A record is judged in its **own view**, the access changes its `seen` names
 and everything they saw, and then against the changes to its author's
 standing it had not seen. Those are the only two inputs.
 
+`judge` answers only for the access history. A peer combines it with the
+rest of standing as [02](02-records.md) §9.4 says: a version `judge` calls
+withdrawn is still judged on its tags and rules, and is refused if they
+fail.
+
 A change that took power from someone **covers** a version when the change's
 `cutoff` (§6.3) names the version's key and collection with a place at or
 above the version's place in that key's line for that collection (`log.c.n`). What a covering change's author had seen of that key stands,
