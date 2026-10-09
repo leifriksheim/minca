@@ -53,7 +53,8 @@ reader confirms it from exactly what was cited.
   reader counts it.
 - **Pending while cited versions are missing.** A version citing one this
   node doesn't hold is pending: not counted, and judged again when more
-  arrives. Only a passing verdict, or a failing one, is cached.
+  arrives (up to 256 records at a time; beyond that, when the space's index
+  is next rebuilt). Only a passing verdict, or a failing one, is cached.
 - **Unreadable.** A node that can't open the version's body, the version
   before it (when that is kept whole), or a version it cites, because it
   doesn't hold the key, can't tell, and counts it on the rest.
@@ -62,9 +63,12 @@ reader confirms it from exactly what was cited.
   ([below](#citing-a-version)).
 - **A chain counts only while every step does.** A version that follows one
   failing its checks fails too, so a forged step can't be laundered by the
-  next. Writing a key again continues from the newest version that counts, or
-  starts it afresh when none does: a version that fails can't make others build
-  on it, or hold a `onePer` key against the real record.
+  next. A step under checks that wasn't kept whole (`retain`, which is signed)
+  can't be judged, so what follows it doesn't count either; a step not held
+  yet leaves what follows pending. Writing a key again continues from the
+  newest version that counts, or starts it afresh when none does: a version
+  that fails, or waits for ever on what it cites, can't make others build on
+  it, or hold a `onePer` key against the real record.
 - **Every read path.** `get`, `list`, `linked`, queries and their counts, rules
   and notifications count only versions that pass; `history` lists every
   version and gives a failing one its reason.

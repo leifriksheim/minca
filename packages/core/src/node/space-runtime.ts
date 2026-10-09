@@ -416,6 +416,8 @@ type ChecksVerdict =
   /** A version it cites hasn't arrived */
   | { readonly pending: true };
 const NO_CHECKS: ChecksVerdict = { passes: null };
+/** Records waiting on a cited version that are read again whenever anything arrives */
+const MAX_PENDING_REREAD = 256;
 /** Checks this node can't judge yet: what they read can't be opened here. Never cached. */
 const UNJUDGED: ChecksVerdict = Object.freeze({ passes: null });
 
@@ -1338,6 +1340,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // It continues the version before: one that follows a version failing its checks fails too,
       // or a forged step would be laundered by the next.
       const previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
+      if (version.seq > 0 && version.prev && !previous) return { pending: true };
+      // A step under checks is kept whole by an honest writer (it is signed, so every reader sees the same):
+      // one that wasn't can't be judged, and what follows it doesn't count.
+      if (previous && !previous.retain && !previous.deleted) {
+        const then = (await access()).history.at(previous.seen ?? []);
+        const before = then ? (await rulesAt(then, previous.collection))?.rules.check : undefined;
+        if (Array.isArray(before) && before.length > 0)
+          return { passes: false, reason: 'It follows a version under checks that was not kept whole' };
+      }
       if (previous && !isStub(previous)) {
         if (previous.retain && !previous.deleted) {
           const before = await openBody(previous);
@@ -1367,7 +1378,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function counts(version: Version): Promise<boolean> {
     if (!(await standingOf(version)).ok) return false;
     const passes = await checksOf(version);
-    if ('pending' in passes) pendingKeys.add(version.key);
+    // Bounded: past it, a waiting record is read again only when the index is rebuilt.
+    if ('pending' in passes && pendingKeys.size < MAX_PENDING_REREAD) pendingKeys.add(version.key);
     return !('pending' in passes) && passes.passes !== false;
   }
 
@@ -2884,7 +2896,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const held = await storage.getCurrent(recordKey);
     if (!held) return { key: recordKey, seq: 0 };
     const verdict = (await standingOf(held)).ok ? await checksOf(held) : NO_CHECKS;
-    if (!('passes' in verdict) || verdict.passes !== false) return nextVersion(held);
+    // One that fails its checks, or waits for ever on what it cites, can't hold the key.
+    if ('passes' in verdict && verdict.passes !== false) return nextVersion(held);
     const counted = await currentOf(recordKey);
     return counted ? nextVersion(counted) : { key: recordKey, seq: 0 };
   }
