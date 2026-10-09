@@ -92,7 +92,8 @@ people anyway.
 - keep lists (03 §6.3);
 - the 10,000-id limit;
 - `within`;
-- 02 §7.6's citation special cases;
+- the citation special cases of checks (since moved out of the protocol, to
+  `packages/core/docs/checks.md`);
 - 03 §5.2 step 10;
 - `at(seen)` as a judging input;
 - the warrants' separate own view;
@@ -124,9 +125,14 @@ Finality (a quorum-signed checkpoint) can follow for governance (#137, #160).
 
 Built (protocol 12): a check's condition, a subscription's `where` and a
 rule's `holds` are CEL, a subset of it pinned to a commit of the CEL spec and
-tested against its conformance suite (02 §7.6). `who`, `onePer`, `fixed` and
-`final` stay declarative: they are short, and a peer reads them for more than
-a verdict (`onePer` makes a key).
+tested against its conformance suite. `who`, `onePer`, `fixed` and `final`
+stay declarative: they are short, and a peer reads them for more than a
+verdict (`onePer` makes a key).
+
+Since protocol 15, checks are not protocol: peers keep a definition's `check`
+and every version that fails it, and the library counts only versions that
+pass. The CEL subset, citations and limits moved from 02 §7.6 to
+`packages/core/docs/checks.md`.
 
 ## Warrants leave the protocol
 

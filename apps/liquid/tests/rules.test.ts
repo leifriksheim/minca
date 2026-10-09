@@ -168,27 +168,32 @@ describe('liquid: deciding a proposal', () => {
     await assert.rejects(alice.node.records.delete(space, decided.key), /is final/);
   });
 
-  test('a decision forged by hand is refused by every peer that receives it', async () => {
+  test('a decision forged by hand reaches every peer and counts for none', async () => {
     const { alice, bob, space, voters } = await assembly();
     const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters });
     const a = await castBy(alice, space, put.key, 'for');
     await until(async () => (await bob.node.records.get(space, a.key)) !== null, 4000, 'Alice’s vote');
 
-    let rejected = '';
-    bob.node.subscribe((event) => {
-      if (event.type === 'rejected') rejected = event.reason;
-    });
+    const key = (await decisionKey(alice, put.key)) ?? '';
     await forge(alice, space, {
       author: '',
       collection: decision.name,
       body: { outcome: 'passed', proposal: put.version, voters, votes: [a.version] },
       links: [{ rel: 'about', to: put.key }],
-      version: { key: (await decisionKey(alice, put.key)) ?? '', seq: 0 },
+      version: { key, seq: 0 },
       retain: true,
     });
     await hold(alice.node, space);
-    await until(async () => rejected !== '', 4000, 'Bob to refuse it');
-    assert.match(rejected, /passes once as many voters as it needs/);
+    await until(
+      async () => (await bob.node.records.checks(space, key))?.passes === false,
+      4000,
+      'Bob to hold it',
+    );
+    assert.match(
+      (await bob.node.records.checks(space, key))?.reason ?? '',
+      /passes once as many voters as it needs/,
+    );
+    assert.equal(await bob.node.records.get(space, key), null);
   });
 
   test('a decision follows the proposal’s own rule', async () => {

@@ -279,6 +279,16 @@ export interface NodeCollections {
   tag(spaceId: string, collection: string, field: string, value: string | number | boolean): Promise<string>;
 }
 
+/** A version under its collection's checks: `passes` null when it has none, or this node can't judge them */
+export interface RecordChecks {
+  readonly version: string;
+  readonly passes: boolean | null;
+  /** Why it fails */
+  readonly reason?: string;
+  /** A version it cites hasn't arrived yet */
+  readonly pending?: true;
+}
+
 export interface ListOptions {
   /** Only this collection. Default: every collection except the protocol's own `sys.*` */
   readonly collection?: string;
@@ -404,6 +414,12 @@ export interface NodeRecords {
   list<T = unknown>(spaceId: string, options?: ListOptions): Promise<ReadonlyArray<NodeRecord<T>>>;
   /** A record's current version, or null when there is none or it was deleted */
   get<T = unknown>(spaceId: string, key: string): Promise<NodeRecord<T> | null>;
+  /**
+   * How a record's newest version fares under its collection's checks. A
+   * version that fails is kept and synced by every peer, but `get`, `list`
+   * and queries count only versions that pass (packages/core/docs/checks.md).
+   */
+  checks(spaceId: string, key: string): Promise<RecordChecks | null>;
   /** Creates a record, under a random key unless given. Writing a deleted key brings it back */
   put<T = unknown>(
     spaceId: string,

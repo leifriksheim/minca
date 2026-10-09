@@ -675,8 +675,8 @@ read them. It holds:
 It holds no seed, no space key, no invite secret and no note: it signs nothing,
 and writes nothing. It runs every record it takes in through the same gates
 as a member's node, but in a private space it cannot read bodies, so it
-skips the checks that read them: `onePer`, `fixed`, tags and `check`
-([02](02-records.md) §7.3, §7.4, §8.4, §7.6). It accepts what passes the
+skips the checks that read them: `onePer`, `fixed` and tags
+([02](02-records.md) §7.3, §7.4, §8.4). It accepts what passes the
 rest, as any peer without the key does; peers that hold the key still judge
 those checks. On the wire it shows no note, so peers see it as `from: null`.
 

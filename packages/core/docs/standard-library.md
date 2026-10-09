@@ -215,7 +215,7 @@ and remove.
 
 **Proven outcomes.** A `std.decision` and a `std.goal-reached` are not
 declared by anyone: each cites the records that prove it, by version id, and
-every device checks the proof ([spec 02 §7.6](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)). Anyone in the space may write one, once, when the
+every device checks the proof before it counts one ([checks.md](checks.md)). Anyone in the space may write one, once, when the
 proof is there:
 
 - `std.decision` cites the proposal's first version (`proposal`) and ballots

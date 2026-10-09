@@ -117,6 +117,15 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     relied on, by revoking its own key with a cutoff of 0, or forking its
     own log at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
   - A `seq 0` for someone else's key can take over "creator" ([#72](https://github.com/leifriksheim/weave/issues/72)).
+  - A collection's checks bind only readers that judge them: peers keep and
+    sync a version that fails them, and only the library leaves it out of
+    what it counts, on every read path, along a record's chain, and without
+    letting it hold a `onePer` key ([checks](../packages/core/docs/checks.md);
+    `packages/core/tests/checks-reads.test.ts`, `checks-squat.test.ts`,
+    `checks-pending.test.ts`). Another
+    implementation that doesn't judge checks shows it. Every such version
+    costs every peer storage, like any record it may write
+    ([#33](https://github.com/leifriksheim/weave/issues/33)).
   - The top rank answers to no one, and no vote can bind a change to who may
     do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
 
@@ -135,8 +144,13 @@ _Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/te
   - A change by a sock it granted, though dropped, still strikes changes made
     concurrently by those the sock outranked
     ([#191](https://github.com/leifriksheim/weave/issues/191)).
-  - A version it backdates is withdrawn, but a colluding member's `check` can
-    still cite and count it ([#184](https://github.com/leifriksheim/weave/issues/184)).
+  - A version it backdates is withdrawn, but a colluding member can still cite
+    it as evidence in a version under checks, and the library's checks count
+    it, since they judge a cited version as of what the citer saw
+    ([#184](https://github.com/leifriksheim/weave/issues/184),
+    [checks](../packages/core/docs/checks.md#citing-a-version)). Checks are
+    not protocol, so this is a gap in what readers count, not in what peers
+    store.
   - It can rejoin through any open role invite it saw: removal closes none
     ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_.
   - A key change is only a SHOULD, and only a member with `manage` can make

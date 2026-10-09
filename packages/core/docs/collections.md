@@ -116,15 +116,15 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`), `packages/core/src
 
 ## Rules
 
-| Rule     | Means                                                     | Default        |
-| -------- | --------------------------------------------------------- | -------------- |
-| `create` | Who may create a record                                   | `member`       |
-| `edit`   | Who may write later versions                              | `member`       |
-| `delete` | Who may delete                                            | same as `edit` |
-| `onePer` | At most one record per combination of these               | none           |
-| `fixed`  | Fields that keep the value the record was created with    | none           |
-| `check`  | Conditions every new version must meet ([below](#checks)) | none           |
-| `final`  | `true`: written once, then never edited or deleted        | none           |
+| Rule     | Means                                                      | Default        |
+| -------- | ---------------------------------------------------------- | -------------- |
+| `create` | Who may create a record                                    | `member`       |
+| `edit`   | Who may write later versions                               | `member`       |
+| `delete` | Who may delete                                             | same as `edit` |
+| `onePer` | At most one record per combination of these                | none           |
+| `fixed`  | Fields that keep the value the record was created with     | none           |
+| `check`  | Conditions a version must meet to count ([below](#checks)) | none           |
+| `final`  | `true`: written once, then never edited or deleted         | none           |
 
 Who is one of these, or a list meaning any of them:
 
@@ -145,9 +145,9 @@ rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:about'] }
 
 ## Checks
 
-The rules above say who may write. `check` says what a version must be:
-conditions every device checks, over the body, the version before it, and
-other versions it **cites** as evidence. With them a space can hold things
+The rules above say who may write, and every peer enforces them. `check` says
+what a version must be to count: conditions over the body, the version before
+it, and other versions it **cites** as evidence. With them a space can hold things
 that normally need a server or a smart contract: a proposal that passes only
 with enough votes, a game whose moves must be legal, points that can't be
 spent twice, a reward that unlocks when its condition is met.
@@ -183,10 +183,17 @@ await node.records.put(
 
 A check never searches, because no device holds everything. The writer does
 the work (finds the votes, adds up the balances, picks the move) and cites
-what proves it. Every device then checks that exactly what was cited proves
-it. A version that fails is refused everywhere, with the check's `else` as
-the reason, and your own node refuses it before signing. A version citing
-one that hasn't arrived yet waits until it does.
+what proves it. Every reader then checks that exactly what was cited proves
+it.
+
+Checks are read by the library, not enforced by peers
+([checks.md](checks.md)). A version that fails them is kept and synced
+everywhere like any other, but `get`, `list` and queries count only a
+record's newest version that passes: one that fails is skipped, and the
+version before shows instead. Your own node refuses to sign a version that
+fails, with the check's `else` as the reason. `node.records.checks(space, key)`
+says how a record's newest version fares, and why. A version citing one that
+hasn't arrived yet is pending, and doesn't count until it does.
 
 A condition is a [CEL](https://cel.dev) expression: the Common Expression
 Language that Kubernetes, Firebase and Envoy use for policies. It reads `body`,
@@ -217,12 +224,13 @@ over more than its limits is refused, so a check that passes on small
 records can fail on large ones; the hints say where to look.
 
 Bytes, timestamps, durations, regular expressions and types as values are
-left out. The exact subset is in the spec, `spec/02-records.md` §7.6.
+left out. The exact subset, and its limits, are in [checks.md](checks.md).
 
 **What can be cited.** Only versions kept whole, so every device reads the
 same thing however late it joins: any version in a collection with
-`history: 'all'` or with checks of its own, and a first version under
-`onePer` or `fixed`. Give a collection you mean to cite `history: 'all'`,
+`history: 'all'` or with checks of its own (the node keeps those whole), and
+a first version under `onePer` or `fixed`. A cited version must also pass its
+own checks. Give a collection you mean to cite `history: 'all'`,
 or an edited vote's latest version can't be cited. A cited version proves
 what was signed, not that it is still current, so make evidence final where
 it matters: `final: true` on a vote, so nobody can change or delete it once
@@ -231,8 +239,8 @@ it is counted, or `fixed: ['choice']` to allow other edits.
 **A proof stays a proof.** A cited version is judged as of what the citing
 version saw: removing a voter later, or revoking the device that voted,
 doesn't undo a decision that already counted the vote. A decision written
-after seeing the removal can't count it. Peers keep such withdrawn versions
-for this, without showing them.
+after seeing the removal can't count it. Peers keep such withdrawn versions,
+and the library reads them for this, without showing them.
 
 The standard library has two ready-made: `std.decision`, a proposal decided
 by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
@@ -286,8 +294,8 @@ await node.spaces.setMember(space.id, did, 'host');
   (`node.records.history`). The default, `latest`, keeps the current one
   whole and forgets what earlier ones said, and what a deleted record said.
   With `onePer` or `fixed` in the rules, a record's first version is kept
-  whole too: those rules are checked against it. With `check`, every version
-  is.
+  whole too: those rules are checked against it. With `check`, the node
+  keeps every version whole, so checks can read the one before and cite it.
 - `topics: ['mentions', 'link:channel']` lets a node that can't read the
   space still match records by a field's value, or by where a link of that
   role points, for notifications. At most 8.

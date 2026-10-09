@@ -2286,6 +2286,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const self: NodeRecords = Object.freeze({
       list: async <T>(spaceId: string, options?: ListOptions) => (await runtime(spaceId)).list<T>(options),
       get: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).get<T>(key),
+      checks: async (spaceId: string, key: string) => (await runtime(spaceId)).checks(key),
       put: async <T>(
         spaceId: string,
         collection: CollectionRef,

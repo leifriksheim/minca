@@ -17,7 +17,7 @@ store, and judge every record the same way:
 | Part                                            | Covers                                                                                                                                                                       |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, the account vault, root and session signers, UCAN delegations, what a note lets a key do, device keys, contact keys, pairing |
-| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules and checks, topics, the validation pipeline |
+| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline            |
 | [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                   |
 | [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN        |
 | [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                              |
@@ -67,6 +67,9 @@ change without touching this spec:
   ([spaces](../packages/core/docs/spaces.md)).
 - **The query format** a node answers ([query format](../packages/core/docs/query-format.md)).
   Peers never exchange queries.
+- **Checks**: the CEL conditions a definition's `rules.check` holds, what a
+  version cites as evidence, and counting only versions that pass. Peers keep
+  `check` and every version that fails it ([checks](../packages/core/docs/checks.md)).
 - **Node actions** and the tools the CLI, MCP and WebMCP make of them
   ([actions](../packages/core/docs/actions.md)).
 - **The standard collections** (`std.*`), which are a naming convention, not
@@ -152,7 +155,6 @@ they are described; the smaller ones share
 | References to records in other spaces                                                             | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/weave/issues/38)                                                           |
 | `pattern` and `format` in definitions                                                             | [02 §6](02-records.md)                                                                                                                     |
 | Private `onePer` keys; uniqueness that cannot be a key                                            | [02 §7.3](02-records.md), [#87](https://github.com/leifriksheim/weave/issues/87)                                                           |
-| Asking for what a version cites                                                                   | [02 §7.6](02-records.md), [#79](https://github.com/leifriksheim/weave/issues/79)                                                           |
 | Deleted access records can't leave access standing                                                | [03 §7.2](03-spaces.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                            |
 | What a private space still shows (hashed keys and collection names)                               | [03 §8.6](03-spaces.md), [#87](https://github.com/leifriksheim/weave/issues/87)                                                            |
 | Access-control convergence                                                                        | [05 §8](05-sync-and-storage.md), [#10](https://github.com/leifriksheim/weave/issues/10)                                                    |

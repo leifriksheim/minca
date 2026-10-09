@@ -78,7 +78,7 @@ where either outcome is safe.
   - #164: concurrent key changes keep every key.
 - **Partly fixes #10.** Convergence becomes a property the harness checks.
 - **Doesn't fix:**
-  - #184, where a colluding citer counts a backdated vote: citations still use the citer's view;
+  - #184, where a colluding citer counts a backdated vote: citations still use the citer's view (checks are now the library's, `packages/core/docs/checks.md`, so this is about what readers count, not what peers store);
   - #166's fork at 0, and #175, which need witnesses;
   - #165, #168, #169, which are about keys.
 
