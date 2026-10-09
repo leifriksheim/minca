@@ -65,7 +65,8 @@ reader confirms it from exactly what was cited.
   failing its checks fails too, so a forged step can't be laundered by the
   next. A step under checks that wasn't kept whole (`retain`, which is signed)
   can't be judged, so what follows it doesn't count either; a step not held
-  yet leaves what follows pending. Writing a key again continues from the
+  yet leaves what follows pending; a delete in between hides nothing, since
+  the chain is judged by the step before it. Writing a key again continues from the
   newest version that counts, or starts it afresh when none does: a version
   that fails, or waits for ever on what it cites, can't make others build on
   it, or hold a `onePer` key against the real record.

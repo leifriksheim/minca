@@ -1339,8 +1339,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (opened.body === null && opened.encrypted) return UNJUDGED;
       // It continues the version before: one that follows a version failing its checks fails too,
       // or a forged step would be laundered by the next.
-      const previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
+      let previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
       if (version.seq > 0 && version.prev && !previous) return { pending: true };
+      // A delete in between hides nothing: the chain is judged by the step before it.
+      while (previous?.deleted && previous.seq > 0 && previous.prev) {
+        const before: Version | null = await storage.getVersion(previous.prev);
+        if (!before) return { pending: true };
+        previous = before;
+      }
       // A step under checks is kept whole by an honest writer (it is signed, so every reader sees the same):
       // one that wasn't can't be judged, and what follows it doesn't count.
       if (previous && !previous.retain && !previous.deleted) {
@@ -2806,6 +2812,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // The next place in this key's log here: given back if the version is refused below.
     const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
       const { history, events: held } = await access();
+      const seen = await seenFor(history, collection);
+      // Checks in force as of the very point it names: a definition arriving meanwhile can't leave it unkept.
+      const checkedThen = (() => {
+        const then = history.at(seen);
+        return then ? rulesAt(then, collection) : null;
+      })();
+      const keep = retain || (!deleted && !!(await checkedThen)?.rules.check?.length);
       const made = await signer.sign(
         createVersion({
           author: writer.did,
@@ -2814,9 +2827,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           body: payload,
           proof: writer.proof(),
           version,
-          retain,
+          retain: keep,
           deleted,
-          seen: await seenFor(history, collection),
+          seen,
           // In the clear only where the body is: a private space sealed them above.
           ...(space.visibility === 'public' && !deleted && links.length ? { links } : {}),
           ...(tags.length ? { tags } : {}),
@@ -2898,6 +2911,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const verdict = (await standingOf(held)).ok ? await checksOf(held) : NO_CHECKS;
     // One that fails its checks, or waits for ever on what it cites, can't hold the key.
     if ('passes' in verdict && verdict.passes !== false) return nextVersion(held);
+    // Waiting only for its own step before: continue it, rather than fork this record.
+    if ('pending' in verdict && held.prev && !(await storage.getVersion(held.prev))) return nextVersion(held);
     const counted = await currentOf(recordKey);
     return counted ? nextVersion(counted) : { key: recordKey, seq: 0 };
   }
