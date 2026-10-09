@@ -1361,6 +1361,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           return { passes: false, reason: 'It follows a version that does not stand' };
         const before = await checksOf(previous);
         if ('pending' in before) return { pending: true };
+        // A step this node couldn't judge leaves what follows unjudged too, so neither is kept as a pass.
+        if (before === UNJUDGED) return UNJUDGED;
         if (before.passes === false)
           return { passes: false, reason: `It follows a version that fails its checks: ${before.reason}` };
       }
