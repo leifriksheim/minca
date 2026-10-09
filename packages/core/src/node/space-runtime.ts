@@ -1312,12 +1312,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * a version another cites, as of what that one saw (`within`).
    */
   async function checksOf(version: Version, within?: ReadonlyArray<string>): Promise<ChecksVerdict> {
-    if (
-      version.deleted ||
-      ACCESS_COLLECTIONS.has(version.collection) ||
-      version.collection.startsWith('sys.')
-    )
-      return NO_CHECKS;
+    if (ACCESS_COLLECTIONS.has(version.collection) || version.collection.startsWith('sys.')) return NO_CHECKS;
     const cacheKey = `${version.id}|${within ? [...new Set(within)].sort().join(',') : ''}`;
     const cached = checkVerdicts.get(cacheKey);
     if (cached) return cached;
@@ -1335,8 +1330,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (checkChecks(checks, 'rules.check', defined?.permissions ?? []) !== null || !Array.isArray(checks))
         return { passes: false, reason: `The checks of ${version.collection} can't be read` };
       // What this node can't open, it can't judge: it counts on the rest, as a peer without the key does.
-      const opened = await openBody(version);
-      if (opened.body === null && opened.encrypted) return UNJUDGED;
+      if (!version.deleted) {
+        const opened = await openBody(version);
+        if (opened.body === null && opened.encrypted) return UNJUDGED;
+      }
       // It continues the version before: one that follows a version failing its checks fails too,
       // or a forged step would be laundered by the next.
       let previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
@@ -1367,6 +1364,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if (before.passes === false)
           return { passes: false, reason: `It follows a version that fails its checks: ${before.reason}` };
       }
+      // A delete has no content to check, but it continues the chain like any step: one that follows a
+      // failing step fails too, so it can't hide the record from readers or make its key unwritable.
+      if (version.deleted) return NO_CHECKS;
       const outcome = await checkStanding(version, first, root, state, checks);
       if (outcome.ok) return { passes: true };
       return outcome.later ? { pending: true } : { passes: false, reason: outcome.reason };
