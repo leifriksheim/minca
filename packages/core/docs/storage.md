@@ -111,18 +111,16 @@ account home uses `weave-app:<account DID>` (the grant's `did`). Only this origi
 
 Each database:
 
-- is version **3**. Opening one of version 1 or 2 (which held a Merkle tree)
-  deletes its object stores: it is a local copy, rebuilt by syncing.
+- is version **4**. Opening one made at an earlier version deletes its object
+  stores and starts empty: it is a local copy, rebuilt by syncing.
 - has object store `kv`: out-of-line string keys, values `ArrayBuffer`s (the
   entry bytes). `list(prefix)` is a key-range cursor over
   `[prefix, prefix + "￿"]`.
-- has object store `expressions` (named before versions were called that;
-  kept so existing databases open): key path `id`, no indexes (databases made
-  before may have `collection`, `author` and `createdAt` ones, which nothing
-  reads). Values are the version objects.
+- has object store `versions`: key path `id`, no indexes. Values are the
+  version objects.
 - writes `batch` as one `readwrite` transaction over `kv`. Bodies are written
   in their own transactions, except through `commit`: one `readwrite`
-  transaction over `kv` and `expressions`.
+  transaction over `kv` and `versions`.
 - reads `entries(prefix)` with `getAllKeys` and `getAll` over the same key
   range in one `readonly` transaction; `getVersions` is one `readonly`
   transaction.

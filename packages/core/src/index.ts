@@ -57,15 +57,12 @@ export { createIdentityManager, rootFromSeed } from './identity/identity-manager
 export {
   createFolderAccountStore,
   createBrowserAccountStore,
-  listFolderAccounts,
-  adoptLegacyFolderAccount,
   accountDataPath,
   newAccountId,
 } from './identity/account-store.js';
 export type { AccountStore, AccountSummary } from './identity/account-store.js';
-export { readFolderVault, createVault, ACCOUNT_FILE } from './identity/folder-account.js';
-export type { FolderState } from './identity/folder-account.js';
 export {
+  createVault,
   wrapSeedWithDeviceKey,
   unwrapSeedWithDeviceKey,
   wrapSeedWithPassphrase,

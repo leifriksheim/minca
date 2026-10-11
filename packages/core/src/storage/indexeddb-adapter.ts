@@ -8,11 +8,10 @@ import { isStoredVersion } from '../utils/guards.js';
 import { requestResult as idbRequest, transactionDone } from '../identity/idb.js';
 
 /**
- * Bumped to 3 when the Merkle tree gave way to plain entries and sync by
- * reconciliation. Opening an older database wipes it: it is a local copy,
- * rebuilt by syncing with peers.
+ * Bumped whenever the object stores change. Opening a database made at an
+ * earlier one wipes it: it is a local copy, rebuilt by syncing with peers.
  */
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /** A stored version, or null for a miss */
 async function readVersion(request: IDBRequest<unknown>): Promise<Version | null> {
@@ -39,26 +38,13 @@ export async function createIndexedDBAdapter(dbName = 'weave-storage'): Promise<
   const db = await new Promise<IDBDatabase>((resolve, reject) => {
     const request = globalThis.indexedDB.open(dbName, DB_VERSION);
 
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = () => {
       const db = request.result;
-      const previousVersion = event.oldVersion;
-
-      // Older versions indexed records in a Merkle tree this store no longer
-      // has. The local copy is dropped and rebuilt by syncing with peers.
-      if (previousVersion > 0 && previousVersion < 3) {
-        for (const name of ['kv', 'expressions']) {
-          if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
-        }
-      }
-
-      // Store for key-value: which version is current, what sync compares, space records
-      if (!db.objectStoreNames.contains('kv')) {
-        db.createObjectStore('kv');
-      }
-
-      // Versions by id. Databases made before had indexes on them that nothing reads.
-      if (!db.objectStoreNames.contains('expressions'))
-        db.createObjectStore('expressions', { keyPath: 'id' });
+      for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);
+      // Key-value: which version is current, what sync compares, space records
+      db.createObjectStore('kv');
+      // Versions by id
+      db.createObjectStore('versions', { keyPath: 'id' });
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -133,8 +119,8 @@ export async function createIndexedDBAdapter(dbName = 'weave-storage'): Promise<
       readonly ops: ReadonlyArray<BatchOp>;
       readonly remove: ReadonlyArray<string>;
     }): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['kv', 'expressions'], 'readwrite');
-      const versions = tx.objectStore('expressions');
+      const { tx, complete } = idbTransaction(db, ['kv', 'versions'], 'readwrite');
+      const versions = tx.objectStore('versions');
       const kv = tx.objectStore('kv');
       for (const version of write.store) versions.put(version);
       for (const op of write.ops) {
@@ -147,26 +133,26 @@ export async function createIndexedDBAdapter(dbName = 'weave-storage'): Promise<
 
     async getVersions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version | null>> {
       if (ids.length === 0) return [];
-      const { tx } = idbTransaction(db, ['expressions'], 'readonly');
-      const store = tx.objectStore('expressions');
+      const { tx } = idbTransaction(db, ['versions'], 'readonly');
+      const store = tx.objectStore('versions');
       return Promise.all(ids.map((id) => readVersion(store.get(id))));
     },
 
     async putVersion(version: Version): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['expressions'], 'readwrite');
-      const store = tx.objectStore('expressions');
+      const { tx, complete } = idbTransaction(db, ['versions'], 'readwrite');
+      const store = tx.objectStore('versions');
       store.put(version);
       await complete;
     },
 
     async getVersion(id: string): Promise<Version | null> {
-      const { tx } = idbTransaction(db, ['expressions'], 'readonly');
-      return readVersion(tx.objectStore('expressions').get(id));
+      const { tx } = idbTransaction(db, ['versions'], 'readonly');
+      return readVersion(tx.objectStore('versions').get(id));
     },
 
     async deleteVersion(id: string): Promise<void> {
-      const { tx, complete } = idbTransaction(db, ['expressions'], 'readwrite');
-      const store = tx.objectStore('expressions');
+      const { tx, complete } = idbTransaction(db, ['versions'], 'readwrite');
+      const store = tx.objectStore('versions');
       store.delete(id);
       await complete;
     },

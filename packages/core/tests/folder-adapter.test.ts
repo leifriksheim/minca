@@ -112,7 +112,7 @@ describe('folder adapter — versions', () => {
 
     // One file per record, named after its own hash — that is what lets two
     // copies of the folder merge by union.
-    const files = folder.paths().filter((path) => path.includes('/expressions/'));
+    const files = folder.paths().filter((path) => path.includes('/versions/'));
     assert.equal(files.length, 2);
     assert.ok(files.some((path) => path.endsWith(`${first.id}.json`)));
   });
@@ -203,7 +203,7 @@ describe('two origins, one folder', () => {
     // is the case the shared root pointer cannot cover, and the reason
     // reconciling reads the directory rather than trusting the pointer.
     const store = await (await folder.open().getDirectoryHandle('spaces')).getDirectoryHandle('demo');
-    const versions = await store.getDirectoryHandle('expressions');
+    const versions = await store.getDirectoryHandle('versions');
     await versions.removeEntry(`${version.id}.json`);
 
     const result = await reconcileFolder(a.storage, a.adapter);

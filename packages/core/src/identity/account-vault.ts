@@ -263,3 +263,27 @@ export function withWrap(vault: AccountVault, wrap: SeedWrap): AccountVault {
 
   return { ...vault, wraps: [...vault.wraps.filter((existing) => !superseded(existing)), wrap] };
 }
+
+/**
+ * Assembles a fresh locked account.
+ *
+ * Pure — it neither generates the seed nor touches the disk, so a caller stays
+ * in charge of both the entropy and when it lands.
+ *
+ * @param params.wraps Shortcuts for getting in. May be empty: the account code
+ *   is the seed written out, so it opens the account with nothing stored —
+ *   which is exactly what a brand new account has.
+ */
+export function createVault(params: {
+  did: string;
+  wraps: ReadonlyArray<SeedWrap>;
+  label?: string;
+}): AccountVault {
+  return {
+    version: 2,
+    label: params.label ?? 'My data',
+    did: params.did,
+    createdAt: new Date().toISOString(),
+    wraps: params.wraps,
+  };
+}

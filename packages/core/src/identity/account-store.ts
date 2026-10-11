@@ -25,7 +25,6 @@
 import type { DirectoryHandleLike } from '../storage/folder-adapter.js';
 import { readFolderFile, writeFolderFile } from '../storage/folder-adapter.js';
 import { isAccountVault, type AccountVault } from './account-vault.js';
-import { readFolderVault } from './folder-account.js';
 import { base64UrlEncode, utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { protocolError } from '../utils/errors.js';
 import { isRecord } from '../utils/guards.js';
@@ -42,9 +41,8 @@ export interface AccountSummary {
   /**
    * Where this account's spaces live, relative to the store root.
    *
-   * Carried rather than computed so that an account written before folders
-   * held more than one keeps its data exactly where it already is, instead of
-   * needing every file moved.
+   * Carried rather than computed so that a row filed again under a fresh id
+   * keeps pointing at the subtree its data already lives in.
    */
   readonly dataPath: string;
   readonly lastUsedAt?: string;
@@ -71,8 +69,6 @@ export interface AccountStore {
 const LIST_FILE = 'accounts.json';
 const ACCOUNTS_DIR = 'accounts';
 const VAULT_FILE = 'account.json';
-/** Where a single-account folder kept its spaces, before there was a list. */
-const LEGACY_DATA_PATH = 'stores';
 
 /** Where a brand new account keeps its spaces. */
 export function accountDataPath(id: string): string {
@@ -101,16 +97,14 @@ export function isAccountId(id: unknown): id is string {
 /**
  * Whether a row points somewhere this store could have put it.
  *
- * `dataPath` is carried, not computed, but there are only two shapes it can
- * honestly have: an account subtree, or the folder's root store from before
- * there was a list. Usually the subtree is the row's own — though a row filed
- * again under a fresh id keeps the one its data already lives in. Anything
- * else, `../../elsewhere` above all, is someone editing the list to aim an
- * account at files outside the folder.
+ * `dataPath` is carried, not computed, but there is only one shape it can
+ * honestly have: an account subtree. Usually the subtree is the row's own —
+ * though a row filed again under a fresh id keeps the one its data already
+ * lives in. Anything else, `../../elsewhere` above all, is someone editing the
+ * list to aim an account at files outside the folder.
  */
 function isTrustworthy(account: unknown): boolean {
   if (!isRecord(account) || !isAccountId(account.id) || typeof account.dataPath !== 'string') return false;
-  if (account.dataPath === LEGACY_DATA_PATH) return true;
   const [accounts, id, stores, ...more] = account.dataPath.split('/');
   return accounts === ACCOUNTS_DIR && isAccountId(id) && stores === 'stores' && more.length === 0;
 }
@@ -315,53 +309,4 @@ export async function createBrowserAccountStore(dbName = DB_NAME): Promise<Accou
       await idbPut(db, LIST_KEY, accounts);
     },
   });
-}
-
-// ─── Folders written before they could hold more than one account ──────
-
-/**
- * Finds the account in a folder that predates the list, so it can join it.
- *
- * Its data stays exactly where it is. Moving it would mean copying every file
- * by hand — the File System Access API cannot rename across directories — for
- * no benefit, so the summary records where the spaces already live instead.
- *
- * @param existing Accounts already listed, so one is not adopted twice
- */
-export async function adoptLegacyFolderAccount(
-  dir: DirectoryHandleLike,
-  existing: ReadonlyArray<AccountSummary>,
-): Promise<{ summary: AccountSummary; vault: AccountVault } | null> {
-  const legacy = await readFolderVault(dir);
-
-  // Nothing there, or a folder from before locking existed — that one cannot
-  // be adopted silently, because it has no keys to copy. The app asks the user
-  // to put a password on it instead.
-  if (!legacy.vault) return null;
-
-  if (existing.some((account) => account.did === legacy.vault!.did)) return null;
-
-  return {
-    summary: {
-      id: newAccountId(),
-      name: legacy.label,
-      did: legacy.vault.did,
-      createdAt: legacy.vault.createdAt,
-      dataPath: LEGACY_DATA_PATH,
-    },
-    vault: legacy.vault,
-  };
-}
-
-/** Lists a folder's accounts, adopting a pre-list one if it finds it. */
-export async function listFolderAccounts(
-  dir: DirectoryHandleLike,
-  store: AccountStore,
-): Promise<ReadonlyArray<AccountSummary>> {
-  const listed = await store.list();
-  const adopted = await adoptLegacyFolderAccount(dir, listed);
-  if (!adopted) return listed;
-
-  await store.write(adopted.summary, adopted.vault);
-  return store.list();
 }

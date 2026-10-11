@@ -11,7 +11,7 @@
  *   accounts/<id>/account.json       that account's keys, locked
  *   accounts/<id>/stores/<name>/
  *     kv/<key>                       which version is current, what sync compares, space records
- *     expressions/<cid>.json
+ *     versions/<cid>.json
  * ```
  *
  * **Versions are the truth; the entries are an index over them.** That
@@ -176,7 +176,7 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
   }
   const base = await resolvePath(root, segments);
   const kvDir = await base.getDirectoryHandle('kv', { create: true });
-  const versionsDir = await base.getDirectoryHandle('expressions', { create: true });
+  const versionsDir = await base.getDirectoryHandle('versions', { create: true });
 
   const versions = new Map<string, Version>();
 

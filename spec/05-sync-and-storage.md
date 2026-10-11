@@ -875,24 +875,19 @@ that follows this section can share a folder with this one.
   accounts/<account id>/stores/         that account's data path
     registry/
       kv/<encoded key>                  one file per entry
-      expressions/                      (empty for a registry)
+      versions/                         (empty for a registry)
     spaces/<space id>/
       kv/<encoded key>
-      expressions/<version id>.json     one file per version, whole (§14.3)
+      versions/<version id>.json        one file per version, whole (§14.3)
     mirrors/<space id>/<n>/kv/…
 ```
 
 - `<account id>` matches `^[a-z0-9]{1,12}$`. An account's `dataPath` in
-  `accounts.json` MUST be `accounts/<its id>/stores`, or `stores` for a folder
-  written before it held more than one account (then its data is at
-  `<folder>/stores/…`). A reader MUST skip rows with any other id or data
-  path, and MUST NOT resolve a path from them.
+  `accounts.json` MUST be `accounts/<its id>/stores`. A reader MUST skip rows
+  with any other id or data path, and MUST NOT resolve a path from them.
 - A store at path `a/b/c` is the directory `<dataPath>/a/b/c`, each segment
   encoded as in §14.2. Each store directory has exactly two subdirectories,
-  `kv` and `expressions`, created on open. `expressions` is the old name for
-  versions, kept so folders written before still open.
-- Legacy single-account folders also have `weave-account.json` and
-  `README.txt` at the root ([01 — Identity](01-identity.md)).
+  `kv` and `versions`, created on open.
 
 ### 14.2 File name encoding
 
@@ -916,14 +911,14 @@ A writer MUST use exactly this encoding; a reader MUST decode it.
 
 - **Entry files** `kv/<encoded key>`: the entry value, raw bytes (for the §10
   entries, the UTF-8 version id; for sealed keys, §15).
-- **Version files** `expressions/<encoded id>.json`: the version exactly as on
+- **Version files** `versions/<encoded id>.json`: the version exactly as on
   the wire ([02](02-records.md)), as UTF-8 JSON. Version ids are lower-case
   base32, so the name is the id itself. The file is named by its own content
   hash and never changes once written. JSON formatting is not significant; a
   reader MUST parse, not compare bytes. A file that does not parse (for
   instance half-written) MUST be treated as absent.
 - Names that end in `.tmp` are a writer's work in progress and MUST be
-  ignored. Only names ending in `.json` in `expressions/` are versions.
+  ignored. Only names ending in `.json` in `versions/` are versions.
 
 A writer SHOULD replace a file atomically: write it under a name ending in
 `.tmp`, then rename it into place. How the library does it is in
@@ -945,7 +940,7 @@ derived state, and the rule is: **the set of version files wins.**
 Any client sharing a folder SHOULD re-read it periodically while a space is
 open, and reconcile:
 
-1. List `expressions/`. Note files that appeared since the last pass and files
+1. List `versions/`. Note files that appeared since the last pass and files
    that vanished. If anything moved, read the store again (§10.2).
 2. For every version file that is not indexed, **or appeared since the last
    pass**, read it, pass it through the gatekeeper (§8), and place it (§10.1).

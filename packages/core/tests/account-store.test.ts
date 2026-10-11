@@ -1,6 +1,5 @@
 /**
- * Account store tests — several accounts in one place, and the folder that
- * predates the idea joining them.
+ * Account store tests — several accounts in one place.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,15 +7,11 @@ import assert from 'node:assert/strict';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import {
   createFolderAccountStore,
-  listFolderAccounts,
-  adoptLegacyFolderAccount,
   accountDataPath,
   newAccountId,
   type AccountSummary,
 } from '../src/identity/account-store.js';
-import { createVault } from '../src/identity/folder-account.js';
-import { writeFolderVault } from './helpers/vault.js';
-import { wrapSeedWithPassphrase } from '../src/identity/account-vault.js';
+import { createVault, wrapSeedWithPassphrase } from '../src/identity/account-vault.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { utf8Decode } from '../src/utils/encoding.js';
@@ -176,56 +171,5 @@ describe('several accounts in one folder', () => {
   test('an unknown account reads as nothing, not as an error', async () => {
     const store = createFolderAccountStore(createMemoryDirectory().open());
     assert.equal(await store.read('nope'), null);
-  });
-});
-
-describe('a folder from before the list existed', () => {
-  test('its account joins the list, keeping its data where it is', async () => {
-    const folder = createMemoryDirectory();
-    const seed = generateSeed();
-    const identity = await manager.fromSeed(seed);
-
-    // The single-account layout: keys at the root, spaces under stores/.
-    await writeFolderVault(
-      folder.open(),
-      createVault({
-        did: identity.did,
-        label: 'my-data',
-        wraps: [await wrapSeedWithPassphrase(seed, 'a passphrase')],
-      }),
-    );
-
-    const store = createFolderAccountStore(folder.open());
-    const accounts = await listFolderAccounts(folder.open(), store);
-
-    assert.equal(accounts.length, 1);
-    assert.equal(accounts[0]!.did, identity.did);
-    assert.equal(accounts[0]!.name, 'my-data');
-    // Moving it would mean copying every file by hand for no benefit.
-    assert.equal(accounts[0]!.dataPath, 'stores');
-  });
-
-  test('it is only adopted once', async () => {
-    const folder = createMemoryDirectory();
-    const seed = generateSeed();
-    const identity = await manager.fromSeed(seed);
-    await writeFolderVault(
-      folder.open(),
-      createVault({
-        did: identity.did,
-        wraps: [await wrapSeedWithPassphrase(seed, 'a passphrase')],
-      }),
-    );
-
-    const store = createFolderAccountStore(folder.open());
-    await listFolderAccounts(folder.open(), store);
-    const second = await listFolderAccounts(folder.open(), store);
-
-    assert.equal(second.length, 1);
-  });
-
-  test('an empty folder has nothing to adopt', async () => {
-    const folder = createMemoryDirectory();
-    assert.equal(await adoptLegacyFolderAccount(folder.open(), []), null);
   });
 });
