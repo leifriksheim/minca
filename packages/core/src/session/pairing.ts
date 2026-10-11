@@ -147,7 +147,7 @@ export async function offerToPhone(
   if (!relay && !params.transport) throw new Error('Pairing needs a relay, and none is configured.');
 
   const secret = newPairingSecret();
-  const ticket: PairingTicket = { v: 1, secret: base64UrlEncode(secret), relay: relay ?? '' };
+  const ticket: PairingTicket = { v: 2, secret: base64UrlEncode(secret), relay: relay ?? '' };
   const url = `${params.link}#pair=${encodePairingTicket(ticket)}`;
   const room = await meet({ relays, transport: params.transport }, secret);
   const mine = await pairingKeyPair();

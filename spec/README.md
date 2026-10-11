@@ -37,6 +37,7 @@ everything the same:
 A peer that joins spaces and syncs them needs, from the core:
 
 - 01 §1–9: keys, DIDs, UCAN notes, what a note lets a key do, and envelopes;
+  §10.2 and §11.1 for the member keys a private space's new keys are boxed to;
 - 02 whole;
 - 03 §1–7, and §8–9 for private spaces;
 - 04 §1–2, one transport from §5, §6–7 and §9;

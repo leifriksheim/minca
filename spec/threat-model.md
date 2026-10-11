@@ -84,10 +84,12 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     another envelope or body, turns an honest write into proof against its
     writer. Warrants are a standard collection, not protocol
     ([warrants](../packages/core/docs/warrants.md)).
-  - Every ciphertext is bound to its place: a record body copied into another
-    record, collection or space, a box presented for another space, key or
-    recipient, or a key record's `earlier` under another key id, does not
-    open there (01 §9, 03 §8.3, §9.3, §9.4).
+  - Ciphertexts sealed under a space key or to a member key are bound to
+    their place: a record body copied into another record, collection or
+    space, or a box presented for another space, key or recipient, does not
+    open there (01 §9, 03 §8.3, §9.4). Holding the key, it can still seal
+    whatever it likes; what it can't do is pass off someone else's
+    ciphertext as being about something else (the agent link aside, 01 §9).
 - **Does not hold yet.**
   - A narrowed rule alone binds only what saw it: a version naming an older
     point counts if its author could have written it then, since nobody can
@@ -133,7 +135,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - The top rank answers to no one, and no vote can bind a change to who may
     do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
 
-_Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
+_Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
 ### 3.3 Former member
 
@@ -253,6 +255,9 @@ _Source: 01 §8, §11; 06 §2; 05 §15. Tests: `packages/core/tests/connect.test
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - Its door mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
+  - It can send an agent link's message back to its sender, or as another
+    type: an app then shows an agent connected that nobody allowed, and the
+    offer ends; no note is issued (01 §9, 06 §3.2) _(traced)_.
 
 _Source: 04 §1, §5.1, §6.2; 07 §5. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`._
 

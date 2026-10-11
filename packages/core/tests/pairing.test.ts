@@ -91,18 +91,18 @@ describe('the ticket in the QR code', () => {
 
   test('round-trips', () => {
     const ticket: PairingTicket = {
-      v: 1,
+      v: 2,
       secret: base64UrlEncode(newPairingSecret()),
       relay: 'ws://192.168.1.42:8787',
     };
     assert.deepEqual(decodePairingTicket(encodePairingTicket(ticket)), ticket);
   });
 
-  test('a ticket of another version, or a mangled one, is refused', () => {
+  test('an old ticket with a recovery code in it, or a mangled one, is refused', () => {
     const other = base64UrlEncode(
-      utf8Encode(JSON.stringify({ v: 2, secret: base64UrlEncode(newPairingSecret()), relay: 'wss://r' })),
+      utf8Encode(JSON.stringify({ v: 1, code: seedToRecoveryCode(generateSeed()), relay: 'wss://r' })),
     );
-    const short = base64UrlEncode(utf8Encode(JSON.stringify({ v: 1, secret: 'AAAA', relay: 'wss://r' })));
+    const short = base64UrlEncode(utf8Encode(JSON.stringify({ v: 2, secret: 'AAAA', relay: 'wss://r' })));
     for (const bad of ['', 'not-base64!!', other, short]) {
       assert.throws(() => decodePairingTicket(bad), unreadable);
     }

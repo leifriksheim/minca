@@ -14,6 +14,7 @@ import { createCapabilityGate } from '../src/validation/capability-gate.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
 import { openBody, sealBody, spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
 import { newRecordKey } from '../src/records/version.js';
+import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { team } from '../src/space/presets.js';
 import { makeKey } from './helpers/person.js';
 
@@ -195,7 +196,9 @@ describe('private space versions', () => {
     assert.equal(await openBody(sealed, key, { ...place, space: 'bsomewhereelse' }), null);
     // A body naming another key id, or with a changed byte, does not open either.
     assert.equal(await openBody({ ...sealed, keyId: 'AAAAAAAAAAAAAAAAAAAAAA' }, key, place), null);
-    const flipped = sealed.sealed.slice(0, -2) + (sealed.sealed.endsWith('AA') ? 'AB' : 'AA');
+    const bytes = base64UrlDecode(sealed.sealed);
+    bytes[bytes.length - 1] = bytes[bytes.length - 1]! ^ 1;
+    const flipped = base64UrlEncode(bytes);
     assert.equal(await openBody({ ...sealed, sealed: flipped }, key, place), null);
   });
 

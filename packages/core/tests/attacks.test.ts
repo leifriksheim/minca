@@ -12,7 +12,8 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { SYNC_PROTOCOL_VERSION } from '../src/sync/sync-messages.js';
-import { nextVersion } from '../src/records/version.js';
+import { newRecordKey, nextVersion } from '../src/records/version.js';
+import { isSealedBody } from '../src/privacy/space-encryption.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -58,6 +59,28 @@ async function setup() {
 }
 
 describe('attacks on a shared space', () => {
+  test('a sealed body copied into another record, or another collection, reads as unreadable', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Diary', ...team, visibility: 'private' });
+    const note = await alice.node.records.put(space, 'app.note', { text: 'secret' });
+    const sealed = (await (await stored(alice.stores, space)).getCurrent(note.key))!.body;
+    assert.ok(isSealedBody(sealed));
+    // The same ciphertext, signed into a record of its own and into another collection.
+    const moved = await forge(alice, space, { collection: 'app.note', body: sealed });
+    const relabelled = await forge(alice, space, {
+      collection: 'app.other',
+      body: sealed,
+      version: { key: newRecordKey(), seq: 0 },
+    });
+    assert.deepEqual((await alice.node.records.get(space, note.key))?.body, { text: 'secret' });
+    for (const copy of [moved, relabelled]) {
+      const read = await alice.node.records.get(space, copy.key);
+      assert.ok(read, 'the copy is held, and shown');
+      assert.equal(read.body, null);
+    }
+  });
+
   test("a version cannot escape its record's rules by naming another record as its first", async () => {
     const { alice, bob, space, poll } = await setup();
     const unruled = await bob.node.records.put(space, 'app.other', { x: 1 });

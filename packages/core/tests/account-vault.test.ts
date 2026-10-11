@@ -142,6 +142,21 @@ describe('wrapping a seed', () => {
       );
   });
 
+  test('the example passphrase wrap of spec 01 §11.2 opens to the seed of §3.3', async () => {
+    const wrap = {
+      kind: 'passphrase' as const,
+      id: '3FhYYIDMZJI',
+      label: 'Passphrase',
+      addedAt: '2026-10-11T10:15:34.694Z',
+      salt: '9ae06Gjd9kltZrGo6jupLQ',
+      iterations: 600000,
+      sealed: 'AWFF7dAydbB7LQNVyPYX5ohUGrCi-n3UnxgyuWup2zlu1qBLRwtVYQft-BBr',
+    };
+    const did = 'did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr';
+    const seed = await unwrapSeedWithPassphrase(wrap, 'hunter2 hunter2', did);
+    assert.equal(bytesToHex(seed), '00112233445566778899aabbccddeeff');
+  });
+
   test('a device wrap relabelled as another wrap does not open', async () => {
     const seed = generateSeed();
     const key = await deviceKey('k');

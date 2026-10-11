@@ -30,7 +30,7 @@ export type PairingSide = 'offer' | 'phone';
 
 /** What the QR code carries */
 export interface PairingTicket {
-  readonly v: 1;
+  readonly v: 2;
   /** The one-time secret, base64url. Says nothing about the account. */
   readonly secret: string;
   /** Where to meet. Must be an address the phone can actually reach. */
@@ -173,7 +173,7 @@ export function encodePairingTicket(ticket: PairingTicket): string {
 function isPairingTicket(value: unknown): value is PairingTicket {
   return (
     isRecord(value) &&
-    value.v === 1 &&
+    value.v === 2 &&
     typeof value.secret === 'string' &&
     typeof value.relay === 'string' &&
     base64UrlDecode(value.secret).length === PAIRING_SECRET_BYTES

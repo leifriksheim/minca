@@ -51,7 +51,9 @@ Terms used here:
 A node acts for one account and signs with one session key at a time. It
 holds a set of spaces, each with its own store and its own peers.
 
-A node MAY hold the **account key** ([01 §11.1](01-identity.md)), never the local key.
+A node MAY hold the **account key** ([01 §11.1](01-identity.md)). A node that is
+not one of the account's own devices (an app's or an agent's) is never given
+the local key.
 With it the node follows the account registry — the account's list of spaces,
 its name, its carriers, hosts and subscriptions — and joins and leaves spaces as
 the account does on any device (§1.3). Without it, the node holds only the

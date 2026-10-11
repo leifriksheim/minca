@@ -704,6 +704,7 @@ _Tests:_ `packages/core/tests/agents.test.ts`.
 
 Everything Weave encrypts is sealed one of two ways: under a symmetric key,
 as an **envelope** (§9.1), or to a P-256 public key, with **HPKE** (§9.2).
+The one exception is below.
 Each use names a **label** and a **bound**: the label says what the sealed
 thing is, the bound says where it belongs. Both are authenticated, so a
 sealed thing opens only for the use and the place it was sealed for: moved to
@@ -803,6 +804,15 @@ Conventions built on the protocol use the same two primitives: direct
 messages (`weave/direct-text/v1`, `weave/direct-box/v1`), contact requests
 (`weave/contact-request/v1`), and the CLI's writer keys on disk
 (`weave/writer-key/v1`); see `packages/core/docs/`.
+
+> **Known defect:** the agent link ([06 §3.2](06-nodes-and-sessions.md))
+> still seals its messages with plain AES-GCM under one key for both
+> directions, with neither label nor bound, and the message type unbound. A
+> relay can send a message back to its sender, or as another type: it can
+> make an app show an agent as connected before anyone allowed it, and end
+> the offer, though no note is issued. A change that moves the link onto the
+> pairing channel's pattern (a key per direction, each message bound to
+> `{ type, seq }`) is planned.
 
 _Source:_ `packages/core/src/identity/envelope.ts` (`sealEnvelope`, `openEnvelope`, `boundContext`), `packages/core/src/identity/hpke.ts` (`hpkeSeal`, `hpkeOpen`, `sealTo`, `openFrom`).
 _Tests:_ `packages/core/tests/envelope.test.ts`.
@@ -1146,24 +1156,25 @@ of the room opens nothing.
 ### 15.1 The ticket
 
 ```json
-{ "v": 1, "secret": "AAECAwQFBgcICQoLDA0ODw", "relay": "wss://relay.example" }
+{ "v": 2, "secret": "AAECAwQFBgcICQoLDA0ODw", "relay": "wss://relay.example" }
 ```
 
 | Field    | Type   | Meaning                                                                 |
 | -------- | ------ | ----------------------------------------------------------------------- |
-| `v`      | `1`    | Version                                                                 |
+| `v`      | `2`    | Version                                                                 |
 | `secret` | string | base64url of 16 random bytes, new for every offer                       |
 | `relay`  | string | A relay URL the offering device is connected to and the phone can reach |
 
 Encoding: `base64url(UTF-8(JSON))`, placed in a URL fragment as
 `<page>#pair=<ticket>` and shown as a QR code. Readers find it with
 `/[#&]pair=([^&]+)/` on the fragment. A decoder MUST reject a ticket that is
-not base64url JSON, whose `v` is not `1`, whose `relay` is not a string, or
+not base64url JSON, whose `v` is not `2`, whose `relay` is not a string, or
 whose `secret` does not decode to exactly 16 bytes (`PAIRING_TICKET_UNREADABLE`).
+Version 1 tickets carried the recovery code and MUST be refused.
 The page SHOULD remove the fragment from the address bar once read.
 
 Example (the ticket above):
-`eyJ2IjoxLCJzZWNyZXQiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3IiwicmVsYXkiOiJ3c3M6Ly9yZWxheS5leGFtcGxlIn0`
+`eyJ2IjoyLCJzZWNyZXQiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3IiwicmVsYXkiOiJ3c3M6Ly9yZWxheS5leGFtcGxlIn0`
 
 The offering device MUST generate the secret with a CSPRNG for each offer and
 MUST NOT derive it from the seed.

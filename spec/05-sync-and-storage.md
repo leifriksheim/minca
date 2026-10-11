@@ -246,7 +246,7 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 1` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 2` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
@@ -273,7 +273,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 1,
+  "v": 2,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -1130,7 +1130,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 1                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 2                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |
