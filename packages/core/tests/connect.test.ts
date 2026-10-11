@@ -545,26 +545,6 @@ describe('connecting a carrier to an account home', () => {
   });
 });
 
-describe('connecting asks for no subscriptions', () => {
-  test('an app still sending some while connecting connects, and nothing is subscribed', async () => {
-    const hub = createFakeHub({ latencyMs: 1 });
-    const auth = await home(hub);
-    const { node } = auth.getState().session!;
-    await node.spaces.create({ name: 'Club', visibility: 'private' });
-    // An app written before connecting stopped carrying them: the field is ignored, never offered.
-    const request = await asked({
-      v: 1 as const,
-      audience: 'did:key:zChat',
-      access: 'write' as const,
-      scope: 'account' as const,
-      notify: [{ label: 'New message', collection: 'app.chat.message' }],
-    });
-    const grant = await auth.grant({ origin: 'https://chat.test', request, spaceIds: [] });
-    assert.ok(!('notify' in grant));
-    assert.deepEqual(await node.notifications.list(), []);
-  });
-});
-
 describe('an app proposing subscriptions', () => {
   const propose = (notify: ProposeRequest['notify']): ProposeRequest => ({ v: 1, kind: 'propose', notify });
   const connect = async (
@@ -943,6 +923,30 @@ describe('the home receiving a request', () => {
       await new Promise((resolve) => setTimeout(resolve, 150)); // the window closes itself a moment later
     } finally {
       popup.restore();
+    }
+  });
+
+  test('a request with a field it does not know is refused, subscriptions while connecting included', async () => {
+    const { receiveConnectRequest } = await import('../src/session/connect.js');
+    for (const request of [
+      await asked({
+        v: 1,
+        audience: 'did:key:zChat',
+        access: 'write',
+        notify: [{ label: 'New message', collection: 'app.chat.message' }],
+      }),
+      { v: 1, kind: 'propose', notify: [{ label: 'New', collection: 'app.chat.message' }], extra: true },
+    ]) {
+      const popup = popupWindow();
+      try {
+        const received = receiveConnectRequest(1000);
+        popup.send({ type: 'weave:request', request });
+        assert.equal(await received, null);
+        assert.ok(popup.sent.some((m) => isDenied(m.message)));
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      } finally {
+        popup.restore();
+      }
     }
   });
 

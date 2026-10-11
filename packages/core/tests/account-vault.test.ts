@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
-import { writeFolderVault, hasPassphraseWrap, withoutWrap } from './helpers/vault.js';
+import { hasPassphraseWrap, withoutWrap } from './helpers/vault.js';
 import {
   wrapSeedWithDeviceKey,
   unwrapSeedWithDeviceKey,
@@ -21,12 +21,13 @@ import {
   deriveVaultKeyBytes,
   deviceWrapsFor,
   withWrap,
+  createVault,
 } from '../src/identity/account-vault.js';
-import { readFolderVault, createVault, ACCOUNT_FILE } from '../src/identity/folder-account.js';
+import { accountDataPath, createFolderAccountStore, newAccountId } from '../src/identity/account-store.js';
 import { createEncryptedAdapter } from '../src/storage/encrypted-adapter.js';
 import { createSpaceManager } from '../src/space/space-manager.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
-import { generateSeed, seedToRecoveryCode, recoveryCodeToSeed } from '../src/identity/recovery-code.js';
+import { generateSeed, seedToRecoveryCode } from '../src/identity/recovery-code.js';
 import { utf8Encode, utf8Decode } from '../src/utils/encoding.js';
 import { isProtocolError } from '../src/utils/errors.js';
 import { team } from '../src/space/presets.js';
@@ -182,52 +183,33 @@ describe('the account file', () => {
     const folder = createMemoryDirectory();
     const seed = generateSeed();
     const identity = await manager.fromSeed(seed);
+    const id = newAccountId();
 
     const vault = createVault({
       did: identity.did,
       label: 'Work',
       wraps: [await wrapSeedWithDeviceKey(seed, await deviceKey('k'), { rpId: 'a.example' })],
     });
-    await writeFolderVault(folder.open(), vault);
+    const store = createFolderAccountStore(folder.open());
+    await store.write(
+      { id, name: 'Work', did: identity.did, createdAt: vault.createdAt, dataPath: accountDataPath(id) },
+      vault,
+    );
 
-    const state = await readFolderVault(folder.open());
-    assert.equal(state.vault?.did, identity.did);
-    assert.equal(state.label, 'Work');
-    assert.equal(state.unlockedSeed, null, 'the seed must not be readable from the file');
+    assert.equal((await store.read(id))?.did, identity.did);
 
     // Nothing in the file may spell out the seed.
     const raw = utf8Decode(
       await folder
         .open()
-        .getFileHandle(ACCOUNT_FILE)
+        .getDirectoryHandle('accounts')
+        .then((d) => d.getDirectoryHandle(id))
+        .then((d) => d.getFileHandle('account.json'))
         .then((h) => h.getFile())
         .then((f) => f.arrayBuffer())
         .then((b) => new Uint8Array(b)),
     );
     assert.ok(!raw.includes(seedToRecoveryCode(seed).replace(/-/g, '')));
-  });
-
-  test('recognises the older format that stored the seed in the clear', async () => {
-    const folder = createMemoryDirectory();
-    const seed = generateSeed();
-    const code = seedToRecoveryCode(seed);
-
-    const handle = await folder.open().getFileHandle(ACCOUNT_FILE, { create: true });
-    const writable = await handle.createWritable();
-    await writable.write(
-      utf8Encode(JSON.stringify({ version: 1, label: 'Old', recoveryCode: code, did: 'did:key:zold' })),
-    );
-    await writable.close();
-
-    const state = await readFolderVault(folder.open());
-    assert.equal(state.vault, null);
-    assert.deepEqual(state.unlockedSeed, recoveryCodeToSeed(code));
-  });
-
-  test('an empty folder reports no account', async () => {
-    const state = await readFolderVault(createMemoryDirectory().open());
-    assert.equal(state.vault, null);
-    assert.equal(state.unlockedSeed, null);
   });
 });
 
@@ -289,26 +271,24 @@ describe('encryption at rest', () => {
     await assert.rejects(() => adapter.get('space:planted'));
   });
 
-  test('a member key and the relays are sealed too, and an older folder’s are sealed on first read', async () => {
+  test('a member key and the relays are sealed too, and refused in the clear', async () => {
     const inner = createMemoryAdapter();
     const vaultKey = await deriveVaultKey(generateSeed());
     const memberKey = utf8Encode('{"memberKey":"c2VjcmV0LW1lbWJlci1rZXk"}');
-    // Written in the clear by an older version, before these were sealed.
-    await inner.put('spacememberkey:old', memberKey);
-    await inner.put('spacerelays:old', utf8Encode('["wss://relay.example"]'));
-
     const adapter = createEncryptedAdapter(inner, vaultKey);
-    assert.deepEqual(await adapter.get('spacememberkey:old'), memberKey);
-    for (const entry of ['spacememberkey:old', 'spacerelays:old']) {
+    await adapter.put('spacememberkey:a', memberKey);
+    await adapter.put('spacerelays:a', utf8Encode('["wss://relay.example"]'));
+    for (const entry of ['spacememberkey:a', 'spacerelays:a']) {
       const raw = utf8Decode((await inner.get(entry))!);
-      assert.ok(!raw.includes('c2VjcmV0') && !raw.includes('relay.example'), `${entry} is sealed now`);
+      assert.ok(!raw.includes('c2VjcmV0') && !raw.includes('relay.example'), `${entry} is sealed`);
     }
-    await adapter.put('spacememberkey:new', memberKey);
-    assert.ok(!utf8Decode((await inner.get('spacememberkey:new'))!).includes('c2VjcmV0'));
+    assert.deepEqual(await adapter.get('spacememberkey:a'), memberKey);
 
-    // Once the folder is caught up, one planted in the clear is refused like any other.
+    // One planted in the clear is refused like any other.
     await inner.put('spacememberkey:planted', memberKey);
-    await assert.rejects(() => createEncryptedAdapter(inner, vaultKey).get('spacememberkey:planted'));
+    await inner.put('spacerelays:planted', utf8Encode('["wss://relay.example"]'));
+    await assert.rejects(() => adapter.get('spacememberkey:planted'));
+    await assert.rejects(() => adapter.get('spacerelays:planted'));
   });
 
   test('an invite secret waiting to be used is sealed too', async () => {

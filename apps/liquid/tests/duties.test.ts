@@ -95,7 +95,6 @@ function assembly(
     countOf: (p) => tally(p.voters, p.votes),
     comingOf: (p) => pending(input(p)),
     nextFor: (p, did = ADA) => follow({ ...input(p), me: did }),
-    current: true,
     ready: true,
   };
 }

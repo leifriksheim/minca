@@ -38,26 +38,7 @@ newline.
 `weave-accounts`, object store `accounts`: key `__list` holds the array of
 summaries, and key `<id>` that account's vault. No other origin can edit it.
 
-**A folder from before `accounts.json`** held one account at its root:
-
-```
-<folder>/
-  weave-account.json     the vault (spec 01 §10.2), or the version-1 form below
-  README.txt             explanation for humans
-  stores/…               the spaces
-```
-
-- If `weave-account.json` has `version: 2` and a `wraps` array, it is a vault.
-  Opening the folder adopts it when `accounts.json` does not list its DID: a
-  new id, name = its `label` (default `My data`), `dataPath: "stores"`. The
-  data is not moved.
-- **Version 1** stored the seed in the clear as
-  `{ "recoveryCode": "…", "label"?: …, "did"?: … }`. It is read only to
-  migrate, never written, and never adopted silently: the person is asked to
-  lock it.
-- Anything else fails with `FOLDER_ACCOUNT_UNREADABLE`.
-
-_Source: `packages/core/src/identity/account-store.ts`, `packages/core/src/identity/folder-account.ts`. Tests: `packages/core/tests/account-store.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account file")._
+_Source: `packages/core/src/identity/account-store.ts`. Tests: `packages/core/tests/account-store.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account file")._
 
 ## Stages
 

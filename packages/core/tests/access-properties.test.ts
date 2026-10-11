@@ -1,6 +1,6 @@
 /**
  * Properties of the access replay, checked on thousands of random histories
- * (spec/drafts/convergent-access.md). Unlike access-convergence.test.ts,
+ * (spec/03-spaces.md §4). Unlike access-convergence.test.ts,
  * which compares the replay with a frozen copy of itself, these say what any
  * correct replay must do, so they can't share its bugs.
  *

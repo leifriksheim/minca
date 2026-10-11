@@ -9,7 +9,6 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { createFakeHub } from './helpers/fake-transport.js';
-import { isRecord } from '../src/utils/guards.js';
 import { createEmitter } from '../src/utils/events.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createNetworkManager, type NetworkManager } from '../src/network/network-manager.js';
@@ -369,39 +368,6 @@ describe('the mesh, through real relays', () => {
     await until(() => seen.a1.messages.some((m) => m.payload === 'still here'), 2000, 'room one to carry on');
     assert.deepEqual(meshA.opened, ['did:key:zB'], 'over the same connection');
     for (const room of [a1, a2, b1, b2]) room.disconnect();
-  });
-
-  test('the relay still serves the older one-room sockets, as app versions before the mesh use them', async () => {
-    const open = async (did: string) => {
-      const socket = new WebSocket(`${relay}?room=legacy`);
-      const heard: Array<Record<string, unknown>> = [];
-      socket.addEventListener('message', (event) => {
-        const message: unknown = JSON.parse(String(event.data));
-        if (isRecord(message)) heard.push(message);
-      });
-      await new Promise((resolve) => socket.addEventListener('open', resolve));
-      socket.send(JSON.stringify({ type: 'join', from: did }));
-      return { socket, heard };
-    };
-    const first = await open('did:key:zPast1');
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const second = await open('did:key:zPast2');
-    await until(
-      () => first.heard.some((m) => m.type === 'join' && m.from === 'did:key:zPast2'),
-      2000,
-      'the join notice',
-    );
-
-    second.socket.send(
-      JSON.stringify({ type: 'offer', from: 'did:key:zPast2', to: 'did:key:zPast1', payload: { sdp: 'x' } }),
-    );
-    await until(
-      () => first.heard.some((m) => m.type === 'offer' && m.from === 'did:key:zPast2'),
-      2000,
-      'the offer',
-    );
-    first.socket.close();
-    second.socket.close();
   });
 
   describe('every peer proves who it is, in every room', () => {

@@ -4,15 +4,7 @@
  * they all agree, and the count (`tally.ts`) runs on what they show.
  */
 import { useMemo } from 'react';
-import {
-  useAccess,
-  useAccount,
-  useCan,
-  useCollections,
-  useLive,
-  useNames,
-  useQuery,
-} from '@weaveprotocol/core/react';
+import { useAccess, useAccount, useCan, useLive, useNames, useQuery } from '@weaveprotocol/core/react';
 import { profile, type Profile } from '@weaveprotocol/core/schemas';
 import type { SpaceRole } from '@weaveprotocol/core';
 import {
@@ -31,7 +23,6 @@ import {
 } from './schema';
 import {
   follow,
-  majority,
   pending,
   resultOf,
   tally,
@@ -67,9 +58,9 @@ export interface ProposalView {
   readonly title: string;
   readonly body: string;
   readonly topic: string | null;
-  /** Who votes on it; empty for one made before proposals listed their voters */
+  /** Who votes on it */
   readonly voters: ReadonlyArray<string>;
-  /** How many of its voters must vote for it to pass: what it says, else more than half */
+  /** How many of its voters must vote for it to pass */
   readonly toPass: number;
   readonly createdBy: string | null;
   readonly createdAt: string;
@@ -139,17 +130,8 @@ export interface Assembly {
   readonly comingOf: (proposal: ProposalView) => Tally;
   /** What your own device does about a proposal you haven't voted on */
   readonly nextFor: (proposal: ProposalView, did?: string) => Next;
-  /** Whether the space holds the collections this Liquid needs, with final votes and proposals that set their rule: false for one made by an older Liquid */
-  readonly current: boolean;
   /** False until the first records are read */
   readonly ready: boolean;
-}
-
-/** Whether a stored schema has a field: how a definition from an older Liquid is told apart */
-function hasField(schema: unknown, field: string): boolean {
-  if (typeof schema !== 'object' || schema === null || !('properties' in schema)) return false;
-  const { properties } = schema;
-  return typeof properties === 'object' && properties !== null && field in properties;
 }
 
 /** A hue from a key, for a topic or party that didn't pick one */
@@ -167,7 +149,6 @@ export function useAssembly(spaceId: string): Assembly {
   const name = useNames(spaceId);
   const access = useAccess(spaceId);
   const mayModerate = useCan(spaceId, 'create', topic.name);
-  const collections = useCollections(spaceId);
   const bots = useBots(spaceId);
 
   const topics = useQuery(spaceId, { collection: topic, sort: { '@createdAt': 'asc' } }).result;
@@ -238,9 +219,12 @@ export function useAssembly(spaceId: string): Assembly {
       const of = linkOf(r, 'party');
       if (!about || !of) continue;
       const these = rollsOf.get(about) ?? new Map<string, RollView>();
-      const decides: PartyDecides = r.body.representative
+      const decides: PartyDecides | null = r.body.representative
         ? { representative: r.body.representative }
-        : { toTake: r.body.toTake ?? majority(new Set(r.body.members).size) };
+        : r.body.toTake !== undefined
+          ? { toTake: r.body.toTake }
+          : null;
+      if (!decides) continue;
       these.set(of, { key: r.key, version: r.version, members: r.body.members, decides });
       rollsOf.set(about, these);
     }
@@ -273,8 +257,8 @@ export function useAssembly(spaceId: string): Assembly {
         title: r.body.title,
         body: r.body.body ?? '',
         topic: linked && topicByKey.has(linked) ? linked : null,
-        voters: Array.isArray(r.body.voters) ? r.body.voters : [],
-        toPass: r.body.toPass ?? majority(Array.isArray(r.body.voters) ? new Set(r.body.voters).size : 0),
+        voters: r.body.voters,
+        toPass: r.body.toPass,
         createdBy: r.createdBy,
         createdAt: r.createdAt,
         supporters: supportersOf.get(r.key) ?? new Set(),
@@ -304,8 +288,8 @@ export function useAssembly(spaceId: string): Assembly {
       askedOf.set(about, (askedOf.get(about) ?? new Map<string, string>()).set(r.root, r.key));
     }
     const partyViews: PartyFull[] = (parties?.records ?? []).map((r) => {
-      const listed = new Set(r.body.members ?? []);
-      const stewards = new Set(r.body.stewards ?? (r.createdBy ? [r.createdBy] : []));
+      const listed = new Set(r.body.members);
+      const stewards = new Set(r.body.stewards);
       const asked = askedOf.get(r.key) ?? new Map<string, string>();
       const inParty = new Set(
         [...listed].filter((did) => inAssembly.has(did) && (asked.has(did) || stewards.has(did))),
@@ -320,7 +304,7 @@ export function useAssembly(spaceId: string): Assembly {
         listed,
         asked,
         members: inParty,
-        decides: r.body.decides ?? 'majority',
+        decides: r.body.decides,
         representative: r.body.representative ?? null,
       };
     });
@@ -354,10 +338,6 @@ export function useAssembly(spaceId: string): Assembly {
       countOf: (p) => tally(p.voters, p.votes),
       comingOf: (p) => pending(followInput(p)),
       nextFor: (p, did = me) => follow({ ...followInput(p), me: did }),
-      current:
-        collections.some((c) => c.name === vote.name && c.rules.final === true) &&
-        collections.some((c) => c.name === proposal.name && c.rules.fixed?.includes('toPass') === true) &&
-        collections.some((c) => c.name === party.name && hasField(c.schema, 'decides')),
       ready: access !== undefined && proposals !== null && topics !== null,
     };
   }, [
@@ -366,7 +346,6 @@ export function useAssembly(spaceId: string): Assembly {
     name,
     access,
     mayModerate,
-    collections,
     bots,
     topics,
     proposals,

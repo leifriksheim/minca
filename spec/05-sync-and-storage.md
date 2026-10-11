@@ -246,30 +246,15 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 15` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 1` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
 > Rationale: two versions that cannot reconcile should fail loudly, not leave
 > a quiet partial sync.
->
-> Version 5 came with the envelope of [02 §3.2](02-records.md): a version
-> signs its body's hash, not its body, so a peer speaking 4 would refuse every
-> version a peer speaking 5 sends. Protocol 6 renamed `push-update`'s
-> `expression` member to `version`. Protocol 7 came with writers' logs
-> ([02 §4.10](02-records.md)): every version in a space carries `log`, and a
-> peer speaking 7 refuses every version a peer speaking 6 writes. Protocol 8
-> added each version's place in its collection's line, `log.c`. Protocol 9
-> keys warrants by the offending version and their writer: a peer
-> speaking 8 would judge every warrant a peer speaking 9 writes false, and
-> flag its honest writer. Protocol 10 made warrants a standard collection,
-> `std.warrant`, stored like any record: a peer speaking 9 refuses them.
-> Protocol 11 replaced keep lists with cutoffs, made revokes name a key, and
-> stopped dropped changes being heads (03 §3.2, §6.3, §6.4): peers judge
-> records differently across it.
-> Protocol 15 stopped peers judging collection checks (02 §7.6): a peer
-> speaking 14 refuses a version that fails them, which a peer speaking 15
-> stores and syncs, so the two would never converge.
+
+Before v1 the protocol makes clean breaks and keeps no history of earlier
+drafts.
 
 Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
@@ -288,7 +273,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 15,
+  "v": 1,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -825,16 +810,17 @@ writer keeps in its store, are the node's own (the library's are in
 [the node](../packages/core/docs/node.md#holding-part-of-a-space) and
 [mirrors](../packages/core/docs/storage.md#mirrors)).
 
-**Registry entries.** One space's registry entries, each keyed by space id:
+**Registry entries.** One space's registry entries, each keyed by space id
+and all sealed (§15):
 
-| Key                   | Value                                                                                                           | Sealed by default            |
-| --------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `space:<id>`          | UTF-8 JSON of the `Space` ([03](03-spaces.md))                                                                  | yes                          |
-| `spacekey:<id>`       | UTF-8 JSON `{ "keys": [{ "id", "raw" (base64url AES-256 key), "createdAt", "version" }], "current": <key id> }` | yes                          |
-| `spaceinvite:<id>`    | UTF-8 base64url of an invite secret, until used                                                                 | yes                          |
-| `spacerole:<id>`      | UTF-8 role name this account last held (a listing hint)                                                         | yes                          |
-| `spacememberkey:<id>` | UTF-8 base64url of this account's member key for the space                                                      | yes (since `sealed:v1`, §15) |
-| `spacerelays:<id>`    | UTF-8 JSON array of relay URLs                                                                                  | yes (since `sealed:v1`, §15) |
+| Key                   | Value                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `space:<id>`          | UTF-8 JSON of the `Space` ([03](03-spaces.md))                                                                  |
+| `spacekey:<id>`       | UTF-8 JSON `{ "keys": [{ "id", "raw" (base64url AES-256 key), "createdAt", "version" }], "current": <key id> }` |
+| `spaceinvite:<id>`    | UTF-8 base64url of an invite secret, until used                                                                 |
+| `spacerole:<id>`      | UTF-8 role name this account last held (a listing hint)                                                         |
+| `spacememberkey:<id>` | UTF-8 base64url of this account's member key for the space                                                      |
+| `spacerelays:<id>`    | UTF-8 JSON array of relay URLs                                                                                  |
 
 Forgetting a space deletes all six.
 
@@ -875,24 +861,19 @@ that follows this section can share a folder with this one.
   accounts/<account id>/stores/         that account's data path
     registry/
       kv/<encoded key>                  one file per entry
-      expressions/                      (empty for a registry)
+      versions/                         (empty for a registry)
     spaces/<space id>/
       kv/<encoded key>
-      expressions/<version id>.json     one file per version, whole (§14.3)
+      versions/<version id>.json        one file per version, whole (§14.3)
     mirrors/<space id>/<n>/kv/…
 ```
 
 - `<account id>` matches `^[a-z0-9]{1,12}$`. An account's `dataPath` in
-  `accounts.json` MUST be `accounts/<its id>/stores`, or `stores` for a folder
-  written before it held more than one account (then its data is at
-  `<folder>/stores/…`). A reader MUST skip rows with any other id or data
-  path, and MUST NOT resolve a path from them.
+  `accounts.json` MUST be `accounts/<its id>/stores`. A reader MUST skip rows
+  with any other id or data path, and MUST NOT resolve a path from them.
 - A store at path `a/b/c` is the directory `<dataPath>/a/b/c`, each segment
   encoded as in §14.2. Each store directory has exactly two subdirectories,
-  `kv` and `expressions`, created on open. `expressions` is the old name for
-  versions, kept so folders written before still open.
-- Legacy single-account folders also have `weave-account.json` and
-  `README.txt` at the root ([01 — Identity](01-identity.md)).
+  `kv` and `versions`, created on open.
 
 ### 14.2 File name encoding
 
@@ -916,14 +897,14 @@ A writer MUST use exactly this encoding; a reader MUST decode it.
 
 - **Entry files** `kv/<encoded key>`: the entry value, raw bytes (for the §10
   entries, the UTF-8 version id; for sealed keys, §15).
-- **Version files** `expressions/<encoded id>.json`: the version exactly as on
+- **Version files** `versions/<encoded id>.json`: the version exactly as on
   the wire ([02](02-records.md)), as UTF-8 JSON. Version ids are lower-case
   base32, so the name is the id itself. The file is named by its own content
   hash and never changes once written. JSON formatting is not significant; a
   reader MUST parse, not compare bytes. A file that does not parse (for
   instance half-written) MUST be treated as absent.
 - Names that end in `.tmp` are a writer's work in progress and MUST be
-  ignored. Only names ending in `.json` in `expressions/` are versions.
+  ignored. Only names ending in `.json` in `versions/` are versions.
 
 A writer SHOULD replace a file atomically: write it under a name ending in
 `.tmp`, then rename it into place. How the library does it is in
@@ -945,7 +926,7 @@ derived state, and the rule is: **the set of version files wins.**
 Any client sharing a folder SHOULD re-read it periodically while a space is
 open, and reconcile:
 
-1. List `expressions/`. Note files that appeared since the last pass and files
+1. List `versions/`. Note files that appeared since the last pass and files
    that vanished. If anything moved, read the store again (§10.2).
 2. For every version file that is not indexed, **or appeared since the last
    pass**, read it, pass it through the gatekeeper (§8), and place it (§10.1).
@@ -989,7 +970,7 @@ Values of entries whose key starts with one of the sealed prefixes —
 
 ```
 offset  size  field
-0       8     magic  77 65 61 76 65 65 02 00   ("weavee", version 2, 0)
+0       8     magic  77 65 61 76 65 65 01 00   ("weavee", version 1, 0)
 8       12    IV, random per write
 20      n+16  AES-GCM ciphertext and tag of the value,
               additional data = UTF-8 of the entry key
@@ -1003,12 +984,6 @@ offset  size  field
   public space.
 
 Every registry entry of §12 that belongs to one space is sealed.
-
-Folders written before `spacememberkey:` and `spacerelays:` were sealed hold
-them in the clear. A reader that finds no entry `sealed:v1` MUST seal every
-entry under those two prefixes that lacks the magic, then write `sealed:v1`
-(sealed, value `01`), before it reads any of them. After that, those two
-prefixes are refused in the clear like the rest.
 
 _Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/node/stores.ts`. Tests:
 `packages/core/tests/account-vault.test.ts` ("encryption at rest")._
@@ -1158,7 +1133,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 15                           | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 1                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

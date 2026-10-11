@@ -35,7 +35,7 @@ client says. Per-message compression is off (`perMessageDeflate: false`).
 
 ## TURN passwords
 
-Passwords are minted as [spec 04 §1.7](../../spec/04-network.md) says, one per
+Passwords are minted as [spec 04 §1.6](../../spec/04-network.md) says, one per
 network: every socket from one IPv4 address, or one IPv6 /64, shares a
 username. A held one is reused while more than half its TTL remains, and a new
 one is minted after that. So asking again is free, and coturn's per-user quota
@@ -45,7 +45,7 @@ else, so set coturn's own quotas too (`user-quota`, `total-quota`, `max-bps`);
 the Docker image's coturn is already capped that way.
 
 The limits the relay enforces, and what it does on each, are in
-[spec 04 §1.6](../../spec/04-network.md); the values are the constants at the
+[spec 04 §1.5](../../spec/04-network.md); the values are the constants at the
 top of `relay.mjs`.
 
 _Source: `packages/relay/relay.mjs` (`createRelay`, `clientIp`, `turnFromEnv`, `offerTurn`, `networkOf`), `packages/relay/relay.d.mts`, `packages/relay/signaling-server.mjs`, `packages/relay/start.sh`, `packages/relay/fly.toml`, `packages/cli/src/serve.ts`. Tests: `packages/core/tests/relay-turn.test.ts`, `packages/cli/tests/cli.test.ts`._

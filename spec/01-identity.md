@@ -800,11 +800,11 @@ the **account key**: input for member keys (§9.2) and the account's own spaces
 
 Example (seed of §3.3): `f505285e87582af18ea47617b97d6b408f3032c3fd1dabf87b39ef8885d77e3a`.
 
-### 10.2 Vault format (version 2)
+### 10.2 Vault format (version 1)
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "label": "Ada",
   "did": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
   "createdAt": "2026-09-26T11:47:11.062Z",
@@ -910,7 +910,7 @@ can try it, and a copy of the vault can be attacked offline. Which wraps a
 client offers, and how it manages passwords, are the library's: see
 [Ways in](../packages/core/docs/sign-in.md#ways-in).
 
-_Source:_ `packages/core/src/identity/account-vault.ts`, `packages/core/src/identity/folder-account.ts` (`createVault`).
+_Source:_ `packages/core/src/identity/account-vault.ts` (`createVault`).
 _Tests:_ `packages/core/tests/account-vault.test.ts`.
 
 ---
@@ -964,7 +964,7 @@ Where vaults are kept. These are local storage formats; a folder's format
 matters for interoperability between apps (and origins) that open the same
 folder.
 
-### 13.1 Folder layout (current)
+### 13.1 Folder layout
 
 ```
 <folder>/
@@ -991,19 +991,19 @@ folder.
 }
 ```
 
-| Field        | Type                               | Meaning                                                                                                                                       |
-| ------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`         | string matching `^[a-z0-9]{1,12}$` | Account id and directory name. New ids: base64url of 8 random bytes, non-alphanumerics removed, lowercased, first 12 characters               |
-| `name`       | string                             | Display name                                                                                                                                  |
-| `did`        | string                             | Account DID                                                                                                                                   |
-| `createdAt`  | ISO 8601                           |                                                                                                                                               |
-| `dataPath`   | string                             | Where the spaces live, relative to the folder: `accounts/<id>/stores` for an account's own subtree, or `stores` for a pre-list folder (§13.3) |
-| `lastUsedAt` | ISO 8601, optional                 |                                                                                                                                               |
+| Field        | Type                               | Meaning                                                                                                                         |
+| ------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | string matching `^[a-z0-9]{1,12}$` | Account id and directory name. New ids: base64url of 8 random bytes, non-alphanumerics removed, lowercased, first 12 characters |
+| `name`       | string                             | Display name                                                                                                                    |
+| `did`        | string                             | Account DID                                                                                                                     |
+| `createdAt`  | ISO 8601                           |                                                                                                                                 |
+| `dataPath`   | string                             | Where the spaces live, relative to the folder: `accounts/<id>/stores`                                                           |
+| `lastUsedAt` | ISO 8601, optional                 |                                                                                                                                 |
 
 Rules:
 
 - Readers MUST skip rows whose `id` fails the pattern, or whose `dataPath` is
-  neither `stores` nor `accounts/<valid id>/stores` exactly (the list is a
+  not `accounts/<valid id>/stores` exactly (the list is a
   plain file in a folder that may be shared; a path like `../..` is an
   attack).
 - A reader keeps at most one row per DID: the most recently used
@@ -1018,13 +1018,7 @@ their seeds.
 
 Not protocol: see [Account stores](../packages/core/docs/sign-in.md#account-stores).
 
-### 13.3 Legacy single-account folder
-
-Not protocol: how the reference library reads a folder from before
-`accounts.json`, and adopts its account, is in
-[Account stores](../packages/core/docs/sign-in.md#account-stores).
-
-_Source:_ `packages/core/src/identity/account-store.ts`, `packages/core/src/identity/folder-account.ts`.
+_Source:_ `packages/core/src/identity/account-store.ts`.
 _Tests:_ `packages/core/tests/account-store.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account file"), `packages/cli/tests/path-safety.test.ts`.
 
 ---

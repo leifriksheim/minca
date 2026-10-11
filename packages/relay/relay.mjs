@@ -129,10 +129,9 @@ export function createRelay(options = {}) {
    * Admits one socket. It is nameless until its first `join`, which fixes its
    * DID for the life of the socket.
    */
-  function accept(ws, legacyRoom, ip) {
+  function accept(ws, ip) {
     const client = {
       ws,
-      legacyRoom,
       ip,
       did: null,
       rooms: new Set(),
@@ -192,7 +191,7 @@ export function createRelay(options = {}) {
       return;
     }
     if (!message || typeof message.type !== 'string') return;
-    const room = message.room ?? client.legacyRoom;
+    const room = message.room;
 
     if (message.type === 'join') {
       // A socket wears one name: a changed DID would let it wear two.
@@ -543,21 +542,18 @@ export function createRelay(options = {}) {
      */
     upgrade(wss, req, socket, head) {
       socket.on('error', () => socket.destroy());
-      const legacyRoom = new URL(req.url ?? '/', 'http://relay').searchParams.get('room');
       const ip = clientIp(req);
       const refusal =
-        legacyRoom !== null && !canEnter(legacyRoom)
-          ? [503, 'Room full']
-          : clients.size >= MAX_CONNECTIONS
-            ? [503, 'Relay full']
-            : (perIp.get(ip) ?? 0) >= MAX_CONNECTIONS_PER_IP
-              ? [429, 'Too many connections']
-              : null;
+        clients.size >= MAX_CONNECTIONS
+          ? [503, 'Relay full']
+          : (perIp.get(ip) ?? 0) >= MAX_CONNECTIONS_PER_IP
+            ? [429, 'Too many connections']
+            : null;
       if (refusal) {
         socket.end(`HTTP/1.1 ${refusal[0]} ${refusal[1]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
         return;
       }
-      wss.handleUpgrade(req, socket, head, (ws) => accept(ws, legacyRoom, ip));
+      wss.handleUpgrade(req, socket, head, (ws) => accept(ws, ip));
     },
 
     /** Drops every socket and stops the heartbeat */

@@ -22,7 +22,7 @@ import {
   isAccountId,
   type AccountSummary,
 } from '../../core/src/identity/account-store.js';
-import { createVault } from '../../core/src/identity/folder-account.js';
+import { createVault } from '../../core/src/identity/account-vault.js';
 
 const temporary: string[] = [];
 async function tempDir(): Promise<string> {
@@ -119,10 +119,9 @@ describe('accounts.json is checked, not trusted', () => {
 
   test('skips rows whose id or data path it would not have written', async () => {
     const good = newAccountId();
-    const legacy = newAccountId();
     const { store } = await withList([
       summary(good),
-      summary(legacy, 'stores'),
+      summary(newAccountId(), 'stores'),
       summary('..', 'accounts/../stores'),
       summary('evil', '../../somewhere'),
       summary('evil2', 'accounts/someoneelse/stores/../../..'),
@@ -132,7 +131,7 @@ describe('accounts.json is checked, not trusted', () => {
     ]);
 
     const listed = (await store.list()).map((account) => account.id).sort();
-    assert.deepEqual(listed, [good, legacy].sort());
+    assert.deepEqual(listed, [good]);
   });
 
   test('remove refuses an id that is not one, and deletes nothing outside', async () => {

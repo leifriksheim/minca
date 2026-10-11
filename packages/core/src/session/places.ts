@@ -8,11 +8,7 @@
  *   browser. That is a place.
  * - **Who am I?** An account in that place. A place can hold several.
  */
-import {
-  createBrowserAccountStore,
-  createFolderAccountStore,
-  listFolderAccounts,
-} from '../identity/account-store.js';
+import { createBrowserAccountStore, createFolderAccountStore } from '../identity/account-store.js';
 import type { AccountStore, AccountSummary } from '../identity/account-store.js';
 import {
   forgetDataFolder,
@@ -87,7 +83,7 @@ export async function forgetPod(): Promise<void> {
 
 /** Every account in a place, most recently used first. */
 export async function listAccounts(place: Place): Promise<ReadonlyArray<AccountSummary>> {
-  return place.directory ? listFolderAccounts(place.directory, place.store) : place.store.list();
+  return place.store.list();
 }
 
 /** What a pod holds of this account and others, and whether it is the one in use. */

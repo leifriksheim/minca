@@ -12,7 +12,7 @@ import { createIdentityManager, rootFromSeed } from '../identity/identity-manage
 import { AGENT_FACT } from '../identity/agent-note.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
 import type { AccountStore, AccountSummary } from '../identity/account-store.js';
-import { createVault } from '../identity/folder-account.js';
+import { createVault } from '../identity/account-vault.js';
 import {
   withWrap,
   wrapSeedWithDeviceKey,

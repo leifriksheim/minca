@@ -72,7 +72,7 @@ export type SeedWrap = DeviceWrap | PassphraseWrap;
 
 /** The account file at the root of a data folder, in its locked form */
 export interface AccountVault {
-  readonly version: 2;
+  readonly version: 1;
   readonly label: string;
   /** The DID the seed derives. Public, and useful for recognising the folder. */
   readonly did: string;
@@ -85,7 +85,7 @@ export interface AccountVault {
  * wraps; each wrap is checked when something tries to open it.
  */
 export function isAccountVault(value: unknown): value is AccountVault {
-  return isRecord(value) && value.version === 2 && Array.isArray(value.wraps);
+  return isRecord(value) && value.version === 1 && Array.isArray(value.wraps);
 }
 
 /** Random bytes as base64url, for salts and nonces. */
@@ -262,4 +262,28 @@ export function withWrap(vault: AccountVault, wrap: SeedWrap): AccountVault {
     existing.kind === 'device' && wrap.kind === 'device' && existing.rpId === wrap.rpId;
 
   return { ...vault, wraps: [...vault.wraps.filter((existing) => !superseded(existing)), wrap] };
+}
+
+/**
+ * Assembles a fresh locked account.
+ *
+ * Pure — it neither generates the seed nor touches the disk, so a caller stays
+ * in charge of both the entropy and when it lands.
+ *
+ * @param params.wraps Shortcuts for getting in. May be empty: the account code
+ *   is the seed written out, so it opens the account with nothing stored —
+ *   which is exactly what a brand new account has.
+ */
+export function createVault(params: {
+  did: string;
+  wraps: ReadonlyArray<SeedWrap>;
+  label?: string;
+}): AccountVault {
+  return {
+    version: 1,
+    label: params.label ?? 'My data',
+    did: params.did,
+    createdAt: new Date().toISOString(),
+    wraps: params.wraps,
+  };
 }

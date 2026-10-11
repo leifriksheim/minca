@@ -503,11 +503,7 @@ export async function checkGrant(grant: Grant, audience: string): Promise<void> 
   const { payload } = parseUCAN(grant.token);
   if (payload.aud !== audience) throw new Error('The grant was made out to a different key.');
   if (payload.iss !== grant.did) throw new Error('The grant was not signed by the account it names.');
-  if (payload.att.some((capability) => capability.can.startsWith('expression/'))) throw new Error(OLD_GRANT);
 }
-
-/** A grant from before abilities were named for records: every write under it would be refused */
-const OLD_GRANT = 'This connection is from an older version of Weave. Connect to your account home again.';
 
 /** Whether a note grants records and nothing more, as an agent's must (spec 01 §8) */
 export function recordsOnlyGrant(token: string): boolean {
@@ -528,8 +524,6 @@ export function grantSigner(grant: Grant): RootSigner {
       if (grant.expiresAt <= Math.floor(Date.now() / 1000)) {
         throw new Error('Access has run out. Connect to your account home again.');
       }
-      if (parseUCAN(grant.token).payload.att.some((capability) => capability.can.startsWith('expression/')))
-        throw new Error(OLD_GRANT);
       token ??= cidFromBytes(utf8Encode(grant.token)).then((cid) => ({
         ...parseUCAN(grant.token),
         encoded: grant.token,
@@ -670,11 +664,31 @@ export function receiveConnectRequest(timeoutMs = 10_000): Promise<IncomingReque
   });
 }
 
+/** Every field a request may carry; one with any other is refused, not read in part */
+const REQUEST_FIELDS = new Set([
+  'v',
+  'audience',
+  'proof',
+  'name',
+  'access',
+  'scope',
+  'create',
+  'contacts',
+  'chooseSpaces',
+  'agent',
+  'days',
+]);
+const PROPOSE_FIELDS = new Set(['v', 'kind', 'name', 'notify']);
+
+const onlyFields = (value: Record<string, unknown>, fields: ReadonlySet<string>): boolean =>
+  Object.keys(value).every((field) => fields.has(field));
+
 function isRequest(value: unknown, origin: string): value is ConnectRequest | ProposeRequest {
   if (!isObject(value)) return false;
   const proposal = value;
   if (proposal.kind !== undefined) {
     return (
+      onlyFields(proposal, PROPOSE_FIELDS) &&
       proposal.v === 1 &&
       proposal.kind === 'propose' &&
       (proposal.name === undefined || (typeof proposal.name === 'string' && proposal.name.length <= 80)) &&
@@ -685,6 +699,7 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
   }
   const request = value;
   return (
+    onlyFields(request, REQUEST_FIELDS) &&
     request.v === 1 &&
     typeof request.audience === 'string' &&
     request.audience.startsWith('did:key:') &&
@@ -694,6 +709,7 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
     (request.scope === undefined || request.scope === 'spaces' || request.scope === 'account') &&
     (request.name === undefined || (typeof request.name === 'string' && request.name.length <= 80)) &&
     (request.contacts === undefined || typeof request.contacts === 'boolean') &&
+    (request.chooseSpaces === undefined || typeof request.chooseSpaces === 'boolean') &&
     (request.create === undefined || isNewSpaces(request.create)) &&
     (request.days === undefined ||
       (typeof request.days === 'number' &&

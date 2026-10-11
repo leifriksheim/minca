@@ -97,7 +97,7 @@ weave run --port 8787
   the node to your account, so nothing else answering at that address is let
   in; `weave run` prints the pinned address when it starts. Plain `ws://` works
   only on this machine.
-- `ws://host:8787?room=<id>` — the signaling relay, so one process bootstraps a space.
+- `ws://host:8787` — the signaling relay, so one process bootstraps a space.
 - `GET /health` — `{"ok":true}`, nothing more
 
 It listens on this machine only (`127.0.0.1`). On a server, put it behind
