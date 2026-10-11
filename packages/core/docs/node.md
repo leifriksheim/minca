@@ -17,7 +17,7 @@ conveniences.
 | Field               | Type                        | Meaning                                                                                                                                                                                                                                                                                                               |
 | ------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `signer`            | `RootSigner`                | Who the node acts for. Asked only for session notes ([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                                                  |
-| `accountKey`        | bytes, optional             | The account's vault key bytes. Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                   |
+| `accountKey`        | bytes, optional             | The account key (`deriveAccountKey(seed)`). Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
 | `contactKey`        | bytes, optional             | The contact key's secret. Opens contact requests; published on profiles.                                                                                                                                                                                                                                              |
 | `contactsSpace`     | string, optional            | The contacts space's id, for a node given it without the account key (an app granted `contacts`, [spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
 | `stores`            | `StoreFactory`              | Where the registry and each space's store live ([stores](#stores)).                                                                                                                                                                                                                                                   |
@@ -164,8 +164,9 @@ What a path means is the factory's choice:
 - `indexedDBStores(prefix)` — one IndexedDB database per path, named
   `<prefix>:<path with / replaced by :>`. Never sealed: the browser profile
   already guards it.
-- `folderStores(directory, { basePath?, vaultKey? })` — a directory tree under
-  `basePath`; the `registry` is sealed under `vaultKey` when one is given.
+- `folderStores(directory, { basePath?, localKey? })` — a directory tree under
+  `basePath`; the `registry` is sealed under `localKey` (`deriveLocalKey(seed)`)
+  when one is given.
 
 Every version a node signs in a space takes the next place in its key's log
 there ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
@@ -209,15 +210,18 @@ node makes a key for this run as it would without a source.
   (`deleteBrowserData`) deletes the keys too. The key never goes in the data
   folder, which other apps and devices share.
 - The CLI keeps them in `~/.weave/writers/<account id>/slot-<n>/`: the key as
-  JWK sealed under the account's vault key (`key.sealed`, AES-GCM, mode 600),
-  so a copy of the files can't sign; its places in `heads/`; and a `lock` file
-  naming the process that holds it, taken over once that process is gone.
+  JWK in an envelope (spec 01 §9.1) under the account's local key, with label
+  `weave/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
+  (`key.sealed`, mode 600), so a copy of the files can't sign, and a key file
+  moved to another slot or account is refused rather than used; its places in
+  `heads/`; and a `lock` file naming the process that holds it, taken over
+  once that process is gone.
 
-_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts`._
+_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts` ("a key file moved to another slot, or to another account, does not open")._
 
 Sign-in ([sign-in](sign-in.md)) uses `storesFor(account)`: IndexedDB with prefix
 `weave:<dataPath with : for />` in the browser, or `folderStores(pod,
-{ basePath: account.dataPath, vaultKey })` in a pod, where `dataPath` is
+{ basePath: account.dataPath, localKey })` in a pod, where `dataPath` is
 `accounts/<id>/stores`. A connected app uses `indexedDBStores('weave-app:<account DID>')`
 by default. These names are _implementation details_ ([sync and storage](storage.md#indexeddb));
 a pod's layout is in

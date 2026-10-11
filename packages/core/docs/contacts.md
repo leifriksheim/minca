@@ -9,8 +9,8 @@ never heard of `std.contact` or `std.contact-request` sync, store and judge
 them like any other record. Only apps that want to read each other's contact
 lists and requests have to agree on what follows. It uses these protocol
 parts: the contacts space ([spec 03 §13.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
-profiles (§11), invites (§7), and the contact key and `sealFor`
-([spec 01 §9.1, §9.4](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+profiles (§11), invites (§7), and the contact key and sealing to it with HPKE
+([spec 01 §10.1, §9.2](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
 Asking someone you share **no** space with goes through a door
 ([spec 07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)).
 
@@ -39,7 +39,7 @@ the account's derived spaces (spec 03 §13.1).
 
 A request is sealed to the askee's contact key: the public half, published as
 `contactKey` on their profile in the space (spec 03 §11). How it is derived is
-in spec 01 §9.1. A node holds the private half only when it was given it
+in spec 01 §10.1. A node holds the private half only when it was given it
 (`config.contactKey`); an agent never is.
 
 ## `std.contact-request`
@@ -56,16 +56,16 @@ what.
 ### Sealing
 
 ```
-value   = { invite: <role invite to the space for two>, note?: string ≤2000 }
-context = "weave/contact-request|<spaceId>|<askerAccountDid>|<askeeAccountDid>"
-sealed  = sealFor(askee.contactKey, value, context)
+value  = { invite: <role invite to the space for two>, note?: string ≤2000 }
+bound  = { space: <spaceId>, from: <askerAccountDid>, to: <askeeAccountDid> }
+sealed = HPKE(askee.contactKey, "weave/contact-request/v1", bound, JSON value)
 ```
 
-`sealFor` is the seal of spec 01 §9.4. A sealed `{"invite":"x"}` is
-65 + 12 + 14 + 16 = 107 bytes.
+`HPKE` is sealing to a key, spec 01 §9.2. A sealed `{"invite":"x"}` is
+1 + 65 + 14 + 16 = 96 bytes.
 
-Example: in space `bspace`, `did:key:zA` asking `did:key:zB` seals under
-`weave/contact-request|bspace|did:key:zA|did:key:zB`.
+Example: in space `bspace`, `did:key:zA` asking `did:key:zB` seals with bound
+`{"from":"did:key:zA","space":"bspace","to":"did:key:zB"}`.
 
 ### Opening
 
@@ -74,7 +74,7 @@ current version was signed by the account itself or under a note that grants
 `account/write` for every space (`with: "*"`), as a knock needs (spec 01 §8;
 not one for some spaces, nor an agent's), is in `std.contact-request`, `to` is the
 receiver's account, and `from` (the record's root) equals the root of the
-record's first version and is not the receiver. It must use the context built
+record's first version and is not the receiver. It must use the bound built
 from the space the record is in and that `from`. It must then reject the value
 unless `invite` parses as an invite (spec 03 §7.4) to a **private** space whose
 `creator` is `from` and which carries a `key`.
@@ -112,7 +112,7 @@ space (`with: "*"`), as a knock does. An app granted
 `contacts` sees the list and requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/schemas/contacts.ts`, `packages/core/src/identity/contact-key.ts` (`sealFor`, `openSealed`, `deriveContactKeyBytes`), `packages/core/src/node/node.ts` (contacts section: `requestContext`, `openRequest`, `contacts`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/schemas/contacts.ts`, `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealValueTo`, `openValueFrom`), `packages/core/src/node/node.ts` (contacts section: `REQUEST_LABEL`, `openRequest`, `contacts`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts`._
 
 ## Planned: requests that can be taken back
 

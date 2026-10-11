@@ -136,7 +136,7 @@ The space manager keeps, per space, in a storage adapter (the node's
 | `spacekey:<id>`       | JSON `{ keys: [{ id, raw, createdAt, version }], current }`: every key held, `raw` base64url |
 | `spaceinvite:<id>`    | base64url invite secret, until used                                                          |
 | `spacerole:<id>`      | the role last held: a hint for listing, never a gate                                         |
-| `spacememberkey:<id>` | base64url member key scalar, for a node given it without the vault key                       |
+| `spacememberkey:<id>` | base64url member key scalar, for a node given it without the account key                     |
 | `spacerelays:<id>`    | JSON relay list last heard                                                                   |
 
 `remove` deletes all six. Joining again with a secret while one is waiting
