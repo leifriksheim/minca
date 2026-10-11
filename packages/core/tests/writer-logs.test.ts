@@ -135,6 +135,29 @@ describe('a writer’s log', () => {
     assert.deepEqual(now, { n: was.n + 1, prev: a.version });
   });
 
+  test('places a node kept before a line per collection are not carried on', async () => {
+    const { me, manager } = await person();
+    const keys = await provider.generateKeyPair();
+    const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
+    const stores = memoryStores();
+    const node = await createNode({
+      signer: createLocalRootSigner(me, manager.getProvider()),
+      sessionKey: keys,
+      stores,
+      watchIntervalMs: 0,
+    });
+    open.push(node);
+    const { id: space } = await node.spaces.create({ name: 'Mine', visibility: 'public' });
+    // What the node kept when a key had one line across the space, naming versions no peer holds now.
+    const old = { head: { n: 9, id: 'old9' }, collections: { 'app.note': { n: 4, id: 'old4' } } };
+    await (
+      await stores('writers')
+    ).put(`head/${did}/${space}`, new TextEncoder().encode(JSON.stringify(old)));
+    const written = await node.records.put(space, 'app.note', { text: 'a' });
+    const version = await createStorageProvider(await stores(`spaces/${space}`)).getVersion(written.version);
+    assert.deepEqual(version?.log, { n: 0 });
+  });
+
   test('two nodes sharing a handed-in key and its storage, as two tabs of an app do, never take one place', async () => {
     const { me, manager } = await person();
     const keys = await provider.generateKeyPair();
@@ -303,6 +326,28 @@ describe('a fork', () => {
       assert.equal(await who.node.records.get(space, second.key), null);
       assert.equal(await who.node.records.get(space, rival.key), null);
     }
+  });
+
+  test('places a node kept before a line per collection don’t hide a fork', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    const key = await handKey(bob, space);
+    // Each node kept, from before, that this key's place 1 in app.note was a version no peer holds now.
+    for (const who of [alice, bob])
+      await (
+        await who.stores(`spaces/${space}`)
+      ).put(`clog/${key.did}/app.note/1`, new TextEncoder().encode('old'));
+    const first = await key.sign('first', { n: 0 });
+    const second = await key.sign('second', { n: 1, prev: first.id });
+    const rival = await key.sign('rival', { n: 1, prev: first.id });
+    await letGo(bob.node, space);
+    const store = createStorageProvider(await bob.stores(`spaces/${space}`));
+    for (const version of [first, second, rival]) await store.addVersion(version);
+    await hold(bob.node, space);
+    await until(
+      async () => (await alice.node.spaces.access(space)).forks.some((fork) => fork.writer === key.did),
+      8000,
+      'the fork to be proven',
+    );
   });
 
   test('a fork reaches only the line it is in: the key’s versions in other collections stand', async () => {

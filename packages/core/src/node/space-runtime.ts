@@ -2963,12 +2963,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // version is checked against the one it names as the place before — when it
   // arrives, or when that one does. Either way the proof goes to everyone else.
 
-  /** `clog/<author>/<collection>/<n>` → the id of the version that took that place */
-  const LOG_PREFIX = 'clog/';
+  // Named for this format of the log: the `log/`, `next/`, `clog/` and
+  // `cnext/` a node kept before it map places to versions no peer holds any
+  // more, so they are left unread rather than trusted.
+  /** `place/<author>/<collection>/<n>` → the id of the version that took that place */
+  const LOG_PREFIX = 'place/';
   /** Key DID → the account it writes for here */
   const KEY_ROOT_PREFIX = 'keyroot/';
-  /** `cnext/<id>` → the id of a version naming that one as the place before it */
-  const NEXT_PREFIX = 'cnext/';
+  /** `follows/<id>` → the id of a version naming that one as the place before it */
+  const NEXT_PREFIX = 'follows/';
 
   async function placeInLog(version: Version): Promise<void> {
     if (version.space !== space.id || !version.log) return;

@@ -192,4 +192,4 @@ CEL cannot say.
   members' records carry over or are re-signed.
 
 Related: #160 (governance), #197 (checks out of the core), #198 (equal
-ranks), #201 (simpler roles), #166 and #175 (witnessing).
+ranks), #201 (simpler roles), #166 (witnessing).

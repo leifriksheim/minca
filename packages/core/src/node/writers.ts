@@ -51,7 +51,12 @@ interface Places {
   readonly collections: Readonly<Record<string, Head>>;
 }
 
-const headKey = (did: string, spaceId: string) => `head/${did}/${spaceId}`;
+/**
+ * Where a key's places in a space are kept. `head/` held them while a key had
+ * one line across a space's collections, whose places no peer accepts any
+ * more, so a key carried over from then starts each line afresh.
+ */
+const headKey = (did: string, spaceId: string) => `lines/${did}/${spaceId}`;
 
 const isHead = (value: unknown): value is Head =>
   isRecord(value) &&

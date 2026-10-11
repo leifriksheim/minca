@@ -462,6 +462,37 @@ describe('records against the history', () => {
     assert.ok(judge(5, 'wz').ok, 'other keys are untouched');
   });
 
+  test('a stolen key is answered by its revoke, not by catching the copy: what the revoke kept stands', () => {
+    // A copy of Alice's key wa grants Eve admin; Alice's node syncs it, then revokes wa.
+    const theft: AccessEvent = { ...setRole('alice', 'eve', 'admin', []), author: 'wa', line: 0 };
+    const revoke: AccessEvent = {
+      id: id('v'),
+      key: 'revoke:wa|alice',
+      kind: 'revoke',
+      root: 'alice',
+      author: 'k',
+      target: 'wa',
+      seen: [theft.id],
+      cutoff: new Map([['wa', new Map([['sys.member', 0]])]]),
+    };
+    assert.equal(roleOf(replayAccess(genesis, [theft, revoke]), 'eve'), 'admin', 'the revoke kept it');
+    // A fork of wa proven in another collection doesn't reach it; only one in its own does.
+    const fork = (collection: string): AccessEvent => ({
+      id: id('f'),
+      key: `fork:wa|${collection}`,
+      kind: 'fork',
+      root: 'alice',
+      author: 'k',
+      writer: 'wa',
+      collection,
+      from: 0,
+      seen: [theft.id],
+      cutoff: new Map(),
+    });
+    assert.equal(roleOf(replayAccess(genesis, [theft, fork('app.note')]), 'eve'), 'admin');
+    assert.equal(roleOf(replayAccess(genesis, [theft, fork('sys.member')]), 'eve'), null);
+  });
+
   test('a promotion takes nothing away', () => {
     const bob = setRole('alice', 'bob', 'member', []);
     const promote = setRole('alice', 'bob', 'moderator', [bob.id]);

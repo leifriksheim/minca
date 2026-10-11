@@ -181,7 +181,7 @@ before the version leaves the node. Where the places are kept depends on the key
   keeps them in the `writers` store, and a restart carries on where it left off.
   Such a key may be signing in several nodes at once: every tab of an app
   signs with the app's key. So each place is taken under a Web Lock
-  (`weave-writer:head/<did>/<space>`) every tab and worker of the origin
+  (`weave-writer:lines/<did>/<space>`) every tab and worker of the origin
   shares, and read afresh from the store inside it, never from a copy in
   memory. Nodes that share a key must share that store too, as tabs of one
   origin share IndexedDB; two nodes signing with one key from separate stores,

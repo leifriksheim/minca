@@ -649,12 +649,13 @@ after them do not. What K signs in `app.photos` is judged as before.
 > Rationale: why a line per collection, and none across them. A node holding
 > part of a space can walk only the lines of the collections it holds, and a
 > cutoff ([03](03-spaces.md) §6.3) names places in those lines. A line across
-> collections would let a fork found in one collection reach the key's writes
-> in others, and catch two copies of a key that never write in one
-> collection. But a key can already sign where its other copy's line never
-> meets it, by naming a place far ahead ([#175](https://github.com/leifriksheim/weave/issues/175)),
-> so that line bound only a copy that did not try; and the answer to a stolen
-> key, in every collection, is the owner's revoke (03 §6.4).
+> collections was there to catch a copy of a key: two copies that never write
+> in one collection would still have forked it. Weave does not try to catch
+> copied keys. A stolen key is treated like a stolen session token: what it
+> signed before the owner revoked it stands, and the revoke (03 §6.4) stops
+> it from then on ([threat model](threat-model.md) §3.4). A fork is what a
+> line shows when a key is used in two places, not a defence that relies on
+> the copy being found.
 
 > Rationale: a key's line does not also require each version's `seen` to
 > include what the version before it had seen. It would stop one key from
