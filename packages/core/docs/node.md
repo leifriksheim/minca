@@ -157,7 +157,7 @@ A node asks for stores by path through its `StoreFactory`:
 | ------------------ | ---------------------------------------------------- | --------------------------------------- |
 | `registry`         | the node's list of spaces and their keys             | yes: the node asks for `{ seal: true }` |
 | `spaces/<spaceId>` | one space's records and what the node keeps about it | no                                      |
-| `writers`          | the last place each lasting key took in each log     | no                                      |
+| `writers`          | the last place each lasting key took in each line    | no                                      |
 
 What a path means is the factory's choice:
 
@@ -168,8 +168,8 @@ What a path means is the factory's choice:
   `basePath`; the `registry` is sealed under `localKey` (`deriveLocalKey(seed)`)
   when one is given.
 
-Every version a node signs in a space takes the next place in its key's log
-there ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+Every version a node signs in a space takes the next place in its key's line
+for that collection there ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
 Writes by one key in one space go one at a time, and the place is remembered
 before the version leaves the node. Where the places are kept depends on the key:
 
@@ -185,8 +185,8 @@ before the version leaves the node. Where the places are kept depends on the key
   shares, and read afresh from the store inside it, never from a copy in
   memory. Nodes that share a key must share that store too, as tabs of one
   origin share IndexedDB; two nodes signing with one key from separate stores,
-  or in separate processes without a shared lock, fork its log, and every
-  peer then withdraws what it signed from the fork on.
+  or in separate processes without a shared lock, fork its lines, and every
+  peer then withdraws what it signed in a forked collection from the fork on.
 
 _Source: `packages/core/src/node/writers.ts` (`createWriters`, `exclusively`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer’s log", "two nodes sharing a handed-in key…")._
 

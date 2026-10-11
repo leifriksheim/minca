@@ -2,11 +2,11 @@
  * @module node/writer-keys
  * A signing key that outlives the node, held by one node at a time.
  *
- * Every key's writes in a space form one line (spec 02 §4.10). A node that
- * makes a new key each time it starts begins a new line each time; one that
- * keeps its key keeps one line for as long as the device does. But a kept key
- * must never sign in two places at once, or its line forks and everything it
- * signed from there stops counting. So a key is kept in a **slot**, and a node
+ * A key's writes in each collection of a space form one line (spec 02
+ * §4.10). A node that makes a new key each time it starts begins new lines
+ * each time; one that keeps its key keeps its lines for as long as the device
+ * does. But a kept key must never sign in two places at once, or its lines
+ * fork and everything it signed there from the fork on stops counting. So a key is kept in a **slot**, and a node
  * claims a slot under a lock: another tab, worker or process that finds the
  * slot taken claims the next one. A key's places in its log are kept in the
  * slot with it — never in the account's stores, which may be a folder shared,

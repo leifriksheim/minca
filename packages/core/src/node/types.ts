@@ -152,11 +152,15 @@ export interface SpaceAccess {
   /** How many keepers a write should reach before a node holding part of the space lets go of it; null for the default */
   readonly copies: number | null;
   /**
-   * Keys proven to have signed two versions at one place in their log here:
-   * stolen, or copied where they shouldn't be. What they signed from `from`
-   * on no longer counts (spec 02 §4.10).
+   * Keys proven to have signed two versions at one place in their line for a
+   * collection here: stolen, or copied where they shouldn't be. What they
+   * signed in that collection from `from` on no longer counts (spec 02 §4.10).
    */
-  readonly forks: ReadonlyArray<{ readonly writer: string; readonly from: number }>;
+  readonly forks: ReadonlyArray<{
+    readonly writer: string;
+    readonly collection: string;
+    readonly from: number;
+  }>;
   /**
    * Accounts proven, by a warrant every peer checked, to have signed something
    * the protocol refuses and no honest writer could have (spec 03 §6.6). For

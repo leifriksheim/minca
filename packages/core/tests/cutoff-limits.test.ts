@@ -49,7 +49,6 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
   await letGo(who.node, space);
   const versions: Version[] = [];
   for (let i = 0; i < count; i++) {
-    const prev = versions.at(-1);
     versions.push(
       await createSigner(provider).sign(
         createVersion({
@@ -59,7 +58,7 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
           body: { i },
           proof: note.encoded,
           seen,
-          log: { n: i, ...(prev ? { prev: prev.id } : {}), c: { n: 0 } },
+          log: { n: 0 },
         }),
         pair.privateKey,
       ),

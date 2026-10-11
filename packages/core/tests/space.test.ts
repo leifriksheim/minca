@@ -153,7 +153,7 @@ describe('private space versions', () => {
       author: session.did,
       collection: 'app.test.note',
       space: spaceId,
-      log: { n: 0, c: { n: 0 } },
+      log: { n: 0 },
       body: sealed,
       proof: ucan.encoded,
       version: { key: place.key, seq: 0 },
@@ -223,7 +223,7 @@ describe('private space versions', () => {
       author: strangerSession.did,
       collection: 'app.test.note',
       space: spaceId,
-      log: { n: 0, c: { n: 0 } },
+      log: { n: 0 },
       body: { text: 'let me in' },
       proof: ucan.encoded,
     });

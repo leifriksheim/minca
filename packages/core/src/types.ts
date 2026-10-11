@@ -107,9 +107,10 @@ export interface UnsignedVersion<T = unknown> {
   /** Id of the record's first version — who created it. Absent on seq 0. */
   readonly genesis?: string;
   /**
-   * Its place in its writer's log for this space: every key's writes in a
-   * space form one line, `n` from 0, each naming the one before. Two versions
-   * by one key at one place are a fork (02 §4.10). Required in a space.
+   * Its place in its writer's line for its collection in this space: a key's
+   * writes in one collection of a space form one line, `n` from 0, each
+   * naming the one before. Two versions by one key at one place are a fork
+   * (02 §4.10). Required in a space.
    */
   readonly log?: WriterLog;
   /** Keep this version once it is superseded — set by the writer, from the collection's `history` */
@@ -148,22 +149,16 @@ export type Envelope = Omit<UnsignedVersion, 'body'> & {
   readonly bodyHash?: string;
 };
 
-/** A place in one line of a writer's log */
-export interface LogPlace {
+/**
+ * A version's place in its writer's log: the line of what one key wrote in
+ * one collection of one space, which a node holding only some collections
+ * can walk (spec 02 §4.10).
+ */
+export interface WriterLog {
   /** Its position, from 0 */
   readonly n: number;
   /** The id of the writer's version one place before, in the same line. Absent at 0. */
   readonly prev?: string;
-}
-
-/**
- * A version's place in its writer's log for one space: in the line of
- * everything the key wrote there (`n`, `prev`), and in the line of what it
- * wrote in this version's collection (`c`), which a node holding only some
- * collections can walk (spec 02 §4.10).
- */
-export interface WriterLog extends LogPlace {
-  readonly c: LogPlace;
 }
 
 /** Version — the atomic data unit */

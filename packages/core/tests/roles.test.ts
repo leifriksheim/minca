@@ -404,12 +404,12 @@ describe('records against the history', () => {
     const remove = setRole('alice', 'bob', null, [bob.id], { cutoff: { wb: { 'app.note': 3 } } });
     const history = replayAccess(genesis, [bob, remove]);
     const honest = history.judge(
-      { id: 'honest', root: 'bob', seen: [bob.id], writer: 'wb', at: 3, collection: 'app.note', line: 3 },
+      { id: 'honest', root: 'bob', seen: [bob.id], writer: 'wb', collection: 'app.note', line: 3 },
       isMember,
     );
     assert.deepEqual(honest, { ok: true, unseen: [] }, 'what the remover had seen is covered');
     const forged = history.judge(
-      { id: 'forged', root: 'bob', seen: [bob.id], writer: 'wb', at: 4, collection: 'app.note', line: 4 },
+      { id: 'forged', root: 'bob', seen: [bob.id], writer: 'wb', collection: 'app.note', line: 4 },
       isMember,
     );
     assert.deepEqual(
@@ -429,7 +429,7 @@ describe('records against the history', () => {
     const history = replayAccess(genesis, [bob, demote]);
     const judge = (at: number) =>
       history.judge(
-        { id: `r${at}`, root: 'bob', seen: [bob.id], writer: 'wb', at, collection: 'app.note', line: at },
+        { id: `r${at}`, root: 'bob', seen: [bob.id], writer: 'wb', collection: 'app.note', line: at },
         canModerate,
       );
     assert.deepEqual(judge(1), { ok: true, unseen: [] });
@@ -454,7 +454,7 @@ describe('records against the history', () => {
     const history = replayAccess(genesis, [thief, owner]);
     const judge = (at: number, writer = 'wa') =>
       history.judge(
-        { id: `r${at}`, root: 'alice', seen: [], writer, at, collection: 'app.note', line: at },
+        { id: `r${at}`, root: 'alice', seen: [], writer, collection: 'app.note', line: at },
         isMember,
       );
     assert.ok(judge(2).ok, 'covered by both');
@@ -466,10 +466,16 @@ describe('records against the history', () => {
     const bob = setRole('alice', 'bob', 'member', []);
     const promote = setRole('alice', 'bob', 'moderator', [bob.id]);
     const history = replayAccess(genesis, [bob, promote]);
-    assert.deepEqual(history.judge({ id: 'r', root: 'bob', seen: [bob.id], writer: 'wb', at: 9 }, isMember), {
-      ok: true,
-      unseen: [],
-    });
+    assert.deepEqual(
+      history.judge(
+        { id: 'r', root: 'bob', seen: [bob.id], writer: 'wb', collection: 'app.note', line: 9 },
+        isMember,
+      ),
+      {
+        ok: true,
+        unseen: [],
+      },
+    );
   });
 
   test('revokes are never heads: any number of them leaves what a writer names as it was', () => {
@@ -503,7 +509,12 @@ describe('records against the history', () => {
     };
     const history = replayAccess(genesis, [bob, revoke]);
     assert.deepEqual(history.revoked('wa', 'alice'), []);
-    assert.ok(history.judge({ id: 'r', root: 'alice', seen: [], writer: 'wa', at: 5 }, isMember).ok);
+    assert.ok(
+      history.judge(
+        { id: 'r', root: 'alice', seen: [], writer: 'wa', collection: 'app.note', line: 5 },
+        isMember,
+      ).ok,
+    );
   });
 
   test('definitions: define to create, the definer or a manager to change', () => {

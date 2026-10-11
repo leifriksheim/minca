@@ -13,10 +13,11 @@ import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
 /**
- * The segment format. 2 since sealed bodies became envelopes (spec 01 §9): a
- * reader of 1 would misread them, so it holds nothing for it instead.
+ * The segment format. 3 since a version's log became one line per collection
+ * (spec 02 §4.10): an older segment's versions carry a log every peer
+ * refuses, so a reader holds nothing for it instead.
  */
-const SEGMENT_VERSION = 2;
+const SEGMENT_VERSION = 3;
 
 /** Packs versions into a segment's bytes */
 export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {

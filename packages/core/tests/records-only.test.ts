@@ -86,7 +86,7 @@ async function forgeAsAgent(
       author: agent.did,
       space,
       proof: agent.note,
-      log: { n: 0, c: { n: 0 } },
+      log: { n: 0 },
     }),
     agent.keys.privateKey,
   );
@@ -1114,7 +1114,7 @@ describe('an agent running a node of its own', () => {
           body: { text: 'Joined somewhere' },
           author: did,
           space: registry,
-          log: { n: 0, c: { n: 0 } },
+          log: { n: 0 },
           proof: note.encoded,
         }),
         pair.privateKey,

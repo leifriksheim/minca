@@ -109,7 +109,7 @@ describe('profiles', () => {
         body: { name: 'Evil Alice' },
         proof: ucan.encoded,
         version: nextVersion(aliceCurrent!),
-        log: { n: 0, c: { n: 0 } },
+        log: { n: 0 },
         retain: true,
         seen: await seenBy(mallory.node, space),
       }),

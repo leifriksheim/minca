@@ -21,7 +21,7 @@ function member(
   did: string,
   role: string | null,
   seen: string[],
-  extra: { author?: string; at?: number; line?: number } = {},
+  extra: { author?: string; line?: number } = {},
 ): AccessEvent {
   const place = n++;
   return {
@@ -34,7 +34,6 @@ function member(
     role,
     seen,
     cutoff: new Map(),
-    at: extra.at ?? place,
     line: extra.line ?? place,
   };
 }
@@ -72,7 +71,6 @@ describe('attacks on the access history', () => {
   test('a thief’s grant, struck by a revoke, gives the thief’s sock nothing', () => {
     const theft = member('tt1', 'alice', 'eve', 'owner', ['space'], {
       author: 'aliceLaptop',
-      at: 5,
       line: 5,
     });
     const revoke: AccessEvent = {
@@ -84,7 +82,6 @@ describe('attacks on the access history', () => {
       target: 'aliceLaptop',
       seen: ['tt1'],
       cutoff: new Map(),
-      at: 0,
       line: 0,
     };
     const proxy = member('tp', 'eve', 'frank', 'owner', ['tt1']);
@@ -94,7 +91,7 @@ describe('attacks on the access history', () => {
   });
 
   test('a revoke or a fork proof undoes a thief’s change to who may do what, whatever it saw', () => {
-    const theft = member('t1', 'alice', 'eve', 'owner', ['space'], { author: 'aliceLaptop', at: 5, line: 5 });
+    const theft = member('t1', 'alice', 'eve', 'owner', ['space'], { author: 'aliceLaptop', line: 5 });
     const revoke: AccessEvent = {
       id: 'rv',
       key: 'revoke:x',
@@ -104,7 +101,6 @@ describe('attacks on the access history', () => {
       target: 'aliceLaptop',
       seen: ['t1'],
       cutoff: new Map(),
-      at: 0,
       line: 0,
     };
     const revoked = replayAccess(genesis, [theft, revoke]);
@@ -117,10 +113,10 @@ describe('attacks on the access history', () => {
       root: 'alice',
       author: 'alicePhone',
       writer: 'aliceLaptop',
+      collection: 'sys.member',
       from: 0,
       seen: ['t1'],
       cutoff: new Map(),
-      at: 1,
       line: 0,
     };
     const forked = replayAccess(genesis, [theft, fork]);
@@ -203,7 +199,6 @@ describe('attacks on the access history', () => {
         target: 'did:key:zMal',
         seen: self.slice(-2).map((event) => event.id),
         cutoff: new Map(),
-        at: i,
         line: i,
       });
     const started = Date.now();

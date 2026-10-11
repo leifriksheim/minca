@@ -114,7 +114,6 @@ function generate(seed: number): Made {
       role,
       seen,
       cutoff: cutoff >= 0 ? new Map([[did, new Map([['sys.member', cutoff]])]]) : new Map(),
-      at: lineLength.get(author) ?? 0,
       line: lineLength.get(author) ?? 0,
     };
     events.push(event);
