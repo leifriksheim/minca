@@ -400,10 +400,29 @@ describe('encryption at rest', () => {
     await assert.rejects(() => adapter.get('spacekey:b'));
   });
 
-  test('the account key does not open local storage', async () => {
+  test('one registry entry that does not open is left out of the list, not the end of it', async () => {
+    const inner = createMemoryAdapter();
+    const spaces = createSpaceManager(createEncryptedAdapter(inner, await deriveLocalKey(generateSeed())));
+    const made = await spaces.create({
+      name: 'Mine',
+      ...team,
+      visibility: 'private',
+      creator: 'did:key:zowner',
+    });
+    // Planted by someone who can write the folder, or left in an older format.
+    await inner.put('space:bjunk', utf8Encode('{"name":"written in the clear"}'));
+    assert.deepEqual(
+      (await spaces.list()).map((record) => record.space.id),
+      [made.space.id],
+    );
+    await assert.rejects(() => spaces.get('bjunk'), 'still refused when asked for');
+  });
+
+  test("the account key does not open the registry store's sealed entries", async () => {
     // An app given the whole account holds the account key. Neither it, nor
     // anything derived from it under the local key's label, opens what this
-    // device sealed: the local key comes from the seed, beside it.
+    // device sealed in the registry store: the local key comes from the seed,
+    // beside it. (It does open the account's spaces, which list every space key.)
     const seed = generateSeed();
     const inner = createMemoryAdapter();
     await createEncryptedAdapter(inner, await deriveLocalKey(seed)).put('space:x', utf8Encode('hello'));

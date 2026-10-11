@@ -18,6 +18,11 @@ One record serves every reader and every one of their devices. A fresh
 member key. Members publish member keys only in private spaces, so today
 direct messages need a private space.
 
+A reader can't tell that the others read the same text: AES-GCM does not
+commit to its key, so a writer can seal boxes that open to different message
+keys, each opening `data` to a different text
+([#214](https://github.com/leifriksheim/weave/issues/214)).
+
 ## `std.direct`
 
 ```

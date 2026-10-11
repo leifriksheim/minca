@@ -975,15 +975,20 @@ value = envelope(localKey, "weave/at-rest/v1", { entry: <the entry key> }, plain
 - A reader MUST refuse (not fall back to raw) a value under a sealed prefix
   that does not open as that envelope: one written in the clear, one moved
   from another entry, one sealed by another account. Its version byte is what
-  marks it sealed; the prefix says it must be.
+  marks it sealed; the prefix says it must be. It refuses that entry alone:
+  the reference leaves a space whose entry won't open out of the list.
 - Entry keys, other entries, and version bodies are not sealed: a folder
   shows each record's author, timestamp and collection, and anything in a
   public space.
+- Rollback and deletion are not protected. An envelope is bound only to its
+  entry, so someone who can write the folder can put back an older sealed
+  value of the same entry, such as a `spacekey:` from before a key change, and
+  it opens; or delete an entry ([#215](https://github.com/leifriksheim/weave/issues/215)).
 
 Every registry entry of §12 that belongs to one space is sealed.
 
-_Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/node/stores.ts`. Tests:
-`packages/core/tests/account-vault.test.ts` ("encryption at rest": "a sealed value moved to another entry does not open", "the account key does not open local storage")._
+_Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/space/space-manager.ts` (`list`), `packages/core/src/node/stores.ts`. Tests:
+`packages/core/tests/account-vault.test.ts` ("encryption at rest": "a sealed value moved to another entry does not open", "one registry entry that does not open is left out of the list, not the end of it", "the account key does not open the registry store's sealed entries")._
 
 ---
 

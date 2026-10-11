@@ -891,8 +891,14 @@ accountKey = HKDF(seed, "weave/account-key/v1", 32)    // 32 bytes, only ever HK
   given the whole account receives ([06](06-nodes-and-sessions.md)), and what
   a node that follows the account's registry is given.
 
-Neither is derivable from the other, so an app holding the account key reads
-none of the device's storage.
+Neither is derivable from the other, but that keeps less from an app holding
+the account key than it may seem. The account key opens the account's own
+spaces (03 §13.1), whose versions a folder stores unsealed like any space's,
+and their `sys.joined` records carry the key of every private space the
+registry lists. What the local key alone keeps from such an app is the
+sealed entries of the registry store ([05](05-sync-and-storage.md) §15) that
+nothing else carries: invite secrets waiting to be used (`spaceinvite:`) and
+the CLI's writer keys.
 
 Example (seed of §3.3): local key
 `26e6f39b9eeff4676d4efac5cfc6d075fb3becb6ceb13f9e03f6bc3d11d34fa9`, account key
@@ -1006,7 +1012,7 @@ client offers, and how it manages passwords, are the library's: see
 [Ways in](../packages/core/docs/sign-in.md#ways-in).
 
 _Source:_ `packages/core/src/identity/account-vault.ts` (`createVault`, `wrapSeedWithDeviceKey`, `unwrapSeedWithPassphrase`, `deriveLocalKey`, `deriveAccountKey`).
-_Tests:_ `packages/core/tests/account-vault.test.ts` ("a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open", "the account key does not open local storage").
+_Tests:_ `packages/core/tests/account-vault.test.ts` ("a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open", "the account key does not open the registry store's sealed entries").
 
 ---
 
@@ -1258,7 +1264,8 @@ Offering device                                       Phone
 - **Offering device:**
   - answers the **first** `pair:commit` only. From then on the offer is spent:
     it MUST NOT answer another commit, and MUST ignore `pair:reveal` and
-    `pair:done` from any other peer.
+    `pair:done` from any other peer. A commit is not authenticated, so the
+    relay, or anyone in the room, can spend an offer: denial of service only.
   - MUST stop answering a commit after a short time with no phone (two minutes
     in this implementation), and when the person stops the offer.
   - on `pair:reveal`, MUST check the commitment and finish with a failure if it

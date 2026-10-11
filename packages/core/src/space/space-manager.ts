@@ -257,7 +257,11 @@ export function createSpaceManager(
 
     async list(): Promise<ReadonlyArray<SpaceRecord>> {
       const keys = await adapter.list(SPACE_PREFIX);
-      const records = await Promise.all(keys.map((key) => load(key.slice(SPACE_PREFIX.length))));
+      // Each entry on its own: one that won't open (planted, or in an older format) is refused and
+      // left out, and the rest still list.
+      const records = await Promise.all(
+        keys.map((key) => load(key.slice(SPACE_PREFIX.length)).catch(() => null)),
+      );
       return records
         .filter((record): record is SpaceRecord => record !== null)
         .sort((a, b) => a.space.createdAt.localeCompare(b.space.createdAt));

@@ -221,8 +221,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
     app only the spaces chosen for it (01 §8, 06 §2). It can be given a note
     only for a key it shows it holds, never the home's own or another
     connection's, so disconnecting it revokes nobody else (06 §2.5).
-  - Given the whole account, it holds the account key, not the local key:
-    nothing it derives opens the home's storage at rest (01 §11.1, 05 §15).
+  - Given the whole account, it holds the account key, not the local key, so
+    it can't open the registry store's sealed entries, and of those it gets
+    nothing else it lacks but invite secrets waiting to be used and the CLI's
+    writer keys (01 §11.1, 05 §15). The account key does yield every space key
+    the account's registry lists.
   - Where it can write the account's vault, a wrap of another account it
     plants, or a passphrase wrap it edits to fewer rounds, does not open as
     the account (01 §11.3).
@@ -252,7 +255,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
     [#168](https://github.com/leifriksheim/weave/issues/168)).
 
-_Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open local storage", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
+_Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 
@@ -310,8 +313,12 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#176](https://github.com/leifriksheim/weave/issues/176)) _(traced)_.
+  - Where it can write the account's data folder (a pod in a synced drive,
+    say), it can put back an older sealed registry entry, such as a space key
+    from before a key change, or delete one: sealing at rest binds an entry's
+    name, not its version (05 §15, [#215](https://github.com/leifriksheim/weave/issues/215)).
 
-_Source: 03 §8; 02 §3; 06 §4. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
+_Source: 03 §8; 02 §3; 06 §4; 05 §15. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
 
 ### 3.9 Network attacker
 

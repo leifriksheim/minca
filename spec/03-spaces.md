@@ -920,6 +920,11 @@ id names.
 
 Example: `K = ff fe … e0` → id `aLhvw5pkV65_lcQHEcUOug`.
 
+Envelopes take a random 96-bit nonce, which keeps AES-GCM safe for about 2³²
+seals under one key, and a space's seal key lasts until a member is removed
+(§9); a space that would write more under one key needs to change it first
+([#182](https://github.com/leifriksheim/weave/issues/182)).
+
 ### 8.2 What is encrypted
 
 In a private space, the body of every version is encrypted **before signing**,
