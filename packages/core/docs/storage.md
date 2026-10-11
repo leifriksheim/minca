@@ -112,7 +112,10 @@ account home uses `weave-app:<account DID>` (the grant's `did`). Only this origi
 Each database:
 
 - is version **4**. Opening one made at an earlier version deletes its object
-  stores and starts empty: it is a local copy, rebuilt by syncing.
+  stores and starts empty. Space records are rebuilt by syncing, but the
+  registry is lost with it: space keys, unused invite secrets, and versions
+  written here but not yet synced. Before v1 that is accepted; after it, a
+  schema change must keep the registry.
 - has object store `kv`: out-of-line string keys, values `ArrayBuffer`s (the
   entry bytes). `list(prefix)` is a key-range cursor over
   `[prefix, prefix + "￿"]`.

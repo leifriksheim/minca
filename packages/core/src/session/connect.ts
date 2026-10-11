@@ -709,6 +709,7 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
     (request.scope === undefined || request.scope === 'spaces' || request.scope === 'account') &&
     (request.name === undefined || (typeof request.name === 'string' && request.name.length <= 80)) &&
     (request.contacts === undefined || typeof request.contacts === 'boolean') &&
+    (request.chooseSpaces === undefined || typeof request.chooseSpaces === 'boolean') &&
     (request.create === undefined || isNewSpaces(request.create)) &&
     (request.days === undefined ||
       (typeof request.days === 'number' &&
