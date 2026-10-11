@@ -112,8 +112,9 @@ parts of `packages/cli`, the grant in `apps/home`, the mini app contract in
    the diff, the spec and `spec/threat-model.md`, and proves each blocker with
    a probe test.
 2. Fix every blocker, and keep its probe as a test that fails without the
-   fix. Answer every other finding: fixed, filed as an issue, or why it isn't
-   one. Run the review again after fixing a blocker; fixes open holes too.
+   fix. Answer every other finding through the `file-issue` skill: fixed,
+   joined to an existing issue, recorded in the spec, parked, filed, or why it
+   isn't one. Run the review again after fixing a blocker; fixes open holes too.
 3. Put the findings and what was done about each under **Adversarial review**
    in the PR description, and say under **Threat model** what changes there.
    CI (`scripts/check-review.mjs`) fails a protocol PR without both.
@@ -128,12 +129,24 @@ Diffs only show what changed. Before each release, and whenever the threat
 model changes, audit the whole spec for soundness: one reviewer per adversary
 in the threat model's §2, in parallel, each trying to break every "Holds"
 claim about it and every rule it could abuse, spec against spec and spec
-against code. File what they find. An audit that only looks for what went
-stale is not this one.
+against code. Take what they find through the `file-issue` skill. An audit
+that only looks for what went stale is not this one.
 
 ## Issues and pull requests
 
-Track bugs, planned work and open questions as GitHub issues (`gh issue`).
+An open issue means we intend to do it before v1. Accepted limitations live
+in the threat model and Known defect notes, and ideas for later are filed
+closed with the `idea` label, so the backlog stays a list of real work: at
+most 40 open, each P0, P1 or P2.
+
+- File every issue through the `file-issue` skill
+  (`.claude/skills/file-issue/SKILL.md`). It searches for an issue to join
+  first, and a hook (`.claude/hooks/issue-guard.mjs`) refuses
+  `gh issue create` without its body sections, a priority, or room under the
+  cap.
+- Sweep the backlog with the `triage-issues` skill monthly, before each
+  release, and whenever it reaches the cap.
+
 Before starting, look for an issue that covers the work. A PR links every
 related issue in its description: `Fixes #N` when it closes one, `Refs #N`
 when it only touches it.

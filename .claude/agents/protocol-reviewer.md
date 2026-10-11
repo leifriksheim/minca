@@ -60,7 +60,10 @@ keep it as the regression test.
   - confirmed (with the probe's path) or traced;
   - the attack or the disagreement, as concrete steps;
   - the spec sections and code that allow it;
-  - a suggested direction.
+  - a suggested direction;
+  - for anything short of a blocker, an existing issue it belongs to, if one
+    does (`gh issue list --state all --search`). Merge findings with the same
+    root cause into one.
 - **Threat model**: "Holds" claims that are false or overstated, and
   guarantees the change strengthens, weakens, or should state differently.
 
