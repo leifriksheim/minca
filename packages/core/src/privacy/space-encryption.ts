@@ -1,108 +1,132 @@
-import type { Version } from '../types.js';
-import { base64UrlEncode, base64UrlDecode, concatBytes, utf8Encode, utf8Decode } from '../utils/encoding.js';
-import { aesOpen, aesSeal, NONCE_BYTES } from '../identity/aes.js';
-import { sha256 } from '../utils/hash.js';
-import { bufferSource } from '../utils/guards.js';
+/**
+ * @module privacy/space-encryption
+ * A private space's key, and the record bodies sealed under it (spec 03 §8).
+ *
+ * The 32 random bytes of a space key are only ever a root: the AES key that
+ * seals, the key id, the read key and the topic key are each derived from
+ * them under a label of their own, so publishing one says nothing of another.
+ */
+import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { hkdf, hkdfAesKey } from '../identity/hkdf.js';
+import { openEnvelope, sealEnvelope } from '../identity/envelope.js';
+import { isRecord } from '../utils/guards.js';
 
-/** Represents a key used to encrypt a Space. */
+const SPACE_KEY_BYTES = 32;
+const SEAL_INFO = utf8Encode('weave/space-seal/v1');
+const KEY_ID_INFO = utf8Encode('weave/space-key-id/v1');
+const KEY_ID_BYTES = 16;
+
+/** The envelope label of a record body; bound to `{ space, collection, key, keyId }` */
+const RECORD_BODY_LABEL = 'weave/record-body/v1';
+/** The envelope label of the earlier keys a `sys.key` carries; bound to `{ space, keyId }` */
+export const EARLIER_KEYS_LABEL = 'weave/earlier-keys/v1';
+/** The envelope label of a reader's note, sealed for a connection; bound to `{ space }` */
+export const MEMBERSHIP_LABEL = 'weave/membership/v1';
+
+/** A key of a private space */
 export interface SpaceKey {
+  /** `base64url(HKDF(K, "weave/space-key-id/v1", 16))`: names the key without giving it away */
   readonly id: string;
-  readonly key: CryptoKey;
+  /** K, the 32 random bytes. Only ever key material for HKDF, never a key itself. */
+  readonly raw: Uint8Array;
+  /** `HKDF(K, "weave/space-seal/v1")`: the AES-256-GCM key every envelope under this space key uses */
+  readonly seal: CryptoKey;
   readonly createdAt: string;
   readonly version: number;
 }
 
-/** The body of a version after it has been encrypted. */
+/** A record body sealed under a space key */
 export interface EncryptedVersionBody {
-  readonly ciphertext: string;
-  readonly iv: string;
+  /** base64url of the envelope (spec 01 §9.1) */
+  readonly sealed: string;
   readonly keyId: string;
 }
 
-/** A version whose body has been encrypted. */
-export type EncryptedVersion = Omit<Version, 'body'> & {
-  readonly body: EncryptedVersionBody;
-};
-
-/** A new random AES-256-GCM key for a space */
-export async function generateSpaceKey(): Promise<SpaceKey> {
-  const key = await globalThis.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
-    'encrypt',
-    'decrypt',
-  ]);
-  const raw = await globalThis.crypto.subtle.exportKey('raw', key);
-  const id = base64UrlEncode(new Uint8Array(await sha256(new Uint8Array(raw))));
-
-  return Object.freeze({
-    id,
-    key,
-    createdAt: new Date().toISOString(),
-    version: 1,
-  });
+/** Where a sealed body belongs: what a reader knows of the version before opening it */
+export interface BodyPlace {
+  readonly space: string;
+  readonly collection: string;
+  /** The record key */
+  readonly key: string;
 }
 
-/** Encrypts a version's body under a space key */
-export async function encryptVersion(version: Version, spaceKey: SpaceKey): Promise<EncryptedVersion> {
-  const sealed = await aesSeal(spaceKey.key, utf8Encode(JSON.stringify(version.body)));
-  return Object.freeze({
-    ...version,
-    body: Object.freeze({
-      ciphertext: base64UrlEncode(sealed.subarray(NONCE_BYTES)),
-      iv: base64UrlEncode(sealed.subarray(0, NONCE_BYTES)),
-      keyId: spaceKey.id,
-    }),
-  });
-}
-
-/** Decrypts an encrypted version's body; throws when the key id doesn't match */
-export async function decryptVersion(encrypted: EncryptedVersion, spaceKey: SpaceKey): Promise<Version> {
-  if (encrypted.body.keyId !== spaceKey.id) {
-    throw new Error('Key ID mismatch');
-  }
-  const sealed = concatBytes(base64UrlDecode(encrypted.body.iv), base64UrlDecode(encrypted.body.ciphertext));
-  const body: unknown = JSON.parse(utf8Decode(await aesOpen(spaceKey.key, sealed)));
-  return Object.freeze({ ...encrypted, body });
+/** A space key's id, from its raw bytes */
+async function spaceKeyId(raw: Uint8Array): Promise<string> {
+  return base64UrlEncode(await hkdf(raw, KEY_ID_INFO, KEY_ID_BYTES));
 }
 
 /**
- * A space key from its raw bytes. Its id is the hash of the bytes, so a key
- * handed over — in an invite, a box — can be checked against the id a space
- * or its history names.
+ * A space key from its raw bytes. Its id is derived from them, so a key
+ * handed over (in an invite, a box) can be checked against the id a space or
+ * its history names.
  */
 export async function spaceKeyFromRaw(
   raw: Uint8Array,
   createdAt = new Date().toISOString(),
 ): Promise<SpaceKey> {
-  const key = await globalThis.crypto.subtle.importKey(
-    'raw',
-    bufferSource(raw),
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt'],
-  );
-  const id = base64UrlEncode(new Uint8Array(await sha256(raw)));
-  return Object.freeze({ id, key, createdAt, version: 1 });
+  if (raw.length !== SPACE_KEY_BYTES) throw new Error('A space key is 32 bytes');
+  const bytes = new Uint8Array(raw);
+  return Object.freeze({
+    id: await spaceKeyId(bytes),
+    raw: bytes,
+    seal: await hkdfAesKey(bytes, SEAL_INFO),
+    createdAt,
+    version: 1,
+  });
 }
 
-/** A space key's raw bytes */
-export async function spaceKeyBytes(key: SpaceKey): Promise<Uint8Array> {
-  return new Uint8Array(await globalThis.crypto.subtle.exportKey('raw', key.key));
+/** A new random space key */
+export function generateSpaceKey(): Promise<SpaceKey> {
+  return spaceKeyFromRaw(globalThis.crypto.getRandomValues(new Uint8Array(SPACE_KEY_BYTES)));
+}
+
+const bodyBound = (place: BodyPlace, keyId: string) => ({
+  space: place.space,
+  collection: place.collection,
+  key: place.key,
+  keyId,
+});
+
+/**
+ * Seals a version's content (`{ body }`, or `{ body, links }`) for one record:
+ * opened anywhere else, under another key id, or changed, it does not open.
+ */
+export async function sealBody(
+  content: unknown,
+  spaceKey: SpaceKey,
+  place: BodyPlace,
+): Promise<EncryptedVersionBody> {
+  const sealed = await sealEnvelope(
+    spaceKey.seal,
+    RECORD_BODY_LABEL,
+    bodyBound(place, spaceKey.id),
+    utf8Encode(JSON.stringify(content)),
+  );
+  return Object.freeze({ sealed: base64UrlEncode(sealed), keyId: spaceKey.id });
+}
+
+/** Whether a body is a sealed one: `{ sealed, keyId }`, both strings */
+export function isSealedBody(body: unknown): body is EncryptedVersionBody {
+  return isRecord(body) && typeof body.sealed === 'string' && typeof body.keyId === 'string';
 }
 
 /**
- * Seals a value with a space key, bound to `context`: only someone holding
- * the key opens it, and only where the context matches.
- * @returns base64url: the IV, then the ciphertext
+ * Opens a sealed body with the key it names.
+ * @returns The content, or null when the key is not the one it names, it was
+ *   sealed for another record, or anything changed
  */
-export async function sealWith(spaceKey: SpaceKey, value: unknown, context: string): Promise<string> {
-  return base64UrlEncode(await aesSeal(spaceKey.key, utf8Encode(JSON.stringify(value)), utf8Encode(context)));
-}
-
-/** Opens what `sealWith` sealed; null when it wasn't sealed with this key, for this context, or was changed */
-export async function openWith(spaceKey: SpaceKey, sealed: unknown, context: string): Promise<unknown> {
-  if (typeof sealed !== 'string' || sealed.length > 1_000_000) return null;
+export async function openBody(body: unknown, spaceKey: SpaceKey, place: BodyPlace): Promise<unknown> {
+  if (!isSealedBody(body) || body.keyId !== spaceKey.id) return null;
   try {
-    return JSON.parse(utf8Decode(await aesOpen(spaceKey.key, base64UrlDecode(sealed), utf8Encode(context))));
+    const plain = await openEnvelope(
+      spaceKey.seal,
+      RECORD_BODY_LABEL,
+      bodyBound(place, body.keyId),
+      base64UrlDecode(body.sealed),
+    );
+    if (!plain) return null;
+    const content: unknown = JSON.parse(utf8Decode(plain));
+    return content;
   } catch {
     return null;
   }

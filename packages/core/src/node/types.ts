@@ -44,7 +44,7 @@ export interface NodeNetworkConfig {
 export interface NodeConfig {
   /** Who this node acts for. The root key only ever signs session delegations. */
   readonly signer: RootSigner;
-  /** The account's vault key bytes (`deriveVaultKeyBytes(seed)`): with it, the node follows the account registry, so spaces are joined and left on every device */
+  /** The account key (`deriveAccountKey(seed)`): with it, the node follows the account registry, so spaces are joined and left on every device */
   readonly accountKey?: Uint8Array;
   /** The account's contact key (`deriveContactKeyBytes(seed)`), for a node allowed to open contact requests and knocks */
   readonly contactKey?: Uint8Array;

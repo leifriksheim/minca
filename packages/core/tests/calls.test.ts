@@ -13,7 +13,7 @@ import { call as callSchema } from '../src/schemas/index.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -49,7 +49,7 @@ async function person(hub: FakeHub, seed = generateSeed(), loseSignal = false) {
   const node = await createNode({
     signer: createLocalRootSigner(me, manager.getProvider()),
     stores: memoryStores(),
-    accountKey: await deriveVaultKeyBytes(seed),
+    accountKey: await deriveAccountKey(seed),
     watchIntervalMs: 0,
     network: { transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)] },
   });

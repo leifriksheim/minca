@@ -13,8 +13,6 @@ import {
   derivePairingChannel,
   encodePairingTicket,
   decodePairingTicket,
-  sealPairingPayload,
-  openPairingPayload,
   type PairingTicket,
 } from '../src/identity/pairing.js';
 import { offerToPhone, receiveFromDesktop, type PairingStage } from '../src/session/pairing.js';
@@ -35,8 +33,8 @@ async function exchange(secret = newPairingSecret()) {
   const points = { offer: offer.point, phone: phone.point };
   return {
     secret,
-    offer: await derivePairingChannel({ secret, privateKey: offer.privateKey, ...points, peer: phone.point }),
-    phone: await derivePairingChannel({ secret, privateKey: phone.privateKey, ...points, peer: offer.point }),
+    offer: await derivePairingChannel({ secret, privateKey: offer.privateKey, ...points, side: 'offer' }),
+    phone: await derivePairingChannel({ secret, privateKey: phone.privateKey, ...points, side: 'phone' }),
   };
 }
 
@@ -93,19 +91,19 @@ describe('the ticket in the QR code', () => {
 
   test('round-trips', () => {
     const ticket: PairingTicket = {
-      v: 2,
+      v: 1,
       secret: base64UrlEncode(newPairingSecret()),
       relay: 'ws://192.168.1.42:8787',
     };
     assert.deepEqual(decodePairingTicket(encodePairingTicket(ticket)), ticket);
   });
 
-  test('an old ticket with a recovery code in it, or a mangled one, is refused', () => {
-    const old = base64UrlEncode(
-      utf8Encode(JSON.stringify({ v: 1, code: seedToRecoveryCode(generateSeed()), relay: 'wss://r' })),
+  test('a ticket of another version, or a mangled one, is refused', () => {
+    const other = base64UrlEncode(
+      utf8Encode(JSON.stringify({ v: 2, secret: base64UrlEncode(newPairingSecret()), relay: 'wss://r' })),
     );
-    const short = base64UrlEncode(utf8Encode(JSON.stringify({ v: 2, secret: 'AAAA', relay: 'wss://r' })));
-    for (const bad of ['', 'not-base64!!', old, short]) {
+    const short = base64UrlEncode(utf8Encode(JSON.stringify({ v: 1, secret: 'AAAA', relay: 'wss://r' })));
+    for (const bad of ['', 'not-base64!!', other, short]) {
       assert.throws(() => decodePairingTicket(bad), unreadable);
     }
   });
@@ -120,12 +118,16 @@ describe('the meeting room', () => {
 });
 
 describe('the exchange', () => {
-  test('both sides get the same key and the same six digits', async () => {
+  test('both sides get the same six digits, and each opens what the other sealed', async () => {
     const both = await exchange();
     assert.match(both.offer.code, /^\d{6}$/);
     assert.equal(both.offer.code, both.phone.code);
-    const sealed = await sealPairingPayload(utf8Encode('the account'), both.offer.key);
-    assert.equal(utf8Decode(await openPairingPayload(sealed, both.phone.key)), 'the account');
+    const handover = await both.offer.seal('pair:handover', utf8Encode('the account'));
+    // Text, not an array of numbers.
+    assert.match(handover, /^[A-Za-z0-9_-]+$/);
+    assert.equal(utf8Decode((await both.phone.open('pair:handover', handover))!), 'the account');
+    const done = await both.phone.seal('pair:done', utf8Encode('thanks'));
+    assert.equal(utf8Decode((await both.offer.open('pair:done', done))!), 'thanks');
   });
 
   test('someone without the secret gets a different channel', async () => {
@@ -136,23 +138,54 @@ describe('the exchange', () => {
       secret: newPairingSecret(),
       privateKey: offer.privateKey,
       ...points,
-      peer: phone.point,
+      side: 'offer',
     });
     const guess = await derivePairingChannel({
       secret: newPairingSecret(),
       privateKey: phone.privateKey,
       ...points,
-      peer: offer.point,
+      side: 'phone',
     });
-    const sealed = await sealPairingPayload(utf8Encode('the account'), real.key);
-    await assert.rejects(() => openPairingPayload(sealed, guess.key), unreadable);
+    const sealed = await real.seal('pair:handover', utf8Encode('the account'));
+    assert.equal(await guess.open('pair:handover', sealed), null);
   });
 
   test('a handover from one exchange opens in no other, even with the same secret', async () => {
     const first = await exchange();
     const second = await exchange(first.secret);
-    const sealed = await sealPairingPayload(utf8Encode('the account'), first.offer.key);
-    await assert.rejects(() => openPairingPayload(sealed, second.phone.key), unreadable);
+    const sealed = await first.offer.seal('pair:handover', utf8Encode('the account'));
+    assert.equal(await second.phone.open('pair:handover', sealed), null);
+  });
+
+  test('a message sent back to the side that sealed it does not open there', async () => {
+    // Each direction has its own key: what the offering device sent, reflected
+    // back to it, is not something the phone said.
+    const both = await exchange();
+    const handover = await both.offer.seal('pair:done', utf8Encode('the account'));
+    assert.equal(await both.offer.open('pair:done', handover), null);
+    const done = await both.phone.seal('pair:handover', utf8Encode('hello'));
+    assert.equal(await both.phone.open('pair:handover', done), null);
+  });
+
+  test('a message relabelled as another type does not open', async () => {
+    const both = await exchange();
+    const done = await both.phone.seal('pair:done', utf8Encode('{"spaces":1}'));
+    assert.equal(await both.offer.open('pair:handover', done), null);
+    // Refusing it left the count alone: the real message still opens.
+    assert.ok(await both.offer.open('pair:done', done));
+  });
+
+  test('a message replayed, or delivered out of order, does not open', async () => {
+    const both = await exchange();
+    const first = await both.offer.seal('pair:handover', utf8Encode('one'));
+    const second = await both.offer.seal('pair:handover', utf8Encode('two'));
+    // The second before the first: it is not the next one.
+    assert.equal(await both.phone.open('pair:handover', second), null);
+    assert.equal(utf8Decode((await both.phone.open('pair:handover', first))!), 'one');
+    // The first again: already taken.
+    assert.equal(await both.phone.open('pair:handover', first), null);
+    assert.equal(utf8Decode((await both.phone.open('pair:handover', second))!), 'two');
+    assert.equal(await both.phone.open('pair:handover', second), null);
   });
 
   test('a key that is not a P-256 point is refused', async () => {
@@ -165,15 +198,16 @@ describe('the exchange', () => {
           privateKey: offer.privateKey,
           offer: offer.point,
           phone: junk,
-          peer: junk,
+          side: 'offer',
         }),
       unreadable,
     );
   });
 
-  test('a truncated payload is refused rather than misread', async () => {
+  test('a truncated payload, or one that is not text, is refused rather than misread', async () => {
     const { offer } = await exchange();
-    await assert.rejects(() => openPairingPayload(new Uint8Array(4), offer.key), unreadable);
+    for (const bad of ['AAAA', '', [1, 2, 3], null, '!!not base64!!'])
+      assert.equal(await offer.open('pair:done', bad), null);
   });
 
   test('the commitment is a hash of the point', async () => {

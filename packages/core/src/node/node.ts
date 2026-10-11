@@ -65,9 +65,8 @@ import {
   deriveDoorKeyBytes,
   deriveDoorSignKeyBytes,
   deriveMemberKeyBytes,
-  openSealed,
-  sealFor,
 } from '../identity/contact-key.js';
+import { openValueFrom, sealValueTo } from '../identity/hpke.js';
 import { direct as directSchema } from '../schemas/library/publishing.js';
 import { openDirect, sealDirect, type DirectBody } from '../privacy/direct.js';
 import {
@@ -1545,8 +1544,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       links: [],
       body: { did },
     }))!;
-  const requestContext = (spaceId: string, from: string, to: string) =>
-    `weave/contact-request|${spaceId}|${from}|${to}`;
+  /** The HPKE label a contact request is sealed under; bound to `{ space, from, to }` */
+  const REQUEST_LABEL = 'weave/contact-request/v1';
 
   async function contactsRuntime(): Promise<SpaceRuntime> {
     if (!contactsSpaceId)
@@ -1652,10 +1651,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!noteGrants(note, { with: '*', can: ACCOUNT_ABILITY })) return null;
     const from = record.root;
     if (!from || record.createdBy !== from || from === config.signer.did) return null;
-    const value = await openSealed(
-      contactKeys.privateKey,
+    const value = await openValueFrom(
+      contactKeys,
+      REQUEST_LABEL,
+      { space: spaceId, from, to: config.signer.did },
       record.body.sealed,
-      requestContext(spaceId, from, config.signer.did),
     );
     if (!isRecord(value) || typeof value.invite !== 'string') return null;
     let invited;
@@ -1748,10 +1748,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const invite = await spaces.invite(pair.id, { role: 'editor' });
       await writeContact({ did, name: theirs.name, space: pair.id });
       const note = options.note?.trim().slice(0, 2000);
-      const sealed = await sealFor(
+      const sealed = await sealValueTo(
         theirs.contactKey,
+        REQUEST_LABEL,
+        { space: spaceId, from: config.signer.did, to: did },
         { invite, ...(note ? { note } : {}) },
-        requestContext(spaceId, config.signer.did, did),
       );
       const request = await shared.put<ContactRequestRecord>(contactRequestSchema.name, { to: did, sealed });
       return { space: pair.id, request: request.key };
@@ -2040,7 +2041,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const me = config.signer.did;
     if (from !== me && !to.includes(me)) return null;
     const pair = open.ownMemberKey();
-    const opened = pair ? await openDirect(spaceId, from, record.body, me, pair.privateKey) : null;
+    const opened = pair ? await openDirect(spaceId, from, record.body, me, pair) : null;
     return Object.freeze({
       key: record.key,
       from,

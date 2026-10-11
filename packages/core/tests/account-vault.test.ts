@@ -17,8 +17,8 @@ import {
   unwrapSeedWithDeviceKey,
   wrapSeedWithPassphrase,
   unwrapSeedWithPassphrase,
-  deriveVaultKey,
-  deriveVaultKeyBytes,
+  deriveLocalKey,
+  deriveAccountKey,
   deviceWrapsFor,
   withWrap,
   createVault,
@@ -28,11 +28,15 @@ import { createEncryptedAdapter } from '../src/storage/encrypted-adapter.js';
 import { createSpaceManager } from '../src/space/space-manager.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { generateSeed, seedToRecoveryCode } from '../src/identity/recovery-code.js';
-import { utf8Encode, utf8Decode } from '../src/utils/encoding.js';
+import { bytesToHex, hexToBytes, utf8Encode, utf8Decode } from '../src/utils/encoding.js';
+import { hkdf, hkdfAesKey } from '../src/identity/hkdf.js';
+import { deriveMemberKeyBytes } from '../src/identity/contact-key.js';
+import { deriveAccountRegistry, deriveContactsSpace } from '../src/space/account-registry.js';
 import { isProtocolError } from '../src/utils/errors.js';
 import { team } from '../src/space/presets.js';
 
 const manager = createIdentityManager();
+const didOf = async (seed: Uint8Array) => (await manager.fromSeed(seed)).did;
 
 /** A device key, as `createDeviceKey` would make one — without the storage. */
 async function deviceKey(id: string) {
@@ -54,7 +58,7 @@ describe('wrapping a seed', () => {
       credentialId: 'cred-a',
     });
 
-    assert.deepEqual(await unwrapSeedWithDeviceKey(wrap, key.key), seed);
+    assert.deepEqual(await unwrapSeedWithDeviceKey(wrap, key.key, await didOf(seed)), seed);
     // The seed must not be recoverable from the file itself.
     assert.ok(!JSON.stringify(wrap).includes(seedToRecoveryCode(seed).replace(/-/g, '')));
     // Which key opens it has to be recorded, or another browser cannot tell
@@ -63,14 +67,15 @@ describe('wrapping a seed', () => {
   });
 
   test('another device\u2019s key does not open it', async () => {
-    const wrap = await wrapSeedWithDeviceKey(generateSeed(), await deviceKey('k1'), {
+    const seed = generateSeed();
+    const wrap = await wrapSeedWithDeviceKey(seed, await deviceKey('k1'), {
       rpId: 'app-a.example',
       credentialId: 'cred-a',
     });
 
     const stranger = await deviceKey('k2');
     await assert.rejects(
-      () => unwrapSeedWithDeviceKey(wrap, stranger.key),
+      async () => unwrapSeedWithDeviceKey(wrap, stranger.key, await didOf(seed)),
       (error: unknown) => isProtocolError(error, 'VAULT_UNLOCK_FAILED'),
     );
   });
@@ -79,9 +84,10 @@ describe('wrapping a seed', () => {
     const seed = generateSeed();
     const wrap = await wrapSeedWithPassphrase(seed, 'correct horse battery staple');
 
-    assert.deepEqual(await unwrapSeedWithPassphrase(wrap, 'correct horse battery staple'), seed);
+    const did = await didOf(seed);
+    assert.deepEqual(await unwrapSeedWithPassphrase(wrap, 'correct horse battery staple', did), seed);
     await assert.rejects(
-      () => unwrapSeedWithPassphrase(wrap, 'correct horse battery stapler'),
+      () => unwrapSeedWithPassphrase(wrap, 'correct horse battery stapler', did),
       (error: unknown) => isProtocolError(error, 'VAULT_UNLOCK_FAILED'),
     );
   });
@@ -92,8 +98,58 @@ describe('wrapping a seed', () => {
     const first = await wrapSeedWithDeviceKey(seed, key, { rpId: 'a' });
     const second = await wrapSeedWithDeviceKey(seed, key, { rpId: 'a' });
 
-    assert.notEqual(first.ciphertext, second.ciphertext, 'the nonce must be fresh each time');
-    assert.deepEqual(await unwrapSeedWithDeviceKey(second, key.key), seed);
+    assert.notEqual(first.sealed, second.sealed, 'the nonce must be fresh each time');
+    assert.deepEqual(await unwrapSeedWithDeviceKey(second, key.key, await didOf(seed)), seed);
+  });
+
+  test('a wrap from another account does not open as this one', async () => {
+    // Someone who can write the vault copies in a wrap of their own account,
+    // under a passphrase they know: it must not open as the account the vault names.
+    const mine = generateSeed();
+    const theirs = generateSeed();
+    const planted = await wrapSeedWithPassphrase(theirs, 'their passphrase');
+    await assert.rejects(
+      async () => unwrapSeedWithPassphrase(planted, 'their passphrase', await didOf(mine)),
+      (error: unknown) => isProtocolError(error, 'VAULT_UNLOCK_FAILED'),
+    );
+    const key = await deviceKey('k');
+    const device = await wrapSeedWithDeviceKey(theirs, key, { rpId: 'a.example' });
+    await assert.rejects(
+      async () => unwrapSeedWithDeviceKey(device, key.key, await didOf(mine)),
+      (error: unknown) => isProtocolError(error, 'VAULT_UNLOCK_FAILED'),
+    );
+  });
+
+  test('a passphrase wrap edited to fewer rounds, another salt or another id does not open', async () => {
+    const seed = generateSeed();
+    const did = await didOf(seed);
+    const wrap = await wrapSeedWithPassphrase(seed, 'a passphrase');
+    // Below the floor: refused before any rounds are run.
+    for (const iterations of [1, 1000, 599_999, 1.5, Number.NaN, 1e12])
+      await assert.rejects(
+        () => unwrapSeedWithPassphrase({ ...wrap, iterations }, 'a passphrase', did),
+        (error: unknown) => isProtocolError(error, 'VAULT_UNLOCK_FAILED'),
+      );
+    // Within the bounds but not what it was sealed with: the envelope is bound to it.
+    for (const edited of [
+      { ...wrap, iterations: 600_001 },
+      { ...wrap, salt: 'AAAAAAAAAAAAAAAAAAAAAA' },
+      { ...wrap, id: 'AAAAAAAAAAA' },
+    ])
+      await assert.rejects(
+        () => unwrapSeedWithPassphrase(edited, 'a passphrase', did),
+        (error: unknown) => isProtocolError(error, 'VAULT_UNLOCK_FAILED'),
+      );
+  });
+
+  test('a device wrap relabelled as another wrap does not open', async () => {
+    const seed = generateSeed();
+    const key = await deviceKey('k');
+    const wrap = await wrapSeedWithDeviceKey(seed, key, { rpId: 'a.example' });
+    await assert.rejects(
+      async () => unwrapSeedWithDeviceKey({ ...wrap, id: 'AAAAAAAAAAA' }, key.key, await didOf(seed)),
+      (error: unknown) => isProtocolError(error, 'VAULT_UNLOCK_FAILED'),
+    );
   });
 });
 
@@ -110,9 +166,11 @@ describe('the set of wraps', () => {
     const onB = await wrapSeedWithDeviceKey(seed, keyB, { rpId: 'app-b.example' });
     const byPhrase = await wrapSeedWithPassphrase(seed, 'a passphrase');
 
-    const fromA = await manager.fromSeed(await unwrapSeedWithDeviceKey(onA, keyA.key));
-    const fromB = await manager.fromSeed(await unwrapSeedWithDeviceKey(onB, keyB.key));
-    const fromPhrase = await manager.fromSeed(await unwrapSeedWithPassphrase(byPhrase, 'a passphrase'));
+    const fromA = await manager.fromSeed(await unwrapSeedWithDeviceKey(onA, keyA.key, expected));
+    const fromB = await manager.fromSeed(await unwrapSeedWithDeviceKey(onB, keyB.key, expected));
+    const fromPhrase = await manager.fromSeed(
+      await unwrapSeedWithPassphrase(byPhrase, 'a passphrase', expected),
+    );
     // And the code, which needs no wrap because it is the seed.
     const fromCode = await manager.fromRecoveryCode(seedToRecoveryCode(seed));
 
@@ -154,7 +212,7 @@ describe('the set of wraps', () => {
 
     assert.equal(vault.wraps.length, 1);
     assert.deepEqual(
-      await unwrapSeedWithDeviceKey(deviceWrapsFor(vault, 'a.example')[0]!, replacement.key),
+      await unwrapSeedWithDeviceKey(deviceWrapsFor(vault, 'a.example')[0]!, replacement.key, vault.did),
       seed,
     );
   });
@@ -216,8 +274,8 @@ describe('the account file', () => {
 describe('encryption at rest', () => {
   test('a space key is unreadable in the underlying store', async () => {
     const inner = createMemoryAdapter();
-    const vaultKey = await deriveVaultKey(generateSeed());
-    const spaces = createSpaceManager(createEncryptedAdapter(inner, vaultKey));
+    const localKey = await deriveLocalKey(generateSeed());
+    const spaces = createSpaceManager(createEncryptedAdapter(inner, localKey));
 
     const { space } = await spaces.create({
       name: 'Grocery list',
@@ -240,20 +298,20 @@ describe('encryption at rest', () => {
 
   test('a different seed cannot read it', async () => {
     const inner = createMemoryAdapter();
-    const spaces = createSpaceManager(createEncryptedAdapter(inner, await deriveVaultKey(generateSeed())));
+    const spaces = createSpaceManager(createEncryptedAdapter(inner, await deriveLocalKey(generateSeed())));
     const { space } = await spaces.create({
       name: 'Private',
       visibility: 'private',
       creator: 'did:key:zowner',
     });
 
-    const stranger = createSpaceManager(createEncryptedAdapter(inner, await deriveVaultKey(generateSeed())));
+    const stranger = createSpaceManager(createEncryptedAdapter(inner, await deriveLocalKey(generateSeed())));
     await assert.rejects(() => stranger.get(space.id));
   });
 
   test('values outside the sealed prefixes pass straight through', async () => {
     const inner = createMemoryAdapter();
-    const adapter = createEncryptedAdapter(inner, await deriveVaultKey(generateSeed()));
+    const adapter = createEncryptedAdapter(inner, await deriveLocalKey(generateSeed()));
 
     // Keys outside the sealed prefixes — index entries, anything else — stay
     // as they were: cheap to read, and legible from outside.
@@ -267,15 +325,15 @@ describe('encryption at rest', () => {
     // Planted by someone who can write the folder but does not hold the seed.
     await inner.put('space:planted', utf8Encode('{"name":"written in the clear"}'));
 
-    const adapter = createEncryptedAdapter(inner, await deriveVaultKey(generateSeed()));
+    const adapter = createEncryptedAdapter(inner, await deriveLocalKey(generateSeed()));
     await assert.rejects(() => adapter.get('space:planted'));
   });
 
   test('a member key and the relays are sealed too, and refused in the clear', async () => {
     const inner = createMemoryAdapter();
-    const vaultKey = await deriveVaultKey(generateSeed());
+    const localKey = await deriveLocalKey(generateSeed());
     const memberKey = utf8Encode('{"memberKey":"c2VjcmV0LW1lbWJlci1rZXk"}');
-    const adapter = createEncryptedAdapter(inner, vaultKey);
+    const adapter = createEncryptedAdapter(inner, localKey);
     await adapter.put('spacememberkey:a', memberKey);
     await adapter.put('spacerelays:a', utf8Encode('["wss://relay.example"]'));
     for (const entry of ['spacememberkey:a', 'spacerelays:a']) {
@@ -293,7 +351,7 @@ describe('encryption at rest', () => {
 
   test('an invite secret waiting to be used is sealed too', async () => {
     const inner = createMemoryAdapter();
-    const spaces = createSpaceManager(createEncryptedAdapter(inner, await deriveVaultKey(generateSeed())));
+    const spaces = createSpaceManager(createEncryptedAdapter(inner, await deriveLocalKey(generateSeed())));
     const other = createSpaceManager(createMemoryAdapter());
     const made = await other.create({
       name: 'Team',
@@ -314,44 +372,74 @@ describe('encryption at rest', () => {
     // Every registry entry underneath is ciphertext, whatever its prefix.
     for (const key of entries.filter((key) => key.startsWith('space'))) {
       const raw = (await inner.get(key))!;
-      assert.deepEqual([...raw.subarray(0, 5)], [...utf8Encode('weave')], `${key} is stored in the clear`);
+      assert.equal(raw[0], 0x01, `${key} is stored in the clear`);
+      assert.ok(!utf8Decode(raw).includes('Team'), `${key} is stored in the clear`);
     }
   });
 
   test('a sealed value moved to another entry does not open', async () => {
     const inner = createMemoryAdapter();
-    const adapter = createEncryptedAdapter(inner, await deriveVaultKey(generateSeed()));
+    const adapter = createEncryptedAdapter(inner, await deriveLocalKey(generateSeed()));
     await adapter.put('spacekey:a', utf8Encode('key of a'));
     await inner.put('spacekey:b', (await inner.get('spacekey:a'))!);
     await assert.rejects(() => adapter.get('spacekey:b'));
   });
 
-  test('the vault key as bytes is the same key', async () => {
-    // A node is handed the bytes; the folder is sealed with the CryptoKey. If
-    // these two ever drift, a folder written through one is unreadable through
-    // the other.
+  test('the account key does not open local storage', async () => {
+    // An app given the whole account holds the account key. Neither it, nor
+    // anything derived from it under the local key's label, opens what this
+    // device sealed: the local key comes from the seed, beside it.
     const seed = generateSeed();
     const inner = createMemoryAdapter();
+    await createEncryptedAdapter(inner, await deriveLocalKey(seed)).put('space:x', utf8Encode('hello'));
 
-    await createEncryptedAdapter(inner, await deriveVaultKey(seed)).put('space:x', utf8Encode('hello'));
-
-    const fromBytes = await globalThis.crypto.subtle.importKey(
+    const accountKey = await deriveAccountKey(seed);
+    const asIs = await globalThis.crypto.subtle.importKey(
       'raw',
-      new Uint8Array(await deriveVaultKeyBytes(seed)),
-      { name: 'AES-GCM', length: 256 },
+      new Uint8Array(accountKey),
+      'AES-GCM',
       false,
       ['encrypt', 'decrypt'],
     );
-
-    assert.equal(utf8Decode((await createEncryptedAdapter(inner, fromBytes).get('space:x'))!), 'hello');
+    const derived = await hkdfAesKey(accountKey, utf8Encode('weave/local-key/v1'));
+    for (const key of [asIs, derived])
+      await assert.rejects(() => createEncryptedAdapter(inner, key).get('space:x'));
   });
 
-  test('the vault key is deterministic, and distinct per seed', async () => {
+  test("the account key, and the spaces derived from it, match the spec's examples", async () => {
+    const seed = hexToBytes('00112233445566778899aabbccddeeff');
+    assert.equal(
+      bytesToHex(await deriveAccountKey(seed)),
+      'f9b921c105dcc1f1f13b4d643cfe961701b733d3be473c1d0e416db233c5d598',
+    );
+    assert.equal(
+      bytesToHex(await deriveMemberKeyBytes(await deriveAccountKey(seed), 'bexample')),
+      'd6e2d8fba5a6ad5e3e1484236c85c0313a01414bf9bc95fd44e4664946fb8a48',
+    );
+    // The local key never leaves Web Crypto; its bytes are HKDF under its own label.
+    assert.equal(
+      bytesToHex(await hkdf(seed, utf8Encode('weave/local-key/v1'), 32)),
+      '26e6f39b9eeff4676d4efac5cfc6d075fb3becb6ceb13f9e03f6bc3d11d34fa9',
+    );
+    await assert.rejects(globalThis.crypto.subtle.exportKey('raw', await deriveLocalKey(seed)));
+
+    const other = new Uint8Array(16).map((_, i) => i + 1);
+    const did = (await manager.fromSeed(other)).did;
+    const registry = await deriveAccountRegistry(await deriveAccountKey(other), did);
+    assert.equal(registry.space.id, 'bvkbzgjhryaxdys2fyi4oifvardlc4b7bv3bvqn6d736v5ngl23iq');
+    assert.equal(registry.space.nonce, 'Jx8Oo78z30WwKl1X');
+    assert.equal(
+      (await deriveContactsSpace(await deriveAccountKey(other), did)).space.id,
+      'bqg4jypdnk3lvna26eda7bmesxzhbsoisqs5xodhif4d4gyx2adnq',
+    );
+  });
+
+  test('the local key is deterministic, and distinct per seed', async () => {
     const seed = generateSeed();
     const inner = createMemoryAdapter();
 
-    await createEncryptedAdapter(inner, await deriveVaultKey(seed)).put('space:x', utf8Encode('hello'));
-    const again = createEncryptedAdapter(inner, await deriveVaultKey(seed));
+    await createEncryptedAdapter(inner, await deriveLocalKey(seed)).put('space:x', utf8Encode('hello'));
+    const again = createEncryptedAdapter(inner, await deriveLocalKey(seed));
     assert.equal(utf8Decode((await again.get('space:x'))!), 'hello');
   });
 });

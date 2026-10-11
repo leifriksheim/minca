@@ -15,11 +15,9 @@ import {
   decodePairingTicket,
   encodePairingTicket,
   newPairingSecret,
-  openPairingPayload,
   pairingCommitment,
   pairingKeyPair,
   pairingRoomId,
-  sealPairingPayload,
   type PairingChannel,
   type PairingTicket,
 } from '../identity/pairing.js';
@@ -90,12 +88,13 @@ async function meet(network: PairingNetwork, secret: Uint8Array) {
     : createMesh({ relays: network.relays, did, introductions: false }).join(room);
   const send = (to: string, type: string, payload: unknown) => net.send(to, { type, from: did, payload });
   const seal = async (to: string, type: string, channel: PairingChannel, value: unknown) =>
-    send(to, type, Array.from(await sealPairingPayload(utf8Encode(JSON.stringify(value)), channel.key)));
-  /** What a sealed message says, or null when it was not sealed on this channel */
+    send(to, type, await channel.seal(type, utf8Encode(JSON.stringify(value))));
+  /** What a sealed message says, or null when it is not the other side's next message on this channel */
   const open = async (message: NetworkMessage, channel: PairingChannel): Promise<unknown> => {
-    if (!Array.isArray(message.payload) || !message.payload.every((n) => Number.isInteger(n))) return null;
+    const plain = await channel.open(message.type, message.payload);
+    if (!plain) return null;
     try {
-      return JSON.parse(utf8Decode(await openPairingPayload(new Uint8Array(message.payload), channel.key)));
+      return JSON.parse(utf8Decode(plain));
     } catch {
       return null;
     }
@@ -148,7 +147,7 @@ export async function offerToPhone(
   if (!relay && !params.transport) throw new Error('Pairing needs a relay, and none is configured.');
 
   const secret = newPairingSecret();
-  const ticket: PairingTicket = { v: 2, secret: base64UrlEncode(secret), relay: relay ?? '' };
+  const ticket: PairingTicket = { v: 1, secret: base64UrlEncode(secret), relay: relay ?? '' };
   const url = `${params.link}#pair=${encodePairingTicket(ticket)}`;
   const room = await meet({ relays, transport: params.transport }, secret);
   const mine = await pairingKeyPair();
@@ -201,7 +200,7 @@ export async function offerToPhone(
             privateKey: mine.privateKey,
             offer: mine.point,
             phone: point,
-            peer: point,
+            side: 'offer',
           });
           channel = open;
           const peer = phone.peer;
@@ -329,7 +328,7 @@ export async function receiveFromDesktop(
               privateKey: mine.privateKey,
               offer: point,
               phone: mine.point,
-              peer: point,
+              side: 'phone',
             });
             desktop = message.from;
             channel = open;

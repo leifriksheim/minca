@@ -11,7 +11,7 @@ import { createP256Provider } from '../../src/identity/crypto-p256.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
 import { didOf, publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
 import { keyProof } from '../../src/session/connect.js';
-import { deriveVaultKeyBytes } from '../../src/identity/account-vault.js';
+import { deriveAccountKey } from '../../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../../src/identity/contact-key.js';
 import { createSigner } from '../../src/schema/signer.js';
 import { createVersion, type CreateVersionParams } from '../../src/schema/version.js';
@@ -52,7 +52,7 @@ export async function person(hub?: FakeHub, options: PersonOptions = {}) {
     signer: createLocalRootSigner(me, manager.getProvider()),
     stores,
     watchIntervalMs: 0,
-    ...(options.accountKey ? { accountKey: await deriveVaultKeyBytes(seed) } : {}),
+    ...(options.accountKey ? { accountKey: await deriveAccountKey(seed) } : {}),
     ...(options.contactKey ? { contactKey: await deriveContactKeyBytes(seed) } : {}),
     ...(hub
       ? {

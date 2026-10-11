@@ -20,7 +20,7 @@ import type { P2PNode } from '../../../core/src/node/types.js';
 import { createIdentityManager } from '../../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../../core/src/identity/root-signer.js';
 import { generateSeed } from '../../../core/src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../../../core/src/identity/account-vault.js';
+import { deriveAccountKey } from '../../../core/src/identity/account-vault.js';
 import { memoryStores } from '../../../core/tests/helpers/memory-stores.js';
 import { spaceSize } from '../../src/host-setup.js';
 
@@ -75,7 +75,7 @@ async function account(): Promise<P2PNode> {
   return createNode({
     signer: createLocalRootSigner(identity, manager.getProvider()),
     stores: memoryStores(),
-    accountKey: await deriveVaultKeyBytes(seed),
+    accountKey: await deriveAccountKey(seed),
     watchIntervalMs: 0,
     network: {},
   });

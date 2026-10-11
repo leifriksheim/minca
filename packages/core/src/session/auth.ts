@@ -21,8 +21,8 @@ import {
   unwrapSeedWithPassphrase,
   deviceWrapsFor,
   CLI_PASSPHRASE_LABEL,
-  deriveVaultKey,
-  deriveVaultKeyBytes,
+  deriveLocalKey,
+  deriveAccountKey,
   type AccountVault,
   type DeviceWrap,
   type PassphraseWrap,
@@ -495,7 +495,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
   /** The seed behind the open session. Never leaves this closure except as the recovery code. */
   let seed: Uint8Array | null = null;
-  let vaultKey: CryptoKey | null = null;
+  let localKey: CryptoKey | null = null;
   let stopFollowingName: (() => void) | null = null;
   let expiryTimer: ReturnType<typeof setInterval> | null = null;
   let started: Promise<void> | null = null;
@@ -508,7 +508,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
   const storesOf = (place: Place, account: AccountSummary, key: CryptoKey): StoreFactory =>
     place.directory
-      ? storesFor(account, { directory: place.directory, vaultKey: key })
+      ? storesFor(account, { directory: place.directory, localKey: key })
       : browserStores(account);
 
   // ─── Accounts in a place ───────────────────────────────────────────
@@ -568,7 +568,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     if (expiryTimer) clearInterval(expiryTimer);
     expiryTimer = null;
     seed = null;
-    vaultKey = null;
+    localKey = null;
     await node?.close();
   }
 
@@ -631,15 +631,15 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     await stopNode();
 
     const { identity, signer } = await rootFromSeed(unlocked);
-    const key = await deriveVaultKey(unlocked);
+    const key = await deriveLocalKey(unlocked);
     const node = await startPageNode(
       {
         signer,
-        accountKey: await deriveVaultKeyBytes(unlocked),
+        accountKey: await deriveAccountKey(unlocked),
         contactKey: await deriveContactKeyBytes(unlocked),
         stores: describeStores(
           account,
-          place.directory ? { directory: place.directory, vaultKey: key } : undefined,
+          place.directory ? { directory: place.directory, localKey: key } : undefined,
         ),
         ...(config.network ? { network: config.network } : {}),
       },
@@ -647,7 +647,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     );
 
     seed = unlocked;
-    vaultKey = key;
+    localKey = key;
     const session: WeaveSession = Object.freeze({
       account,
       did: identity.did,
@@ -959,7 +959,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         for (const wrap of place && entry ? wraps : []) {
           let unlocked: Uint8Array | null = null;
           try {
-            unlocked = await unwrapSeedWithPassphrase(wrap, password);
+            unlocked = await unwrapSeedWithPassphrase(wrap, password, entry!.vault.did);
           } catch (error) {
             failed = error instanceof Error ? error : new Error(String(error));
           }
@@ -999,7 +999,11 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
           );
         }
         return {
-          session: await begin(place, entry.summary, await unwrapSeedWithDeviceKey(target, key)),
+          session: await begin(
+            place,
+            entry.summary,
+            await unwrapSeedWithDeviceKey(target, key, entry.vault.did),
+          ),
           byCode: false,
         };
       });
@@ -1167,9 +1171,9 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     async confirmPod(how) {
       const choice = state.podChoice;
       const session = state.session;
-      if (!choice || !session || !seed || !vaultKey) return;
+      if (!choice || !session || !seed || !localKey) return;
       const unlocked = seed;
-      const key = vaultKey;
+      const key = localKey;
 
       await run(async () => {
         const { pod, contents, from } = choice;
@@ -1205,7 +1209,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
           from: storesOf(from, session.account, key),
           to: storesOf(pod, summary, key),
           did: session.account.did,
-          accountKey: await deriveVaultKeyBytes(unlocked),
+          accountKey: await deriveAccountKey(unlocked),
         });
 
         await land(summary, {
@@ -1298,7 +1302,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         // Only for the spaces granted: each opens that space's next key and nothing else.
         const memberKey =
           !whole && space.visibility === 'private'
-            ? base64UrlEncode(await deriveMemberKeyBytes(await deriveVaultKeyBytes(seed), id))
+            ? base64UrlEncode(await deriveMemberKeyBytes(await deriveAccountKey(seed), id))
             : null;
         spaces.push({ id, name: space.name, invite, ...(memberKey ? { memberKey } : {}) });
       }
@@ -1344,7 +1348,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         access,
         scope: whole ? 'account' : 'spaces',
         spaces,
-        ...(whole ? { accountKey: base64UrlEncode(await deriveVaultKeyBytes(seed)) } : {}),
+        ...(whole ? { accountKey: base64UrlEncode(await deriveAccountKey(seed)) } : {}),
         // Never to an agent: the contact key opens contact requests and knocks on your doors.
         ...(!agent && (whole || request.contacts)
           ? { contactKey: base64UrlEncode(await deriveContactKeyBytes(seed)) }

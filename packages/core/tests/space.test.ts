@@ -12,7 +12,8 @@ import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
 import { createCapabilityGate } from '../src/validation/capability-gate.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
-import { encryptVersion, decryptVersion } from '../src/privacy/space-encryption.js';
+import { openBody, sealBody, spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
+import { newRecordKey } from '../src/records/version.js';
 import { team } from '../src/space/presets.js';
 import { makeKey } from './helpers/person.js';
 
@@ -90,21 +91,9 @@ describe('invites', () => {
     assert.equal(joined.invite, null, 'a view-only invite carries no secret to wait on');
 
     // The key that arrived must open what the owner sealed
-    const sealed = await encryptVersion(
-      {
-        id: 'x',
-        author: OWNER,
-        collection: 'app.test.note',
-        createdAt: 'now',
-        key: 'x',
-        seq: 0,
-        body: { text: 'secret' },
-        signature: '',
-      },
-      record.key!,
-    );
-    const opened = await decryptVersion(sealed, joined.key!);
-    assert.deepEqual(opened.body, { text: 'secret' });
+    const place = { space: record.space.id, collection: 'app.test.note', key: 'x' };
+    const sealed = await sealBody({ text: 'secret' }, record.key!, place);
+    assert.deepEqual(await openBody(sealed, joined.key!, place), { text: 'secret' });
   });
 
   test('a public space invite carries no key', async () => {
@@ -157,26 +146,16 @@ describe('private space versions', () => {
     );
 
     // Encrypt first, then sign: the signature covers the ciphertext.
-    const sealed = await encryptVersion(
-      {
-        id: '',
-        author: '',
-        collection: 'app.test.note',
-        createdAt: '',
-        key: '',
-        seq: 0,
-        body: { text: 'dinner at eight' },
-        signature: '',
-      },
-      record.key!,
-    );
+    const place = { space: spaceId, collection: 'app.test.note', key: newRecordKey() };
+    const sealed = await sealBody({ text: 'dinner at eight' }, record.key!, place);
     const unsigned = createVersion({
       author: session.did,
       collection: 'app.test.note',
       space: spaceId,
       log: { n: 0, c: { n: 0 } },
-      body: sealed.body,
+      body: sealed,
       proof: ucan.encoded,
+      version: { key: place.key, seq: 0 },
     });
     const version = await signer.sign(unsigned, session.privateKey);
 
@@ -189,8 +168,35 @@ describe('private space versions', () => {
     assert.equal('text' in version.body, false);
 
     // A member opens it
-    const opened = await decryptVersion(version, record.key!);
-    assert.deepEqual(opened.body, { text: 'dinner at eight' });
+    assert.deepEqual(await openBody(version.body, record.key!, place), { text: 'dinner at eight' });
+  });
+
+  test('the example body of spec 03 §8.3 opens', async () => {
+    const key = await spaceKeyFromRaw(new Uint8Array(32).map((_, i) => 255 - i));
+    assert.equal(key.id, 'aLhvw5pkV65_lcQHEcUOug');
+    const body = {
+      sealed: 'AaChoqOkpaanqKmqq0Fx-eCwOhnoZnLVU8hJnQsqWTBRgYQ5jezwBbEdvJDeKm5_wX3j',
+      keyId: 'aLhvw5pkV65_lcQHEcUOug',
+    };
+    const place = { space: 'bexample', collection: 'app.note', key: 'k1' };
+    assert.deepEqual(await openBody(body, key, place), { body: { text: 'hi' } });
+  });
+
+  test('a sealed body moved to another record, collection or space does not open', async () => {
+    const spaces = createSpaceManager(createMemoryAdapter());
+    const record = await spaces.create({ name: 'Secrets', ...team, visibility: 'private', creator: OWNER });
+    const key = record.key!;
+    const place = { space: record.space.id, collection: 'app.test.note', key: newRecordKey() };
+    const sealed = await sealBody({ text: 'dinner at eight' }, key, place);
+    assert.deepEqual(await openBody(sealed, key, place), { text: 'dinner at eight' });
+    // A member who copies the ciphertext into a record of their own gets nothing readable there.
+    assert.equal(await openBody(sealed, key, { ...place, key: newRecordKey() }), null);
+    assert.equal(await openBody(sealed, key, { ...place, collection: 'app.test.other' }), null);
+    assert.equal(await openBody(sealed, key, { ...place, space: 'bsomewhereelse' }), null);
+    // A body naming another key id, or with a changed byte, does not open either.
+    assert.equal(await openBody({ ...sealed, keyId: 'AAAAAAAAAAAAAAAAAAAAAA' }, key, place), null);
+    const flipped = sealed.sealed.slice(0, -2) + (sealed.sealed.endsWith('AA') ? 'AB' : 'AA');
+    assert.equal(await openBody({ ...sealed, sealed: flipped }, key, place), null);
   });
 
   test('a personal space refuses a stranger, whatever they sign', async () => {

@@ -27,7 +27,7 @@ import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { createSigner } from '../../core/src/schema/signer.js';
 import { createVersion } from '../../core/src/schema/version.js';
 import { generateSeed, recoveryCodeToSeed } from '../../core/src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../../core/src/identity/account-vault.js';
+import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import { NODE_ACTIONS, PERSON_ONLY } from '../../core/src/node/actions.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { team } from '../../core/src/space/presets.js';
@@ -226,7 +226,7 @@ describe('the daemon', () => {
     const laptop = await createNode({
       signer,
       stores: memoryStores(),
-      accountKey: await deriveVaultKeyBytes(recoveryCodeToSeed(code)),
+      accountKey: await deriveAccountKey(recoveryCodeToSeed(code)),
       watchIntervalMs: 0,
       network: { nodes: [peerUrl] },
     });
@@ -253,7 +253,7 @@ describe('the daemon', () => {
     const browser = await createNode({
       signer,
       stores: memoryStores(),
-      accountKey: await deriveVaultKeyBytes(recoveryCodeToSeed(code)),
+      accountKey: await deriveAccountKey(recoveryCodeToSeed(code)),
       watchIntervalMs: 0,
       network: { relays },
     });
@@ -289,7 +289,7 @@ describe('the daemon', () => {
       // With the account key, so each has a member key the new space key is sealed to.
       const node = await createNode({
         signer: createLocalRootSigner(me, manager.getProvider()),
-        accountKey: await deriveVaultKeyBytes(seed),
+        accountKey: await deriveAccountKey(seed),
         stores: memoryStores(),
         watchIntervalMs: 0,
         network: { nodes: [peerUrl] },

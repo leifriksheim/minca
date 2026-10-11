@@ -11,13 +11,14 @@ import { createNode } from '../src/node/node.js';
 import type { P2PNode } from '../src/node/types.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { deriveMemberKeyBytes } from '../src/identity/contact-key.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { replayAccess, type AccessEvent, type AccessGenesis, type Role } from '../src/space/roles.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
-import { deriveReadKey, membershipContext } from '../src/space/space-access.js';
-import { sealWith, spaceKeyFromRaw, type SpaceKey } from '../src/privacy/space-encryption.js';
+import { deriveReadKey } from '../src/space/space-access.js';
+import { MEMBERSHIP_LABEL, spaceKeyFromRaw, type SpaceKey } from '../src/privacy/space-encryption.js';
+import { sealValue } from '../src/identity/envelope.js';
 import { createClientAuth, type ReadAccess } from '../src/network/peer-auth.js';
 import { team } from '../src/space/presets.js';
 import { base64UrlDecode } from '../src/utils/encoding.js';
@@ -30,7 +31,7 @@ import { open, person as somebody } from './helpers/person.js';
 
 async function person(hub: FakeHub) {
   const who = await somebody(hub, { accountKey: true });
-  return { ...who, accountKey: await deriveVaultKeyBytes(who.seed) };
+  return { ...who, accountKey: await deriveAccountKey(who.seed) };
 }
 
 const provider = createP256Provider();
@@ -366,7 +367,7 @@ describe('proving you may read, after the key changed', () => {
     return {
       key: () => deriveReadKey(key, provider),
       current: () => 'did:key:not-this-one',
-      membership: async () => (note ? sealWith(key, note, membershipContext(space)) : null),
+      membership: async () => (note ? sealValue(key.seal, MEMBERSHIP_LABEL, { space }, note) : null),
     };
   }
 
@@ -435,7 +436,7 @@ describe('proving you may read, while a new key is due', () => {
       const read: ReadAccess = {
         key: () => deriveReadKey(key, provider),
         current: () => 'did:key:not-this-one',
-        membership: async () => sealWith(key, note.encoded, membershipContext(space)),
+        membership: async () => sealValue(key.seal, MEMBERSHIP_LABEL, { space }, note.encoded),
       };
       const hello = await createClientAuth(space, { did, key: pair.privateKey }, read, provider).hello(
         did,

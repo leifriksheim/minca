@@ -10,14 +10,9 @@ import { createNode } from '../src/node/node.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
-import {
-  contactKeyPair,
-  contactPublicKey,
-  deriveContactKeyBytes,
-  openSealed,
-  sealFor,
-} from '../src/identity/contact-key.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
+import { contactKeyPair, contactPublicKey, deriveContactKeyBytes } from '../src/identity/contact-key.js';
+import { openValueFrom, sealValueTo } from '../src/identity/hpke.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -64,13 +59,17 @@ describe('the contact key', () => {
     assert.ok(!identity.did.includes(contactPublicKey(a)));
   });
 
-  test('opens what was sealed to it, only in the same context', async () => {
+  test('opens what was sealed to it, only under the same label and bound', async () => {
     const pair = await contactKeyPair(await deriveContactKeyBytes(generateSeed()));
     const other = await contactKeyPair(await deriveContactKeyBytes(generateSeed()));
-    const sealed = await sealFor(pair.publicKey, { hello: 'Anna' }, 'here');
-    assert.deepEqual(await openSealed(pair.privateKey, sealed, 'here'), { hello: 'Anna' });
-    assert.equal(await openSealed(pair.privateKey, sealed, 'somewhere else'), null);
-    assert.equal(await openSealed(other.privateKey, sealed, 'here'), null);
+    const label = 'weave/contact-request/v1';
+    const bound = { space: 'bspace', from: 'did:a', to: 'did:b' };
+    const sealed = await sealValueTo(pair.publicKey, label, bound, { hello: 'Anna' });
+    assert.deepEqual(await openValueFrom(pair, label, bound, sealed), { hello: 'Anna' });
+    assert.equal(await openValueFrom(pair, label, { ...bound, space: 'bother' }, sealed), null);
+    assert.equal(await openValueFrom(pair, label, { ...bound, from: 'did:c' }, sealed), null);
+    assert.equal(await openValueFrom(pair, 'weave/knock/v1', bound, sealed), null);
+    assert.equal(await openValueFrom(other, label, bound, sealed), null);
   });
 
   test('its public half is on the account’s profile in every space it writes in', async () => {
@@ -93,7 +92,7 @@ describe('the contact key', () => {
     const bare = await createNode({
       signer: createLocalRootSigner(await manager.fromSeed(leif.seed), manager.getProvider()),
       stores: memoryStores(),
-      accountKey: await deriveVaultKeyBytes(leif.seed),
+      accountKey: await deriveAccountKey(leif.seed),
       watchIntervalMs: 0,
       network: { transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)] },
     });

@@ -23,8 +23,9 @@ import { createCryptoGate } from '../src/validation/crypto-gate.js';
 import { createSyncEngine } from '../src/sync/sync-engine.js';
 import type { NetworkMessage, PeerInfo } from '../src/types.js';
 import { createMeshAuth, type ReadAccess } from '../src/network/peer-auth.js';
-import { generateSpaceKey, openWith, sealWith } from '../src/privacy/space-encryption.js';
-import { deriveReadKey, membershipContext } from '../src/space/space-access.js';
+import { generateSpaceKey, MEMBERSHIP_LABEL } from '../src/privacy/space-encryption.js';
+import { openValue, sealValue } from '../src/identity/envelope.js';
+import { deriveReadKey } from '../src/space/space-access.js';
 import { until } from './helpers/until.js';
 
 /** Resolves when `predicate` holds, polling; fails the test after `ms`. */
@@ -457,7 +458,7 @@ describe('the mesh, through real relays', () => {
         const keys = [await generateSpaceKey(), await generateSpaceKey(), await generateSpaceKey()];
         const reads = await Promise.all(keys.map((key) => deriveReadKey(key, provider)));
         const members = new Set<string>();
-        const context = membershipContext('changed');
+        const bound = { space: 'changed' };
         const note = (who: string) => `the note of ${who}`;
         /** Who holds `held` (newest last) and calls `current` the space's key */
         const access = (who: { did: string }, held: number[], current: number): ReadAccess => ({
@@ -468,7 +469,7 @@ describe('the mesh, through real relays', () => {
               .slice(0, -1)
               .reverse()
               .map((i) => reads[i]!),
-          membership: async () => sealWith(keys[held.at(-1)!]!, note(who.did), context),
+          membership: async () => sealValue(keys[held.at(-1)!]!.seal, MEMBERSHIP_LABEL, bound, note(who.did)),
           // A peer proving an older key gets in when its note opens with that key and names someone still a member.
           admits: async (peerDid, readKey, membership) => {
             const i = reads.findIndex((read) => read.did === readKey);
@@ -476,7 +477,7 @@ describe('the mesh, through real relays', () => {
               i >= 0 &&
               held.includes(i) &&
               members.has(peerDid) &&
-              (await openWith(keys[i]!, membership, context)) === note(peerDid)
+              (await openValue(keys[i]!.seal, MEMBERSHIP_LABEL, bound, membership)) === note(peerDid)
             );
           },
         });

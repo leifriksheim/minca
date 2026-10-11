@@ -12,7 +12,7 @@ import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createMeshAuth } from '../src/network/peer-auth.js';
@@ -42,7 +42,7 @@ async function account(seed = generateSeed()) {
   return {
     did: identity.did,
     signer: createLocalRootSigner(identity, manager.getProvider()),
-    accountKey: await deriveVaultKeyBytes(seed),
+    accountKey: await deriveAccountKey(seed),
   };
 }
 type Account = Awaited<ReturnType<typeof account>>;

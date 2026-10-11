@@ -40,7 +40,7 @@ import {
 import { createWeaveAuth, type WeaveAuth } from '../src/session/auth.js';
 import { grantSigner, type Grant } from '../src/session/connect.js';
 import { acceptAgentLink, newAgentCode, offerAgentLink, readAgentCode } from '../src/session/agent-link.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { seenBy } from './helpers/as-member.js';
@@ -890,7 +890,7 @@ describe('an agent running a node of its own', () => {
       access: 'write',
       scope: 'account',
       spaces: [],
-      accountKey: base64UrlEncode(await deriveVaultKeyBytes(who.seed)),
+      accountKey: base64UrlEncode(await deriveAccountKey(who.seed)),
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
       agent: true,
       home: 'https://home.test/connect',
@@ -915,7 +915,7 @@ describe('an agent running a node of its own', () => {
     const node = await createNode({
       signer: createLocalRootSigner(me, manager.getProvider()),
       stores,
-      accountKey: await deriveVaultKeyBytes(seed),
+      accountKey: await deriveAccountKey(seed),
       watchIntervalMs: 0,
       network: { transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)] },
     });
@@ -958,7 +958,7 @@ describe('an agent running a node of its own', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const ada = await accountHolder(hub);
     await ada.node.account.setName('Ada');
-    const registry = (await deriveAccountRegistry(await deriveVaultKeyBytes(ada.seed), ada.me.did)).space.id;
+    const registry = (await deriveAccountRegistry(await deriveAccountKey(ada.seed), ada.me.did)).space.id;
     const provider = ada.manager.getProvider();
     const slipIn = async (can: string) => {
       const pair = await provider.generateKeyPair();

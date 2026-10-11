@@ -7,15 +7,24 @@
  * process that holds it, reclaimed once that process is gone.
  *
  * Kept outside the account's data, which may be copied or synced: a key in
- * two places at once forks its log. And sealed under the account's vault
- * key, as the registry is, so a copy of the files can't sign.
+ * two places at once forks its log. And sealed under the account's local
+ * key, as the registry is, bound to the account and the slot, so a copy of
+ * the files can't sign, and a key file moved to another slot doesn't open.
  */
 import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ClaimedWriter, HeadStore, WriterKeySource } from '@weaveprotocol/core';
+import {
+  openEnvelope,
+  sealEnvelope,
+  type ClaimedWriter,
+  type HeadStore,
+  type WriterKeySource,
+} from '@weaveprotocol/core';
 import { errorCode, isRecord } from './json.js';
 
 const MAX_SLOTS = 32;
+/** The envelope label of a writer key on disk; bound to `{ did, slot }` */
+const WRITER_KEY_LABEL = 'weave/writer-key/v1';
 const algorithm = { name: 'ECDSA', namedCurve: 'P-256' };
 
 /** Whether a process is still running */
@@ -56,32 +65,37 @@ async function lock(file: string): Promise<boolean> {
   return false;
 }
 
-/** AES-GCM under the vault key: a 12-byte IV, then the ciphertext */
-async function seal(vaultKey: CryptoKey, text: string): Promise<Uint8Array> {
-  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
-  const sealed = new Uint8Array(
-    await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, vaultKey, new TextEncoder().encode(text)),
-  );
-  const out = new Uint8Array(iv.length + sealed.length);
-  out.set(iv);
-  out.set(sealed, iv.length);
-  return out;
+/** Where a sealed key belongs: whose it is, and which slot */
+interface Slot {
+  readonly localKey: CryptoKey;
+  readonly did: string;
+  readonly slot: number;
 }
 
-async function unseal(vaultKey: CryptoKey, bytes: Uint8Array<ArrayBuffer>): Promise<string> {
-  const opened = await globalThis.crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: bytes.subarray(0, 12) },
-    vaultKey,
-    bytes.subarray(12),
+const sealKey = (where: Slot, text: string) =>
+  sealEnvelope(
+    where.localKey,
+    WRITER_KEY_LABEL,
+    { did: where.did, slot: where.slot },
+    new TextEncoder().encode(text),
   );
+
+async function openKey(where: Slot, bytes: Uint8Array): Promise<string> {
+  const opened = await openEnvelope(
+    where.localKey,
+    WRITER_KEY_LABEL,
+    { did: where.did, slot: where.slot },
+    bytes,
+  );
+  if (!opened) throw new Error(`The writer key in slot ${where.slot} is not this account's, or was changed`);
   return new TextDecoder().decode(opened);
 }
 
 /** The slot's key pair: made on first claim, then the same every time */
-async function keyPair(file: string, vaultKey: CryptoKey): Promise<CryptoKeyPair> {
+async function keyPair(file: string, where: Slot): Promise<CryptoKeyPair> {
   const subtle = globalThis.crypto.subtle;
   try {
-    const stored: unknown = JSON.parse(await unseal(vaultKey, new Uint8Array(await readFile(file))));
+    const stored: unknown = JSON.parse(await openKey(where, new Uint8Array(await readFile(file))));
     if (isRecord(stored) && isRecord(stored.privateKey) && isRecord(stored.publicKey))
       return {
         privateKey: await subtle.importKey('jwk', stored.privateKey, algorithm, false, ['sign']),
@@ -95,7 +109,7 @@ async function keyPair(file: string, vaultKey: CryptoKey): Promise<CryptoKeyPair
     privateKey: await subtle.exportKey('jwk', made.privateKey),
     publicKey: await subtle.exportKey('jwk', made.publicKey),
   };
-  await writeFile(file, await seal(vaultKey, JSON.stringify(jwk)), { mode: 0o600 });
+  await writeFile(file, await sealKey(where, JSON.stringify(jwk)), { mode: 0o600 });
   return {
     privateKey: await subtle.importKey('jwk', jwk.privateKey, algorithm, false, ['sign']),
     publicKey: made.publicKey,
@@ -125,9 +139,10 @@ function headStore(dir: string): HeadStore {
 /**
  * Lasting writer keys in a directory of slots.
  * @param dir One account's slots, e.g. `~/.weave/writers/<account id>`
- * @param vaultKey The account's vault key, which seals each key at rest
+ * @param localKey The account's local key (`deriveLocalKey`), which seals each key at rest
+ * @param did The account's DID, which each sealed key is bound to
  */
-export function fileWriterKeys(dir: string, vaultKey: CryptoKey): WriterKeySource {
+export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): WriterKeySource {
   return Object.freeze({
     async claim(): Promise<ClaimedWriter | null> {
       for (let slot = 0; slot < MAX_SLOTS; slot += 1) {
@@ -137,7 +152,7 @@ export function fileWriterKeys(dir: string, vaultKey: CryptoKey): WriterKeySourc
         if (!(await lock(lockFile))) continue;
         try {
           return Object.freeze({
-            keys: await keyPair(path.join(where, 'key.sealed'), vaultKey),
+            keys: await keyPair(path.join(where, 'key.sealed'), { localKey, did, slot }),
             heads: headStore(path.join(where, 'heads')),
             async release() {
               await rm(lockFile, { force: true });

@@ -11,7 +11,7 @@ import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import type { StandardSchemaV1 } from '../src/types.js';
 import * as z from 'zod';
 import { isRecord } from '../src/utils/guards.js';
@@ -319,7 +319,7 @@ describe('the account registry', () => {
     const node = await createNode({
       signer,
       stores,
-      accountKey: await deriveVaultKeyBytes(seed),
+      accountKey: await deriveAccountKey(seed),
       watchIntervalMs: 0,
       network: { transports: (spaceId, sessionDid) => [hub.transport(sessionDid, spaceId)] },
     });

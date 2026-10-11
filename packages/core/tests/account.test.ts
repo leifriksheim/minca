@@ -11,7 +11,7 @@ import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
@@ -30,7 +30,7 @@ async function account(seed = generateSeed()) {
     seed,
     did: identity.did,
     signer: createLocalRootSigner(identity, manager.getProvider()),
-    accountKey: await deriveVaultKeyBytes(seed),
+    accountKey: await deriveAccountKey(seed),
   };
 }
 

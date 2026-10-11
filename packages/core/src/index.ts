@@ -68,8 +68,8 @@ export {
   wrapSeedWithPassphrase,
   CLI_PASSPHRASE_LABEL,
   unwrapSeedWithPassphrase,
-  deriveVaultKey,
-  deriveVaultKeyBytes,
+  deriveLocalKey,
+  deriveAccountKey,
   deviceWrapsFor,
   withWrap,
   PASSPHRASE_ITERATIONS,
@@ -81,9 +81,10 @@ export {
   contactKeyPair,
   contactPublicKey,
   isContactPublicKey,
-  sealFor,
-  openSealed,
 } from './identity/contact-key.js';
+export { sealEnvelope, openEnvelope, sealValue, openValue } from './identity/envelope.js';
+export type { Bound } from './identity/envelope.js';
+export { sealTo, openFrom, sealValueTo, openValueFrom } from './identity/hpke.js';
 export type { ContactKeyPair } from './identity/contact-key.js';
 export type { AccountVault, SeedWrap, DeviceWrap, PassphraseWrap } from './identity/account-vault.js';
 export type { IdentityManager, Identity } from './identity/identity-manager.js';
@@ -99,10 +100,8 @@ export {
   derivePairingChannel,
   encodePairingTicket,
   decodePairingTicket,
-  sealPairingPayload,
-  openPairingPayload,
 } from './identity/pairing.js';
-export type { PairingTicket, PairingChannel } from './identity/pairing.js';
+export type { PairingTicket, PairingChannel, PairingSide } from './identity/pairing.js';
 export {
   issueUCAN,
   parseUCAN,
@@ -287,10 +286,16 @@ export type { CapabilityGate, CapabilityGateConfig } from './validation/capabili
 export { createVersionCheck } from './validation/check-version.js';
 
 // Phase 7: Encryption & Privacy
-export { generateSpaceKey, encryptVersion, decryptVersion } from './privacy/space-encryption.js';
-export { sealDirect, openDirect, directContext, directRecipients, MAX_DIRECT_TO } from './privacy/direct.js';
+export {
+  generateSpaceKey,
+  spaceKeyFromRaw,
+  sealBody,
+  openBody,
+  isSealedBody,
+} from './privacy/space-encryption.js';
+export { sealDirect, openDirect, directBound, directRecipients, MAX_DIRECT_TO } from './privacy/direct.js';
 export type { DirectBody, DirectContent } from './privacy/direct.js';
-export type { SpaceKey, EncryptedVersion, EncryptedVersionBody } from './privacy/space-encryption.js';
+export type { SpaceKey, EncryptedVersionBody, BodyPlace } from './privacy/space-encryption.js';
 
 // Utilities
 export {

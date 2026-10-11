@@ -20,7 +20,9 @@
  * the remover never saw it — is passed over when reading, and the version
  * before it counts again, where the store still has one.
  */
-import { contactKeyPair, isContactPublicKey, openSealed, sealFor } from '../identity/contact-key.js';
+import { contactKeyPair, isContactPublicKey } from '../identity/contact-key.js';
+import { openValueFrom, sealValueTo } from '../identity/hpke.js';
+import { openValue, sealValue } from '../identity/envelope.js';
 import type { Version, CryptoProvider, StorageAdapter } from '../types.js';
 import type { Signer } from '../schema/signer.js';
 import type { SchemaEngine } from '../schema/schema-engine.js';
@@ -53,12 +55,12 @@ import type { Writers } from './writers.js';
 import { breaksCollectionLine, breaksLine, checkFork, forkProof } from '../records/fork.js';
 import { knownKind, readWarrant, type Warrant, type WarrantKind } from '../records/warrant.js';
 import {
-  encryptVersion,
-  decryptVersion,
+  EARLIER_KEYS_LABEL,
   generateSpaceKey,
-  openWith,
-  sealWith,
-  spaceKeyBytes,
+  isSealedBody,
+  MEMBERSHIP_LABEL,
+  openBody as openSealedBody,
+  sealBody,
   spaceKeyFromRaw,
   type SpaceKey,
 } from '../privacy/space-encryption.js';
@@ -78,10 +80,9 @@ import {
   SPACE_RELAYS_RECORD,
   SPACE_KEEPERS_RECORD,
   memberKeyRecordKey,
-  boxContext,
+  BOX_LABEL,
+  boxBound,
   boxKey,
-  earlierKeysContext,
-  membershipContext,
   deriveInviteKey,
   deriveReadKey,
   generateInviteSecret,
@@ -423,9 +424,7 @@ const UNJUDGED: ChecksVerdict = Object.freeze({ passes: null });
 
 const storable = (standing: Standing): boolean => standing.ok || !!standing.withdrawn;
 
-function looksEncrypted(body: unknown): boolean {
-  return isRecord(body) && typeof body.ciphertext === 'string' && typeof body.iv === 'string';
-}
+const looksEncrypted = isSealedBody;
 
 /** The key a sealed body names, as the keyring is looked up by */
 function sealedKeyId(body: unknown): string {
@@ -618,12 +617,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const sealedWith = keyring.get(sealedKeyId(version.body));
     if (!sealedWith) return { body: null, links: [], encrypted: true };
     try {
-      const { ciphertext, iv, keyId } = isRecord(version.body) ? version.body : {};
-      // A key id that is not a string can't be the one found above, so it never opens.
-      if (typeof ciphertext !== 'string' || typeof iv !== 'string' || typeof keyId !== 'string')
-        return { body: null, links: [], encrypted: true };
-      const content = (await decryptVersion({ ...version, body: { ciphertext, iv, keyId } }, sealedWith))
-        .body;
+      // Bound to this record: a body copied from another record, space or collection does not open.
+      const content = await openSealedBody(version.body, sealedWith, {
+        space: space.id,
+        collection: version.collection,
+        key: version.key,
+      });
       const opened = isRecord(content) ? content : null;
       const sealedLinks = opened?.links ?? [];
       const links = isLinks(sealedLinks) ? sealedLinks : [];
@@ -1000,7 +999,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!found) {
       const held = keyId === null ? null : keyring.get(keyId);
       if (keyId !== null && !held) return null;
-      found = topicKey(held ? { spaceKey: held.key } : { spaceId: space.id });
+      found = topicKey(held ? { spaceKey: held.raw } : { spaceId: space.id });
       topicKeys.set(name, found);
     }
     return found;
@@ -1911,10 +1910,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           const epoch = epochs.find((known) => known.keyId === body.keyId);
           if (!epoch || keyring.has(epoch.keyId)) continue;
           opened.add(version.id);
-          const content = await openSealed(
-            memberPair.privateKey,
+          const content = await openValueFrom(
+            memberPair,
+            BOX_LABEL,
+            boxBound(space.id, epoch.keyId, deps.rootDid),
             body.sealed,
-            boxContext(space.id, epoch.keyId, deps.rootDid),
           );
           if (!isRecord(content) || typeof content.key !== 'string') continue;
           // Whoever sealed it, it is the key the history names or it is nothing.
@@ -1941,7 +1941,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           const holder = keyring.get(body.keyId);
           if (!holder) continue;
           opened.add(version.id);
-          const earlier = await openWith(holder, body.earlier, earlierKeysContext(space.id, holder.id));
+          const earlier = await openValue(
+            holder.seal,
+            EARLIER_KEYS_LABEL,
+            { space: space.id, keyId: holder.id },
+            body.earlier,
+          );
           if (!isStringList(earlier)) continue;
           for (const raw of earlier.slice(0, 1000)) {
             const found = await spaceKeyFromRaw(base64UrlDecode(raw)).catch(() => null);
@@ -1966,13 +1971,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!currentKey(history.current))
       throw new Error(`This device doesn't hold the current key of "${space.name}" yet`);
     const next = await generateSpaceKey();
-    const earlier = await Promise.all(
-      [...keyring.values()].map(async (held) => base64UrlEncode(await spaceKeyBytes(held))),
-    );
+    const earlier = [...keyring.values()].map((held) => base64UrlEncode(held.raw));
     const body = {
       keyId: next.id,
       readKey: (await deriveReadKey(next, provider)).did,
-      earlier: await sealWith(next, earlier, earlierKeysContext(space.id, next.id)),
+      earlier: await sealValue(next.seal, EARLIER_KEYS_LABEL, { space: space.id, keyId: next.id }, earlier),
     };
     keyring.set(next.id, next);
     try {
@@ -2012,11 +2015,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
     }
     const memberKeys = await memberKeyMap();
-    const raw = base64UrlEncode(await spaceKeyBytes(key));
+    const raw = base64UrlEncode(key.raw);
     for (const did of [...readers(state)].sort()) {
       const publicKey = memberKeys.get(did);
       if (boxed.has(did) || !publicKey) continue;
-      const sealed = await sealFor(publicKey, { key: raw }, boxContext(space.id, epoch.keyId, did));
+      const sealed = await sealValueTo(publicKey, BOX_LABEL, boxBound(space.id, epoch.keyId, did), {
+        key: raw,
+      });
       await upsert(BOX_COLLECTION, await boxKey(epoch.keyId, did, deps.rootDid), {
         keyId: epoch.keyId,
         to: did,
@@ -2108,7 +2113,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           },
           async membership() {
             const held = newestKey((await access()).history.current);
-            return held ? sealWith(held, session.proof(), membershipContext(space.id)) : null;
+            return held ? sealValue(held.seal, MEMBERSHIP_LABEL, { space: space.id }, session.proof()) : null;
           },
           async admits(peerDid: string, readKey: string, membership: unknown) {
             const { history } = await access();
@@ -2117,7 +2122,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
             if (!held) return false;
             const { account } = await accountOf(
               peerDid,
-              await openWith(held, membership, membershipContext(space.id)),
+              await openValue(held.seal, MEMBERSHIP_LABEL, { space: space.id }, membership),
             );
             return account !== null && readers(history.current).has(account);
           },
@@ -2126,7 +2131,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
             const epoch = history.current.keys.find((known) => known.readKey === readKey);
             const held = epoch ? keyring.get(epoch.keyId) : undefined;
             if (!held) return false;
-            const note = await openWith(held, membership, membershipContext(space.id)).catch(() => null);
+            const note = await openValue(held.seal, MEMBERSHIP_LABEL, { space: space.id }, membership);
             const { account } = await accountOf(peerDid, note);
             return account !== null && (await formerMembers({ untilNewKey: true })).has(account);
           },
@@ -2765,20 +2770,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         }
         // Body and links sealed together: a relay learns neither.
         const content = links.length ? { body, links } : { body };
-        const sealed = await encryptVersion(
-          {
-            id: '',
-            author: '',
-            collection,
-            createdAt: '',
-            body: content,
-            signature: '',
-            key: version.key,
-            seq: version.seq,
-          },
-          key,
-        );
-        payload = sealed.body;
+        payload = await sealBody(content, key, { space: space.id, collection, key: version.key });
       }
       // Worked out from the body, with the key it is sealed with: what every reader will check.
       const topics = collection.startsWith('sys.')

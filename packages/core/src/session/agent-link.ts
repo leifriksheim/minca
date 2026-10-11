@@ -14,10 +14,9 @@ import { didOf } from '../identity/did.js';
 import { parseUCAN } from '../identity/ucan.js';
 import { isAgentNote } from '../identity/agent-note.js';
 import { hkdfAesKey } from '../identity/hkdf.js';
-import { openPairingPayload, sealPairingPayload } from '../identity/pairing.js';
 import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { cidFromBytes } from '../utils/hash.js';
-import { isObject } from '../utils/guards.js';
+import { bufferSource, isObject } from '../utils/guards.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import { checkGrant, recordsOnlyGrant, type Grant } from './connect.js';
 
@@ -25,6 +24,27 @@ const CODE_PREFIX = 'wv_';
 const SECRET_BYTES = 16;
 const ROOM_PREFIX = utf8Encode('weave-agent-link-room-v1');
 const KEY_INFO = utf8Encode('weave-agent-link-key-v1');
+
+/** AES-GCM, a 12-byte nonce then the ciphertext: this link's own format, until it is replaced */
+async function sealPayload(plaintext: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const sealed = await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    bufferSource(plaintext),
+  );
+  return concatBytes(iv, new Uint8Array(sealed));
+}
+
+async function openPayload(sealed: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
+  if (sealed.length <= 12) throw new Error('Too short');
+  const plain = await globalThis.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: bufferSource(sealed.subarray(0, 12)) },
+    key,
+    bufferSource(sealed.subarray(12)),
+  );
+  return new Uint8Array(plain);
+}
 
 /** Messages on the link, each sealed */
 const ASK = 'agent-link:ask';
@@ -110,14 +130,14 @@ async function sealedRoom(params: {
       timer = globalThis.setTimeout(() => finish(onTimeout), ms);
     },
     send: async (to: string, type: string, value: unknown): Promise<void> => {
-      const sealed = await sealPairingPayload(utf8Encode(JSON.stringify(value)), key);
+      const sealed = await sealPayload(utf8Encode(JSON.stringify(value)), key);
       net.send(to, { type, from: params.did, payload: Array.from(sealed) });
     },
     /** What a message says, or null when it was not sealed with this secret */
     open: async (message: NetworkMessage): Promise<unknown> => {
       if (!Array.isArray(message.payload)) return null;
       try {
-        return JSON.parse(utf8Decode(await openPairingPayload(new Uint8Array(message.payload), key)));
+        return JSON.parse(utf8Decode(await openPayload(new Uint8Array(message.payload), key)));
       } catch {
         return null;
       }

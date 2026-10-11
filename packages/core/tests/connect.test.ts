@@ -31,7 +31,7 @@ import { createNode } from '../src/node/node.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { until } from './helpers/until.js';
 import { watchNotifications, type NotifyMatch } from '../src/node/watch-notifications.js';
@@ -388,7 +388,7 @@ describe('giving an app the contacts', () => {
     const bob = await createNode({
       signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
       stores: memoryStores(),
-      accountKey: await deriveVaultKeyBytes(seed),
+      accountKey: await deriveAccountKey(seed),
       contactKey: await deriveContactKeyBytes(seed),
       watchIntervalMs: 0,
       network: { transports: (spaceId, sessionDid) => [hub.transport(sessionDid, spaceId)] },
@@ -776,7 +776,7 @@ describe('an app showing its own notifications', () => {
     const bob = await createNode({
       signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
       stores: memoryStores(),
-      accountKey: await deriveVaultKeyBytes(seed),
+      accountKey: await deriveAccountKey(seed),
       watchIntervalMs: 0,
       network: { transports: (spaceId, sessionDid) => [hub.transport(sessionDid, spaceId)] },
     });

@@ -19,7 +19,7 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
 import { hold, letGo } from './helpers/hold.js';
 import { stored } from './helpers/stored.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { contactPublicKey, deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { profileKey } from '../src/node/space-runtime.js';
 import { contactRequest } from '../src/schemas/contacts.js';
@@ -245,7 +245,7 @@ describe('attacks on contacts', () => {
     const node = await createNode({
       signer: createLocalRootSigner(me, manager.getProvider()),
       stores,
-      accountKey: await deriveVaultKeyBytes(seed),
+      accountKey: await deriveAccountKey(seed),
       contactKey: await deriveContactKeyBytes(seed),
       watchIntervalMs: 0,
       network: { transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)] },

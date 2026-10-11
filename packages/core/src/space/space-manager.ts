@@ -141,25 +141,18 @@ interface StoredKey {
   readonly version: number;
 }
 
-async function exportKey(key: SpaceKey): Promise<StoredKey> {
-  const raw = await globalThis.crypto.subtle.exportKey('raw', key.key);
+function exportKey(key: SpaceKey): StoredKey {
   return {
     id: key.id,
-    raw: base64UrlEncode(new Uint8Array(raw)),
+    raw: base64UrlEncode(key.raw),
     createdAt: key.createdAt,
     version: key.version,
   };
 }
 
-async function importKey(stored: StoredKey): Promise<SpaceKey> {
-  const key = await globalThis.crypto.subtle.importKey(
-    'raw',
-    base64UrlDecode(stored.raw),
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt'],
-  );
-  return Object.freeze({ id: stored.id, key, createdAt: stored.createdAt, version: stored.version });
+/** The id is derived again from the bytes, never taken from what was stored */
+function importKey(stored: StoredKey): Promise<SpaceKey> {
+  return spaceKeyFromRaw(base64UrlDecode(stored.raw), stored.createdAt);
 }
 
 /** Creates a space manager backed by a storage adapter. */
@@ -191,7 +184,7 @@ export function createSpaceManager(
     keys: ReadonlyArray<SpaceKey>,
     current: string,
   ): Promise<void> {
-    const stored: StoredKeyring = { keys: await Promise.all(keys.map(exportKey)), current };
+    const stored: StoredKeyring = { keys: keys.map(exportKey), current };
     await adapter.put(`${KEY_PREFIX}${spaceId}`, utf8Encode(JSON.stringify(stored)));
   }
 
@@ -301,7 +294,7 @@ export function createSpaceManager(
       if (parsed.key && parsed.space.visibility !== 'private')
         throw new Error('That invite carries a key for a space that has none.');
       // The key may be the space's first or a later one — the space's key
-      // changed since. Its id is its hash, so it is only ever the key the
+      // changed since. Its id is derived from it, so it is only ever the key the
       // history names or one that opens nothing.
       const key = parsed.key
         ? await spaceKeyFromRaw(base64UrlDecode(parsed.key), parsed.space.createdAt)
@@ -376,7 +369,7 @@ export async function encodeSpaceInvite(
   const invite: SpaceInvite = {
     space: record.space,
     invitedBy,
-    ...(record.key ? { key: (await exportKey(record.key)).raw } : {}),
+    ...(record.key ? { key: exportKey(record.key).raw } : {}),
     ...(options.secret ? { invite: base64UrlEncode(options.secret) } : {}),
     ...(options.secret && options.role ? { role: options.role } : {}),
     ...((options.relays ?? record.relays)?.length ? { relays: [...(options.relays ?? record.relays)!] } : {}),

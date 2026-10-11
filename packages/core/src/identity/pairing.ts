@@ -12,20 +12,25 @@ import { cidFromBytes, sha256 } from '../utils/hash.js';
 import { protocolError } from '../utils/errors.js';
 import { bufferSource, isRecord } from '../utils/guards.js';
 import { hkdf, hkdfAesKey } from './hkdf.js';
-import { aesOpen, aesSeal, NONCE_BYTES } from './aes.js';
+import { openEnvelope, sealEnvelope } from './envelope.js';
 
 /** Bytes of a pairing secret */
 const PAIRING_SECRET_BYTES = 16;
 /** Bytes of an uncompressed P-256 point, the form ephemeral keys travel in */
 const POINT_BYTES = 65;
 
-const PAIRING_ROOM_LABEL = utf8Encode('weave/pairing-room/v2');
-const PAIRING_KEY_LABEL = 'weave/pairing-key/v2';
-const PAIRING_CODE_LABEL = 'weave/pairing-code/v2';
+const PAIRING_ROOM_LABEL = utf8Encode('weave/pairing-room/v1');
+const PAIRING_KEY_LABEL = 'weave/pairing-key/v1';
+const PAIRING_CODE_LABEL = 'weave/pairing-code/v1';
+/** The envelope label of a sealed pairing message; bound to `{ type, seq }` */
+const PAIRING_MESSAGE_LABEL = 'weave/pairing/v1';
+
+/** Which device: the one offering the account, or the phone taking it */
+export type PairingSide = 'offer' | 'phone';
 
 /** What the QR code carries */
 export interface PairingTicket {
-  readonly v: 2;
+  readonly v: 1;
   /** The one-time secret, base64url. Says nothing about the account. */
   readonly secret: string;
   /** Where to meet. Must be an address the phone can actually reach. */
@@ -65,11 +70,19 @@ export async function pairingCommitment(point: Uint8Array): Promise<string> {
   return base64UrlEncode(await sha256(point));
 }
 
-/** What both sides end up with: the key the handover is sealed with, and the code people compare */
+/**
+ * What both sides end up with: the code people compare, and the sealed
+ * channel. Each direction has its own key, and each message is bound to its
+ * type and to its place in its direction (`seq`, from 0), so a message sent
+ * back to its sender, relabelled, replayed or reordered does not open.
+ */
 export interface PairingChannel {
-  readonly key: CryptoKey;
   /** Six digits */
   readonly code: string;
+  /** Seals this side's next message: base64url of an envelope */
+  seal(type: string, plaintext: Uint8Array): Promise<string>;
+  /** Opens the other side's next message; null for anything else, which leaves the count where it was */
+  open(type: string, sealed: unknown): Promise<Uint8Array | null>;
 }
 
 const notAKey = () => protocolError('PAIRING_TICKET_UNREADABLE', 'That device sent a key that is not one.');
@@ -88,8 +101,8 @@ export async function derivePairingChannel(params: {
   readonly offer: Uint8Array;
   /** The phone's point */
   readonly phone: Uint8Array;
-  /** The other side's point: `offer` or `phone` */
-  readonly peer: Uint8Array;
+  /** Which of the two this side is */
+  readonly side: PairingSide;
 }): Promise<PairingChannel> {
   for (const point of [params.offer, params.phone]) {
     if (point.length !== POINT_BYTES || point[0] !== 0x04) throw notAKey();
@@ -98,7 +111,7 @@ export async function derivePairingChannel(params: {
   try {
     const peer = await globalThis.crypto.subtle.importKey(
       'raw',
-      bufferSource(params.peer),
+      bufferSource(params.side === 'offer' ? params.phone : params.offer),
       { name: 'ECDH', namedCurve: 'P-256' },
       false,
       [],
@@ -111,10 +124,40 @@ export async function derivePairingChannel(params: {
   }
   const ikm = concatBytes(params.secret, shared);
   const transcript = `|${base64UrlEncode(params.offer)}|${base64UrlEncode(params.phone)}`;
-  const key = await hkdfAesKey(ikm, utf8Encode(PAIRING_KEY_LABEL + transcript));
+  const other: PairingSide = params.side === 'offer' ? 'phone' : 'offer';
+  const sendKey = await hkdfAesKey(ikm, utf8Encode(`${PAIRING_KEY_LABEL}|${params.side}${transcript}`));
+  const receiveKey = await hkdfAesKey(ikm, utf8Encode(`${PAIRING_KEY_LABEL}|${other}${transcript}`));
   const digits = await hkdf(ikm, utf8Encode(PAIRING_CODE_LABEL + transcript), 4);
   const value = new DataView(digits.buffer, digits.byteOffset, 4).getUint32(0) % 1_000_000;
-  return { key, code: String(value).padStart(6, '0') };
+
+  let sent = 0;
+  let received = 0;
+  // One open at a time, so two messages arriving together are each tried at the count they should have.
+  let opening: Promise<unknown> = Promise.resolve();
+  return Object.freeze({
+    code: String(value).padStart(6, '0'),
+    async seal(type: string, plaintext: Uint8Array): Promise<string> {
+      const seq = sent;
+      sent += 1;
+      return base64UrlEncode(await sealEnvelope(sendKey, PAIRING_MESSAGE_LABEL, { type, seq }, plaintext));
+    },
+    open(type: string, sealed: unknown): Promise<Uint8Array | null> {
+      const result = opening.then(async () => {
+        if (typeof sealed !== 'string' || sealed.length > 1_000_000) return null;
+        let bytes: Uint8Array;
+        try {
+          bytes = base64UrlDecode(sealed);
+        } catch {
+          return null;
+        }
+        const plain = await openEnvelope(receiveKey, PAIRING_MESSAGE_LABEL, { type, seq: received }, bytes);
+        if (plain) received += 1;
+        return plain;
+      });
+      opening = result;
+      return result;
+    },
+  });
 }
 
 /**
@@ -130,7 +173,7 @@ export function encodePairingTicket(ticket: PairingTicket): string {
 function isPairingTicket(value: unknown): value is PairingTicket {
   return (
     isRecord(value) &&
-    value.v === 2 &&
+    value.v === 1 &&
     typeof value.secret === 'string' &&
     typeof value.relay === 'string' &&
     base64UrlDecode(value.secret).length === PAIRING_SECRET_BYTES
@@ -149,23 +192,5 @@ export function decodePairingTicket(encoded: string): PairingTicket {
       'That pairing link could not be read.',
       'It may have been truncated, or made by an older version. Show a new code.',
     );
-  }
-}
-
-/** Encrypts a handover message: nonce, then ciphertext */
-export async function sealPairingPayload(plaintext: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
-  return aesSeal(key, plaintext);
-}
-
-/** Decrypts a handover message */
-export async function openPairingPayload(sealed: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
-  if (sealed.length <= NONCE_BYTES) {
-    throw protocolError('PAIRING_TICKET_UNREADABLE', 'That handover was too short to be real.');
-  }
-  try {
-    return await aesOpen(key, sealed);
-  } catch {
-    // Someone else in the room, or a handover from another exchange.
-    throw protocolError('PAIRING_TICKET_UNREADABLE', 'That handover was not meant for this phone.');
   }
 }

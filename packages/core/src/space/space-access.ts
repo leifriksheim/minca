@@ -97,8 +97,7 @@ export async function deriveReadKey(spaceKey: SpaceKey, provider: CryptoProvider
  * what a pass hands a node that carries a space it cannot read (`space/pass.ts`).
  */
 export async function deriveReadSeed(spaceKey: SpaceKey): Promise<Uint8Array> {
-  const raw = new Uint8Array(await globalThis.crypto.subtle.exportKey('raw', spaceKey.key));
-  return expandSecret(raw, READ_INFO);
+  return expandSecret(spaceKey.raw, READ_INFO);
 }
 
 /** The read key pair, from its seed */
@@ -202,11 +201,6 @@ export const MEMBER_KEY_COLLECTION = 'sys.memberkey';
 export const memberKeyRecordKey = (did: string) => hashedKey('memberkey', did);
 /** Where the sealed copies of a changed space key live, one per member: `{ keyId, to, sealed }` */
 export const BOX_COLLECTION = 'sys.box';
-/** What the earlier keys a key record carries are bound to */
-export const earlierKeysContext = (spaceId: string, keyId: string) =>
-  `weave/space-earlier-keys/v1|${spaceId}|${keyId}`;
-/** What a reader's note, sealed for a connection, is bound to (`network/peer-auth.ts`) */
-export const membershipContext = (spaceId: string) => `weave/space-membership/v1|${spaceId}`;
 /** The one record key the space's relay list is a version of */
 export const SPACE_RELAYS_RECORD = 'relays:space';
 /** The one record key the space's list of keepers is a version of */
@@ -215,9 +209,10 @@ export const SPACE_KEEPERS_RECORD = 'keepers:space';
 export const SPACE_KEY_RECORD = 'key:space';
 /** The key of a sealed copy of a space key: one per key, recipient and sender */
 export const boxKey = (keyId: string, to: string, from: string) => hashedKey('box', `${keyId}|${to}|${from}`);
+/** The HPKE label a box is sealed under (spec 01 §9.3; spec 03 §9.4) */
+export const BOX_LABEL = 'weave/space-key-box/v1';
 /** What a box is bound to, so one moved to another space, key or person doesn't open */
-export const boxContext = (spaceId: string, keyId: string, to: string) =>
-  `weave/space-key-box/v1|${spaceId}|${keyId}|${to}`;
+export const boxBound = (space: string, keyId: string, to: string) => ({ space, keyId, to });
 
 const inviteLabel = (spaceId: string, did: string) => utf8Encode(`${INVITE_INFO}|${spaceId}|${did}`);
 
