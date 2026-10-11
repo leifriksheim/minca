@@ -246,30 +246,15 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 15` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 1` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
 > Rationale: two versions that cannot reconcile should fail loudly, not leave
 > a quiet partial sync.
->
-> Version 5 came with the envelope of [02 §3.2](02-records.md): a version
-> signs its body's hash, not its body, so a peer speaking 4 would refuse every
-> version a peer speaking 5 sends. Protocol 6 renamed `push-update`'s
-> `expression` member to `version`. Protocol 7 came with writers' logs
-> ([02 §4.10](02-records.md)): every version in a space carries `log`, and a
-> peer speaking 7 refuses every version a peer speaking 6 writes. Protocol 8
-> added each version's place in its collection's line, `log.c`. Protocol 9
-> keys warrants by the offending version and their writer: a peer
-> speaking 8 would judge every warrant a peer speaking 9 writes false, and
-> flag its honest writer. Protocol 10 made warrants a standard collection,
-> `std.warrant`, stored like any record: a peer speaking 9 refuses them.
-> Protocol 11 replaced keep lists with cutoffs, made revokes name a key, and
-> stopped dropped changes being heads (03 §3.2, §6.3, §6.4): peers judge
-> records differently across it.
-> Protocol 15 stopped peers judging collection checks (02 §7.6): a peer
-> speaking 14 refuses a version that fails them, which a peer speaking 15
-> stores and syncs, so the two would never converge.
+
+Before v1 the protocol makes clean breaks and keeps no history of earlier
+drafts.
 
 Ids below are version ids (strings, §2). Byte strings are `base64url`.
 
@@ -288,7 +273,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 15,
+  "v": 1,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -1148,7 +1133,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 15                           | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 1                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

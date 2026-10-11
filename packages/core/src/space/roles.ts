@@ -591,7 +591,7 @@ function change(event: AccessEvent, state: MutableState): void {
   }
 }
 
-// ─── The convergent replay (spec/drafts/convergent-access.md) ──────────
+// ─── The convergent replay (spec/03-spaces.md §4) ──────────
 //
 // No order decides anything. A change is allowed when its author had the
 // power in the state its own view gives (the changes it saw that were
