@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 
 import type { LiveMessage, P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
+import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { utf8Encode } from '../src/utils/encoding.js';
@@ -124,6 +126,46 @@ describe('live messages', () => {
     assert.equal(heard[0]!.from, null, 'the note was made out to Alice’s key, not Mallory’s');
     assert.deepEqual((await alice.node.spaces.status(space)).accounts, {});
     wire.closeAll();
+  });
+
+  test('recordsOnly marks a note that writes records here and nothing more, not one that only reads', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Open', ...team, visibility: 'public' });
+    await alice.node.spaces.hold(space);
+    const heard = inbox(alice.node);
+    const provider = alice.manager.getProvider();
+
+    for (const [can, recordsOnly] of [
+      ['record/read', false],
+      ['record/*', true],
+      ['*', false],
+    ] as const) {
+      const pair = await provider.generateKeyPair();
+      const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
+      const note = await createLocalRootSigner(alice.me, provider).delegate({
+        audience: did,
+        capabilities: [{ with: '*', can }],
+        expiration: Math.floor(Date.now() / 1000) + 3600,
+      });
+      const wire = hub.transport(did, space);
+      await wire.connect?.();
+      await until(
+        async () => (await alice.node.spaces.status(space)).peers.includes(did),
+        4000,
+        `the ${can} key to connect`,
+      );
+      const say = (type: string, payload: unknown) =>
+        wire.send(alice.node.sessionDid, utf8Encode(JSON.stringify({ type, from: did, payload })));
+      say('who', { note: note.encoded });
+      say('live', { type: 'hello', can });
+      await until(() => heard.some((m) => m.peer === did), 4000, `the ${can} message`);
+      const message = heard.find((m) => m.peer === did)!;
+      assert.equal(message.from, alice.node.did, can);
+      // A read-only app may take part in calls; a key given records to write here may not (docs/calls.md).
+      assert.equal(message.recordsOnly, recordsOnly, can);
+      wire.closeAll();
+    }
   });
 
   test('a peer that floods live messages is cut off after its allowance', async () => {

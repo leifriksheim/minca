@@ -253,26 +253,41 @@ export function grantCapabilities(
 /** What a key signs to show it is the one a connect request names */
 const KEY_PROOF = 'weave/connect-key/v1';
 
-/** What a key agrees to in a connect request: how it reached the app, and how much it asks for */
-export interface KeyTerms {
-  /** `popup`: the app's own key; `code`: a program's, handed over a connect code */
-  readonly via: 'popup' | 'code';
-  readonly recordsOnly: boolean;
-}
+/**
+ * What a key agrees to in a connect request: how it reached the app, how much
+ * it asks for, and, for a program's key handed over a code, the app it went
+ * through.
+ */
+export type KeyTerms =
+  /** The app's own key */
+  | { readonly via: 'popup'; readonly recordsOnly: boolean }
+  /** A program's key, handed to the app at `origin` over a connect code */
+  | { readonly via: 'code'; readonly recordsOnly: boolean; readonly origin: string };
 
 /**
  * The statement, terms included: a proof a program hands an app over a code
  * can't ask for the app's own connection, nor for more than records when it
- * asked for records only.
+ * asked for records only, nor be used from another app's origin.
  */
 const keyStatement = (audience: string, terms: KeyTerms) =>
-  utf8Encode(canonicalize({ audience, proof: KEY_PROOF, recordsOnly: terms.recordsOnly, via: terms.via }));
+  utf8Encode(
+    canonicalize({
+      audience,
+      ...(terms.via === 'code' ? { origin: terms.origin } : {}),
+      proof: KEY_PROOF,
+      recordsOnly: terms.recordsOnly,
+      via: terms.via,
+    }),
+  );
 
-/** The terms a request names */
-export const requestTerms = (request: Pick<ConnectRequest, 'via' | 'recordsOnly'>): KeyTerms => ({
-  via: request.via === 'code' ? 'code' : 'popup',
-  recordsOnly: request.recordsOnly === true,
-});
+/** The terms a request names, as the home received it from `origin` */
+export const requestTerms = (
+  request: Pick<ConnectRequest, 'via' | 'recordsOnly'>,
+  origin: string,
+): KeyTerms =>
+  request.via === 'code'
+    ? { via: 'code', recordsOnly: request.recordsOnly === true, origin }
+    : { via: 'popup', recordsOnly: request.recordsOnly === true };
 
 /** A key's proof that it holds itself, for a connect request with these terms (`ConnectRequest.proof`) */
 export async function keyProof(
@@ -340,7 +355,7 @@ export interface ConnectOptions {
    * program's that reached the app over a connect code (`offerConnectCode`).
    */
   readonly audience?: string;
-  /** With `audience`: that key's {@link keyProof} with `via: code`, which only its holder can make */
+  /** With `audience`: that key's {@link keyProof} with `via: code` and this app's origin, which only its holder can make */
   readonly audienceProof?: string;
   /** How long to wait for the person. Default 10 minutes. */
   readonly timeoutMs?: number;

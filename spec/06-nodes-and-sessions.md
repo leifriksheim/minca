@@ -204,20 +204,20 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 
 `ConnectRequest`:
 
-| Field          | Type                            | Meaning                                                                                                                                                                                                                                                                                                                         |
-| -------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v`            | `1`                             |                                                                                                                                                                                                                                                                                                                                 |
-| `audience`     | string                          | The app's key, `did:key:…`, or with `via: code` the program's (§3). The note is made out to it.                                                                                                                                                                                                                                 |
-| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"audience":<audience>,"proof":"weave/connect-key/v1","recordsOnly":<recordsOnly>,"via":<via>}`, where `recordsOnly` is the request's (`false` when absent) and `via` is `"code"` with `via: code` and `"popup"` otherwise (below). |
-| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                                                                                                                                                                                |
-| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                                                                                                                                                                                          |
-| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                                                                                                                                                                                |
-| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.                                                                                                                                                                         |
-| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                                                                                                                                                                                         |
-| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                                                                                                                                                                                           |
-| `recordsOnly`  | boolean, optional               | A note that grants records only (`record/*` to write, `record/read` to read; [01](01-identity.md) §8).                                                                                                                                                                                                                          |
-| `via`          | `code`, optional                | The audience is not the app's own key but a program's that reached the app over a connect code (§3).                                                                                                                                                                                                                            |
-| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                                                                                                     |
+| Field          | Type                            | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `v`            | `1`                             |                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `audience`     | string                          | The app's key, `did:key:…`, or with `via: code` the program's (§3). The note is made out to it.                                                                                                                                                                                                                                                                                                                          |
+| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"audience":<audience>,"proof":"weave/connect-key/v1","recordsOnly":<recordsOnly>,"via":<via>}`, where `recordsOnly` is the request's (`false` when absent) and `via` is `"code"` with `via: code` and `"popup"` otherwise; with `via: code` it also has `"origin":<origin>`, the origin of the app it went through (below). |
+| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                                                                                                                                                                                                                                                                         |
+| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                                                                                                                                                                                                                                                                                   |
+| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                                                                                                                                                                                                                                                                         |
+| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.                                                                                                                                                                                                                                                                  |
+| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                                                                                                                                                                                                                                                                                    |
+| `recordsOnly`  | boolean, optional               | A note that grants records only (`record/*` to write, `record/read` to read; [01](01-identity.md) §8).                                                                                                                                                                                                                                                                                                                   |
+| `via`          | `code`, optional                | The audience is not the app's own key but a program's that reached the app over a connect code (§3).                                                                                                                                                                                                                                                                                                                     |
+| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                                                                                                                                                                                              |
 
 A home MUST refuse a request (as in §2.3 step 4) unless: it has no member
 but those in the table; `v` is `1`; `audience` starts with `did:key:`;
@@ -254,15 +254,26 @@ The bytes a key signs for `proof`, for an app's request with the key above:
 {"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","proof":"weave/connect-key/v1","recordsOnly":false,"via":"popup"}
 ```
 
+With `via: code`, for a program's key reached through the app at
+`https://app.example`:
+
+```
+{"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","origin":"https://app.example","proof":"weave/connect-key/v1","recordsOnly":true,"via":"code"}
+```
+
 Binding `via` and `recordsOnly` means a program's proof, which it hands to
 the app it connects through (§3), can't ask for that app's own connection,
 nor for more than records when the program asked for records only. An app's
-own proof can't be passed off as a program's either.
+own proof can't be passed off as a program's either. Binding `origin` means
+the proof is no use from any other app: the home checks it against the
+origin the browser reports for the request (§2.3), never one the request
+names.
 
 ### 2.5 The grant
 
 A home MUST refuse a request whose `proof` does not verify with the
-`audience` key, whose `audience` is the home's own session key, or whose
+`audience` key over the statement of §2.4 (with `via: code`, naming the
+origin the request came from), whose `audience` is the home's own session key, or whose
 `audience` another connection of a different origin, or a different `via`,
 already holds. Disconnecting revokes the audience key (§2.10), so a request
 must never be able to name a key its sender doesn't hold.
@@ -395,7 +406,8 @@ or rotates a space key; in a private space it only learns keys. With
 `scope: account` it still gets the account key, so the contact list is within
 its note to read; a home MUST NOT give it the contact key, with which it could
 open contact requests and knocks on the account's doors ([07](07-doors.md)).
-What the library also ignores from such a key (contact requests, calls) is in
+What the library also ignores from such a key (contact requests, and calls
+from a key that writes records here and nothing more) is in
 [contacts](../packages/core/docs/contacts.md) and
 [calls](../packages/core/docs/calls.md#messages).
 
@@ -583,17 +595,25 @@ _Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `
 A program with no browser of its own (a command in a terminal, a server)
 connects to an account through an app the person has open. The app shows a
 one-time code; the program is given it (`weave connect wv_…`); the two meet on
-the code's channel, the program says which key it holds and what it asks for,
-and the app asks the account home (§2) for a note made out to that key. The
-protocol does not care what the program is: it asks for what it needs, and
-gets that or less.
+the code's channel, the app says where it lives, the program says which key
+it holds and what it asks for, and the app asks the account home (§2) for a
+note made out to that key. The protocol does not care what the program is.
+What it asks for is only a request: the app chooses the terms, the person
+allows them at the home, and the program gets that or nothing.
 
-**The code.** `wv_` followed by 16 random bytes in base64url (22 characters),
-e.g. `wv_eYV4XGMvhkky6OWpPfqfRQ`. The app MUST make it with a CSPRNG for each
-offer. A reader MUST accept it anywhere in pasted text: the first match of
-`wv_([A-Za-z0-9_-]{22})` not followed by another base64url character.
+**The code.** `wv_` followed by 24 bytes in base64url (32 characters): a
+16-byte secret, then the **account fingerprint**, the first 8 bytes of
+`SHA-256(UTF-8("weave/code-account/v1") ‖ UTF-8(account DID))` for the
+account the app is signed in to. The app MUST make the secret with a CSPRNG
+for each offer. A reader MUST accept the code anywhere in pasted text: the
+first match of `wv_([A-Za-z0-9_-]{32})` not followed by another base64url
+character, decoding to 24 bytes.
 
-**The channel.** The 16 bytes are the secret of a channel of kind _connect by
+For the secret `eYV4XGMvhkky6OWpPfqfRQ` (base64url) and the account
+`did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy`, the fingerprint
+is `a4f5ba1f73ede9ce` (hex) and the code is `wv_eYV4XGMvhkky6OWpPfqfRaT1uh9z7enO`.
+
+**The channel.** The 16-byte secret is the secret of a channel of kind _connect by
 code_ ([01](01-identity.md) §15.2): room `CID(UTF-8("weave/code-room/v1") ‖ secret)`,
 keys under `weave/code-key/v1`, sealed messages under `weave/code/v1` bound to
 `{ type, seq }`. The app is the offering side, the program the joining side.
@@ -606,14 +626,15 @@ For the code above, the room is `bodq6nylbhebwd57ve5zifkt7gqnltkzfn2dpclw4wlwewc
 a point in the clear; the rest are sealed (`payload` is the base64url
 envelope of the UTF-8 JSON body).
 
-| `type`        | From    | Payload                                                                                                                                                   |
-| ------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `code:hello`  | program | `{ "key": base64url(J) }`, to each peer that connects, until a `code:heard` opens                                                                         |
-| `code:key`    | app     | `{ "key": base64url(O) }`, to each peer that said hello, until one asks                                                                                   |
-| `code:ask`    | program | sealed `{ "did": "<its key>", "proof": "<keyProof, via code>", "name": "…", "recordsOnly": <bool> }`; `did` starts `did:key:`, `name` ≤ 80, `proof` ≤ 200 |
-| `code:heard`  | app     | sealed `{}`                                                                                                                                               |
-| `code:answer` | app     | sealed `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                               |
-| `code:done`   | program | sealed `{}`                                                                                                                                               |
+| `type`        | From    | Payload                                                                                                                                                           |
+| ------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code:hello`  | program | `{ "key": base64url(J) }`, to each peer that connects, until a `code:heard` opens                                                                                 |
+| `code:key`    | app     | `{ "key": base64url(O) }`, to each peer that said hello, until one asks                                                                                           |
+| `code:app`    | app     | sealed `{ "origin": "<the app's origin>" }`, right after `code:key`; `origin` ≤ 200, a serialized origin such as `https://app.example`                            |
+| `code:ask`    | program | sealed `{ "did": "<its key>", "proof": "<keyProof, via code, origin>", "name": "…", "recordsOnly": <bool> }`; `did` starts `did:key:`, `name` ≤ 80, `proof` ≤ 200 |
+| `code:heard`  | app     | sealed `{}`                                                                                                                                                       |
+| `code:answer` | app     | sealed `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                                       |
+| `code:done`   | program | sealed `{}`                                                                                                                                                       |
 
 ```
 App                                                   Program
@@ -621,33 +642,41 @@ App                                                   Program
             ◀─────────────── peer connected ───────────────▶
                           ◀── code:hello   { key: J }
   code:key { key: O } ──▶
+  code:app sealed { origin } ──▶
                           ◀── code:ask     sealed { did, proof, name, recordsOnly }
   code:heard sealed {} ──▶
-  the person allows it; the app asks the home (§2.3) with
-  audience = did, proof, via: code, recordsOnly
+  the app decides the terms; the person allows them; the app asks
+  the home (§2.3) with audience = did, proof, via: code, recordsOnly
   code:answer sealed { grant } ──▶
                                                       checks the grant
+                                                      and the account
                           ◀── code:done    sealed {}
 ```
 
-- **The app** answers each `code:hello` with `code:key` and runs an exchange
-  with that peer (at most a few dozen), until one `code:ask` opens and reads
-  as above. That program is the one asked about, and the code is spent: the
+- **The app** answers each `code:hello` with `code:key` and `code:app`, and
+  runs an exchange with that peer (at most a few dozen), until one `code:ask`
+  opens and reads as above. That program is the one asked about, and the code is spent: the
   app MUST NOT answer another hello or ask, and MUST ignore `code:done` from
   any other peer. It sends `code:heard` at once. It sends `code:answer` with a
   grant only once the person has allowed it at the home, and MUST NOT send a
-  grant whose note is made out to another key, or, when the program asked for
-  records only, one that grants more.
+  grant whose note is made out to another key or comes from another account,
+  or, when the program asked for records only, one that grants more.
+- **The terms are the app's.** The program's ask is a request. The app
+  decides what to ask the home for, and when that is not what the program
+  asked, it denies the ask (`code:answer` with `denied`): the proof binds the
+  program's `recordsOnly`, so the home would refuse anything else.
 - **The request** the app makes is a `ConnectRequest` (§2.4) with
-  `audience` = the ask's `did`, `proof` = its `proof`, `via: "code"` and
-  `recordsOnly` = the ask's. The proof binds those terms, so the home refuses
-  the request unless the app asks for what the program did.
-- **The program** answers each `code:key` with `code:ask` on that exchange,
-  and takes the first peer whose `code:heard` opens as the app, ignoring every
-  other from then on. It MUST check a grant as an app does (§2.6): `v` is 1;
-  the note verifies; `aud` is its own key; `iss` is `grant.did`; and, when it
-  asked for records only, the note grants nothing but `record/` abilities.
-  Then it sends `code:done` and keeps the grant.
+  `audience` = the ask's `did`, `proof` = its `proof`, `via: "code"`, and the
+  `recordsOnly` the program asked for. The home checks the proof against the
+  request's origin (§2.5), so it is no use from any other app.
+- **The program** answers each `code:app` whose `origin` reads as above with
+  `code:ask` on that exchange, its proof naming that origin, and takes the
+  first peer whose `code:heard` opens as the app, ignoring every other from
+  then on. It MUST check a grant as an app does (§2.6): `v` is 1; the note
+  verifies; `aud` is its own key; `iss` is `grant.did`; and, when it asked
+  for records only, the note grants nothing but `record/` abilities. It MUST
+  also refuse a grant whose `grant.did` does not have the account
+  fingerprint the code names. Then it sends `code:done` and keeps the grant.
 
 What the reference app shows and asks for, the program's timeouts and how the
 CLI keeps its key and grant are in
@@ -663,8 +692,13 @@ CLI keeps its key and grant are in
 > direction and a count in each message mean nobody in the room can turn one
 > side's message into the other's, relabel it or repeat it. A peer that says
 > hello without the code costs the app one exchange, and spends nothing.
+> Someone else who holds the code can answer the program first and pose as
+> the app; the fingerprint means the only note they can hand it is one from
+> the account on the app's screen, which they can't sign. Eight bytes are
+> enough: they would have to find an account key whose DID matches while the
+> code is still on screen.
 
-_Source: `packages/core/src/session/connect-code.ts` (`offerConnectCode`, `connectWithCode`, `readConnectCode`), `packages/core/src/identity/channel.ts` (`CODE_CHANNEL`), `packages/core/src/session/connect.ts` (`connectToHome`, `checkGrant`, `keyProof`). Tests: `packages/core/tests/connect-code.test.ts` ("the room for a code", "the code alone does not open a recorded exchange", "a recording of the room, and the code learned later, open nothing", "a relay that relabels or repeats messages changes nothing", "a code works for one program: a second with the same code is not answered", "saying no reaches the program; a note for another key, or for more than records, is refused"), `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home")._
+_Source: `packages/core/src/session/connect-code.ts` (`offerConnectCode`, `connectWithCode`, `readConnectCode`), `packages/core/src/identity/channel.ts` (`CODE_CHANNEL`), `packages/core/src/session/connect.ts` (`connectToHome`, `checkGrant`, `keyProof`). Tests: `packages/core/tests/connect-code.test.ts` ("the room for a code", "the code alone does not open a recorded exchange", "a recording of the room, and the code learned later, open nothing", "a relay that relabels or repeats messages changes nothing", "a code works for one program: a second with the same code is not answered", "saying no reaches the program; a note for another key, account, or for more than records, is refused", "someone else holding the code who answers first, with a note from their own account, is refused"), `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home": "over a code: the program learns the app’s origin, and its proof is refused from any other"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else"), `apps/example/tests/program-terms.test.ts`._
 
 ### 3.1 Planned
 

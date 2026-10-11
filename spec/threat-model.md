@@ -226,12 +226,15 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - Where it can write the account's vault, a wrap of another account it
     plants, or a passphrase wrap it edits to fewer rounds, does not open as
     the account (01 §11.3).
-  - A program connected by code gets a note only on the terms its key
-    signed: the app it connects through can't use its proof for the app's
-    own connection, nor ask for more than records when it asked for records
-    only; and an app's own proof can't be passed off as a program's (06 §2.4,
-    §3). A note that grants records only never comes with the contact key
-    (06 §2.8).
+  - A program connected by code gets what the app it connects through asks
+    for and the person allows, never more than its key signed for: the app
+    can't use its proof for the app's own connection, nor ask for more than
+    records when it asked for records only, nor use it from another origin;
+    and an app's own proof can't be passed off as a program's (06 §2.4, §3).
+    What the program asks for is only a request: the app chooses the terms,
+    and the home shows the person a warning when a request by code asks for
+    more than records. A request with `recordsOnly` never gets the contact
+    key (06 §2.8).
   - The note carries no label a peer reads: what a version, a live message or
     a knock may do is what its note grants, whatever its `fct` says (01 §8).
 - **Does not hold yet.**
@@ -262,8 +265,14 @@ _Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect
     never learns the secret itself.
   - Someone who records a channel's room and learns its secret later still
     opens nothing (01 §15.2).
-  - A connect code serves one program: once one has asked, the app answers
-    nobody else (06 §3).
+  - On the app's side a connect code serves one program: once one has asked,
+    the app answers nobody else (06 §3).
+  - Someone else who holds the code (it is on a screen, and pasted) can
+    answer the program first and pose as the app, but the program takes a
+    note only from the account the code names (its fingerprint, 06 §3), which
+    they can't sign. Posing gets them the program's proof, which names the
+    origin they claimed and so works only from there, and denies the program
+    its connection.
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
     fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay that
@@ -273,8 +282,15 @@ _Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - Its door mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
+  - It can fill the 32 exchanges an app offering a code runs before the right
+    program arrives, with peers that say hello, so the program is never
+    answered. Denial of service only: none of them holds the code, so none
+    can ask.
+  - Someone else who holds the code can also ask before the program does,
+    posing as it. The person sees only the name it gives itself, and may
+    allow a note for its key; the real program is then never answered.
 
-_Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered")._
+_Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "someone else holding the code who answers first, with a note from their own account, is refused")._
 
 ### 3.8 Host or carrier
 

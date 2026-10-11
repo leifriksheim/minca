@@ -7,7 +7,7 @@
  * the note that lets a session key write.
  */
 import { parseUCAN } from '../identity/ucan.js';
-import { unref } from '../utils/guards.js';
+import { isObject, unref } from '../utils/guards.js';
 import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
 import type { AccountStore, AccountSummary } from '../identity/account-store.js';
@@ -232,6 +232,46 @@ export interface Connection {
   readonly via?: 'code';
   /** Present, and true, when its note grants records only */
   readonly recordsOnly?: true;
+}
+
+/** Every field a kept connection may have */
+const CONNECTION_FIELDS = new Set([
+  'origin',
+  'name',
+  'audience',
+  'access',
+  'scope',
+  'carrySpace',
+  'spaces',
+  'grantedAt',
+  'expiresAt',
+  'token',
+  'via',
+  'recordsOnly',
+]);
+
+/** Whether a kept connection has this shape, and nothing else */
+function isConnection(value: unknown): value is Connection {
+  if (!isObject(value) || !Object.keys(value).every((field) => CONNECTION_FIELDS.has(field))) return false;
+  const { origin, name, audience, access, scope, carrySpace, spaces, grantedAt, expiresAt, token, via } =
+    value;
+  return (
+    typeof origin === 'string' &&
+    (name === null || typeof name === 'string') &&
+    typeof audience === 'string' &&
+    (access === 'read' || access === 'write' || access === 'carry') &&
+    (scope === 'spaces' || scope === 'account') &&
+    (carrySpace === undefined || typeof carrySpace === 'string') &&
+    Array.isArray(spaces) &&
+    spaces.every(
+      (space) => isObject(space) && typeof space.id === 'string' && typeof space.name === 'string',
+    ) &&
+    typeof grantedAt === 'string' &&
+    typeof expiresAt === 'number' &&
+    (token === undefined || typeof token === 'string') &&
+    (via === undefined || via === 'code') &&
+    (value.recordsOnly === undefined || value.recordsOnly === true)
+  );
 }
 
 /** What the person chose on the approval screen */
@@ -580,7 +620,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
    * disconnecting later revokes it (the node's own, or another connection's).
    */
   async function audienceProblem(request: ConnectRequest, origin: string): Promise<string | null> {
-    if (!(await checkKeyProof(request.audience, request.proof, requestTerms(request))))
+    if (!(await checkKeyProof(request.audience, request.proof, requestTerms(request, origin))))
       return 'The app did not show it holds the key it named, for what it asked.';
     if (request.audience === state.session?.node.sessionDid) return 'That key is this home’s own.';
     const elsewhere = auth
@@ -846,10 +886,15 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       if (state.stage === 'unlock' && hasEverydayWay(state.entry)) afterUnlock();
     });
 
-  /** Connected apps are remembered per account, on this device; none when what is kept can't be read */
+  /**
+   * Connected apps are remembered per account, on this device; none when what
+   * is kept can't be read. One kept in another shape, such as one from before
+   * a field changed meaning, is dropped rather than read in part: its app or
+   * program connects again.
+   */
   function readConnections(account: string): Connection[] {
-    const connections = read<Connection[]>(`${prefix}.connections:${account}`);
-    return Array.isArray(connections) ? connections : [];
+    const connections = read<unknown>(`${prefix}.connections:${account}`);
+    return Array.isArray(connections) ? connections.filter(isConnection) : [];
   }
 
   function writeConnections(connections: ReadonlyArray<Connection>): void {

@@ -496,12 +496,12 @@ sender's account is established are in
 A received live message is emitted as a `message` event,
 `{ type: "message", space, from, peer, recordsOnly, message }`:
 
-| Field         | Meaning                                                                                                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `from`        | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets). |
-| `peer`        | The sending device's session DID — also where a reply to that device goes.                                                                                                                 |
-| `recordsOnly` | `true` when the sender's note grants records only in this space: it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).    |
-| `message`     | The value sent.                                                                                                                                                                            |
+| Field         | Meaning                                                                                                                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `from`        | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets).                                                                   |
+| `peer`        | The sending device's session DID — also where a reply to that device goes.                                                                                                                                                                                   |
+| `recordsOnly` | `true` when the sender's note grants writing records in this space and nothing more (`record/*`): it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)). `false` for a note that only reads. |
+| `message`     | The value sent.                                                                                                                                                                                                                                              |
 
 `spaces.status(id)` returns `SpaceStatus`:
 

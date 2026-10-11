@@ -268,8 +268,10 @@ lifetime, clamped to [1/24, 365].
 **Connections.** The home remembers each connection per account in
 `localStorage` under `<prefix>.connections:<accountId>` (`Connection`:
 `origin`, `name`, `audience`, `access`, `scope`, `carrySpace?`, `spaces`,
-`grantedAt`, `expiresAt`, `token?`, `via?`, `recordsOnly?`). Connecting the
-same origin again replaces its connection; a connection with `via: 'code'` (a
+`grantedAt`, `expiresAt`, `token?`, `via?`, `recordsOnly?`). A kept
+connection with any other field, or one of these in another shape, is
+dropped when read, not read in part: its app or program connects again.
+Connecting the same origin again replaces its connection; a connection with `via: 'code'` (a
 program connected by code through the app) is keyed by its audience instead,
 so each such program is its own. `auth.connections()` lists them.
 
@@ -290,4 +292,4 @@ carrier from the same origin, adds the carrier with `node.carriers.add`
 returns the `CarryGrant`. Its connection is kept with `expiresAt: 0`, since a
 carry connection never expires.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`), `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`, `isConnection`), `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home"), `packages/core/tests/records-only.test.ts` ("a connection kept in an older shape is dropped, not read as the app’s own")._

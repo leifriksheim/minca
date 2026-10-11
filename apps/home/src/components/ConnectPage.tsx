@@ -152,6 +152,16 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         </>
       )}
 
+      {byCode && !recordsOnly && (
+        <Note title="More than records" warn>
+          {host} asks for more than records for this program. It could{' '}
+          {writes ? 'add apps and collections, change who may do what, ' : ''}
+          {whole || request.contacts ? 'open contact requests sent to you, ' : ''}
+          and work in your account as fully as an app you use here. Allow it only if you trust {host} and the
+          program both.
+        </Note>
+      )}
+
       {recordsOnly && writes && (
         <>
           <Note title="What it can do" below={12}>
@@ -455,12 +465,23 @@ function useSpaces(hold: boolean): ReadonlyArray<SpaceSummary> {
 }
 
 /** A boxed explanation: what something may do, or may not */
-function Note({ title, below = 20, children }: { title: string; below?: number; children: ReactNode }) {
+function Note({
+  title,
+  below = 20,
+  warn = false,
+  children,
+}: {
+  title: string;
+  below?: number;
+  /** Something the person should weigh before allowing */
+  warn?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div
       style={{ ...styles.errorBox, marginTop: 0, marginBottom: below, background: palette.surface.sunken }}
     >
-      <p style={{ ...styles.todoText }}>{title}</p>
+      <p style={{ ...styles.todoText, ...(warn ? { color: palette.accent.danger } : {}) }}>{title}</p>
       <p style={styles.errorHint}>{children}</p>
     </div>
   );

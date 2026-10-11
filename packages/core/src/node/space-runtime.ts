@@ -359,7 +359,7 @@ export type SpaceRuntime = Awaited<ReturnType<typeof openSpaceRuntime>>;
 /** Which account a connected peer showed it acts for */
 interface PeerAccount {
   readonly account: string | null;
-  /** Its note grants records only here: it can't define collections in this space */
+  /** Its note grants writing records here and nothing more (`record/*`): it can't define collections in this space */
   readonly recordsOnly: boolean;
 }
 const NO_ACCOUNT: PeerAccount = Object.freeze({ account: null, recordsOnly: false });
@@ -2305,9 +2305,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (typeof note !== 'string' || note.length > MAX_NOTE_LENGTH) return NO_ACCOUNT;
     const chain = await resolveDelegationRoot(note, () => null, provider).catch(() => null);
     if (!chain?.valid || chain.audience !== peer || !chain.rootDid) return NO_ACCOUNT;
+    const here = `space:${space.id}`;
     return {
       account: chain.rootDid,
-      recordsOnly: !noteGrants(note, { with: `space:${space.id}`, can: DEFINE_ABILITY }),
+      // Writing records here and nothing more. A note that only reads is not one: it writes nothing.
+      recordsOnly:
+        noteGrants(note, { with: here, can: 'record/write' }) &&
+        !noteGrants(note, { with: here, can: DEFINE_ABILITY }),
     };
   }
 

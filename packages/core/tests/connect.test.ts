@@ -258,6 +258,7 @@ describe('connecting an app to an account home', () => {
     const programAsk = await asked(
       { v: 1, audience: programKey.did, access: 'write', via: 'code', recordsOnly: true } as const,
       programKey,
+      'https://evil.test',
     );
     const { via: _via, ...asOwn } = programAsk;
     await assert.rejects(ask('https://evil.test', asOwn), /holds the key/);
@@ -265,6 +266,8 @@ describe('connecting an app to an account home', () => {
     // An app's own proof can't be passed off as a program's either.
     const ownAsk = await asked({ v: 1, audience: programKey.did, access: 'write' } as const, programKey);
     await assert.rejects(ask('https://evil.test', { ...ownAsk, via: 'code' }), /holds the key/);
+    // A program's proof names the app it went through: from any other origin it is refused.
+    await assert.rejects(ask('https://other.test', programAsk), /holds the key/);
     // Nor a key another app was given.
     await ask('https://good.test', await asked({ v: 1, audience: theirs.did, access: 'write' }, theirs));
     await assert.rejects(
@@ -712,14 +715,18 @@ describe('an app proposing subscriptions', () => {
     });
     await auth.grant({
       origin: 'https://code.test',
-      request: await asked({
-        v: 1,
-        audience: (await appKey()).did,
-        access: 'write',
-        scope: 'account',
-        via: 'code',
-        recordsOnly: true,
-      }),
+      request: await asked(
+        {
+          v: 1,
+          audience: (await appKey()).did,
+          access: 'write',
+          scope: 'account',
+          via: 'code',
+          recordsOnly: true,
+        },
+        undefined,
+        'https://code.test',
+      ),
       spaceIds: [],
     });
 
@@ -955,7 +962,11 @@ describe('the home receiving a request', () => {
         create: [{ name: 'Mine', visibility: 'private' }],
       }),
       await asked({ v: 1, audience: 'did:key:zNarrow', access: 'carry', recordsOnly: true }),
-      await asked({ v: 1, audience: 'did:key:zByCode', access: 'carry', via: 'code' }),
+      await asked(
+        { v: 1, audience: 'did:key:zByCode', access: 'carry', via: 'code' },
+        undefined,
+        'https://x.test',
+      ),
       { ...(await asked({ v: 1, audience: 'did:key:zByCode', access: 'write' })), via: 'popup' },
     ]) {
       const popup = popupWindow();

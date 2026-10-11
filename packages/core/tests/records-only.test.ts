@@ -39,6 +39,7 @@ import {
 } from '../src/schemas/index.js';
 import { createWeaveAuth, type WeaveAuth } from '../src/session/auth.js';
 import { grantSigner, type Grant } from '../src/session/connect.js';
+import { connectWithCode, offerConnectCode } from '../src/session/connect-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
@@ -737,10 +738,12 @@ describe('what a collection allows, in words', () => {
 });
 
 describe('a program connected by code, through the account home', () => {
-  async function home(hub: FakeHub): Promise<WeaveAuth> {
+  async function home(
+    hub: FakeHub,
+    values = new Map<string, string>([['weave.stay-signed-in', '"never"']]),
+  ): Promise<WeaveAuth> {
     const accounts = createFolderAccountStore(createMemoryDirectory().handle);
     const stores = memoryStores();
-    const values = new Map<string, string>([['weave.stay-signed-in', '"never"']]);
     const auth = createWeaveAuth({
       rpId: 'home.test',
       storage: {
@@ -758,6 +761,116 @@ describe('a program connected by code, through the account home', () => {
     return auth;
   }
 
+  test('over a code: the program learns the app’s origin, and its proof is refused from any other', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const origin = 'https://example.test';
+    const network = { relays: [], transport: (did: string) => hub.transport(did, 'code') };
+    const program = await testAppKey('did:key:zCodeProgram');
+    let proof = '';
+    const offer = await offerConnectCode(
+      { ...network, account: auth.getState().session!.did, origin },
+      (stage) => {
+        if (stage.kind !== 'asking') return;
+        proof = stage.asking.proof;
+        void auth
+          .grant({
+            origin,
+            request: {
+              v: 1,
+              audience: stage.asking.did,
+              proof: stage.asking.proof,
+              name: stage.asking.name,
+              access: 'write',
+              scope: 'account',
+              chooseSpaces: false,
+              recordsOnly: true,
+              via: 'code',
+            },
+            spaceIds: [],
+          })
+          .then((grant) => stage.allow({ ...grant, home: 'https://home.test/connect' }));
+      },
+    );
+    open.push({ close: async () => offer.stop() });
+    const grant = await connectWithCode({
+      code: offer.code,
+      key: program,
+      name: 'Agent on laptop',
+      recordsOnly: true,
+      network,
+    });
+    assert.deepEqual(parseUCAN(grant.token).payload.att, [{ with: '*', can: 'record/*' }]);
+    assert.equal(grant.contactKey, undefined);
+
+    // Gone again: its proof is refused from another origin, and still good from the app's.
+    await auth.disconnect(origin, { audience: program.did });
+    const replayed = {
+      v: 1,
+      audience: program.did,
+      proof,
+      access: 'write',
+      scope: 'account',
+      recordsOnly: true,
+      via: 'code',
+    } as const;
+    await assert.rejects(
+      auth.grant({ origin: 'https://other.test', request: replayed, spaceIds: [] }),
+      /holds the key/,
+    );
+    await auth.grant({ origin, request: replayed, spaceIds: [] });
+  });
+
+  test('a connection kept in an older shape is dropped, not read as the app’s own', async () => {
+    const values = new Map<string, string>([['weave.stay-signed-in', '"never"']]);
+    const auth = await home(createFakeHub({ latencyMs: 1 }), values);
+    const origin = 'https://app.test';
+    const program = await testAppKey('did:key:zOldAgent');
+    const key = `weave.connections:${auth.getState().session!.account.id}`;
+    const kept = {
+      origin,
+      name: 'Agent',
+      audience: program.did,
+      access: 'write',
+      scope: 'account',
+      spaces: [],
+      grantedAt: new Date().toISOString(),
+      expiresAt: Math.floor(Date.now() / 1000) + 86400,
+    };
+    // Before `via` and `recordsOnly`, a program's connection said `agent: true`.
+    values.set(
+      key,
+      JSON.stringify([
+        { ...kept, agent: true },
+        { ...kept, audience: 'x', access: 'all' },
+      ]),
+    );
+    assert.deepEqual(auth.connections(), [], 'neither is read in part');
+
+    // So the program connects again by code, and the app connecting again leaves it be.
+    const whole = { v: 1, access: 'write', scope: 'account', via: 'code', recordsOnly: true } as const;
+    await auth.grant({
+      origin,
+      request: await asked({ ...whole, audience: 'did:key:zOldAgent' }, undefined, origin),
+      spaceIds: [],
+    });
+    await auth.grant({
+      origin,
+      request: await asked({ v: 1, audience: 'did:key:zApp', access: 'write' }),
+      spaceIds: [],
+    });
+    assert.deepEqual(
+      auth
+        .connections()
+        .map((c) => [c.audience, c.via])
+        .sort(),
+      [
+        [(await testAppKey('did:key:zApp')).did, undefined],
+        [program.did, 'code'],
+      ].sort(),
+    );
+  });
+
   test("the home signs a records-only note for the program's key, kept apart from the app's own; the app going takes it too", async () => {
     const auth = await home(createFakeHub({ latencyMs: 1 }));
     const { node } = auth.getState().session!;
@@ -771,13 +884,17 @@ describe('a program connected by code, through the account home', () => {
     });
     const agent = await auth.grant({
       origin,
-      request: await asked({
-        v: 1,
-        audience: 'did:key:zAgent',
-        access: 'write',
-        via: 'code',
-        recordsOnly: true,
-      }),
+      request: await asked(
+        {
+          v: 1,
+          audience: 'did:key:zAgent',
+          access: 'write',
+          via: 'code',
+          recordsOnly: true,
+        },
+        undefined,
+        origin,
+      ),
       spaceIds: [gym.id],
     });
     assert.equal(parseUCAN(agent.token).payload.fct, undefined, 'no label: the note says what it grants');
@@ -791,14 +908,18 @@ describe('a program connected by code, through the account home', () => {
       async () =>
         auth.grant({
           origin,
-          request: await asked({
-            v: 1,
-            audience: 'did:key:zAgent',
-            access: 'write',
-            via: 'code',
-            recordsOnly: true,
-            create: [{ name: 'Mine', visibility: 'private' }],
-          }),
+          request: await asked(
+            {
+              v: 1,
+              audience: 'did:key:zAgent',
+              access: 'write',
+              via: 'code',
+              recordsOnly: true,
+              create: [{ name: 'Mine', visibility: 'private' }],
+            },
+            undefined,
+            origin,
+          ),
           spaceIds: [],
         }),
       /spaces that exist/,
@@ -811,13 +932,17 @@ describe('a program connected by code, through the account home', () => {
     );
     await auth.grant({
       origin,
-      request: await asked({
-        v: 1,
-        audience: 'did:key:zAgent2',
-        access: 'write',
-        via: 'code',
-        recordsOnly: true,
-      }),
+      request: await asked(
+        {
+          v: 1,
+          audience: 'did:key:zAgent2',
+          access: 'write',
+          via: 'code',
+          recordsOnly: true,
+        },
+        undefined,
+        origin,
+      ),
       spaceIds: [gym.id],
     });
     await auth.disconnect(origin);
@@ -838,12 +963,20 @@ describe('a program connected by code, through the account home', () => {
 
     const laptop = await auth.grant({
       origin,
-      request: await asked({ ...whole, audience: 'did:key:zLaptop', name: 'Agent on laptop', days: 30 }),
+      request: await asked(
+        { ...whole, audience: 'did:key:zLaptop', name: 'Agent on laptop', days: 30 },
+        undefined,
+        origin,
+      ),
       spaceIds: [],
     });
     const desk = await auth.grant({
       origin,
-      request: await asked({ ...whole, audience: 'did:key:zDesk', name: 'Agent on desk', days: 1 }),
+      request: await asked(
+        { ...whole, audience: 'did:key:zDesk', name: 'Agent on desk', days: 1 },
+        undefined,
+        origin,
+      ),
       spaceIds: [],
     });
     assert.ok(laptop.accountKey, 'it follows the account, so spaces made later reach it');

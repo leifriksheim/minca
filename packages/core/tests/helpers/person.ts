@@ -132,13 +132,20 @@ export function testAppKey(name: string): Promise<{ keys: CryptoKeyPair; did: st
   return key;
 }
 
-/** A connect request as an app would send it: the named key swapped for a real one, with its proof */
+/**
+ * A connect request as an app would send it: the named key swapped for a real
+ * one, with its proof. One with `via: code` needs the origin of the app it
+ * goes through, which its proof names.
+ */
 export async function asked<
   T extends { readonly audience: string; readonly via?: 'code'; readonly recordsOnly?: boolean },
 >(
   request: T,
   key?: { readonly keys: CryptoKeyPair; readonly did: string },
+  origin?: string,
 ): Promise<T & { readonly proof: string }> {
+  if (request.via === 'code' && !origin) throw new Error('A request via code needs the app’s origin.');
   const signer = key ?? (await testAppKey(request.audience));
-  return { ...request, audience: signer.did, proof: await keyProof(signer, requestTerms(request)) };
+  const proof = await keyProof(signer, requestTerms(request, origin ?? ''));
+  return { ...request, audience: signer.did, proof };
 }

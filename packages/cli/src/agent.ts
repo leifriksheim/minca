@@ -19,7 +19,7 @@ import {
   type P2PNode,
 } from '@weaveprotocol/core';
 import { profile } from '@weaveprotocol/core/schemas';
-import { checkGrant, connectWithCode, grantSigner, keyProof, type Grant } from '@weaveprotocol/core/session';
+import { checkGrant, connectWithCode, grantSigner, type Grant } from '@weaveprotocol/core/session';
 import { base64UrlDecode } from '@weaveprotocol/core';
 import { openFsDirectory } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
@@ -132,12 +132,12 @@ export async function connectAgent(params: {
   params.log('Looking for the app…');
   const grant = await connectWithCode({
     code: params.code,
-    did,
-    proof: await keyProof({ keys: key.keys, did }, { via: 'code', recordsOnly: true }),
+    key: { keys: key.keys, did },
     name: params.name,
     recordsOnly: true,
     network: { relays: params.relays },
-    onWaiting: () => params.log('Found it. Allow the agent in the app — it opens your account home.'),
+    onWaiting: ({ origin }) =>
+      params.log(`Found ${origin}. Allow the agent there — it opens your account home.`),
   });
 
   // Another account's spaces don't belong next to this one's.

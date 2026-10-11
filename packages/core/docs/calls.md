@@ -36,8 +36,12 @@ Every call message is a JSON object with a `type` and a `call` id: a string
 of 1–64 characters (the library makes 12 random bytes in lowercase hex). A
 receiver must ignore a call message that is not one of these types, lacks a
 valid `call`, comes from a peer with no account (`from: null`), or comes from
-a key whose note grants records only there (`recordsOnly: true`), such as an
-agent's.
+a key whose note grants writing records there and nothing more
+(`recordsOnly: true`, a `record/*` note). The account trusts such a key less
+than itself, and in a call it would speak as the account. A key whose note
+only reads (`record/read`) is not one: it may take part, as an app that only
+reads may. Its note can't tell whether it was asked for records only, since
+both kinds of read note are the same.
 
 | `type`          | Sent to                                              | Fields                                                                                    | Meaning                                      |
 | --------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------- |
@@ -156,7 +160,7 @@ Reference values, all in `createCalls`'s options or constants: `heartbeatMs`
 giving up on a declined or missed ring, 1 s before letting go of the space,
 10 s for the member list.
 
-_Source: `packages/core/src/calls/calls.ts` (`createCalls`, `isCallMessage`, `RINGS_PER_MINUTE`, `GIVE_UP_MS`, `LEAVE_LINGER_MS`, `MEMBERS_MS`, `RETRY_MS`), `packages/core/src/react/use-calls.ts`. Tests: `packages/core/tests/calls.test.ts`._
+_Source: `packages/core/src/calls/calls.ts` (`createCalls`, `isCallMessage`, `RINGS_PER_MINUTE`, `GIVE_UP_MS`, `LEAVE_LINGER_MS`, `MEMBERS_MS`, `RETRY_MS`), `packages/core/src/react/use-calls.ts`, `packages/core/src/node/space-runtime.ts` (`accountOf`). Tests: `packages/core/tests/calls.test.ts`, `packages/core/tests/live.test.ts` ("recordsOnly marks a note that writes records here and nothing more, not one that only reads")._
 
 ## Planned
 
