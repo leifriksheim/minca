@@ -271,26 +271,24 @@ describe('encryption at rest', () => {
     await assert.rejects(() => adapter.get('space:planted'));
   });
 
-  test('a member key and the relays are sealed too, and an older folder’s are sealed on first read', async () => {
+  test('a member key and the relays are sealed too, and refused in the clear', async () => {
     const inner = createMemoryAdapter();
     const vaultKey = await deriveVaultKey(generateSeed());
     const memberKey = utf8Encode('{"memberKey":"c2VjcmV0LW1lbWJlci1rZXk"}');
-    // Written in the clear by an older version, before these were sealed.
-    await inner.put('spacememberkey:old', memberKey);
-    await inner.put('spacerelays:old', utf8Encode('["wss://relay.example"]'));
-
     const adapter = createEncryptedAdapter(inner, vaultKey);
-    assert.deepEqual(await adapter.get('spacememberkey:old'), memberKey);
-    for (const entry of ['spacememberkey:old', 'spacerelays:old']) {
+    await adapter.put('spacememberkey:a', memberKey);
+    await adapter.put('spacerelays:a', utf8Encode('["wss://relay.example"]'));
+    for (const entry of ['spacememberkey:a', 'spacerelays:a']) {
       const raw = utf8Decode((await inner.get(entry))!);
-      assert.ok(!raw.includes('c2VjcmV0') && !raw.includes('relay.example'), `${entry} is sealed now`);
+      assert.ok(!raw.includes('c2VjcmV0') && !raw.includes('relay.example'), `${entry} is sealed`);
     }
-    await adapter.put('spacememberkey:new', memberKey);
-    assert.ok(!utf8Decode((await inner.get('spacememberkey:new'))!).includes('c2VjcmV0'));
+    assert.deepEqual(await adapter.get('spacememberkey:a'), memberKey);
 
-    // Once the folder is caught up, one planted in the clear is refused like any other.
+    // One planted in the clear is refused like any other.
     await inner.put('spacememberkey:planted', memberKey);
-    await assert.rejects(() => createEncryptedAdapter(inner, vaultKey).get('spacememberkey:planted'));
+    await inner.put('spacerelays:planted', utf8Encode('["wss://relay.example"]'));
+    await assert.rejects(() => adapter.get('spacememberkey:planted'));
+    await assert.rejects(() => adapter.get('spacerelays:planted'));
   });
 
   test('an invite secret waiting to be used is sealed too', async () => {

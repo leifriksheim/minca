@@ -825,16 +825,17 @@ writer keeps in its store, are the node's own (the library's are in
 [the node](../packages/core/docs/node.md#holding-part-of-a-space) and
 [mirrors](../packages/core/docs/storage.md#mirrors)).
 
-**Registry entries.** One space's registry entries, each keyed by space id:
+**Registry entries.** One space's registry entries, each keyed by space id
+and all sealed (§15):
 
-| Key                   | Value                                                                                                           | Sealed by default            |
-| --------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `space:<id>`          | UTF-8 JSON of the `Space` ([03](03-spaces.md))                                                                  | yes                          |
-| `spacekey:<id>`       | UTF-8 JSON `{ "keys": [{ "id", "raw" (base64url AES-256 key), "createdAt", "version" }], "current": <key id> }` | yes                          |
-| `spaceinvite:<id>`    | UTF-8 base64url of an invite secret, until used                                                                 | yes                          |
-| `spacerole:<id>`      | UTF-8 role name this account last held (a listing hint)                                                         | yes                          |
-| `spacememberkey:<id>` | UTF-8 base64url of this account's member key for the space                                                      | yes (since `sealed:v1`, §15) |
-| `spacerelays:<id>`    | UTF-8 JSON array of relay URLs                                                                                  | yes (since `sealed:v1`, §15) |
+| Key                   | Value                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `space:<id>`          | UTF-8 JSON of the `Space` ([03](03-spaces.md))                                                                  |
+| `spacekey:<id>`       | UTF-8 JSON `{ "keys": [{ "id", "raw" (base64url AES-256 key), "createdAt", "version" }], "current": <key id> }` |
+| `spaceinvite:<id>`    | UTF-8 base64url of an invite secret, until used                                                                 |
+| `spacerole:<id>`      | UTF-8 role name this account last held (a listing hint)                                                         |
+| `spacememberkey:<id>` | UTF-8 base64url of this account's member key for the space                                                      |
+| `spacerelays:<id>`    | UTF-8 JSON array of relay URLs                                                                                  |
 
 Forgetting a space deletes all six.
 
@@ -998,12 +999,6 @@ offset  size  field
   public space.
 
 Every registry entry of §12 that belongs to one space is sealed.
-
-Folders written before `spacememberkey:` and `spacerelays:` were sealed hold
-them in the clear. A reader that finds no entry `sealed:v1` MUST seal every
-entry under those two prefixes that lacks the magic, then write `sealed:v1`
-(sealed, value `01`), before it reads any of them. After that, those two
-prefixes are refused in the clear like the rest.
 
 _Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/node/stores.ts`. Tests:
 `packages/core/tests/account-vault.test.ts` ("encryption at rest")._
