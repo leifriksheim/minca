@@ -63,7 +63,7 @@ describe('live messages', () => {
     assert.deepEqual(bobHeard[0]!.message, { type: 'typing' });
     assert.equal(bobHeard[0]!.from, alice.node.did);
     assert.equal(bobHeard[0]!.peer, alice.node.sessionDid);
-    assert.equal(bobHeard[0]!.agent, false);
+    assert.equal(bobHeard[0]!.recordsOnly, false);
     assert.equal(bobHeard[0]!.space, space);
     // Nothing written, on either side.
     for (const who of [alice, bob]) {

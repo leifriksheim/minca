@@ -131,8 +131,8 @@ export function AutomationsView({
             {rules.rules.map((record) => {
               const rule = ruleOf(record)!;
               const mine = record.createdBy === did;
-              // An agent's rule waits for its person to save it themselves.
-              const suggested = record.viaAgent === true;
+              // A rule written under a records-only note (an agent's) waits for its person to save it themselves.
+              const suggested = record.recordsOnly === true;
               const off = rule.paused || suggested;
               const agentOnly = rule.then.kind === 'ask' || (!rule.when && !!rule.every);
               const runs = rules.runs.get(record.key) ?? [];

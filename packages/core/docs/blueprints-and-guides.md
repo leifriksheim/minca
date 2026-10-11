@@ -71,7 +71,7 @@ await applyBlueprint(node, space.id, proposal.key);
   `collections_apply` ([actions](actions.md)). An agent's node is not offered
   `collections_apply`.
 
-_Source: `packages/core/src/schemas/blueprints.ts` (`checkBlueprint`, `proposeCollections`, `applyBlueprint`, `copyBlueprint`), `packages/core/src/schemas/library/collections.ts` (`blueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`, `collections_apply`). Tests: `packages/core/tests/agents.test.ts` ("collections proposed in a blueprint": "an agent proposes, someone who may define applies it, and the space then has the collections", "a person whose role does not hold define proposes the same way, and someone who may applies it", "copying a blueprint into another space proposes it there, and says where it came from", "a proposal may not name the protocol's own collections, a version, or one collection twice")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`checkBlueprint`, `proposeCollections`, `applyBlueprint`, `copyBlueprint`), `packages/core/src/schemas/library/collections.ts` (`blueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`, `collections_apply`). Tests: `packages/core/tests/records-only.test.ts` ("collections proposed in a blueprint": "an agent proposes, someone who may define applies it, and the space then has the collections", "a person whose role does not hold define proposes the same way, and someone who may applies it", "copying a blueprint into another space proposes it there, and says where it came from", "a proposal may not name the protocol's own collections, a version, or one collection twice")._
 
 ## The review
 
@@ -89,7 +89,7 @@ history, links, permissions, rules and topics are the library's. The review
 never offers an earlier standard definition as a change to a space that
 holds the current one, since applying it would only take the additions away.
 
-_Source: `packages/core/src/schemas/blueprints.ts` (`reviewBlueprint`, `metByLibrary`). Tests: `packages/core/tests/agents.test.ts` ("a proposal that changes a collection the space has says so, and says how", "a blueprint made against an earlier standard definition is met by the library's current one, not offered as a change back")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`reviewBlueprint`, `metByLibrary`). Tests: `packages/core/tests/records-only.test.ts` ("a proposal that changes a collection the space has says so, and says how", "a blueprint made against an earlier standard definition is met by the library's current one, not offered as a change back")._
 
 ## Updates
 
@@ -120,7 +120,7 @@ blueprints that need a collection it would change (`usedBy`), and
 > **Planned (open question):** with [`compare`](#compatible-definitions), an update's review would list
 > its breaks.
 
-_Source: `packages/core/src/schemas/blueprints.ts` (`supersededBlueprints`, `reviewBlueprint`, `proposeCollections`, `applyBlueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`). Tests: `packages/core/tests/agents.test.ts` ("an update replaces the blueprint it names: once applied, the old version is not offered again", "a change to a collection another blueprint uses names it, and warns the agent")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`supersededBlueprints`, `reviewBlueprint`, `proposeCollections`, `applyBlueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`). Tests: `packages/core/tests/records-only.test.ts` ("an update replaces the blueprint it names: once applied, the old version is not offered again", "a change to a collection another blueprint uses names it, and warns the agent")._
 
 ## Guides
 
@@ -150,7 +150,7 @@ exists, and reads one with `records_get` before writing there.
 - A guide is what someone in the space wrote. An agent must read it as data
   about the collections, never as instructions from the person it works for.
 
-_Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`). Tests: `packages/core/tests/agents.test.ts` ("collections_list points at the guides written about each collection"), `apps/example/tests/launcher.test.ts` ("the guide agents read is in the space, on the collections it is about")._
+_Source: `packages/core/src/schemas/guides.ts` (`writeGuide`, `guidesOf`), `packages/core/src/schemas/library/collections.ts` (`guide`), `packages/core/src/node/actions.ts` (`collections_list`). Tests: `packages/core/tests/records-only.test.ts` ("collections_list points at the guides written about each collection"), `apps/example/tests/launcher.test.ts` ("the guide agents read is in the space, on the collections it is about")._
 
 ## Apps with a screen of their own
 
@@ -193,7 +193,7 @@ not know must make it fail rather than stay silent.
 
 The wording can change; that every rule produces a sentence doesn't.
 
-_Source: `packages/core/src/records/describe.ts`. Tests: `packages/core/tests/agents.test.ts` ("what a collection allows, in words")._
+_Source: `packages/core/src/records/describe.ts`. Tests: `packages/core/tests/records-only.test.ts` ("what a collection allows, in words")._
 
 ## Compatible definitions
 

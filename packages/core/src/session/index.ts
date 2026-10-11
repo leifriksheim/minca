@@ -34,6 +34,7 @@ export {
   connectCarrier,
   keyProof,
   checkKeyProof,
+  checkGrant,
   proposeToHome,
   isProposeRequest,
   homeAddress,
@@ -56,6 +57,7 @@ export type {
   GrantedSpace,
   IncomingRequest,
   AppKey,
+  KeyTerms,
 } from './connect.js';
 export {
   browserPlace,
@@ -73,12 +75,6 @@ export { createStaySignedIn, STAY_SIGNED_IN_CHOICES, DEFAULT_STAY_SIGNED_IN } fr
 export type { StaySignedIn, StaySignedInStore, KeyValueStore } from './stay-signed-in.js';
 export { offerToPhone, receiveFromDesktop, readPairingTicket, clearPairingTicket } from './pairing.js';
 export type { PairingStage, PairingOffer, Handover } from './pairing.js';
-export {
-  offerAgentLink,
-  acceptAgentLink,
-  checkAgentGrant,
-  newAgentCode,
-  readAgentCode,
-} from './agent-link.js';
-export type { AgentLinkStage, AgentLinkOffer, AgentAsking } from './agent-link.js';
+export { offerConnectCode, connectWithCode, newConnectCode, readConnectCode } from './connect-code.js';
+export type { ConnectCodeStage, ConnectCodeOffer, CodeAsking } from './connect-code.js';
 export { offerToSave, accountCredentialName, recoveryKit } from './credentials.js';

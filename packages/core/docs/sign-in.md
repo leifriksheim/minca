@@ -268,15 +268,16 @@ lifetime, clamped to [1/24, 365].
 **Connections.** The home remembers each connection per account in
 `localStorage` under `<prefix>.connections:<accountId>` (`Connection`:
 `origin`, `name`, `audience`, `access`, `scope`, `carrySpace?`, `spaces`,
-`grantedAt`, `expiresAt`, `token?`, `agent?`). Connecting the same origin again
-replaces its connection; an agent's connection is keyed by its audience
-instead, so each agent is its own. `auth.connections()` lists them.
+`grantedAt`, `expiresAt`, `token?`, `via?`, `recordsOnly?`). Connecting the
+same origin again replaces its connection; a connection with `via: 'code'` (a
+program connected by code through the app) is keyed by its audience instead,
+so each such program is its own. `auth.connections()` lists them.
 
-**Disconnecting.** `auth.disconnect(origin, { agent?, audience? })` removes the
-app's connections (by default the app and every agent connected through it;
-`agent: true` only those agents; `audience` only that key), revokes the notes
-of those with `access: write`, and, unless only agents go, removes the
-subscriptions the app proposed.
+**Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
+the app's connections (by default the app and every program connected through
+it by code; `byCode: true` only those programs; `audience` only that key),
+revokes the notes of those with `access: write`, and, unless only programs
+connected by code go, removes the subscriptions the app proposed.
 
 **Proposals.** `auth.propose({ origin, request, notify? })` adds the
 subscriptions the person kept: `notify` is the indices kept, default all. The

@@ -36,7 +36,8 @@ Every call message is a JSON object with a `type` and a `call` id: a string
 of 1–64 characters (the library makes 12 random bytes in lowercase hex). A
 receiver must ignore a call message that is not one of these types, lacks a
 valid `call`, comes from a peer with no account (`from: null`), or comes from
-an agent (`agent: true`).
+a key whose note grants records only there (`recordsOnly: true`), such as an
+agent's.
 
 | `type`          | Sent to                                              | Fields                                                                                    | Meaning                                      |
 | --------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------- |

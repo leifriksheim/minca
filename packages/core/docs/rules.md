@@ -153,8 +153,9 @@ A bot answering mentions, from anyone holding a role, run by the bot:
   (`timed: false`); `weave agent` runs all of them.
 - With `by`, only that bot, and only while the maker holds `std.rule/instruct`
   in the space: its roles say who may direct a bot there.
-- A rule whose current version an agent wrote (`viaAgent`) runs nowhere: an
-  agent may suggest one, and it waits until the person saves it themselves.
+- A rule whose current version was written under a records-only note
+  (`recordsOnly`, an agent's) runs nowhere: an agent may suggest one, and it
+  waits until the person saves it themselves.
 
 Two runners of one account, an app and an agent, may both claim a record
 before either hears the other. `startRules` waits `claimMs` after claiming;

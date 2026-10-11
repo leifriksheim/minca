@@ -252,13 +252,19 @@ describe('connecting an app to an account home', () => {
       ask('https://evil.test', { v: 1, audience: node.sessionDid, proof: 'x', access: 'write' }),
       /holds the key|this home’s own/,
     );
-    // An agent's proof, handed to an app in the agent link, can't ask for an app's connection.
-    const agentKey = await testAppKey('agent');
-    const agentAsk = await asked(
-      { v: 1, audience: agentKey.did, access: 'write', agent: true } as const,
-      agentKey,
+    // A program's proof, handed to an app over a connect code, can't ask for the app's own
+    // connection, nor for more than the records only it asked for.
+    const programKey = await testAppKey('program');
+    const programAsk = await asked(
+      { v: 1, audience: programKey.did, access: 'write', via: 'code', recordsOnly: true } as const,
+      programKey,
     );
-    await assert.rejects(ask('https://evil.test', { ...agentAsk, agent: false }), /holds the key/);
+    const { via: _via, ...asOwn } = programAsk;
+    await assert.rejects(ask('https://evil.test', asOwn), /holds the key/);
+    await assert.rejects(ask('https://evil.test', { ...programAsk, recordsOnly: false }), /holds the key/);
+    // An app's own proof can't be passed off as a program's either.
+    const ownAsk = await asked({ v: 1, audience: programKey.did, access: 'write' } as const, programKey);
+    await assert.rejects(ask('https://evil.test', { ...ownAsk, via: 'code' }), /holds the key/);
     // Nor a key another app was given.
     await ask('https://good.test', await asked({ v: 1, audience: theirs.did, access: 'write' }, theirs));
     await assert.rejects(
@@ -687,7 +693,7 @@ describe('an app proposing subscriptions', () => {
     assert.equal(answer.versions, undefined);
   });
 
-  test('refused: from nowhere connected here, from a carrier or an agent, or looking at a space the app was not given', async () => {
+  test('refused: from nowhere connected here, from a carrier or a program connected by code, or looking at a space the app was not given', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
     const { node } = auth.getState().session!;
@@ -705,13 +711,14 @@ describe('an app proposing subscriptions', () => {
       }),
     });
     await auth.grant({
-      origin: 'https://agent.test',
+      origin: 'https://code.test',
       request: await asked({
         v: 1,
         audience: (await appKey()).did,
         access: 'write',
         scope: 'account',
-        agent: true,
+        via: 'code',
+        recordsOnly: true,
       }),
       spaceIds: [],
     });
@@ -719,7 +726,7 @@ describe('an app proposing subscriptions', () => {
     const one = propose([
       { label: 'New', collection: 'app.chat.message', topic: { field: 'mentions', me: true } },
     ]);
-    for (const origin of ['https://stranger.test', extension, 'https://agent.test'])
+    for (const origin of ['https://stranger.test', extension, 'https://code.test'])
       await assert.rejects(() => auth.propose({ origin, request: one }), /Connect it first/, origin);
     await assert.rejects(
       () =>
@@ -936,6 +943,20 @@ describe('the home receiving a request', () => {
         notify: [{ label: 'New message', collection: 'app.chat.message' }],
       }),
       { v: 1, kind: 'propose', notify: [{ label: 'New', collection: 'app.chat.message' }], extra: true },
+      // There is no kind of key to name, only what it may do.
+      await asked({ v: 1, audience: 'did:key:zOld', access: 'write', agent: true }),
+      // Records only goes with no contacts, no spaces made for it and no carrying; a program by code carries nothing.
+      await asked({ v: 1, audience: 'did:key:zNarrow', access: 'write', recordsOnly: true, contacts: true }),
+      await asked({
+        v: 1,
+        audience: 'did:key:zNarrow',
+        access: 'write',
+        recordsOnly: true,
+        create: [{ name: 'Mine', visibility: 'private' }],
+      }),
+      await asked({ v: 1, audience: 'did:key:zNarrow', access: 'carry', recordsOnly: true }),
+      await asked({ v: 1, audience: 'did:key:zByCode', access: 'carry', via: 'code' }),
+      { ...(await asked({ v: 1, audience: 'did:key:zByCode', access: 'write' })), via: 'popup' },
     ]) {
       const popup = popupWindow();
       try {

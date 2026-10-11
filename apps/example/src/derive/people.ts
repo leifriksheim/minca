@@ -25,15 +25,16 @@ export const isBot = (did: string | null | undefined, people: People): boolean =
 
 /**
  * Who wrote this version: their name, "via agent" when an agent wrote it for
- * them, and "bot" when the account says it is one. The account signed "via
- * agent" into the agent's note, so the agent can't leave it out.
+ * them, and "bot" when the account says it is one. "via agent" when the note
+ * it was written under grants records only: the account signed that, so the
+ * writer can't leave it out, and in this app only a connected agent gets one.
  */
 export function writerOf(
-  record: { readonly root: string | null; readonly viaAgent?: true },
+  record: { readonly root: string | null; readonly recordsOnly?: true },
   people: People,
 ): string {
   const name = nameOf(record.root, people);
-  if (record.viaAgent) return `${name} via agent`;
+  if (record.recordsOnly) return `${name} via agent`;
   return isBot(record.root, people) ? `${name} · bot` : name;
 }
 

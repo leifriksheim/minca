@@ -94,14 +94,20 @@ export { createLocalRootSigner } from './identity/root-signer.js';
 export type { RootSigner } from './identity/root-signer.js';
 export {
   newPairingSecret,
-  pairingRoomId,
-  pairingKeyPair,
   pairingCommitment,
-  derivePairingChannel,
+  pairingCode,
   encodePairingTicket,
   decodePairingTicket,
 } from './identity/pairing.js';
-export type { PairingTicket, PairingChannel, PairingSide } from './identity/pairing.js';
+export type { PairingTicket } from './identity/pairing.js';
+export {
+  channelRoom,
+  channelKeyPair,
+  deriveChannel,
+  PAIRING_CHANNEL,
+  CODE_CHANNEL,
+} from './identity/channel.js';
+export type { Channel, ChannelKind, ChannelSide } from './identity/channel.js';
 export {
   issueUCAN,
   parseUCAN,
@@ -110,7 +116,6 @@ export {
   delegateCapabilities,
   resolveDelegationRoot,
 } from './identity/ucan.js';
-export { AGENT_FACT, isAgentNote } from './identity/agent-note.js';
 export type {
   UCANHeader,
   UCANPayload,

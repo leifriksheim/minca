@@ -46,10 +46,10 @@ export function Settings() {
       }),
     );
   };
-  // An agent is its own key; an app takes the agents that connected through it along.
+  // A program connected by code is its own key; an app takes the programs that connected through it along.
   const disconnect = (app: Connection) =>
     leave(connectionId(app), app.name ?? app.origin, () =>
-      auth.disconnect(app.origin, app.agent ? { audience: app.audience } : {}),
+      auth.disconnect(app.origin, app.via === 'code' ? { audience: app.audience } : {}),
     );
 
   // Carriers are in the account registry, so every device lists them — not
@@ -542,8 +542,8 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
   );
 }
 
-/** Agents connect through an app's origin, several to one, so each is named by its key */
-const connectionId = (app: Connection) => (app.agent ? app.audience : app.origin);
+/** Programs connect by code through an app's origin, several to one, so each is named by its key */
+const connectionId = (app: Connection) => (app.via === 'code' ? app.audience : app.origin);
 
 /** The account's DID, short, with a way to copy it whole — what a host's `--allow` takes */
 function CopyDid({ did }: { did: string }) {
@@ -571,11 +571,12 @@ function describeConnection(app: Connection): string {
   if (app.access === 'carry')
     return `${app.name ?? 'Browser extension'} · keeps your spaces online · can't read them`;
   const host = extension ? 'browser extension' : url.host;
-  const who = app.agent
-    ? `${app.name ?? 'An agent'} (agent, via ${host})`
-    : app.name
-      ? `${app.name} (${host})`
-      : host;
+  const who =
+    app.via === 'code'
+      ? `${app.name ?? 'A program'} (by code, via ${host}${app.recordsOnly ? ', records only' : ''})`
+      : app.name
+        ? `${app.name} (${host})`
+        : host;
   const what =
     app.scope === 'account'
       ? 'your whole account'

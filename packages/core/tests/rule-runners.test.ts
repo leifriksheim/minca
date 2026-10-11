@@ -13,7 +13,6 @@ import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import { AGENT_FACT } from '../src/identity/agent-note.js';
 import { community } from '../src/space/presets.js';
 import { message } from '../src/schemas/library/publishing.js';
 import { task } from '../src/schemas/library/planning.js';
@@ -63,7 +62,6 @@ async function personAndAgent(fill: number) {
     audience: publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC),
     capabilities: [{ with: `space:${space}`, can: 'record/*' }],
     expiration: Math.floor(Date.now() / 1000) + 3600,
-    facts: [AGENT_FACT],
   });
   const agent = await person.asAgent({ keys, note: note.encoded });
   nodes.push(agent);

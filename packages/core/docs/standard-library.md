@@ -36,7 +36,7 @@ Names of an app's own collections should say what they are for
 app may want for something else. Making apps open collections by what they
 hold rather than by name is [compatible definitions](blueprints-and-guides.md#compatible-definitions).
 
-_Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `packages/core/src/schemas/standard.ts` (`standardDefinition`, `standardGroups`), `packages/core/src/node/actions.ts` (`collections_standard`, `collections_propose`). Tests: `packages/core/tests/agents.test.ts` ("a standard collection by name is exactly the library’s; a look-alike std.\* is refused", "collections_standard lists the library by area, and gives definitions in full")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `packages/core/src/schemas/standard.ts` (`standardDefinition`, `standardGroups`), `packages/core/src/node/actions.ts` (`collections_standard`, `collections_propose`). Tests: `packages/core/tests/records-only.test.ts` ("a standard collection by name is exactly the library’s; a look-alike std.\* is refused", "collections_standard lists the library by area, and gives definitions in full")._
 
 ## Conventions
 
@@ -295,7 +295,7 @@ is about any one app. Described in [blueprints and guides](blueprints-and-guides
 | `std.blueprint` | **`title`** 1–100; **`collections`** 1–10 objects, each a definition without `version`; `description` ≤ 1000; `from` ≤ 300; `updates` 1–100 | edit: creator; delete: creator, `can:moderate`                   |
 | `std.guide`     | **`name`** 1–100; **`title`** 1–200; **`text`** 1–20000; `collections` ≤ 16 names                                                           | edit: creator; delete: creator, `can:moderate`; `onePer: [name]` |
 
-_Source: `packages/core/src/schemas/library/collections.ts` (`blueprint`, `guide`), `packages/core/src/schemas/blueprints.ts`, `packages/core/src/schemas/guides.ts`. Tests: `packages/core/tests/agents.test.ts` ("collections proposed in a blueprint")._
+_Source: `packages/core/src/schemas/library/collections.ts` (`blueprint`, `guide`), `packages/core/src/schemas/blueprints.ts`, `packages/core/src/schemas/guides.ts`. Tests: `packages/core/tests/records-only.test.ts` ("collections proposed in a blueprint")._
 
 **Bots.** A bot is an account of its own that people invite to their spaces
 as a member. The protocol does not tell bots and people apart, and has no way
@@ -428,7 +428,7 @@ never ends in `0`, so there is always room between two. Equal positions sort by
 key. A record without one goes at the end. `positionBetween(before, after)` in
 the library makes one; any string that sorts correctly is valid.
 
-_Source: `packages/core/src/schemas/fragments.ts`, `packages/core/src/schemas/library/` (one file per area), `packages/core/src/schemas/standard.ts` (`standardGroups`), `packages/core/src/schemas/index.ts` (`positionBetween`, `useSchemas`), `packages/core/src/schemas/contacts.ts`. Tests: `packages/core/tests/schemas.test.ts` ("the standard library", "standard nouns"), `packages/core/tests/contacts.test.ts`, `packages/core/tests/agents.test.ts`._
+_Source: `packages/core/src/schemas/fragments.ts`, `packages/core/src/schemas/library/` (one file per area), `packages/core/src/schemas/standard.ts` (`standardGroups`), `packages/core/src/schemas/index.ts` (`positionBetween`, `useSchemas`), `packages/core/src/schemas/contacts.ts`. Tests: `packages/core/tests/schemas.test.ts` ("the standard library", "standard nouns"), `packages/core/tests/contacts.test.ts`, `packages/core/tests/records-only.test.ts`._
 
 **Places and areas.** A place with a point also carries its `cells`: the
 geohash of `lat` and `lon` at precisions 3, 4, 5 and 6, coarsest first, about

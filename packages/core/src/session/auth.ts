@@ -9,7 +9,6 @@
 import { parseUCAN } from '../identity/ucan.js';
 import { unref } from '../utils/guards.js';
 import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
-import { AGENT_FACT } from '../identity/agent-note.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
 import type { AccountStore, AccountSummary } from '../identity/account-store.js';
 import { createVault } from '../identity/account-vault.js';
@@ -79,6 +78,7 @@ import {
   type ProposeRequest,
   type Proposed,
   checkKeyProof,
+  requestTerms,
 } from './connect.js';
 import {
   fromProposal,
@@ -228,8 +228,10 @@ export interface Connection {
   readonly expiresAt: number;
   /** The note the app writes under — what disconnecting revokes */
   readonly token?: string;
-  /** Present, and true, for an agent connected through the app at `origin` — its own key, kept apart from the app's own connection */
-  readonly agent?: true;
+  /** `code` for a program connected by code through the app at `origin`: its own key, kept apart from the app's own connection */
+  readonly via?: 'code';
+  /** Present, and true, when its note grants records only */
+  readonly recordsOnly?: true;
 }
 
 /** What the person chose on the approval screen */
@@ -348,7 +350,7 @@ export interface WeaveAuth {
    * Adds the subscriptions an app connected from this home proposed, as the
    * account home — the ones the person kept, naming it, looking only at
    * spaces it may reach.
-   * @throws When no app from `origin` is connected here (a carrier or an agent doesn't count), or a proposal names a space it wasn't given
+   * @throws When no app from `origin` is connected here (a carrier or a program connected by code doesn't count), or a proposal names a space it wasn't given
    */
   propose(choice: ProposeChoice): Promise<Proposed>;
   /** Apps this account is connected to from this home, newest first */
@@ -366,13 +368,13 @@ export interface WeaveAuth {
    * seen it write stays. What it could already read, it keeps — reading is
    * holding a space's key, and that is not taken back.
    *
-   * Disconnecting an app disconnects the agents connected through it too.
-   * `{ agent: true }` disconnects only those agents; `{ audience }` only the
-   * one with that key.
+   * Disconnecting an app disconnects the programs connected by code through
+   * it too. `{ byCode: true }` disconnects only those programs; `{ audience }`
+   * only the one with that key.
    */
   disconnect(
     origin: string,
-    options?: { readonly agent?: boolean; readonly audience?: string },
+    options?: { readonly byCode?: boolean; readonly audience?: string },
   ): Promise<void>;
   readonly staySignedIn: {
     choice(): StaySignedIn;
@@ -577,19 +579,15 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
    * itself, and be no key this home already uses for something else, since
    * disconnecting later revokes it (the node's own, or another connection's).
    */
-  async function audienceProblem(
-    request: ConnectRequest,
-    origin: string,
-    agent: boolean,
-  ): Promise<string | null> {
-    if (!(await checkKeyProof(request.audience, request.proof, agent)))
-      return 'The app did not show it holds the key it named.';
+  async function audienceProblem(request: ConnectRequest, origin: string): Promise<string | null> {
+    if (!(await checkKeyProof(request.audience, request.proof, requestTerms(request))))
+      return 'The app did not show it holds the key it named, for what it asked.';
     if (request.audience === state.session?.node.sessionDid) return 'That key is this home’s own.';
     const elsewhere = auth
       .connections()
       .some(
         (known) =>
-          known.audience === request.audience && (known.origin !== origin || !!known.agent !== agent),
+          known.audience === request.audience && (known.origin !== origin || known.via !== request.via),
       );
     return elsewhere ? 'That key is already connected for something else.' : null;
   }
@@ -1274,12 +1272,14 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       if (request.access === 'carry')
         throw new Error('A carrier is given passes, not a note — use grantCarry.');
       const access = request.access;
-      const agent = request.agent === true;
-      const problem = await audienceProblem(request, choice.origin, agent);
+      const recordsOnly = request.recordsOnly === true;
+      const byCode = request.via === 'code';
+      const problem = await audienceProblem(request, choice.origin);
       if (problem) throw new Error(problem);
-      if (agent && request.create?.length)
-        throw new Error('An agent works in spaces that exist — none are made for it.');
-      if (agent && request.contacts) throw new Error('An agent is not given your contacts.');
+      if (recordsOnly && request.create?.length)
+        throw new Error('A key given records only works in spaces that exist — none are made for it.');
+      if (recordsOnly && request.contacts)
+        throw new Error('A key given records only is not given your contacts.');
       const whole = request.scope === 'account';
       const created = [];
       for (const params of request.create ?? []) created.push(await node.spaces.create(params));
@@ -1313,11 +1313,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const token = await signer.delegate({
         audience: request.audience,
         capabilities: grantCapabilities(
-          agent && access === 'write' ? 'records' : access,
+          recordsOnly && access === 'write' ? 'records' : access,
           whole ? 'all' : ids,
         ),
         expiration: expiresAt,
-        ...(agent ? { facts: [AGENT_FACT] } : {}),
       });
 
       const connection: Connection = {
@@ -1330,11 +1329,12 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         grantedAt: new Date().toISOString(),
         expiresAt,
         token: token.encoded,
-        ...(agent ? { agent: true as const } : {}),
+        ...(byCode ? { via: 'code' as const } : {}),
+        ...(recordsOnly ? { recordsOnly: true as const } : {}),
       };
-      // Connecting again replaces the old note. An agent is its own key: connecting one replaces only that one.
+      // Connecting again replaces the old note. A program connected by code is its own key: connecting one replaces only that one.
       const replaced = (known: Connection) =>
-        agent ? known.audience === request.audience : known.origin === choice.origin && !known.agent;
+        byCode ? known.audience === request.audience : known.origin === choice.origin && !known.via;
       // A note it replaces stops too: no time ends it, so revoking does (unless it is the same key, still in use).
       for (const known of auth.connections().filter(replaced))
         if (known.audience !== connection.audience) await revokeConnection(node, known);
@@ -1349,14 +1349,13 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         scope: whole ? 'account' : 'spaces',
         spaces,
         ...(whole ? { accountKey: base64UrlEncode(await deriveAccountKey(seed)) } : {}),
-        // Never to an agent: the contact key opens contact requests and knocks on your doors.
-        ...(!agent && (whole || request.contacts)
+        // Never with records only: the contact key opens contact requests and knocks on your doors.
+        ...(!recordsOnly && (whole || request.contacts)
           ? { contactKey: base64UrlEncode(await deriveContactKeyBytes(seed)) }
           : {}),
         ...(contactsSpace ? { contactsSpace } : {}),
         ...(config.network?.relays?.length ? { relays: [...config.network.relays] } : {}),
         expiresAt,
-        ...(agent ? { agent: true as const } : {}),
       };
     },
 
@@ -1364,10 +1363,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const session = state.session;
       if (!session) throw new Error('Sign in first.');
       const { node } = session;
-      // Only an app: an agent isn't someone looking at it, and a carrier can't read what it would notify about.
+      // Only the app itself: a program connected through it by code isn't what the person is looking at, and a carrier can't read what it would notify about.
       const connection = auth
         .connections()
-        .find((known) => known.origin === origin && !known.agent && known.access !== 'carry');
+        .find((known) => known.origin === origin && !known.via && known.access !== 'carry');
       if (!connection)
         throw new Error(
           'Only an app connected to your account here may suggest what to notify you about. Connect it first.',
@@ -1402,7 +1401,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const session = state.session;
       if (!session || !seed) throw new Error('Sign in first.');
       const { node } = session;
-      const problem = await audienceProblem(request, origin, false);
+      const problem = await audienceProblem(request, origin);
       if (problem) throw new Error(problem);
       // Connecting again replaces the old one: one carrier per origin.
       const previous = auth.connections().find((known) => known.origin === origin);
@@ -1454,11 +1453,11 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     },
 
     async disconnect(origin, options = {}) {
-      // The app goes with the agents connected through it; an agent can go alone.
+      // The app goes with the programs connected through it by code; such a program can go alone.
       const goes = (known: Connection) =>
         options.audience !== undefined
           ? known.audience === options.audience
-          : known.origin === origin && (!options.agent || !!known.agent);
+          : known.origin === origin && (!options.byCode || known.via === 'code');
       const going = auth.connections().filter(goes);
       const node = state.session?.node;
       for (const connection of going) {
@@ -1466,7 +1465,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         if (connection.carrySpace && node) await node.carriers.remove(connection.carrySpace).catch(() => {});
         if (node) await revokeConnection(node, connection);
         // The app's own subscriptions go with it, and a carrier's: what they look for is theirs to know.
-        if (!connection.agent && node) {
+        if (!connection.via && node) {
           for (const sub of await node.notifications.list()) {
             if (sub.app?.origin === connection.origin)
               await node.notifications.remove(sub.id).catch(() => {});

@@ -7,14 +7,20 @@ import assert from 'node:assert/strict';
 
 import {
   newPairingSecret,
-  pairingRoomId,
-  pairingKeyPair,
+  pairingCode,
   pairingCommitment,
-  derivePairingChannel,
   encodePairingTicket,
   decodePairingTicket,
   type PairingTicket,
 } from '../src/identity/pairing.js';
+import {
+  channelRoom,
+  channelKeyPair,
+  deriveChannel,
+  CODE_CHANNEL,
+  PAIRING_CHANNEL,
+  type ChannelKind,
+} from '../src/identity/channel.js';
 import { offerToPhone, receiveFromDesktop, type PairingStage } from '../src/session/pairing.js';
 import { generateSeed, seedToRecoveryCode } from '../src/identity/recovery-code.js';
 import { base64UrlEncode, utf8Encode, utf8Decode } from '../src/utils/encoding.js';
@@ -27,14 +33,15 @@ after(() => stops.forEach((stop) => stop()));
 const unreadable = (error: unknown) => isProtocolError(error, 'PAIRING_TICKET_UNREADABLE');
 
 /** Both sides of one exchange, run by hand */
-async function exchange(secret = newPairingSecret()) {
-  const offer = await pairingKeyPair();
-  const phone = await pairingKeyPair();
-  const points = { offer: offer.point, phone: phone.point };
+async function exchange(secret = newPairingSecret(), kind: ChannelKind = PAIRING_CHANNEL) {
+  const offer = await channelKeyPair();
+  const phone = await channelKeyPair();
+  const points = { kind, offer: offer.point, join: phone.point };
   return {
     secret,
-    offer: await derivePairingChannel({ secret, privateKey: offer.privateKey, ...points, side: 'offer' }),
-    phone: await derivePairingChannel({ secret, privateKey: phone.privateKey, ...points, side: 'phone' }),
+    points,
+    offer: await deriveChannel({ secret, privateKey: offer.privateKey, ...points, side: 'offer' }),
+    phone: await deriveChannel({ secret, privateKey: phone.privateKey, ...points, side: 'join' }),
   };
 }
 
@@ -112,16 +119,20 @@ describe('the ticket in the QR code', () => {
 describe('the meeting room', () => {
   test('is named after the secret, so every offer meets somewhere new', async () => {
     const secret = newPairingSecret();
-    assert.equal(await pairingRoomId(secret), await pairingRoomId(Uint8Array.from(secret)));
-    assert.notEqual(await pairingRoomId(newPairingSecret()), await pairingRoomId(newPairingSecret()));
+    const room = (s: Uint8Array) => channelRoom(PAIRING_CHANNEL, s);
+    assert.equal(await room(secret), await room(Uint8Array.from(secret)));
+    assert.notEqual(await room(newPairingSecret()), await room(newPairingSecret()));
+    // Connecting by code meets elsewhere, even with the same secret.
+    assert.notEqual(await room(secret), await channelRoom(CODE_CHANNEL, secret));
   });
 });
 
 describe('the exchange', () => {
   test('both sides get the same six digits, and each opens what the other sealed', async () => {
     const both = await exchange();
-    assert.match(both.offer.code, /^\d{6}$/);
-    assert.equal(both.offer.code, both.phone.code);
+    const code = await pairingCode(both.offer);
+    assert.match(code, /^\d{6}$/);
+    assert.equal(code, await pairingCode(both.phone));
     const handover = await both.offer.seal('pair:handover', utf8Encode('the account'));
     // Text, not an array of numbers.
     assert.match(handover, /^[A-Za-z0-9_-]+$/);
@@ -131,20 +142,20 @@ describe('the exchange', () => {
   });
 
   test('someone without the secret gets a different channel', async () => {
-    const offer = await pairingKeyPair();
-    const phone = await pairingKeyPair();
-    const points = { offer: offer.point, phone: phone.point };
-    const real = await derivePairingChannel({
+    const offer = await channelKeyPair();
+    const phone = await channelKeyPair();
+    const points = { kind: PAIRING_CHANNEL, offer: offer.point, join: phone.point };
+    const real = await deriveChannel({
       secret: newPairingSecret(),
       privateKey: offer.privateKey,
       ...points,
       side: 'offer',
     });
-    const guess = await derivePairingChannel({
+    const guess = await deriveChannel({
       secret: newPairingSecret(),
       privateKey: phone.privateKey,
       ...points,
-      side: 'phone',
+      side: 'join',
     });
     const sealed = await real.seal('pair:handover', utf8Encode('the account'));
     assert.equal(await guess.open('pair:handover', sealed), null);
@@ -189,15 +200,16 @@ describe('the exchange', () => {
   });
 
   test('a key that is not a P-256 point is refused', async () => {
-    const offer = await pairingKeyPair();
+    const offer = await channelKeyPair();
     const junk = new Uint8Array(65).fill(4);
     await assert.rejects(
       () =>
-        derivePairingChannel({
+        deriveChannel({
+          kind: PAIRING_CHANNEL,
           secret: newPairingSecret(),
           privateKey: offer.privateKey,
           offer: offer.point,
-          phone: junk,
+          join: junk,
           side: 'offer',
         }),
       unreadable,
@@ -211,9 +223,49 @@ describe('the exchange', () => {
   });
 
   test('the commitment is a hash of the point', async () => {
-    const { point } = await pairingKeyPair();
+    const { point } = await channelKeyPair();
     assert.equal(await pairingCommitment(point), await pairingCommitment(Uint8Array.from(point)));
-    assert.notEqual(await pairingCommitment(point), await pairingCommitment((await pairingKeyPair()).point));
+    assert.notEqual(await pairingCommitment(point), await pairingCommitment((await channelKeyPair()).point));
+  });
+
+  test('someone who learns the secret later cannot open a recording of the exchange', async () => {
+    // What passed in the room: both points in the clear, and sealed messages.
+    const both = await exchange();
+    const sealed = await both.offer.seal('pair:handover', utf8Encode('the account'));
+    // With the secret and both points, but neither private key, the best guess
+    // is an exchange of one's own against the recorded points.
+    for (const side of ['offer', 'join'] as const) {
+      const eve = await channelKeyPair();
+      const guess = await deriveChannel({
+        secret: both.secret,
+        privateKey: eve.privateKey,
+        ...both.points,
+        side,
+      });
+      assert.equal(await guess.open('pair:handover', sealed), null);
+    }
+  });
+
+  test('pairing and connecting by code never open each other’s messages', async () => {
+    const secret = newPairingSecret();
+    const offer = await channelKeyPair();
+    const join = await channelKeyPair();
+    const points = { offer: offer.point, join: join.point };
+    const pairing = await deriveChannel({
+      kind: PAIRING_CHANNEL,
+      secret,
+      privateKey: offer.privateKey,
+      ...points,
+      side: 'offer',
+    });
+    const code = await deriveChannel({
+      kind: CODE_CHANNEL,
+      secret,
+      privateKey: join.privateKey,
+      ...points,
+      side: 'join',
+    });
+    assert.equal(await code.open('x', await pairing.seal('x', utf8Encode('hi'))), null);
   });
 });
 

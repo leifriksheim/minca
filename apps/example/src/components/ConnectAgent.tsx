@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   connectToHome,
-  offerAgentLink,
-  type AgentAsking,
-  type AgentLinkStage,
+  offerConnectCode,
+  type CodeAsking,
+  type ConnectCodeStage,
 } from '@weaveprotocol/core/session';
 import { useAccount, useConnection } from '@weaveprotocol/core/react';
 import { Choice, Modal } from '@weave/app-shared/Modal';
@@ -27,8 +27,8 @@ type Lasts = (typeof LASTS)[number]['value'];
 type Step =
   | { readonly kind: 'starting' }
   | { readonly kind: 'waiting' }
-  | { readonly kind: 'asking'; readonly stage: Extract<AgentLinkStage, { kind: 'asking' }> }
-  | { readonly kind: 'connected'; readonly agent: AgentAsking }
+  | { readonly kind: 'asking'; readonly stage: Extract<ConnectCodeStage, { kind: 'asking' }> }
+  | { readonly kind: 'connected'; readonly agent: CodeAsking }
   | { readonly kind: 'failed'; readonly reason: string };
 
 /** Connects an agent on this computer: one command to paste, then the account home signs its note */
@@ -49,9 +49,15 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let stopped = false;
     let stop = () => {};
-    void offerAgentLink({ relays: relayUrls() }, (stage) => {
+    void offerConnectCode({ relays: relayUrls() }, (stage) => {
       if (stopped) return;
-      setStep(stage.kind === 'asking' ? { kind: 'asking', stage } : stage);
+      setStep(
+        stage.kind === 'asking'
+          ? { kind: 'asking', stage }
+          : stage.kind === 'connected'
+            ? { kind: 'connected', agent: stage.asking }
+            : stage,
+      );
     }).then(
       (offer) => {
         if (stopped) return offer.stop();
@@ -72,18 +78,18 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
     : '';
 
   // From the click itself: the home opens in a popup.
-  const allow = (stage: Extract<AgentLinkStage, { kind: 'asking' }>) =>
+  const allow = (stage: Extract<ConnectCodeStage, { kind: 'asking' }>) =>
     run(() =>
       connectToHome({
         home: state.home,
-        audience: stage.agent.did,
-        audienceProof: stage.agent.proof,
+        audience: stage.asking.did,
+        audienceProof: stage.asking.proof,
         request: {
-          name: stage.agent.name,
+          name: stage.asking.name,
           access: 'write',
           scope: 'account',
           chooseSpaces: false,
-          agent: true,
+          recordsOnly: stage.asking.recordsOnly,
           days: Number(days),
         },
       }).then((grant) => stage.allow(grant)),
@@ -116,7 +122,7 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
       ) : step.kind === 'asking' ? (
         <>
           <div style={note}>
-            <p style={styles.todoText}>“{step.stage.agent.name}” wants to connect</p>
+            <p style={styles.todoText}>“{step.stage.asking.name}” wants to connect</p>
             <p style={styles.errorHint}>
               It gets every space in your account, for {LASTS.find((option) => option.value === days)!.label}.
               Your account home opens to confirm.
@@ -182,7 +188,7 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Connected({ agent, onClose }: { agent: AgentAsking; onClose: () => void }) {
+function Connected({ agent, onClose }: { agent: CodeAsking; onClose: () => void }) {
   return (
     <>
       <div style={note}>

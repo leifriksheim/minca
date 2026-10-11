@@ -26,8 +26,7 @@ import {
   type Capability,
   type UCANToken,
 } from '../identity/ucan.js';
-import { isAgentNote } from '../identity/agent-note.js';
-import { ACCOUNT_ABILITY, noteGrants } from '../identity/abilities.js';
+import { ACCOUNT_ABILITY, grantsRecordsOnly, noteGrants } from '../identity/abilities.js';
 import { createSigner } from '../schema/signer.js';
 import { createSchemaEngine } from '../schema/schema-engine.js';
 import {
@@ -2048,7 +2047,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       to: [...to].sort(),
       text: opened?.text ?? null,
       createdAt: record.createdAt,
-      ...(record.viaAgent ? { viaAgent: true as const } : {}),
+      ...(record.recordsOnly ? { recordsOnly: true as const } : {}),
     });
   }
 
@@ -2356,8 +2355,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const checked = await verifyUCAN(agent.note, provider);
     if (!checked.valid)
       throw new Error(`The agent's note does not check out: ${checked.reason ?? 'invalid'}`);
-    if (!isAgentNote(agent.note))
-      throw new Error("That note is not an agent's — ask the account home for one with `agent: true`.");
+    if (!grantsRecordsOnly(agent.note))
+      throw new Error(
+        'That note grants more than records — ask the account home for one with `recordsOnly: true`.',
+      );
     const note: UCANToken = { ...parseUCAN(agent.note), encoded: agent.note, cid: await noteCid(agent.note) };
     if (note.payload.aud !== agentDid) throw new Error('That note was made out to a different key.');
     if (note.payload.iss !== config.signer.did) throw new Error('That note is from a different account.');

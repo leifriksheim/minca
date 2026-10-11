@@ -618,8 +618,8 @@ export function createCalls(node: P2PNode, options: CallsOptions = {}): Calls {
     const message = event.message;
     if (!isCallMessage(message) || !event.from) return;
     const { space, peer, from } = event;
-    // An agent acting for someone can't take part in their calls.
-    if (event.agent) return;
+    // A key given records only, such as a program acting for someone, can't take part in their calls.
+    if (event.recordsOnly) return;
 
     switch (message.type) {
       case 'call.here': {

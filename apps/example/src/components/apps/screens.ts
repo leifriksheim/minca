@@ -230,7 +230,7 @@ const toScreen = (record: NodeRecord, viewer: string): ScreenRecord => ({
   createdAt: record.createdAt,
   updatedAt: record.updatedAt,
   mine: record.createdBy === viewer,
-  viaAgent: record.viaAgent === true,
+  viaAgent: record.recordsOnly === true,
 });
 
 /** Only plain data crosses into a screen, and only this much of it */

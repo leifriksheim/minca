@@ -697,7 +697,7 @@ describe('node.doors', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(await manager.fromSeed(seed), provider).delegate({
       audience: did,
-      // No agent fact: what it may do is what the note grants, whatever holds the key.
+      // What it may do is what the note grants, whatever holds the key.
       capabilities: [{ with: '*', can: 'record/*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });

@@ -527,7 +527,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   {
     name: 'collections_proposals',
     description:
-      'The blueprints proposed in a space: each with its title, who proposed it (viaAgent when an agent did), and for every ' +
+      'The blueprints proposed in a space: each with its title, who proposed it (recordsOnly when under a note that grants records only), and for every ' +
       'collection whether it is new, already there, or would change one, with what it allows, worked out from its rules. ' +
       '"applied" is true once someone has applied it. "updates" names the blueprint it is a new version of; "superseded" ' +
       'is true once a newer version of it has been applied, so it is only history.',
@@ -548,7 +548,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
           title: record.body?.title ?? null,
           description: record.body?.description ?? null,
           proposedBy: record.createdBy,
-          ...(record.viaAgent ? { viaAgent: true } : {}),
+          ...(record.recordsOnly ? { recordsOnly: true } : {}),
           ...(record.body?.updates ? { updates: record.body.updates } : {}),
           applied: review?.applied ?? false,
           superseded: superseded.has(record.key),
