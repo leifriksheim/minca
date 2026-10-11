@@ -29,7 +29,7 @@ import { aesOpen, aesSeal, NONCE_BYTES } from '../identity/aes.js';
  * clear, and "try to decrypt, fall back to raw on failure" turns every genuine
  * key mismatch into silently wrong data.
  */
-const MAGIC = new Uint8Array([0x77, 0x65, 0x61, 0x76, 0x65, 0x65, 0x02, 0x00]); // "weavee\x02\x00" — Weave, encrypted, v2
+const MAGIC = new Uint8Array([0x77, 0x65, 0x61, 0x76, 0x65, 0x65, 0x01, 0x00]); // "weavee\x01\x00" — Weave, encrypted, v1
 
 /**
  * What gets sealed by default: every entry of the space registry — each

@@ -970,7 +970,7 @@ Values of entries whose key starts with one of the sealed prefixes —
 
 ```
 offset  size  field
-0       8     magic  77 65 61 76 65 65 02 00   ("weavee", version 2, 0)
+0       8     magic  77 65 61 76 65 65 01 00   ("weavee", version 1, 0)
 8       12    IV, random per write
 20      n+16  AES-GCM ciphertext and tag of the value,
               additional data = UTF-8 of the entry key

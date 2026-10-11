@@ -800,11 +800,11 @@ the **account key**: input for member keys (§9.2) and the account's own spaces
 
 Example (seed of §3.3): `f505285e87582af18ea47617b97d6b408f3032c3fd1dabf87b39ef8885d77e3a`.
 
-### 10.2 Vault format (version 2)
+### 10.2 Vault format (version 1)
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "label": "Ada",
   "did": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
   "createdAt": "2026-09-26T11:47:11.062Z",

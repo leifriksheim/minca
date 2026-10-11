@@ -72,7 +72,7 @@ export type SeedWrap = DeviceWrap | PassphraseWrap;
 
 /** The account file at the root of a data folder, in its locked form */
 export interface AccountVault {
-  readonly version: 2;
+  readonly version: 1;
   readonly label: string;
   /** The DID the seed derives. Public, and useful for recognising the folder. */
   readonly did: string;
@@ -85,7 +85,7 @@ export interface AccountVault {
  * wraps; each wrap is checked when something tries to open it.
  */
 export function isAccountVault(value: unknown): value is AccountVault {
-  return isRecord(value) && value.version === 2 && Array.isArray(value.wraps);
+  return isRecord(value) && value.version === 1 && Array.isArray(value.wraps);
 }
 
 /** Random bytes as base64url, for salts and nonces. */
@@ -280,7 +280,7 @@ export function createVault(params: {
   label?: string;
 }): AccountVault {
   return {
-    version: 2,
+    version: 1,
     label: params.label ?? 'My data',
     did: params.did,
     createdAt: new Date().toISOString(),
