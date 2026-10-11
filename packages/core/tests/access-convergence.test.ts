@@ -138,7 +138,7 @@ function generate(seed: number): History {
           )
         : [],
     );
-    const base = { id: newId(), root: author(), author: r.pick(WRITERS), seen, cutoff };
+    const base = { id: newId(), root: author(), author: r.pick(WRITERS), seen, cutoff, line: r.int(6) };
     let event: AccessEvent;
     if (roll < 40) {
       const did = r.pick(PEOPLE);
@@ -187,7 +187,8 @@ function generate(seed: number): History {
       event = { ...base, kind: 'revoke', key: `revoke:${key}|${base.root}`, target: key };
     } else if (roll < 75) {
       const writer = r.pick(WRITERS);
-      event = { ...base, kind: 'fork', key: `fork:${writer}`, writer, from: r.int(5) };
+      const collection = r.pick([...COLLECTIONS, 'sys.member', 'sys.role']);
+      event = { ...base, kind: 'fork', key: `fork:${writer}`, writer, collection, from: r.int(5) };
     } else if (roll < 83) {
       const name = r.pick(['app.x', 'app.y']);
       event = { ...base, kind: 'definition', key: `collection:${name}`, name, deleted: r.chance(0.15) };
@@ -233,9 +234,7 @@ function generate(seed: number): History {
     id: `rec-${i}`,
     root: r.chance(0.8) ? r.pick([...powerful]) : r.pick(PEOPLE),
     seen: someSeen(),
-    ...(r.chance(0.5)
-      ? { writer: r.pick(WRITERS), at: r.int(6), collection: r.pick(COLLECTIONS), line: r.int(6) }
-      : {}),
+    ...(r.chance(0.5) ? { writer: r.pick(WRITERS), collection: r.pick(COLLECTIONS), line: r.int(6) } : {}),
     ...(r.chance(0.3) ? { within: someSeen() } : {}),
   }));
   return { genesis, events, cuts, records };
@@ -289,8 +288,14 @@ function shape(history: ReferenceHistory, h: History): Record<string, string> {
   }
   for (const writer of WRITERS)
     for (const did of PEOPLE) out[`revoked ${writer} ${did}`] = JSON.stringify(history.revoked(writer, did));
-  for (const writer of WRITERS) out[`forked ${writer}`] = JSON.stringify(history.forked(writer));
-  out.forks = JSON.stringify([...history.forks()].sort((a, b) => a.writer.localeCompare(b.writer)));
+  for (const writer of WRITERS)
+    for (const collection of [...COLLECTIONS, 'sys.member', 'sys.role'])
+      out[`forked ${writer} ${collection}`] = JSON.stringify(history.forked(writer, collection));
+  out.forks = JSON.stringify(
+    [...history.forks()].sort(
+      (a, b) => a.writer.localeCompare(b.writer) || a.collection.localeCompare(b.collection),
+    ),
+  );
   for (const did of PEOPLE) out[`named ${did}`] = String(history.named(did));
   for (const key of INVITES) out[`knownInvite ${key}`] = String(history.knownInvite(key));
   return out;

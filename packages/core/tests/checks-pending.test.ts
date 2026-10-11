@@ -80,7 +80,7 @@ test('a pending decision becomes visible in list once its cited vote arrives', a
     links: about,
     retain: true,
     version: { key: passedKey, seq: 0 },
-    log: { n: 0, c: { n: 0 } },
+    log: { n: 0 },
   });
   await hold(bob.node, space);
   await until(

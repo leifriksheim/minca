@@ -260,8 +260,8 @@ forgetting content, which is the point of stubs (02 §4.9).
 Also related: Git's shallow clones (a cut the client chooses, trusted
 because it is local), and Hypercore and Certificate Transparency's signed tree
 heads (a signer vouches for a prefix), which is closest to §3. Writers' logs
-have landed (02 §4.10): a checkpoint could cite a writer's log position
-instead of a chain.
+have landed (02 §4.10): a checkpoint could cite a writer's place in a
+collection's line instead of a chain.
 
 ## 6. Migration
 
@@ -334,9 +334,9 @@ dropped. Worth doing for canvases and chats with many deletes. It touches
 - **Interaction with writers' logs** (02 §4.10): a node holding a
   collection lacks nothing a writer's line there names only if it holds every
   stub the lines name. A stub dropped below a checkpoint is named by the next
-  version's `log.prev` or `log.c.prev`, and is fork evidence (03 §6.5), so a
-  checkpoint must stand in for it in both: completeness counts it as held, and
-  a fork or break below it can no longer be proven.
+  version's `log.prev`, and is fork evidence (03 §6.5), so a checkpoint must
+  stand in for it in both: completeness counts it as held, and a fork or break
+  below it can no longer be proven.
 
 ## 9. Tests it would need
 

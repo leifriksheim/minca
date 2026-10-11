@@ -220,8 +220,8 @@ describe('holding part of a space', () => {
         }),
         pair.privateKey,
       );
-    const first = await sign('first', { n: 0, c: { n: 0 } });
-    const second = await sign('second', { n: 1, prev: first.id, c: { n: 1, prev: first.id } });
+    const first = await sign('first', { n: 0 });
+    const second = await sign('second', { n: 1, prev: first.id });
     const slip = async (version: Version) => {
       await letGo(bob.node, space);
       await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(version);

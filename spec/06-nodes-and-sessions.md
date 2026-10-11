@@ -148,9 +148,9 @@ The key's DID is the grant's audience, and the app's node signs with this key,
 not a fresh one. Where the reference keeps it:
 [the app-side client](../packages/core/docs/node.md#the-app-side-client).
 
-Every tab or window of one app signs with this key, so they write one log
-([02](02-records.md) §4.10): each place in it is taken under a lock every tab
-shares, and read from the storage they share.
+Every tab or window of one app signs with this key, so they write the same
+lines ([02](02-records.md) §4.10): each place in them is taken under a lock
+every tab shares, and read from the storage they share.
 
 > **Known defect:** so every tab or window of one app is the same DID on the
 > relays, and only the first gets into a space's room; the others report

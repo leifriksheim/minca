@@ -274,12 +274,12 @@ describe('a record’s chain', () => {
         version: { key: 'mfrggzdfmztwq2lknnwg23tpoa', seq: 0 },
         seen: ['b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq'],
         links: [{ rel: 'about', to: 'list.groceries' }],
-        log: { n: 0, c: { n: 0 } },
+        log: { n: 0 },
       }),
       me.privateKey,
     );
     assert.equal(example.bodyHash, 'b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq');
-    assert.equal(example.id, 'bq4ldps7e2jbyewbnlj2tsrcgvnicui6cpgekt76hlkc7zepebydq');
+    assert.equal(example.id, 'bvp24phiade5evl3x5un7qv77yyp3fpkjwdeakivuxv2mz4uzbqeq');
   });
 
   test('the body is signed through its hash: a stub checks alone, another body does not', async () => {

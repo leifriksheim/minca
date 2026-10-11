@@ -497,9 +497,9 @@ describe('space access: taking it back', () => {
         }),
         pair.privateKey,
       );
-    const first = await sign('honest', { n: 0, c: { n: 0 } });
+    const first = await sign('honest', { n: 0 });
     // Planted before the removal, far past anything real.
-    const planted = await sign('plant', { n: 1e12, prev: 'bnothing', c: { n: 1e12, prev: 'bnothing' } });
+    const planted = await sign('plant', { n: 1e12, prev: 'bnothing' });
     await letGo(bob.node, space);
     for (const version of [first, planted])
       await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(version);
@@ -513,7 +513,7 @@ describe('space access: taking it back', () => {
     );
     await alice.node.spaces.setMember(space, bob.node.did, null);
     // After the removal, the next place in Bob's real line, naming the old point.
-    const after = await sign('after removal', { n: 1, prev: first.id, c: { n: 1, prev: first.id } });
+    const after = await sign('after removal', { n: 1, prev: first.id });
     await letGo(alice.node, space);
     await aliceStore.addVersion(after);
     await hold(alice.node, space);
@@ -546,9 +546,7 @@ describe('space access: taking it back', () => {
           body: { text },
           proof: note.encoded,
           seen: heads,
-          log: last
-            ? { n: (last.log?.n ?? 0) + 1, prev: last.id, c: { n: (last.log?.c.n ?? 0) + 1, prev: last.id } }
-            : { n: 0, c: { n: 0 } },
+          log: last ? { n: (last.log?.n ?? 0) + 1, prev: last.id } : { n: 0 },
         }),
         pair.privateKey,
       ));

@@ -1,9 +1,10 @@
 /**
  * @module node/writers
- * Every key's writes in a space form one line: its log (spec 02 §4.10).
+ * A key's writes in each collection of a space form one line: its log
+ * (spec 02 §4.10).
  *
- * Each version a key signs in a space takes the next place in that key's log
- * there, naming the one before. Two versions at one place are a fork, which
+ * Each version a key signs in a space takes the next place in that key's line
+ * for its collection there, naming the one before. Two versions at one place are a fork, which
  * only a key used in two places at once can make: a stolen key, or one copied
  * where it shouldn't be. So a node hands out each place once, one write at a
  * time per key and space, and remembers the last place it gave before the
@@ -23,7 +24,7 @@ import type { HeadStore } from './writer-keys.js';
 import { utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { isRecord } from '../utils/guards.js';
 
-/** The last place a key took in a space's log */
+/** The last place a key took in one collection's line */
 interface Head {
   readonly n: number;
   readonly id: string;
@@ -32,9 +33,9 @@ interface Head {
 export interface Writers {
   /**
    * Signs the next version of `did`'s log in a space, in a collection. `sign`
-   * is given its places — in the space's line and the collection's — and
-   * returns the version, or throws to give them back. Writes by one key in one
-   * space go one at a time; the places are remembered before this returns, so
+   * is given its place in the collection's line and returns the version, or
+   * throws to give it back. Writes by one key in one
+   * space go one at a time; the place is remembered before this returns, so
    * before the version can leave the node.
    */
   append(
@@ -45,13 +46,17 @@ export interface Writers {
   ): Promise<Version>;
 }
 
-/** A key's places in one space, kept in one record so no failure can leave the two lines out of step */
+/** A key's places in one space: the last it took in each collection's line */
 interface Places {
-  readonly head: Head;
   readonly collections: Readonly<Record<string, Head>>;
 }
 
-const headKey = (did: string, spaceId: string) => `head/${did}/${spaceId}`;
+/**
+ * Where a key's places in a space are kept. `head/` held them while a key had
+ * one line across a space's collections, whose places no peer accepts any
+ * more, so a key carried over from then starts each line afresh.
+ */
+const headKey = (did: string, spaceId: string) => `lines/${did}/${spaceId}`;
 
 const isHead = (value: unknown): value is Head =>
   isRecord(value) &&
@@ -63,10 +68,10 @@ function readPlaces(bytes: Uint8Array | null): Places | null {
   if (!bytes) return null;
   try {
     const parsed: unknown = JSON.parse(utf8Decode(bytes));
-    if (!isRecord(parsed) || !isHead(parsed.head) || !isRecord(parsed.collections)) return null;
+    if (!isRecord(parsed) || !isRecord(parsed.collections)) return null;
     const collections: Record<string, Head> = {};
     for (const [name, head] of Object.entries(parsed.collections)) if (isHead(head)) collections[name] = head;
-    return { head: parsed.head, collections };
+    return { collections };
   } catch {
     return null;
   }
@@ -92,7 +97,7 @@ function exclusively<T>(name: string, work: () => Promise<T>): Promise<T> {
 }
 
 /** The next place after a head, or the first */
-const after = (head: Head | undefined) => (head ? { n: head.n + 1, prev: head.id } : { n: 0 });
+const after = (head: Head | undefined): WriterLog => (head ? { n: head.n + 1, prev: head.id } : { n: 0 });
 
 /**
  * The logs of the keys one node signs with.
@@ -116,11 +121,10 @@ export function createWriters(storeOf: (did: string) => HeadStore | null): Write
       const key = headKey(did, spaceId);
       const take = async () => {
         const places = await placesOf(did, spaceId);
-        const log: WriterLog = { ...after(places?.head), c: after(places?.collections[collection]) };
+        const log = after(places?.collections[collection]);
         const version = await sign(log);
         const next: Places = {
-          head: { n: log.n, id: version.id },
-          collections: { ...places?.collections, [collection]: { n: log.c.n, id: version.id } },
+          collections: { ...places?.collections, [collection]: { n: log.n, id: version.id } },
         };
         // Kept before the version can leave: a restart must never give these places again.
         await storeOf(did)?.put(key, utf8Encode(JSON.stringify(next)));

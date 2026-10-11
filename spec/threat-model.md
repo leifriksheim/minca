@@ -43,6 +43,8 @@ and metadata through relays and hosts (§3.7, §3.8).
 | **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members              |
 | **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                            |
 
+A key thief is answered by revoking the key, not by detecting the copy (§3.4).
+
 Peers are assumed to run arbitrary code. Nothing relies on a peer running the
 reference implementation, or any implementation, honestly.
 
@@ -114,14 +116,16 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
-    by revoking its key or forking their log ([#168](https://github.com/leifriksheim/weave/issues/168)),
+    by revoking its key or forking their line in the warrants' collection ([#168](https://github.com/leifriksheim/weave/issues/168)),
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
-  - Fork proofs deter, but don't catch: a fork counts once a member holding
-    both versions writes `sys.fork`, and a key can sign where its other branch
-    never reaches ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_.
+  - Fork proofs don't reliably catch a copy of a key that writes where its
+    other branch never reaches (§3.4): a fork counts once a member holding
+    both versions writes `sys.fork` _(traced)_. A second version at a place a
+    cutoff covers is always caught, since the remover holds that line (§3.3,
+    03 §6.3).
   - It can disown its own history, withdrawing votes and agreements others
     relied on, by revoking its own key with a cutoff of 0, or forking its
-    own log at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
+    own line in a collection at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
   - A `seq 0` for someone else's key can take over "creator" ([#72](https://github.com/leifriksheim/weave/issues/72)).
   - A collection's checks bind only readers that judge them: peers keep and
     sync a version that fails them, and only the library leaves it out of
@@ -178,21 +182,42 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
 
 ### 3.4 Key thief
 
+**Principle.** It concerns a copy of a key its owner didn't make, and nothing
+else. A stolen device key is treated like a stolen session token in
+an ordinary app: what it signed before it was revoked stands, and that is on
+whoever held it. The defence is revocation, and expiry where peers can judge
+it (live use, 01 §7.4). Weave does not try to detect a copied key: a fork
+proof (02 §4.10) withdraws a copy's writes only where it happens to be
+proven, and nothing relies on catching a copy. Reviews measure this section
+against that, not against catching the copy. It does not extend to removal
+and revocation: a second version at a place a cutoff covers must be caught
+and withdrawn (03 §6.3), and is, because the remover's node holds the covered
+line. That is relied on, by members (§3.2) and former members (§3.3).
+
 - **Holds.**
-  - Once a fork of the key's log is proven, what it signed from the proven
-    place on stops counting, records and changes to who may do what alike
-    (02 §4.10, 03 §4.3, §6.5).
   - Once the owner revokes the key, what it signed past what the owner had
     seen of it stops counting, records and changes to who may do what alike, under every note to that key. A
     revoke the thief writes first, covering what it signed in advance, doesn't
     shield it: every revoke applies (03 §6.4).
+  - Once a fork of the key's line in a collection is proven, what it signed
+    in that collection from the proven place on stops counting, records and
+    changes to who may do what alike (02 §4.10, 03 §4.3, §6.5).
 - **Does not hold yet.**
   - It can revoke the owner's other keys, with a cutoff of its choosing: a key
     whose note grants `*` is the account while it lasts
     ([#168](https://github.com/leifriksheim/weave/issues/168)).
-  - It decides whether it forks the owner's line at all ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_. And a fork
-    it makes at the start of the line withdraws everything the owner's device
-    wrote ([#166](https://github.com/leifriksheim/weave/issues/166)).
+  - A fork it makes at the start of a line withdraws everything the owner's
+    device wrote in that collection ([#166](https://github.com/leifriksheim/weave/issues/166)).
+- **By design** (the principle above).
+  - What it signed before the revoke stands. The revoke stops the key from
+    then on, and its cutoff keeps what the revoking node held of the key's
+    lines, so a copy's record or access change that reached that node first,
+    a grant in `sys.member` say, keeps counting.
+  - Only a fork proven in the same collection withdraws it. Lines are kept
+    per collection and nothing orders a key's writes across them (02 §4.10),
+    so a copy that writes only where the owner's device doesn't is never
+    caught, and a fork proven in one collection leaves the key's writes in
+    the others standing.
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
     live messages, connecting) ends with the note (01 §7.4). Signing out
@@ -202,7 +227,7 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
     keys ([#26](https://github.com/leifriksheim/weave/issues/26)). A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
-_Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…")._
+_Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a stolen key is answered by its revoke…")._
 
 ### 3.5 Root thief
 

@@ -269,7 +269,7 @@ this one own the use; this table is the registry.
 | `weave/contacts/nonce/v1`                | as above                                  | account key                                                                        | space nonce            | Contacts space                                               | `space/account-registry.ts:92,103` | 03     |
 | `weave/contacts/key/v1`                  | as above                                  | account key                                                                        | space key K            | Contacts space                                               | `space/account-registry.ts:92,105` | 03     |
 | `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key               | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                  | relay room name        | A space's room on a relay                                    | `node/space-runtime.ts:254`        | 04     |
+| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                  | relay room name        | A space's room on a relay                                    | `node/space-runtime.ts:260`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention

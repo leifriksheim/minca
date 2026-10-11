@@ -57,7 +57,7 @@ import { createMirror, type Mirror } from '../storage/mirror.js';
 import type { FolderAdapter } from '../storage/folder-adapter.js';
 import { createVersionCheck } from '../validation/check-version.js';
 import type { Writers } from './writers.js';
-import { breaksCollectionLine, breaksLine, checkFork, forkProof } from '../records/fork.js';
+import { breaksLine, checkFork, forkProof } from '../records/fork.js';
 import { knownKind, readWarrant, type Warrant, type WarrantKind } from '../records/warrant.js';
 import {
   EARLIER_KEYS_LABEL,
@@ -313,7 +313,7 @@ export interface ActiveSession {
 
 export interface SpaceRuntimeDeps {
   readonly record: SpaceRecord;
-  /** The logs of the keys this node signs with: one line per key and space (`node/writers.ts`) */
+  /** The logs of the keys this node signs with: one line per key, space and collection (`node/writers.ts`) */
   readonly writers: Writers;
   readonly stores: StoreFactory;
   readonly provider: CryptoProvider;
@@ -712,7 +712,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       author: version.author,
       seen,
       cutoff: NO_CUTOFF,
-      ...(version.log ? { at: version.log.n, line: version.log.c.n } : {}),
+      ...(version.log ? { line: version.log.n } : {}),
     };
 
     if (version.collection === DEFINITION_COLLECTION) {
@@ -792,7 +792,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         // The proof stands on its own: every peer checks both signatures itself.
         const fork = await checkFork(body.a, body.b, space.id, provider);
         if (typeof fork === 'string' || version.key !== (await forkKey(fork.writer))) return null;
-        return { ...base, kind: 'fork', writer: fork.writer, from: fork.from };
+        return { ...base, kind: 'fork', writer: fork.writer, collection: fork.collection, from: fork.from };
       }
       case KEEPERS_COLLECTION: {
         const { keepers } = body;
@@ -1134,7 +1134,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         seen,
         writer: version.author,
         collection: version.collection,
-        ...(version.log ? { at: version.log.n, line: version.log.c.n } : {}),
+        ...(version.log ? { line: version.log.n } : {}),
       },
       needs,
       within,
@@ -2576,7 +2576,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!cache || !version.log || version.collection.startsWith('sys.')) return;
     const { collection } = version;
     const missing = cacheState.missing[collection] ?? [];
-    const before = version.log.c.prev;
+    const before = version.log.prev;
     if (!before || missing.includes(before) || (await storage.getVersion(before))) return;
     cacheState.missing[collection] = [...missing, before];
     sync.ask(collection, [before]);
@@ -2815,7 +2815,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // Every version under a check: it reads the one before, and others cite it.
       (!deleted && !!definition?.rules?.check?.length);
 
-    // The next place in this key's log here: given back if the version is refused below.
+    // The next place in this key's line for the collection: given back if the version is refused below.
     const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
       const { history, events: held } = await access();
       const seen = await seenFor(history, collection);
@@ -2957,21 +2957,21 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   // ─── Writers' logs ─────────────────────────────────────────────────
   //
-  // Every key's writes here form one line (02 §4.10). Each place a key took is
-  // remembered by the version that took it, so a second version at the same
-  // place is found the moment it arrives. And each version is checked against
-  // the one it names as the place before — when it arrives, or when that one
-  // does. Either way the proof goes to everyone else.
+  // A key's writes in each collection here form one line (02 §4.10). Each
+  // place a key took is remembered by the version that took it, so a second
+  // version at the same place is found the moment it arrives. And each
+  // version is checked against the one it names as the place before — when it
+  // arrives, or when that one does. Either way the proof goes to everyone else.
 
-  /** `log/<author>/<n>` → the id of the version that took that place */
-  const LOG_PREFIX = 'log/';
+  // Named for this format of the log: the `log/`, `next/`, `clog/` and
+  // `cnext/` a node kept before it map places to versions no peer holds any
+  // more, so they are left unread rather than trusted.
+  /** `place/<author>/<collection>/<n>` → the id of the version that took that place */
+  const LOG_PREFIX = 'place/';
   /** Key DID → the account it writes for here */
   const KEY_ROOT_PREFIX = 'keyroot/';
-  /** `next/<id>` → the id of a version naming that one as the place before it */
-  const NEXT_PREFIX = 'next/';
-  /** The same two, for each key's line in each collection */
-  const COLLECTION_LOG_PREFIX = 'clog/';
-  const COLLECTION_NEXT_PREFIX = 'cnext/';
+  /** `follows/<id>` → the id of a version naming that one as the place before it */
+  const NEXT_PREFIX = 'follows/';
 
   async function placeInLog(version: Version): Promise<void> {
     if (version.space !== space.id || !version.log) return;
@@ -2985,56 +2985,43 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       !(await adapter.get(`${KEY_ROOT_PREFIX}${version.author}`))
     )
       await adapter.put(`${KEY_ROOT_PREFIX}${version.author}`, utf8Encode(root));
-    // Two lines: everything the key wrote here, and what it wrote in this collection.
-    const lines = [
-      {
-        at: `${LOG_PREFIX}${version.author}/${log.n}`,
-        prev: log.prev,
-        next: NEXT_PREFIX,
-        breaks: breaksLine,
-      },
-      {
-        at: `${COLLECTION_LOG_PREFIX}${version.author}/${version.collection}/${log.c.n}`,
-        prev: log.c.prev,
-        next: COLLECTION_NEXT_PREFIX,
-        breaks: breaksCollectionLine,
-      },
-    ];
-    for (const line of lines) {
-      // Its place: a second version there is a fork.
-      const held = await adapter.get(line.at);
-      if (!held) await adapter.put(line.at, utf8Encode(version.id));
-      else if (utf8Decode(held) !== version.id) {
-        const first = await storage.getVersion(utf8Decode(held));
-        if (first)
-          void reportFork(first, version, version.author, Math.min(first.log?.n ?? log.n, log.n)).catch(
-            () => {},
-          );
-      }
-      // The place before it, if held, must be its key's; and so must it be for whatever names it.
-      if (line.prev) {
-        await adapter.put(`${line.next}${line.prev}`, utf8Encode(version.id));
-        const previous = await storage.getVersion(line.prev);
-        if (previous && line.breaks(version, previous))
-          void reportFork(version, previous, version.author, log.n).catch(() => {});
-      }
-      const naming = await adapter.get(`${line.next}${version.id}`);
-      const next = naming ? await storage.getVersion(utf8Decode(naming)) : null;
-      if (next?.log && line.breaks(next, version))
-        void reportFork(next, version, next.author, next.log.n).catch(() => {});
+    // Its place: a second version there is a fork.
+    const at = `${LOG_PREFIX}${version.author}/${version.collection}/${log.n}`;
+    const held = await adapter.get(at);
+    if (!held) await adapter.put(at, utf8Encode(version.id));
+    else if (utf8Decode(held) !== version.id) {
+      const first = await storage.getVersion(utf8Decode(held));
+      if (first) void reportFork(first, version, version.author, version.collection, log.n).catch(() => {});
     }
+    // The place before it, if held, must be its key's; and so must it be for whatever names it.
+    if (log.prev) {
+      await adapter.put(`${NEXT_PREFIX}${log.prev}`, utf8Encode(version.id));
+      const previous = await storage.getVersion(log.prev);
+      if (previous && breaksLine(version, previous))
+        void reportFork(version, previous, version.author, version.collection, log.n).catch(() => {});
+    }
+    const naming = await adapter.get(`${NEXT_PREFIX}${version.id}`);
+    const next = naming ? await storage.getVersion(utf8Decode(naming)) : null;
+    if (next?.log && breaksLine(next, version))
+      void reportFork(next, version, next.author, next.collection, next.log.n).catch(() => {});
     await noteGap(version);
   }
 
   /**
-   * Hands every peer the proof that a key's log is not one line — a fork or a
-   * break — unless a proof at or before this place stands already. Any member
-   * may; one whose note doesn't let it change access leaves it to one whose
-   * note does.
+   * Hands every peer the proof that a key's line for a collection is not one
+   * line — a fork or a break — unless a proof at or before this place stands
+   * already. Any member may; one whose note doesn't let it change access
+   * leaves it to one whose note does.
    */
-  async function reportFork(a: Version, b: Version, writer: string, from: number): Promise<void> {
+  async function reportFork(
+    a: Version,
+    b: Version,
+    writer: string,
+    collection: string,
+    from: number,
+  ): Promise<void> {
     if (closed) return;
-    const known = (await access()).history.forked(writer);
+    const known = (await access()).history.forked(writer, collection);
     if (known && known.from <= from) return;
     if (!noteGrants(session.proof(), accessCapability(space.id, FORK_COLLECTION)) || (await cannotWrite()))
       return;
@@ -3386,7 +3373,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       for (const lines of accounts) {
         const end = lines[round];
         if (!end || named >= MAX_CUTOFF) continue;
-        (cutoff[end.author] ??= {})[end.collection] = end.log!.c.n;
+        (cutoff[end.author] ??= {})[end.collection] = end.log!.n;
         named++;
       }
     return cutoff;
@@ -3404,7 +3391,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (!version.log) return;
       const line = `${version.author} ${version.collection}`;
       const entry = placed.get(line) ?? { did, held: new Map<number, Version>() };
-      if (!entry.held.has(version.log.c.n)) entry.held.set(version.log.c.n, version);
+      if (!entry.held.has(version.log.n)) entry.held.set(version.log.n, version);
       placed.set(line, entry);
     };
     for (const version of await everyCurrent()) {
@@ -3416,7 +3403,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const key = name.slice(KEY_ROOT_PREFIX.length);
       const did = utf8Decode((await adapter.get(name)) ?? new Uint8Array());
       if ((only && key !== only) || !dids.has(did)) continue;
-      for (const place of await adapter.list(`${COLLECTION_LOG_PREFIX}${key}/`)) {
+      for (const place of await adapter.list(`${LOG_PREFIX}${key}/`)) {
         const id = await adapter.get(place);
         const version = id ? await storage.getVersion(utf8Decode(id)) : null;
         if (version?.author === key) add(did, version);
@@ -3427,7 +3414,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       let end: Version | null = null;
       for (let n = 0; ; n++) {
         const version = held.get(n);
-        if (!version || (n > 0 && version.log?.c.prev !== end?.id)) break;
+        if (!version || (n > 0 && version.log?.prev !== end?.id)) break;
         end = version;
       }
       if (end) byAccount.set(did, [...(byAccount.get(did) ?? []), end]);

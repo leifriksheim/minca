@@ -69,9 +69,10 @@ export const RELAYS_COLLECTION = 'sys.relays';
  */
 export const KEEPERS_COLLECTION = 'sys.keepers';
 /**
- * A writer's log forked: two versions one key signed at one place in its log
- * for this space (02 §4.10). The record carries both, so every peer checks the
- * proof for itself, and the key's versions from that place on stop counting.
+ * A writer's log forked: two versions one key signed at one place in its line
+ * for one collection of this space (02 §4.10). The record carries both, so
+ * every peer checks the proof for itself, and the key's versions in that
+ * collection from that place on stop counting.
  */
 export const FORK_COLLECTION = 'sys.fork';
 
@@ -146,8 +147,7 @@ interface EventBase {
   readonly author: string;
   /** The latest access changes its author knew of */
   readonly seen: ReadonlyArray<string>;
-  /** Its place in its key's log here, and in its key's line for its collection: what forks and cutoffs reach */
-  readonly at?: number;
+  /** Its place in its key's line for its collection here: what forks and cutoffs reach */
   readonly line?: number;
   /**
    * What this change leaves standing of what it takes away: for each key of
@@ -156,6 +156,13 @@ interface EventBase {
    * Versions at or below it are covered.
    */
   readonly cutoff: Cutoff;
+}
+
+/** A key whose line for a collection forked, and the place from which its versions there stop counting */
+export interface ForkedLine {
+  readonly writer: string;
+  readonly collection: string;
+  readonly from: number;
 }
 
 /** Key DID → collection → the place in that key's line for that collection, at and below which is covered */
@@ -194,7 +201,9 @@ export type AccessEvent = EventBase &
         readonly kind: 'fork';
         /** The key whose log forked */
         readonly writer: string;
-        /** Where: its versions here and after no longer count */
+        /** The collection whose line forked */
+        readonly collection: string;
+        /** Where: its versions in that collection here and after no longer count */
         readonly from: number;
       }
     | {
@@ -373,9 +382,8 @@ export interface AccessHistory {
       readonly id: string;
       readonly root: string;
       readonly seen: ReadonlyArray<string>;
-      /** The key that signed it, and its place in that key's log here */
+      /** The key that signed it */
       readonly writer?: string;
-      readonly at?: number;
       /** Its collection, and its place in its key's line for that collection */
       readonly collection?: string;
       readonly line?: number;
@@ -385,10 +393,10 @@ export interface AccessHistory {
   ): RecordVerdict;
   /** The applied changes by an account that revoked one of its keys */
   revoked(key: string, root: string): ReadonlyArray<string>;
-  /** Where a key's log forked, as the lowest place any applied change proves, if it did */
-  forked(writer: string): { readonly event: string; readonly from: number } | null;
-  /** Every key whose log forked, and from where */
-  forks(): ReadonlyArray<{ readonly writer: string; readonly from: number }>;
+  /** Where a key's line for a collection forked, as the lowest place any applied change proves, if it did */
+  forked(writer: string, collection: string): { readonly event: string; readonly from: number } | null;
+  /** Every key whose line for a collection forked, and from where */
+  forks(): ReadonlyArray<ForkedLine>;
   /**
    * Whether an account appears anywhere in the history — the creator, or
    * named by any member change, whatever became of it. Only grows as changes
@@ -601,6 +609,9 @@ function change(event: AccessEvent, state: MutableState): void {
 // valid changes: on each record, the latest wins, and of latest changes that
 // didn't see each other, the one that gives least.
 
+/** A key's line for one collection, as a map key */
+const lineOf = (writer: string, collection: string) => `${writer}\n${collection}`;
+
 /** The kind's collection: where a change's place in its key's line is counted */
 const KIND_COLLECTION: Record<AccessEvent['kind'], string> = {
   role: ROLE_COLLECTION,
@@ -693,7 +704,8 @@ interface Replay {
   /** Valid reductions, by the account they lowered */
   readonly reductions: ReadonlyMap<string, ReadonlyArray<string>>;
   readonly revokes: ReadonlyMap<string, ReadonlyArray<{ readonly event: string; readonly root: string }>>;
-  readonly forks: ReadonlyMap<string, { readonly event: string; readonly from: number }>;
+  /** The lowest applied fork of each key's line for each collection, by {@link lineOf} */
+  readonly forks: ReadonlyMap<string, ForkedLine & { readonly event: string }>;
   readonly state: AccessState;
   readonly named: ReadonlySet<string>;
   readonly invites: ReadonlySet<string>;
@@ -994,7 +1006,11 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     if (reduction.kind === 'revoke')
       return event.root === reduction.root && event.author === reduction.target;
     if (reduction.kind === 'fork')
-      return event.author === reduction.writer && (event.at ?? 0) >= reduction.from;
+      return (
+        event.author === reduction.writer &&
+        KIND_COLLECTION[event.kind] === reduction.collection &&
+        (event.line ?? 0) >= reduction.from
+      );
     // Closing an invite strikes joins through it that the close had not seen.
     if (reduction.kind === 'invite')
       return !reduction.open && event.kind === 'member' && event.viaInvite === reduction.inviteKey;
@@ -1046,7 +1062,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
 
   const reductions = new Map<string, string[]>();
   const revokes = new Map<string, Array<{ event: string; root: string }>>();
-  const forks = new Map<string, { event: string; from: number }>();
+  const forks = new Map<string, ForkedLine & { event: string }>();
   for (const id of order) {
     if (!valid.has(id)) continue;
     const event = byId.get(id)!;
@@ -1057,8 +1073,11 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
         event: id,
         root: event.root,
       });
-    if (event.kind === 'fork' && event.from < (forks.get(event.writer)?.from ?? Infinity))
-      forks.set(event.writer, { event: id, from: event.from });
+    if (event.kind === 'fork') {
+      const line = lineOf(event.writer, event.collection);
+      if (event.from < (forks.get(line)?.from ?? Infinity))
+        forks.set(line, { event: id, writer: event.writer, collection: event.collection, from: event.from });
+    }
   }
   const named = new Set<string>([genesis.creator]);
   const invites = new Set<string>();
@@ -1309,12 +1328,12 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
   const uncovered = (reduction: string) =>
     (r.byId.get(reduction)!.cutoff.get(event.author)?.get(KIND_COLLECTION[event.kind]) ?? -1) <
     (event.line ?? 0);
-  const fork = r.forks.get(event.author);
+  const fork = r.forks.get(lineOf(event.author, KIND_COLLECTION[event.kind]));
   const strikers = [
     ...(r.revokes.get(event.author) ?? [])
       .filter((revoke) => revoke.root === event.root && uncovered(revoke.event))
       .map((revoke) => revoke.event),
-    ...(fork && (event.at ?? 0) >= fork.from ? [fork.event] : []),
+    ...(fork && (event.line ?? 0) >= fork.from ? [fork.event] : []),
   ];
   if (strikers.length > 0) {
     const strikes = new Map(r.strikes);
@@ -1447,8 +1466,11 @@ function historyOf(r: Replay): AccessHistory {
           if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))
             return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
       }
-      const fork = record.writer === undefined ? undefined : r.forks.get(record.writer);
-      if (fork && (record.at ?? 0) >= fork.from && counts(fork.event))
+      const fork =
+        record.writer === undefined || record.collection === undefined
+          ? undefined
+          : r.forks.get(lineOf(record.writer, record.collection));
+      if (fork && (record.line ?? 0) >= fork.from && counts(fork.event))
         return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
       const own = at(record.seen);
       if (!needs(roleOf(own, record.root), own))
@@ -1461,8 +1483,11 @@ function historyOf(r: Replay): AccessHistory {
     },
     revoked: (key: string, root: string) =>
       (r.revokes.get(key) ?? []).filter((revoke) => revoke.root === root).map((revoke) => revoke.event),
-    forked: (writer: string) => r.forks.get(writer) ?? null,
-    forks: () => [...r.forks].map(([writer, { from }]) => ({ writer, from })),
+    forked: (writer: string, collection: string) => {
+      const fork = r.forks.get(lineOf(writer, collection));
+      return fork ? { event: fork.event, from: fork.from } : null;
+    },
+    forks: () => [...r.forks.values()].map(({ writer, collection, from }) => ({ writer, collection, from })),
     named: (did: string) => r.named.has(did),
     knownInvite: (key: string) => r.invites.has(key),
     extend(event: AccessEvent) {
