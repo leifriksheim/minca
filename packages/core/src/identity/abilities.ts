@@ -13,7 +13,7 @@
  *   carrier's passes) and its doors.
  *
  * A person's own sessions, and apps given write, get `*`. A key the account
- * trusts less, such as an agent's, gets `record/*`, and proposes what it can't do.
+ * trusts less gets `record/*`, and proposes what it can't do.
  */
 import { isCapabilitySubset, parseUCAN, type Capability } from './ucan.js';
 
@@ -31,6 +31,26 @@ export function noteGrants(encoded: string | null | undefined, required: Capabil
   if (!encoded) return true;
   try {
     return parseUCAN(encoded).payload.att.some((granted) => isCapabilitySubset(granted, required));
+  } catch {
+    return false;
+  }
+}
+
+/** Whether a note lets its key write records in any space. False for anything unreadable. */
+export function writesRecords(encoded: string): boolean {
+  try {
+    return parseUCAN(encoded).payload.att.some((capability) =>
+      isCapabilitySubset(capability, { with: capability.with, can: 'record/write' }),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Whether a note grants records and nothing more: every capability it names is a `record/` one. False for anything unreadable. */
+export function grantsRecordsOnly(encoded: string): boolean {
+  try {
+    return parseUCAN(encoded).payload.att.every((capability) => capability.can.startsWith('record/'));
   } catch {
     return false;
   }

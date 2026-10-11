@@ -132,7 +132,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `collection` | string   | yes        | The collection the record is in, e.g. `app.todo.item`.                                                                                                                                                                                            |
 | `space`      | string   | in a space | Id of the space it belongs to. Signed, so it cannot be replayed into another space. A peer MUST refuse a version whose `space` is not the space it arrived for.                                                                                   |
 | `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3) and no standing (§9.3); for display, and as a sync hint ([05](05-sync-and-storage.md)).                                                        |
-| `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, an encryption envelope `{ "ciphertext", "iv", "keyId" }` ([03 — Spaces](03-spaces.md)).                 |
+| `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, a sealed body `{ "sealed", "keyId" }` ([03 — Spaces](03-spaces.md) §8.3).                               |
 | `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                                        |
 | `proof`      | string   | no         | Encoded UCAN delegating to `author` the right to write here ([01 — Identity](01-identity.md)). Absent when the author signs for itself.                                                                                                           |
 | `key`        | string   | yes        | The record's identity within the space, stable across versions (§4.1).                                                                                                                                                                            |
@@ -747,7 +747,7 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`, `LINK_REL_PATTERN`,
 
 ## 6. Collection definitions
 
-A space describes its collections as data, so an app or agent that has never
+A space describes its collections as data, so an app or program that has never
 seen the space can learn what it holds.
 
 ### 6.1 The definition record
@@ -1186,7 +1186,7 @@ values.
 
 ```
 IKM  = public space:  UTF-8( "weave/public-topics/v1|" ‖ spaceId )
-       private space: the 32 raw bytes of the AES-256 space key whose id is the body's keyId
+       private space: the space key K (32 bytes, 03 §8.1) whose id is the body's keyId
 PRK/OKM = HKDF-SHA-256( IKM, salt = "" (zero length), info = UTF-8("weave/topic-tags/v1"), L = 32 )
 tagKey  = OKM, used as an HMAC-SHA-256 key
 ```

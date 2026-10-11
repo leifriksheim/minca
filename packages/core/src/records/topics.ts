@@ -19,7 +19,7 @@
  */
 import { canonicalize } from '../schema/version.js';
 import { base64UrlEncode, utf8Encode } from '../utils/encoding.js';
-import { isRecord } from '../utils/guards.js';
+import { bufferSource, isRecord } from '../utils/guards.js';
 import type { Link } from '../types.js';
 import { LINK_FIELD_PATTERN } from './links.js';
 
@@ -70,13 +70,13 @@ export function topicValues(
   return scalar(value) ? [value] : [];
 }
 
-/** What a space's tags are keyed with: from its key in a private space, from its id in a public one */
+/** What a space's tags are keyed with: from its raw key in a private space, from its id in a public one */
 export async function topicKey(
-  material: { readonly spaceKey: CryptoKey } | { readonly spaceId: string },
+  material: { readonly spaceKey: Uint8Array } | { readonly spaceId: string },
 ): Promise<CryptoKey> {
   const secret =
     'spaceKey' in material
-      ? new Uint8Array(await globalThis.crypto.subtle.exportKey('raw', material.spaceKey))
+      ? bufferSource(material.spaceKey)
       : utf8Encode(`weave/public-topics/v1|${material.spaceId}`);
   const base = await globalThis.crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
   return globalThis.crypto.subtle.deriveKey(

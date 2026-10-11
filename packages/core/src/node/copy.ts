@@ -52,7 +52,12 @@ export async function copyAccountData(params: CopyAccountParams): Promise<CopyRe
     : null;
   let spacesAdded = 0;
   const spaceIds: string[] = [];
-  for (const { space } of await fromRegistry.list()) {
+  const listed = await fromRegistry.list();
+  // A list leaves out an entry that won't open; a copy must not, or the person
+  // could forget the browser copy of a space that never reached the pod.
+  if (listed.length !== (await fromRegistryStore.list('space:')).length)
+    throw new Error('A space on this device can no longer be read, so nothing was copied.');
+  for (const { space } of listed) {
     spaceIds.push(space.id);
     if (await toRegistry.get(space.id)) continue;
     // An invite carries exactly what a registry needs: the space, and its key.

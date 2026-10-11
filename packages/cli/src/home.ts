@@ -15,8 +15,8 @@ import {
   createFolderAccountStore,
   createIdentityManager,
   createVault,
-  deriveVaultKey,
-  deriveVaultKeyBytes,
+  deriveLocalKey,
+  deriveAccountKey,
   deriveContactKeyBytes,
   folderStores,
   generateSeed,
@@ -150,7 +150,7 @@ export async function unlock(
       throw new Error(`"${account.name}" has no passphrase; unlock it with its recovery code`);
     for (const wrap of wraps) {
       try {
-        seed = await unwrapSeedWithPassphrase(wrap, secret.passphrase);
+        seed = await unwrapSeedWithPassphrase(wrap, secret.passphrase, account.did);
         break;
       } catch {
         // Not this one.
@@ -167,14 +167,14 @@ export async function unlock(
   if (identity.did !== account.did)
     throw new Error(`That code belongs to a different account than "${account.name}"`);
 
-  const vaultKey = await deriveVaultKey(seed);
+  const localKey = await deriveLocalKey(seed);
   return {
     account,
     signer,
-    stores: folderStores(home.directory, { basePath: account.dataPath, vaultKey }),
-    accountKey: await deriveVaultKeyBytes(seed),
+    stores: folderStores(home.directory, { basePath: account.dataPath, localKey }),
+    accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),
-    writerKey: fileWriterKeys(path.join(home.path, 'writers', account.id), vaultKey),
+    writerKey: fileWriterKeys(path.join(home.path, 'writers', account.id), localKey, account.did),
   };
 }
 

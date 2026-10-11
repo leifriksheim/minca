@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   connectToHome,
-  offerAgentLink,
-  type AgentAsking,
-  type AgentLinkStage,
+  offerConnectCode,
+  type CodeAsking,
+  type ConnectCodeStage,
 } from '@weaveprotocol/core/session';
 import { useAccount, useConnection } from '@weaveprotocol/core/react';
 import { Choice, Modal } from '@weave/app-shared/Modal';
 import { relayUrls } from '@weave/app-shared/relay';
 import { message, useAction, useCopy } from '@weave/app-shared/action';
 import { styles, palette, variants } from '../styles';
+import { programRequest } from '../program-terms';
 
 /** What people run, before the code */
 const COMMAND = import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli connect';
@@ -27,8 +28,8 @@ type Lasts = (typeof LASTS)[number]['value'];
 type Step =
   | { readonly kind: 'starting' }
   | { readonly kind: 'waiting' }
-  | { readonly kind: 'asking'; readonly stage: Extract<AgentLinkStage, { kind: 'asking' }> }
-  | { readonly kind: 'connected'; readonly agent: AgentAsking }
+  | { readonly kind: 'asking'; readonly stage: Extract<ConnectCodeStage, { kind: 'asking' }> }
+  | { readonly kind: 'connected'; readonly agent: CodeAsking }
   | { readonly kind: 'failed'; readonly reason: string };
 
 /** Connects an agent on this computer: one command to paste, then the account home signs its note */
@@ -48,10 +49,28 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     let stopped = false;
+    let refused = false;
     let stop = () => {};
-    void offerAgentLink({ relays: relayUrls() }, (stage) => {
+    void offerConnectCode({ relays: relayUrls(), account: did }, (stage) => {
       if (stopped) return;
-      setStep(stage.kind === 'asking' ? { kind: 'asking', stage } : stage);
+      // This app gives a program records only, whatever it asks for: its ask is a request, the terms are ours.
+      if (stage.kind === 'asking' && !programRequest(stage.asking, 1)) {
+        refused = true;
+        stage.deny('This app connects a program for records only. Ask for records only.');
+        setStep({
+          kind: 'failed',
+          reason: `“${stage.asking.name}” asked for more than records, which this app doesn't give. Make a new code to try again.`,
+        });
+        return;
+      }
+      if (refused) return;
+      setStep(
+        stage.kind === 'asking'
+          ? { kind: 'asking', stage }
+          : stage.kind === 'connected'
+            ? { kind: 'connected', agent: stage.asking }
+            : stage,
+      );
     }).then(
       (offer) => {
         if (stopped) return offer.stop();
@@ -64,7 +83,7 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
       stopped = true;
       stop();
     };
-  }, [attempt]);
+  }, [attempt, did]);
 
   const relays = relayUrls();
   const command = code
@@ -72,22 +91,18 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
     : '';
 
   // From the click itself: the home opens in a popup.
-  const allow = (stage: Extract<AgentLinkStage, { kind: 'asking' }>) =>
-    run(() =>
-      connectToHome({
+  const allow = (stage: Extract<ConnectCodeStage, { kind: 'asking' }>) =>
+    run(async () => {
+      const request = programRequest(stage.asking, Number(days));
+      if (!request) throw new Error('This app connects a program for records only.');
+      const grant = await connectToHome({
         home: state.home,
-        audience: stage.agent.did,
-        audienceProof: stage.agent.proof,
-        request: {
-          name: stage.agent.name,
-          access: 'write',
-          scope: 'account',
-          chooseSpaces: false,
-          agent: true,
-          days: Number(days),
-        },
-      }).then((grant) => stage.allow(grant)),
-    );
+        audience: stage.asking.did,
+        audienceProof: stage.asking.proof,
+        request,
+      });
+      await stage.allow(grant);
+    });
 
   return (
     <Modal title="Connect an agent" onClose={onClose}>
@@ -116,10 +131,11 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
       ) : step.kind === 'asking' ? (
         <>
           <div style={note}>
-            <p style={styles.todoText}>“{step.stage.agent.name}” wants to connect</p>
+            <p style={styles.todoText}>“{step.stage.asking.name}” wants to connect</p>
             <p style={styles.errorHint}>
-              It gets every space in your account, for {LASTS.find((option) => option.value === days)!.label}.
-              Your account home opens to confirm.
+              It may read every space in your account and write records in them, for{' '}
+              {LASTS.find((option) => option.value === days)!.label}. It can't add apps or collections, change
+              who may do what, or open your contact requests. Your account home opens to confirm.
             </p>
           </div>
           <Choice label="How long it may work" value={days} options={LASTS} onChange={setDays} />
@@ -182,7 +198,7 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Connected({ agent, onClose }: { agent: AgentAsking; onClose: () => void }) {
+function Connected({ agent, onClose }: { agent: CodeAsking; onClose: () => void }) {
   return (
     <>
       <div style={note}>

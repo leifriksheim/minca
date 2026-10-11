@@ -17,7 +17,7 @@ import type { P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import {
   contactPublicKey,
   deriveContactKeyBytes,
@@ -697,7 +697,7 @@ describe('node.doors', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(await manager.fromSeed(seed), provider).delegate({
       audience: did,
-      // No agent fact: what it may do is what the note grants, whatever holds the key.
+      // What it may do is what the note grants, whatever holds the key.
       capabilities: [{ with: '*', can: 'record/*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
@@ -715,7 +715,7 @@ describe('node.doors', () => {
       }),
       sessionKey: keys,
       stores: memoryStores(),
-      accountKey: await deriveVaultKeyBytes(seed),
+      accountKey: await deriveAccountKey(seed),
       contactKey: await deriveContactKeyBytes(seed),
       watchIntervalMs: 0,
       network: {

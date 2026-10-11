@@ -17,6 +17,7 @@ import { createVersion } from '../src/schema/version.js';
 import type { Version } from '../src/types.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
+import { spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
 import {
   checkSpace,
   deriveInviteKey,
@@ -77,15 +78,9 @@ describe('space access: the keys', () => {
     const secret = new Uint8Array(32).map((_, i) => i);
     const inviteDid = (await deriveInviteKey(secret, provider)).did;
     assert.equal(inviteDid, (await deriveInviteKey(secret, provider)).did);
-    const aes = await crypto.subtle.importKey(
-      'raw',
-      new Uint8Array(32).map((_, i) => 255 - i),
-      { name: 'AES-GCM', length: 256 },
-      true,
-      ['encrypt', 'decrypt'],
-    );
+    const spaceKey = await spaceKeyFromRaw(new Uint8Array(32).map((_, i) => 255 - i));
     assert.equal(
-      (await deriveReadKey({ id: 'k', key: aes, createdAt: '', version: 1 }, provider)).did,
+      (await deriveReadKey(spaceKey, provider)).did,
       'did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf',
     );
     // The same bytes as an account seed give a different key: each use has its own label.

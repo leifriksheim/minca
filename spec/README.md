@@ -3,8 +3,8 @@
 This is the specification of Weave: what goes over the wire, what is stored,
 what is signed, and what every peer must check. It is written so that someone
 can build a client that interoperates with this implementation without
-reading its code, and so that an agent can understand the architecture from
-the spec and the tests alone.
+reading its code, and so that a reader, or a model, can understand the
+architecture from the spec and the tests alone.
 
 The code in `packages/core/src/` is the reference implementation. Where this document and
 the code disagree, that is a bug in one of them: open an issue, and say which.
@@ -14,13 +14,13 @@ the code disagree, that is a bug in one of them: open an issue, and say which.
 **The core.** What every peer implements to sync with others, store what they
 store, and judge every record the same way:
 
-| Part                                            | Covers                                                                                                                                                                       |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, the account vault, root and session signers, UCAN delegations, what a note lets a key do, device keys, contact keys, pairing |
-| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline            |
-| [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                   |
-| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN        |
-| [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                              |
+| Part                                            | Covers                                                                                                                                                                                           |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, root and session signers, UCAN delegations, what a note lets a key do, envelopes and HPKE, contact keys, the account vault, device keys, pairing |
+| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline                                |
+| [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                                       |
+| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                            |
+| [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                                                  |
 
 **Built on the core.** Exchanges between two parties that a peer needs only
 if it takes part in them; a peer that doesn't still syncs, stores and judges
@@ -28,7 +28,7 @@ everything the same:
 
 | Part                                                      | Covers                                                                                                                            |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, agents, carriers                                     |
+| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, connecting by code, carriers                         |
 | [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock |
 | [08 — Hosting](08-hosting.md)                             | Hosts: subscriptions and payment, a space's own fund, bots a host runs                                                            |
 
@@ -36,7 +36,8 @@ everything the same:
 
 A peer that joins spaces and syncs them needs, from the core:
 
-- 01 §1–8: keys, DIDs, UCAN notes, and what a note lets a key do;
+- 01 §1–9: keys, DIDs, UCAN notes, what a note lets a key do, and envelopes;
+  §10.2 and §11.1 for the member keys a private space's new keys are boxed to;
 - 02 whole;
 - 03 §1–7, and §8–9 for private spaces;
 - 04 §1–2, one transport from §5, §6–7 and §9;
@@ -147,8 +148,6 @@ they are described; the smaller ones share
 | Delegations as UCAN 1.0                                                                           | [01 §7](01-identity.md), [#19](https://github.com/leifriksheim/weave/issues/19)                                                            |
 | Grants narrower than a space                                                                      | [01 §7.1](01-identity.md), [06 §2](06-nodes-and-sessions.md), [#19](https://github.com/leifriksheim/weave/issues/19)                       |
 | Removing a lost device from another one (sign-out already revokes)                                | [01 §7.4](01-identity.md), [#26](https://github.com/leifriksheim/weave/issues/26)                                                          |
-| Sealing with HPKE (RFC 9180)                                                                      | [01 §9.4](01-identity.md), [#24](https://github.com/leifriksheim/weave/issues/24)                                                          |
-| Wraps bound to their account                                                                      | [01 §10](01-identity.md)                                                                                                                   |
 | Keys that belong to their creator                                                                 | [02 §4.7](02-records.md), [#72](https://github.com/leifriksheim/weave/issues/72)                                                           |
 | Merging inside one record                                                                         | [02 §4.8](02-records.md)                                                                                                                   |
 | Forgetting in blob stores                                                                         | [02 §4.9](02-records.md)                                                                                                                   |
@@ -164,7 +163,7 @@ they are described; the smaller ones share
 | Mirrors: restoring an account, absorbing a quiet store writer                                     | [05 §16.5](05-sync-and-storage.md)                                                                                                         |
 | Files: blob references, bytes synced by hash                                                      | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/weave/issues/37)                                                 |
 | A wallet as the account home                                                                      | [06 §2](06-nodes-and-sessions.md)                                                                                                          |
-| Agents: renewing notes, agents that can't run a program                                           | [06 §3.3](06-nodes-and-sessions.md)                                                                                                        |
+| Connecting by code: renewing notes, programs that can't run code of their own                     | [06 §3.1](06-nodes-and-sessions.md)                                                                                                        |
 | Subscriptions that match any of several topic values                                              | [06 §4.4](06-nodes-and-sessions.md), [#141](https://github.com/leifriksheim/weave/issues/141)                                              |
 | Subscriptions delivered per device, by Web Push to an app that is closed                          | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/weave/issues/60)                        |
 | Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#117](https://github.com/leifriksheim/weave/issues/117), [#128](https://github.com/leifriksheim/weave/issues/128) |
@@ -173,7 +172,7 @@ they are described; the smaller ones share
 
 Proposed in an issue but not yet designed into the spec, so listed under
 **Not yet specified** in their part: key rotation, KERI-style pre-rotation
-([01 §15](01-identity.md), [#9](https://github.com/leifriksheim/weave/issues/9)), and access-history checkpoints
+([01 §16](01-identity.md), [#9](https://github.com/leifriksheim/weave/issues/9)), and access-history checkpoints
 ([03 §17](03-spaces.md), [#25](https://github.com/leifriksheim/weave/issues/25)).
 
 ## The shape of it, in one page

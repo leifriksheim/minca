@@ -8,9 +8,9 @@ import assert from 'node:assert/strict';
 
 import { runAction } from '../src/node/actions.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../src/identity/account-vault.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { contactKeyPair, deriveMemberKeyBytes } from '../src/identity/contact-key.js';
-import { directContext, openDirect, sealDirect, type DirectBody } from '../src/privacy/direct.js';
+import { directBound, openDirect, sealDirect, type DirectBody } from '../src/privacy/direct.js';
 import { direct } from '../src/schemas/library/publishing.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -24,7 +24,7 @@ const person = (hub: FakeHub, name: string) => somebody(hub, { name, accountKey:
 
 /** A member key pair, as the account derives it for a space */
 async function memberPair(seed: Uint8Array, spaceId: string) {
-  return contactKeyPair(await deriveMemberKeyBytes(await deriveVaultKeyBytes(seed), spaceId));
+  return contactKeyPair(await deriveMemberKeyBytes(await deriveAccountKey(seed), spaceId));
 }
 
 /** Leif, Anna and Carol in a private book club, each seeing the others' member keys */
@@ -69,30 +69,31 @@ describe('sealing a direct message', () => {
       body.boxes.map((box) => box.to),
       ['did:b', 'did:a'],
     );
-    assert.deepEqual(await openDirect(space, 'did:a', body, 'did:b', b.privateKey), { text: 'hi' });
-    assert.deepEqual(await openDirect(space, 'did:a', body, 'did:a', a.privateKey), { text: 'hi' });
-    assert.equal(await openDirect(space, 'did:a', body, 'did:c', c.privateKey), null);
+    assert.deepEqual(await openDirect(space, 'did:a', body, 'did:b', b), { text: 'hi' });
+    assert.deepEqual(await openDirect(space, 'did:a', body, 'did:a', a), { text: 'hi' });
+    assert.equal(await openDirect(space, 'did:a', body, 'did:c', c), null);
     // Someone else's key under a reader's name opens nothing either.
-    assert.equal(await openDirect(space, 'did:a', body, 'did:b', c.privateKey), null);
+    assert.equal(await openDirect(space, 'did:a', body, 'did:b', c), null);
   });
 
   test('opens nothing in another space, from another writer, or for other people', async () => {
     const { b, keys } = await three();
     const body = await sealDirect(space, 'did:a', ['did:b'], { text: 'hi' }, keys);
-    assert.equal(await openDirect('space-2', 'did:a', body, 'did:b', b.privateKey), null);
-    assert.equal(await openDirect(space, 'did:c', body, 'did:b', b.privateKey), null);
+    assert.equal(await openDirect('space-2', 'did:a', body, 'did:b', b), null);
+    assert.equal(await openDirect(space, 'did:c', body, 'did:b', b), null);
     const widened: DirectBody = { ...body, to: ['did:b', 'did:c'] };
-    assert.equal(await openDirect(space, 'did:a', widened, 'did:b', b.privateKey), null);
+    assert.equal(await openDirect(space, 'did:a', widened, 'did:b', b), null);
   });
 
   test('names who it is for once each, sorted, without the writer', async () => {
     const { keys } = await three();
     const body = await sealDirect(space, 'did:a', ['did:c', 'did:b', 'did:a', 'did:c'], { text: 'hi' }, keys);
     assert.deepEqual(body.to, ['did:b', 'did:c']);
-    assert.equal(
-      directContext(space, 'did:a', ['did:c', 'did:b']),
-      'weave/direct/v1|space-1|did:a|did:b,did:c',
-    );
+    assert.deepEqual(directBound(space, 'did:a', ['did:c', 'did:b']), {
+      space: 'space-1',
+      from: 'did:a',
+      to: 'did:b,did:c',
+    });
   });
 
   test('refuses someone with no member key, and a message for nobody', async () => {
@@ -126,13 +127,7 @@ describe('node.direct', () => {
     assert.deepEqual(await carol.node.direct.list(club), []);
     const [record] = await carol.node.records.list(club, { collection: direct.name });
     assert.equal(
-      await openDirect(
-        club,
-        leif.node.did,
-        record?.body,
-        carol.node.did,
-        (await memberPair(carol.seed, club)).privateKey,
-      ),
+      await openDirect(club, leif.node.did, record?.body, carol.node.did, await memberPair(carol.seed, club)),
       null,
     );
   });

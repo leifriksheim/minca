@@ -23,7 +23,7 @@
  * ```
  * code   = base64url(JSON { v: 1, key, sign, relays, name? })
  * topic  = base64url(SHA-256("weave/door-topic/v1|" + sign))
- * knock  = sealFor(key, { body, sig }, "weave/knock/v1|" + key)
+ * knock  = sealTo(key, "weave/knock/v1", { door: key }, JSON { body, sig })   // HPKE
  * body   = { v: 1, door: key, from, name, invite, note?, at, session, proof }
  * sig    = session key signs canonical(body)
  * ```
@@ -36,11 +36,10 @@ import {
   contactKeyPair,
   contactPublicKey,
   isContactPublicKey,
-  openSealed,
-  sealFor,
   signWithScalar,
   verifyWithPoint,
 } from '../identity/contact-key.js';
+import { openValueFrom, sealValueTo } from '../identity/hpke.js';
 import { didToPublicKey } from '../identity/did.js';
 import {
   isCapabilitySubset,
@@ -240,7 +239,8 @@ export async function knockId(blob: string): Promise<string> {
   return base64UrlEncode(await sha256(utf8Encode(blob)));
 }
 
-const knockContext = (door: string) => `weave/knock/v1|${door}`;
+/** The HPKE label a knock is sealed under; bound to `{ door }`, the door key */
+const KNOCK_LABEL = 'weave/knock/v1';
 
 /**
  * Makes a knock: the body, signed by the session key, sealed to the door key.
@@ -265,7 +265,7 @@ export async function sealKnock(
     proof: session.proof,
   };
   const sig = base64UrlEncode(await provider.sign(session.key, utf8Encode(canonicalize(body))));
-  return sealFor(door, { body, sig }, knockContext(door));
+  return sealValueTo(door, KNOCK_LABEL, { door }, { body, sig });
 }
 
 /**
@@ -284,7 +284,7 @@ export async function openKnock(
   provider: CryptoProvider,
 ): Promise<OpenedKnock | null> {
   const door = contactPublicKey(doorKey);
-  const opened = await openSealed((await contactKeyPair(doorKey)).privateKey, blob, knockContext(door));
+  const opened = await openValueFrom(await contactKeyPair(doorKey), KNOCK_LABEL, { door }, blob);
   if (!isObject(opened)) return null;
   const { body, sig } = opened;
   if (!isObject(body) || typeof sig !== 'string') return null;

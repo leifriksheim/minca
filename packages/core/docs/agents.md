@@ -1,11 +1,16 @@
 # Agents
 
 An agent reads and writes as the person, with a note from their account that
-every peer checks. The note grants writing records and nothing more
+every peer checks. The protocol doesn't know it is an agent: it is a program
+that asked for a note that grants writing records and nothing more
 (`record/*`), so every peer refuses it defining collections, changing who
-may do what, or writing for the account ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)). The note also says the key is an agent's, so what it writes shows
-as theirs, "via agent", everywhere; that is a label, and no peer acts on it.
-It never gets the seed.
+may do what, or writing for the account ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+What it writes counts as the person's, and carries `recordsOnly: true`
+everywhere, which apps may show (the example app says "via agent"). It never
+gets the seed.
+
+An agent that is its own user, such as a community's bot, is an account of
+its own instead (see Bots, below).
 
 ## Every operation, described once
 
@@ -41,18 +46,43 @@ the same tools. See `packages/cli/README.md`.
 
 ## Connecting with a code
 
-The code, the room and link key derived from it, and the messages the two
-sides trade are protocol ([spec 06 §3.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). What the reference sides add:
+The code, the channel it opens and the messages the two sides trade are
+protocol, and know nothing of agents
+([spec 06 §3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+The library's two sides are `offerConnectCode` (the app) and `connectWithCode`
+(the program).
 
-- The app (`apps/example/src/components/ConnectAgent.tsx`) shows the code, then
-  the agent's name once `heard` is sent, and asks the person to allow it.
-- Allowing opens the account home with `access: write`, `scope: account`,
-  `chooseSpaces: false` and the lifetime the person chose.
-- The app shows the agent connected when `done` arrives.
-- The terminal (`weave connect`, `checkAgentGrant`) waits 60 s to hear `heard`,
-  then 10 minutes for the answer.
+- `offerConnectCode({ relays, account, origin? }, onStage)` makes a code that
+  names `account`, the account the app is signed in to, and tells the
+  program `origin` (default: the page's). On `asking` it hands the app the
+  program's ask (`did`, `name`, `proof`, `recordsOnly`) and two answers,
+  `allow(grant)` and `deny(reason?)`. What the program asked for is only a
+  request: the app decides, and denies an ask it won't grant as asked.
+- `connectWithCode({ code, key, name, recordsOnly, network, onWaiting? })`
+  signs the proof itself once it learns the app's origin
+  (`keyProof(key, { via: 'code', recordsOnly, origin })`), tells
+  `onWaiting({ origin })` when the app has heard, and refuses a grant from any
+  account but the one the code names.
 
-_Source: `packages/core/src/session/agent-link.ts`, `apps/example/src/components/ConnectAgent.tsx`. Tests: `packages/core/tests/agents.test.ts` ("connecting an agent with a code")._
+What the reference sides add:
+
+- The terminal (`weave connect`) asks for records only, and shows the app's
+  origin while the person decides.
+- The app (`apps/example/src/components/ConnectAgent.tsx`) shows the code. It
+  gives a program records only (`apps/example/src/program-terms.ts`): it
+  denies an ask without `recordsOnly: true`, and otherwise shows the
+  program's name and what it may do, and asks the person to allow it.
+- Allowing opens the account home (`connectToHome` with `audience` and
+  `audienceProof`, which adds `via: 'code'`) with `access: write`,
+  `scope: account`, `chooseSpaces: false`, `recordsOnly: true` and the
+  lifetime the person chose. The home warns in red when a request by code asks
+  for more than records.
+- The app shows the agent connected when `code:done` arrives.
+- The terminal waits 60 s to hear `code:heard`, then 10 minutes for the
+  answer, and checks the grant with `checkGrant(grant, did, { recordsOnly: true })`
+  before keeping it, and again each time it starts.
+
+_Source: `packages/core/src/session/connect-code.ts`, `packages/cli/src/agent.ts` (`connectAgent`, `startAgentNode`), `apps/example/src/components/ConnectAgent.tsx`, `apps/example/src/program-terms.ts`, `apps/home/src/components/ConnectPage.tsx`. Tests: `packages/core/tests/connect-code.test.ts`, `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home"), `apps/example/tests/program-terms.test.ts`._
 
 ## Tools an agent gets
 
@@ -108,18 +138,17 @@ by whoever wants to, with their own key.
 
 ## In your own code
 
-`node.asAgent({ keys, note })` gives the same node acting as an agent, from an
-agent's note issued by the account home. Everything it writes is signed under
-that note. A record written under a note that can't define collections is
-`recordsOnly: true`; an app that runs what a record holds, as code, should
-trust only records without it.
+`node.asAgent({ keys, note })` gives the same node acting as an agent, from a
+note that grants records only, issued by the account home. Everything it
+writes is signed under that note. A record written under a note that can't
+define collections is `recordsOnly: true`; an app that runs what a record
+holds, as code, should trust only records without it.
 
-> **Planned (open question): naming the agent.** Records show as "via agent",
-> without saying which. The note could carry a name (say
-> `{ "weave": "agent", "name": "Claude in Chrome" }`), but that is the
-> agent's own word, signed by the account on its say-so, not a proof. Peers
-> would judge records the same either way, so it is a matter of display. Not
-> decided whether that is worth showing.
+Records don't say which program wrote them, only that its note grants
+records only. Naming it would be the program's own word, signed by the account
+on its say-so, not a proof, and peers would judge records the same either way;
+an app that wants to show it can keep its own list of connected programs by
+key, as the account home does.
 
 ## Working on a Weave app with a coding agent
 

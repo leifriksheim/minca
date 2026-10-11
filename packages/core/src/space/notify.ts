@@ -317,7 +317,7 @@ export async function carriedFor(
     for (const space of looked) {
       if (space.visibility === 'private' && !space.key) continue;
       const key = await topicKey(
-        space.visibility === 'private' ? { spaceKey: space.key!.key } : { spaceId: space.id },
+        space.visibility === 'private' ? { spaceKey: space.key!.raw } : { spaceId: space.id },
       );
       tags[space.id] = [await topicTag(key, when.collection, when.topic.field, when.topic.value)];
     }

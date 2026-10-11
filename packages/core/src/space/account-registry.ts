@@ -7,7 +7,7 @@
  * space only the account can find, and every other device and node of the
  * account syncs that record and joins by itself.
  *
- * The registry's key and nonce are derived from the account's vault key, and
+ * The registry's key and nonce are derived from the account key, and
  * its id is the hash of its genesis like any space's — so nothing needs to be
  * exchanged to find it, and nobody without the account can. The DID alone is
  * not enough: it appears in everything the account signs, and a room named
@@ -15,9 +15,8 @@
  */
 import type { CryptoProvider, Space } from '../types.js';
 import type { SpaceRecord } from './space-manager.js';
-import type { SpaceKey } from '../privacy/space-encryption.js';
+import { spaceKeyFromRaw } from '../privacy/space-encryption.js';
 import { base64UrlEncode } from '../utils/encoding.js';
-import { sha256 } from '../utils/hash.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { deriveReadKey, expandSecret, spaceGenesis, spaceIdOf } from './space-access.js';
 import { solo } from './presets.js';
@@ -70,7 +69,7 @@ export interface Carrier {
 
 /**
  * The account's registry space, derived — the same on every device.
- * @param accountKey The account's vault key bytes (`deriveVaultKeyBytes(seed)`)
+ * @param accountKey The account's account key (`deriveAccountKey(seed)`)
  */
 export function deriveAccountRegistry(
   accountKey: Uint8Array,
@@ -93,7 +92,7 @@ export function deriveContactsSpace(
   return deriveAccountSpace(accountKey, owner, 'weave/contacts', 'Contacts', provider);
 }
 
-/** A private space only the account can find: its key and nonce derived from the vault key under `label`. */
+/** A private space only the account can find: its key and nonce derived from the account key under `label`. */
 async function deriveAccountSpace(
   accountKey: Uint8Array,
   owner: string,
@@ -102,21 +101,8 @@ async function deriveAccountSpace(
   provider: CryptoProvider,
 ): Promise<SpaceRecord> {
   const nonce = base64UrlEncode((await expandSecret(accountKey, `${label}/nonce/v1`)).subarray(0, 12));
-  const keyBytes = await expandSecret(accountKey, `${label}/key/v1`);
-  const cryptoKey = await globalThis.crypto.subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt'],
-  );
   const createdAt = new Date(0).toISOString(); // fixed, so every device derives the same record
-  const key: SpaceKey = Object.freeze({
-    id: base64UrlEncode(await sha256(keyBytes)),
-    key: cryptoKey,
-    createdAt,
-    version: 1,
-  });
+  const key = await spaceKeyFromRaw(await expandSecret(accountKey, `${label}/key/v1`), createdAt);
   const fixed = {
     visibility: 'private' as const,
     creator: owner,

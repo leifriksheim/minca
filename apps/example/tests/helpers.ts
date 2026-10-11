@@ -9,7 +9,7 @@ import { joined } from '../../../packages/core/tests/helpers/joined.js';
 import { until as untilWithin } from '../../../packages/core/tests/helpers/until.js';
 import { createLocalRootSigner } from '../../../packages/core/src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../../../packages/core/src/identity/did.js';
-import { AGENT_FACT, team } from '@weaveprotocol/core';
+import { team } from '@weaveprotocol/core';
 
 export const waitFor = (check: () => Promise<boolean>, what: string) => untilWithin(check, 4000, what);
 
@@ -26,7 +26,7 @@ export async function setup() {
   return { hub, alice, bob, space };
 }
 
-/** This person's agent in these spaces: a key whose note grants records only, and says it is an agent's */
+/** This person's agent in these spaces: a key whose note grants records only */
 export async function agentOf(who: Person, spaces: ReadonlyArray<string>) {
   const provider = who.manager.getProvider();
   const keys = await provider.generateKeyPair();
@@ -35,7 +35,6 @@ export async function agentOf(who: Person, spaces: ReadonlyArray<string>) {
     audience: did,
     capabilities: spaces.map((id) => ({ with: `space:${id}`, can: 'record/*' })),
     expiration: Math.floor(Date.now() / 1000) + 3600,
-    facts: [AGENT_FACT],
   });
   return who.node.asAgent({ keys, note: note.encoded });
 }

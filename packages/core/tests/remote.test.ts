@@ -18,7 +18,6 @@ import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import { AGENT_FACT } from '../src/identity/agent-note.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
 import { until } from './helpers/until.js';
@@ -174,7 +173,7 @@ describe('a node across a port', () => {
     await assert.rejects(() => remote.spaces.authenticator(space), /serves no sockets/);
   });
 
-  test('an agent started across the port writes as the person, via agent', async () => {
+  test('an agent started across the port writes as the person, records only', async () => {
     const { node, remote, manager, me } = await served();
     const { id: space } = await node.spaces.create({ name: 'Climbing', ...team, visibility: 'public' });
     const provider = manager.getProvider();
@@ -184,14 +183,13 @@ describe('a node across a port', () => {
       audience: did,
       capabilities: [{ with: `space:${space}`, can: 'record/*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
-      facts: [AGENT_FACT],
     });
 
     const agent: P2PNode = await remote.asAgent({ keys, note: note.encoded });
     assert.equal(agent.did, node.did);
     assert.equal(agent.sessionDid, did);
     const written = await agent.records.put(space, 'app.note', { text: 'Bring chalk' });
-    assert.equal(written.viaAgent, true);
+    assert.equal(written.recordsOnly, true);
     await assert.rejects(() => agent.spaces.invite(space), /Ask the person/);
 
     // Closing the agent leaves the node it acts through running.

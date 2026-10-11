@@ -17,7 +17,7 @@ conveniences.
 | Field               | Type                        | Meaning                                                                                                                                                                                                                                                                                                               |
 | ------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `signer`            | `RootSigner`                | Who the node acts for. Asked only for session notes ([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                                                  |
-| `accountKey`        | bytes, optional             | The account's vault key bytes. Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                   |
+| `accountKey`        | bytes, optional             | The account key (`deriveAccountKey(seed)`). Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
 | `contactKey`        | bytes, optional             | The contact key's secret. Opens contact requests; published on profiles.                                                                                                                                                                                                                                              |
 | `contactsSpace`     | string, optional            | The contacts space's id, for a node given it without the account key (an app granted `contacts`, [spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
 | `stores`            | `StoreFactory`              | Where the registry and each space's store live ([stores](#stores)).                                                                                                                                                                                                                                                   |
@@ -93,10 +93,10 @@ The **session note** a node asks for when it starts:
 
 ```
 aud = session DID
-att = [{ "with": "*", "can": "*" }]          (SESSION_CAPABILITY; an agent's own node signs under its grant, `record/*`)
+att = [{ "with": "*", "can": "*" }]          (SESSION_CAPABILITY; a node acting as an agent signs under its grant, `record/*`)
 exp = now + sessionTtlSeconds                     (default 3600)
 nbf = now − 300                                   (issueUCAN's default)
-fct = absent                                      (or [{"weave":"agent"}] for an agent's own node)
+fct = absent
 prf = []
 ```
 
@@ -164,8 +164,9 @@ What a path means is the factory's choice:
 - `indexedDBStores(prefix)` — one IndexedDB database per path, named
   `<prefix>:<path with / replaced by :>`. Never sealed: the browser profile
   already guards it.
-- `folderStores(directory, { basePath?, vaultKey? })` — a directory tree under
-  `basePath`; the `registry` is sealed under `vaultKey` when one is given.
+- `folderStores(directory, { basePath?, localKey? })` — a directory tree under
+  `basePath`; the `registry` is sealed under `localKey` (`deriveLocalKey(seed)`)
+  when one is given.
 
 Every version a node signs in a space takes the next place in its key's log
 there ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
@@ -209,15 +210,18 @@ node makes a key for this run as it would without a source.
   (`deleteBrowserData`) deletes the keys too. The key never goes in the data
   folder, which other apps and devices share.
 - The CLI keeps them in `~/.weave/writers/<account id>/slot-<n>/`: the key as
-  JWK sealed under the account's vault key (`key.sealed`, AES-GCM, mode 600),
-  so a copy of the files can't sign; its places in `heads/`; and a `lock` file
-  naming the process that holds it, taken over once that process is gone.
+  JWK in an envelope (spec 01 §9.1) under the account's local key, with label
+  `weave/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
+  (`key.sealed`, mode 600), so a copy of the files can't sign, and a key file
+  moved to another slot or account is refused rather than used; its places in
+  `heads/`; and a `lock` file naming the process that holds it, taken over
+  once that process is gone.
 
-_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts`._
+_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts` ("a key file moved to another slot, or to another account, does not open")._
 
 Sign-in ([sign-in](sign-in.md)) uses `storesFor(account)`: IndexedDB with prefix
 `weave:<dataPath with : for />` in the browser, or `folderStores(pod,
-{ basePath: account.dataPath, vaultKey })` in a pod, where `dataPath` is
+{ basePath: account.dataPath, localKey })` in a pod, where `dataPath` is
 `accounts/<id>/stores`. A connected app uses `indexedDBStores('weave-app:<account DID>')`
 by default. These names are _implementation details_ ([sync and storage](storage.md#indexeddb));
 a pod's layout is in
@@ -432,15 +436,15 @@ _Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `remember`, `forget`
 `node.subscribe(listener)` delivers `NodeEvent`s and returns an unsubscribe
 function. A listener that throws does not stop the others.
 
-| `type`     | Fields                                      | When                                                                                                                                                                                |
-| ---------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `records`  | `space`                                     | Records were added, changed or deleted in a space, locally or by sync.                                                                                                              |
-| `status`   | `space`                                     | Connection state or peers changed. A status change in the account registry is re-emitted for every open space (which peers are the account's own is read off the registry's peers). |
-| `spaces`   | —                                           | The node's list of spaces changed: created, joined, left, a role or waiting invite changed.                                                                                         |
-| `account`  | —                                           | The account's profile may have changed (records changed in the account registry, or `setName`).                                                                                     |
-| `rejected` | `space`, `peer`, `reason`                   | A peer sent a version that failed validation.                                                                                                                                       |
-| `message`  | `space`, `from`, `peer`, `agent`, `message` | A live message arrived ([live messages and status](#live-messages-and-status)).                                                                                                     |
-| `revoked`  | `space`                                     | The note this node writes under was revoked in that space. Emitted at most once per space per node.                                                                                 |
+| `type`     | Fields                                            | When                                                                                                                                                                                |
+| ---------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `records`  | `space`                                           | Records were added, changed or deleted in a space, locally or by sync.                                                                                                              |
+| `status`   | `space`                                           | Connection state or peers changed. A status change in the account registry is re-emitted for every open space (which peers are the account's own is read off the registry's peers). |
+| `spaces`   | —                                                 | The node's list of spaces changed: created, joined, left, a role or waiting invite changed.                                                                                         |
+| `account`  | —                                                 | The account's profile may have changed (records changed in the account registry, or `setName`).                                                                                     |
+| `rejected` | `space`, `peer`, `reason`                         | A peer sent a version that failed validation.                                                                                                                                       |
+| `message`  | `space`, `from`, `peer`, `recordsOnly`, `message` | A live message arrived ([live messages and status](#live-messages-and-status)).                                                                                                     |
+| `revoked`  | `space`                                           | The note this node writes under was revoked in that space. Emitted at most once per space per node.                                                                                 |
 
 _Source: `packages/core/src/node/types.ts` (`NodeEvent`), `packages/core/src/node/node.ts` (`fromRuntime`, `checkRevoked`). Tests: `packages/core/tests/node.test.ts` ("events announce local writes"), `packages/core/tests/connect.test.ts` ("disconnecting revokes the note")._
 
@@ -490,14 +494,14 @@ sender's account is established are in
 [spec 04 §9](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md).
 
 A received live message is emitted as a `message` event,
-`{ type: "message", space, from, peer, agent, message }`:
+`{ type: "message", space, from, peer, recordsOnly, message }`:
 
-| Field     | Meaning                                                                                                                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `from`    | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets). |
-| `peer`    | The sending device's session DID — also where a reply to that device goes.                                                                                                                 |
-| `agent`   | `true` when the sender's note is an agent's ([spec 06 §3.1](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                               |
-| `message` | The value sent.                                                                                                                                                                            |
+| Field         | Meaning                                                                                                                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `from`        | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets).                                                                   |
+| `peer`        | The sending device's session DID — also where a reply to that device goes.                                                                                                                                                                                   |
+| `recordsOnly` | `true` when the sender's note grants writing records in this space and nothing more (`record/*`): it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)). `false` for a note that only reads. |
+| `message`     | The value sent.                                                                                                                                                                                                                                              |
 
 `spaces.status(id)` returns `SpaceStatus`:
 
@@ -619,17 +623,17 @@ _Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`, `Rel
 ## A node acting as an agent
 
 `node.asAgent({ keys, note })` returns the same node acting as an agent. It
-throws unless the note verifies, carries the agent fact, is made out to `keys`,
-and was issued by `node.did`. The agent:
+throws unless the note verifies, grants records only (every capability a
+`record/` one), is made out to `keys`, and was issued by `node.did`. The agent:
 
-- signs with its own key, under its note, so what it writes shows "via agent";
+- signs with its own key, under its note, so what it writes is `recordsOnly`;
 - reaches only spaces its note names (`space:<id>`), or every space for `*`;
   events for other spaces are filtered out;
 - refuses, locally, everything that needs a person: making, inviting, joining
   or leaving spaces; changing members, roles, invites or revocations; changing
   a space's key, relays or keepers; defining
-  or deleting collections; live messages (`send` — a live message carries no
-  note to say "via agent"); renaming or revoking at the account level; adding or
+  or deleting collections; live messages (`send`, which a person's devices
+  would take as theirs); renaming or revoking at the account level; adding or
   removing carriers; notifications; hosting; changing, blocking, asking or
   accepting contacts; everything about doors (its list of doors is empty);
   `delegate`; `asAgent`;
@@ -639,13 +643,13 @@ Closing the agent leaves the underlying node running.
 
 An agent granted `scope: account` gets a records-only note for every space
 (`{ "with": "*", "can": "record/*" }`) and the account key in its
-grant ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home must not
-give an agent the contact key: with it, an agent could open contact requests
-and knocks on the account's doors ([doors.md](doors.md)).
+grant ([spec 06 §2.8](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home never
+gives a records-only key the contact key: with it, it could open contact
+requests and knocks on the account's doors ([doors.md](doors.md)).
 
 Which of these each method of the node is — passed through, held to the note's spaces, or refused — is one table, `API` in `packages/core/src/node/api.ts`; a new method does not type-check until it is decided there. The same table lists what `remoteNode` forwards.
 
-_Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/agents.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts`._
+_Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts`._
 
 ## The app-side client
 

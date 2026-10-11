@@ -10,12 +10,18 @@ never heard of `std.direct` sync, store and judge it like any other record,
 and nothing about the space changes for them. Only apps that want to read each
 other's direct messages have to agree on what follows. It uses these protocol
 parts: member keys ([spec 03 §9.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
-`sealWith` (§8.5) and `sealFor` ([spec 01 §9.4](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+the space key's derivations (§8.1), the envelope and sealing to a key with
+HPKE ([spec 01 §9](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
 
 One record serves every reader and every one of their devices. A fresh
 **message key** seals the text once, and that key is sealed to each reader's
 member key. Members publish member keys only in private spaces, so today
 direct messages need a private space.
+
+A reader can't tell that the others read the same text: AES-GCM does not
+commit to its key, so a writer can seal boxes that open to different message
+keys, each opening `data` to a different text
+([#214](https://github.com/leifriksheim/weave/issues/214)).
 
 ## `std.direct`
 
@@ -39,12 +45,15 @@ me" is a subscription a keeper can match without reading it.
 ## Sealing
 
 ```
-context = "weave/direct/v1|<spaceId>|<from>|<to joined by ",">"
-k       = a fresh space key (spec 03 §8.1)
-data    = sealWith(k, { text }, context)
-box(r)  = sealFor(memberKey(r), { key: base64url(raw k) }, context + "|" + r)
+bound   = { space: <spaceId>, from: <from>, to: <to joined by ","> }
+k       = 32 fresh random bytes, a space key (spec 03 §8.1)
+data    = base64url(envelope(sealKey(k), "weave/direct-text/v1", bound, JSON { text }))
+box(r)  = HPKE(memberKey(r), "weave/direct-box/v1", { ...bound, reader: r }, JSON { key: base64url(k) })
 boxes   = [ box(r) for r in to, then box(from) ]
 ```
+
+`sealKey(k)` is `HKDF(k, "weave/space-seal/v1", 32)`, as for any space key;
+`envelope` and `HPKE` are spec 01 §9.1 and §9.2.
 
 `memberKey(r)` is the key `r` published in `sys.memberkey`. The writer may use
 its own member key as it holds it, rather than as published, so its other
@@ -52,27 +61,28 @@ devices can read what it sent before that key has been published. A writer
 must not write a direct message for someone with no member key in the space.
 `text` is a string of 1–10000 characters.
 
-Example: space `space-1`, from `did:a`, to `did:c` and `did:b`. `context` is
-`weave/direct/v1|space-1|did:a|did:b,did:c`, and the box for `did:b` is bound
-to `weave/direct/v1|space-1|did:a|did:b,did:c|did:b`.
+Example: space `space-1`, from `did:a`, to `did:c` and `did:b`. The text is
+bound to `{"from":"did:a","space":"space-1","to":"did:b,did:c"}`, and the box
+for `did:b` to `{"from":"did:a","reader":"did:b","space":"space-1","to":"did:b,did:c"}`.
 
 ## Opening
 
 A reader `r` opens a direct message only when the record verifies and stands,
 its collection is `std.direct`, and `r` is `from` or is in `to`. It builds the
-context from the space the record is in, `from` and `to` as the record gives
+bound from the space the record is in, `from` and `to` as the record gives
 them (sorted), then:
 
 1. takes the box whose `to` is `r`;
-2. opens it with its own member key and `context + "|" + r`, giving a value
-   whose `key` is a base64url string of 32 bytes;
-3. opens `data` with that key and `context`, giving an object whose `text` is
-   a string.
+2. opens it with its own member key, label `weave/direct-box/v1` and the
+   bound with `reader: r`, giving a value whose `key` is a base64url string of
+   32 bytes;
+3. opens `data` with that key's seal key, label `weave/direct-text/v1` and
+   the bound, giving an object whose `text` is a string.
 
 If any step fails, the message is unreadable to `r`. A chat must show it as
 unreadable, not drop it, the way a body a reader can't open is shown.
 
-Binding the context to the space, the writer and who it is for means a copy
+Binding the text to the space, the writer and who it is for means a copy
 re-posted by another member, moved to another space, or with a reader added
 to `to` opens nothing. Binding each box to its reader means a box can't be
 moved to another reader's slot.
@@ -96,7 +106,7 @@ _Source:_ `packages/core/src/node/actions.ts` (`direct_list`, `direct_send`),
 (`openTrigger`, `ruleContext`). Tests: `packages/core/tests/direct.test.ts`
 ("the direct message actions"), `packages/cli/tests/agent-rules.test.ts`.
 
-_Source: `packages/core/src/privacy/direct.ts` (`sealDirect`, `openDirect`, `directContext`), `packages/core/src/schemas/library/publishing.ts` (`direct`), `packages/core/src/node/node.ts` (`direct`, `directView`), `packages/core/src/node/space-runtime.ts` (`memberKeys`, `ownMemberKey`), `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`, `packages/core/tests/agents.test.ts` ("neither sends nor reads direct messages")._
+_Source: `packages/core/src/privacy/direct.ts` (`sealDirect`, `openDirect`, `directBound`), `packages/core/src/schemas/library/publishing.ts` (`direct`), `packages/core/src/node/node.ts` (`direct`, `directView`), `packages/core/src/node/space-runtime.ts` (`memberKeys`, `ownMemberKey`), `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`, `packages/core/tests/records-only.test.ts` ("neither sends nor reads direct messages")._
 
 ## Planned: direct messages in public spaces
 

@@ -19,17 +19,10 @@
  */
 
 import type { StorageAdapter, BatchOp } from '../types.js';
-import { concatBytes } from '../utils/encoding.js';
-import { aesOpen, aesSeal, NONCE_BYTES } from '../identity/aes.js';
+import { openEnvelope, sealEnvelope } from '../identity/envelope.js';
 
-/**
- * Marks a value this module wrote.
- *
- * Without it there is no way to tell ciphertext from a value written in the
- * clear, and "try to decrypt, fall back to raw on failure" turns every genuine
- * key mismatch into silently wrong data.
- */
-const MAGIC = new Uint8Array([0x77, 0x65, 0x61, 0x76, 0x65, 0x65, 0x01, 0x00]); // "weavee\x01\x00" — Weave, encrypted, v1
+/** The envelope label of a value sealed at rest; bound to `{ entry }`, its storage key */
+const AT_REST_LABEL = 'weave/at-rest/v1';
 
 /**
  * What gets sealed by default: every entry of the space registry — each
@@ -54,23 +47,17 @@ export interface EncryptedAdapterOptions {
   readonly prefixes?: ReadonlyArray<string>;
 }
 
-/** Whether these bytes were written sealed. */
-function isSealed(bytes: Uint8Array): boolean {
-  if (bytes.length < MAGIC.length + NONCE_BYTES) return false;
-  return MAGIC.every((byte, index) => bytes[index] === byte);
-}
-
 /**
  * Wraps a storage adapter so that selected values are encrypted on the way in
  * and decrypted on the way out.
  *
- * Each value is bound to its storage key (it is the AES-GCM additional data),
- * so sealed values cannot be swapped between entries. A value under a sealed
- * prefix that was not sealed is refused, not trusted: anyone who can write the
- * folder could otherwise plant a space, or a key, in the clear.
+ * Each value is an envelope bound to its storage key, so sealed values
+ * cannot be swapped between entries. A value under a sealed prefix that does
+ * not open is refused, not trusted: anyone who can write the folder could
+ * otherwise plant a space, or a key, in the clear.
  *
  * @param inner The adapter doing the actual storing
- * @param key An AES-GCM key, from `deriveVaultKey`
+ * @param key The account's local key (`deriveLocalKey`)
  * @param options Which keys to seal
  * @returns An adapter with the same contract
  */
@@ -84,15 +71,15 @@ export function createEncryptedAdapter(
   const shouldSeal = (storageKey: string): boolean =>
     prefixes.some((prefix) => storageKey.startsWith(prefix));
 
-  const bound = (storageKey: string) => new TextEncoder().encode(storageKey);
-
-  async function seal(storageKey: string, value: Uint8Array): Promise<Uint8Array> {
-    return concatBytes(MAGIC, await aesSeal(key, value, bound(storageKey)));
+  function seal(storageKey: string, value: Uint8Array): Promise<Uint8Array> {
+    return sealEnvelope(key, AT_REST_LABEL, { entry: storageKey }, value);
   }
 
   async function unseal(storageKey: string, bytes: Uint8Array): Promise<Uint8Array> {
-    if (!isSealed(bytes)) throw new Error(`${storageKey} should be sealed, and is not — refusing it`);
-    return aesOpen(key, bytes.subarray(MAGIC.length), bound(storageKey));
+    const opened = await openEnvelope(key, AT_REST_LABEL, { entry: storageKey }, bytes);
+    if (!opened)
+      throw new Error(`${storageKey} should be sealed under this account, and is not — refusing it`);
+    return opened;
   }
 
   return Object.freeze({

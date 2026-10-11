@@ -12,17 +12,22 @@ import { utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
+/**
+ * The segment format. 2 since sealed bodies became envelopes (spec 01 §9): a
+ * reader of 1 would misread them, so it holds nothing for it instead.
+ */
+const SEGMENT_VERSION = 2;
 
 /** Packs versions into a segment's bytes */
 export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {
-  return utf8Encode(JSON.stringify({ v: 1, versions }));
+  return utf8Encode(JSON.stringify({ v: SEGMENT_VERSION, versions }));
 }
 
 /** The versions in a segment; none for bytes that are not one */
 export function unpackSegment(bytes: Uint8Array): Version[] {
   try {
     const parsed: unknown = JSON.parse(utf8Decode(bytes));
-    if (!isObject(parsed) || parsed.v !== 1 || !Array.isArray(parsed.versions)) return [];
+    if (!isObject(parsed) || parsed.v !== SEGMENT_VERSION || !Array.isArray(parsed.versions)) return [];
     return parsed.versions.filter(isStoredVersion);
   } catch {
     return [];

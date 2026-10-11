@@ -165,7 +165,7 @@ function Proposal({
           </strong>
           <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 2 }}>
             {wasAdded ? 'Changed by' : 'Proposed by'} <Person did={by} />
-            {record.viaAgent && <AgentBadge />} · {ago(record.updatedAt)}
+            {record.recordsOnly && <AgentBadge />} · {ago(record.updatedAt)}
             {plan?.from && ' · copied from another space'}
             {replaces?.body && ` · an update to ${replaces.body.title}`}
             {body?.updates !== undefined &&

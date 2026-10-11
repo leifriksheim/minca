@@ -11,10 +11,12 @@ import { fileWriterKeys, holdLock } from '../src/writer-keys.js';
 import { openHome, createAccount, unlock, chooseAccount, nodeFor } from '../src/home.js';
 import { tempDir } from './helpers/nodes.js';
 
-const vaultKey = await globalThis.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+const localKey = await globalThis.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
   'encrypt',
   'decrypt',
 ]);
+
+const ACCOUNT = 'did:key:zAccount';
 
 const didOf = async (keys: CryptoKeyPair) =>
   Buffer.from(await globalThis.crypto.subtle.exportKey('raw', keys.publicKey)).toString('hex');
@@ -22,7 +24,7 @@ const didOf = async (keys: CryptoKeyPair) =>
 describe('writer keys on disk', () => {
   test('a slot gives the same key each time, and only to one holder at once', async () => {
     const dir = await tempDir();
-    const source = fileWriterKeys(dir, vaultKey);
+    const source = fileWriterKeys(dir, localKey, ACCOUNT);
     const first = (await source.claim())!;
     const second = (await source.claim())!;
     assert.notEqual(await didOf(first.keys), await didOf(second.keys), 'the slot is taken: another one');
@@ -37,7 +39,7 @@ describe('writer keys on disk', () => {
 
   test('a lock left by a process that is gone is taken over', async () => {
     const dir = await tempDir();
-    const source = fileWriterKeys(dir, vaultKey);
+    const source = fileWriterKeys(dir, localKey, ACCOUNT);
     const first = (await source.claim())!;
     const kept = await didOf(first.keys);
     // As if it crashed: the lock stays, naming a process that no longer runs.
@@ -49,7 +51,7 @@ describe('writer keys on disk', () => {
 
   test('places are kept beside the key', async () => {
     const dir = await tempDir();
-    const source = fileWriterKeys(dir, vaultKey);
+    const source = fileWriterKeys(dir, localKey, ACCOUNT);
     const first = (await source.claim())!;
     await first.heads.put('head/did:key:z/space', new TextEncoder().encode('{"n":4,"id":"b"}'));
     await first.release();
@@ -62,9 +64,9 @@ describe('writer keys on disk', () => {
     await again.release();
   });
 
-  test("a key on disk is sealed: a copy of the files without the vault key can't sign", async () => {
+  test("a key on disk is sealed: a copy of the files without the local key can't sign", async () => {
     const dir = await tempDir();
-    const claimed = (await fileWriterKeys(dir, vaultKey).claim())!;
+    const claimed = (await fileWriterKeys(dir, localKey, ACCOUNT).claim())!;
     await claimed.release();
     const text = await readFile(path.join(dir, 'slot-0', 'key.sealed'), 'latin1');
     assert.equal(text.includes('"kty"'), false, 'no key in the clear');
@@ -72,7 +74,24 @@ describe('writer keys on disk', () => {
       'encrypt',
       'decrypt',
     ]);
-    await assert.rejects(fileWriterKeys(dir, other).claim());
+    await assert.rejects(fileWriterKeys(dir, other, ACCOUNT).claim());
+  });
+
+  test('a key file moved to another slot, or to another account, does not open', async () => {
+    const dir = await tempDir();
+    const source = fileWriterKeys(dir, localKey, ACCOUNT);
+    const first = (await source.claim())!;
+    const second = (await source.claim())!;
+    await first.release();
+    await second.release();
+    // Slot 1's file copied over slot 0's: it is bound to slot 1, so slot 0 refuses it.
+    await writeFile(
+      path.join(dir, 'slot-0', 'key.sealed'),
+      await readFile(path.join(dir, 'slot-1', 'key.sealed')),
+    );
+    await assert.rejects(source.claim(), /slot 0/);
+    // The same files, read as another account's under the same local key.
+    await assert.rejects(fileWriterKeys(dir, localKey, 'did:key:zSomeoneElse').claim());
   });
 
   test('a lock is held by one at a time, and let go of by the holder (as an agent holds its key)', async () => {
@@ -87,7 +106,7 @@ describe('writer keys on disk', () => {
   });
 
   test('the private key can sign, and is not given out', async () => {
-    const source = fileWriterKeys(await tempDir(), vaultKey);
+    const source = fileWriterKeys(await tempDir(), localKey, ACCOUNT);
     const claimed = (await source.claim())!;
     assert.equal(claimed.keys.privateKey.extractable, false);
     await claimed.release();

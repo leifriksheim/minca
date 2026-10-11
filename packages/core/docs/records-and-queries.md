@@ -59,7 +59,6 @@ The roles a record may carry are declared on its collection
   createdAt, updatedAt,   // the writer's clock: for display only
   verified,      // signature, delegation and shape check out
   conforms,      // fits the collection's schema (null when there is none)
-  viaAgent,      // true when an agent wrote it for the account
   recordsOnly,   // true when written under a note that can't define collections
 }
 ```

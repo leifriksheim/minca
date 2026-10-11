@@ -17,7 +17,7 @@ A **place** is where accounts and their data are kept (`Place`):
 | `kind`             | Accounts are kept                     | Data is kept                                                 |
 | ------------------ | ------------------------------------- | ------------------------------------------------------------ |
 | `browser`          | the browser account store (IndexedDB) | IndexedDB, per account ([stores](node.md#stores))            |
-| `folder` (a _pod_) | the folder's account store            | the folder, per account, registry sealed under the vault key |
+| `folder` (a _pod_) | the folder's account store            | the folder, per account, registry sealed under the local key |
 
 A pod is a directory picked through the File System Access API. The last one
 picked is remembered and re-opened without a prompt when permission is still
@@ -29,7 +29,7 @@ _Source: `packages/core/src/session/places.ts`. Tests: `packages/core/tests/acco
 ## Account stores
 
 A folder's `accounts.json` and vault files are
-[spec 01 §13.1](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
+[spec 01 §14.1](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
 The library lists them most recently used first (`lastUsedAt`, else
 `createdAt`), and writes each file as JSON with a 2-space indent and a trailing
 newline.
@@ -125,7 +125,7 @@ _Source: `packages/core/src/session/auth.ts`, `packages/core/src/session/credent
 
 ## Device keys and passkeys
 
-A device key ([spec 01 §11](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md))
+A device key ([spec 01 §12](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md))
 is generated non-extractable, with usages `encrypt` and `decrypt`, and kept in
 IndexedDB database `weave-device-keys`, object store `keys`, key = its id,
 value = the `CryptoKey`.
@@ -170,10 +170,10 @@ _Source: `packages/core/src/identity/device-key.ts`, `packages/core/src/identity
 ## The session a sign-in starts
 
 A sign-in starts a node with the local root signer from the seed, the account
-key (`deriveVaultKeyBytes(seed)`), the contact key (`deriveContactKeyBytes(seed)`),
+key (`deriveAccountKey(seed)`), the contact key (`deriveContactKeyBytes(seed)`),
 the place's stores for that account ([stores](node.md#stores)) and the configured network. A
-page holds the vault key as a non-extractable `CryptoKey`; only a node that
-must derive from it gets its bytes. The
+page holds the local key (`deriveLocalKey(seed)`), which seals a pod's
+registry, as a non-extractable `CryptoKey`, and never hands it out. The
 session (`WeaveSession`) is `{ account, did, sessionDid, node }`. The seed stays
 inside the auth object; `recoveryCode()` returns it as a recovery code.
 
@@ -225,7 +225,7 @@ _Source: `packages/core/src/session/auth.ts` (`confirmPod`), `packages/core/src/
 ## Pairing a phone
 
 The ticket, the room and the exchange are
-[spec 01 §14](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
+[spec 01 §15](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
 `offerToPhone(onStage)` starts an offer on the first configured relay and
 returns `{ url, stop }`: the link for the QR code, and a way to stop. The link
 holds a one-time secret, not the account. The offer answers the first phone
@@ -268,15 +268,18 @@ lifetime, clamped to [1/24, 365].
 **Connections.** The home remembers each connection per account in
 `localStorage` under `<prefix>.connections:<accountId>` (`Connection`:
 `origin`, `name`, `audience`, `access`, `scope`, `carrySpace?`, `spaces`,
-`grantedAt`, `expiresAt`, `token?`, `agent?`). Connecting the same origin again
-replaces its connection; an agent's connection is keyed by its audience
-instead, so each agent is its own. `auth.connections()` lists them.
+`grantedAt`, `expiresAt`, `token?`, `via?`, `recordsOnly?`). A kept
+connection with any other field, or one of these in another shape, is
+dropped when read, not read in part: its app or program connects again.
+Connecting the same origin again replaces its connection; a connection with `via: 'code'` (a
+program connected by code through the app) is keyed by its audience instead,
+so each such program is its own. `auth.connections()` lists them.
 
-**Disconnecting.** `auth.disconnect(origin, { agent?, audience? })` removes the
-app's connections (by default the app and every agent connected through it;
-`agent: true` only those agents; `audience` only that key), revokes the notes
-of those with `access: write`, and, unless only agents go, removes the
-subscriptions the app proposed.
+**Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
+the app's connections (by default the app and every program connected through
+it by code; `byCode: true` only those programs; `audience` only that key),
+revokes the notes of those with `access: write`, and, unless only programs
+connected by code go, removes the subscriptions the app proposed.
 
 **Proposals.** `auth.propose({ origin, request, notify? })` adds the
 subscriptions the person kept: `notify` is the indices kept, default all. The
@@ -289,4 +292,4 @@ carrier from the same origin, adds the carrier with `node.carriers.add`
 returns the `CarryGrant`. Its connection is kept with `expiresAt: 0`, since a
 carry connection never expires.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`), `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`, `isConnection`), `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home"), `packages/core/tests/records-only.test.ts` ("a connection kept in an older shape is dropped, not read as the app’s own")._

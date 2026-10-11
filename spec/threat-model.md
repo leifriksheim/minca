@@ -31,17 +31,17 @@ and metadata through relays and hosts (§3.7, §3.8).
 
 ## 2. Adversaries
 
-| Adversary            | Holds                                                                                                 |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Stranger**         | Network access; any number of keys and accounts of its own; a space's id, or a leaked invite string   |
-| **Member**           | A role in the space, its own keys, the space key of a private space; a modified client                |
-| **Former member**    | Everything it held while a member: old keys, space keys, notes, invite secrets, its copy of the space |
-| **Key thief**        | One of an account's delegated keys (session, writer, app or agent key), with its note                 |
-| **Root thief**       | The account's seed or recovery code                                                                   |
-| **App or agent**     | A grant from the account: a note, and perhaps the vault, contact or member keys (06 §2)               |
-| **Relay**            | The signaling traffic of the rooms it serves, and the door mailbox it keeps                           |
-| **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members |
-| **Network attacker** | Can watch, delay, drop and replay traffic between peers                                               |
+| Adversary            | Holds                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Stranger**         | Network access; any number of keys and accounts of its own; a space's id, or a leaked invite string                |
+| **Member**           | A role in the space, its own keys, the space key of a private space; a modified client                             |
+| **Former member**    | Everything it held while a member: old keys, space keys, notes, invite secrets, its copy of the space              |
+| **Key thief**        | One of an account's delegated keys (session, writer or app key), with its note                                     |
+| **Root thief**       | The account's seed or recovery code                                                                                |
+| **App or program**   | A grant from the account, by popup or by code: a note, and perhaps the account, contact or member keys (06 §2, §3) |
+| **Relay**            | The signaling traffic of the rooms it serves, and the door mailbox it keeps                                        |
+| **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members              |
+| **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                            |
 
 Peers are assumed to run arbitrary code. Nothing relies on a peer running the
 reference implementation, or any implementation, honestly.
@@ -84,6 +84,12 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     another envelope or body, turns an honest write into proof against its
     writer. Warrants are a standard collection, not protocol
     ([warrants](../packages/core/docs/warrants.md)).
+  - Ciphertexts sealed under a space key or to a member key are bound to
+    their place: a record body copied into another record, collection or
+    space, or a box presented for another space, key or recipient, does not
+    open there (01 §9, 03 §8.3, §9.4). Holding the key, it can still seal
+    whatever it likes; what it can't do is pass off someone else's
+    ciphertext as being about something else (01 §9).
 - **Does not hold yet.**
   - A narrowed rule alone binds only what saw it: a version naming an older
     point counts if its author could have written it then, since nobody can
@@ -129,7 +135,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - The top rank answers to no one, and no vote can bind a change to who may
     do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
 
-_Source: 03 §4, §5; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
+_Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
 ### 3.3 Former member
 
@@ -204,21 +210,41 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - is the account for good: there is no rotation and no recovery ([#9](https://github.com/leifriksheim/weave/issues/9));
   - controls every space where the account ranks highest, and no member can
     remove it ([#160](https://github.com/leifriksheim/weave/issues/160));
-  - derives the vault key, and from it every member key, so it reads every
-    private space the account was, is or will be a reader of, and the
-    account's data at rest (01 §10, 03 §9.1, 05 §15).
+  - derives the account key, and from it every member key, so it reads every
+    private space the account was, is or will be a reader of; and the local
+    key, so it reads the account's data at rest (01 §11.1, 03 §9.1, 05 §15).
 
-### 3.6 App or agent
+### 3.6 App or program
 
-- **Holds.** Its writes count only where its note covers them, and a home
-  grants an app only the spaces chosen for it (01 §8, 06 §2). It can be given
-  a note only for a key it shows it holds, never the home's own or another
-  connection's, so disconnecting it revokes nobody else (06 §2.5).
+- **Holds.**
+  - Its writes count only where its note covers them, and a home grants an
+    app only the spaces chosen for it (01 §8, 06 §2). It can be given a note
+    only for a key it shows it holds, never the home's own or another
+    connection's, so disconnecting it revokes nobody else (06 §2.5).
+  - Given the whole account, it holds the account key, not the local key, so
+    it can't open the registry store's sealed entries, and of those it gets
+    nothing else it lacks but invite secrets waiting to be used and the CLI's
+    writer keys (01 §11.1, 05 §15). The account key does yield every space key
+    the account's registry lists.
+  - Where it can write the account's vault, a wrap of another account it
+    plants, or a passphrase wrap it edits to fewer rounds, does not open as
+    the account (01 §11.3).
+  - A program connected by code gets what the app it connects through asks
+    for and the person allows, never more than its key signed for: the app
+    can't use its proof for the app's own connection, nor ask for more than
+    records when it asked for records only, nor use it from another origin;
+    and an app's own proof can't be passed off as a program's (06 §2.4, §3).
+    What the program asks for is only a request: the app chooses the terms,
+    and the home shows the person a warning when a request by code asks for
+    more than records. A request with `recordsOnly` never gets the contact
+    key (06 §2.8).
+  - The note carries no label a peer reads: what a version, a live message or
+    a knock may do is what its note grants, whatever its `fct` says (01 §8).
 - **Does not hold yet.**
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
     keys sealed to itself _(traced)_ ([#169](https://github.com/leifriksheim/weave/issues/169)).
-  - `scope: account` hands over the vault key, and `scope: spaces` member
+  - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
     its grant expires ([#165](https://github.com/leifriksheim/weave/issues/165), [#169](https://github.com/leifriksheim/weave/issues/169)).
   - Any key the account granted can pose as the account's node to a client
@@ -229,11 +255,27 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
     [#168](https://github.com/leifriksheim/weave/issues/168)).
 
-_Source: 01 §8; 06 §2. Tests: `packages/core/tests/connect.test.ts`, `packages/core/tests/agents.test.ts`, `packages/core/tests/ucan.test.ts`._
+_Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 
-- **Holds.** Nothing a test shows yet. It can always drop and delay.
+- **Holds.** It can always drop and delay. Beyond that:
+  - It can't read or change what two sides say on a channel, pairing or
+    connecting by code: each direction has its own key from the secret and an
+    ephemeral exchange, and each message is bound to its type and place, so
+    one sent back to its sender, relabelled, repeated or reordered does not
+    open (01 §15.2, 06 §3). The room's name is a hash of the secret, so it
+    never learns the secret itself.
+  - Someone who records a channel's room and learns its secret later still
+    opens nothing (01 §15.2).
+  - On the app's side a connect code serves one program: once one has asked,
+    the app answers nobody else (06 §3).
+  - Someone else who holds the code (it is on a screen, and pasted) can
+    answer the program first and pose as the app, but the program takes a
+    note only from the account the code names (its fingerprint, 06 §3), which
+    they can't sign. Posing gets them the program's proof, which names the
+    origin they claimed and so works only from there, and denies the program
+    its connection.
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
     fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay that
@@ -243,8 +285,15 @@ _Source: 01 §8; 06 §2. Tests: `packages/core/tests/connect.test.ts`, `packages
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - Its door mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
+  - It can fill the 32 exchanges an app offering a code runs before the right
+    program arrives, with peers that say hello, so the program is never
+    answered. Denial of service only: none of them holds the code, so none
+    can ask.
+  - Someone else who holds the code can also ask before the program does,
+    posing as it. The person sees only the name it gives itself, and may
+    allow a note for its key; the real program is then never answered.
 
-_Source: 04 §1, §5.1, §6.2; 07 §5. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`._
+_Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered", "someone else holding the code who answers first, with a note from their own account, is refused")._
 
 ### 3.8 Host or carrier
 
@@ -264,8 +313,12 @@ _Source: 04 §1, §5.1, §6.2; 07 §5. Tests: `packages/core/tests/signaling.tes
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#176](https://github.com/leifriksheim/weave/issues/176)) _(traced)_.
+  - Where it can write the account's data folder (a pod in a synced drive,
+    say), it can put back an older sealed registry entry, such as a space key
+    from before a key change, or delete one: sealing at rest binds an entry's
+    name, not its version (05 §15, [#215](https://github.com/leifriksheim/weave/issues/215)).
 
-_Source: 03 §8; 02 §3; 06 §4. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
+_Source: 03 §8; 02 §3; 06 §4; 05 §15. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
 
 ### 3.9 Network attacker
 
@@ -276,13 +329,16 @@ _Source: 03 §8; 02 §3; 06 §4. Tests: `packages/core/tests/carrier.test.ts`, `
     Nothing binds the handshake to the connection, so one that relays the
     real node's handshake is kept out only by TLS.
   - A node URL must be `wss://`, or `ws://` only to the same machine (04 §5.2).
+  - In pairing, each direction has its own key and each message its type and
+    count, so a message sent back to its sender, relabelled, replayed or
+    reordered does not open (01 §15.2).
 - **Does not hold yet.**
   - An unpinned connection to a node accepts whichever node answers, and an
     account pin accepts any key the account granted ([#177](https://github.com/leifriksheim/weave/issues/177)) _(traced)_.
   - Group keys give no forward secrecy: whoever later obtains a space key
     reads everything sealed under it and every earlier key ([#182](https://github.com/leifriksheim/weave/issues/182)).
 
-_Source: 04 §5, §6.1. Tests: `packages/core/tests/ws-transport.test.ts`._
+_Source: 04 §5, §6.1; 01 §15.2. Tests: `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open")._
 
 ### 3.10 Raised, not yet confirmed
 
@@ -308,7 +364,7 @@ raised but has no place above until a test confirms or rules it out.
 ## 5. Reviewing a change against this page
 
 Every change to the protocol is reviewed adversarially before it merges (see
-`CLAUDE.md` and `.claude/agents/protocol-reviewer.md`). This is the one list
+`CLAUDE.md`, and the protocol reviewer's instructions under `.claude/`). This is the one list
 of questions. For each adversary in §2, the review asks:
 
 1. **What's new.** What can it now do that it could not before? Can it reach

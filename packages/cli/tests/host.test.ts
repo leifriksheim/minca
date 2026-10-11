@@ -18,7 +18,7 @@ import { createIdentityManager } from '../../core/src/identity/identity-manager.
 import { createLocalRootSigner } from '../../core/src/identity/root-signer.js';
 import { createP256Provider } from '../../core/src/identity/crypto-p256.js';
 import { generateSeed } from '../../core/src/identity/recovery-code.js';
-import { deriveVaultKeyBytes } from '../../core/src/identity/account-vault.js';
+import { deriveAccountKey } from '../../core/src/identity/account-vault.js';
 import {
   createHostClient,
   createSpaceHostClient,
@@ -65,7 +65,7 @@ async function account() {
   return {
     did: identity.did,
     signer: createLocalRootSigner(identity, manager.getProvider()),
-    accountKey: await deriveVaultKeyBytes(seed),
+    accountKey: await deriveAccountKey(seed),
   };
 }
 type Account = Awaited<ReturnType<typeof account>>;

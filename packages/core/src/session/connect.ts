@@ -13,7 +13,7 @@ import { idbOnce } from '../identity/idb.js';
 import { cidFromBytes } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { verifyUCAN, parseUCAN, type Capability, type UCANToken } from '../identity/ucan.js';
-import { isAgentNote } from '../identity/agent-note.js';
+import { grantsRecordsOnly } from '../identity/abilities.js';
 import type { RootSigner } from '../identity/root-signer.js';
 import { startPageNode, type WorkerLike } from '../node/worker.js';
 import type { StoreFactory } from '../node/stores.js';
@@ -37,9 +37,10 @@ export interface ConnectRequest {
   /** The app's key — the note is made out to it */
   readonly audience: string;
   /**
-   * That key's signature over `{"proof":"weave-connect-key/v1","audience":…}`
-   * (canonical JSON), so a request can only name a key its sender holds:
-   * disconnecting revokes that key, and must never revoke someone else's.
+   * That key's signature over what it agreed to (`keyProof`): its DID, how it
+   * reached the app (`via`) and whether it asked for records only. So a
+   * request can only name a key its sender holds, for what that key asked:
+   * disconnecting revokes the key, and must never revoke someone else's.
    */
   readonly proof: string;
   /** What the app calls itself. Shown, but never trusted: the home shows the origin too. */
@@ -68,14 +69,18 @@ export interface ConnectRequest {
   /** Whether to offer the person's existing spaces to pick from. Default true. */
   readonly chooseSpaces?: boolean;
   /**
-   * The key is an agent's — one on the person's computer, connected with
-   * `weave connect` (`agent-link.ts`). Its note grants writing records only,
-   * so every peer refuses it changing the space's collections or who may do
-   * what, or the account's list of spaces; and it carries `AGENT_FACT`, so
-   * every record it writes shows as "via agent". It may be given chosen
-   * spaces or the whole account, but never spaces made for it.
+   * A note that grants writing records and nothing more (`record/*`), so
+   * every peer refuses its key changing a space's collections or who may do
+   * what, or writing in the account's own spaces. No contact key, no spaces
+   * made for it, and no carrying.
    */
-  readonly agent?: boolean;
+  readonly recordsOnly?: boolean;
+  /**
+   * `code`: the key is not the app's own but a program's, which reached the
+   * app over a connect code (`connect-code.ts`). The home keeps its
+   * connection by its key, apart from the app's own. Absent: the app's own key.
+   */
+  readonly via?: 'code';
   /** How many days the note should last, 1–365. The home decides; default 7. */
   readonly days?: number;
 }
@@ -85,7 +90,7 @@ export interface ConnectRequest {
  * be notified: subscriptions, and nothing else. Never part of connecting — a
  * person signing in has asked for nothing yet. The home knows the app by the
  * origin the browser reports, and refuses one it has no connection for, a
- * carrier's and an agent's.
+ * carrier's and a program's connected by code.
  */
 export interface ProposeRequest {
   readonly v: 1;
@@ -160,8 +165,6 @@ export interface Grant {
   readonly contactsSpace?: string;
   /** Unix seconds */
   readonly expiresAt: number;
-  /** Present, and true, when the note is an agent's */
-  readonly agent?: true;
   /** The home that granted it, so the app can go back there */
   readonly home: string;
   /**
@@ -234,8 +237,8 @@ export function homeAddress(input: string): string {
 /**
  * The capabilities a grant carries, for these spaces. Writing is everything
  * the account may do there; `records` is writing records only, for a key the
- * account trusts less (an agent's): it can't define collections, change who
- * may do what, or write for the account (`identity/abilities.ts`).
+ * account trusts less: it can't define collections, change who may do what,
+ * or write for the account (`identity/abilities.ts`).
  */
 export function grantCapabilities(
   access: 'read' | 'write' | 'records',
@@ -247,28 +250,60 @@ export function grantCapabilities(
 
 // ─── The app's side ──────────────────────────────────────────────────
 
-/** The app's own key, and its DID */
 /** What a key signs to show it is the one a connect request names */
-const KEY_PROOF = 'weave-connect-key/v1';
-/** The statement, kind included: an agent's proof can never ask for an app's connection, nor the other way */
-const keyStatement = (audience: string, agent: boolean) =>
-  utf8Encode(canonicalize({ agent, audience, proof: KEY_PROOF }));
+const KEY_PROOF = 'weave/connect-key/v1';
 
-/** A key's proof that it holds itself, for a connect request (`ConnectRequest.proof`) */
+/**
+ * What a key agrees to in a connect request: how it reached the app, how much
+ * it asks for, and, for a program's key handed over a code, the app it went
+ * through.
+ */
+export type KeyTerms =
+  /** The app's own key */
+  | { readonly via: 'popup'; readonly recordsOnly: boolean }
+  /** A program's key, handed to the app at `origin` over a connect code */
+  | { readonly via: 'code'; readonly recordsOnly: boolean; readonly origin: string };
+
+/**
+ * The statement, terms included: a proof a program hands an app over a code
+ * can't ask for the app's own connection, nor for more than records when it
+ * asked for records only, nor be used from another app's origin.
+ */
+const keyStatement = (audience: string, terms: KeyTerms) =>
+  utf8Encode(
+    canonicalize({
+      audience,
+      ...(terms.via === 'code' ? { origin: terms.origin } : {}),
+      proof: KEY_PROOF,
+      recordsOnly: terms.recordsOnly,
+      via: terms.via,
+    }),
+  );
+
+/** The terms a request names, as the home received it from `origin` */
+export const requestTerms = (
+  request: Pick<ConnectRequest, 'via' | 'recordsOnly'>,
+  origin: string,
+): KeyTerms =>
+  request.via === 'code'
+    ? { via: 'code', recordsOnly: request.recordsOnly === true, origin }
+    : { via: 'popup', recordsOnly: request.recordsOnly === true };
+
+/** A key's proof that it holds itself, for a connect request with these terms (`ConnectRequest.proof`) */
 export async function keyProof(
   key: { readonly keys: CryptoKeyPair; readonly did: string },
-  agent = false,
+  terms: KeyTerms = { via: 'popup', recordsOnly: false },
 ): Promise<string> {
-  return base64UrlEncode(await createP256Provider().sign(key.keys.privateKey, keyStatement(key.did, agent)));
+  return base64UrlEncode(await createP256Provider().sign(key.keys.privateKey, keyStatement(key.did, terms)));
 }
 
-/** Whether `proof` was made by the key `audience` names, for a request of this kind */
-export async function checkKeyProof(audience: string, proof: unknown, agent = false): Promise<boolean> {
+/** Whether `proof` was made by the key `audience` names, for a request with these terms */
+export async function checkKeyProof(audience: string, proof: unknown, terms: KeyTerms): Promise<boolean> {
   if (typeof proof !== 'string') return false;
   try {
     const provider = createP256Provider();
     const publicKey = await provider.importPublicKey(didToPublicKey(audience).publicKeyBytes);
-    return await provider.verify(publicKey, base64UrlDecode(proof), keyStatement(audience, agent));
+    return await provider.verify(publicKey, base64UrlDecode(proof), keyStatement(audience, terms));
   } catch {
     return false;
   }
@@ -309,18 +344,18 @@ export async function forgetAppKey(name = 'default'): Promise<void> {
 export interface ConnectOptions {
   /** The home's connect page, e.g. `https://weave.example/connect` */
   readonly home: string;
-  /** What to ask for; `audience` and `proof` are filled in with this app's key */
-  readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof'>;
+  /** What to ask for; `audience`, `proof` and `via` are filled in */
+  readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof' | 'via'>;
   /** The key to ask for. Default: {@link appKey} under `keyName`. */
   readonly key?: AppKey;
   /** Which of this app's keys to use when `key` is not given. Default `default`. */
   readonly keyName?: string;
   /**
-   * Ask for a note made out to this key instead of one of the app's own —
-   * an agent's, which lives on another computer (`offerAgentLink`).
+   * Ask for a note made out to this key instead of one of the app's own: a
+   * program's that reached the app over a connect code (`offerConnectCode`).
    */
   readonly audience?: string;
-  /** With `audience`: that key's {@link keyProof}, which only its holder can make */
+  /** With `audience`: that key's {@link keyProof} with `via: code` and this app's origin, which only its holder can make */
   readonly audienceProof?: string;
   /** How long to wait for the person. Default 10 minutes. */
   readonly timeoutMs?: number;
@@ -339,6 +374,7 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   const popup = openHome(homeUrl);
   let audience: string;
   let proof: string;
+  const byCode = options.audience !== undefined;
   if (options.audience !== undefined) {
     if (!options.audienceProof) throw new Error('Asking for another key needs its proof (keyProof).');
     audience = options.audience;
@@ -346,20 +382,15 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   } else {
     const key = options.key ?? (await appKey(options.keyName));
     audience = key.did;
-    proof = await keyProof(key, options.request.agent === true);
+    proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
   }
   const grant = await askHome<Grant>(
     popup,
     homeUrl.origin,
-    { v: 1, audience, proof, ...options.request },
+    { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) },
     options.timeoutMs,
   );
-  await checkGrant(grant, audience);
-  // An agent's note must say so, or its writes would pass as the person's own; and grant records only.
-  if (options.request.agent && !isAgentNote(grant.token))
-    throw new Error("The home gave an ordinary note, not an agent's. Update your account home.");
-  if (options.request.agent && !recordsOnlyGrant(grant.token))
-    throw new Error('The home gave an agent more than records. Update your account home.');
+  await checkGrant(grant, audience, { recordsOnly: options.request.recordsOnly === true });
   return { ...grant, home: homeUrl.href };
 }
 
@@ -493,8 +524,15 @@ function askHome<T>(
   });
 }
 
-/** Refuses a grant that is not a valid note from the account to this key. */
-export async function checkGrant(grant: Grant, audience: string): Promise<void> {
+/**
+ * Refuses a grant that is not a valid note from the account to this key, or,
+ * when records only were asked for, one that grants more.
+ */
+export async function checkGrant(
+  grant: Grant,
+  audience: string,
+  asked: { readonly recordsOnly?: boolean } = {},
+): Promise<void> {
   if (!isObject(grant) || grant.v !== 1 || typeof grant.token !== 'string' || typeof grant.did !== 'string') {
     throw new Error('That is not a grant.');
   }
@@ -503,15 +541,8 @@ export async function checkGrant(grant: Grant, audience: string): Promise<void> 
   const { payload } = parseUCAN(grant.token);
   if (payload.aud !== audience) throw new Error('The grant was made out to a different key.');
   if (payload.iss !== grant.did) throw new Error('The grant was not signed by the account it names.');
-}
-
-/** Whether a note grants records and nothing more, as an agent's must (spec 01 §8) */
-export function recordsOnlyGrant(token: string): boolean {
-  try {
-    return parseUCAN(token).payload.att.every((capability) => capability.can.startsWith('record/'));
-  } catch {
-    return false;
-  }
+  if (asked.recordsOnly && !grantsRecordsOnly(grant.token))
+    throw new Error('The grant gives more than records, which is all that was asked for.');
 }
 
 /** A signer that answers with the note the home gave — the app holds nothing else. */
@@ -675,7 +706,8 @@ const REQUEST_FIELDS = new Set([
   'create',
   'contacts',
   'chooseSpaces',
-  'agent',
+  'recordsOnly',
+  'via',
   'days',
 ]);
 const PROPOSE_FIELDS = new Set(['v', 'kind', 'name', 'notify']);
@@ -716,10 +748,11 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
         Number.isInteger(request.days) &&
         request.days >= 1 &&
         request.days <= MAX_GRANT_DAYS)) &&
-    // An agent works in spaces that exist: none made for it, and no carrying.
-    (request.agent === undefined ||
-      request.agent === false ||
-      (request.agent === true &&
+    (request.via === undefined || (request.via === 'code' && request.access !== 'carry')) &&
+    // Records only: in spaces that exist, none made for it, no contacts and no carrying.
+    (request.recordsOnly === undefined ||
+      request.recordsOnly === false ||
+      (request.recordsOnly === true &&
         request.access !== 'carry' &&
         request.create === undefined &&
         !request.contacts))

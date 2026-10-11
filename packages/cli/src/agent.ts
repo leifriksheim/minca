@@ -1,8 +1,8 @@
 /**
  * The terminal as an agent: `weave connect <code>` trades the app's code for
- * an agent's note from the account home, signed to a key made here that never
- * leaves (`packages/core/src/session/agent-link.ts`). Then `weave mcp` and
- * `weave agent` run a node of their own as the agent, writing "via agent".
+ * a records-only note from the account home, signed to a key made here that
+ * never leaves (`packages/core/src/session/connect-code.ts`). Then `weave mcp`
+ * and `weave agent` run a node of their own as the agent, under that note.
  * Kept in `<home>/agent/`, readable only by this user: `key.json`,
  * `grant.json`, `data/`, and `weave agent`'s model keys and `spend.json`.
  */
@@ -19,8 +19,7 @@ import {
   type P2PNode,
 } from '@weaveprotocol/core';
 import { profile } from '@weaveprotocol/core/schemas';
-import { grantSigner, type Grant } from '@weaveprotocol/core/session';
-import { acceptAgentLink, checkAgentGrant, keyProof } from '@weaveprotocol/core/session';
+import { checkGrant, connectWithCode, grantSigner, type Grant } from '@weaveprotocol/core/session';
 import { base64UrlDecode } from '@weaveprotocol/core';
 import { openFsDirectory } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
@@ -98,7 +97,7 @@ async function agentKey(home: string): Promise<Stored> {
 /** The grant this computer's agent was given, or null before `weave connect` */
 async function loadAgentGrant(home: string): Promise<Grant | null> {
   try {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- written by connectAgent; startAgentNode checks it with checkAgentGrant before use
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- written by connectAgent; startAgentNode checks it with checkGrant before use
     return JSON.parse(await readFile(path.join(agentDir(home), 'grant.json'), 'utf8')) as Grant;
   } catch {
     return null;
@@ -117,7 +116,7 @@ export function defaultAgentName(): string {
 }
 
 /**
- * Trades a code from the app for an agent's note, and keeps it.
+ * Trades a code from the app for a records-only note, and keeps it.
  * @returns The grant, checked
  */
 export async function connectAgent(params: {
@@ -131,13 +130,14 @@ export async function connectAgent(params: {
   const key = await agentKey(params.home);
   const did = key.did;
   params.log('Looking for the app…');
-  const grant = await acceptAgentLink({
+  const grant = await connectWithCode({
     code: params.code,
-    did,
-    proof: await keyProof({ keys: key.keys, did }, true),
+    key: { keys: key.keys, did },
     name: params.name,
+    recordsOnly: true,
     network: { relays: params.relays },
-    onWaiting: () => params.log('Found it. Allow the agent in the app — it opens your account home.'),
+    onWaiting: ({ origin }) =>
+      params.log(`Found ${origin}. Allow the agent there — it opens your account home.`),
   });
 
   // Another account's spaces don't belong next to this one's.
@@ -175,7 +175,7 @@ export async function startAgentNode(
       "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
     );
   const key = await agentKey(home);
-  await checkAgentGrant(grant, key.did);
+  await checkGrant(grant, key.did, { recordsOnly: true });
   // One key, so one process signing with it: two at once would fork its log (spec 02 §4.10).
   const release = await holdLock(path.join(agentDir(home), 'lock'));
   if (!release)

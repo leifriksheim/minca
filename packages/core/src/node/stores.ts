@@ -46,17 +46,17 @@ export function indexedDBStores(prefix: string): StoreFactory {
  *
  * @param directory The root to write under
  * @param options.basePath Where this account's data starts, e.g. `accounts/<id>/stores`
- * @param options.vaultKey Seals the registry. Without it nothing is sealed.
+ * @param options.localKey Seals the registry. Without it nothing is sealed.
  */
 export function folderStores(
   directory: DirectoryHandleLike,
-  options: { readonly basePath?: string; readonly vaultKey?: CryptoKey | null } = {},
+  options: { readonly basePath?: string; readonly localKey?: CryptoKey | null } = {},
 ): StoreFactory {
   return async (path, storeOptions) => {
     const full = options.basePath ? `${options.basePath}/${path}` : path;
     const adapter = await createFolderAdapter(directory, full);
-    return storeOptions?.seal && options.vaultKey
-      ? createEncryptedAdapter(adapter, options.vaultKey)
+    return storeOptions?.seal && options.localKey
+      ? createEncryptedAdapter(adapter, options.localKey)
       : adapter;
   };
 }
@@ -69,7 +69,7 @@ export type WorkerStores =
   | {
       readonly directory: DirectoryHandleLike;
       readonly basePath?: string;
-      readonly vaultKey?: CryptoKey | null;
+      readonly localKey?: CryptoKey | null;
     };
 
 /**
@@ -90,6 +90,6 @@ export function workerStores(stores: WorkerStores): StoreFactory {
     ? indexedDBStores(stores.indexedDB)
     : folderStores(stores.directory, {
         ...(stores.basePath !== undefined ? { basePath: stores.basePath } : {}),
-        ...(stores.vaultKey ? { vaultKey: stores.vaultKey } : {}),
+        ...(stores.localKey ? { localKey: stores.localKey } : {}),
       });
 }

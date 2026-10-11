@@ -6,6 +6,7 @@
  * expires after a chosen time unused, and never travels in a pod.
  */
 import { createDeviceKey, deleteDeviceKey, getDeviceKey } from '../identity/device-key.js';
+import { createIdentityManager } from '../identity/identity-manager.js';
 import {
   unwrapSeedWithDeviceKey,
   wrapSeedWithDeviceKey,
@@ -81,6 +82,8 @@ interface Remembered {
   /** Which kind of place the account was opened from — a pod account resumes only when the pod is open again */
   readonly place: 'browser' | 'folder';
   readonly wrap: DeviceWrap;
+  /** The account's DID, which the seed in the wrap must derive */
+  readonly did: string;
   /** Unix ms; pushed forward each time it is used */
   readonly expiresAt: number;
 }
@@ -144,6 +147,7 @@ export function createStaySignedIn(
         accountId,
         place,
         wrap,
+        did: (await createIdentityManager().fromSeed(seed)).did,
         expiresAt: Date.now() + DURATION[chosen],
       } satisfies Remembered);
     },
@@ -162,7 +166,7 @@ export function createStaySignedIn(
         return null;
       }
       try {
-        const seed = await unwrapSeedWithDeviceKey(current.wrap, key);
+        const seed = await unwrapSeedWithDeviceKey(current.wrap, key, current.did);
         write(RECORD, { ...current, expiresAt: Date.now() + DURATION[choice()] });
         return { accountId: current.accountId, seed };
       } catch {

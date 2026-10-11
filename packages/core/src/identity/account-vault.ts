@@ -5,11 +5,13 @@
  * passphrase). The recovery code needs no wrap: it is the seed.
  */
 
-import { base64UrlEncode, base64UrlDecode, concatBytes, utf8Encode } from '../utils/encoding.js';
+import { base64UrlEncode, base64UrlDecode, utf8Encode } from '../utils/encoding.js';
 import { protocolError } from '../utils/errors.js';
 import { bufferSource, isRecord } from '../utils/guards.js';
 import { hkdf, hkdfAesKey } from './hkdf.js';
-import { aesOpen, aesSeal, NONCE_BYTES } from './aes.js';
+import { openEnvelope, sealEnvelope, type Bound } from './envelope.js';
+import { createIdentityManager } from './identity-manager.js';
+import { RECOVERY_SEED_BYTES } from './recovery-code.js';
 
 const SALT_BYTES = 16;
 
@@ -21,8 +23,13 @@ const SALT_BYTES = 16;
  * session.
  */
 export const PASSPHRASE_ITERATIONS = 600_000;
+/** More rounds than this are refused: a vault file edited to a huge count would hang the page */
+const MAX_ITERATIONS = 10_000_000;
 
-const VAULT_KEY_INFO = utf8Encode('weave-vault-key-v1');
+const LOCAL_KEY_INFO = utf8Encode('weave/local-key/v1');
+const ACCOUNT_KEY_INFO = utf8Encode('weave/account-key/v1');
+/** The envelope label of a wrap; bound to `{ did, id, kind }`, and a passphrase wrap's `salt` and `iterations` */
+const WRAP_LABEL = 'weave/vault-wrap/v1';
 
 /** Fields every wrap carries, whatever unlocks it */
 interface WrapBase {
@@ -31,9 +38,8 @@ interface WrapBase {
   /** Shown when asking which one to use */
   readonly label: string;
   readonly addedAt: string;
-  readonly salt: string;
-  readonly iv: string;
-  readonly ciphertext: string;
+  /** base64url of the envelope around the seed (spec 01 §9.1) */
+  readonly sealed: string;
 }
 
 /**
@@ -65,6 +71,8 @@ export interface DeviceWrap extends WrapBase {
 /** A seed wrapped under a passphrase */
 export interface PassphraseWrap extends WrapBase {
   readonly kind: 'passphrase';
+  /** base64url of 16 random bytes */
+  readonly salt: string;
   readonly iterations: number;
 }
 
@@ -98,25 +106,47 @@ function wrapId(): string {
   return base64UrlEncode(randomBytes(8));
 }
 
-async function seal(seed: Uint8Array, key: CryptoKey): Promise<{ iv: string; ciphertext: string }> {
-  const sealed = await aesSeal(key, seed);
-  return {
-    iv: base64UrlEncode(sealed.subarray(0, NONCE_BYTES)),
-    ciphertext: base64UrlEncode(sealed.subarray(NONCE_BYTES)),
-  };
+/** The DID a seed derives */
+async function didOfSeed(seed: Uint8Array): Promise<string> {
+  return (await createIdentityManager().fromSeed(seed)).did;
 }
 
-async function open(wrap: WrapBase, key: CryptoKey): Promise<Uint8Array> {
+/** What a wrap's envelope is bound to: whose seed, which wrap, and how it opens */
+function wrapBound(
+  did: string,
+  wrap: {
+    readonly id: string;
+    readonly kind: SeedWrap['kind'];
+    readonly salt?: string;
+    readonly iterations?: number;
+  },
+): Bound {
+  return wrap.kind === 'passphrase'
+    ? { did, id: wrap.id, kind: wrap.kind, salt: wrap.salt ?? '', iterations: wrap.iterations ?? 0 }
+    : { did, id: wrap.id, kind: wrap.kind };
+}
+
+const unlockFailed = () =>
+  protocolError(
+    'VAULT_UNLOCK_FAILED',
+    'That did not unlock the folder.',
+    'Check the passphrase, or use your recovery code instead.',
+  );
+
+/**
+ * Opens a wrap, and checks what is inside is the seed of `did`: a wrap copied
+ * in from another account's vault, or edited, is refused.
+ */
+async function open(wrap: SeedWrap, key: CryptoKey, did: string): Promise<Uint8Array> {
+  let seed: Uint8Array | null = null;
   try {
-    return await aesOpen(key, concatBytes(base64UrlDecode(wrap.iv), base64UrlDecode(wrap.ciphertext)));
+    seed = await openEnvelope(key, WRAP_LABEL, wrapBound(did, wrap), base64UrlDecode(wrap.sealed));
   } catch {
-    // AES-GCM authenticates, so this is the wrong key rather than corruption.
-    throw protocolError(
-      'VAULT_UNLOCK_FAILED',
-      'That did not unlock the folder.',
-      'Check the passphrase, or use your recovery code instead.',
-    );
+    seed = null;
   }
+  // AES-GCM authenticates, so a failure is the wrong key, account or wrap rather than corruption.
+  if (!seed || seed.length !== RECOVERY_SEED_BYTES || (await didOfSeed(seed)) !== did) throw unlockFailed();
+  return seed;
 }
 
 /**
@@ -156,26 +186,31 @@ export async function wrapSeedWithDeviceKey(
   deviceKey: { id: string; key: CryptoKey },
   meta: { rpId: string; credentialId?: string; userHandle?: string; label?: string },
 ): Promise<DeviceWrap> {
-  const sealed = await seal(seed, deviceKey.key);
-
+  const id = wrapId();
+  const bound = wrapBound(await didOfSeed(seed), { id, kind: 'device' });
   return {
     kind: 'device',
-    id: wrapId(),
+    id,
     label: meta.label ?? meta.rpId,
     rpId: meta.rpId,
     deviceKeyId: deviceKey.id,
     ...(meta.credentialId ? { credentialId: meta.credentialId } : {}),
     ...(meta.userHandle ? { userHandle: meta.userHandle } : {}),
     addedAt: new Date().toISOString(),
-    // Nothing is stretched into this key, so there is no salt to record.
-    salt: '',
-    ...sealed,
+    sealed: base64UrlEncode(await sealEnvelope(deviceKey.key, WRAP_LABEL, bound, seed)),
   };
 }
 
-/** Opens a device wrap. */
-export async function unwrapSeedWithDeviceKey(wrap: DeviceWrap, deviceKey: CryptoKey): Promise<Uint8Array> {
-  return open(wrap, deviceKey);
+/**
+ * Opens a device wrap.
+ * @param did The vault's DID: the seed inside must derive it
+ */
+export async function unwrapSeedWithDeviceKey(
+  wrap: DeviceWrap,
+  deviceKey: CryptoKey,
+  did: string,
+): Promise<Uint8Array> {
+  return open(wrap, deviceKey, did);
 }
 
 /** Wraps a seed under a passphrase — the portable way back in. */
@@ -185,52 +220,56 @@ export async function wrapSeedWithPassphrase(
   label = 'Passphrase',
 ): Promise<PassphraseWrap> {
   const salt = randomBytes(SALT_BYTES);
-  const sealed = await seal(seed, await passphraseWrappingKey(passphrase, salt, PASSPHRASE_ITERATIONS));
-
-  return {
-    kind: 'passphrase',
+  const key = await passphraseWrappingKey(passphrase, salt, PASSPHRASE_ITERATIONS);
+  const unsealed = {
+    kind: 'passphrase' as const,
     id: wrapId(),
     label,
     addedAt: new Date().toISOString(),
     salt: base64UrlEncode(salt),
     iterations: PASSPHRASE_ITERATIONS,
-    ...sealed,
   };
+  const bound = wrapBound(await didOfSeed(seed), unsealed);
+  return { ...unsealed, sealed: base64UrlEncode(await sealEnvelope(key, WRAP_LABEL, bound, seed)) };
 }
 
-/** Opens a passphrase wrap. */
+/**
+ * Opens a passphrase wrap. Its `salt` and `iterations` are bound into the
+ * envelope, so a wrap edited to fewer rounds does not open; fewer than
+ * {@link PASSPHRASE_ITERATIONS} are refused before any are run.
+ * @param did The vault's DID: the seed inside must derive it
+ */
 export async function unwrapSeedWithPassphrase(
   wrap: PassphraseWrap,
   passphrase: string,
+  did: string,
 ): Promise<Uint8Array> {
-  const key = await passphraseWrappingKey(passphrase, base64UrlDecode(wrap.salt), wrap.iterations);
-  return open(wrap, key);
+  const { iterations } = wrap;
+  if (!Number.isSafeInteger(iterations) || iterations < PASSPHRASE_ITERATIONS || iterations > MAX_ITERATIONS)
+    throw unlockFailed();
+  const key = await passphraseWrappingKey(passphrase, base64UrlDecode(wrap.salt), iterations);
+  return open(wrap, key, did);
 }
 
 /**
- * The vault key as raw bytes.
+ * The **local key**: what seals this account's data on this device (the
+ * registry at rest, the CLI's writer keys). Never handed to anyone, and not
+ * extractable, so a page can use it without being able to leak it.
  *
- * {@link deriveVaultKey} returns a key that cannot be exported, which is right
- * for a page — it should not be able to leak what it was given. A node derives
- * the account registry from the key, so it is handed the bytes directly
- * rather than the protocol relaxing that for everyone.
- *
- * Identical material to `deriveVaultKey`: same input, same info, same length.
- * If those ever drift, the registry and the folder would be sealed under two
- * different keys.
+ * Derived from the seed under its own label, beside the account key, so an
+ * app given the account key derives nothing that opens local storage.
  */
-export async function deriveVaultKeyBytes(seed: Uint8Array): Promise<Uint8Array> {
-  return hkdf(seed, VAULT_KEY_INFO, 32);
+export async function deriveLocalKey(seed: Uint8Array): Promise<CryptoKey> {
+  return hkdfAesKey(seed, LOCAL_KEY_INFO);
 }
 
 /**
- * Derives the key that encrypts a folder's contents at rest.
- *
- * Separate from the signing key, and from every wrapping key, so that handing
- * one out never implies the others.
+ * The **account key**, 32 bytes: the root of the member keys and of the
+ * account's own spaces (the registry, the contacts). What an app given the
+ * whole account receives, and a node that follows the registry is given.
  */
-export async function deriveVaultKey(seed: Uint8Array): Promise<CryptoKey> {
-  return hkdfAesKey(seed, VAULT_KEY_INFO);
+export async function deriveAccountKey(seed: Uint8Array): Promise<Uint8Array> {
+  return hkdf(seed, ACCOUNT_KEY_INFO, 32);
 }
 
 /**

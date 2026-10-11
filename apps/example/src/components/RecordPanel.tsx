@@ -207,13 +207,13 @@ export function RecordPanel({
                   ) : (
                     <Person did={record.createdBy ?? record.root} />
                   )}
-                  {record.viaAgent && record.seq === 0 && ' via agent'}
+                  {record.recordsOnly && record.seq === 0 && ' via agent'}
                 </span>
                 <span>· {ago(record.createdAt)}</span>
                 {record.seq > 0 && (
                   <span>
                     · edited {ago(record.updatedAt)}
-                    {record.viaAgent && ' via agent'}
+                    {record.recordsOnly && ' via agent'}
                   </span>
                 )}
               </div>

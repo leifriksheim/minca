@@ -10,8 +10,8 @@ import { createLocalRootSigner } from '../../src/identity/root-signer.js';
 import { createP256Provider } from '../../src/identity/crypto-p256.js';
 import { generateSeed } from '../../src/identity/recovery-code.js';
 import { didOf, publicKeyToDid, P256_MULTICODEC } from '../../src/identity/did.js';
-import { keyProof } from '../../src/session/connect.js';
-import { deriveVaultKeyBytes } from '../../src/identity/account-vault.js';
+import { keyProof, requestTerms } from '../../src/session/connect.js';
+import { deriveAccountKey } from '../../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../../src/identity/contact-key.js';
 import { createSigner } from '../../src/schema/signer.js';
 import { createVersion, type CreateVersionParams } from '../../src/schema/version.js';
@@ -52,7 +52,7 @@ export async function person(hub?: FakeHub, options: PersonOptions = {}) {
     signer: createLocalRootSigner(me, manager.getProvider()),
     stores,
     watchIntervalMs: 0,
-    ...(options.accountKey ? { accountKey: await deriveVaultKeyBytes(seed) } : {}),
+    ...(options.accountKey ? { accountKey: await deriveAccountKey(seed) } : {}),
     ...(options.contactKey ? { contactKey: await deriveContactKeyBytes(seed) } : {}),
     ...(hub
       ? {
@@ -119,7 +119,7 @@ export async function makeKey() {
 
 const namedKeys = new Map<string, Promise<{ keys: CryptoKeyPair; did: string }>>();
 
-/** A real key for a name a test uses as an app's or agent's key, the same one each time */
+/** A real key for a name a test uses as an app's or a program's key, the same one each time */
 export function testAppKey(name: string): Promise<{ keys: CryptoKeyPair; did: string }> {
   let key = namedKeys.get(name);
   if (!key) {
@@ -132,11 +132,20 @@ export function testAppKey(name: string): Promise<{ keys: CryptoKeyPair; did: st
   return key;
 }
 
-/** A connect request as an app would send it: the named key swapped for a real one, with its proof */
-export async function asked<T extends { readonly audience: string; readonly agent?: boolean }>(
+/**
+ * A connect request as an app would send it: the named key swapped for a real
+ * one, with its proof. One with `via: code` needs the origin of the app it
+ * goes through, which its proof names.
+ */
+export async function asked<
+  T extends { readonly audience: string; readonly via?: 'code'; readonly recordsOnly?: boolean },
+>(
   request: T,
   key?: { readonly keys: CryptoKeyPair; readonly did: string },
+  origin?: string,
 ): Promise<T & { readonly proof: string }> {
+  if (request.via === 'code' && !origin) throw new Error('A request via code needs the app’s origin.');
   const signer = key ?? (await testAppKey(request.audience));
-  return { ...request, audience: signer.did, proof: await keyProof(signer, request.agent === true) };
+  const proof = await keyProof(signer, requestTerms(request, origin ?? ''));
+  return { ...request, audience: signer.did, proof };
 }

@@ -1210,7 +1210,7 @@ function DirectRoom({
           <Fragment key={m.key}>
             <Line
               from={m.from}
-              at={`${ago(m.createdAt)}${m.viaAgent ? ' · via agent' : ''}`}
+              at={`${ago(m.createdAt)}${m.recordsOnly ? ' · via agent' : ''}`}
               name={nameOf(m.from, people)}
               startsRun={startsRun}
             >

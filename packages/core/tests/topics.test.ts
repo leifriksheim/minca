@@ -64,7 +64,7 @@ describe('topic tags, worked out', () => {
   });
 
   test('the same value gives the same tag; another field, collection, key or type gives another', async () => {
-    const key = await topicKey({ spaceKey: (await generateSpaceKey()).key });
+    const key = await topicKey({ spaceKey: (await generateSpaceKey()).raw });
     const tag = await topicTag(key, 'app.chat', 'channel', 'design');
     assert.equal(await topicTag(key, 'app.chat', 'channel', 'design'), tag);
     assert.notEqual(await topicTag(key, 'app.chat', 'topic', 'design'), tag);
@@ -72,7 +72,7 @@ describe('topic tags, worked out', () => {
     assert.notEqual(await topicTag(key, 'app.chat', 'channel', 'Design'), tag);
     assert.notEqual(
       await topicTag(
-        await topicKey({ spaceKey: (await generateSpaceKey()).key }),
+        await topicKey({ spaceKey: (await generateSpaceKey()).raw }),
         'app.chat',
         'channel',
         'design',

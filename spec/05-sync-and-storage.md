@@ -246,7 +246,7 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 1` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 2` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
@@ -273,7 +273,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 1,
+  "v": 2,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -801,7 +801,7 @@ adapter:
 
 | Path                     | Holds                                                            | Sealed (§15)                     |
 | ------------------------ | ---------------------------------------------------------------- | -------------------------------- |
-| `registry`               | the spaces this node holds, and their keys                       | yes, on a node given a vault key |
+| `registry`               | the spaces this node holds, and their keys                       | yes, on a node given a local key |
 | `spaces/<space id>`      | one space: §10 entries and bodies, and what the node keeps on it | no                               |
 | `mirrors/<space id>/<n>` | a mirror's store writer state (§16.4); `n` is the mirror's index | no                               |
 
@@ -826,7 +826,7 @@ Forgetting a space deletes all six.
 
 In a data folder, a store at a path is a folder adapter (§14) at
 `<dataPath>/<path>`, and the `registry` store is sealed under the account's
-vault key (§15). Where a node keeps its stores otherwise (IndexedDB, and a
+local key (§15). Where a node keeps its stores otherwise (IndexedDB, and a
 host's own store) is its own; the library's naming is in
 [Sync and storage in the library](../packages/core/docs/storage.md#indexeddb).
 
@@ -961,32 +961,34 @@ _Source: `packages/core/src/storage/folder-adapter.ts`, `packages/core/src/stora
 
 A private space's bodies are encrypted before signing ([03](03-spaces.md)),
 but its key sits in the registry of the same folder. So a folder's registry
-is sealed under the account's **vault key** (AES-256-GCM, derived from the
-seed with HKDF, label `weave-vault-key-v1`, [01 — Identity](01-identity.md)).
+is sealed under the account's **local key** ([01 — Identity](01-identity.md)
+§11.1), which no app is given.
 
 Values of entries whose key starts with one of the sealed prefixes —
 `space:`, `spacekey:`, `spaceinvite:`, `spacerole:`, `spacememberkey:`,
-`spacerelays:` — are stored as:
+`spacerelays:` — are stored as an envelope ([01 §9.1](01-identity.md)):
 
 ```
-offset  size  field
-0       8     magic  77 65 61 76 65 65 01 00   ("weavee", version 1, 0)
-8       12    IV, random per write
-20      n+16  AES-GCM ciphertext and tag of the value,
-              additional data = UTF-8 of the entry key
+value = envelope(localKey, "weave/at-rest/v1", { entry: <the entry key> }, plaintext value)
 ```
 
 - A reader MUST refuse (not fall back to raw) a value under a sealed prefix
-  that lacks the magic or fails to decrypt. Binding the key as additional
-  data means a sealed value moved to another entry does not open.
+  that does not open as that envelope: one written in the clear, one moved
+  from another entry, one sealed by another account. Its version byte is what
+  marks it sealed; the prefix says it must be. It refuses that entry alone:
+  the reference leaves a space whose entry won't open out of the list.
 - Entry keys, other entries, and version bodies are not sealed: a folder
   shows each record's author, timestamp and collection, and anything in a
   public space.
+- Rollback and deletion are not protected. An envelope is bound only to its
+  entry, so someone who can write the folder can put back an older sealed
+  value of the same entry, such as a `spacekey:` from before a key change, and
+  it opens; or delete an entry ([#215](https://github.com/leifriksheim/weave/issues/215)).
 
 Every registry entry of §12 that belongs to one space is sealed.
 
-_Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/node/stores.ts`. Tests:
-`packages/core/tests/account-vault.test.ts` ("encryption at rest")._
+_Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/space/space-manager.ts` (`list`), `packages/core/src/node/stores.ts`. Tests:
+`packages/core/tests/account-vault.test.ts` ("encryption at rest": "a sealed value moved to another entry does not open", "one registry entry that does not open is left out of the list, not the end of it", "the account key does not open the registry store's sealed entries")._
 
 ---
 
@@ -1029,18 +1031,22 @@ offline by anyone holding the store.
 A segment is UTF-8 JSON:
 
 ```json
-{"v":1,"versions":[ <Version>, … ]}
+{"v":2,"versions":[ <Version>, … ]}
 ```
 
 The versions are exactly as on the wire — private bodies still sealed. A
-reader MUST treat bytes that are not JSON, or `v` other than `1`, or a
-missing `versions` array, as holding nothing; entries that are not objects
+segment carries its own version, apart from the sync messages' (§4): a mirror
+outlives the peers that wrote it, so a reader meets old segments long after
+it last met an old peer. `v` is `2` since sealed bodies became envelopes
+([01](01-identity.md) §9); a reader MUST treat bytes that are not JSON, or
+`v` other than `2`, or a missing `versions` array, as holding nothing, so a
+segment of the old format is never misread; entries that are not objects
 with a string `id` are skipped.
 
 Its name is `<counter>-<hash>.seg`: the store writer's counter (from 1, decimal,
 zero-padded to 6 digits) and the first 8 bytes of SHA-256 of the segment's
-bytes, as 16 lower-case hex. The empty segment `{"v":1,"versions":[]}` written
-first is `000001-ca1cf99cf9ccaa1b.seg`. Only names ending `.seg` are segments.
+bytes, as 16 lower-case hex. The empty segment `{"v":2,"versions":[]}` written
+first is `000001-8c45015e9099599e.seg`. Only names ending `.seg` are segments.
 
 > Rationale: the counter sorts a listing for people reading it; the hash
 > means a retried upload lands on the same name.
@@ -1133,7 +1139,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 1                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 2                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

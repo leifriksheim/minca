@@ -102,8 +102,12 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   const { auth } = useAuth();
   const session = useSession();
   const host = new URL(origin).host;
-  const agent = request.agent === true;
-  const previous = auth.connections().find((known) => known.origin === origin && !!known.agent === agent);
+  // A program that reached the app with a code is its own key, apart from the app's own connection.
+  const byCode = request.via === 'code';
+  const recordsOnly = request.recordsOnly === true;
+  const previous = auth
+    .connections()
+    .find((known) => (byCode ? known.audience === request.audience : known.origin === origin && !known.via));
 
   const spaces = useSpaces(true);
   const [chosen, setChosen] = useState<ReadonlySet<string>>(
@@ -119,7 +123,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   const privateChosen = offered.some((space) => chosen.has(space.id) && space.visibility === 'private');
   const creating = request.create ?? [];
   // A whole-account app gets the contacts anyway; the box below is for one that asks for them alone.
-  const contacts = request.contacts === true && !agent && !whole;
+  const contacts = request.contacts === true && !recordsOnly && !whole;
   const nothing = !whole && !contacts && chosen.size === 0 && creating.length === 0;
 
   const allow = () =>
@@ -127,24 +131,15 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 
   return (
     <Frame>
-      {agent ? (
+      {byCode ? (
         <>
-          <h1 style={styles.title}>Connect “{request.name ?? 'an agent'}”</h1>
+          <h1 style={styles.title}>Connect “{request.name ?? 'a program'}”</h1>
           <p style={styles.subtitle}>
-            An AI agent on your computer — Claude Code, Claude Desktop, Cursor — wants to{' '}
+            A program you started with a code from {host} — on your computer or a server — wants to{' '}
             {writes ? 'read and change' : 'read'} {whole ? 'everything in' : 'spaces in'} your account,{' '}
-            <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>. It asked through{' '}
-            {host}.
+            <strong style={{ color: palette.ink.strong }}>{session.account.name}</strong>. It keeps working
+            when no app is open.
           </p>
-          <Note title="What it can do" below={12}>
-            Read {whole ? 'every space, including ones you make later' : 'the spaces you pick'}, write in them
-            as you, and propose new collections and apps there. Everything it writes shows as yours, “via
-            agent”, to everyone in the space. It keeps working when no app is open.
-          </Note>
-          <Note title="What always needs you">
-            Adding an app or a collection, changing roles, inviting or removing people, joining or leaving
-            spaces. Every device ignores an agent that tries. It can't sign in as you.
-          </Note>
         </>
       ) : (
         <>
@@ -157,7 +152,31 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         </>
       )}
 
-      {whole && !agent && (
+      {byCode && !recordsOnly && (
+        <Note title="More than records" warn>
+          {host} asks for more than records for this program. It could{' '}
+          {writes ? 'add apps and collections, change who may do what, ' : ''}
+          {whole || request.contacts ? 'open contact requests sent to you, ' : ''}
+          and work in your account as fully as an app you use here. Allow it only if you trust {host} and the
+          program both.
+        </Note>
+      )}
+
+      {recordsOnly && writes && (
+        <>
+          <Note title="What it can do" below={12}>
+            Read {whole ? 'every space, including ones you make later' : 'the spaces you pick'}, write records
+            in them as you, and propose new collections and apps there. Everything it writes shows as yours,
+            and apps can tell it came from a key that may only write records.
+          </Note>
+          <Note title="What always needs you">
+            Adding an app or a collection, changing roles, inviting or removing people, joining or leaving
+            spaces. Every device ignores a key like this that tries. It can't sign in as you.
+          </Note>
+        </>
+      )}
+
+      {whole && !recordsOnly && (
         <Note title="Your whole account">
           Every space, including private ones, the list of them, your contacts, and contact requests sent to
           you. It can make and join spaces for you. It cannot sign in anywhere as you, change your password or
@@ -174,7 +193,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 
       {choosing && (
         <section style={{ marginBottom: 20 }}>
-          <p style={styles.fieldLabel}>{agent ? 'Which spaces it may work in' : 'Which spaces'}</p>
+          <p style={styles.fieldLabel}>{byCode ? 'Which spaces it may work in' : 'Which spaces'}</p>
           {offered.length === 0 && <p style={styles.errorHint}>You have no spaces it could use.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {offered.map((space) => (
@@ -229,9 +248,9 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       />
 
       <p style={{ ...styles.errorHint, marginTop: 20 }}>
-        {agent ? 'The agent' : 'The app'} gets a note signed by your account, for its own key. It never sees
-        your password.
-        {agent && ' You can disconnect it any time, in your account.'}
+        {byCode ? 'The program' : 'The app'} gets a note signed by your account, for its own key. It never
+        sees your password.
+        {byCode && ' You can disconnect it any time, in your account.'}
       </p>
     </Frame>
   );
@@ -327,7 +346,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
   const session = useSession();
   const connection = auth
     .connections()
-    .find((known) => known.origin === origin && !known.agent && known.access !== 'carry');
+    .find((known) => known.origin === origin && !known.via && known.access !== 'carry');
   const spaces = useSpaces(false);
   const [kept, setKept] = useState<ReadonlySet<number>>(
     () => new Set(request.notify.map((_, index) => index)),
@@ -446,12 +465,23 @@ function useSpaces(hold: boolean): ReadonlyArray<SpaceSummary> {
 }
 
 /** A boxed explanation: what something may do, or may not */
-function Note({ title, below = 20, children }: { title: string; below?: number; children: ReactNode }) {
+function Note({
+  title,
+  below = 20,
+  warn = false,
+  children,
+}: {
+  title: string;
+  below?: number;
+  /** Something the person should weigh before allowing */
+  warn?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div
       style={{ ...styles.errorBox, marginTop: 0, marginBottom: below, background: palette.surface.sunken }}
     >
-      <p style={{ ...styles.todoText }}>{title}</p>
+      <p style={{ ...styles.todoText, ...(warn ? { color: palette.accent.danger } : {}) }}>{title}</p>
       <p style={styles.errorHint}>{children}</p>
     </div>
   );

@@ -10,7 +10,8 @@ and profiles. Contacts, built on these, are described in the library's docs
 
 What a record is, how it is signed, hashed and versioned, and how collection
 rules are written is in [02 — Records](02-records.md). Seeds, DIDs, notes
-(UCANs), the vault key and the contact key are in [01 — Identity](01-identity.md).
+(UCANs), the account key, the contact key and the two ways anything is sealed
+(envelopes and HPKE) are in [01 — Identity](01-identity.md).
 How peers connect and prove they may read is in [04 — Network](04-network.md).
 
 - [1. The space and its id](#1-the-space-and-its-id)
@@ -571,7 +572,7 @@ A version outside the access collections **stands** when, in this order:
 > **Known defect:** a peer applies step 3 only where it knows the space is
 > one of the account's own (`accountOnly` in
 > `packages/core/src/node/space-runtime.ts`). The account's devices know,
-> since they derive those ids (§13.1). A peer without the vault key, such as
+> since they derive those ids (§13.1). A peer without the account key, such as
 > a carrier, a host or a mirror reader, may not be able to tell those spaces
 > from any other, and then lets stand a version the account's devices refuse.
 > Tracked in [#90](https://github.com/leifriksheim/weave/issues/90).
@@ -903,11 +904,26 @@ _Source: `packages/core/src/space/space-access.ts` (`generateInviteSecret`, `der
 
 ### 8.1 The space key
 
-A space key is 32 random bytes used as an AES-256-GCM key. Its **key id** is
-`base64url(SHA-256(raw key))` (43 characters). The first key's id is the
-genesis's `encryptionKeyId`; later keys are named by `sys.key` (§9).
+A space key `K` is 32 random bytes. It is only ever key material for HKDF
+(01 §5); nothing uses it as a key itself. From it:
 
-Example: raw `ff fe … e0` → id `GGXACDHnP37iP8E8stD1iLnDQYNcp0cvjsA1q6S3idY`.
+```
+sealKey = HKDF(K, "weave/space-seal/v1", 32)                 // AES-256-GCM: every envelope under this space key
+keyId   = base64url(HKDF(K, "weave/space-key-id/v1", 16))    // 22 characters
+readKey = §8.4;  topic key = 02 §8.2
+```
+
+The first key's id is the genesis's `encryptionKeyId`; later keys are named by
+`sys.key` (§9). A peer that receives a raw key (in an invite, a box, a key
+record's `earlier`) derives its id from it and takes it only as the key that
+id names.
+
+Example: `K = ff fe … e0` → id `aLhvw5pkV65_lcQHEcUOug`.
+
+Envelopes take a random 96-bit nonce, which keeps AES-GCM safe for about 2³²
+seals under one key, and a space's seal key lasts until a member is removed
+(§9); a space that would write more under one key needs to change it first
+([#182](https://github.com/leifriksheim/weave/issues/182)).
 
 ### 8.2 What is encrypted
 
@@ -933,27 +949,33 @@ the envelope. A delete carries no body.
 ### 8.3 The encrypted body
 
 ```
-plaintext  = UTF-8( JSON.stringify( links.length ? { body, links } : { body } ) )
-iv         = 12 random bytes
-ciphertext = AES-256-GCM(key, iv, plaintext)          // no additional data; 16-byte tag appended
-body       = { ciphertext: base64url(ciphertext), iv: base64url(iv), keyId }
+plaintext = UTF-8( JSON.stringify( links.length ? { body, links } : { body } ) )
+sealed    = envelope(sealKey, "weave/record-body/v1",
+                     { space: <space id>, collection, key: <record key>, keyId }, plaintext)   // 01 §9.1
+body      = { sealed: base64url(sealed), keyId }
 ```
+
+The bound is what a reader knows of a version before it opens it: its space,
+its collection and its record key, from the envelope, and the key id the body
+names. So a body copied into another record, collection or space, or relabelled
+with another key id, does not open.
 
 A writer **MUST** encrypt with the key the history names as current (the last
 entry of `keys`); if it does not hold that key it **MUST NOT** write.
 
-A reader treats a body as encrypted when it has string `ciphertext` and string
-`iv`, looks up `keyId` among the keys it holds, decrypts, and takes `body` and
-`links` from the result. A body it cannot open is shown as unreadable
-(`body: null`), never refused for that reason.
+A reader treats a body as encrypted when it has string `sealed` and string
+`keyId`, looks up `keyId` among the keys it holds, opens it with the version's
+own space, collection and record key, and takes `body` and `links` from the
+result. A body it cannot open, for any of these reasons, is shown as
+unreadable (`body: null`), never refused for that reason.
 
-Example (key of §8.1, plaintext `{"body":{"text":"hi"}}`):
+Example (key of §8.1, space `bexample`, collection `app.note`, record key `k1`,
+nonce `a0 a1 … ab`, plaintext `{"body":{"text":"hi"}}`):
 
 ```json
 {
-  "ciphertext": "nXyTdBm1FywtTGY8N_G5n-xLwRddVhSp8oqaULS-20O7Ay2RDMk",
-  "iv": "0nDFOs-BiAkLaQfC",
-  "keyId": "GGXACDHnP37iP8E8stD1iLnDQYNcp0cvjsA1q6S3idY"
+  "sealed": "AaChoqOkpaanqKmqq0Fx-eCwOhnoZnLVU8hJnQsqWTBRgYQ5jezwBbEdvJDeKm5_wX3j",
+  "keyId": "aLhvw5pkV65_lcQHEcUOug"
 }
 ```
 
@@ -963,7 +985,7 @@ A private space has a **read key** pair per space key, so a peer can prove it
 may read without anyone checking it holding the AES key:
 
 ```
-readSeed = HKDF-SHA256(ikm = raw space key, salt = empty, info = "weave/space-read/v1", L = 32)
+readSeed = HKDF-SHA256(ikm = K, salt = empty, info = "weave/space-read/v1", L = 32)
 readKey  = deriveKeyPairFromSeed(readSeed)      // 01 — Identity; did:key P-256
 ```
 
@@ -973,18 +995,7 @@ the new one's. How a peer proves it holds the read key when connecting is in
 
 Example: the key of §8.1 → `did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf`.
 
-### 8.5 `sealWith` / `openWith`
-
-A value sealed under a space key, bound to a context string (used by `sys.key`):
-
-```
-sealed = base64url( iv(12) ‖ AES-256-GCM(key, iv, UTF-8(JSON.stringify(value)), AAD = UTF-8(context)) )
-```
-
-Opening fails (returns nothing) for the wrong key, the wrong context, or a
-changed value. Inputs longer than 1 000 000 characters are not tried.
-
-_Source: `packages/core/src/privacy/space-encryption.ts`, `packages/core/src/node/space-runtime.ts` (`IN_THE_CLEAR`, `write`, `openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space versions"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
+_Source: `packages/core/src/privacy/space-encryption.ts` (`spaceKeyFromRaw`, `sealBody`, `openBody`), `packages/core/src/node/space-runtime.ts` (`IN_THE_CLEAR`, `write`, `openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space versions"; "a sealed body moved to another record, collection or space does not open"; "the example body of spec 03 §8.3 opens"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
 
 ### 8.6 Planned: what a private space still shows
 
@@ -1039,8 +1050,8 @@ know of the removal stop sending to them anyway.
 ### 9.1 Member keys (`sys.memberkey`)
 
 Each account has, per space, a **member key**: a P-256 ECDH key pair derived
-from the account's vault key and the space id ([01](01-identity.md),
-`deriveMemberKeyBytes`: HKDF-SHA256(vault key, info
+from the account key and the space id ([01 §10.2](01-identity.md),
+`deriveMemberKeyBytes`: HKDF-SHA256(account key, info
 `"weave/p256-member-key/v1|<spaceId>"`, 48 bytes) reduced to a scalar).
 
 Each member publishes its public half, in the clear:
@@ -1059,7 +1070,7 @@ passed over. A member that can write **SHOULD** publish its member key, and
 publish it again when it differs from what is published.
 
 > **Known defect:** any key whose note lets it write records for the account,
-> an app's or an agent's included, can publish a member key of its own, and
+> an app's included, or one granted records only, can publish a member key of its own, and
 > it wins as the newest. The next space key is then boxed to it
 > ([01](01-identity.md) §8 asks for more only on access collections).
 > Tracked in [#169](https://github.com/leifriksheim/weave/issues/169).
@@ -1087,7 +1098,9 @@ before it writes anything else or closes the space: until then, the one who
 lost their place still reads what others write.
 
 1. generate a new space key `K'`;
-2. `earlier` = `sealWith(K', [base64url(raw) of every key it holds], "weave/space-earlier-keys/v1|<spaceId>|<K'.id>")`;
+2. `earlier` = base64url of an envelope ([01 §9.1](01-identity.md)) under `K'`'s
+   seal key, label `weave/earlier-keys/v1`, bound `{ space: <spaceId>, keyId: K'.id }`,
+   around `JSON [base64url(K) of every key it holds]`;
 3. write `sys.key` at `key:space`: `{ keyId: K'.id, readKey: <K' read DID>, earlier }`;
 4. seal `K'` to each member (§9.4).
 
@@ -1095,9 +1108,9 @@ Two key changes made apart both stand: every key stays in `keys`, so what
 was sealed under either stays readable, and the current one is the lowest id
 of the latest (§4.4). A key id or read key used before is refused.
 
-A peer holding any key named by a `key` event opens its `earlier` and takes
-each raw key it contains (up to 1000); repeat until nothing new. So holding
-the current key opens every earlier one.
+A peer holding any key named by a `key` event opens its `earlier` with that
+key and the event's `keyId`, and takes each raw key it contains (up to 1000);
+repeat until nothing new. So holding the current key opens every earlier one.
 
 ### 9.4 Boxes (`sys.box`)
 
@@ -1107,18 +1120,20 @@ The current key is sealed to each reader's member key, in the clear:
 sys.box at box:<hex40("<keyId>|<toDid>|<fromDid>")>
 { keyId, to: <recipient account DID>, sealed }
 
-sealed = sealFor(recipientMemberKey, { key: base64url(raw K) },
-                 "weave/space-key-box/v1|<spaceId>|<keyId>|<toDid>")
+sealed = HPKE(recipientMemberKey, "weave/space-key-box/v1",
+              { space: <spaceId>, keyId, to: <toDid> }, JSON { key: base64url(K) })
 ```
 
-`sealFor` is the ECDH seal of [01 §9.4](01-identity.md).
+`HPKE` is sealing to a key ([01 §9.2](01-identity.md)), with that label and
+bound.
 
 A manager seals the current key to every reader who has published a member key
 and has no box for that key id yet from themselves or from anyone holding
 `manage`.
 
 A recipient opens every box with `to` = its account and `keyId` naming a key
-it lacks in the history; it **MUST** accept the opened key only if its id
+it lacks in the history, with the bound built from the space, that `keyId`
+and its own account; it **MUST** accept the opened key only if its derived id
 equals `keyId` and its derived read DID equals the history's `readKey` for
 that key — whoever sealed it.
 
@@ -1129,7 +1144,7 @@ write, and proves it may read with the newest key it holds (see
 [04](04-network.md)). A view-only invite made before a change carries only the
 old key; its holder is not a reader and gets no box.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `boxContext`, `earlierKeysContext`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`, `sealFor`). Tests: `packages/core/tests/key-change.test.ts`._
+_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
 
 ---
 
@@ -1165,7 +1180,7 @@ sys.profile at profile:<hex40(accountDid)>
 
 `sys.profile` is reserved for this. It is encrypted in a private space (§8.2).
 `contactKey` is the public half of the account's contact key
-([01 §9.1](01-identity.md)), to which others seal what only the account may
+([01 §10.1](01-identity.md)), to which others seal what only the account may
 open, and by which they find it ([07](07-doors.md)).
 
 A reader **MUST** take a profile, and its `contactKey`, only from a version of
@@ -1194,16 +1209,16 @@ in [its docs](../packages/core/docs/spaces.md#the-space-manager).
 ### 13.1 Derived account spaces
 
 An account derives private spaces that only it can find, the same on every
-device, from its vault key ([01](01-identity.md), `deriveVaultKeyBytes`) and a
-label:
+device, from its account key ([01 §11.1](01-identity.md), `deriveAccountKey`)
+and a label:
 
 ```
-nonce   = base64url( HKDF-SHA256(vaultKey, salt = empty, info = "<label>/nonce/v1", 32)[0..12] )
-rawKey  = HKDF-SHA256(vaultKey, salt = empty, info = "<label>/key/v1", 32)
+nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1", 32)[0..12] )
+K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1", 32)      // the space key, §8.1
 space   = { visibility: "private", creator: accountDid,
             roles: [{ name: "owner", title: "Owner", rank: 100, permissions: ["*"] }],
             creatorRole: "owner", createdAt: "1970-01-01T00:00:00.000Z", nonce,
-            readKey: readDid(rawKey), encryptionKeyId: base64url(SHA-256(rawKey)) }
+            readKey: readDid(K), encryptionKeyId: keyId(K) }
 id      = cid(canonical(genesis))            // §1.2
 ```
 
@@ -1216,8 +1231,8 @@ other bytes give another id.
 | `weave/account-registry` | the account registry | `Account registry` |
 | `weave/contacts`         | the contacts space   | `Contacts`         |
 
-Example (seed `01 02 … 10`): registry `bkbogrf2jtmudunoee5mtpgfdenyrwbdnagfkogw4jvphavoelteq`
-(nonce `isIO1Hq-k9yg1wNZ`), contacts `by2fwk6cy2g73mni4fy3bjcbv2arn4xi5qsw7rzu22rpxnxvzmotq`.
+Example (seed `01 02 … 10`): registry `bvkbzgjhryaxdys2fyi4oifvardlc4b7bv3bvqn6d736v5ngl23iq`
+(nonce `Jx8Oo78z30WwKl1X`), contacts `bqg4jypdnk3lvna26eda7bmesxzhbsoisqs5xodhif4d4gyx2adnq`.
 
 > Rationale: the DID alone is not enough to find them — it appears on
 > everything the account signs.
@@ -1245,7 +1260,7 @@ is in [06](06-nodes-and-sessions.md) §1.3. The registry holds other records
 of the library's own too, such as the account's name
 ([docs](../packages/core/docs/spaces.md#profiles)).
 
-_Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`, `ownName`). Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
+_Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`, `ownName`). Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
 
 ---
 
@@ -1376,7 +1391,7 @@ Moved to [contacts](../packages/core/docs/contacts.md). The contacts space itsel
 
 ### 16.2 The contact key
 
-The contact key is [01 §9.1](01-identity.md); its public half is published on
+The contact key is [01 §10.1](01-identity.md); its public half is published on
 the profile (§11).
 
 ### 16.3 `std.contact-request`
@@ -1385,7 +1400,7 @@ Moved to [contacts](../packages/core/docs/contacts.md).
 
 ### 16.4 How a request is sealed
 
-Moved to [contacts](../packages/core/docs/contacts.md). `sealFor` is [01 §9.4](01-identity.md).
+Moved to [contacts](../packages/core/docs/contacts.md). It is sealed with HPKE, [01 §9.2](01-identity.md).
 
 ### 16.5 Asking, accepting and the rest
 

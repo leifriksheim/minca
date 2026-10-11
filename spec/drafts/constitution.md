@@ -138,7 +138,7 @@ to authority.
 
 A constitution in CEL can express majorities, quorums, "any two founders",
 "every member", and per-role rights. It is bounded, and readable by people
-and agents. Wasm would allow any computation, but a constitution must be
+and programs. Wasm would allow any computation, but a constitution must be
 judged identically by every peer, so its cost metering would have to match
 exactly across implementations, and nobody can read a bytecode constitution
 before joining. Start with CEL; add Wasm only if a real community needs what

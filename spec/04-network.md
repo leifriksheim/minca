@@ -102,8 +102,8 @@ fixes the socket's DID for the life of the socket.
 > and only the first gets into a room; the other is refused until it stops.
 > That still happens with the tabs of one app where they don't share a
 > SharedWorker: each signs with the app's key ([06](06-nodes-and-sessions.md)
-> §2.1). (An agent's processes can't collide any more: only one may hold its
-> key.) The refused tab says so (§2, and `refused` in `spaces.status`), but
+> §2.1). (The processes of a program connected by code can't collide any
+> more: only one may hold its key.) The refused tab says so (§2, and `refused` in `spaces.status`), but
 > it cannot sync until the first closes. A key per tab, delegated from the
 > app's key, would fix it; that needs peers to accept a two-link chain
 > ([01](01-identity.md) §7.5). Tracked in
@@ -134,8 +134,8 @@ A client MUST use this derivation for a space's room; two implementations
 that differ here never meet.
 
 Other protocols meet in rooms of their own on the same relays, with names
-derived elsewhere: device pairing (`pairingRoomId`, [01 — Identity](01-identity.md) §14)
-and the agent link ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md)).
+derived elsewhere: the channel's rooms (`channelRoom`, [01 — Identity](01-identity.md) §15.2),
+for device pairing and for connecting by code ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §3).
 The relay treats them all alike.
 
 _Source: `packages/core/src/node/space-runtime.ts` (`relayRoom`), `packages/core/src/utils/hash.ts` (`base32Encode`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/network-manager.test.ts`._
@@ -265,7 +265,7 @@ Not protocol: how the reference relay is started and configured is in
 ## 2. The signaling client
 
 A client holds **one socket per relay** and joins one room per space (and
-per pairing or agent link) on it.
+per channel: pairing, or connecting by code) on it.
 
 - On open, the client MUST (re)send `join` for every room it is in: a relay
   forgets everything when a socket closes.
@@ -576,8 +576,8 @@ being the prover's session key over `T`. The verifier MUST check `sig`
 against the prover's DID and, in a private space, the read proof (§6.3)
 over the same `T`.
 
-In a room that asks no proof (a pairing or agent-link room, which secure
-their own payloads), the hellos are still exchanged and no proofs are sent.
+In a room that asks no proof (a channel's room, pairing or connecting by
+code, which secures its own payloads), the hellos are still exchanged and no proofs are sent.
 
 Example (public space, placeholder fingerprints):
 
@@ -608,10 +608,12 @@ proof:
   reason:
 
   ```
-  member = base64url( iv(12 bytes) ‖ AES-256-GCM(spaceKey, iv,
-                       aad = UTF-8("weave/space-membership/v1|" + spaceId),
-                       plaintext = UTF-8(JSON.stringify(noteString))) )
+  member = base64url( envelope(sealKey, "weave/membership/v1", { space: spaceId },
+                               UTF-8(JSON.stringify(noteString))) )
   ```
+
+  where `sealKey` is the seal key of that space key ([03](03-spaces.md) §8.1) and
+  the envelope is [01 §9.1](01-identity.md).
 
 - `earlier` — the same signature by each **older** read key it still holds,
   newest first, at most 4: `[{ "readKey": <DID>, "read": <signature> }, …]`.
@@ -692,7 +694,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `formerMembers`, `cutOff`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`sealWith`, `openWith`), `packages/core/src/space/space-access.ts` (`membershipContext`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `formerMembers`, `cutOff`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
 
 ### 6.4 The account behind a session
 
@@ -702,9 +704,9 @@ side sends on a space's connection, as soon as the peer is admitted, is
 delegation chain ([01 — Identity](01-identity.md)) and takes the root DID as
 the peer's account **only if** the chain is valid and its audience is the
 peer's proven session DID. A note longer than 16 384 characters, invalid, or
-made out to another key gives the peer **no account** (`null`). Whether the
-note carries the agent fact ([01](01-identity.md) §8.1) is recorded alongside,
-as a label for apps.
+made out to another key gives the peer **no account** (`null`). Nothing else
+in the note is read here; what the library tells apps about the sender is in
+[the node](../packages/core/docs/node.md#live-messages-and-status).
 
 > Rationale: a note copied off someone's record names their key, not the
 > copier's, so it is useless to anyone else.
@@ -844,8 +846,8 @@ _Source: `packages/core/src/network/mesh.ts`, `packages/core/src/network/introdu
 
 Once connected to one peer, its data channel is used to arrange the next
 connection, so a relay is needed only to meet the first peer in a room.
-Introductions are on by default and MAY be turned off (pairing and agent-link
-rooms turn them off).
+Introductions are on by default and MAY be turned off (a channel's rooms,
+pairing and connecting by code, turn them off).
 
 **`__peers`.** When a peer is admitted to a room, the admitting side sends
 the newcomer `{ room, type: "__peers", payload: [every other admitted peer in
@@ -905,9 +907,9 @@ receiver MUST attribute a message to the connection's peer, not to `from`.
 | `who`  | `{ "note": string }` | §6.4, §9.1                                      |
 | `live` | any JSON             | §9.2                                            |
 
-Pairing and agent-link rooms carry their own types (`packages/core/src/session/pairing.ts`,
-`packages/core/src/session/agent-link.ts`); see [01 — Identity](01-identity.md) and
-[06 — Nodes, sessions and apps](06-nodes-and-sessions.md). Unknown types are
+A channel's rooms carry their own types (`packages/core/src/session/pairing.ts`,
+`packages/core/src/session/connect-code.ts`); see [01 — Identity](01-identity.md) §15 and
+[06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §3. Unknown types are
 ignored.
 
 ### 9.1 `who`

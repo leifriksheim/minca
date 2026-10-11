@@ -7,7 +7,7 @@ import { createNode } from '../../../core/src/node/node.js';
 import type { NodeConfig, P2PNode } from '../../../core/src/node/types.js';
 import { createIdentityManager } from '../../../core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../../core/src/identity/root-signer.js';
-import { deriveVaultKeyBytes } from '../../../core/src/identity/account-vault.js';
+import { deriveAccountKey } from '../../../core/src/identity/account-vault.js';
 import { memoryStores } from '../../../core/tests/helpers/memory-stores.js';
 import type { FakeHub } from '../../../core/tests/helpers/fake-transport.js';
 
@@ -45,7 +45,7 @@ export async function aNode(
     signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
     stores: memoryStores(),
     watchIntervalMs: 0,
-    ...(account ? { accountKey: await deriveVaultKeyBytes(seed) } : {}),
+    ...(account ? { accountKey: await deriveAccountKey(seed) } : {}),
     ...config,
   });
   nodes.push(node);

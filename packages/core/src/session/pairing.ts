@@ -7,28 +7,21 @@
  * the seed and the spaces, sealed for this exchange only. Afterwards the phone
  * is a full peer and never needs the desktop again.
  */
-import { createMesh } from '../network/mesh.js';
-import { createNetworkManager, type NetworkManager } from '../network/network-manager.js';
 import type { PeerTransport } from '../network/transport.js';
+import { channelKeyPair, deriveChannel, PAIRING_CHANNEL, type Channel } from '../identity/channel.js';
 import {
-  derivePairingChannel,
   decodePairingTicket,
   encodePairingTicket,
   newPairingSecret,
-  openPairingPayload,
+  pairingCode,
   pairingCommitment,
-  pairingKeyPair,
-  pairingRoomId,
-  sealPairingPayload,
-  type PairingChannel,
   type PairingTicket,
 } from '../identity/pairing.js';
-import { createP256Provider } from '../identity/crypto-p256.js';
-import { didOf } from '../identity/did.js';
 import { RECOVERY_SEED_BYTES } from '../identity/recovery-code.js';
-import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isObject } from '../utils/guards.js';
 import type { NetworkMessage } from '../types.js';
+import { bytesField, meetOnChannel, type ChannelNetwork } from './channel-room.js';
 
 /** Messages in a pairing room, in the order they are sent */
 const COMMIT = 'pair:commit';
@@ -70,52 +63,6 @@ export interface PairingOffer {
   stop(): void;
 }
 
-/** Where the two devices meet */
-interface PairingNetwork {
-  readonly relays: ReadonlyArray<string>;
-  /** A transport instead of WebRTC — for tests */
-  readonly transport?: (did: string) => PeerTransport;
-}
-
-/**
- * Joins the room for a secret as a throwaway name. Neither side is anyone yet
- * on the wire: the phone has no account, and the desktop's session key would
- * tie the room to it.
- */
-async function meet(network: PairingNetwork, secret: Uint8Array) {
-  const did = await didOf((await createP256Provider().generateKeyPair()).publicKey);
-  const room = await pairingRoomId(secret);
-  const net: NetworkManager = network.transport
-    ? createNetworkManager({ did, createTransport: () => network.transport!(did) })
-    : createMesh({ relays: network.relays, did, introductions: false }).join(room);
-  const send = (to: string, type: string, payload: unknown) => net.send(to, { type, from: did, payload });
-  const seal = async (to: string, type: string, channel: PairingChannel, value: unknown) =>
-    send(to, type, Array.from(await sealPairingPayload(utf8Encode(JSON.stringify(value)), channel.key)));
-  /** What a sealed message says, or null when it was not sealed on this channel */
-  const open = async (message: NetworkMessage, channel: PairingChannel): Promise<unknown> => {
-    if (!Array.isArray(message.payload) || !message.payload.every((n) => Number.isInteger(n))) return null;
-    try {
-      return JSON.parse(utf8Decode(await openPairingPayload(new Uint8Array(message.payload), channel.key)));
-    } catch {
-      return null;
-    }
-  };
-  // A moment for the last message to leave.
-  const leave = () => globalThis.setTimeout(() => net.disconnect(), 500);
-  return { net, send, seal, open, leave };
-}
-
-/** A base64url field of a plain message, as bytes, or null */
-function field(message: NetworkMessage, name: string): Uint8Array | null {
-  const value = isObject(message.payload) ? message.payload[name] : undefined;
-  if (typeof value !== 'string') return null;
-  try {
-    return base64UrlDecode(value);
-  } catch {
-    return null;
-  }
-}
-
 const failure = (error: unknown, fallback: string): PairingStage => ({
   kind: 'failed',
   reason: error instanceof Error ? error.message : fallback,
@@ -150,11 +97,11 @@ export async function offerToPhone(
   const secret = newPairingSecret();
   const ticket: PairingTicket = { v: 2, secret: base64UrlEncode(secret), relay: relay ?? '' };
   const url = `${params.link}#pair=${encodePairingTicket(ticket)}`;
-  const room = await meet({ relays, transport: params.transport }, secret);
-  const mine = await pairingKeyPair();
+  const room = await meetOnChannel(PAIRING_CHANNEL, { relays, transport: params.transport }, secret);
+  const mine = await channelKeyPair();
 
   let phone: { readonly peer: string; readonly commit: string } | null = null;
-  let channel: PairingChannel | null = null;
+  let channel: Channel | null = null;
   let settled = false;
   const finish = (stage: PairingStage) => {
     if (settled) return;
@@ -168,7 +115,7 @@ export async function offerToPhone(
     params.ttlMs ?? OFFER_TTL_MS,
   );
 
-  const handOver = async (peer: string, open: PairingChannel) => {
+  const handOver = async (peer: string, open: Channel) => {
     if (settled) return;
     onStage({ kind: 'sending' });
     try {
@@ -183,31 +130,32 @@ export async function offerToPhone(
     if (settled) return;
     void (async () => {
       if (message.type === COMMIT && !phone) {
-        const commit = field(message, 'commit');
+        const commit = bytesField(message, 'commit');
         if (!commit) return;
         // The code is spent: nobody after this phone is answered.
         phone = { peer: message.from, commit: base64UrlEncode(commit) };
         globalThis.clearTimeout(expiry);
         room.send(message.from, KEY, { key: base64UrlEncode(mine.point) });
       } else if (message.type === REVEAL && phone && message.from === phone.peer && !channel) {
-        const point = field(message, 'key');
+        const point = bytesField(message, 'key');
         if (!point || (await pairingCommitment(point)) !== phone.commit) {
           finish({ kind: 'failed', reason: 'The phone did not pair cleanly. Show a new code.' });
           return;
         }
         try {
-          const open = await derivePairingChannel({
+          const open = await deriveChannel({
+            kind: PAIRING_CHANNEL,
             secret,
             privateKey: mine.privateKey,
             offer: mine.point,
-            phone: point,
-            peer: point,
+            join: point,
+            side: 'offer',
           });
           channel = open;
           const peer = phone.peer;
           onStage({
             kind: 'compare',
-            code: open.code,
+            code: await pairingCode(open),
             same: () => void handOver(peer, open),
             different: () =>
               finish({
@@ -291,13 +239,14 @@ export async function receiveFromDesktop(
   const secret = base64UrlDecode(ticket.secret);
   // The relay in the ticket: the computer showing the code is on it, and the
   // phone has no configuration.
-  const room = await meet({ relays: [ticket.relay], transport: options.transport }, secret);
-  const mine = await pairingKeyPair();
+  const network: ChannelNetwork = { relays: [ticket.relay], transport: options.transport };
+  const room = await meetOnChannel(PAIRING_CHANNEL, network, secret);
+  const mine = await channelKeyPair();
   const commit = await pairingCommitment(mine.point);
 
   return new Promise<Handover>((resolve, reject) => {
     let desktop: string | null = null;
-    let channel: PairingChannel | null = null;
+    let channel: Channel | null = null;
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const settle = (done: () => void) => {
@@ -321,20 +270,22 @@ export async function receiveFromDesktop(
       if (settled) return;
       void (async () => {
         if (message.type === KEY && !desktop) {
-          const point = field(message, 'key');
+          const point = bytesField(message, 'key');
           if (!point) return;
           try {
-            const open = await derivePairingChannel({
+            const open = await deriveChannel({
+              kind: PAIRING_CHANNEL,
               secret,
               privateKey: mine.privateKey,
               offer: point,
-              phone: mine.point,
-              peer: point,
+              join: mine.point,
+              side: 'join',
             });
+            const code = await pairingCode(open);
             desktop = message.from;
             channel = open;
             room.send(message.from, REVEAL, { key: base64UrlEncode(mine.point) });
-            onStage({ kind: 'confirm', code: open.code });
+            onStage({ kind: 'confirm', code });
             wait(
               options.confirmTimeoutMs ?? 10 * 60_000,
               'Nobody confirmed the code on the computer. Show a new code to try again.',

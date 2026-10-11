@@ -44,7 +44,7 @@ export interface NodeNetworkConfig {
 export interface NodeConfig {
   /** Who this node acts for. The root key only ever signs session delegations. */
   readonly signer: RootSigner;
-  /** The account's vault key bytes (`deriveVaultKeyBytes(seed)`): with it, the node follows the account registry, so spaces are joined and left on every device */
+  /** The account key (`deriveAccountKey(seed)`): with it, the node follows the account registry, so spaces are joined and left on every device */
   readonly accountKey?: Uint8Array;
   /** The account's contact key (`deriveContactKeyBytes(seed)`), for a node allowed to open contact requests and knocks */
   readonly contactKey?: Uint8Array;
@@ -205,8 +205,6 @@ export interface NodeRecord<T = unknown> {
   readonly encrypted: boolean;
   /** Signature, delegation and shape all check out */
   readonly verified: boolean;
-  /** True when an agent wrote this version for `root`, as the note it was signed under says (`AGENT_FACT`) */
-  readonly viaAgent?: true;
   /**
    * True when the note this version was signed under grants writing records
    * and no more: it could not have defined a collection here. An app that
@@ -329,8 +327,12 @@ export interface LiveMessage {
   readonly from: string | null;
   /** The sending device: its session DID, which is also where a reply to that device goes */
   readonly peer: string;
-  /** Whether the sender is an agent acting for the account, not the person */
-  readonly agent: boolean;
+  /**
+   * Whether the sender's note writes records in some space but can't define
+   * collections in this one, judged on the whole note so a key for another
+   * space is caught too. False for a note that only reads, which writes nothing.
+   */
+  readonly recordsOnly: boolean;
   readonly message: unknown;
 }
 
@@ -706,7 +708,8 @@ export interface DirectMessage {
   /** Null when this node can't open it: its member key here isn't the one it was sealed to */
   readonly text: string | null;
   readonly createdAt: string;
-  readonly viaAgent?: true;
+  /** Written under a note that grants records only here, as `NodeRecord.recordsOnly` */
+  readonly recordsOnly?: true;
 }
 
 /** Direct messages: text sealed to some members' member keys, in a private space (`docs/direct-messages.md`) */

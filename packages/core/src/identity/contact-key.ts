@@ -14,26 +14,22 @@
  * (`sys.profile`). The private half stays with the account home, and goes to
  * apps the person lets handle contacts.
  *
- * Sealing uses a fresh key pair for each message, a secret shared with the
- * recipient's public key, and AES-GCM. The `context` is bound in as additional data, so a
- * sealed message moved anywhere its context no longer matches doesn't open.
+ * Sealing to it is HPKE (`identity/hpke.ts`): a fresh key pair for each
+ * message, with a label and the place it belongs bound in.
  */
 import { p256 } from '@noble/curves/nist.js';
-import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode } from '../utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
 import { hkdf } from './hkdf.js';
-import { aesOpen, aesSeal, NONCE_BYTES } from './aes.js';
 
 /** Domain separation for the contact key. Changing it changes every account's contact key. */
 const CONTACT_KEY_INFO = 'weave/p256-contact-key/v1';
-const SEAL_INFO = 'weave/contact-seal/v1';
 const MEMBER_KEY_INFO = 'weave/p256-member-key/v1';
 const DOOR_KEY_INFO = 'weave/p256-door-key/v1';
 const DOOR_SIGN_KEY_INFO = 'weave/p256-door-sign-key/v1';
 
 /** 48 bytes reduce to a P-256 scalar without bias, as for the root key (`crypto-p256.ts`) */
 const P256_SEED_BYTES = 48;
-const POINT_BYTES = 65;
 
 export interface ContactKeyPair {
   /** The public half: a compressed P-256 point, base64url. What goes on a profile. */
@@ -80,13 +76,13 @@ export async function deriveContactKeyBytes(seed: Uint8Array): Promise<Uint8Arra
 
 /**
  * An account's **member key** for one space: the same kind of key pair, derived
- * from the account's vault key and the space id. When a private space's key
+ * from the account key and the space id. When a private space's key
  * changes, the new key is sealed to each member's member key (`sys.box`).
  *
  * One per space, not one per account, so an account home can hand an app the
  * member keys for exactly the spaces it grants — and a new space key reaches
  * that app without it holding anything that opens other spaces' keys.
- * @param accountKey The vault key bytes (`deriveVaultKeyBytes(seed)`)
+ * @param accountKey The account key (`deriveAccountKey(seed)`)
  */
 export async function deriveMemberKeyBytes(accountKey: Uint8Array, spaceId: string): Promise<Uint8Array> {
   return deriveScalar(accountKey, `${MEMBER_KEY_INFO}|${spaceId}`);
@@ -176,75 +172,4 @@ export function isContactPublicKey(value: unknown): value is string {
 export async function contactKeyPair(secret: Uint8Array): Promise<ContactKeyPair> {
   const privateKey = await importScalar(secret, 'ECDH', ['deriveBits']);
   return Object.freeze({ publicKey: contactPublicKey(secret), privateKey });
-}
-
-/** The AES key two sides agree on, bound to the ephemeral key it came from */
-async function sealKey(shared: ArrayBuffer, ephemeral: Uint8Array, usage: KeyUsage): Promise<CryptoKey> {
-  const ikm = new Uint8Array([...new Uint8Array(shared), ...ephemeral]);
-  const material = await hkdf(ikm, utf8Encode(SEAL_INFO), 32);
-  return globalThis.crypto.subtle.importKey(
-    'raw',
-    bufferSource(material),
-    { name: 'AES-GCM', length: 256 },
-    false,
-    [usage],
-  );
-}
-
-/**
- * Seals a value so only the holder of a contact key can open it.
- * @param recipient The contact key's public half, as a profile carries it
- * @param value Anything JSON can carry
- * @param context What the sealed value belongs to; opening needs the same
- * @returns base64url: the ephemeral public point, the IV, and the ciphertext
- */
-export async function sealFor(recipient: string, value: unknown, context: string): Promise<string> {
-  const recipientKey = await globalThis.crypto.subtle.importKey(
-    'raw',
-    bufferSource(p256.Point.fromBytes(base64UrlDecode(recipient)).toBytes(false)),
-    { name: 'ECDH', namedCurve: 'P-256' },
-    false,
-    [],
-  );
-  const ephemeral = await globalThis.crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
-    'deriveBits',
-  ]);
-  const ephemeralPoint = new Uint8Array(await globalThis.crypto.subtle.exportKey('raw', ephemeral.publicKey));
-  const shared = await globalThis.crypto.subtle.deriveBits(
-    { name: 'ECDH', public: recipientKey },
-    ephemeral.privateKey,
-    256,
-  );
-  const key = await sealKey(shared, ephemeralPoint, 'encrypt');
-  const sealed = await aesSeal(key, utf8Encode(JSON.stringify(value)), utf8Encode(context));
-  return base64UrlEncode(concatBytes(ephemeralPoint, sealed));
-}
-
-/**
- * Opens what `sealFor` sealed.
- * @returns The value, or null when it was not sealed for this key, or for this context, or was changed
- */
-export async function openSealed(privateKey: CryptoKey, sealed: string, context: string): Promise<unknown> {
-  try {
-    const bytes = base64UrlDecode(sealed);
-    if (bytes.length <= POINT_BYTES + NONCE_BYTES) return null;
-    const ephemeralPoint = bytes.subarray(0, POINT_BYTES);
-    const ephemeral = await globalThis.crypto.subtle.importKey(
-      'raw',
-      bufferSource(ephemeralPoint),
-      { name: 'ECDH', namedCurve: 'P-256' },
-      false,
-      [],
-    );
-    const shared = await globalThis.crypto.subtle.deriveBits(
-      { name: 'ECDH', public: ephemeral },
-      privateKey,
-      256,
-    );
-    const key = await sealKey(shared, ephemeralPoint, 'decrypt');
-    const plain = await aesOpen(key, bytes.subarray(POINT_BYTES), utf8Encode(context));
-    return JSON.parse(utf8Decode(plain));
-  } catch {
-    return null;
-  }
 }

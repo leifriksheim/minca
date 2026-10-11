@@ -107,14 +107,14 @@ export async function inspectPod(pod: Place, current: Place, did: string): Promi
  *
  * Paths are account-scoped either way, so two accounts in one browser never
  * share a store, the same way two accounts in one folder never share a subtree.
- * A pod's registry is sealed under the vault key, so someone who copies the
+ * A pod's registry is sealed under the account's local key, so someone who copies the
  * folder cannot read the private spaces in it.
  *
- * @param folder The unlocked pod and its vault key, when the account lives in one
+ * @param folder The unlocked pod and its local key, when the account lives in one
  */
 export function storesFor(
   account: AccountSummary,
-  folder?: { readonly directory: DirectoryHandleLike; readonly vaultKey: CryptoKey },
+  folder?: { readonly directory: DirectoryHandleLike; readonly localKey: CryptoKey },
 ): StoreFactory {
   return workerStores(describeStores(account, folder));
 }
@@ -122,10 +122,10 @@ export function storesFor(
 /** The same stores as {@link storesFor}, said as data, for a node in a worker to open */
 export function describeStores(
   account: AccountSummary,
-  folder?: { readonly directory: DirectoryHandleLike; readonly vaultKey: CryptoKey },
+  folder?: { readonly directory: DirectoryHandleLike; readonly localKey: CryptoKey },
 ): WorkerStores {
   return folder
-    ? { directory: folder.directory, basePath: account.dataPath, vaultKey: folder.vaultKey }
+    ? { directory: folder.directory, basePath: account.dataPath, localKey: folder.localKey }
     : { indexedDB: `weave:${account.dataPath.replace(/\//g, ':')}` };
 }
 

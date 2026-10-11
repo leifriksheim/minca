@@ -235,14 +235,12 @@ A knock is a JSON object, signed by the knocker's **session key**:
 
 ```
 sig    = ECDSA-P256-SHA256(session private key, UTF-8(canonicalJSON(body)))   — 64 bytes r‖s, base64url
-sealed = sealFor(door, { body, sig }, context = "weave/knock/v1|" + door)
+sealed = HPKE(door, "weave/knock/v1", { door }, UTF-8(JSON.stringify({ body, sig })))
 ```
 
-`sealFor` is the contact-key seal ([01 §9.4](01-identity.md)): a fresh
-P-256 key pair per message, ECDH with the door key, HKDF-SHA-256 over the shared
-secret and the ephemeral point (info `weave/contact-seal/v1`), AES-256-GCM with
-a 12-byte IV and the context as additional data. The blob is
-`base64url(ephemeral point (65 bytes) ‖ IV ‖ ciphertext)`.
+`HPKE` is sealing to a key ([01 §9.2](01-identity.md)): to the door key, with
+label `weave/knock/v1` and bound `{ "door": <the door key> }`. The blob is
+`base64url(0x01 ‖ ephemeral point (65 bytes) ‖ ciphertext)`.
 
 A knocker drops a knock as soon as it signs it.
 
@@ -251,7 +249,7 @@ A knocker drops a knock as soon as it signs it.
 A door's owner MUST treat a blob as a knock only if all of these hold, and
 otherwise ignore it. `receivedAt` is the relay's `at` for the blob.
 
-1. It opens with the door key under context `weave/knock/v1|<door public key>`.
+1. It opens with the door key, label `weave/knock/v1` and bound `{ "door": <door public key> }`.
 2. `body.v` is 1 and `body.door` is this door's public key.
 3. Every field has the type and size above.
 4. **Time.** `at` is no more than 5 minutes after now and no more than 14 days
@@ -300,8 +298,8 @@ Not protocol: how a knock becomes a space for two (`std.knock`), how the owner
 answers there (`std.knock-answer`, signed with the door signing key) and how
 the knocker settles it are records a peer syncs and judges like any other. See
 [Doors](../packages/core/docs/doors.md#the-exchange) in the library's docs. An
-account home MUST NOT give an agent the contact key
-([06 §3.1](06-nodes-and-sessions.md)).
+account home MUST NOT give the contact key with a note that grants records
+only ([06 §2.8](06-nodes-and-sessions.md)).
 
 ## 8. Security considerations
 
