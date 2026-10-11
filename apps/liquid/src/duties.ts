@@ -50,8 +50,8 @@ export type Duty =
 export function duties(a: Assembly): Duty[] {
   const todo: Duty[] = [];
   for (const p of a.proposals) {
-    // Made by an older Liquid, without voters; or disputed: nothing more to do.
-    if (p.voters.length === 0 || p.result === 'disputed') continue;
+    // Disputed: nothing more to do.
+    if (p.result === 'disputed') continue;
     // Settled can come before followers' devices catch up: a voter trusting the one vote that settled
     // it still follows, so the record shows how they stood. Nothing new is frozen or decided.
     const open = p.result === 'open';
@@ -138,7 +138,6 @@ async function findConflicts(
   const found: Array<{ proposal: string; record: string; versions: [string, string] }> = [];
   const disputed = new Set(a.proposals.flatMap((p) => p.conflicts.map((c) => c.record)));
   for (const p of a.proposals) {
-    if (p.voters.length === 0) continue;
     const keys = [...[...p.votes.values()].map((v) => v.key), ...[...p.rolls.values()].map((r) => r.key)];
     for (const key of keys) {
       if (disputed.has(key)) continue;
@@ -174,7 +173,7 @@ export function useDuties(a: Assembly, writable: boolean): void {
   latest.current = a;
 
   useEffect(() => {
-    if (!writable || !a.ready || !a.current) return;
+    if (!writable || !a.ready) return;
     const run = async () => {
       if (running.current) {
         again.current = true;

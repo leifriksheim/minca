@@ -111,8 +111,8 @@ const castBy = (who: Person, space: string, key: string, choice: Choice, via?: s
 describe('liquid: deciding a proposal', () => {
   test('a decision stands with more than half of the voters, and nothing less', async () => {
     const { alice, bob, carol, dave, space, voters } = await assembly();
-    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters });
-    const other = await alice.node.records.put(space, proposal, { title: 'Paint', voters });
+    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters, toPass: 2 });
+    const other = await alice.node.records.put(space, proposal, { title: 'Paint', voters, toPass: 2 });
     await until(async () => (await carol.node.records.get(space, other.key)) !== null, 4000, 'the proposals');
 
     const a = await castBy(alice, space, put.key, 'for');
@@ -170,7 +170,7 @@ describe('liquid: deciding a proposal', () => {
 
   test('a decision forged by hand reaches every peer and counts for none', async () => {
     const { alice, bob, space, voters } = await assembly();
-    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters });
+    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters, toPass: 2 });
     const a = await castBy(alice, space, put.key, 'for');
     await until(async () => (await bob.node.records.get(space, a.key)) !== null, 4000, 'Alice’s vote');
 
@@ -238,18 +238,28 @@ describe('liquid: deciding a proposal', () => {
       /more votes for than it has voters/,
     );
     await assert.rejects(alice.node.records.put(space, proposal, { title: 'None', voters, toPass: 0 }));
+    // Every proposal says what it takes to pass, and every party how it decides.
+    await assert.rejects(alice.node.records.put(space, proposal.name, { title: 'Unsaid', voters }));
+    await assert.rejects(
+      alice.node.records.put(space, party.name, { name: 'Undecided', members: voters, stewards: voters }),
+    );
   });
 
   test('a proposal lists members only, each once', async () => {
     const { alice, space, voters } = await assembly();
     await assert.rejects(
-      alice.node.records.put(space, proposal, { title: 'Stacked', voters: [...voters, voters[0]!] }),
+      alice.node.records.put(space, proposal, {
+        title: 'Stacked',
+        voters: [...voters, voters[0]!],
+        toPass: 1,
+      }),
       /each once/,
     );
     await assert.rejects(
       alice.node.records.put(space, proposal, {
         title: 'Outsiders',
         voters: [...voters, 'did:key:zNotHere'],
+        toPass: 1,
       }),
       /are members/,
     );
@@ -259,7 +269,7 @@ describe('liquid: deciding a proposal', () => {
 describe('liquid: conflicts', () => {
   test('two first versions of one vote that disagree are a conflict; two votes that don’t, aren’t', async () => {
     const { alice, bob, space, voters } = await assembly();
-    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters });
+    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters, toPass: 2 });
     await until(async () => (await bob.node.records.get(space, put.key)) !== null, 4000, 'the proposal');
     const a = await castBy(alice, space, put.key, 'for');
     const b = await castBy(bob, space, put.key, 'for');
@@ -303,15 +313,21 @@ describe('liquid: parties', () => {
     const { alice, bob, carol, space, voters } = await assembly();
     const [aliceDid, bobDid, carolDid] = [alice.node.did, bob.node.did, carol.node.did];
     await assert.rejects(
-      alice.node.records.put(space, party, { name: 'Greens', members: [aliceDid], stewards: [bobDid] }),
+      alice.node.records.put(space, party, {
+        name: 'Greens',
+        members: [aliceDid],
+        stewards: [bobDid],
+        decides: 'majority',
+      }),
       /Only a party’s stewards/,
     );
     const greens = await alice.node.records.put(space, party, {
       name: 'Greens',
       members: [aliceDid, bobDid, carolDid],
       stewards: [aliceDid, bobDid],
+      decides: 'majority',
     });
-    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters });
+    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters, toPass: 2 });
     await until(
       async () =>
         (await carol.node.records.get(space, put.key)) !== null &&
@@ -325,6 +341,7 @@ describe('liquid: parties', () => {
       name: 'The Greens',
       members: [aliceDid, bobDid, carolDid],
       stewards: [aliceDid, bobDid],
+      decides: 'majority',
     });
     await until(
       async () =>
@@ -338,6 +355,7 @@ describe('liquid: parties', () => {
         name: 'Mine',
         members: [carolDid],
         stewards: [carolDid],
+        decides: 'majority',
       }),
       /Only a party’s stewards/,
     );
@@ -350,10 +368,15 @@ describe('liquid: parties', () => {
     };
     const members = [aliceDid, bobDid, carolDid].sort();
     await assert.rejects(
-      carol.node.records.put(space, partyRoll, { party: current.version, members }, links),
+      carol.node.records.put(space, partyRoll, { party: current.version, members, toTake: 2 }, links),
       /written by a steward/,
     );
-    const roll = await bob.node.records.put(space, partyRoll, { party: current.version, members }, links);
+    const roll = await bob.node.records.put(
+      space,
+      partyRoll,
+      { party: current.version, members, toTake: 2 },
+      links,
+    );
 
     const a = await castBy(alice, space, put.key, 'for');
     const c = await castBy(carol, space, put.key, 'for', greens.key);
@@ -382,7 +405,7 @@ describe('liquid: how a party decides', () => {
       stewards: [alice.node.did],
       decides: 'everyone',
     });
-    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters });
+    const put = await alice.node.records.put(space, proposal, { title: 'Bike racks', voters, toPass: 2 });
     const links = {
       links: [
         { rel: 'party', to: greens.key },
@@ -443,7 +466,7 @@ describe('liquid: how a party decides', () => {
       decides: 'representative',
       representative: bob.node.did,
     });
-    const put = await alice.node.records.put(space, proposal, { title: 'Paint', voters });
+    const put = await alice.node.records.put(space, proposal, { title: 'Paint', voters, toPass: 2 });
     const links = {
       links: [
         { rel: 'party', to: reds.key },
@@ -499,7 +522,7 @@ describe('liquid: a decision fits in one check', () => {
       author: voters[0]!,
       createdAt: '2026-10-03T12:00:00.000Z',
       deleted: false,
-      body: { title: 'Big', voters },
+      body: { title: 'Big', voters, toPass: 2 },
       links: [],
     };
     const held = new Map([...cited, theProposal].map((v) => [v.id, v]));

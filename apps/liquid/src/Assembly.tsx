@@ -7,7 +7,7 @@ import { useAssembly, type Assembly } from './model';
 import { Proposals } from './Proposals';
 import { Delegations } from './Delegations';
 import { People } from './People';
-import { ASSEMBLY, topic as topicCollection } from './schema';
+import { topic as topicCollection } from './schema';
 import { Problem, TopicChip } from './ui';
 import { useAction, useCopy } from '@weave/app-shared/action';
 import { useDuties } from './duties';
@@ -153,7 +153,6 @@ function AssemblyBody({ space, a }: { space: SpaceSummary; a: Assembly }) {
               You can read this assembly, but you hold no role in it, so you can’t vote, propose or delegate.
             </div>
           )}
-          {!a.current && <Outdated a={a} writable={space.writable} />}
           {tab === 'proposals' && <CommunitySetup spaceId={a.spaceId} writable={space.writable} />}
           {tab === 'proposals' && <Proposals a={a} writable={space.writable} />}
           {tab === 'trust' && <Delegations a={a} writable={space.writable} />}
@@ -163,44 +162,6 @@ function AssemblyBody({ space, a }: { space: SpaceSummary; a: Assembly }) {
 
       {how && <HowItWorks onClose={closeHow} />}
       {topics && <Topics a={a} onClose={() => setTopics(false)} />}
-    </div>
-  );
-}
-
-/**
- * An assembly made by an older Liquid: votes there could change, proposals
- * had no voter list, or couldn't set what it takes to pass. Someone allowed
- * to change the space's collections brings it up to date; proposals made
- * before keep the rules they were made with.
- */
-function Outdated({ a, writable }: { a: Assembly; writable: boolean }) {
-  const node = useNode();
-  const action = useAction();
-  return (
-    <div className="lq-note" data-tone="warn" style={{ marginBottom: 20, fontSize: 13, lineHeight: 1.55 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span>
-          This assembly was made with an older Liquid. Updating it makes votes final, lets proposals settle
-          themselves, lets whoever proposes pick what it takes to pass, and lets parties pick how they decide.
-          Proposals made before keep the rules they were made with.
-        </span>
-        {writable && (
-          <button
-            className="lq-btn"
-            data-size="sm"
-            style={{ alignSelf: 'flex-start' }}
-            disabled={action.busy}
-            onClick={() =>
-              void action.run(async () => {
-                for (const definition of ASSEMBLY) await node.collections.define(a.spaceId, definition);
-              })
-            }
-          >
-            Update this assembly
-          </button>
-        )}
-        <Problem>{action.error}</Problem>
-      </div>
     </div>
   );
 }

@@ -436,13 +436,6 @@ function VotePanel({
   const voter = p.voters.includes(a.me);
   const topic = a.topicOf(p.topic);
 
-  if (p.voters.length === 0)
-    return (
-      <div className="lq-note" data-tone="warn">
-        This proposal was made with an older Liquid, before proposals listed their voters, so it can’t be
-        decided.
-      </div>
-    );
   if (!voter)
     return (
       <div className="lq-note">
@@ -788,10 +781,8 @@ function Compose({
     .filter(picks)
     .sort();
   const n = voters.length;
-  // An assembly made before proposals set their rule takes more than half.
-  const toPass = !a.current
-    ? majority(n)
-    : rule === 'custom'
+  const toPass =
+    rule === 'custom'
       ? Math.min(Math.max(1, custom), n)
       : (RULES.find((r) => r.id === rule)?.toPass(n) ?? majority(n));
   const problem =
@@ -828,7 +819,7 @@ function Compose({
                 title: title.trim(),
                 ...(body.trim() ? { body: body.trim() } : {}),
                 voters,
-                ...(a.current ? { toPass } : {}),
+                toPass,
               },
               topicKey ? { links: [{ rel: 'topic', to: topicKey }] } : {},
             );
@@ -929,53 +920,47 @@ function Compose({
           <p className="lq-label" style={{ marginBottom: 8 }}>
             What it takes to pass
           </p>
-          {a.current ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="Rule">
-              {RULES.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  className="lq-chip"
-                  data-filter
-                  aria-pressed={rule === r.id}
-                  onClick={() => setRule(r.id)}
-                >
-                  {r.label}
-                </button>
-              ))}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="Rule">
+            {RULES.map((r) => (
               <button
+                key={r.id}
                 type="button"
                 className="lq-chip"
                 data-filter
-                aria-pressed={rule === 'custom'}
-                onClick={() => {
-                  setCustom(toPass);
-                  setRule('custom');
-                }}
+                aria-pressed={rule === r.id}
+                onClick={() => setRule(r.id)}
               >
-                A number
+                {r.label}
               </button>
-              {rule === 'custom' && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                  <input
-                    className="lq-input"
-                    type="number"
-                    min={1}
-                    max={Math.max(1, n)}
-                    value={custom}
-                    onChange={(event) => setCustom(Math.round(Number(event.target.value)) || 1)}
-                    style={{ width: 72, height: 30 }}
-                    aria-label="Votes for it needs"
-                  />
-                  <span className="lq-muted">of {n}</span>
-                </span>
-              )}
-            </div>
-          ) : (
-            <p className="lq-faint" style={{ fontSize: 12.5 }}>
-              More than half. Update this assembly to pick another rule.
-            </p>
-          )}
+            ))}
+            <button
+              type="button"
+              className="lq-chip"
+              data-filter
+              aria-pressed={rule === 'custom'}
+              onClick={() => {
+                setCustom(toPass);
+                setRule('custom');
+              }}
+            >
+              A number
+            </button>
+            {rule === 'custom' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                <input
+                  className="lq-input"
+                  type="number"
+                  min={1}
+                  max={Math.max(1, n)}
+                  value={custom}
+                  onChange={(event) => setCustom(Math.round(Number(event.target.value)) || 1)}
+                  style={{ width: 72, height: 30 }}
+                  aria-label="Votes for it needs"
+                />
+                <span className="lq-muted">of {n}</span>
+              </span>
+            )}
+          </div>
           {n > 0 && (
             <p className="lq-muted lq-num" style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 8 }}>
               Passes once {toPass} of the {n} {n === 1 ? 'voter votes' : 'voters vote'} for. Fails once{' '}

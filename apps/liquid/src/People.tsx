@@ -176,7 +176,7 @@ function PartyCard({
         hue: p.hue,
         members: [...new Set([...p.stewards, ...members])],
         stewards: [...p.stewards],
-        ...(a.current ? ruleBody(p.decides, p.representative) : {}),
+        ...ruleBody(p.decides, p.representative),
       }),
     );
 
@@ -338,8 +338,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
         hue: shade,
         members: [...new Set([a.me, ...keepers, ...listed])],
         stewards: [...keepers],
-        // An assembly from before parties chose keeps more than half.
-        ...(a.current ? ruleBody(decides, representative) : {}),
+        ...ruleBody(decides, representative),
       };
       if (editing) {
         await node.records.update(a.spaceId, editing.key, body);
@@ -410,58 +409,52 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
             style={{ minHeight: 96 }}
           />
         </label>
-        {a.current && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <p className="lq-label">How it takes a position</p>
-            <div
-              style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}
-              role="group"
-              aria-label="How it decides"
-            >
-              {PARTY_RULES.map((rule) => (
-                <button
-                  key={rule}
-                  type="button"
-                  className="lq-chip"
-                  data-filter
-                  aria-pressed={decides === rule}
-                  onClick={() => setDecides(rule)}
-                >
-                  {PARTY_RULE_LABEL[rule]}
-                </button>
-              ))}
-            </div>
-            {decides === 'representative' ? (
-              <>
-                <select
-                  className="lq-input"
-                  value={representative}
-                  onChange={(event) => setRepresentative(event.target.value)}
-                  aria-label="Representative"
-                >
-                  {[a.me, ...members].map((did) => (
-                    <option key={did} value={did}>
-                      {did === a.me ? `${a.name(did)} (you)` : a.name(did)}
-                    </option>
-                  ))}
-                </select>
-                <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-                  Their own vote on a proposal is the party’s, and everyone who trusts the party follows it. A
-                  vote they cast by following someone doesn’t count.
-                </p>
-              </>
-            ) : (
-              <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-                It takes a position once{' '}
-                {decides === 'everyone' ? 'all' : PARTY_RULE_LABEL[decides].toLowerCase()} of its members vote
-                the same way themselves. Until then, nobody who trusts it votes by it.
-              </p>
-            )}
-            <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-              Changing this applies to proposals made from now on.
-            </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p className="lq-label">How it takes a position</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} role="group" aria-label="How it decides">
+            {PARTY_RULES.map((rule) => (
+              <button
+                key={rule}
+                type="button"
+                className="lq-chip"
+                data-filter
+                aria-pressed={decides === rule}
+                onClick={() => setDecides(rule)}
+              >
+                {PARTY_RULE_LABEL[rule]}
+              </button>
+            ))}
           </div>
-        )}
+          {decides === 'representative' ? (
+            <>
+              <select
+                className="lq-input"
+                value={representative}
+                onChange={(event) => setRepresentative(event.target.value)}
+                aria-label="Representative"
+              >
+                {[a.me, ...members].map((did) => (
+                  <option key={did} value={did}>
+                    {did === a.me ? `${a.name(did)} (you)` : a.name(did)}
+                  </option>
+                ))}
+              </select>
+              <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                Their own vote on a proposal is the party’s, and everyone who trusts the party follows it. A
+                vote they cast by following someone doesn’t count.
+              </p>
+            </>
+          ) : (
+            <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+              It takes a position once{' '}
+              {decides === 'everyone' ? 'all' : PARTY_RULE_LABEL[decides].toLowerCase()} of its members vote
+              the same way themselves. Until then, nobody who trusts it votes by it.
+            </p>
+          )}
+          <p className="lq-faint" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+            Changing this applies to proposals made from now on.
+          </p>
+        </div>
         {editing && members.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p className="lq-label">Members</p>
