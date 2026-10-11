@@ -53,13 +53,11 @@ which the peer handshake (§6) catches.
 
 - A relay accepts a WebSocket upgrade on **any path** (the always-on node
   reserves `/peer` for itself, §5.3, and hands every other path to its relay).
-- The optional query parameter `?room=<name>` opens a **one-room socket**
-  (§1.5). Without it the socket is a **multi-room socket**.
 - `GET /health` answers `200` with `{"ok":true}` (`content-type:
 application/json`). It MUST NOT reveal how many rooms or peers exist.
 - Any other plain HTTP request answers `426` with a text body.
 - All relay messages are **text frames** carrying one JSON object each.
-  Binary frames are counted against the rate budget (§1.6) and otherwise
+  Binary frames are counted against the rate budget (§1.5) and otherwise
   ignored. Text that is not a JSON object with a string `type` is ignored.
 
 Before a socket is opened, the relay MAY refuse the upgrade with a plain HTTP
@@ -67,7 +65,6 @@ response and `Connection: close`:
 
 | Status | Reason phrase          | When                                                      |
 | ------ | ---------------------- | --------------------------------------------------------- |
-| `503`  | `Room full`            | a one-room socket's `?room=` cannot be entered (§1.6)     |
 | `503`  | `Relay full`           | the relay holds `MAX_CONNECTIONS` sockets                 |
 | `429`  | `Too many connections` | the client address holds `MAX_CONNECTIONS_PER_IP` sockets |
 
@@ -97,7 +94,7 @@ fixes the socket's DID for the life of the socket.
 
 > Rationale: taking over a DID would let anyone who learns it receive the
 > offers meant for it. A peer that reconnects after a silent drop is refused
-> until the heartbeat (§1.6) reaps its old socket; its client retries (§2).
+> until the heartbeat (§1.5) reaps its old socket; its client retries (§2).
 > Letting two sockets share a DID is no answer either: signals are routed by
 > `to`, so the relay could not tell which one is meant.
 
@@ -152,10 +149,10 @@ and are not forwarded (forwarded messages are rebuilt from known fields).
 
 | `type`                         | Fields                         | Effect                                                                                                                                                                                                                                                                        |
 | ------------------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `join`                         | `from`: DID, `room`: string    | Enter `room` (§1.2 for `from`). On success, every _other_ socket in the room receives a relay `join`. The joiner receives no acknowledgement and no list of who is present. On the socket's first successful join, the relay also sends an `ice` offer if it has TURN (§1.7). |
+| `join`                         | `from`: DID, `room`: string    | Enter `room` (§1.2 for `from`). On success, every _other_ socket in the room receives a relay `join`. The joiner receives no acknowledgement and no list of who is present. On the socket's first successful join, the relay also sends an `ice` offer if it has TURN (§1.6). |
 | `leave`                        | `room`: string                 | Leave `room`, if in it. Every other socket in the room receives a relay `leave`.                                                                                                                                                                                              |
 | `offer`, `answer`, `candidate` | `to`: DID, `payload`: any JSON | Delivered to the socket holding `to` in the first room it shares with the sender (in the sender's join order), as the relay form below. Dropped if the sender has not joined, or shares no room with `to`, or `to` is the sender itself.                                      |
-| `ice`                          | —                              | Ask for TURN servers (§1.7). Ignored before the socket's first join, and by a relay without TURN.                                                                                                                                                                             |
+| `ice`                          | —                              | Ask for TURN servers (§1.6). Ignored before the socket's first join, and by a relay without TURN.                                                                                                                                                                             |
 
 The reference client adds `from` (its DID) to every message it sends,
 including `leave`, `ice` and the signals; the relay reads `from` only on
@@ -163,7 +160,7 @@ including `leave`, `ice` and the signals; the relay reads `from` only on
 
 The relay never replies with an error. A message that fails any check is
 dropped silently (except the `4009` close of §1.2 and the flood cut-off of
-§1.6).
+§1.5).
 
 #### Relay → client
 
@@ -199,20 +196,7 @@ Examples (DIDs shortened for readability; real ones are full `did:key`s):
 
 _Source: `packages/relay/relay.mjs` (`handleMessage`, `announce`, `offerTurn`), `packages/core/src/network/signaling.ts`. Tests: `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/introductions.test.ts` ("several relays at once")._
 
-### 1.5 One-room sockets
-
-A socket opened with `?room=<name>` is the older, one-room form. For it, any
-message without a `room` field means `<name>`: `{"type":"join","from":…}`
-joins it, `{"type":"leave"}` leaves it. It may still join other rooms by
-naming them. One-room and multi-room sockets meet in the same rooms, and
-relay `join` / `leave` notices always carry `room`.
-
-A relay SHOULD keep serving one-room sockets; app versions from before the
-mesh use them. New clients MUST use multi-room sockets.
-
-_Source: `packages/relay/relay.mjs` (`upgrade`, `handleMessage`). Tests: `packages/core/tests/network-manager.test.ts` ("the relay still serves the older one-room sockets…")._
-
-### 1.6 Limits
+### 1.5 Limits
 
 A relay is open to anyone and MUST bound what one client can cost it. Every
 value below is the reference relay's; a compatible relay MAY choose others,
@@ -229,7 +213,7 @@ two pings, so a relay SHOULD ping every **15 s** or more often.
 | Open sockets per client address    | 32                            | upgrade refused `429 Too many connections`                                                                                |
 | Rooms, whole relay                 | 10 000                        | `join` of a new room ignored                                                                                              |
 | Rooms per socket                   | 256                           | `join` ignored                                                                                                            |
-| Peers per room                     | 64                            | `join` ignored (`503 Room full` for a one-room socket's upgrade)                                                          |
+| Peers per room                     | 64                            | `join` ignored                                                                                                            |
 | Room name length                   | 1–128 chars                   | `join` ignored                                                                                                            |
 | DID length                         | ≤ 256 chars                   | `join` ignored                                                                                                            |
 | Message rate per socket            | token bucket: 50/s, burst 100 | socket terminated with no close frame                                                                                     |
@@ -242,7 +226,7 @@ ones.
 
 _Source: `packages/relay/relay.mjs` (constants at the top, `withinBudget`, `send`, heartbeat). Tests: not pinned by tests — see Open questions._
 
-### 1.7 TURN passwords
+### 1.6 TURN passwords
 
 A relay MAY hand out TURN credentials for a TURN server (coturn run with
 `use-auth-secret`) that shares a secret with it — the "TURN REST API"
@@ -271,7 +255,7 @@ A relay without TURN never answers `ice`.
 
 _Source: `packages/relay/relay.mjs` (`turnFromEnv`, `offerTurn`, `networkOf`). Tests: `packages/core/tests/relay-turn.test.ts`._
 
-### 1.8 Running a relay
+### 1.7 Running a relay
 
 Not protocol: how the reference relay is started and configured is in
 [`packages/relay/README.md`](../packages/relay/README.md).
@@ -974,7 +958,7 @@ _Source: `packages/core/src/node/space-runtime.ts` (`send`, `onLive`, `withinAll
 
 ## 10. ICE and TURN (client side)
 
-A client MUST use TURN servers a relay offered (§1.7, §3) only while their
+A client MUST use TURN servers a relay offered (§1.6, §3) only while their
 `expiresAt` is in the future. Which other ICE servers it uses, and when it
 asks relays for fresh passwords, is its own choice; the reference node's is in
 [the node's docs](../packages/core/docs/node.md#the-network).
@@ -985,14 +969,14 @@ _Source: `packages/core/src/network/mesh.ts` (`iceServers`). Tests: `packages/co
 
 ## 11. Conformance summary
 
-A compatible **relay** MUST: accept multi-room sockets on any path; fix one
+A compatible **relay** MUST: accept sockets on any path; fix one
 DID per socket on first `join`; refuse a second socket claiming a DID in a
 room (close `4009`); announce `join`/`leave` with `from` and `room` to the
 _other_ members only; forward `offer`/`answer`/`candidate` only between
 sockets sharing a room, rewriting `from` to the sender's DID; announce `leave`
 for every room of a socket that closes or dies; and bound sizes, rates and
-counts (§1.6). It SHOULD serve one-room sockets and `/health`, and MAY hand
-out TURN passwords (§1.7).
+counts (§1.5). It SHOULD serve `/health`, and MAY hand out TURN passwords
+(§1.6).
 
 A compatible **client** MUST: derive rooms as in §1.3; rejoin all rooms on
 reconnect; de-duplicate presence across relays (§3); run the mesh handshake
