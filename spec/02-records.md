@@ -775,8 +775,7 @@ A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
 has no schema, no rules and no topics. The same holds for a version of a
 definition record that is a delete, or whose key does not match its `name`.
-Members not listed above are ignored: a definition stored with the `screen`
-and `network` of earlier versions of this spec is judged without them.
+Members not listed above are ignored.
 
 Example (the standard `std.vote`, as stored):
 

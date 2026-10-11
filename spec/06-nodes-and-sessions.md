@@ -215,16 +215,15 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 | `agent`        | boolean, optional               | The audience is an agent's key (§3): its note grants records only.                                                                                                                                                                                 |
 | `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                        |
 
-A home MUST refuse a request (as in §2.3 step 4) unless: `v` is `1`; `audience`
-starts with `did:key:`; `access` is one of the three; `scope`, `name`,
-`contacts`, `create`, `days` are absent or valid as above; when
-`agent: true`, `access` is not `carry`, `create` is absent and `contacts` is
-not true.
+A home MUST refuse a request (as in §2.3 step 4) unless: it has no member
+but those in the table; `v` is `1`; `audience` starts with `did:key:`;
+`access` is one of the three; `scope`, `name`, `contacts`, `create`, `days`
+are absent or valid as above; when `agent: true`, `access` is not `carry`,
+`create` is absent and `contacts` is not true.
 
 Connecting offers no subscriptions: a person signing in has asked to be told
 about nothing yet. An app asks later, when they do (§2.11). A home MUST NOT
-add a subscription while connecting; a `notify` field an older app still
-sends is ignored.
+add a subscription while connecting.
 
 Example:
 
@@ -348,7 +347,7 @@ whose note's payload is
 > the space's key. Invites are view-only because what lets the app write is the
 > note, under the account's own role — never a secret of the space's.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `grantCapabilities`, `isRequest`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "connecting asks for no subscriptions")._
+_Source: `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `grantCapabilities`, `isRequest`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "a request with a field it does not know is refused…")._
 
 ### 2.6 What the app checks
 
@@ -457,7 +456,7 @@ at the spaces the app may reach (step 2 below), or with `spaces` only those of
 them; it cannot widen them.
 
 A home MUST refuse a request with a `kind` as malformed (§2.3 step 4) unless
-`v` is `1`, `kind` is `propose`, `name` is absent or valid, and `notify` has 1
+it has no member but those in the table, `v` is `1`, `kind` is `propose`, `name` is absent or valid, and `notify` has 1
 to 8 entries, each of which would be a valid `NotifyWhen` ([03](03-spaces.md)
 §15) with `app.origin` the request's origin and `spaces` its `spaces` when
 given (else `"all"`), and whose `open`, when given, is on the request's
