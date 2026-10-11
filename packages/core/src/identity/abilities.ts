@@ -36,6 +36,17 @@ export function noteGrants(encoded: string | null | undefined, required: Capabil
   }
 }
 
+/** Whether a note lets its key write records in any space. False for anything unreadable. */
+export function writesRecords(encoded: string): boolean {
+  try {
+    return parseUCAN(encoded).payload.att.some((capability) =>
+      isCapabilitySubset(capability, { with: capability.with, can: 'record/write' }),
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Whether a note grants records and nothing more: every capability it names is a `record/` one. False for anything unreadable. */
 export function grantsRecordsOnly(encoded: string): boolean {
   try {

@@ -29,7 +29,13 @@ import type { SchemaEngine } from '../schema/schema-engine.js';
 import type { SpaceRecord } from '../space/space-manager.js';
 import type { Capability } from '../identity/ucan.js';
 import { parseUCAN, resolveDelegationRoot } from '../identity/ucan.js';
-import { ACCESS_ABILITY, ACCOUNT_ABILITY, DEFINE_ABILITY, noteGrants } from '../identity/abilities.js';
+import {
+  ACCESS_ABILITY,
+  ACCOUNT_ABILITY,
+  DEFINE_ABILITY,
+  noteGrants,
+  writesRecords,
+} from '../identity/abilities.js';
 import { bodyProblem, createVersion, getVersionId, isStub, signedPart, stubOf } from '../schema/version.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
 import { chainProblem, MAX_SEEN, newRecordKey, nextVersion } from '../records/version.js';
@@ -2308,10 +2314,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const here = `space:${space.id}`;
     return {
       account: chain.rootDid,
-      // Writing records here and nothing more. A note that only reads is not one: it writes nothing.
-      recordsOnly:
-        noteGrants(note, { with: here, can: 'record/write' }) &&
-        !noteGrants(note, { with: here, can: DEFINE_ABILITY }),
+      // A key that writes records somewhere but can't define here. Judged on the
+      // whole note, so a key for another space doesn't pass as the account here.
+      // A note that only reads is not one: it writes nothing.
+      recordsOnly: writesRecords(note) && !noteGrants(note, { with: here, can: DEFINE_ABILITY }),
     };
   }
 

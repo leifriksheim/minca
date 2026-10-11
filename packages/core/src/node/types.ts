@@ -328,9 +328,9 @@ export interface LiveMessage {
   /** The sending device: its session DID, which is also where a reply to that device goes */
   readonly peer: string;
   /**
-   * Whether the sender's note grants writing records in this space and nothing
-   * more (`record/*`): it can write here but can't define collections. False
-   * for a note that only reads, which writes nothing.
+   * Whether the sender's note writes records in some space but can't define
+   * collections in this one, judged on the whole note so a key for another
+   * space is caught too. False for a note that only reads, which writes nothing.
    */
   readonly recordsOnly: boolean;
   readonly message: unknown;

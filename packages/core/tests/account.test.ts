@@ -132,6 +132,20 @@ describe('moving and merging an account', () => {
     assert.equal((await after.account.profile())?.name, 'Leif');
   });
 
+  test('a space this device can no longer read stops the copy, so nothing is left behind unnoticed', async () => {
+    const me = await account();
+    const browser = memoryStores();
+    const before = await device(me, browser);
+    await before.spaces.create({ name: 'Diary', visibility: 'private' });
+    await before.close();
+    await (await browser('registry')).put('space:bunreadable', new Uint8Array([1, 2, 3]));
+
+    await assert.rejects(
+      copyAccountData({ from: browser, to: memoryStores(), did: me.did, accountKey: me.accountKey }),
+      /can no longer be read/,
+    );
+  });
+
   test('merging into stores that already hold the account keeps both sides', async () => {
     const me = await account();
     const browser = memoryStores();
