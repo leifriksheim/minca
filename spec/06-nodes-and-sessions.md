@@ -3,8 +3,8 @@
 This part covers what a **node** must do to act for an account: the session
 note it writes under, and what it keeps current for the account. Then the
 exchanges that let a program act without the seed: **connecting an app** to
-an account home, **connecting an agent**, and **carriers** that keep spaces
-online without reading them. Hosts, carriers many accounts pay for, are in
+an account home, **connecting by code** a program that has no browser, and
+**carriers** that keep spaces online without reading them. Hosts, carriers many accounts pay for, are in
 [08 — Hosting](08-hosting.md). Calls, built only from live messages, are
 a layer on it and described with the library
 ([calls](../packages/core/docs/calls.md)).
@@ -14,14 +14,15 @@ may shape its own however it likes. The reference one is described in the
 package docs: [the node](../packages/core/docs/node.md) (creating one, stores,
 holding spaces, following the account, events, the app-side client, carriers
 and hosting), [sign-in](../packages/core/docs/sign-in.md) (including the
-account home's side of §2), [agents](../packages/core/docs/agents.md), and
+account home's side of §2), [agents](../packages/core/docs/agents.md) (the
+library's and the CLI's use of §3), and
 [actions](../packages/core/docs/actions.md) (the CLI, MCP and WebMCP tools).
 
 Material specified elsewhere is linked, not repeated:
 
 | Topic                                                                                                                                                                                                                                            | Where                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| Seeds, recovery codes, DIDs, the account vault and its wraps, UCANs, `AGENT_FACT`, device keys, contact and member keys, phone pairing                                                                                                           | [01 — Identity](01-identity.md)                 |
+| Seeds, recovery codes, DIDs, the account vault and its wraps, UCANs, device keys, contact and member keys, phone pairing and the channel it runs on                                                                                              | [01 — Identity](01-identity.md)                 |
 | Records, versions, `seq`, rules, topics and tags                                                                                                                                                                                                 | [02 — Records](02-records.md)                   |
 | Spaces, roles, the access log (`sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.keepers`), invites, encryption, the account registry (`sys.joined`, `sys.profile`, `sys.carrier`), profiles | [03 — Spaces](03-spaces.md)                     |
 | Relays, rooms, peer authentication, the network message envelope, the `who` note exchange, live messages and their limits, TURN                                                                                                                  | [04 — Network](04-network.md)                   |
@@ -52,8 +53,8 @@ A node acts for one account and signs with one session key at a time. It
 holds a set of spaces, each with its own store and its own peers.
 
 A node MAY hold the **account key** ([01 §11.1](01-identity.md)). A node that is
-not one of the account's own devices (an app's or an agent's) is never given
-the local key.
+not one of the account's own devices (an app's, or any other program's) is
+never given the local key.
 With it the node follows the account registry — the account's list of spaces,
 its name, its carriers, hosts and subscriptions — and joins and leaves spaces as
 the account does on any device (§1.3). Without it, the node holds only the
@@ -115,15 +116,15 @@ passes or none.
 The account registry, the contacts space and carry spaces are the account's
 own machinery. In them a record counts only under a note that grants
 `account/write` ([01](01-identity.md) §8), and a node always holds them whole
-([05](05-sync-and-storage.md) §5). A node whose note lacks it, such as an
-agent's, never writes the account registry: no `sys.joined`, no passes, no
-name, no hosting receipts (every peer would ignore them).
+([05](05-sync-and-storage.md) §5). A node whose note lacks it, such as one
+granted records only, never writes the account registry: no `sys.joined`, no
+passes, no name, no hosting receipts (every peer would ignore them).
 
 When a node joins, leaves and reconciles, which spaces it hides from its own
 list, and when it publishes the account's profile are the node's own; the
 reference node is in [the node](../packages/core/docs/node.md#following-the-account).
 
-_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/agents.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
+_Source: `packages/core/src/node/node.ts` (`reconcileOnce`, `syncPasses`, `nameKeepers`), `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/records-only.test.ts` ("it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand")._
 
 ## 2. The account home protocol
 
@@ -203,25 +204,27 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 
 `ConnectRequest`:
 
-| Field          | Type                            | Meaning                                                                                                                                                                                                                                            |
-| -------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v`            | `1`                             |                                                                                                                                                                                                                                                    |
-| `audience`     | string                          | The app's key, `did:key:…`. The note is made out to it.                                                                                                                                                                                            |
-| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"agent":<agent>,"audience":<audience>,"proof":"weave-connect-key/v1"}`, where `agent` is `true` for an agent's request and `false` otherwise (below). |
-| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                                                                                                   |
-| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                                                                                                             |
-| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                                                                                                   |
-| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.                                                                                            |
-| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                                                                                                            |
-| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                                                                                                              |
-| `agent`        | boolean, optional               | The audience is an agent's key (§3): its note grants records only.                                                                                                                                                                                 |
-| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                        |
+| Field          | Type                            | Meaning                                                                                                                                                                                                                                                                                                                         |
+| -------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v`            | `1`                             |                                                                                                                                                                                                                                                                                                                                 |
+| `audience`     | string                          | The app's key, `did:key:…`, or with `via: code` the program's (§3). The note is made out to it.                                                                                                                                                                                                                                 |
+| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"audience":<audience>,"proof":"weave/connect-key/v1","recordsOnly":<recordsOnly>,"via":<via>}`, where `recordsOnly` is the request's (`false` when absent) and `via` is `"code"` with `via: code` and `"popup"` otherwise (below). |
+| `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                                                                                                                                                                                |
+| `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                                                                                                                                                                                          |
+| `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                                                                                                                                                                                |
+| `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.                                                                                                                                                                         |
+| `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                                                                                                                                                                                         |
+| `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                                                                                                                                                                                           |
+| `recordsOnly`  | boolean, optional               | A note that grants records only (`record/*` to write, `record/read` to read; [01](01-identity.md) §8).                                                                                                                                                                                                                          |
+| `via`          | `code`, optional                | The audience is not the app's own key but a program's that reached the app over a connect code (§3).                                                                                                                                                                                                                            |
+| `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                                                                                                     |
 
 A home MUST refuse a request (as in §2.3 step 4) unless: it has no member
 but those in the table; `v` is `1`; `audience` starts with `did:key:`;
 `access` is one of the three; `scope`, `name`, `contacts`, `create`, `days`
-are absent or valid as above; when `agent: true`, `access` is not `carry`,
-`create` is absent and `contacts` is not true.
+are absent or valid as above; when `recordsOnly: true`, `access` is not
+`carry`, `create` is absent and `contacts` is not true; when `via` is present,
+it is `code` and `access` is not `carry`.
 
 Connecting offers no subscriptions: a person signing in has asked to be told
 about nothing yet. An app asks later, when they do (§2.11). A home MUST NOT
@@ -248,17 +251,19 @@ Example:
 The bytes a key signs for `proof`, for an app's request with the key above:
 
 ```
-{"agent":false,"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","proof":"weave-connect-key/v1"}
+{"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","proof":"weave/connect-key/v1","recordsOnly":false,"via":"popup"}
 ```
 
-Naming the kind means an agent's proof, which it hands to the app that links
-it, can't ask for an app's connection.
+Binding `via` and `recordsOnly` means a program's proof, which it hands to
+the app it connects through (§3), can't ask for that app's own connection,
+nor for more than records when the program asked for records only. An app's
+own proof can't be passed off as a program's either.
 
 ### 2.5 The grant
 
 A home MUST refuse a request whose `proof` does not verify with the
 `audience` key, whose `audience` is the home's own session key, or whose
-`audience` another connection of a different origin (or kind: app or agent)
+`audience` another connection of a different origin, or a different `via`,
 already holds. Disconnecting revokes the audience key (§2.10), so a request
 must never be able to name a key its sender doesn't hold.
 
@@ -284,9 +289,8 @@ When the person approves, the home:
    - `scope: spaces` → one `{ with: "space:<id>", can }` per granted space
 
    where `can` is `*` for `write`, `record/*` for `write` with
-   `agent: true` (records only, [01](01-identity.md) §8), and
-   `record/read` for `read`; and `fct: [{ "weave": "agent" }]` when
-   `agent: true`.
+   `recordsOnly: true` ([01](01-identity.md) §8), and `record/read` for
+   `read`. The note carries no `fct`.
 
 6. Remembers the connection (§2.10).
 7. Answers with the grant.
@@ -304,11 +308,10 @@ page it opened):
 | `scope`         | `spaces` \| `account`                |                                                                                                                                                                            |
 | `spaces`        | `{ id, name, invite, memberKey? }[]` | Granted spaces; `memberKey` is base64url.                                                                                                                                  |
 | `accountKey`    | base64url, optional                  | With `scope: account`: the account key (01 §11.1). It opens every private space and the account registry, but cannot sign as the account or open the home's local storage. |
-| `contactKey`    | base64url, optional                  | With `contacts` or `scope: account`: the contact key's secret. Never in an agent's grant: it opens contact requests and knocks on the account's doors ([07](07-doors.md)). |
+| `contactKey`    | base64url, optional                  | With `contacts` or `scope: account`: the contact key's secret. Never with `recordsOnly`: it opens contact requests and knocks on the account's doors ([07](07-doors.md)).  |
 | `contactsSpace` | string, optional                     | With `contacts` and `scope: spaces`: which of `spaces` is the contacts space.                                                                                              |
 | `relays`        | string[], optional                   | Relays the home uses; the app joins them too, so the two always share one.                                                                                                 |
 | `expiresAt`     | number                               | Unix seconds.                                                                                                                                                              |
-| `agent`         | `true`, optional                     | The note is an agent's: records only, with the agent fact.                                                                                                                 |
 | `home`          | string                               | Added by the app.                                                                                                                                                          |
 
 Example (token shortened):
@@ -349,14 +352,15 @@ whose note's payload is
 > the space's key. Invites are view-only because what lets the app write is the
 > note, under the account's own role — never a secret of the space's.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `grantCapabilities`, `isRequest`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "a request with a field it does not know is refused…")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `grantCapabilities`, `isRequest`, `keyProof`, `checkKeyProof`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…")._
 
 ### 2.6 What the app checks
 
 Before using a grant the app MUST check that the note verifies
 ([01](01-identity.md)), that its `aud` is the app's own key, and that its `iss`
-is `grant.did`. An app that asked for `agent: true` MUST refuse a note without
-the agent fact, so its key's records show as an agent's.
+is `grant.did`. An app that asked for `recordsOnly: true` MUST refuse a note
+that grants anything but `record/` abilities, as a program connected by code
+MUST (§3).
 
 ### 2.7 Starting a connected node
 
@@ -380,13 +384,30 @@ _Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSig
 | Contacts              | only with `contacts: true` (list and requests; not `ask`/`accept`) | yes, including `ask`/`accept`           |
 | Member keys           | one per granted private space                                      | derived from the account key            |
 
+With `recordsOnly` the note grants `record/*` (or `record/read`) under either
+scope, so every peer refuses from it what a records-only note can't do
+([01](01-identity.md) §8): it never changes a space's collections or who may
+do what, and never writes in the account's own spaces. To make something new
+its key proposes collections for someone who may define them (the library's
+blueprints, [blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
+A node whose note can't change access never names relays, seals member keys
+or rotates a space key; in a private space it only learns keys. With
+`scope: account` it still gets the account key, so the contact list is within
+its note to read; a home MUST NOT give it the contact key, with which it could
+open contact requests and knocks on the account's doors ([07](07-doors.md)).
+What the library also ignores from such a key (contact requests, calls) is in
+[contacts](../packages/core/docs/contacts.md) and
+[calls](../packages/core/docs/calls.md#messages).
+
+_Source: `packages/core/src/session/connect.ts` (`grantCapabilities`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/records-only.test.ts` ("a definition signed by hand under a records-only note is ignored by every peer", "what counts is what the note grants", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand", "a program on a computer gets the whole account, records only, for as long as asked; each is its own connection"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
+
 Either way the app never gets the seed: it cannot sign in as the account, change
 its password or passkeys. Its note stops working for live checks at
 `expiresAt`, and its records stop counting once the account disconnects it
 (§2.9, §2.10).
 
 > **Planned: grants narrower than a space.** A note is per space, and reading
-> a private space is holding its key, so an app or agent granted a private
+> a private space is holding its key, so an app granted a private
 > space reads all of it until the space's key changes ([03](03-spaces.md),
 > `changeKey`). Grants per collection would need both a note capability per
 > collection (`with` narrower than `space:<id>`) and collection keys the home
@@ -413,9 +434,10 @@ the old connection record).
 
 The home remembers each connection it grants: the app's origin, audience,
 access, scope and the spaces granted. Connecting the same origin again replaces
-its connection; an agent's connection is its own, apart from the app's.
+its connection; a connection with `via: code` is kept by its audience, apart
+from the app's own, and connecting the same key again replaces it.
 
-**Disconnecting** an app or agent revokes the key of each connection removed
+**Disconnecting** an app, or a program connected by code, revokes the key of each connection removed
 that has `access: write` (never the home's own session key), and connecting
 the same app again with a new key revokes the old one the same way:
 
@@ -423,7 +445,8 @@ the same app again with a new key revokes the old one the same way:
 - `scope: account`: in every space the account can write in, the contacts
   space, and the account registry.
 
-Disconnecting an app (not only its agents) also removes every subscription
+Disconnecting an app (not only the programs connected through it, which go
+with it) also removes every subscription
 whose `app.origin` is its origin (§2.11, §4.4).
 
 Revoking writes a `sys.revoke` record naming the key ([03](03-spaces.md) §6.4).
@@ -438,7 +461,7 @@ _Source: `packages/core/src/session/auth.ts` (`disconnect`, `connections`), `pac
 
 Only an app offers subscriptions, and only when the person asks it to: never
 while connecting (§2.4), never a
-carrier or an agent, and never the home on its own. The home lets the person
+carrier or a program connected by code, and never the home on its own. The home lets the person
 pause and remove what they kept, not add to it. The app uses the exchange of
 §2.3 with a `ProposeRequest` in place of the
 `ConnectRequest`:
@@ -467,7 +490,7 @@ origin: a click on a notification leads only back to the app that proposed it.
 When the person approves some or all of the proposals, the home:
 
 1. Finds the connection it keeps for the request's origin (§2.10), other than
-   an agent's or a carrier's. With none it MUST refuse.
+   one with `via: code` or a carrier's. With none it MUST refuse.
 2. Works out what the app may reach: every space (`"all"`) under
    `scope: account`, else the spaces granted without the contacts space
    (none: it refuses).
@@ -555,107 +578,106 @@ _Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `
 
 ---
 
-## 3. Agents
+## 3. Connecting by code
 
-### 3.1 Agents' notes
-
-An agent is not an identity. It writes for a person under a note from their
-account, like an app. The note grants records only (`record/*`, or
-`record/read` to read), so every
-peer refuses from it what a records-only note can't do ([01](01-identity.md)
-§8): it never changes a space's collections or who may do what, and never
-writes in the account's own spaces. It also carries the agent fact
-(`AGENT_FACT`, [01](01-identity.md) §8.1), so apps show what it writes as
-"via agent". To make something new it proposes collections for someone who
-may define them (the library's blueprints,
-[blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
-
-Not protocol, but recipients also ignore:
-
-- a contact request (`std.contact-request`) written under a note without
-  `account/write` for every space, an agent's among them: it is never opened,
-  as such a note could not knock either ([contacts](../packages/core/docs/contacts.md));
-- call messages from an agent ([calls](../packages/core/docs/calls.md#messages)).
-
-A node whose note can't change access never names relays, seals member keys
-or rotates a space key; in a private space it only learns keys.
-
-An agent granted `scope: account` gets a note for every space and the account
-key in its grant (§2.5), so the contact list is within its note to read. A home
-MUST NOT give an agent the contact key: with it, an agent could open contact
-requests and knocks on the account's doors ([07](07-doors.md)).
-
-_Source: `packages/core/src/session/connect.ts` (`grantCapabilities`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/agents.test.ts` ("a definition an agent signs by hand is ignored by every peer", "what counts is what the note grants, not whether it says agent", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
-
-### 3.2 Connecting an agent with a code
-
-An app offers a one-time code; a terminal on the person's computer pastes it
-(`weave connect wv_…`), and the two trade the agent's key for an agent's note
-over a relay that learns nothing.
+A program with no browser of its own (a command in a terminal, a server)
+connects to an account through an app the person has open. The app shows a
+one-time code; the program is given it (`weave connect wv_…`); the two meet on
+the code's channel, the program says which key it holds and what it asks for,
+and the app asks the account home (§2) for a note made out to that key. The
+protocol does not care what the program is: it asks for what it needs, and
+gets that or less.
 
 **The code.** `wv_` followed by 16 random bytes in base64url (22 characters),
-e.g. `wv_eYV4XGMvhkky6OWpPfqfRQ`. A reader MUST accept it anywhere in pasted
-text: the first match of `wv_([A-Za-z0-9_-]{22})` not followed by another
-base64url character.
+e.g. `wv_eYV4XGMvhkky6OWpPfqfRQ`. The app MUST make it with a CSPRNG for each
+offer. A reader MUST accept it anywhere in pasted text: the first match of
+`wv_([A-Za-z0-9_-]{22})` not followed by another base64url character.
 
-**Derived from the secret** (the 16 bytes):
+**The channel.** The 16 bytes are the secret of a channel of kind _connect by
+code_ ([01](01-identity.md) §15.2): room `CID(UTF-8("weave/code-room/v1") ‖ secret)`,
+keys under `weave/code-key/v1`, sealed messages under `weave/code/v1` bound to
+`{ type, seq }`. The app is the offering side, the program the joining side.
+Both join that room on a shared relay ([04](04-network.md); introductions off)
+under a throwaway `did:key`, and talk over the resulting peer connection.
 
-- the room: `encodeURIComponent('b' + base32(SHA-256(utf8("weave-agent-link-room-v1") ‖ secret)))`
-  — for the code above, `buasdssu2j24ugkfiukw3qorcixxl4mxj67uiyeyc3dsdoqbprocq`;
-- the link key: HKDF-SHA-256 with `ikm = secret`, empty salt,
-  `info = utf8("weave-agent-link-key-v1")`, giving an AES-GCM-256 key.
+For the code above, the room is `bodq6nylbhebwd57ve5zifkt7gqnltkzfn2dpclw4wlwewc5j66ya`.
 
-Both sides join that room on a shared relay ([04](04-network.md); introductions
-off) and talk over the resulting peer connection. The app side uses a throwaway
-key for its DID on the link.
+**Messages.** Network messages `{ type, from, payload }`. The first two carry
+a point in the clear; the rest are sealed (`payload` is the base64url
+envelope of the UTF-8 JSON body).
 
-**Messages.** Network messages `{ type, from, payload }` where `payload` is
-`seal(JSON)`: a 12-byte random IV followed by the AES-GCM ciphertext and tag,
-sent as a JSON array of byte values. A message that does not open with the link
-key is ignored.
+| `type`        | From    | Payload                                                                                                                                                   |
+| ------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code:hello`  | program | `{ "key": base64url(J) }`, to each peer that connects, until a `code:heard` opens                                                                         |
+| `code:key`    | app     | `{ "key": base64url(O) }`, to each peer that said hello, until one asks                                                                                   |
+| `code:ask`    | program | sealed `{ "did": "<its key>", "proof": "<keyProof, via code>", "name": "…", "recordsOnly": <bool> }`; `did` starts `did:key:`, `name` ≤ 80, `proof` ≤ 200 |
+| `code:heard`  | app     | sealed `{}`                                                                                                                                               |
+| `code:answer` | app     | sealed `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                               |
+| `code:done`   | program | sealed `{}`                                                                                                                                               |
 
-| `type`              | From                              | Sealed body                                                                                                                                      |
-| ------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `agent-link:ask`    | terminal, on connecting to a peer | `{ "did": "<agent key>", "proof": "<its proof, agent: true>", "name": "Agent on leifs-macbook" }` (name ≤ 80); an ask without `proof` is ignored |
-| `agent-link:heard`  | app                               | `{ "heard": true }`                                                                                                                              |
-| `agent-link:answer` | app                               | `{ "grant": <Grant> }` or `{ "denied": "<reason>" }`                                                                                             |
-| `agent-link:done`   | terminal                          | `{ "ok": true }`                                                                                                                                 |
+```
+App                                                   Program
+  shows wv_…, joins room                              joins room
+            ◀─────────────── peer connected ───────────────▶
+                          ◀── code:hello   { key: J }
+  code:key { key: O } ──▶
+                          ◀── code:ask     sealed { did, proof, name, recordsOnly }
+  code:heard sealed {} ──▶
+  the person allows it; the app asks the home (§2.3) with
+  audience = did, proof, via: code, recordsOnly
+  code:answer sealed { grant } ──▶
+                                                      checks the grant
+                          ◀── code:done    sealed {}
+```
 
-**Flow.**
+- **The app** answers each `code:hello` with `code:key` and runs an exchange
+  with that peer (at most a few dozen), until one `code:ask` opens and reads
+  as above. That program is the one asked about, and the code is spent: the
+  app MUST NOT answer another hello or ask, and MUST ignore `code:done` from
+  any other peer. It sends `code:heard` at once. It sends `code:answer` with a
+  grant only once the person has allowed it at the home, and MUST NOT send a
+  grant whose note is made out to another key, or, when the program asked for
+  records only, one that grants more.
+- **The request** the app makes is a `ConnectRequest` (§2.4) with
+  `audience` = the ask's `did`, `proof` = its `proof`, `via: "code"` and
+  `recordsOnly` = the ask's. The proof binds those terms, so the home refuses
+  the request unless the app asks for what the program did.
+- **The program** answers each `code:key` with `code:ask` on that exchange,
+  and takes the first peer whose `code:heard` opens as the app, ignoring every
+  other from then on. It MUST check a grant as an app does (§2.6): `v` is 1;
+  the note verifies; `aud` is its own key; `iss` is `grant.did`; and, when it
+  asked for records only, the note grants nothing but `record/` abilities.
+  Then it sends `code:done` and keeps the grant.
 
-1. The app makes a code and joins the room.
-2. The terminal joins the room and, to each peer that connects, sends `ask`.
-3. The app takes the **first** valid `ask` only (a `did` starting `did:key:`)
-   and answers `heard`. Later asks are ignored; the code is good for one agent.
-4. If the person allows it, the app asks the account home (§2) with
-   `audience` = the agent's DID and `agent: true`, checks the note is for the
-   agent's key, and sends `answer { grant }`. If not: `answer { denied }`.
-5. The terminal checks the grant (`v` is 1; the note verifies; `aud` is the
-   agent's key; `iss` is `grant.did`; the note is an agent's), sends `done`,
-   and keeps the grant.
-
-What the reference app shows and asks for, and the terminal's timeouts, are in
+What the reference app shows and asks for, the program's timeouts and how the
+CLI keeps its key and grant are in
 [agents](../packages/core/docs/agents.md#connecting-with-a-code).
 
 > Rationale: the relay introduces the two sides and could sit between them,
-> so everything is sealed with a key from the code. The code is pasted, not
-> typed, so it can be long enough that recording the traffic and guessing it
-> later gets nowhere.
+> so everything after the key exchange is sealed. The code is in the key and
+> so is the shared point: someone without the code gets a different channel,
+> and someone who learns it later, holding a recording, still lacks the
+> point. There is no short code to compare, unlike pairing: the code is
+> pasted, not typed, so it can be long enough that guessing it gets nowhere,
+> and someone in the room without it cannot finish an exchange. A key per
+> direction and a count in each message mean nobody in the room can turn one
+> side's message into the other's, relabel it or repeat it. A peer that says
+> hello without the code costs the app one exchange, and spends nothing.
 
-_Source: `packages/core/src/session/agent-link.ts`, `apps/example/src/components/ConnectAgent.tsx`. Tests: `packages/core/tests/agents.test.ts` ("connecting an agent with a code")._
+_Source: `packages/core/src/session/connect-code.ts` (`offerConnectCode`, `connectWithCode`, `readConnectCode`), `packages/core/src/identity/channel.ts` (`CODE_CHANNEL`), `packages/core/src/session/connect.ts` (`connectToHome`, `checkGrant`, `keyProof`). Tests: `packages/core/tests/connect-code.test.ts` ("the room for a code", "the code alone does not open a recorded exchange", "a recording of the room, and the code learned later, open nothing", "a relay that relabels or repeats messages changes nothing", "a code works for one program: a second with the same code is not answered", "saying no reaches the program; a note for another key, or for more than records, is refused"), `packages/core/tests/records-only.test.ts` ("a program connected by code, through the account home")._
 
-### 3.3 Planned
+### 3.1 Planned
 
 > **Planned.** Not normative.
 >
-> - **Renewing an agent's note.** Today, when the note runs out, the agent
->   says to connect again (§3.2). It could instead ask an open tab of the
->   person's for a new note, while one is open. Open: how the agent reaches the
->   tab, and whether the person must approve each renewal.
-> - **Agents that cannot run a program** (a hosted chat's connectors, a phone
->   app) would need an HTTPS MCP endpoint somewhere else, such as on a relay,
->   which would then see the traffic. If offered at all, it is a separate,
->   clearly labelled option. Not designed.
+> - **Renewing a note.** Today, when a note given over a code runs out, the
+>   program says to connect again. It could instead ask an open tab of the
+>   person's for a new note, while one is open. Open: how the program reaches
+>   the tab, and whether the person must approve each renewal.
+> - **Programs that cannot run code of their own** (a hosted chat's
+>   connectors, a phone app) would need an HTTPS endpoint somewhere else,
+>   such as on a relay, which would then see the traffic. If offered at all,
+>   it is a separate, clearly labelled option. Not designed.
 
 ---
 

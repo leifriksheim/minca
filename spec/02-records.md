@@ -747,7 +747,7 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`, `LINK_REL_PATTERN`,
 
 ## 6. Collection definitions
 
-A space describes its collections as data, so an app or agent that has never
+A space describes its collections as data, so an app or program that has never
 seen the space can learn what it holds.
 
 ### 6.1 The definition record

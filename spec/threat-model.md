@@ -31,17 +31,17 @@ and metadata through relays and hosts (§3.7, §3.8).
 
 ## 2. Adversaries
 
-| Adversary            | Holds                                                                                                 |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Stranger**         | Network access; any number of keys and accounts of its own; a space's id, or a leaked invite string   |
-| **Member**           | A role in the space, its own keys, the space key of a private space; a modified client                |
-| **Former member**    | Everything it held while a member: old keys, space keys, notes, invite secrets, its copy of the space |
-| **Key thief**        | One of an account's delegated keys (session, writer, app or agent key), with its note                 |
-| **Root thief**       | The account's seed or recovery code                                                                   |
-| **App or agent**     | A grant from the account: a note, and perhaps the account, contact or member keys (06 §2)             |
-| **Relay**            | The signaling traffic of the rooms it serves, and the door mailbox it keeps                           |
-| **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members |
-| **Network attacker** | Can watch, delay, drop and replay traffic between peers                                               |
+| Adversary            | Holds                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Stranger**         | Network access; any number of keys and accounts of its own; a space's id, or a leaked invite string                |
+| **Member**           | A role in the space, its own keys, the space key of a private space; a modified client                             |
+| **Former member**    | Everything it held while a member: old keys, space keys, notes, invite secrets, its copy of the space              |
+| **Key thief**        | One of an account's delegated keys (session, writer or app key), with its note                                     |
+| **Root thief**       | The account's seed or recovery code                                                                                |
+| **App or program**   | A grant from the account, by popup or by code: a note, and perhaps the account, contact or member keys (06 §2, §3) |
+| **Relay**            | The signaling traffic of the rooms it serves, and the door mailbox it keeps                                        |
+| **Host or carrier**  | Every version of the spaces it keeps and their envelopes, a pass's read seed, a connection to members              |
+| **Network attacker** | Can watch, delay, drop and replay traffic between peers                                                            |
 
 Peers are assumed to run arbitrary code. Nothing relies on a peer running the
 reference implementation, or any implementation, honestly.
@@ -89,7 +89,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     space, or a box presented for another space, key or recipient, does not
     open there (01 §9, 03 §8.3, §9.4). Holding the key, it can still seal
     whatever it likes; what it can't do is pass off someone else's
-    ciphertext as being about something else (the agent link aside, 01 §9).
+    ciphertext as being about something else (01 §9).
 - **Does not hold yet.**
   - A narrowed rule alone binds only what saw it: a version naming an older
     point counts if its author could have written it then, since nobody can
@@ -214,7 +214,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
     private space the account was, is or will be a reader of; and the local
     key, so it reads the account's data at rest (01 §11.1, 03 §9.1, 05 §15).
 
-### 3.6 App or agent
+### 3.6 App or program
 
 - **Holds.**
   - Its writes count only where its note covers them, and a home grants an
@@ -226,6 +226,14 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - Where it can write the account's vault, a wrap of another account it
     plants, or a passphrase wrap it edits to fewer rounds, does not open as
     the account (01 §11.3).
+  - A program connected by code gets a note only on the terms its key
+    signed: the app it connects through can't use its proof for the app's
+    own connection, nor ask for more than records when it asked for records
+    only; and an app's own proof can't be passed off as a program's (06 §2.4,
+    §3). A note that grants records only never comes with the contact key
+    (06 §2.8).
+  - The note carries no label a peer reads: what a version, a live message or
+    a knock may do is what its note grants, whatever its `fct` says (01 §8).
 - **Does not hold yet.**
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
@@ -241,11 +249,21 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
     [#168](https://github.com/leifriksheim/weave/issues/168)).
 
-_Source: 01 §8, §11; 06 §2; 05 §15. Tests: `packages/core/tests/connect.test.ts`, `packages/core/tests/agents.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open local storage", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
+_Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open local storage", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 
-- **Holds.** Nothing a test shows yet. It can always drop and delay.
+- **Holds.** It can always drop and delay. Beyond that:
+  - It can't read or change what two sides say on a channel, pairing or
+    connecting by code: each direction has its own key from the secret and an
+    ephemeral exchange, and each message is bound to its type and place, so
+    one sent back to its sender, relabelled, repeated or reordered does not
+    open (01 §15.2, 06 §3). The room's name is a hash of the secret, so it
+    never learns the secret itself.
+  - Someone who records a channel's room and learns its secret later still
+    opens nothing (01 §15.2).
+  - A connect code serves one program: once one has asked, the app answers
+    nobody else (06 §3).
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
     fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay that
@@ -255,11 +273,8 @@ _Source: 01 §8, §11; 06 §2; 05 §15. Tests: `packages/core/tests/connect.test
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - Its door mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
-  - It can send an agent link's message back to its sender, or as another
-    type: an app then shows an agent connected that nobody allowed, and the
-    offer ends; no note is issued (01 §9, 06 §3.2) _(traced)_.
 
-_Source: 04 §1, §5.1, §6.2; 07 §5. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`._
+_Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/tests/signaling.test.ts`, `packages/core/tests/relay-refusal.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "someone who learns the secret later cannot open a recording of the exchange"), `packages/core/tests/connect-code.test.ts` ("a relay that relabels or repeats messages changes nothing", "a recording of the room, and the code learned later, open nothing", "a code works for one program: a second with the same code is not answered")._
 
 ### 3.8 Host or carrier
 
@@ -326,7 +341,7 @@ raised but has no place above until a test confirms or rules it out.
 ## 5. Reviewing a change against this page
 
 Every change to the protocol is reviewed adversarially before it merges (see
-`CLAUDE.md` and `.claude/agents/protocol-reviewer.md`). This is the one list
+`CLAUDE.md`, and the protocol reviewer's instructions under `.claude/`). This is the one list
 of questions. For each adversary in §2, the review asks:
 
 1. **What's new.** What can it now do that it could not before? Can it reach

@@ -3,8 +3,8 @@
 This is the specification of Weave: what goes over the wire, what is stored,
 what is signed, and what every peer must check. It is written so that someone
 can build a client that interoperates with this implementation without
-reading its code, and so that an agent can understand the architecture from
-the spec and the tests alone.
+reading its code, and so that a reader, or a model, can understand the
+architecture from the spec and the tests alone.
 
 The code in `packages/core/src/` is the reference implementation. Where this document and
 the code disagree, that is a bug in one of them: open an issue, and say which.
@@ -28,7 +28,7 @@ everything the same:
 
 | Part                                                      | Covers                                                                                                                            |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, agents, carriers                                     |
+| [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) | The session note and following the account, the account home and app grants, connecting by code, carriers                         |
 | [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock |
 | [08 — Hosting](08-hosting.md)                             | Hosts: subscriptions and payment, a space's own fund, bots a host runs                                                            |
 
@@ -163,7 +163,7 @@ they are described; the smaller ones share
 | Mirrors: restoring an account, absorbing a quiet store writer                                     | [05 §16.5](05-sync-and-storage.md)                                                                                                         |
 | Files: blob references, bytes synced by hash                                                      | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/weave/issues/37)                                                 |
 | A wallet as the account home                                                                      | [06 §2](06-nodes-and-sessions.md)                                                                                                          |
-| Agents: renewing notes, agents that can't run a program                                           | [06 §3.3](06-nodes-and-sessions.md)                                                                                                        |
+| Connecting by code: renewing notes, programs that can't run code of their own                     | [06 §3.1](06-nodes-and-sessions.md)                                                                                                        |
 | Subscriptions that match any of several topic values                                              | [06 §4.4](06-nodes-and-sessions.md), [#141](https://github.com/leifriksheim/weave/issues/141)                                              |
 | Subscriptions delivered per device, by Web Push to an app that is closed                          | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/weave/issues/60)                        |
 | Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#117](https://github.com/leifriksheim/weave/issues/117), [#128](https://github.com/leifriksheim/weave/issues/128) |

@@ -10,7 +10,7 @@ locked on a device, and how a second device receives an account (pairing).
 ```
 seed (16 bytes)
  ├─ HKDF "weave/p256-identity-key/v1" ─▶ root key (P-256, ECDSA) ─▶ account DID (did:key:zDn…)
- │                                         └─ signs UCANs ─▶ session / app / agent keys ─▶ sign records
+ │                                         └─ signs UCANs ─▶ session / app keys ─▶ sign records
  ├─ HKDF "weave/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
  │                                         ├─ HKDF "weave/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
  │                                         └─ HKDF "weave/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
@@ -188,7 +188,7 @@ _Tests:_ `packages/core/tests/identity.test.ts` ("deriveKeyPairFromSeed", "deriv
 
 ## 4. DIDs (`did:key`)
 
-Every key in Weave — root, session, app, agent, invite, read — is named by a
+Every key in Weave — root, session, app, invite, read — is named by a
 `did:key` over its P-256 public key.
 
 ```
@@ -254,9 +254,11 @@ this one own the use; this table is the registry.
 | `weave/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                  | mailbox topic          | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
 | `weave/local-key/v1`                     | HKDF, L=32                                | seed                                                                               | AES-256-GCM key        | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`     | 01, 05 |
 | `weave/account-key/v1`                   | HKDF, L=32                                | seed                                                                               | 32 bytes               | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`     | 01, 06 |
-| `weave/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                             | room id                | Pairing room                                                 | `identity/pairing.ts:22`           | 01     |
-| `weave/pairing-key/v1\|<side>\|<O>\|<P>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                     | AES-256-GCM key        | Pairing messages sent by `<side>` (`offer` or `phone`)       | `identity/pairing.ts:23`           | 01     |
-| `weave/pairing-code/v1\|<O>\|<P>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                     | 6-digit code           | Code both screens show                                       | `identity/pairing.ts:24`           | 01     |
+| `weave/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                             | room id                | Pairing room                                                 | `identity/channel.ts:39`           | 01     |
+| `weave/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                     | AES-256-GCM key        | Pairing messages sent by `<side>` (`offer` or `join`)        | `identity/channel.ts:40`           | 01     |
+| `weave/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                     | 6-digit code           | Code both screens show                                       | `identity/pairing.ts:18`           | 01     |
+| `weave/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                        | room id                | Room for connecting by code                                  | `identity/channel.ts:46`           | 06     |
+| `weave/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                | AES-256-GCM key        | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`           | 06     |
 | `weave/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                              | P-256 key              | Invite key                                                   | `space/space-access.ts:34`         | 03     |
 | `weave/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                        | P-256 key              | Read key of a private space                                  | `space/space-access.ts:33`         | 03     |
 | `weave/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                        | AES-256-GCM key        | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
@@ -266,9 +268,7 @@ this one own the use; this table is the registry.
 | `weave/contacts/nonce/v1`                | as above                                  | account key                                                                        | space nonce            | Contacts space                                               | `space/account-registry.ts:92,103` | 03     |
 | `weave/contacts/key/v1`                  | as above                                  | account key                                                                        | space key K            | Contacts space                                               | `space/account-registry.ts:92,105` | 03     |
 | `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key               | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                  | relay room name        | A space's room on a relay                                    | `node/space-runtime.ts:255`        | 04     |
-| `weave-agent-link-room-v1`               | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                        | room id                | Agent link room                                              | `session/agent-link.ts:25`         | 06     |
-| `weave-agent-link-key-v1`                | HKDF, L=32                                | 16-byte connect-code secret                                                        | AES-256-GCM key        | Agent link messages                                          | `session/agent-link.ts:26`         | 06     |
+| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                  | relay room name        | A space's room on a relay                                    | `node/space-runtime.ts:254`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -283,9 +283,10 @@ CLI's own node reads:
 | `weave/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:213`          | 03     |
 | `weave/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
 | `weave/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
-| `weave/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/pairing.ts:26`             | 01     |
+| `weave/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
+| `weave/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
 | `weave/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:243`                 | 07     |
-| `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1548`                  | docs   |
+| `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1547`                  | docs   |
 | `weave/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
 | `weave/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
 | `weave/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
@@ -293,14 +294,15 @@ CLI's own node reads:
 Strings that separate _signed messages_ rather than derive keys, listed so
 new labels do not collide with them:
 
-| String                                                 | Kind                                             | Defined in                                                    | Part |
-| ------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- | ---- |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:217`                                   | 03   |
-| `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
-| `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                     | `doors/doors.ts` (`signAnswer`)                               | docs |
-| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:190,192`                                | 04   |
-| `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:302`                                    | 04   |
-| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                | `session/hosting.ts:78,340`                                   | 08   |
+| String                                                 | Kind                                                   | Defined in                                                    | Part |
+| ------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | ---- |
+| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:217`                                   | 03   |
+| `{"audience":…,"proof":"weave/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:254` (`keyStatement`)                     | 06   |
+| `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
+| `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
+| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:190,192`                                | 04   |
+| `weave-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:302`                                    | 04   |
+| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                   | 08   |
 
 Notes:
 
@@ -322,8 +324,7 @@ Notes:
 | -------------------- | --------------------------------------------------------------- | -------------------------------------------- | --------------------------------------- |
 | **Root key**         | `P256KeyFrom(seed)`                                             | The account's                                | UCANs only (§7)                         |
 | **Session key**      | A lasting P-256 key claimed under a lock, else fresh (02 §4.10) | While the device keeps it, else one node run | Records, peer-auth messages             |
-| **App key**          | Fresh random P-256 key pair kept by an app                      | Until the app forgets it                     | Records, under a grant                  |
-| **Agent key**        | Fresh random P-256 key pair kept by an agent                    | Until the agent forgets it                   | Records, under a records-only note (§8) |
+| **App key**          | Fresh random P-256 key pair kept by an app or other program     | Until the program forgets it                 | Records, under a grant                  |
 | **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§10)                |
 | **Member key**       | `ScalarFrom(HKDF(accountKey, member label, 48))`                | The account's                                | Nothing; ECDH only (§10)                |
 | **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`                  | Until the door is closed                     | Nothing; ECDH only (§10)                |
@@ -344,7 +345,7 @@ notes through, are the library's: see
 
 A node signs records with a session key (§6) under a note from the root
 (§7) made out to it: `aud` is the session DID, `prf` is `[]`, and `fct` is
-absent, or `[{"weave":"agent"}]` for an agent's own node (§8.1). Every record the
+absent. Every record the
 session key signs carries that leaf token, encoded, as its `proof`
 ([02 — Records](02-records.md)). Peers check only that the note verifies and
 covers what each record needs (§7.4–§7.6, §8); which capabilities it grants, how
@@ -394,16 +395,16 @@ token = b64u(canonicalJSON(header)) "." b64u(canonicalJSON(payload)) "." b64u(si
 
 **Payload:**
 
-| Field | Type                  | Required              | Meaning                                                                        |
-| ----- | --------------------- | --------------------- | ------------------------------------------------------------------------------ |
-| `iss` | string (did:key)      | yes                   | Issuer; its key signs the token                                                |
-| `aud` | string (did:key)      | yes                   | Audience: the key receiving the capabilities                                   |
-| `exp` | integer, Unix seconds | yes                   | Not valid at or after this time                                                |
-| `nbf` | integer, Unix seconds | yes                   | Not valid before this time                                                     |
-| `nnc` | string                | issuers always set it | Nonce: 8 random bytes as 16 lowercase hex characters. Not checked by verifiers |
-| `att` | array of Capability   | yes                   | Capabilities granted (may be empty)                                            |
-| `prf` | array of string       | yes                   | CIDs of parent tokens (§7.5); `[]` for a token issued directly by the root     |
-| `fct` | array of object       | no                    | Facts. Omitted when there are none. Weave defines one fact (§8.1)              |
+| Field | Type                  | Required              | Meaning                                                                          |
+| ----- | --------------------- | --------------------- | -------------------------------------------------------------------------------- |
+| `iss` | string (did:key)      | yes                   | Issuer; its key signs the token                                                  |
+| `aud` | string (did:key)      | yes                   | Audience: the key receiving the capabilities                                     |
+| `exp` | integer, Unix seconds | yes                   | Not valid at or after this time                                                  |
+| `nbf` | integer, Unix seconds | yes                   | Not valid before this time                                                       |
+| `nnc` | string                | issuers always set it | Nonce: 8 random bytes as 16 lowercase hex characters. Not checked by verifiers   |
+| `att` | array of Capability   | yes                   | Capabilities granted (may be empty)                                              |
+| `prf` | array of string       | yes                   | CIDs of parent tokens (§7.5); `[]` for a token issued directly by the root       |
+| `fct` | array of object       | no                    | Facts. Omitted when there are none. Weave defines none, and peers read none (§8) |
 
 `nbf` is optional in UCAN 0.10 but **required** here: a verifier MUST reject a
 token without a finite numeric `exp` and `nbf`.
@@ -441,7 +442,7 @@ What each ability permits in a space is specified in
 peer checks them, is §8.
 
 > **Planned: grants narrower than a space.** The smallest resource is a whole
-> space, so an app or agent granted a private space can write in every
+> space, so an app granted a private space can write in every
 > collection and read all of it for as long as its note lasts. A
 > per-collection resource would narrow writes. Narrowing reads also needs
 > keys per collection, which is [03 — Spaces](03-spaces.md)' question. Not
@@ -573,9 +574,10 @@ note to a helper.
 
 What it unblocks:
 
-- Agents' notes today are signed **root → agent key** directly, only because
-  peers resolve one link (§8.1, [06](06-nodes-and-sessions.md)). With chains,
-  an app could delegate to its agent itself, a narrower note than its own.
+- A note for a program connected by code is signed **root → its key**
+  directly today, only because peers resolve one link
+  ([06](06-nodes-and-sessions.md) §3). With chains, the app it connected
+  through could delegate to it itself, a narrower note than its own.
 - The older idea of **roles as delegations** ("anyone the owner made a
   moderator" as a UCAN from the owner, carried in the record's proof) needed
   this. Roles now live in the space's access history
@@ -606,8 +608,8 @@ A parent capability `P` covers a child capability `C` iff both hold:
 
 ### 7.7 Example
 
-Issued by the root key of §3.3 to the did:key spec's example key, with fixed
-times and nonce and the agent fact:
+Issued by the root key of §3.3 to the did:key spec's example key, records
+only, with fixed times and nonce:
 
 Header JSON: `{"alg":"ES256","typ":"JWT","ucv":"0.10.0"}`
 
@@ -618,7 +620,6 @@ Payload JSON:
   "att": [{ "can": "record/*", "with": "*" }],
   "aud": "did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169",
   "exp": 1790000000,
-  "fct": [{ "weave": "agent" }],
   "iss": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
   "nbf": 1789996100,
   "nnc": "0123456789abcdef",
@@ -630,10 +631,10 @@ Encoded (ECDSA signatures are randomized, so the third part differs every
 time):
 
 ```
-eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsInVjdiI6IjAuMTAuMCJ9.eyJhdHQiOlt7ImNhbiI6InJlY29yZC8qIiwid2l0aCI6IioifV0sImF1ZCI6ImRpZDprZXk6ekRuYWVyRGFURjVCWEVhdkNyZlJaRWszMTZkcGJMc2ZQRFozV0o1aFJUUEZVMjE2OSIsImV4cCI6MTc5MDAwMDAwMCwiZmN0IjpbeyJ3ZWF2ZSI6ImFnZW50In1dLCJpc3MiOiJkaWQ6a2V5OnpEbmFlYUE3QmNWeEFpTGROUDE1d0x2UzZTQzF2YVFjOXpwZVZ4clVwRUM0OHl4a3IiLCJuYmYiOjE3ODk5OTYxMDAsIm5uYyI6IjAxMjM0NTY3ODlhYmNkZWYiLCJwcmYiOltdfQ.Y5L8NSDzSGQy2SbWMJyhYDV8nSOvTjySrbOoqyAIpbpdpbU5wH9MsnWQAJ15N4Z0WyTMBd70wRDB-dLaUz3Olg
+eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsInVjdiI6IjAuMTAuMCJ9.eyJhdHQiOlt7ImNhbiI6InJlY29yZC8qIiwid2l0aCI6IioifV0sImF1ZCI6ImRpZDprZXk6ekRuYWVyRGFURjVCWEVhdkNyZlJaRWszMTZkcGJMc2ZQRFozV0o1aFJUUEZVMjE2OSIsImV4cCI6MTc5MDAwMDAwMCwiaXNzIjoiZGlkOmtleTp6RG5hZWFBN0JjVnhBaUxkTlAxNXdMdlM2U0MxdmFRYzl6cGVWeHJVcEVDNDh5eGtyIiwibmJmIjoxNzg5OTk2MTAwLCJubmMiOiIwMTIzNDU2Nzg5YWJjZGVmIiwicHJmIjpbXX0.cuXLLqFQFJUaMxfpS0wLkvD-b8yvDhpKZP02e0jL4PYi6r6PShA9YgYeiyo1nDqX-rALrpAmrZ67Y6pP4OMC4w
 ```
 
-Its CID (for this exact string): `bz2isut3y2xpj7qfz4ufmnbjpn7yitvm4hjuikxczrmawkx4ud2ca`.
+Its CID (for this exact string): `bn3we3malzqeluqvvwpwefm5vsldddbz2f33ktrnji2ztcq6wu2rq`.
 
 _Source:_ `packages/core/src/identity/ucan.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/node/space-runtime.ts` (`writeCapability`, `noteCid`).
 _Tests:_ `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`, `packages/core/tests/attacks.test.ts`.
@@ -644,8 +645,8 @@ _Tests:_ `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.tes
 
 A key may do in a space what its note grants there, judged by capability
 coverage (§7.6) against what each version needs. The protocol never asks what
-kind of thing holds a key: a person's session, an app, an agent and a borrowed
-device are told apart only by what their notes grant.
+kind of thing holds a key: a person's session, an app, any other program and a
+borrowed device are told apart only by what their notes grant.
 
 | A version in space `S`…                                                                                                     | needs `{ "with": "space:S", "can": … }` |
 | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
@@ -666,37 +667,23 @@ A knock ([07 — Doors](07-doors.md)) needs `{ "with": "*", "can": "account/writ
   grants more than its parents, so the leaf says enough.
 
 A person's own sessions, and apps granted write, get `*`. A key the account
-trusts less, such as an agent's, gets `record/*`: it writes records, and
-proposes anything more for someone who may to apply
+trusts less gets `record/*` (a request for records only,
+[06](06-nodes-and-sessions.md) §2.4): it writes records, and proposes anything
+more for someone who may to apply
 ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
 
-> Rationale: earlier, the protocol marked agents with a fact and refused, from
-> a note that carried it, exactly these changes. That tied the protocol to one
-> kind of key. Abilities say the same thing in what UCAN already has, and
-> serve any key the account trusts less, a person's too.
+A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
+message or a knock differently for any `fct` its note carries: what the key
+may do is what the note grants.
+
+> Rationale: earlier, the protocol marked one kind of program with a fact,
+> first refusing changes from a note that carried it and later only showing
+> it as a label. Either way it tied the protocol to one kind of key. Abilities
+> say what matters in what UCAN already has, and serve any key the account
+> trusts less, a person's too.
 
 _Source:_ `packages/core/src/identity/abilities.ts` (`noteGrants`, `DEFINE_ABILITY`, `ACCESS_ABILITY`, `ACCOUNT_ABILITY`), `packages/core/src/node/space-runtime.ts` (`accessCapability`, `buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantCapabilities`).
-_Tests:_ `packages/core/tests/agents.test.ts` ("what counts is what the note grants, not whether it says agent", "a definition an agent signs by hand is ignored by every peer", "taking someone out of the space, signed by an agent, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants account/write: …").
-
-### 8.1 The agent fact
-
-The account may sign one fact into a note to say its key is an agent's:
-
-```json
-{ "weave": "agent" }
-```
-
-- A note is an **agent's note** iff its payload's `fct` is an array containing
-  an object whose `weave` member is the string `"agent"`. Anything unparseable
-  is not one.
-- The fact is only meaningful in a note whose signature and chain verify
-  (§7); on its own it proves nothing.
-- It is a label. Apps show records written under it as "via agent"; a peer
-  MUST NOT judge a version differently for carrying it. What the key may do is
-  what the note grants (§8).
-
-_Source:_ `packages/core/src/identity/agent-note.ts`, `packages/core/src/session/auth.ts` (issuing with `AGENT_FACT`).
-_Tests:_ `packages/core/tests/agents.test.ts`.
+_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants account/write: …").
 
 ---
 
@@ -704,7 +691,6 @@ _Tests:_ `packages/core/tests/agents.test.ts`.
 
 Everything Weave encrypts is sealed one of two ways: under a symmetric key,
 as an **envelope** (§9.1), or to a P-256 public key, with **HPKE** (§9.2).
-The one exception is below.
 Each use names a **label** and a **bound**: the label says what the sealed
 thing is, the bound says where it belongs. Both are authenticated, so a
 sealed thing opens only for the use and the place it was sealed for: moved to
@@ -789,30 +775,22 @@ and for the same suite with AES-128-GCM (RFC 9180 Appendix A.3), in
 
 ### 9.3 Every use
 
-| Use                                  | Sealed   | Key                                         | Label                    | `bound`                                                    | Where                            |
-| ------------------------------------ | -------- | ------------------------------------------- | ------------------------ | ---------------------------------------------------------- | -------------------------------- |
-| A record body in a private space     | envelope | the space key's seal key                    | `weave/record-body/v1`   | `space`, `collection`, `key` (the record's), `keyId`       | [03 §8.3](03-spaces.md)          |
-| Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `weave/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)          |
-| A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `weave/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)         |
-| A space key boxed to a member        | HPKE     | the recipient's member key                  | `weave/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)          |
-| A knock                              | HPKE     | the door key                                | `weave/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)             |
-| A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `weave/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                            |
-| A registry value at rest             | envelope | the local key                               | `weave/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md) |
-| A pairing message                    | envelope | the pairing key of the direction it travels | `weave/pairing/v1`       | `type`, `seq`                                              | §15.2                            |
+| Use                                  | Sealed   | Key                                         | Label                    | `bound`                                                    | Where                             |
+| ------------------------------------ | -------- | ------------------------------------------- | ------------------------ | ---------------------------------------------------------- | --------------------------------- |
+| A record body in a private space     | envelope | the space key's seal key                    | `weave/record-body/v1`   | `space`, `collection`, `key` (the record's), `keyId`       | [03 §8.3](03-spaces.md)           |
+| Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `weave/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)           |
+| A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `weave/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)          |
+| A space key boxed to a member        | HPKE     | the recipient's member key                  | `weave/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)           |
+| A knock                              | HPKE     | the door key                                | `weave/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)              |
+| A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `weave/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                             |
+| A registry value at rest             | envelope | the local key                               | `weave/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md)  |
+| A pairing message                    | envelope | the pairing key of the direction it travels | `weave/pairing/v1`       | `type`, `seq`                                              | §15.2                             |
+| A connect-by-code message            | envelope | the code key of the direction it travels    | `weave/code/v1`          | `type`, `seq`                                              | [06 §3](06-nodes-and-sessions.md) |
 
 Conventions built on the protocol use the same two primitives: direct
 messages (`weave/direct-text/v1`, `weave/direct-box/v1`), contact requests
 (`weave/contact-request/v1`), and the CLI's writer keys on disk
 (`weave/writer-key/v1`); see `packages/core/docs/`.
-
-> **Known defect:** the agent link ([06 §3.2](06-nodes-and-sessions.md))
-> still seals its messages with plain AES-GCM under one key for both
-> directions, with neither label nor bound, and the message type unbound. A
-> relay can send a message back to its sender, or as another type: it can
-> make an app show an agent as connected before anyone allowed it, and end
-> the offer, though no note is issued. A change that moves the link onto the
-> pairing channel's pattern (a key per direction, each message bound to
-> `{ type, seq }`) is planned.
 
 _Source:_ `packages/core/src/identity/envelope.ts` (`sealEnvelope`, `openEnvelope`, `boundContext`), `packages/core/src/identity/hpke.ts` (`hpkeSeal`, `hpkeOpen`, `sealTo`, `openFrom`).
 _Tests:_ `packages/core/tests/envelope.test.ts`.
@@ -1179,36 +1157,45 @@ Example (the ticket above):
 The offering device MUST generate the secret with a CSPRNG for each offer and
 MUST NOT derive it from the seed.
 
-### 15.2 Room, keys and code
+### 15.2 The channel
 
-Both devices join mesh room ([04 — Network](04-network.md)):
+Pairing runs on a **channel**: two programs that share a one-time secret and
+nothing else meet in a room named after it, swap ephemeral keys, and seal
+every later message to each other. Connecting a program by code runs on the
+same channel with its own labels ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §3).
+Each use names a **kind**, three labels:
+
+| Kind            | `room`                  | `key`                  | `message`          |
+| --------------- | ----------------------- | ---------------------- | ------------------ |
+| Pairing         | `weave/pairing-room/v1` | `weave/pairing-key/v1` | `weave/pairing/v1` |
+| Connect by code | `weave/code-room/v1`    | `weave/code-key/v1`    | `weave/code/v1`    |
+
+The side that made the secret and shows it is `offer`; the side that joins
+with it is `join`. Both join mesh room ([04 — Network](04-network.md)):
 
 ```
-room = CID(UTF-8("weave/pairing-room/v1") ‖ secret)     // raw concatenation
+room = CID(UTF-8(room label) ‖ secret)     // raw concatenation
 ```
 
-Example (the secret above): room `bxvuzmmg4srdji5su7e2hyj56x55ohpyaczgg6aquq6iw55bcijha`.
+Example (pairing, the secret above): room `bxvuzmmg4srdji5su7e2hyj56x55ohpyaczgg6aquq6iw55bcijha`.
 
 Each side makes an ephemeral P-256 ECDH key for this exchange only. `O` is the
-offering device's public point and `P` the phone's, each as the 65-byte
+offering side's public point and `J` the joining side's, each as the 65-byte
 uncompressed SEC 1 point (`04 ‖ x ‖ y`). With `Z` the 32-byte ECDH shared
 x-coordinate:
 
 ```
 ikm        = secret ‖ Z
-transcript = "|" ‖ base64url(O) ‖ "|" ‖ base64url(P)
-offerKey   = HKDF(ikm, "weave/pairing-key/v1|offer" ‖ transcript, 32)   // AES-256-GCM: what the offering device sends
-phoneKey   = HKDF(ikm, "weave/pairing-key/v1|phone" ‖ transcript, 32)   // AES-256-GCM: what the phone sends
-code       = uint32_be(HKDF(ikm, "weave/pairing-code/v1" ‖ transcript, 4)) mod 1000000,
-             as 6 decimal digits, zero-padded
-commitment = base64url(SHA-256(P))
+transcript = "|" ‖ base64url(O) ‖ "|" ‖ base64url(J)
+offerKey   = HKDF(ikm, key label ‖ "|offer" ‖ transcript, 32)   // AES-256-GCM: what the offering side sends
+joinKey    = HKDF(ikm, key label ‖ "|join" ‖ transcript, 32)    // AES-256-GCM: what the joining side sends
 ```
 
 A point that is not 65 bytes starting `04`, or that is not on the curve, MUST
 be refused (`PAIRING_TICKET_UNREADABLE`).
 
 A sealed message is an envelope (§9.1), sent as a base64url string: under the
-key of the side that sends it, with label `weave/pairing/v1` and bound
+key of the side that sends it, with the kind's message label and bound
 `{ "type": <the message's type>, "seq": <n> }`, where `n` counts the sealed
 messages that side has sent in this exchange, from 0. A receiver keeps its own
 count of what it has opened from the other side, and MUST refuse a message
@@ -1217,21 +1204,32 @@ refused message leaves the count as it was. So a message sent back to the side
 that sealed it, presented as another type, replayed or delivered out of order
 does not open.
 
-> Rationale: the secret is in `ikm`, so anyone who never saw the QR code gets
-> a different key and a different code. The points are in the labels, so a
-> payload sealed in one exchange opens in no other, even one with the same
-> secret. The phone commits to `P` before it sees `O`, and the offering device
-> sends `O` before it sees `P`, so neither side, nor anyone between them, can
-> choose a key to make two different exchanges show the same code; one guess
-> in a million is all that is left. The secret is high-entropy, so a PAKE
-> would add nothing an HMAC or this key schedule does not. A key per
-> direction, and a count in each message, mean nobody in the room can turn
-> one side's message into something the other said, or say it twice.
+Pairing adds a short code both screens show, and a commitment:
+
+```
+code       = uint32_be(HKDF(ikm, "weave/pairing-code/v1" ‖ transcript, 4)) mod 1000000,
+             as 6 decimal digits, zero-padded
+commitment = base64url(SHA-256(J))
+```
+
+> Rationale: the secret is in `ikm`, so anyone who never had it gets a
+> different key and a different code. `Z` is in `ikm` too, so someone who
+> records the room and learns the secret later still opens nothing. The
+> points are in the labels, so a payload sealed in one exchange opens in no
+> other, even one with the same secret; the kind's labels keep pairing and
+> connecting by code apart. In pairing the phone commits to `J` before it
+> sees `O`, and the offering device sends `O` before it sees `J`, so neither
+> side, nor anyone between them, can choose a key to make two different
+> exchanges show the same code; one guess in a million is all that is left.
+> The secret is high-entropy, so a PAKE would add nothing an HMAC or this key
+> schedule does not. A key per direction, and a count in each message, mean
+> nobody in the room can turn one side's message into something the other
+> said, or say it twice.
 
 ### 15.3 The exchange
 
-Both devices join `room` under a throwaway `did:key` of their own, not a
-session DID. The offering device joins with its configured relays; the phone
+Both devices join the pairing room (§15.2; the phone is the joining side)
+under a throwaway `did:key` of their own, not a session DID. The offering device joins with its configured relays; the phone
 joins with exactly `[ticket.relay]`. Every message is a NetworkMessage
 `{ type, from, payload }`:
 
@@ -1242,8 +1240,8 @@ Offering device                                       Phone
             ◀─────────────── peer connected ───────────────▶
                          ◀── pair:commit  { "commit": commitment }
   pair:key { "key": base64url(O) } ──▶
-                         ◀── pair:reveal  { "key": base64url(P) }
-  checks SHA-256(P) against the commitment
+                         ◀── pair:reveal  { "key": base64url(J) }
+  checks SHA-256(J) against the commitment
   shows code                                          shows code
   the person confirms the codes match
   pair:handover  sealed { "seed", "spaces" } ──▶
@@ -1275,8 +1273,8 @@ Offering device                                       Phone
   taking the account on: the link can come from someone else, and the code
   check cannot tell a stranger's computer from your own.
 
-_Source:_ `packages/core/src/identity/pairing.ts`, `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`acceptPairing`).
-_Tests:_ `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open").
+_Source:_ `packages/core/src/identity/channel.ts` (`deriveChannel`, `channelRoom`, `PAIRING_CHANNEL`, `CODE_CHANNEL`), `packages/core/src/identity/pairing.ts` (`pairingCode`, `pairingCommitment`), `packages/core/src/session/channel-room.ts` (`meetOnChannel`), `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`acceptPairing`).
+_Tests:_ `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open", "someone who learns the secret later cannot open a recording of the exchange", "pairing and connecting by code never open each other’s messages").
 
 ---
 

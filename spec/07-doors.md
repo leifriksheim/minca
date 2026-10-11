@@ -298,8 +298,8 @@ Not protocol: how a knock becomes a space for two (`std.knock`), how the owner
 answers there (`std.knock-answer`, signed with the door signing key) and how
 the knocker settles it are records a peer syncs and judges like any other. See
 [Doors](../packages/core/docs/doors.md#the-exchange) in the library's docs. An
-account home MUST NOT give an agent the contact key
-([06 §3.1](06-nodes-and-sessions.md)).
+account home MUST NOT give the contact key with a note that grants records
+only ([06 §2.8](06-nodes-and-sessions.md)).
 
 ## 8. Security considerations
 

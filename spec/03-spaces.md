@@ -1065,7 +1065,7 @@ passed over. A member that can write **SHOULD** publish its member key, and
 publish it again when it differs from what is published.
 
 > **Known defect:** any key whose note lets it write records for the account,
-> an app's or an agent's included, can publish a member key of its own, and
+> an app's included, or one granted records only, can publish a member key of its own, and
 > it wins as the newest. The next space key is then boxed to it
 > ([01](01-identity.md) §8 asks for more only on access collections).
 > Tracked in [#169](https://github.com/leifriksheim/weave/issues/169).
