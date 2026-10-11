@@ -118,9 +118,11 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
     by revoking its key or forking their line in the warrants' collection ([#168](https://github.com/leifriksheim/weave/issues/168)),
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
-  - Fork proofs don't catch a copied key, and aren't meant to (§3.4): a fork
-    counts once a member holding both versions writes `sys.fork`, and a key
-    can sign where its other branch never reaches _(traced)_.
+  - Fork proofs don't reliably catch a copy of a key that writes where its
+    other branch never reaches (§3.4): a fork counts once a member holding
+    both versions writes `sys.fork` _(traced)_. A second version at a place a
+    cutoff covers is always caught, since the remover holds that line (§3.3,
+    03 §6.3).
   - It can disown its own history, withdrawing votes and agreements others
     relied on, by revoking its own key with a cutoff of 0, or forking its
     own line in a collection at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
@@ -180,13 +182,17 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
 
 ### 3.4 Key thief
 
-**Principle.** A stolen device key is treated like a stolen session token in
+**Principle.** It concerns a copy of a key its owner didn't make, and nothing
+else. A stolen device key is treated like a stolen session token in
 an ordinary app: what it signed before it was revoked stands, and that is on
 whoever held it. The defence is revocation, and expiry where peers can judge
 it (live use, 01 §7.4). Weave does not try to detect a copied key: a fork
 proof (02 §4.10) withdraws a copy's writes only where it happens to be
-proven, and nothing relies on one being found. Reviews measure this section
-against that, not against catching the copy.
+proven, and nothing relies on catching a copy. Reviews measure this section
+against that, not against catching the copy. It does not extend to removal
+and revocation: a second version at a place a cutoff covers must be caught
+and withdrawn (03 §6.3), and is, because the remover's node holds the covered
+line. That is relied on, by members (§3.2) and former members (§3.3).
 
 - **Holds.**
   - Once the owner revokes the key, what it signed past what the owner had
