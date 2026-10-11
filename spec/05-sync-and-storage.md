@@ -1026,18 +1026,22 @@ offline by anyone holding the store.
 A segment is UTF-8 JSON:
 
 ```json
-{"v":1,"versions":[ <Version>, … ]}
+{"v":2,"versions":[ <Version>, … ]}
 ```
 
 The versions are exactly as on the wire — private bodies still sealed. A
-reader MUST treat bytes that are not JSON, or `v` other than `1`, or a
-missing `versions` array, as holding nothing; entries that are not objects
+segment carries its own version, apart from the sync messages' (§4): a mirror
+outlives the peers that wrote it, so a reader meets old segments long after
+it last met an old peer. `v` is `2` since sealed bodies became envelopes
+([01](01-identity.md) §9); a reader MUST treat bytes that are not JSON, or
+`v` other than `2`, or a missing `versions` array, as holding nothing, so a
+segment of the old format is never misread; entries that are not objects
 with a string `id` are skipped.
 
 Its name is `<counter>-<hash>.seg`: the store writer's counter (from 1, decimal,
 zero-padded to 6 digits) and the first 8 bytes of SHA-256 of the segment's
-bytes, as 16 lower-case hex. The empty segment `{"v":1,"versions":[]}` written
-first is `000001-ca1cf99cf9ccaa1b.seg`. Only names ending `.seg` are segments.
+bytes, as 16 lower-case hex. The empty segment `{"v":2,"versions":[]}` written
+first is `000001-8c45015e9099599e.seg`. Only names ending `.seg` are segments.
 
 > Rationale: the counter sorts a listing for people reading it; the hash
 > means a retried upload lands on the same name.

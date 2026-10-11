@@ -18,7 +18,7 @@ import type { BlobStore } from '../src/storage/blob-store.js';
 import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
 import { createS3BlobStore } from '../src/storage/blob/s3.js';
 import { createMirror, deleteMirrored, type Taken } from '../src/storage/mirror.js';
-import { packSegment, unpackSegment } from '../src/storage/segment.js';
+import { packSegment, segmentName, unpackSegment } from '../src/storage/segment.js';
 import type { Version } from '../src/types.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { patience } from './helpers/until.js';
@@ -220,9 +220,15 @@ describe('a mirror', () => {
     assert.deepEqual(await store.list(''), ['other/a/000001-z.seg']);
   });
 
-  test('a segment that is not one opens as nothing', () => {
+  test('a segment that is not one, or of the format before envelopes, opens as nothing', async () => {
     assert.deepEqual(unpackSegment(new TextEncoder().encode('not json')), []);
-    assert.deepEqual(unpackSegment(new TextEncoder().encode('{"v":2,"versions":[]}')), []);
+    assert.deepEqual(unpackSegment(new TextEncoder().encode('{"v":3,"versions":[]}')), []);
+    const [version] = unpackSegment(packSegment([await note(await author(), 'hi')]));
+    assert.ok(version, 'the current format opens');
+    const old = JSON.stringify({ v: 1, versions: [version] });
+    assert.deepEqual(unpackSegment(new TextEncoder().encode(old)), []);
+    // The example in spec 05 §16.3.
+    assert.equal(await segmentName(1, packSegment([])), '000001-8c45015e9099599e.seg');
   });
 });
 
