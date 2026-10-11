@@ -4,8 +4,8 @@ An account is 16 random bytes. Every key the account uses is derived from them,
 so the same 16 bytes give the same identity on any device and any origin. This
 part specifies the seed and its written form, every key derived from it, how
 keys become DIDs, how the root key delegates to the keys that actually sign
-(UCANs), how the seed is stored locked on a device, and how a second device
-receives an account (pairing).
+(UCANs), the two ways anything is sealed (envelopes), how the seed is stored
+locked on a device, and how a second device receives an account (pairing).
 
 ```
 seed (16 bytes)
@@ -14,7 +14,8 @@ seed (16 bytes)
  ├─ HKDF "weave/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
  │                                         ├─ HKDF "weave/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
  │                                         └─ HKDF "weave/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
- └─ HKDF "weave-vault-key-v1"         ─▶ vault key (AES-256) ── also the "account key" bytes
+ ├─ HKDF "weave/local-key/v1"        ─▶ local key (AES-256): seals this device's storage; never handed out
+ └─ HKDF "weave/account-key/v1"      ─▶ account key (32 bytes): what an app given the whole account holds
                                            ├─ HKDF "weave/p256-member-key/v1|<space>" ─▶ member key per space
                                            └─ HKDF "weave/account-registry/…", "weave/contacts/…" ─▶ account spaces
 ```
@@ -43,10 +44,10 @@ as the account, and nothing else can.
 - A new account MUST generate its seed with a CSPRNG
   (`crypto.getRandomValues`).
 - The seed MUST NOT be stored in the clear. It is stored only as _wraps_
-  (§10), or held in memory while unlocked, or written down by the person as a
+  (§11), or held in memory while unlocked, or written down by the person as a
   recovery code (§2).
 - The seed never leaves the account home (the page or process that unlocked
-  it) except as a recovery code or sealed in a pairing handover (§14). Apps receive
+  it) except as a recovery code or sealed in a pairing handover (§15). Apps receive
   delegations (§7), never the seed ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md)).
 
 > Rationale: one secret, everything derived, means recovery is "type 26
@@ -108,7 +109,7 @@ spellings that decode to the same seed (see the example).
 > and may change; no migration is needed. _Open:_ whether to reuse
 > Crockford's mod-37 check symbol (which adds `*~$=U` to the alphabet) or a
 > check computed over the 26 symbols in the existing alphabet, and whether to
-> add a version marker at the same time. Replaces the "checksum" line in §15.
+> add a version marker at the same time. Replaces the "checksum" line in §16.
 > Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
 
 ### 2.4 Example
@@ -160,7 +161,7 @@ d   = ScalarFrom(okm)
 | Space invite key ([03](03-spaces.md)) | `HKDF(inviteSecret, "weave/space-invite/v1", 32)` |
 | Space read key ([03](03-spaces.md))   | `HKDF(rawSpaceKey, "weave/space-read/v1", 32)`    |
 
-The contact key and member keys (§9) use `ScalarFrom` directly, with their own
+The contact key and member keys (§10) use `ScalarFrom` directly, with their own
 labels, without the identity label.
 
 **Derivation is frozen.** Changing the label, the length, or the reduction
@@ -243,49 +244,63 @@ Every label under which bytes are derived anywhere in `packages/core/src/`. No t
 _purposes_ share a label, but see the notes below the table. Parts other than
 this one own the use; this table is the registry.
 
-| Label (UTF-8)                           | Mechanism                                 | Input                                                                                | Output                     | Used for                                                     | Defined in                         | Part   |
-| --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------ | ---------------------------------- | ------ |
-| `weave/p256-identity-key/v1`            | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                   | P-256 scalar               | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`       | 01     |
-| `weave/p256-contact-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed                                                                                 | P-256 scalar (ECDH)        | Contact key                                                  | `identity/contact-key.ts:28`       | 01     |
-| `weave/p256-member-key/v1\|<spaceId>`   | HKDF, L=48 → `ScalarFrom`                 | vault key bytes                                                                      | P-256 scalar (ECDH)        | Member key for one space                                     | `identity/contact-key.ts:30`       | 01, 03 |
-| `weave/p256-door-key/v1\|<doorId>`      | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                 | P-256 scalar (ECDH)        | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:31`       | 01, 07 |
-| `weave/p256-door-sign-key/v1\|<doorId>` | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                 | P-256 scalar (ECDSA)       | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:32`       | 01, 07 |
-| `weave/door-topic/v1\|<signKey>`        | SHA-256, base64url                        | —                                                                                    | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
-| `weave/contact-seal/v1`                 | HKDF, L=32                                | ECDH shared x (32) ‖ ephemeral uncompressed point (65)                               | AES-256-GCM key            | One sealed message to a contact or member key                | `identity/contact-key.ts:29`       | 01     |
-| `weave-vault-key-v1`                    | HKDF, L=32                                | seed                                                                                 | AES-256-GCM key / 32 bytes | Vault key: at-rest encryption; the "account key"             | `identity/account-vault.ts:25`     | 01, 05 |
-| `weave/pairing-room/v2`                 | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                               | room id                    | Pairing room                                                 | `identity/pairing.ts:22`           | 01     |
-| `weave/pairing-key/v2\|<O>\|<P>`        | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                       | AES-256-GCM key            | Pairing handover                                             | `identity/pairing.ts:23`           | 01     |
-| `weave/pairing-code/v2\|<O>\|<P>`       | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                       | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:24`           | 01     |
-| `weave/space-invite/v1`                 | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                | P-256 key                  | Invite key                                                   | `space/space-access.ts:34`         | 03     |
-| `weave/space-read/v1`                   | HKDF, L=32 → `P256KeyFrom`                | raw 32-byte space key                                                                | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:33`         | 03     |
-| `weave/account-registry/nonce/v1`       | HKDF, L=32, first 12 bytes, base64url     | vault key bytes                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:80,104` | 03     |
-| `weave/account-registry/key/v1`         | HKDF, L=32                                | vault key bytes                                                                      | AES-256-GCM space key      | Account registry space                                       | `space/account-registry.ts:80,105` | 03     |
-| `weave/contacts/nonce/v1`               | as above                                  | vault key bytes                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:93,104` | 03     |
-| `weave/contacts/key/v1`                 | as above                                  | vault key bytes                                                                      | AES-256-GCM space key      | Contacts space                                               | `space/account-registry.ts:93,105` | 03     |
-| `weave/topic-tags/v1`                   | HKDF → HMAC-SHA256 key                    | raw space key (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`              | SHA-256, first 20 bytes, base32 lowercase | —                                                                                    | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:246`        | 04     |
-| `weave-agent-link-room-v1`              | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                          | room id                    | Agent link room                                              | `session/agent-link.ts:26`         | 06     |
-| `weave-agent-link-key-v1`               | HKDF, L=32                                | 16-byte connect-code secret                                                          | AES-256-GCM key            | Agent link messages                                          | `session/agent-link.ts:27`         | 06     |
+| Label (UTF-8)                            | Mechanism                                 | Input                                                                              | Output                 | Used for                                                     | Defined in                         | Part   |
+| ---------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------ | ---------------------------------- | ------ |
+| `weave/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                 | P-256 scalar           | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`       | 01     |
+| `weave/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                               | P-256 scalar (ECDH)    | Contact key                                                  | `identity/contact-key.ts:26`       | 01     |
+| `weave/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                        | P-256 scalar (ECDH)    | Member key for one space                                     | `identity/contact-key.ts:27`       | 01, 03 |
+| `weave/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                               | P-256 scalar (ECDH)    | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:28`       | 01, 07 |
+| `weave/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                               | P-256 scalar (ECDSA)   | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:29`       | 01, 07 |
+| `weave/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                  | mailbox topic          | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
+| `weave/local-key/v1`                     | HKDF, L=32                                | seed                                                                               | AES-256-GCM key        | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`     | 01, 05 |
+| `weave/account-key/v1`                   | HKDF, L=32                                | seed                                                                               | 32 bytes               | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`     | 01, 06 |
+| `weave/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                             | room id                | Pairing room                                                 | `identity/pairing.ts:22`           | 01     |
+| `weave/pairing-key/v1\|<side>\|<O>\|<P>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                     | AES-256-GCM key        | Pairing messages sent by `<side>` (`offer` or `phone`)       | `identity/pairing.ts:23`           | 01     |
+| `weave/pairing-code/v1\|<O>\|<P>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                     | 6-digit code           | Code both screens show                                       | `identity/pairing.ts:24`           | 01     |
+| `weave/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                              | P-256 key              | Invite key                                                   | `space/space-access.ts:34`         | 03     |
+| `weave/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                        | P-256 key              | Read key of a private space                                  | `space/space-access.ts:33`         | 03     |
+| `weave/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                        | AES-256-GCM key        | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
+| `weave/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                        | key id (22 characters) | A space key's id                                             | `privacy/space-encryption.ts:16`   | 03     |
+| `weave/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                        | space nonce            | Account registry space                                       | `space/account-registry.ts:79,103` | 03     |
+| `weave/account-registry/key/v1`          | HKDF, L=32                                | account key                                                                        | space key K            | Account registry space                                       | `space/account-registry.ts:79,105` | 03     |
+| `weave/contacts/nonce/v1`                | as above                                  | account key                                                                        | space nonce            | Contacts space                                               | `space/account-registry.ts:92,103` | 03     |
+| `weave/contacts/key/v1`                  | as above                                  | account key                                                                        | space key K            | Contacts space                                               | `space/account-registry.ts:92,105` | 03     |
+| `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key               | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
+| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                  | relay room name        | A space's room on a relay                                    | `node/space-runtime.ts:255`        | 04     |
+| `weave-agent-link-room-v1`               | URI-encoded CID of prefix ‖ secret        | 16-byte connect-code secret                                                        | room id                | Agent link room                                              | `session/agent-link.ts:25`         | 06     |
+| `weave-agent-link-key-v1`                | HKDF, L=32                                | 16-byte connect-code secret                                                        | AES-256-GCM key        | Agent link messages                                          | `session/agent-link.ts:26`         | 06     |
 
-Strings that separate _signed messages_ or _AEAD contexts_ rather than derive
-keys, listed so new labels do not collide with them. _docs_ marks a label used
-by a convention built on the protocol (`packages/core/docs/`), not by it:
+Labels of sealed things: every envelope and every HPKE seal (§9) names one,
+with the fields of its `bound`. _docs_ marks a label used by a convention
+built on the protocol (`packages/core/docs/`), not by it; _CLI_ one only the
+CLI's own node reads:
 
-| String                                                 | Kind                                             | Defined in                                                    | Part   |
-| ------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- | ------ |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:222`                                   | 03     |
-| `weave/space-key-box/v1\|<spaceId>\|<keyId>\|<to>`     | `sealFor` context                                | `space/space-access.ts:220`                                   | 03     |
-| `weave/space-earlier-keys/v1\|<spaceId>\|<keyId>`      | Sealing context                                  | `space/space-access.ts:207`                                   | 03     |
-| `weave/space-membership/v1\|<spaceId>`                 | Sealing context                                  | `space/space-access.ts:209`                                   | 03, 04 |
-| `weave/contact-request\|<spaceId>\|<from>\|<to>`       | `sealFor` context                                | `node/node.ts:1549`                                           | docs   |
-| `weave/direct/v1\|<spaceId>\|<from>\|<to,…>`           | Sealing context (the text)                       | `privacy/direct.ts:37`                                        | docs   |
-| `weave/direct/v1\|<spaceId>\|<from>\|<to,…>\|<reader>` | `sealFor` context (one reader's box)             | `privacy/direct.ts:41`                                        | docs   |
-| `weave/knock/v1\|<doorKey>`                            | `sealFor` context                                | `doors/doors.ts` (`sealKnock`)                                | 07     |
-| `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07     |
-| `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                     | `doors/doors.ts` (`signAnswer`)                               | docs   |
-| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:190,192`                                | 04     |
-| `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:302`                                    | 04     |
-| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                | `session/hosting.ts:78,340`                                   | 08     |
+| Label                      | Primitive | `bound`                                                    | Defined in                           | Part   |
+| -------------------------- | --------- | ---------------------------------------------------------- | ------------------------------------ | ------ |
+| `weave/record-body/v1`     | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
+| `weave/earlier-keys/v1`    | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
+| `weave/membership/v1`      | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
+| `weave/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:213`          | 03     |
+| `weave/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
+| `weave/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
+| `weave/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/pairing.ts:26`             | 01     |
+| `weave/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:243`                 | 07     |
+| `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1548`                  | docs   |
+| `weave/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
+| `weave/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
+| `weave/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
+
+Strings that separate _signed messages_ rather than derive keys, listed so
+new labels do not collide with them:
+
+| String                                                 | Kind                                             | Defined in                                                    | Part |
+| ------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------- | ---- |
+| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                  | `space/space-access.ts:217`                                   | 03   |
+| `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
+| `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                     | `doors/doors.ts` (`signAnswer`)                               | docs |
+| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                        | `network/peer-auth.ts:190,192`                                | 04   |
+| `weave-mesh/v1\|…`                                     | Signed mesh proof                                | `network/peer-auth.ts:302`                                    | 04   |
+| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                | `session/hosting.ts:78,340`                                   | 08   |
 
 Notes:
 
@@ -296,7 +311,8 @@ Notes:
 - `weave/space-invite/v1` is both an HKDF label and the prefix of a signed
   message. The two uses are in different primitives and do not collide, but a
   new use MUST NOT reuse either string.
-- New labels SHOULD follow the `weave/<purpose>/v<N>` form.
+- New labels SHOULD follow the `weave/<purpose>/v<N>` form. A label of a
+  sealed thing names exactly one use, and no derivation label is reused as one.
 
 ---
 
@@ -308,9 +324,9 @@ Notes:
 | **Session key**      | A lasting P-256 key claimed under a lock, else fresh (02 §4.10) | While the device keeps it, else one node run | Records, peer-auth messages             |
 | **App key**          | Fresh random P-256 key pair kept by an app                      | Until the app forgets it                     | Records, under a grant                  |
 | **Agent key**        | Fresh random P-256 key pair kept by an agent                    | Until the agent forgets it                   | Records, under a records-only note (§8) |
-| **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§9)                 |
-| **Member key**       | `ScalarFrom(HKDF(vaultKey, member label, 48))`                  | The account's                                | Nothing; ECDH only (§9)                 |
-| **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`                  | Until the door is closed                     | Nothing; ECDH only (§9)                 |
+| **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§10)                |
+| **Member key**       | `ScalarFrom(HKDF(accountKey, member label, 48))`                | The account's                                | Nothing; ECDH only (§10)                |
+| **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`                  | Until the door is closed                     | Nothing; ECDH only (§10)                |
 | **Door signing key** | `ScalarFrom(HKDF(contactKey, door sign label, 48))`             | Until the door is closed                     | Purge challenges and knock answers (07) |
 
 The root key signs exactly one kind of thing: a UCAN delegating to another key.
@@ -534,7 +550,7 @@ the record's `author`, that some leaf capability covers the capability the
 record needs, and that the root DID is allowed in the space
 ([02 — Records](02-records.md), [03 — Spaces](03-spaces.md)).
 
-**How parent tokens travel is not yet specified** (§15). The rules above are
+**How parent tokens travel is not yet specified** (§16). The rules above are
 the intended check for a chain of any length up to 10.
 
 > **Known defect:** a record carries only its leaf token in `proof`, and the
@@ -547,7 +563,7 @@ the intended check for a chain of any length up to 10.
 
 #### Planned: proof chains that travel
 
-Fixes the known defect above; replaces the first line of §15.
+Fixes the known defect above; replaces the first line of §16.
 
 A record will carry, besides its leaf token, the intermediate tokens its chain
 needs, so any peer can resolve the chain from the record alone, with no lookup
@@ -684,9 +700,120 @@ _Tests:_ `packages/core/tests/agents.test.ts`.
 
 ---
 
-## 9. Contact keys, member keys and sealing
+## 9. Envelopes
 
-### 9.1 Contact key
+Everything Weave encrypts is sealed one of two ways: under a symmetric key,
+as an **envelope** (§9.1), or to a P-256 public key, with **HPKE** (§9.2).
+Each use names a **label** and a **bound**: the label says what the sealed
+thing is, the bound says where it belongs. Both are authenticated, so a
+sealed thing opens only for the use and the place it was sealed for: moved to
+another record, another space, another account or another slot, or presented
+as something else, it does not open.
+
+- A **label** is a constant string `weave/<purpose>/v1`, listed in §5 with its
+  bound's fields.
+- A **bound** is a flat JSON object whose values are strings or numbers. Its
+  bytes are its canonical JSON ([02 — Records](02-records.md)).
+- The **context** of a label and a bound is
+  `UTF-8(label) ‖ 0x00 ‖ UTF-8(canonical(bound))`. A label never contains
+  `0x00`, so no two (label, bound) pairs share a context.
+
+Where a sealed thing travels as text, it is `base64url` of its bytes.
+
+### 9.1 The envelope
+
+Under a 32-byte AES-256-GCM key `k`:
+
+```
+nonce    = 12 random bytes, fresh for every envelope
+aad      = 0x01 ‖ context(label, bound)
+envelope = 0x01 ‖ nonce ‖ AES-256-GCM(k, nonce, plaintext, aad)     // ciphertext ‖ 16-byte tag
+```
+
+| Offset | Bytes | Field              |
+| ------ | ----- | ------------------ |
+| 0      | 1     | version, `0x01`    |
+| 1      | 12    | nonce              |
+| 13     | n+16  | ciphertext and tag |
+
+A reader MUST refuse (treat as not openable) an envelope whose first byte is
+not `0x01`, one shorter than 29 bytes, and one that does not authenticate under
+the key, label and bound its use names. It MUST NOT fall back to reading the
+bytes some other way.
+
+Example (`packages/core/tests/envelope.test.ts`, "opens the fixed vector"):
+
+|           |                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| key       | `000102…1f`                                                                                                                           |
+| label     | `weave/record-body/v1`                                                                                                                |
+| bound     | `{"space":"bexample","collection":"app.note","key":"k1","keyId":"aLhvw5pkV65_lcQHEcUOug"}`                                            |
+| aad       | `0x01` ‖ `weave/record-body/v1` ‖ `0x00` ‖ `{"collection":"app.note","key":"k1","keyId":"aLhvw5pkV65_lcQHEcUOug","space":"bexample"}` |
+| nonce     | `a0a1…ab`                                                                                                                             |
+| plaintext | `{"body":{"text":"hi"}}`                                                                                                              |
+| envelope  | `01a0a1a2a3a4a5a6a7a8a9aaab9d3a1e4221b220851947f3b67f0ee2e452c43032efcaf9fa505cbbb531a3a7173c059be663ee`                              |
+
+### 9.2 Sealing to a key (HPKE)
+
+To a P-256 public key (a contact, member or door key, §10), with HPKE
+([RFC 9180](https://www.rfc-editor.org/rfc/rfc9180)) in base mode, single-shot:
+
+| Parameter | Value                               |
+| --------- | ----------------------------------- |
+| mode      | `0x00` (base)                       |
+| KEM       | `0x0010`, DHKEM(P-256, HKDF-SHA256) |
+| KDF       | `0x0001`, HKDF-SHA256               |
+| AEAD      | `0x0002`, AES-256-GCM               |
+| `info`    | context(label, bound)               |
+| `aad`     | empty                               |
+
+```
+enc, ct = SealBase(pkR, info = context(label, bound), aad = "", plaintext)
+sealed  = 0x01 ‖ enc ‖ ct          // enc: the 65-byte uncompressed ephemeral point; ct includes the 16-byte tag
+```
+
+A reader MUST refuse a sealed value whose first byte is not `0x01`, one shorter
+than 82 bytes, and one that does not open (`OpenBase` fails) for the recipient
+key, label and bound its use names. A sealed `{"invite":"x"}` is
+1 + 65 + 14 + 16 = 96 bytes.
+
+The implementation is checked against the CFRG test vectors for this suite,
+and for the same suite with AES-128-GCM (RFC 9180 Appendix A.3), in
+`packages/core/tests/vectors/hpke-p256.json`.
+
+> Rationale: one symmetric format and one public-key format, each with a
+> version byte, so another implementation has two things to get right rather
+> than one per use. HPKE puts the recipient's key and the ephemeral key into
+> the shared secret, and is specified and tested elsewhere.
+
+### 9.3 Every use
+
+| Use                                  | Sealed   | Key                                         | Label                    | `bound`                                                    | Where                            |
+| ------------------------------------ | -------- | ------------------------------------------- | ------------------------ | ---------------------------------------------------------- | -------------------------------- |
+| A record body in a private space     | envelope | the space key's seal key                    | `weave/record-body/v1`   | `space`, `collection`, `key` (the record's), `keyId`       | [03 §8.3](03-spaces.md)          |
+| Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `weave/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)          |
+| A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `weave/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)         |
+| A space key boxed to a member        | HPKE     | the recipient's member key                  | `weave/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)          |
+| A knock                              | HPKE     | the door key                                | `weave/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)             |
+| A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `weave/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                            |
+| A registry value at rest             | envelope | the local key                               | `weave/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md) |
+| A pairing message                    | envelope | the pairing key of the direction it travels | `weave/pairing/v1`       | `type`, `seq`                                              | §15.2                            |
+
+Conventions built on the protocol use the same two primitives: direct
+messages (`weave/direct-text/v1`, `weave/direct-box/v1`), contact requests
+(`weave/contact-request/v1`), and the CLI's writer keys on disk
+(`weave/writer-key/v1`); see `packages/core/docs/`.
+
+_Source:_ `packages/core/src/identity/envelope.ts` (`sealEnvelope`, `openEnvelope`, `boundContext`), `packages/core/src/identity/hpke.ts` (`hpkeSeal`, `hpkeOpen`, `sealTo`, `openFrom`).
+_Tests:_ `packages/core/tests/envelope.test.ts`.
+
+---
+
+## 10. Contact keys, member keys and door keys
+
+P-256 key-agreement keys that others seal to with HPKE (§9.2).
+
+### 10.1 Contact key
 
 A P-256 **key-agreement** key that lets anyone seal a message only the account
 can open, while the account is offline.
@@ -710,13 +837,13 @@ Example (seed of §3.3): scalar
 `c030558f2c355efdec2c21246e4d422143cad65af9c28532ba1a3fc34f2e0b83`, public
 `AuK878OMKr6if2UO2L9nhzisStKD5W8tYM7ldyetTMdr`.
 
-### 9.2 Member keys
+### 10.2 Member keys
 
 One key-agreement key per account per space, to which a private space's new
 keys are sealed ([03 — Spaces](03-spaces.md), `sys.box`).
 
 ```
-accountKey = HKDF(seed, "weave-vault-key-v1", 32)          // §10.1
+accountKey = HKDF(seed, "weave/account-key/v1", 32)        // §11.1
 d_member   = ScalarFrom(HKDF(accountKey, "weave/p256-member-key/v1|" ‖ spaceId, 48))
 ```
 
@@ -724,9 +851,9 @@ The public half has the same encoding as the contact key. Being per space, an
 account home can give an app the member keys for exactly the spaces it grants.
 
 Example: seed of §3.3, `spaceId = "bexample"` → scalar
-`c15cb915bd682b5c785ccf9c131acbad01c31906139a73f82fa58d4516c5553a`.
+`d6e2d8fba5a6ad5e3e1484236c85c0313a01414bf9bc95fd44e4664946fb8a48`.
 
-### 9.3 Door keys
+### 10.3 Door keys
 
 One key-agreement key per **door** (an address the account hands out so that
 strangers can ask to become a contact; [07 — Doors](07-doors.md)):
@@ -736,7 +863,7 @@ d_door = ScalarFrom(HKDF(d_contact_bytes, "weave/p256-door-key/v1|" ‖ doorId, 
 ```
 
 where `d_contact_bytes` is the contact key's 32-byte big-endian private scalar
-(§9.1). Beside it, each door has a **signing key**, used only for ECDSA:
+(§10.1). Beside it, each door has a **signing key**, used only for ECDSA:
 
 ```
 d_door_sign = ScalarFrom(HKDF(d_contact_bytes, "weave/p256-door-sign-key/v1|" ‖ doorId, 48))
@@ -746,91 +873,70 @@ Every device and app holding the contact key derives the same door keys.
 Their public halves (same encoding as the contact key) say nothing about the
 account behind them.
 
-### 9.4 Sealing (`sealFor` / `openSealed`)
-
-To seal a JSON value `v` to public key `R` (base64url compressed point) under
-a context string `ctx`:
-
-1. Generate an ephemeral P-256 key pair `(e, E)`; `E65` = its uncompressed
-   point (65 bytes).
-2. `z` = ECDH(e, R), the 32-byte x-coordinate.
-3. `k` = HKDF(`z ‖ E65`, `"weave/contact-seal/v1"`, 32), an AES-256-GCM key.
-4. `iv` = 12 random bytes.
-5. `ct` = AES-256-GCM(k, iv, plaintext = UTF-8(`JSON.stringify(v)`),
-   additional data = UTF-8(`ctx`)); `ct` includes the 16-byte tag.
-6. Output `base64url(E65 ‖ iv ‖ ct)`.
-
-Opening reverses this. A sealed value shorter than 78 bytes, or one that fails
-to authenticate (wrong key, wrong context, altered), MUST be treated as not
-openable (the implementation returns `null`). The context binds a sealed value
-to where it belongs; contexts in use are listed in §5.
-
-Example size: `{"hi":1}` seals to 65 + 12 + 8 + 16 = 101 bytes.
-
-> **Planned: HPKE.** This construction is homemade: the key is derived
-> without the recipient's public key, and the output has no version marker.
-> No attack on a single recipient is known, but another implementation has
-> to copy it byte for byte. The plan moves sealing to HPKE (RFC 9180) base
-> mode, DHKEM(P-256, HKDF-SHA256), HKDF-SHA256, AES-256-GCM, with the context
-> as AAD, and gives the new format a version marker. Openers read both
-> formats; sealers write only the new one. Tracked in
-> [#24](https://github.com/leifriksheim/weave/issues/24).
-
 _Source:_ `packages/core/src/identity/contact-key.ts`.
-_Tests:_ `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/key-change.test.ts`, `packages/core/tests/doors.test.ts`.
+_Tests:_ `packages/core/tests/contacts.test.ts` ("the contact key"), `packages/core/tests/key-change.test.ts`, `packages/core/tests/doors.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples").
 
 ---
 
-## 10. The account vault
+## 11. The account vault
 
 The seed is never stored in the clear. What is stored is an **account vault**:
 the account's DID and a list of **wraps**, each an encrypted copy of the seed
 openable one way. The recovery code needs no wrap.
 
-### 10.1 The vault key
+### 11.1 The local key and the account key
+
+Two keys are derived from the seed beside the root key, each for one job:
 
 ```
-vaultKey = HKDF(seed, "weave-vault-key-v1", 32)      // AES-256-GCM
+localKey   = HKDF(seed, "weave/local-key/v1", 32)      // AES-256-GCM
+accountKey = HKDF(seed, "weave/account-key/v1", 32)    // 32 bytes, only ever HKDF input
 ```
 
-The vault key encrypts space keys and space records at rest
-([05 — Sync and storage](05-sync-and-storage.md)). Its raw 32 bytes are also
-the **account key**: input for member keys (§9.2) and the account's own spaces
-([03 — Spaces](03-spaces.md)).
+- The **local key** seals what the account's devices keep for themselves:
+  the registry at rest ([05 — Sync and storage](05-sync-and-storage.md) §15).
+  It MUST NOT be handed to an app or another party; an implementation SHOULD
+  hold it as a non-extractable key.
+- The **account key** is the root of the member keys (§10.2) and of the
+  account's own spaces ([03 — Spaces](03-spaces.md) §13.1). It is what an app
+  given the whole account receives ([06](06-nodes-and-sessions.md)), and what
+  a node that follows the account's registry is given.
 
-Example (seed of §3.3): `f505285e87582af18ea47617b97d6b408f3032c3fd1dabf87b39ef8885d77e3a`.
+Neither is derivable from the other, so an app holding the account key reads
+none of the device's storage.
 
-### 10.2 Vault format (version 1)
+Example (seed of §3.3): local key
+`26e6f39b9eeff4676d4efac5cfc6d075fb3becb6ceb13f9e03f6bc3d11d34fa9`, account key
+`f9b921c105dcc1f1f13b4d643cfe961701b733d3be473c1d0e416db233c5d598`.
+
+### 11.2 Vault format (version 1)
 
 ```json
 {
   "version": 1,
   "label": "Ada",
   "did": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
-  "createdAt": "2026-09-26T11:47:11.062Z",
+  "createdAt": "2026-10-11T10:15:34.694Z",
   "wraps": [
     {
       "kind": "device",
-      "id": "8eWLsZlFIm0",
+      "id": "bgRxJ2h0XcM",
       "label": "app.example",
       "rpId": "app.example",
       "deviceKeyId": "q1w2e3r4t5y6u7i8",
       "credentialId": "AbCdEf",
       "userHandle": "Zz9",
-      "addedAt": "2026-09-26T11:47:10.987Z",
-      "salt": "",
-      "iv": "jbEkOwndo3stlbr-",
-      "ciphertext": "Kq_wfmoEi5jOrz7669nTPHIEUbK1noZLb9VfVZLCiUs"
+      "addedAt": "2026-10-11T10:15:34.769Z",
+      "sealed": "AUZA8LNaPI83gl2TiZd5kLY3FAPWW9nZ_L-6dwATLfTn3ApNO9Me7UNtmKS8"
     },
     {
       "kind": "passphrase",
-      "id": "69sTGwYXr5c",
+      "id": "3FhYYIDMZJI",
       "label": "Passphrase",
-      "addedAt": "2026-09-26T11:47:11.062Z",
-      "salt": "7_RXoBGzjVoqZ-sEuPGk1A",
+      "addedAt": "2026-10-11T10:15:34.694Z",
+      "salt": "9ae06Gjd9kltZrGo6jupLQ",
       "iterations": 600000,
-      "iv": "eiU7IOMbBVWebPLN",
-      "ciphertext": "UGEZbMoL_wEUYxT680bQrlsSNX4_ZzgqDXg3PRPiSMM"
+      "sealed": "AWFF7dAydbB7LQNVyPYX5ohUGrCi-n3UnxgyuWup2zlu1qBLRwtVYQft-BBr"
     }
   ]
 }
@@ -840,7 +946,7 @@ Example (seed of §3.3): `f505285e87582af18ea47617b97d6b408f3032c3fd1dabf87b39ef
 
 | Field       | Type            | Meaning                                                                                   |
 | ----------- | --------------- | ----------------------------------------------------------------------------------------- |
-| `version`   | `2`             | Format version                                                                            |
+| `version`   | `1`             | Format version                                                                            |
 | `label`     | string          | Display name; never part of any key                                                       |
 | `did`       | string          | The DID the seed derives. Public; lets a store recognise the account without unlocking it |
 | `createdAt` | ISO 8601 string |                                                                                           |
@@ -848,54 +954,54 @@ Example (seed of §3.3): `f505285e87582af18ea47617b97d6b408f3032c3fd1dabf87b39ef
 
 Every wrap:
 
-| Field        | Type                         | Meaning                                                                                           |
-| ------------ | ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| `kind`       | `"device"` \| `"passphrase"` | How it opens                                                                                      |
-| `id`         | string                       | base64url of 8 random bytes (11 chars); distinguishes wraps                                       |
-| `label`      | string                       | Shown when choosing                                                                               |
-| `addedAt`    | ISO 8601 string              |                                                                                                   |
-| `salt`       | string                       | base64url; `""` for device wraps                                                                  |
-| `iv`         | string                       | base64url of the 12-byte AES-GCM nonce                                                            |
-| `ciphertext` | string                       | base64url of AES-256-GCM(seed) with 16-byte tag, no additional data (32 bytes for a 16-byte seed) |
+| Field     | Type                         | Meaning                                                            |
+| --------- | ---------------------------- | ------------------------------------------------------------------ |
+| `kind`    | `"device"` \| `"passphrase"` | How it opens                                                       |
+| `id`      | string                       | base64url of 8 random bytes (11 chars); distinguishes wraps        |
+| `label`   | string                       | Shown when choosing                                                |
+| `addedAt` | ISO 8601 string              |                                                                    |
+| `sealed`  | string                       | base64url of the envelope (§9.1) around the 16-byte seed: 45 bytes |
 
 `device` wraps add:
 
 | Field          | Type             | Meaning                                                                               |
 | -------------- | ---------------- | ------------------------------------------------------------------------------------- |
 | `rpId`         | string           | Origin (WebAuthn relying-party id, normally the hostname) whose storage holds the key |
-| `deviceKeyId`  | string           | Id of the device key (§11) that opens it                                              |
+| `deviceKeyId`  | string           | Id of the device key (§12) that opens it                                              |
 | `credentialId` | string, optional | base64url id of the passkey gating it                                                 |
 | `userHandle`   | string, optional | base64url user handle of that passkey                                                 |
 
 `passphrase` wraps add:
 
-| Field        | Type    | Meaning                              |
-| ------------ | ------- | ------------------------------------ |
-| `iterations` | integer | PBKDF2 rounds; new wraps use 600 000 |
+| Field        | Type    | Meaning                                      |
+| ------------ | ------- | -------------------------------------------- |
+| `salt`       | string  | base64url of 16 random bytes                 |
+| `iterations` | integer | PBKDF2 rounds; at least 600 000, at most 10⁷ |
 
-### 10.3 Wrapping and unwrapping
+### 11.3 Wrapping and unwrapping
 
-- **Device wrap:** `ciphertext = AES-256-GCM(deviceKey, iv, seed)`.
-- **Passphrase wrap:**
-  `wrappingKey = PBKDF2-HMAC-SHA256(UTF-8(NFKC(passphrase)), salt(16 random bytes), iterations, 256 bits)`;
-  `ciphertext = AES-256-GCM(wrappingKey, iv, seed)`. Unwrapping MUST use the
-  wrap's own `salt` and `iterations`.
-- A fresh `iv` MUST be used for every wrap.
-- A decryption failure means the wrong key or passphrase (AES-GCM
-  authenticates); it is reported as `VAULT_UNLOCK_FAILED`.
-- After unwrapping, a client SHOULD derive the DID and compare it with the
-  vault's `did`.
+A wrap is an envelope (§9.1) with label `weave/vault-wrap/v1` around the seed:
 
-> **Planned: wraps bound to their account.** Today a wrap's ciphertext has no
-> additional data, and nothing stops a vault file being edited to a lower
-> `iterations`. The plan: (1) after every unwrap the client MUST derive the DID
-> and refuse a seed whose DID is not the vault's `did`; (2) new wraps use
-> UTF-8(`did ‖ "|" ‖ wrap id`) as AES-GCM additional data, so a wrap moved
-> between vaults or re-labelled fails to open; (3) a reader refuses a
-> passphrase wrap whose `iterations` is below a minimum (the current 600 000
-> is the natural floor). Pre-release, so old wraps need not stay openable.
+- **Device wrap:** key = the device key (§12); bound =
+  `{ "did": <vault did>, "id": <wrap id>, "kind": "device" }`.
+- **Passphrase wrap:** key =
+  `PBKDF2-HMAC-SHA256(UTF-8(NFKC(passphrase)), salt, iterations, 256 bits)`;
+  bound = `{ "did", "id", "kind": "passphrase", "salt", "iterations" }`, with
+  the wrap's own values.
 
-### 10.4 Managing wraps
+Unwrapping:
+
+- A reader MUST refuse a passphrase wrap whose `iterations` is not an integer
+  from 600 000 to 10 000 000, before running PBKDF2.
+- It MUST open the envelope with the bound built from the vault's `did` and
+  the wrap's own fields, so a wrap moved from another vault, or edited (its
+  `id`, `kind`, `salt` or `iterations`), does not open.
+- After opening, it MUST derive the DID from the seed (§3) and refuse a seed
+  whose DID is not the vault's `did`, or that is not 16 bytes.
+- Any of these failing is reported as `VAULT_UNLOCK_FAILED`: the wrong key or
+  passphrase looks the same as a planted wrap.
+
+### 11.4 Managing wraps
 
 - A vault holds at most one device wrap per `rpId`: adding one replaces any
   existing device wrap for the same `rpId`, and the replaced wraps' device keys
@@ -910,12 +1016,12 @@ can try it, and a copy of the vault can be attacked offline. Which wraps a
 client offers, and how it manages passwords, are the library's: see
 [Ways in](../packages/core/docs/sign-in.md#ways-in).
 
-_Source:_ `packages/core/src/identity/account-vault.ts` (`createVault`).
-_Tests:_ `packages/core/tests/account-vault.test.ts`.
+_Source:_ `packages/core/src/identity/account-vault.ts` (`createVault`, `wrapSeedWithDeviceKey`, `unwrapSeedWithPassphrase`, `deriveLocalKey`, `deriveAccountKey`).
+_Tests:_ `packages/core/tests/account-vault.test.ts` ("a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open", "the account key does not open local storage").
 
 ---
 
-## 11. Device keys
+## 12. Device keys
 
 A **device key** is a random AES-256-GCM key kept by one origin (the wrap's
 `rpId`). It opens the device wrap whose `deviceKeyId` names it.
@@ -933,7 +1039,7 @@ A **device key** is a random AES-256-GCM key kept by one origin (the wrap's
 How a device key is kept, and what that protects against, are the library's:
 see [Device keys and passkeys](../packages/core/docs/sign-in.md#device-keys-and-passkeys).
 
-### 11.1 Staying signed in (_implementation detail_)
+### 12.1 Staying signed in (_implementation detail_)
 
 Not protocol: see [Staying signed in](../packages/core/docs/sign-in.md#staying-signed-in).
 
@@ -942,34 +1048,34 @@ _Tests:_ `packages/core/tests/account-vault.test.ts` ("wrapping a seed").
 
 ---
 
-## 12. Passkeys and other ways to a root key
+## 13. Passkeys and other ways to a root key
 
-A passkey yields no key material: it is a gate in front of a device key (§11),
+A passkey yields no key material: it is a gate in front of a device key (§12),
 enforced by the client, not by cryptography. A device wrap records the passkey
-that gates it in `credentialId` and `userHandle` (§10.2).
+that gates it in `credentialId` and `userHandle` (§11.2).
 
-### 12.1 Passkeys are a gate
+### 13.1 Passkeys are a gate
 
 Not protocol: see [Device keys and passkeys](../packages/core/docs/sign-in.md#device-keys-and-passkeys).
 
-### 12.2 WebAuthn parameters
+### 13.2 WebAuthn parameters
 
 Not protocol: see [Device keys and passkeys](../packages/core/docs/sign-in.md#device-keys-and-passkeys).
 
 ---
 
-## 13. Account stores and folder accounts
+## 14. Account stores and folder accounts
 
 Where vaults are kept. These are local storage formats; a folder's format
 matters for interoperability between apps (and origins) that open the same
 folder.
 
-### 13.1 Folder layout
+### 14.1 Folder layout
 
 ```
 <folder>/
   accounts.json                 list of accounts, readable without unlocking
-  accounts/<id>/account.json    that account's vault (§10.2)
+  accounts/<id>/account.json    that account's vault (§11.2)
   accounts/<id>/stores/…        that account's spaces (05)
 ```
 
@@ -1014,7 +1120,7 @@ Rules:
 The list reveals how many accounts a folder holds, their names and DIDs; not
 their seeds.
 
-### 13.2 Browser store (_implementation detail_)
+### 14.2 Browser store (_implementation detail_)
 
 Not protocol: see [Account stores](../packages/core/docs/sign-in.md#account-stores).
 
@@ -1023,7 +1129,7 @@ _Tests:_ `packages/core/tests/account-store.test.ts`, `packages/core/tests/accou
 
 ---
 
-## 14. Pairing
+## 15. Pairing
 
 Pairing gives a second device (typically a phone, which cannot open a folder)
 the account and the list of its spaces. Afterwards the phone is a full,
@@ -1033,44 +1139,44 @@ The QR code carries a one-time secret and nothing about the account. The two
 devices meet in a room named after the secret, run an ephemeral key exchange
 bound to it, and both show a six-digit code. The offering device sends the
 seed only after the person confirms the codes match, sealed under a key no
-other exchange shares. A photo of the QR code is useless once a phone has used
-it or a few minutes have passed, and a recording of the room opens nothing.
+other exchange shares, one for each direction. A photo of the QR code is
+useless once a phone has used it or a few minutes have passed, and a recording
+of the room opens nothing.
 
-### 14.1 The ticket
+### 15.1 The ticket
 
 ```json
-{ "v": 2, "secret": "AAECAwQFBgcICQoLDA0ODw", "relay": "wss://relay.example" }
+{ "v": 1, "secret": "AAECAwQFBgcICQoLDA0ODw", "relay": "wss://relay.example" }
 ```
 
 | Field    | Type   | Meaning                                                                 |
 | -------- | ------ | ----------------------------------------------------------------------- |
-| `v`      | `2`    | Version                                                                 |
+| `v`      | `1`    | Version                                                                 |
 | `secret` | string | base64url of 16 random bytes, new for every offer                       |
 | `relay`  | string | A relay URL the offering device is connected to and the phone can reach |
 
 Encoding: `base64url(UTF-8(JSON))`, placed in a URL fragment as
 `<page>#pair=<ticket>` and shown as a QR code. Readers find it with
 `/[#&]pair=([^&]+)/` on the fragment. A decoder MUST reject a ticket that is
-not base64url JSON, whose `v` is not `2`, whose `relay` is not a string, or
+not base64url JSON, whose `v` is not `1`, whose `relay` is not a string, or
 whose `secret` does not decode to exactly 16 bytes (`PAIRING_TICKET_UNREADABLE`).
-Version 1 tickets carried the recovery code and MUST be refused. The page
-SHOULD remove the fragment from the address bar once read.
+The page SHOULD remove the fragment from the address bar once read.
 
 Example (the ticket above):
-`eyJ2IjoyLCJzZWNyZXQiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3IiwicmVsYXkiOiJ3c3M6Ly9yZWxheS5leGFtcGxlIn0`
+`eyJ2IjoxLCJzZWNyZXQiOiJBQUVDQXdRRkJnY0lDUW9MREEwT0R3IiwicmVsYXkiOiJ3c3M6Ly9yZWxheS5leGFtcGxlIn0`
 
 The offering device MUST generate the secret with a CSPRNG for each offer and
 MUST NOT derive it from the seed.
 
-### 14.2 Room, keys and code
+### 15.2 Room, keys and code
 
 Both devices join mesh room ([04 — Network](04-network.md)):
 
 ```
-room = CID(UTF-8("weave/pairing-room/v2") ‖ secret)     // raw concatenation
+room = CID(UTF-8("weave/pairing-room/v1") ‖ secret)     // raw concatenation
 ```
 
-Example (the secret above): room `bqhuxub5bfmr2fsg2cj4i4ycw4ztnqa32todq3e4rhk76yl6qav5a`.
+Example (the secret above): room `bxvuzmmg4srdji5su7e2hyj56x55ohpyaczgg6aquq6iw55bcijha`.
 
 Each side makes an ephemeral P-256 ECDH key for this exchange only. `O` is the
 offering device's public point and `P` the phone's, each as the 65-byte
@@ -1080,8 +1186,9 @@ x-coordinate:
 ```
 ikm        = secret ‖ Z
 transcript = "|" ‖ base64url(O) ‖ "|" ‖ base64url(P)
-key        = HKDF(ikm, "weave/pairing-key/v2"  ‖ transcript, 32)   // AES-256-GCM
-code       = uint32_be(HKDF(ikm, "weave/pairing-code/v2" ‖ transcript, 4)) mod 1000000,
+offerKey   = HKDF(ikm, "weave/pairing-key/v1|offer" ‖ transcript, 32)   // AES-256-GCM: what the offering device sends
+phoneKey   = HKDF(ikm, "weave/pairing-key/v1|phone" ‖ transcript, 32)   // AES-256-GCM: what the phone sends
+code       = uint32_be(HKDF(ikm, "weave/pairing-code/v1" ‖ transcript, 4)) mod 1000000,
              as 6 decimal digits, zero-padded
 commitment = base64url(SHA-256(P))
 ```
@@ -1089,10 +1196,15 @@ commitment = base64url(SHA-256(P))
 A point that is not 65 bytes starting `04`, or that is not on the curve, MUST
 be refused (`PAIRING_TICKET_UNREADABLE`).
 
-A sealed payload is `iv (12 random bytes) ‖ AES-256-GCM(key, iv, plaintext)`
-(ciphertext including the 16-byte tag; no additional data), sent as a JSON
-array of integers 0–255. A payload of 12 bytes or fewer, or one that does not
-authenticate, MUST be rejected.
+A sealed message is an envelope (§9.1), sent as a base64url string: under the
+key of the side that sends it, with label `weave/pairing/v1` and bound
+`{ "type": <the message's type>, "seq": <n> }`, where `n` counts the sealed
+messages that side has sent in this exchange, from 0. A receiver keeps its own
+count of what it has opened from the other side, and MUST refuse a message
+that does not open with the other side's key, its own type and that count; a
+refused message leaves the count as it was. So a message sent back to the side
+that sealed it, presented as another type, replayed or delivered out of order
+does not open.
 
 > Rationale: the secret is in `ikm`, so anyone who never saw the QR code gets
 > a different key and a different code. The points are in the labels, so a
@@ -1101,9 +1213,11 @@ authenticate, MUST be rejected.
 > sends `O` before it sees `P`, so neither side, nor anyone between them, can
 > choose a key to make two different exchanges show the same code; one guess
 > in a million is all that is left. The secret is high-entropy, so a PAKE
-> would add nothing an HMAC or this key schedule does not.
+> would add nothing an HMAC or this key schedule does not. A key per
+> direction, and a count in each message, mean nobody in the room can turn
+> one side's message into something the other said, or say it twice.
 
-### 14.3 The exchange
+### 15.3 The exchange
 
 Both devices join `room` under a throwaway `did:key` of their own, not a
 session DID. The offering device joins with its configured relays; the phone
@@ -1151,11 +1265,11 @@ Offering device                                       Phone
   check cannot tell a stranger's computer from your own.
 
 _Source:_ `packages/core/src/identity/pairing.ts`, `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`acceptPairing`).
-_Tests:_ `packages/core/tests/pairing.test.ts`.
+_Tests:_ `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open").
 
 ---
 
-## 15. Not yet specified
+## 16. Not yet specified
 
 - Transport of parent tokens for multi-link delegation chains: planned in
   §7.5 ("Proof chains that travel").

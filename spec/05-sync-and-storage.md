@@ -801,7 +801,7 @@ adapter:
 
 | Path                     | Holds                                                            | Sealed (§15)                     |
 | ------------------------ | ---------------------------------------------------------------- | -------------------------------- |
-| `registry`               | the spaces this node holds, and their keys                       | yes, on a node given a vault key |
+| `registry`               | the spaces this node holds, and their keys                       | yes, on a node given a local key |
 | `spaces/<space id>`      | one space: §10 entries and bodies, and what the node keeps on it | no                               |
 | `mirrors/<space id>/<n>` | a mirror's store writer state (§16.4); `n` is the mirror's index | no                               |
 
@@ -826,7 +826,7 @@ Forgetting a space deletes all six.
 
 In a data folder, a store at a path is a folder adapter (§14) at
 `<dataPath>/<path>`, and the `registry` store is sealed under the account's
-vault key (§15). Where a node keeps its stores otherwise (IndexedDB, and a
+local key (§15). Where a node keeps its stores otherwise (IndexedDB, and a
 host's own store) is its own; the library's naming is in
 [Sync and storage in the library](../packages/core/docs/storage.md#indexeddb).
 
@@ -961,24 +961,21 @@ _Source: `packages/core/src/storage/folder-adapter.ts`, `packages/core/src/stora
 
 A private space's bodies are encrypted before signing ([03](03-spaces.md)),
 but its key sits in the registry of the same folder. So a folder's registry
-is sealed under the account's **vault key** (AES-256-GCM, derived from the
-seed with HKDF, label `weave-vault-key-v1`, [01 — Identity](01-identity.md)).
+is sealed under the account's **local key** ([01 — Identity](01-identity.md)
+§11.1), which no app is given.
 
 Values of entries whose key starts with one of the sealed prefixes —
 `space:`, `spacekey:`, `spaceinvite:`, `spacerole:`, `spacememberkey:`,
-`spacerelays:` — are stored as:
+`spacerelays:` — are stored as an envelope ([01 §9.1](01-identity.md)):
 
 ```
-offset  size  field
-0       8     magic  77 65 61 76 65 65 01 00   ("weavee", version 1, 0)
-8       12    IV, random per write
-20      n+16  AES-GCM ciphertext and tag of the value,
-              additional data = UTF-8 of the entry key
+value = envelope(localKey, "weave/at-rest/v1", { entry: <the entry key> }, plaintext value)
 ```
 
 - A reader MUST refuse (not fall back to raw) a value under a sealed prefix
-  that lacks the magic or fails to decrypt. Binding the key as additional
-  data means a sealed value moved to another entry does not open.
+  that does not open as that envelope: one written in the clear, one moved
+  from another entry, one sealed by another account. Its version byte is what
+  marks it sealed; the prefix says it must be.
 - Entry keys, other entries, and version bodies are not sealed: a folder
   shows each record's author, timestamp and collection, and anything in a
   public space.
@@ -986,7 +983,7 @@ offset  size  field
 Every registry entry of §12 that belongs to one space is sealed.
 
 _Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PREFIXES`, `createEncryptedAdapter`), `packages/core/src/node/stores.ts`. Tests:
-`packages/core/tests/account-vault.test.ts` ("encryption at rest")._
+`packages/core/tests/account-vault.test.ts` ("encryption at rest": "a sealed value moved to another entry does not open", "the account key does not open local storage")._
 
 ---
 

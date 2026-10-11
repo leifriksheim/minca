@@ -51,7 +51,7 @@ Terms used here:
 A node acts for one account and signs with one session key at a time. It
 holds a set of spaces, each with its own store and its own peers.
 
-A node MAY hold the **account key** (the vault key bytes, [01](01-identity.md)).
+A node MAY hold the **account key** ([01 §11.1](01-identity.md)), never the local key.
 With it the node follows the account registry — the account's list of spaces,
 its name, its carriers, hosts and subscriptions — and joins and leaves spaces as
 the account does on any device (§1.3). Without it, the node holds only the
@@ -301,7 +301,7 @@ page it opened):
 | `access`        | `read` \| `write`                    |                                                                                                                                                                            |
 | `scope`         | `spaces` \| `account`                |                                                                                                                                                                            |
 | `spaces`        | `{ id, name, invite, memberKey? }[]` | Granted spaces; `memberKey` is base64url.                                                                                                                                  |
-| `accountKey`    | base64url, optional                  | With `scope: account`: the vault key bytes. It opens every private space and the account registry, but cannot sign as the account.                                         |
+| `accountKey`    | base64url, optional                  | With `scope: account`: the account key (01 §11.1). It opens every private space and the account registry, but cannot sign as the account or open the home's local storage. |
 | `contactKey`    | base64url, optional                  | With `contacts` or `scope: account`: the contact key's secret. Never in an agent's grant: it opens contact requests and knocks on the account's doors ([07](07-doors.md)). |
 | `contactsSpace` | string, optional                     | With `contacts` and `scope: spaces`: which of `spaces` is the contacts space.                                                                                              |
 | `relays`        | string[], optional                   | Relays the home uses; the app joins them too, so the two always share one.                                                                                                 |

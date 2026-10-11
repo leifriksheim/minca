@@ -134,7 +134,7 @@ A client MUST use this derivation for a space's room; two implementations
 that differ here never meet.
 
 Other protocols meet in rooms of their own on the same relays, with names
-derived elsewhere: device pairing (`pairingRoomId`, [01 — Identity](01-identity.md) §14)
+derived elsewhere: device pairing (`pairingRoomId`, [01 — Identity](01-identity.md) §15)
 and the agent link ([06 — Nodes, sessions and apps](06-nodes-and-sessions.md)).
 The relay treats them all alike.
 
@@ -608,10 +608,12 @@ proof:
   reason:
 
   ```
-  member = base64url( iv(12 bytes) ‖ AES-256-GCM(spaceKey, iv,
-                       aad = UTF-8("weave/space-membership/v1|" + spaceId),
-                       plaintext = UTF-8(JSON.stringify(noteString))) )
+  member = base64url( envelope(sealKey, "weave/membership/v1", { space: spaceId },
+                               UTF-8(JSON.stringify(noteString))) )
   ```
+
+  where `sealKey` is the seal key of that space key ([03](03-spaces.md) §8.1) and
+  the envelope is [01 §9.1](01-identity.md).
 
 - `earlier` — the same signature by each **older** read key it still holds,
   newest first, at most 4: `[{ "readKey": <DID>, "read": <signature> }, …]`.
@@ -692,7 +694,7 @@ when her node redials with K0 and her note, step 4 refuses her.
 > are behind, a node that missed a key change could never reconnect, since
 > the peers that could tell it about the change refuse it.
 
-_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `formerMembers`, `cutOff`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`sealWith`, `openWith`), `packages/core/src/space/space-access.ts` (`membershipContext`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
+_Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MAX_EARLIER_READ_KEYS`), `packages/core/src/node/space-runtime.ts` (`readAccess`, `letGoOfOutsiders`, `formerMembers`, `cutOff`), `packages/core/src/network/mesh.ts` (`drop`), `packages/core/src/network/network-manager.ts` (`drop`), `packages/core/src/privacy/space-encryption.ts` (`MEMBERSHIP_LABEL`), `packages/core/src/identity/envelope.ts` (`sealValue`, `openValue`). Tests: `packages/core/tests/key-change.test.ts` ("with nobody here to change the key…", "proving you may read, while a new key is due"), `packages/core/tests/ws-transport.test.ts` ("a private space"), `packages/core/tests/network-manager.test.ts` ("in a private space, a peer without its key never becomes a peer"; "after the space key changed"; "letting a peer go in one room…"), `packages/cli/tests/cli.test.ts` ("lets go of someone removed from a private space…"), `packages/cli/tests/serve.test.ts` ("a node behind on the space key admits a reader…")._
 
 ### 6.4 The account behind a session
 
