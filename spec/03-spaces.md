@@ -256,7 +256,7 @@ always empty for `definition`, `key`, `relays`, `keepers` and `fork`, and:
 | `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                              | `relays`                                                                                                    |
 | `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                      | `keepers`, `copies`                                                                                         |
 | `revoke`     | `key` a `did:key`; record key = `revoke:<hex40(key + "\|" + root)>`                                                                                   | `target` = `key`                                                                                            |
-| `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                          | `writer` = their `author`, `from` = their `log.n`                                                           |
+| `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                          | `writer` = their `author`, `collection` = the forked line's, `from` = its place (§6.5)                      |
 
 A deleted version in any access collection other than `sys.collection` is
 therefore ignored: access is taken away by writing a change, never by deleting.
@@ -338,16 +338,17 @@ what `e` **saw**. Two events neither of which saw the other are
    its own view, it lowers that account's role (§4.5): a `member` event for
    that account, or a `role` event for a role it holds. A `revoke` is a
    reduction of the keys it names for its own account, a `fork` of the key
-   whose log forked, and closing an invite of the joins through it.
+   whose line forked, and closing an invite of the joins through it.
 3. **Strikes.** A reduction `r` **strikes** an allowed event `e` it reaches
    (`e`'s root is the lowered account; for a revoke, `e`'s author is the key
-   and its root the revoke's; for a fork, `e`'s author is the key and its
-   `log.n` at least the fork's place; for a closed invite, `e` joins through
-   it) when `r`'s cutoff does not cover `e` (`r.cutoff[e.author][e's
-collection] ≥ e`'s place in that collection's line, §6.3) and, unless `r`
-   is a revoke or a fork, neither had seen the other. A revoke or a fork proof
-   reaches its key's events whatever either saw: an owner reacting to a thief
-   has seen what the thief did. Revokes and forks are never struck.
+   and its root the revoke's; for a fork, `e`'s author is the key, `e` is in
+   the forked collection and its `log.n` is at least the fork's place; for a
+   closed invite, `e` joins through it) when `r`'s cutoff does not cover `e`
+   (`r.cutoff[e.author][e's collection] ≥ e`'s place in that collection's
+   line, `log.n`, §6.3) and, unless `r` is a revoke or a fork, neither had
+   seen the other. A revoke or a fork proof reaches its key's events whatever
+   either saw: an owner reacting to a thief has seen what the thief did.
+   Revokes and forks are never struck.
 4. **Valid among a set** `S` (closed under `ancestors`), in two passes:
    1. Take the strongly connected components of the strikes between allowed
       events in `S`, and visit them so that every component comes after the
@@ -501,12 +502,11 @@ fail.
 
 A change that took power from someone **covers** a version when the change's
 `cutoff` (§6.3) names the version's key and collection with a place at or
-above the version's place in that key's line for that collection (`log.c.n`). What a covering change's author had seen of that key stands,
+above the version's place in that key's line for that collection (`log.n`). What a covering change's author had seen of that key stands,
 whatever the change took away.
 
-Given a record's `id`, its root, its `seen`, its `author`, `log.n`, collection
-and `log.c.n`, a
-predicate `needs(role, state)`, and optionally `within`, the `seen` of a
+Given a record's `id`, its root, its `seen`, its `author`, collection and
+`log.n`, a predicate `needs(role, state)`, and optionally `within`, the `seen` of a
 version that cites this one. Peers never pass `within` when judging a
 version's standing; the library's checks do, to judge a version they cite as
 of what the citer saw ([checks](../packages/core/docs/checks.md#citing-a-version)):
@@ -517,9 +517,9 @@ of what the citer saw ([checks](../packages/core/docs/checks.md#citing-a-version
    (§6.4), and does not cover it, and (with `within`) is in
    `within ∪ ancestors(within)` → withdrawn. Every such revoke applies, each
    with its own cutoff.
-   The same for a fork: if a fork of `author` is recorded (§6.5) whose `from`
-   is at most `log.n`, and (with `within`) its event is in
-   `within ∪ ancestors(within)` → withdrawn.
+   The same for a fork: if a fork of `author`'s line in the record's
+   collection is recorded (§6.5) whose `from` is at most `log.n`, and (with
+   `within`) its event is in `within ∪ ancestors(within)` → withdrawn.
 3. `S_seen = at(seen)`. If `needs(role(S_seen, root), S_seen)` is false → refused.
 4. Let `U` be the reductions of `root` (§4.5) whose events are **not** in
    `seen ∪ ancestors(seen)`, that do not cover it, and (with `within`) **are**
@@ -645,8 +645,8 @@ A change that takes power from people — lowering or removing a member, lowerin
 or removing a role, revoking a key — **SHOULD** carry `cutoff`: for each key of
 the affected accounts and each collection, the end of the unbroken line its
 writer holds of that key's versions in that collection ([02](02-records.md)
-§4.10): from place 0 of `log.c`, each place held and naming the one before it
-as `c.prev`. A place held past a gap covers nothing, so one planted far ahead
+§4.10): from place 0 of `log`, each place held and naming the one before it
+as `log.prev`. A place held past a gap covers nothing, so one planted far ahead
 can't stretch a cutoff over what its writer signs later. A node holding part
 of a space keeps the lines of the collections it holds whole
 ([05](05-sync-and-storage.md) §9), so it covers all it holds. At most 1024 places in all: past that, a writer
@@ -676,7 +676,7 @@ change goes. Anything else the affected account wrote that had not seen the
 change, whatever point in history it claims, is judged with it (§5.1 step 4):
 later places, and keys the change's writer had never seen. A cutoff names a
 place, not a branch: a second version at a covered place is a fork of that
-key's log, and a fork proof (§6.5) withdraws both. A change to a collection's definition carries no cutoff: it binds what
+key's line, and a fork proof (§6.5) withdraws both. A change to a collection's definition carries no cutoff: it binds what
 saw it.
 
 > Rationale: a cutoff is exact and small, one number per key, and doesn't
@@ -698,39 +698,45 @@ _Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `rem
 
 ### 6.5 Proving a fork
 
-A member who holds two versions that prove a key's log is not one line, a
-fork or a break ([02](02-records.md) §4.10), writes `sys.fork` at `fork:<hex40(writer DID)>`
-with `{ a, b }`: the two versions without their bodies, `a` the one with the
-lower id. Every peer checks the proof itself before the change counts:
+A member who holds two versions that prove a key's line for a collection is
+not one line, a fork or a break ([02](02-records.md) §4.10), writes
+`sys.fork` at `fork:<hex40(writer DID)>` with `{ a, b }`: the two versions
+without their bodies, `a` the one with the lower id. Every peer checks the
+proof itself before the change counts:
 
 - `a` and `b` are objects with no `body` member, each passes the shape check
   ([02](02-records.md) §4.6) and the signature check (02 §3.3, steps 1–3);
 - both have this space as `space`, and different ids;
 - they are a **break**: one, `v`, has a `log.prev` naming the other, `p`, and
-  `p` is another key's or not one place before (`p.log.n ≠ v.log.n − 1`); or a
-  `log.c.prev` naming `p`, and `p` is another key's or another collection's, or
-  not one place before in that line (`p.log.c.n ≠ v.log.c.n − 1`). Then the
-  event's `writer` is `v.author` and `from` is `v.log.n`;
-- or else a **fork**: the same `author` and the same `log.n`; or the same
-  `author`, `collection` and `log.c.n`. Then `writer` is the shared `author`
-  and `from` the lower `log.n` of the two;
+  `p` is another key's or another collection's, or not one place before
+  (`p.log.n ≠ v.log.n − 1`). Then the event's `writer` is `v.author`,
+  `collection` is `v.collection` and `from` is `v.log.n`;
+- or else a **fork**: the same `author`, the same `collection` and the same
+  `log.n`. Then `writer` is the shared `author`, `collection` the shared
+  `collection` and `from` that `log.n`;
 - the record key is `fork:<hex40(writer)>`.
 
 Anything else is not a well-formed change and is ignored like any other
-(§3.3). From the first applied fork of a writer on, everything it signed in
-the space at `from` or later is withdrawn (§5.1 step 2). A later proof of an
-earlier place is the record's next version, and the lowest `from` applied
+(§3.3). From the first applied fork of a writer's line on, everything it
+signed in that collection of the space at `from` or later is withdrawn (§5.1
+step 2). A later proof, of another collection or of an earlier place, is the
+record's next version, and for each collection the lowest `from` applied
 counts. Nothing is kept: no one can say which branch was the owner's.
 
-A peer writes the proof only when no applied fork of that writer already
-covers the place it found.
+A peer writes the proof only when no applied fork of that writer's line
+already covers the place it found.
 
 > Rationale: the proof names a key, not an account. A copied or stolen key
 > is the account's problem, and the owner's way out is to revoke the key
 > (§6.4) and go on with another; the account's place in the space is a
 > person's decision to change (§6.1).
 
-_Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork"), `packages/core/tests/access-convergence.test.ts`._
+> Rationale: a fork reaches only the collection it was found in. Nothing
+> orders a key's versions across collections ([02](02-records.md) §4.10), so
+> a place in one line says nothing about which of the key's versions
+> elsewhere came after it. The owner's revoke reaches every collection.
+
+_Source: `packages/core/src/records/fork.ts` (`checkFork`, `breaksLine`, `forkProof`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `placeInLog`, `reportFork`), `packages/core/src/space/space-access.ts` (`forkKey`), `packages/core/src/space/roles.ts` (`forked`, `forks`). Tests: `packages/core/tests/writer-logs.test.ts` ("a fork", "a fork reaches only the line it is in…"), `packages/core/tests/access-attacks.test.ts` ("a revoke or a fork proof undoes…"), `packages/core/tests/access-convergence.test.ts`._
 
 ---
 

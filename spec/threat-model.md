@@ -114,14 +114,14 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
-    by revoking its key or forking their log ([#168](https://github.com/leifriksheim/weave/issues/168)),
+    by revoking its key or forking their line in the warrants' collection ([#168](https://github.com/leifriksheim/weave/issues/168)),
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Fork proofs deter, but don't catch: a fork counts once a member holding
     both versions writes `sys.fork`, and a key can sign where its other branch
     never reaches ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_.
   - It can disown its own history, withdrawing votes and agreements others
     relied on, by revoking its own key with a cutoff of 0, or forking its
-    own log at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
+    own line in a collection at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
   - A `seq 0` for someone else's key can take over "creator" ([#72](https://github.com/leifriksheim/weave/issues/72)).
   - A collection's checks bind only readers that judge them: peers keep and
     sync a version that fails them, and only the library leaves it out of
@@ -179,9 +179,9 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
 ### 3.4 Key thief
 
 - **Holds.**
-  - Once a fork of the key's log is proven, what it signed from the proven
-    place on stops counting, records and changes to who may do what alike
-    (02 §4.10, 03 §4.3, §6.5).
+  - Once a fork of the key's line in a collection is proven, what it signed
+    in that collection from the proven place on stops counting, records and
+    changes to who may do what alike (02 §4.10, 03 §4.3, §6.5).
   - Once the owner revokes the key, what it signed past what the owner had
     seen of it stops counting, records and changes to who may do what alike, under every note to that key. A
     revoke the thief writes first, covering what it signed in advance, doesn't
@@ -191,8 +191,15 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
     whose note grants `*` is the account while it lasts
     ([#168](https://github.com/leifriksheim/weave/issues/168)).
   - It decides whether it forks the owner's line at all ([#175](https://github.com/leifriksheim/weave/issues/175)) _(traced)_. And a fork
-    it makes at the start of the line withdraws everything the owner's device
-    wrote ([#166](https://github.com/leifriksheim/weave/issues/166)).
+    it makes at the start of a line withdraws everything the owner's device
+    wrote in that collection ([#166](https://github.com/leifriksheim/weave/issues/166)).
+  - A fork reaches only the collection it is proven in: lines are kept per
+    collection, and nothing orders a key's writes across them (02 §4.10). So
+    a copy of the key that writes only in collections where the owner's
+    device doesn't, such as the access collections, is never caught by a
+    fork, and a fork proven in one collection leaves what the key signed in
+    the others standing. Only the owner's revoke reaches them (03 §6.4)
+    ([#175](https://github.com/leifriksheim/weave/issues/175)).
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
     live messages, connecting) ends with the note (01 §7.4). Signing out

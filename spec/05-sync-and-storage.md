@@ -246,7 +246,7 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 2` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 3` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
 
@@ -273,7 +273,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 2,
+  "v": 3,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -670,7 +670,7 @@ keeps this in) is in
 
 A node that holds part of a space can check, for each collection it holds,
 that it lacks nothing a writer's line there names ([02 §4.10](02-records.md)):
-each version's `log.c.prev` names the writer's version before it in that
+each version's `log.prev` names the writer's version before it in that
 collection, and a store keeps superseded versions as stubs (§10), so every
 version a line names is one a node that holds the collection should hold. It
 can ask any peer for one it lacks, by id (§4). What no line names yet, a
@@ -1031,22 +1031,22 @@ offline by anyone holding the store.
 A segment is UTF-8 JSON:
 
 ```json
-{"v":2,"versions":[ <Version>, … ]}
+{"v":3,"versions":[ <Version>, … ]}
 ```
 
 The versions are exactly as on the wire — private bodies still sealed. A
 segment carries its own version, apart from the sync messages' (§4): a mirror
 outlives the peers that wrote it, so a reader meets old segments long after
-it last met an old peer. `v` is `2` since sealed bodies became envelopes
-([01](01-identity.md) §9); a reader MUST treat bytes that are not JSON, or
-`v` other than `2`, or a missing `versions` array, as holding nothing, so a
+it last met an old peer. `v` is `3` since a version's log became one line
+per collection ([02](02-records.md) §4.10); a reader MUST treat bytes that
+are not JSON, or `v` other than `3`, or a missing `versions` array, as holding nothing, so a
 segment of the old format is never misread; entries that are not objects
 with a string `id` are skipped.
 
 Its name is `<counter>-<hash>.seg`: the store writer's counter (from 1, decimal,
 zero-padded to 6 digits) and the first 8 bytes of SHA-256 of the segment's
-bytes, as 16 lower-case hex. The empty segment `{"v":2,"versions":[]}` written
-first is `000001-8c45015e9099599e.seg`. Only names ending `.seg` are segments.
+bytes, as 16 lower-case hex. The empty segment `{"v":3,"versions":[]}` written
+first is `000001-8f04721ece59f5c5.seg`. Only names ending `.seg` are segments.
 
 > Rationale: the counter sorts a listing for people reading it; the hash
 > means a retried upload lands on the same name.
@@ -1139,7 +1139,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 2                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 3                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |
