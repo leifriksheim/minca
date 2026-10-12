@@ -15,7 +15,14 @@
  * library's: `std.proposal` has fixed options and no topic, and nothing in
  * the library says "I trust this person with my vote on housing".
  */
-import { rolePresets, ROLE_ASSIGN, RECORD_DELETE, RECORD_WRITE } from '@weaveprotocol/core';
+import {
+  commandCovers,
+  rolePresets,
+  ROLE_ASSIGN,
+  RECORD_DELETE,
+  RECORD_READ,
+  RECORD_WRITE,
+} from '@weaveprotocol/core';
 import type { Check, SpaceRole } from '@weaveprotocol/core';
 import { fragments } from '@weaveprotocol/core/schemas';
 
@@ -492,13 +499,47 @@ interface PartyBallot {
   readonly votes: ReadonlyArray<string>;
 }
 
+/**
+ * What stands for one person alone: whom they follow, what they want seen,
+ * which party they join. Only they change or remove it, whatever their role,
+ * or a moderator could move someone's vote by rewriting their delegation.
+ */
+const OWN_ONLY: ReadonlyArray<string> = [delegation.name, support.name, membership.name];
+
+/** A policy statement: in the collections that stand for one person, only their own */
+const ownWhereItStandsForThem = [
+  'or',
+  [
+    ['==', '.byCreator', true],
+    ['and', OWN_ONLY.map((collection) => ['!=', '.collection', collection])],
+  ],
+] as const;
+
+/**
+ * A role with every grant to write or delete records kept to their own in
+ * {@link OWN_ONLY}. Its grants cover no more than `/record`, as a community's do.
+ */
+function ownOnly(role: SpaceRole): SpaceRole {
+  const grants = role.grants.flatMap((grant) => {
+    const writes = commandCovers(grant.cmd, RECORD_WRITE);
+    const deletes = commandCovers(grant.cmd, RECORD_DELETE);
+    if (!writes && !deletes) return [grant];
+    const guarded = (cmd: string) => ({ cmd, pol: [...grant.pol, ownWhereItStandsForThem] });
+    if (grant.cmd === RECORD_WRITE || grant.cmd === RECORD_DELETE) return [guarded(grant.cmd)];
+    // `/record` (the community's roles grant nothing wider): reading as it was, writing and deleting kept.
+    return [{ cmd: RECORD_READ, pol: grant.pol }, guarded(RECORD_WRITE), guarded(RECORD_DELETE)];
+  });
+  return { ...role, grants };
+}
+
 /** Everything an assembly needs, defined when one is made */
 /**
  * An assembly's founding roles: a community's admins and moderators, and
  * members who write their own records but topics, may change any party (its
  * check lets only its stewards), and delete only their own, never a proposal
- * or a topic. Moderators change and remove anything. With `membersInvite`,
- * members invite members too.
+ * or a topic. Moderators change and remove anything but what stands for one
+ * person (a delegation, support, a membership), which only that person
+ * changes. With `membersInvite`, members invite members too.
  */
 export function assemblyRoles(membersInvite = false): ReadonlyArray<SpaceRole> {
   const notIn = (...collections: string[]) =>
@@ -524,7 +565,7 @@ export function assemblyRoles(membersInvite = false): ReadonlyArray<SpaceRole> {
       ...(membersInvite ? [{ cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] }] : []),
     ],
   };
-  return rolePresets.community.roles.map((role) => (role.name === 'member' ? member : role));
+  return rolePresets.community.roles.map((role) => ownOnly(role.name === 'member' ? member : role));
 }
 
 export const ASSEMBLY = [
