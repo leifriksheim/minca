@@ -185,10 +185,13 @@ const inDef =
     e.def === h.id && (e.iss ?? e.by) === h.by;
 
 /**
- * What a role holds: the constitution's grants to it, and what every
- * current definition holds, delegations compared by `{cmd, pol}` and
- * nestings by the role they nest in. A grant in a definition is
- * attenuated to what the definer could do, judged at the definition.
+ * What a role holds. The constitution's grants to it (founding state,
+ * outside any definition) are its first definition, so any later
+ * definition that stands supersedes them. After that, what every current
+ * definition holds: delegations compared by `{cmd, pol}`, nestings by the
+ * role they nest in, each attenuated to what its definer could do, judged
+ * at the definition. Any other grant outside a definition, a founder's
+ * later one included, counts for nothing.
  */
 function holderMay(
   auth: Authority,
@@ -200,26 +203,21 @@ function holderMay(
 ): boolean {
   const role = roleName(principal);
   const fits = (d: Delegation) => d.aud === principal && covers(d.cmd, cmd) && allows(d.pol, args);
-  // The constitution's own grants, outside any definition.
   const constitution = (by: string) => auth.founders.includes(by);
-  if (auth.delegations.some((d) => d.def === undefined && constitution(d.iss) && before(d, at) && fits(d)))
-    return true;
-  if (
-    (auth.nestings ?? []).some(
+  const current = heads(auth, role, at, visiting);
+  const first = current[0];
+  if (!first) {
+    const founding = (e: Placed & { readonly def?: string }, by: string) =>
+      e.def === undefined && e.at === undefined && constitution(by);
+    if (auth.delegations.some((d) => founding(d, d.iss) && fits(d))) return true;
+    return (auth.nestings ?? []).some(
       (n) =>
-        n.def === undefined &&
-        constitution(n.by) &&
-        before(n, at) &&
+        founding(n, n.by) &&
         n.role === role &&
         n.holds !== role &&
         holderMay(auth, `role:${n.holds}`, cmd, args, at, visiting),
-    )
-  )
-    return true;
-  // Every other grant lives in a definition.
-  const current = heads(auth, role, at, visiting);
-  const first = current[0];
-  if (!first) return false;
+    );
+  }
   const attenuated = (h: Definition) =>
     constitution(h.by) || mayIn(auth, h.by, cmd, args, judgedAt(h), visiting);
   if (!current.every(attenuated)) return false;
@@ -289,8 +287,9 @@ function rolesIn(auth: Authority, who: string, at: number, outer: ReadonlySet<st
 
 /**
  * Whether a reduction strikes an action concurrent with it. Removal strikes
- * every one. Unassigning a role, or leaving it, strikes only an action that
- * its own view allowed and would refuse without that role.
+ * every one. Unassigning a role, or leaving it, strikes only an action its
+ * own view allowed and would refuse with that role taken from the author's
+ * holdings at that view only: definitions stay judged at their own views.
  */
 export function strikes(
   auth: Authority,
@@ -300,11 +299,10 @@ export function strikes(
   if (action.who !== reduction.who) return false;
   if (!may(auth, action.who, action.cmd, action.args, action.at)) return false;
   if (reduction.role === undefined) return true;
-  const without: Authority = {
-    ...auth,
-    assignments: auth.assignments.filter((a) => !(a.to === reduction.who && a.role === reduction.role)),
-  };
-  return !may(without, action.who, action.cmd, action.args, action.at);
+  if (auth.founders.includes(action.who)) return false;
+  const visiting = new Set<string>();
+  const without = rolesIn(auth, action.who, action.at, visiting).filter((r) => r !== reduction.role);
+  return !without.some((r) => holderMay(auth, `role:${r}`, action.cmd, action.args, action.at, visiting));
 }
 
 /** The arguments of a command about a target, as the host fills them in: `{ role?, self, roles }` */

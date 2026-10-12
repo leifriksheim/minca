@@ -91,9 +91,13 @@ changed or swapped.
   `strong-remove/1` (§4).
 - **What changes in place, and what can't** (Decided). Roles, grants,
   members and collections change in place, as the rules allow; no migration
-  is needed to add a role. The resolver and `top` can't change: to change
-  them, or to leave a headless space, members move to a **successor space**
-  (Matrix's room upgrade).
+  is needed to add a role. **The constitution's grants for a role are that
+  role's first definition**: a later definition that stands (and so saw
+  them, as every placed record saw the founding state) supersedes them, so
+  founding roles change in place like any other. After the founding,
+  founders grant through `/role/define` like anyone. The resolver and
+  `top` can't change: to change them, or to leave a headless space,
+  members move to a **successor space** (Matrix's room upgrade).
 
 ### Successor spaces
 
@@ -266,13 +270,14 @@ appointed them", "a limit of `.roles`").
 A role's grants come from the space: the founding roles in the
 constitution, and later roles written by whoever holds `/role/define`.
 **Every role grant but the constitution's lives inside a definition**: a
-`/role/define` record that holds the role's delegations and nestings. A
-delegation or nesting outside any definition, not the constitution's,
-counts for nothing, so rewriting a role replaces what it held, and the
-rule for rival definitions (below) can't be sidestepped by adding grants
-one at a time. A role definition is a set of delegations whose issuer is
-the definer, so it
-holds only what the definer held, as of the definition, as UCAN's
+`/role/define` record that holds the role's delegations and nestings. The
+constitution's own grants for a role are its first definition (§1), and a
+later definition supersedes them. Any other delegation or nesting outside a
+definition counts for nothing, a founder's later one included, so
+rewriting a role replaces what it held, and the rule for rival definitions
+(below) can't be sidestepped by adding grants one at a time. A role
+definition is a set of delegations whose issuer is the definer, so it holds
+only what the definer held, as of the definition, as UCAN's
 attenuation requires; the constitution's roles are issued by the space
 itself, the root of every chain. A definition stands when its author held
 `/role/define` for that role as of its view, as for any access event.
@@ -351,9 +356,14 @@ grant ever names the account.
 
 - **What an unassignment strikes.** Unassigning a role, or leaving it on
   one's own (#168), strikes only the account's concurrent actions that its
-  own view allowed and would refuse with that role removed, not all of its
-  concurrent actions: unassigning `greeter` doesn't strike what its holder
-  did as an admin meanwhile. A removal strikes all of them, as today.
+  own view allowed and would refuse with that role taken **from the
+  action author's holdings at that view only**, not all of its concurrent
+  actions: unassigning `greeter` doesn't strike what its holder did as an
+  admin meanwhile. Definitions stay judged at their own views, unaffected
+  unless they are themselves concurrent with the reduction: an admin's
+  concurrent delete through `member`, which her own earlier definition of
+  `member` gave, is not struck by unassigning her from admin. A removal
+  strikes all of them, as today.
 - **Removal and assignments.** A removal ends every assignment of the
   removed account that hadn't seen it, an assignment concurrent with the
   removal included. After a re-add, only assignments that had seen the
@@ -384,8 +394,17 @@ for the role as of its view; one whose author didn't is no rival, or
 anyone could empty a role. No lowest id decides anything (an id can be
 ground), and no peer tries to decide whether one policy implies another.
 
+**The intersection can lock a role that defines itself.** If admins hold
+`/role/define` for `admin`, two admins' concurrent edits that disagree on
+that grant (one narrows its policy, say) leave `admin` without it, and
+then no admin can write the definition that ends the rivalry. A founder
+can repair it; in a headless or `top: "none"` space it takes a successor
+space. So templates should give `/role/define` for a role to a role other
+than itself: founders, or a separate `steward` role, define `admin`.
+
 _Source:_ `scenarios/host/grants.ts` (`heads`, `holderMay`);
-`scenarios/tests/chess.test.ts` ("rival definitions of a role hold only
+`scenarios/tests/chess.test.ts` ("rivals can lock a role that defines
+itself", "rival definitions of a role hold only
 what they share").
 
 ## 3. Contracts
@@ -455,10 +474,11 @@ Three kinds of result, and what each needs:
    - **Claiming each payment once.** The line declaration names the fields
      whose citations may appear only once along the line
      (`"once": ["received"]`), indexed per account per collection
-     (**Decided**: `once` applies only to lines). "Along the line" means the
-     **counted chain**, a version's `prev` back to the start. The reader already holds the whole line, so it checks this with
-     an index, and the body carries nothing extra. The prototype's
-     `body.claimed`, a list re-read on every payment, goes.
+     (**Decided**: `once` applies only to lines). "Along the line" means
+     the **counted chain**, a version's `prev` back to the start. The
+     reader already holds the whole line, so it checks this with an index,
+     and the body carries nothing extra. The prototype's `body.claimed`, a
+     list re-read on every payment, goes.
    - **A known limit: an honest account's offline devices.** Two devices of
      one account that pay in the same collection while apart write twins,
      and the line is dead for good. Apps must keep a line on one device at
@@ -510,15 +530,17 @@ What Weave's replay does today, restated over grants:
 - A change is judged by the grants its author held as of what it had seen:
   the grants of the roles assigned to it, as of the change's own view. An
   account holds nothing else (§2).
-- Role definitions and nestings are access events, judged in their own
-  view, like the rest: a role keeps its grants when its definer later loses
-  power (§2). Rival definitions hold their intersection (§2). Assignments
-  are judged in their own view too, and end when unassigned, or when a
-  removal they hadn't seen ends them.
+- Role definitions and nestings are access events, judged in their own view,
+  like the rest: a role keeps its grants when its definer later loses power
+  (§2). The constitution's grants for a role are its first definition,
+  superseded by a later one (§1). Rival definitions hold their intersection
+  (§2). Assignments are judged in their own view too, and end when
+  unassigned, or when a removal they hadn't seen ends them.
 - Unassigning or leaving a role strikes only the concurrent actions that
   needed that role; removing an account strikes all of its concurrent
   actions (§2).
-- Removing or demoting someone strikes what they did concurrently with it.
+- Removing someone strikes what they did concurrently with it. Unassigning
+  a role strikes only what needed that role (§2).
 - Mutual removals both stand; no one else can remove a founder under
   `top`, so a space with founders has someone in charge until the last one
   steps down by their own choice (§1).
@@ -694,8 +716,8 @@ Each step is its own PR with an adversarial review.
    resolver name and `/space/succeed`.
 6. **Contracts in the spec.** The CEL subset as a spec part with its
    conformance suite; checks renamed; the line rule with `once` and closed
-   keys (corrections later); `sum([])` as `0.0`; the hall of fame and mutual credit
-   scenarios against the real library.
+   keys (corrections later); `sum([])` as `0.0`; the hall of fame and
+   mutual credit scenarios against the real library.
 7. **Later: democracy.** Quorum clauses (question 1) meeting §5's
    requirements, which un-skips the co-op's "needs quorum" scenarios; then
    witnesses for deadlines.
@@ -725,14 +747,15 @@ in the same PR:
   account's power was its roles' grants. Removal takes all of it, and ends
   every assignment that hadn't seen the removal, one concurrent with it
   included; after a re-add, only assignments that saw the removal count.
-  Unassignment takes that role, and strikes only the concurrent actions
-  that needed it. Nothing it handed a key survives, because it could hand
+  Unassignment takes that role, and strikes only the concurrent actions that
+  needed it. Nothing it handed a key survives, because it could hand
   nothing. What does survive is what it wrote into roles while it held
   `/role/define` (§2), its own roles included, until someone rewrites the
-  role. Unassignment takes only the role assignment. That replaces "a grant it makes concurrently with its removal is struck"
-  for roles, which still holds for definitions concurrent with the
-  removal. The sock gap (#191) becomes a sock it _assigned_ a role, which
-  is visible and unassignable.
+  role. Unassignment takes only the role assignment, and strikes the
+  concurrent actions that needed it. That replaces "a grant it makes
+  concurrently with its removal is struck" for roles, which still holds for
+  definitions concurrent with the removal. The sock gap (#191) becomes a
+  sock it _assigned_ a role, which is visible and unassignable.
 - **Top rank.** Founders replace the top rank. A founder can't be removed
   by anyone else, but can step down; a space can become headless.
 - **Root thief (§3.5).** A thief of a founder's account seed is a founder:
@@ -764,7 +787,12 @@ in the same PR:
   - **Rival definitions** hold their intersection (§2): a definer can
     weaken a role, even empty it, by writing a rival definition apart from
     the others, until a definition that saw both is written. It fails
-    closed, never open.
+    closed, never open. Where the role defines itself, rivals can drop
+    `/role/define` from it, and then nobody in it can end the rivalry: a
+    founder repairs it, and in a headless or `top: "none"` space it takes a
+    successor space. Templates give `/role/define` for a role to another
+    role (§2; `scenarios/tests/chess.test.ts`, "rivals can lock a role that
+    defines itself").
   - A member with two accounts sidesteps `.self` (§2). With only roles
     holding grants, the second account must be a member assigned the role,
     visible and unassignable; it is no longer just a fresh key.

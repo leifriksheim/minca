@@ -340,6 +340,121 @@ describe('chess: whoever may define roles is trusted to (by design)', () => {
   });
 });
 
+describe("chess: the constitution's grants are a role's first definition", () => {
+  const GUS = 'did:key:gus';
+  const deletes = (a: Authority) =>
+    may(a, FRANK, '/record/delete', { collection: 'app.chess', byCreator: false });
+
+  test('a later definition that saw them supersedes them: a rewrite removes a constitution grant', () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [
+        { iss: ALICE, aud: 'role:admin', cmd: '/role/define', pol: [] },
+        { iss: ALICE, aud: 'role:member', cmd: '/record/delete', pol: [] },
+      ],
+      assignments: [
+        { by: ALICE, to: GUS, role: 'admin', at: 1 },
+        { by: ALICE, to: FRANK, role: 'member', at: 1 },
+      ],
+    };
+    assert.ok(deletes(a));
+    // Gus, an admin, rewrites member to hold nothing.
+    assert.ok(!deletes({ ...a, definitions: [{ id: 'm1', by: GUS, role: 'member', at: 2 }] }));
+  });
+
+  test("a founder's later grant outside a definition gives nothing: founders define like anyone", () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [{ iss: ALICE, aud: 'role:member', cmd: '/member/remove', pol: [], at: 10 }],
+      assignments: [{ by: ALICE, to: FRANK, role: 'member', at: 1 }],
+    };
+    assert.ok(!may(a, FRANK, '/member/remove', argsFor(a, FRANK, BOB)));
+    const defined: Authority = {
+      ...a,
+      definitions: [{ id: 'm1', by: ALICE, role: 'member', at: 10 }],
+      delegations: [{ iss: ALICE, aud: 'role:member', cmd: '/member/remove', pol: [], def: 'm1', at: 10 }],
+    };
+    assert.ok(may(defined, FRANK, '/member/remove', argsFor(defined, FRANK, BOB)));
+  });
+});
+
+describe('chess: rivals can lock a role that defines itself', () => {
+  const GUS = 'did:key:gus';
+  // admin's first definition (Alice's) lets admins define admin and do anything with records.
+  const a0 = (iss: string, def: string, at?: number, view?: number): Delegation[] => [
+    { iss, aud: 'role:admin', cmd: '/role/define', pol: [], def, at, view },
+    { iss, aud: 'role:admin', cmd: '/record', pol: [], def, at, view },
+  ];
+  const locked: Authority = {
+    founders: [ALICE],
+    delegations: [
+      ...a0(ALICE, 'a0'),
+      // Erin and Gus each rewrite admin apart; Gus narrows /role/define's policy.
+      ...a0(ERIN, 'a1', 2),
+      {
+        iss: GUS,
+        aud: 'role:admin',
+        cmd: '/role/define',
+        pol: [['!=', '.role', 'owner']],
+        def: 'a2',
+        at: 3,
+        view: 1,
+      },
+    ],
+    definitions: [
+      { id: 'a0', by: ALICE, role: 'admin' },
+      { id: 'a1', by: ERIN, role: 'admin', at: 2, saw: ['a0'] },
+      { id: 'a2', by: GUS, role: 'admin', at: 3, view: 1, saw: ['a0'] },
+    ],
+    assignments: [
+      { by: ALICE, to: ERIN, role: 'admin' },
+      { by: ALICE, to: GUS, role: 'admin' },
+    ],
+  };
+
+  test('the rivals share no /role/define, so no admin can write the definition that ends the rivalry', () => {
+    assert.ok(!may(locked, ERIN, '/role/define', { role: 'admin' }));
+    assert.ok(!may(locked, GUS, '/role/define', { role: 'admin' }));
+    const tries: Authority = {
+      ...locked,
+      definitions: [
+        ...(locked.definitions ?? []),
+        { id: 'a3', by: ERIN, role: 'admin', at: 4, saw: ['a1', 'a2'] },
+      ],
+      delegations: [...locked.delegations, ...a0(ERIN, 'a3', 4)],
+    };
+    assert.ok(
+      !may(tries, ERIN, '/role/define', { role: 'admin' }),
+      "Erin's settling definition doesn't stand",
+    );
+  });
+
+  test('a founder repairs it (without one, it takes a successor space)', () => {
+    const repaired: Authority = {
+      ...locked,
+      definitions: [
+        ...(locked.definitions ?? []),
+        { id: 'a3', by: ALICE, role: 'admin', at: 4, saw: ['a1', 'a2'] },
+      ],
+      delegations: [...locked.delegations, ...a0(ALICE, 'a3', 4)],
+    };
+    assert.ok(may(repaired, ERIN, '/role/define', { role: 'admin' }));
+  });
+
+  test('the recommended template: a separate steward role defines admin, so rivals on admin lock nothing', () => {
+    const STEW = 'did:key:steward';
+    const stewarded: Authority = {
+      ...locked,
+      delegations: [
+        ...locked.delegations,
+        { iss: ALICE, aud: 'role:steward', cmd: '/role/define', pol: [['==', '.role', 'admin']] },
+      ],
+      assignments: [...locked.assignments, { by: ALICE, to: STEW, role: 'steward' }],
+    };
+    assert.ok(may(stewarded, STEW, '/role/define', { role: 'admin' }));
+  });
+});
+
 describe('chess: rival definitions of a role hold only what they share', () => {
   const GUS = 'did:key:gus';
   const HAL = 'did:key:hal';
@@ -453,6 +568,39 @@ describe('chess: what an unassignment strikes', () => {
   });
   test('a removal strikes everything concurrent', () => {
     assert.ok(strikes(a, { who: FRED }, assignReferee));
+  });
+});
+
+describe('chess: the strike counterfactual takes the role from the author only', () => {
+  test("unassigning admin doesn't strike Erin's concurrent delete through member, which her earlier m1 gave", () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [
+        { iss: ALICE, aud: 'role:admin', cmd: '/role/define', pol: [] },
+        { iss: ALICE, aud: 'role:admin', cmd: '/record', pol: [] },
+        { iss: ERIN, aud: 'role:member', cmd: '/record/delete', pol: [], def: 'm1', at: 2 },
+      ],
+      definitions: [{ id: 'm1', by: ERIN, role: 'member', at: 2 }],
+      assignments: [
+        { by: ALICE, to: ERIN, role: 'admin', at: 1 },
+        { by: ALICE, to: ERIN, role: 'member', at: 1 },
+      ],
+      unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 5 }],
+    };
+    // Erin deletes having seen up to 4, concurrently with the unassignment at 5.
+    const del = {
+      who: ERIN,
+      cmd: '/record/delete',
+      args: { collection: 'app.chess', byCreator: false },
+      at: 4.5,
+    };
+    assert.ok(
+      !strikes(a, { who: ERIN, role: 'admin' }, del),
+      'm1, judged at its own view, still gives member it',
+    );
+    // What only admin gave her is struck.
+    const write = { who: ERIN, cmd: '/record/write', args: { collection: 'app.chess' }, at: 4.5 };
+    assert.ok(strikes(a, { who: ERIN, role: 'admin' }, write));
   });
 });
 
