@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { argsFor, may, type Authority } from '../host/grants.js';
+import { argsFor, defineArgsFor, may, strikes, type Authority, type Delegation } from '../host/grants.js';
 import { judge, type Host } from '../host/cel-host.js';
 import { version } from '../host/space.js';
 import {
@@ -237,6 +237,208 @@ describe('chess: a role keeps its grants when its definer is demoted (decided)',
     assert.ok(may(a, GUS, '/role/assign', argsFor(a, GUS, BOB, 'referee')));
     assert.ok(!may(a, ERIN, '/role/assign', argsFor(a, ERIN, BOB, 'referee')));
     assert.ok(!may(a, GUS, '/record/delete', { collection: 'app.chess', byCreator: false }));
+  });
+});
+
+describe('chess: parking power in a role you keep', () => {
+  /** Admins define roles, under a template that says `.mine == false`, or one that doesn't */
+  const template = (pol: Delegation['pol']): Delegation[] => [
+    ...grants,
+    { iss: ALICE, aud: 'role:admin', cmd: '/role/define', pol },
+    { iss: ALICE, aud: 'role:admin', cmd: '/member/remove', pol: [['==', '.self', false]] },
+  ];
+  const removesBob = (a: Authority, who: string) =>
+    may(a, who, '/member/remove', argsFor(a, who, BOB, undefined, 5), 5);
+  // Erin, an admin and a member, writes /member/remove into role:member at 2, and loses admin at 4.
+  const parked = (pol: Delegation['pol']): Authority => ({
+    founders: [ALICE],
+    delegations: [
+      ...template(pol),
+      { iss: ERIN, aud: 'role:member', cmd: '/member/remove', pol: [['==', '.self', false]], at: 2 },
+    ],
+    assignments: [...assignments, { by: ALICE, to: ERIN, role: 'member' }],
+    unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 4 }],
+  });
+
+  test('`mine` says whether the definer holds the role, directly or through nesting', () => {
+    const a = parked([]);
+    assert.deepEqual(defineArgsFor(a, ERIN, 'member', undefined, 3), { role: 'member', mine: true });
+    assert.deepEqual(defineArgsFor(a, ERIN, 'coach', undefined, 3), { role: 'coach', mine: false });
+  });
+
+  test('without `.mine` in the template, the power outlives her admin role (the gap the argument closes)', () => {
+    const a = parked([]);
+    assert.ok(removesBob(a, ERIN));
+    assert.ok(removesBob(a, FRANK));
+  });
+
+  test("under `.mine == false`, writing into a role she holds is refused, so there's nothing to keep", () => {
+    const a = parked([['==', '.mine', false]]);
+    assert.ok(!removesBob(a, ERIN));
+    assert.ok(!removesBob(a, FRANK));
+  });
+
+  test('nor can she nest her role inside one she defines', () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [
+        ...template([['==', '.mine', false]]),
+        { iss: ERIN, aud: 'role:park', cmd: '/member/remove', pol: [['==', '.self', false]], at: 2 },
+      ],
+      assignments: [...assignments, { by: ALICE, to: ERIN, role: 'member' }],
+      nestings: [{ by: ERIN, role: 'member', holds: 'park', at: 3 }],
+      unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 4 }],
+    };
+    assert.ok(!removesBob(a, ERIN));
+    assert.ok(!removesBob(a, FRANK));
+  });
+});
+
+describe('chess: rival definitions of a role hold only what they share', () => {
+  const GUS = 'did:key:gus';
+  const HAL = 'did:key:hal';
+  const deletes = (a: Authority, collection: string) =>
+    may(a, HAL, '/record/delete', { collection, byCreator: false });
+  const base: Authority = {
+    founders: [ALICE],
+    delegations: [
+      ...grants,
+      { iss: ALICE, aud: 'role:admin', cmd: '/role/define', pol: [['==', '.mine', false]] },
+      { iss: ALICE, aud: 'role:admin', cmd: '/record', pol: [] },
+    ],
+    assignments: [
+      ...assignments,
+      { by: ALICE, to: GUS, role: 'admin' },
+      { by: ALICE, to: HAL, role: 'judge' },
+    ],
+  };
+  const del = (iss: string, def: string, collection: string, at: number): Delegation => ({
+    iss,
+    aud: 'role:judge',
+    cmd: '/record/delete',
+    pol: [['==', '.collection', collection]],
+    def,
+    at,
+  });
+  // Erin's j1 (chess and polls) and Gus's j2 (chess), written apart: neither saw the other.
+  const rivals: Authority = {
+    ...base,
+    definitions: [
+      { id: 'j1', by: ERIN, role: 'judge', at: 2 },
+      { id: 'j2', by: GUS, role: 'judge', at: 3, view: 1 },
+    ],
+    delegations: [
+      ...base.delegations,
+      del(ERIN, 'j1', 'app.chess', 2),
+      del(ERIN, 'j1', 'app.poll', 2),
+      del(GUS, 'j2', 'app.chess', 3),
+    ],
+  };
+
+  test('while they are rivals, the role holds the intersection', () => {
+    assert.ok(deletes(rivals, 'app.chess'));
+    assert.ok(!deletes(rivals, 'app.poll'), 'only j1 has it');
+  });
+
+  test('a definition that saw both ends the rivalry', () => {
+    const settled: Authority = {
+      ...rivals,
+      definitions: [
+        ...(rivals.definitions ?? []),
+        { id: 'j3', by: ERIN, role: 'judge', at: 4, saw: ['j1', 'j2'] },
+      ],
+      delegations: [...rivals.delegations, del(ERIN, 'j3', 'app.poll', 4)],
+    };
+    assert.ok(deletes(settled, 'app.poll'));
+    assert.ok(!deletes(settled, 'app.chess'));
+  });
+
+  test('rivals with nothing in common leave the role empty: it fails closed', () => {
+    const apart: Authority = {
+      ...rivals,
+      delegations: [...base.delegations, del(ERIN, 'j1', 'app.poll', 2), del(GUS, 'j2', 'app.chess', 3)],
+    };
+    assert.ok(!deletes(apart, 'app.chess'));
+    assert.ok(!deletes(apart, 'app.poll'));
+  });
+
+  test('a rival its author could not write is no rival', () => {
+    const bogus: Authority = {
+      ...base,
+      definitions: [
+        { id: 'j1', by: ERIN, role: 'judge', at: 2 },
+        { id: 'jb', by: BOB, role: 'judge', at: 3, view: 1 },
+      ],
+      delegations: [...base.delegations, del(ERIN, 'j1', 'app.chess', 2)],
+    };
+    assert.ok(deletes(bogus, 'app.chess'), 'Bob holds no /role/define: his empty definition changes nothing');
+  });
+});
+
+describe('chess: what an unassignment strikes', () => {
+  const FRED = 'did:key:fred';
+  const a: Authority = {
+    founders: [ALICE],
+    delegations: [
+      ...grants,
+      { iss: ALICE, aud: 'role:greeter', cmd: '/record/write', pol: [['==', '.collection', 'app.welcome']] },
+    ],
+    assignments: [
+      ...assignments,
+      { by: ALICE, to: FRED, role: 'admin' },
+      { by: ALICE, to: FRED, role: 'greeter' },
+    ],
+  };
+  // Alice unassigns greeter at 5; Fred acts at 6 having seen only up to 4.
+  const greeter = { who: FRED, role: 'greeter' };
+  const assignReferee = {
+    who: FRED,
+    cmd: '/role/assign',
+    args: argsFor(a, FRED, BOB, 'referee', 4.5),
+    at: 4.5,
+  };
+  const welcome = { who: FRED, cmd: '/record/write', args: { collection: 'app.welcome' }, at: 4.5 };
+
+  test("unassigning greeter doesn't strike Fred's concurrent admin actions", () => {
+    assert.ok(!strikes(a, greeter, assignReferee));
+  });
+  test('it strikes what needed greeter, and so does Fred leaving greeter himself (#168)', () => {
+    assert.ok(strikes(a, greeter, welcome));
+  });
+  test('a removal strikes everything concurrent', () => {
+    assert.ok(strikes(a, { who: FRED }, assignReferee));
+  });
+});
+
+describe('chess: a removal ends the assignments that had not seen it', () => {
+  const deletesAny = (a: Authority, who: string) =>
+    may(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
+  const writes = (a: Authority) => may(a, BOB, '/record/write', { collection: 'app.chess' });
+  // Alice removes Bob at 3; Erin, concurrently (seen up to 2), makes him referee at 4.
+  const removed: Authority = {
+    founders: [ALICE],
+    delegations: grants,
+    assignments: [...assignments, { by: ERIN, to: BOB, role: 'referee', at: 4, view: 2 }],
+    removals: [{ by: ALICE, who: BOB, at: 3 }],
+  };
+
+  test('his member role ends, and the concurrent referee assignment does not survive', () => {
+    assert.ok(!writes(removed));
+    assert.ok(!deletesAny(removed, BOB));
+  });
+
+  test('after a re-add, only assignments that saw the removal count', () => {
+    const readded: Authority = {
+      ...removed,
+      assignments: [...removed.assignments, { by: ALICE, to: BOB, role: 'member', at: 5 }],
+    };
+    assert.ok(writes(readded));
+    assert.ok(!deletesAny(readded, BOB), 'the concurrent referee assignment stays dead');
+    const again: Authority = {
+      ...readded,
+      assignments: [...readded.assignments, { by: ERIN, to: BOB, role: 'referee', at: 6 }],
+    };
+    assert.ok(deletesAny(again, BOB));
   });
 });
 

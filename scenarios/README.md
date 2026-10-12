@@ -6,13 +6,13 @@ with the hard cases (a removal racing an action, a reaction withdrawn, a
 double spend from two devices). Each one says, in code, what Weave must let
 that community do and what it must refuse.
 
-| Scenario      | What it tests                                                                                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Chess club    | Roles, a referee, "only your own move" (`.byCreator`), moderators who can't remove admins (`.roles`), unassigning, roles only to accounts, a contract on turn order |
-| Co-op         | No fixed top; removal by a majority counted as of the proposal; padding and backdating, skipped until quorum                                                        |
-| Company team  | Teams and a nested sub-team, an admin who can't read hr or assign herself (`.self`), nor nest or assign hr to her own role                                          |
-| Hall of fame  | A claim citing evidence; withdrawals and removals before and after it                                                                                               |
-| Mutual credit | An account's line of payments, a credit limit, double spends from two devices, griefing and second lines refused, a payee's correction                              |
+| Scenario      | What it tests                                                                                                                                                                                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chess club    | Roles, a referee, "only your own move" (`.byCreator`), moderators who can't remove admins (`.roles`), unassigning and what it strikes, removal against re-add, rival definitions, no parking power (`.mine`), roles only to accounts, a contract on turn order |
+| Co-op         | No fixed top; removal by a majority counted as of the proposal; padding and backdating, skipped until quorum                                                                                                                                                   |
+| Company team  | Teams and a nested sub-team, an admin who can't read hr or assign herself (`.self`), nor nest or assign hr to her own role                                                                                                                                     |
+| Hall of fame  | A claim citing evidence; withdrawals and removals before and after it                                                                                                                                                                                          |
+| Mutual credit | An account's line of payments, a credit limit, double spends from two devices, griefing and second lines refused, no corrections in v1 (a stated limit), closed line keys                                                                                      |
 
 A skipped test is an attack the stand-ins can't refuse yet, named for what
 it waits for ("needs quorum", "needs #72"). It asserts what that work must

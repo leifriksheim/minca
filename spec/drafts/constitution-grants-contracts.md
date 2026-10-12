@@ -9,7 +9,10 @@ adopted below, and each attack it showed is a scenario test in `scenarios/`
 that shows it refused, or a skipped test naming what it waits for. A second,
 narrower review the same day found that delegations to accounts outlived
 their issuer; the fix (only roles hold grants, §2) and its other findings
-are adopted too.
+are adopted too. A third review found power parked in a role the definer
+keeps; its fixes (`mine`, rival definitions as an intersection, scoped
+strikes, removal against re-add, closed line keys) are adopted, and
+corrections in a line are deferred from v1 (§3).
 
 ## In one paragraph
 
@@ -195,19 +198,19 @@ include the few facts about the invoker and the target a policy needs. A
 policy reads only these; a selector naming anything else finds nothing, and
 the policy fails.
 
-| Command              | Arguments                         | Filled in from                                                                                                                         |
-| -------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `/record/read`       | `collection`                      | The collection read                                                                                                                    |
-| `/record/write`      | `collection`, `byCreator`, `body` | `byCreator`: whether the writer's account made the record's first version (true for a new record); `body`: the new body                |
-| `/record/delete`     | `collection`, `byCreator`         | As for `/record/write`                                                                                                                 |
-| `/collection/define` | `collection`                      | The collection defined                                                                                                                 |
-| `/member/add`        | (none)                            |                                                                                                                                        |
-| `/member/remove`     | `self`, `roles`                   | `self`: whether the member removed is the invoker (leaving); `roles`: the target's roles as of the invocation's view, sorted names     |
-| `/role/define`       | `role`, `holds`                   | The role whose grants are written; `holds`: the role it is nested in, or absent (below)                                                |
-| `/role/assign`       | `role`, `self`, `roles`           | `self`: whether the assignee is the invoker's account; `roles`: the assignee's roles as of the view. The assignee is always an account |
-| `/role/unassign`     | `role`, `self`, `roles`           | As for `/role/assign`                                                                                                                  |
-| `/key/change`        | (none)                            |                                                                                                                                        |
-| `/space/succeed`     | (none)                            | The successor's constitution is the payload, not an argument                                                                           |
+| Command              | Arguments                         | Filled in from                                                                                                                                                                |
+| -------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/record/read`       | `collection`                      | The collection read                                                                                                                                                           |
+| `/record/write`      | `collection`, `byCreator`, `body` | `byCreator`: whether the writer's account made the record's first version (true for a new record); `body`: the new body                                                       |
+| `/record/delete`     | `collection`, `byCreator`         | As for `/record/write`                                                                                                                                                        |
+| `/collection/define` | `collection`                      | The collection defined                                                                                                                                                        |
+| `/member/add`        | (none)                            |                                                                                                                                                                               |
+| `/member/remove`     | `self`, `roles`                   | `self`: whether the member removed is the invoker (leaving); `roles`: the target's roles as of the invocation's view, sorted names                                            |
+| `/role/define`       | `role`, `holds`, `mine`           | The role whose grants are written; `holds`: the role it is nested in, or absent (below); `mine`: whether the invoker holds `role` as of the view, directly or through nesting |
+| `/role/assign`       | `role`, `self`, `roles`           | `self`: whether the assignee is the invoker's account; `roles`: the assignee's roles as of the view. The assignee is always an account                                        |
+| `/role/unassign`     | `role`, `self`, `roles`           | As for `/role/assign`                                                                                                                                                         |
+| `/key/change`        | (none)                            |                                                                                                                                                                               |
+| `/space/succeed`     | (none)                            | The successor's constitution is the payload, not an argument                                                                                                                  |
 
 So:
 
@@ -260,9 +263,24 @@ constitution, and later roles written by whoever holds `/role/define`. A
 role definition is a set of delegations whose issuer is the definer, so it
 holds only what the definer held, as of the definition, as UCAN's
 attenuation requires; the constitution's roles are issued by the space
-itself, the root of every chain. A policy on `/role/define` reads `role`
-and `holds`, so "eng may nest web inside eng, and nothing else" is plain
-UCAN.
+itself, the root of every chain. A policy on `/role/define` reads `role`,
+`holds` and `mine`, so "eng may nest web inside eng, and nothing else" is
+plain UCAN.
+
+**`mine`: no parking power in a role you keep.** A definer who rewrites a
+role she holds herself (say `member`) to add `/member/remove`, or nests it
+inside a role she defines, keeps that power through the role after she is
+unassigned from the role that let her define it, and so does everyone in
+it. `mine` is true when the invoker holds the role being defined as of
+the view, directly or through nesting, and templates grant `/role/define`
+with `["==", ".mine", false]`. The guarantee is then: **unassigning takes
+the role; what she wrote into roles she doesn't hold stays until
+rewritten, and `.mine` stops her writing into the ones she does**, where
+the policy says so. A gap stays: two definers who collude can each define
+a role for the other.
+
+_Source:_ `scenarios/host/grants.ts` (`defineArgs`, `holdsRole`);
+`scenarios/tests/chess.test.ts` ("parking power in a role you keep").
 
 Assigning an account to a role is the command `/role/assign`, an
 invocation, not a delegation. It gives the assignee nothing the role didn't
@@ -293,7 +311,8 @@ go only to roles, so losing a role loses its power").
 same arguments as `/role/assign`. **Leaving a role on one's own is built
 in**: an account may always unassign itself, whatever the policy says, as a
 founder may always step down. Either is a reduction of the author's own
-account, so it strikes the author's own actions concurrent with it (§9).
+account, so it strikes the author's own actions concurrent with it that
+needed the role (below, and §9).
 
 A peer judging an action checks both: the assignment (its author held
 `/role/assign` with a policy the arguments meet, as of what it had seen),
@@ -305,20 +324,35 @@ back to the space).
 **A role keeps its grants when its definer is later removed or demoted.**
 Role delegations are access events, judged in their own view, as 03 §4.3
 judges every access event: a definition that was allowed when it was made
-stays allowed. This is not UCAN's chain semantics, where a delegation lives
-only as long as its issuer's proof; it is Weave's, and it is safe only
-because its audience is a role. **An account's power, by contrast, is its
-current assignments as of the action's view**: unassigning or removing it
-takes everything, since no grant ever names the account. Only a reduction concurrent with the definition (one the
+stays allowed. Only a reduction concurrent with the definition (one the
 definition hadn't seen, and that hadn't seen it) strikes it, as
 `strong-remove/1` strikes anything concurrent with a removal. So a
 demotion doesn't take a whole role's grants from its members at once; to
-take them, someone with `/role/define` rewrites the role.
+take them, someone with `/role/define` rewrites the role. This is not
+UCAN's chain semantics, where a delegation lives only as long as its
+issuer's proof; it is Weave's, and it is safe only because its audience is
+a role, and with `.mine` (above) not the definer's own.
 
-_Source:_ `scenarios/tests/chess.test.ts` ("a role keeps its grants when
-its definer is demoted"). The scenario host has one linear history, so it
-shows the first half only; the concurrent strike is the replay's, and is
-tested there when grants land (§8 step 4).
+**An account's power, by contrast, is its current assignments as of the
+action's view**: unassigning or removing it takes everything, since no
+grant ever names the account.
+
+- **What an unassignment strikes.** Unassigning a role, or leaving it on
+  one's own (#168), strikes only the account's concurrent actions that its
+  own view allowed and would refuse with that role removed, not all of its
+  concurrent actions: unassigning `greeter` doesn't strike what its holder
+  did as an admin meanwhile. A removal strikes all of them, as today.
+- **Removal and assignments.** A removal ends every assignment of the
+  removed account that hadn't seen it, an assignment concurrent with the
+  removal included. After a re-add, only assignments that had seen the
+  removal count.
+
+_Source:_ `scenarios/host/grants.ts` (`rolesIn`, `strikes`);
+`scenarios/tests/chess.test.ts` ("a role keeps its grants when its definer
+is demoted", "what an unassignment strikes", "a removal ends the
+assignments that had not seen it"). The scenario host has one linear
+history with views, and doesn't replay strikes; `strikes` states the rule,
+and the replay is tested when grants land (§8 step 4).
 
 ### Which definition is current
 
@@ -326,12 +360,20 @@ tested there when grants land (§8 step 4).
 current among rivals, wherever the protocol or a contract asks for the
 current version of a record.
 
-**Rival role definitions** (two concurrent `/role/define` for one role)
-resolve toward less power, compared **purely syntactically**: if one
-definition's delegations are a subset of the other's (as JSON values), the
-smaller wins; otherwise the one with the lowest id wins. No peer tries to
-decide whether one policy implies another, which is undecidable in general
-and easy to get differently.
+**Rival role definitions** (Decided, from the third review). While
+definitions of one role are rivals (none saw the others), the role holds
+only **the delegations found in every rival**, compared as the canonical
+JSON of `{cmd, pol}` (ignoring `iss`, `nonce` and `meta`). A delegation
+counts only if it is validly issued in each rival, and a nesting only if
+every rival has it. The rivalry ends when a definition that saw all the
+rivals is written. An empty intersection leaves the role empty, which
+fails closed. A definition its author couldn't write is no rival, or
+anyone could empty a role. No lowest id decides anything (an id can be
+ground), and no peer tries to decide whether one policy implies another.
+
+_Source:_ `scenarios/host/grants.ts` (`heads`, `holderMay`);
+`scenarios/tests/chess.test.ts` ("rival definitions of a role hold only
+what they share").
 
 ## 3. Contracts
 
@@ -374,7 +416,10 @@ Three kinds of result, and what each needs:
    not a device's log.
 
    **Lines are a built-in rule**, not a contract. A collection definition
-   declares itself a line (`"line": { "once": [...], "restate": [...] }`):
+   declares itself a line (`"line": { "once": [...] }`). **Its keys are
+   closed**: a peer that finds a key it doesn't know in a line declaration
+   doesn't judge that collection, as it doesn't judge a space with a
+   resolver it doesn't know.
 
    - **One line per account per collection, at a key derived from the
      author.** This needs #72 (keys that belong to their creator): only
@@ -390,50 +435,38 @@ Three kinds of result, and what each needs:
      version counts. It is not fixed by citation: a payment counts until its
      twin arrives (the comparison, §2.5). A payee who waits before building
      on a payment, or a witness, is the only cure.
-   - **A payee's correction.** A payee who built on a payment that was then
-     double-spent loses that version and everything after it. They may write
-     a **correction**: the next version after their last counted one, which
-     had seen the failed version, when that version failed only because of
-     something it cited (it would pass if what it cited stood). The
-     correction is not a twin of it. A "correction" of a version that still
-     counts is a double spend like any other.
-   - **A correction restates; it doesn't rewrite.** The correction carries
-     the failed version's outgoing payment unchanged, and the versions after
-     it restate the failed ones after that, in order, until the failed chain
-     ends: the same fields the line declares
-     (`"restate": ["to", "amount"]`), and the same `once` citations less the
-     ones that failed.
-     Otherwise a payer could cite a payment they expect to fall, pay
-     someone, and "correct" the payment away once it falls. If the restated
-     balance breaks the limit, the correction fails and the line dies, as
-     any double spend's does. A fork inside the failed chain is the writer's
-     own double spend, and nothing restates it.
+   - **No corrections in v1** (Decided). A payee who claims a payment that
+     is later double-spent loses that version and everything after it in
+     that line: any version after their last counted one is a twin of the
+     failed one, so the line ends there.
    - **Claiming each payment once.** The line declaration names the fields
      whose citations may appear only once along the line
      (`"once": ["received"]`), indexed per account per collection
      (**Decided**: `once` applies only to lines). "Along the line" means the
-     **counted chain**, a version's `prev` back to the start: a version that
-     failed doesn't use up what it cited, so a correction may claim it
-     again. The reader already holds the whole line, so it checks this with
+     **counted chain**, a version's `prev` back to the start. The reader already holds the whole line, so it checks this with
      an index, and the body carries nothing extra. The prototype's
      `body.claimed`, a list re-read on every payment, goes.
    - **A known limit: an honest account's offline devices.** Two devices of
      one account that pay in the same collection while apart write twins,
-     and the line is dead for good: neither version failed for something it
-     cited, so a correction doesn't cover it. Apps must keep a line on one
-     device at a time, or sync before paying. A way out could be a
-     **restart record**: after a fork, the account writes a version that had
-     seen both twins and restates both payments, in id order, from their
-     common previous version, under the limit; payees who built on either
-     twin then correct onto it. It is not adopted: it lets an account choose
-     to keep both halves of a double spend whenever the limit allows, which
-     needs its own review. Until then, it is a limit, stated in §9.
+     and the line is dead for good. Apps must keep a line on one device at
+     a time, or sync before paying.
+
+   **Later: corrections.** A way back for a payee, deferred from v1. The
+   starting point is the narrow trigger: a correction is allowed after the
+   payee's last counted version only when a version it cites is one of a
+   double-spent pair, a structural check with no second run of the
+   contract. The second review's rule stays: a correction restates the
+   failed versions' outgoing payments in order, dropping only the failed
+   citations, so it can't unpay anyone. The third review found that a
+   broad trigger ("would pass if what it cited stood") let a correction
+   revive a version that failed for its own reasons, and that a payee
+   restating can't claim the correction that repaid them. A restart record
+   for an honest account's forked devices belongs to the same later work.
 
    _Source:_ `scenarios/host/cel-host.ts` (`lineKey`, `judgeOne`,
-   `restating`, `restates`, `onceAlong`); `scenarios/tests/credit.test.ts`
-   ("a line is its account's own", "a payee recovers after a double spend",
-   "a correction can't rewrite what she paid"). The host derives the key as
-   a stand-in for #72.
+   `onceAlong`); `scenarios/tests/credit.test.ts` ("a line is its account's
+   own", "a payee who built on a double spend", "line declarations have
+   closed keys"). The host derives the key as a stand-in for #72.
 
    **`sum` of an empty list** (Decided). Today `sum([])` is the int `0`,
    and an int plus a double is an error, so a payment that claims nothing
@@ -466,15 +499,20 @@ What Weave's replay does today, restated over grants:
   account holds nothing else (§2).
 - Role definitions and nestings are access events, judged in their own
   view, like the rest: a role keeps its grants when its definer later loses
-  power (§2). Assignments are judged in their own view too, and end when
-  unassigned or removed.
+  power (§2). Rival definitions hold their intersection (§2). Assignments
+  are judged in their own view too, and end when unassigned, or when a
+  removal they hadn't seen ends them.
+- Unassigning or leaving a role strikes only the concurrent actions that
+  needed that role; removing an account strikes all of its concurrent
+  actions (§2).
 - Removing or demoting someone strikes what they did concurrently with it.
 - Mutual removals both stand; no one else can remove a founder under
   `top`, so a space with founders has someone in charge until the last one
   steps down by their own choice (§1).
 - Revocations and removals carry cutoffs; a second version at a covered place
   is a fork, and is withdrawn.
-- Rivals resolve toward less power (rival role definitions: §2).
+- Rivals resolve toward less power: rival role definitions hold only what
+  they share (§2).
 
 The replay machinery (strikes, cutoffs, `least`, the two-pass cascade) stays.
 What goes is numeric ranks, and with them every rank comparison; the
@@ -570,6 +608,10 @@ Resolved on 2026-10-12, kept for the record:
 - ~~**`sum`'s shape**~~: `sum([])` returns `0.0` (§3).
 - ~~**`once` along a line, or a watermark**~~: `once`, only on lines,
   indexed per account per collection (§3).
+- ~~**Rival role definitions**~~: their intersection while they are
+  rivals, never a lowest id (§2).
+- ~~**Corrections in a line**~~: deferred from v1; a payee who built on a
+  double spend loses that line from there (§3).
 - ~~**Headless spaces**~~, in part: founders may step down, so any space
   can become headless; the way out is `/space/succeed` (§1).
 
@@ -579,16 +621,15 @@ Open:
    implement identically. A constitution contract in CEL is more general, but
    puts CEL in what peers enforce. Either way it meets the requirements in
    §5.
-2. **Successors.** Who may run `/space/succeed` under `top: "none"` (any
-   member now, a quorum later, as proposed), and whether rival successors
-   are shown side by side (proposed) or one is preferred by lowest id. What
-   an app shows in a headless space.
-3. **Corrections in a line.** A correction must restate (§3), which the
-   second review asked for and the scenarios now check. Still open: "failed
-   only because of something it cited" is judged by running the contract
-   again with what it cited taken as standing. Whether that is the rule the
-   spec states, or a narrower one (only a cited version that fell to a
-   double spend), and whether a restart record (§3) is worth having.
+2. **Successors.** Who may run `/space/succeed` where no role holds it
+   (any member now, a quorum later, as proposed). What an app shows in a
+   headless space, and how it shows rival successors in no order.
+3. **Corrections, later.** The narrow trigger (a cited version is one of a
+   double-spent pair), restating, and a restart record for an honest
+   account's forked devices (§3).
+4. **Colluding definers.** Two accounts that may each define roles can
+   define one for each other, which `.mine` doesn't see (§2). Whether a
+   template can close that, or it stays a stated gap.
 
 To settle at implementation, each with a test:
 
@@ -622,14 +663,15 @@ Each step is its own PR with an adversarial review.
 4. **Grants and the resolver.** Prototype `strong-remove/1` over grants, run
    it through the existing convergence and attack suites, then replace ranks
    in 03 and the code. The command arguments (§2) land here, with `roles`,
-   nesting under attenuation, `/role/unassign` and leaving built in, and the
+   `mine`, nesting under attenuation, rival definitions as an intersection,
+   `/role/unassign` and leaving built in, scoped strikes, and the
    scenarios move to the real library's grants. The threat model changes
    in §9.
 5. **The constitution record**, with `top`, founders stepping down, the
    resolver name and `/space/succeed`.
 6. **Contracts in the spec.** The CEL subset as a spec part with its
-   conformance suite; checks renamed; the line rule with `once` and
-   corrections; `sum([])` as `0.0`; the hall of fame and mutual credit
+   conformance suite; checks renamed; the line rule with `once` and closed
+   keys (corrections later); `sum([])` as `0.0`; the hall of fame and mutual credit
    scenarios against the real library.
 7. **Later: democracy.** Quorum clauses (question 1) meeting §5's
    requirements, which un-skips the co-op's "needs quorum" scenarios; then
@@ -656,15 +698,19 @@ in the same PR:
   from an invoker whose view includes the target's role: an invoker who
   names a view before the target's promotion, or acts concurrently with it,
   isn't stopped. The same limit as ranks today; a Does-not-hold-yet line.
-- **Former member (§3.3).** Restate in grants: its power was its roles'
-  grants, and its removal or unassignment takes all of it, since no grant
-  names an account; nothing it handed a key survives, because it could hand
-  nothing. What does survive is a role it defined while it held
-  `/role/define` (§2), until someone rewrites the role; that replaces "a
-  grant it makes concurrently with its removal is struck" for roles, which
-  still holds for definitions concurrent with the removal. The sock gap
-  (#191) becomes a sock it _assigned_ a role, which is visible and
-  unassignable.
+- **Former member (§3.3), and the unassigned.** Restate in grants: an
+  account's power was its roles' grants. Removal takes all of it, and ends
+  every assignment that hadn't seen the removal, one concurrent with it
+  included; after a re-add, only assignments that saw the removal count.
+  Unassignment takes that role, and strikes only the concurrent actions
+  that needed it. Nothing it handed a key survives, because it could hand
+  nothing. What does survive is what it wrote into roles it did not hold,
+  while it held `/role/define` (§2), until someone rewrites the role; under
+  a template with `.mine == false` it can't have written into its own.
+  That replaces "a grant it makes concurrently with its removal is struck"
+  for roles, which still holds for definitions concurrent with the
+  removal. The sock gap (#191) becomes a sock it _assigned_ a role, which
+  is visible and unassignable.
 - **Top rank.** Founders replace the top rank. A founder can't be removed
   by anyone else, but can step down; a space can become headless.
 - **Root thief (§3.5).** A thief of a founder's account seed is a founder:
@@ -673,7 +719,8 @@ in the same PR:
   "is a founder".
 - **Leaving is a reduction.** Leaving a role on one's own, or a founder
   stepping down, is a reduction of the author's own account, so it strikes
-  the author's own actions concurrent with it: an account can disown what
+  the author's own concurrent actions that needed what it gave up (a
+  founder stepping down: all of them): an account can disown what
   its other devices did while apart, as revoking its own key or forking
   its own line already can
   ([#168](https://github.com/leifriksheim/weave/issues/168)). Add it to that
@@ -685,16 +732,28 @@ in the same PR:
 - **New gaps.**
   - Roles outlive their definer's demotion (§2): a definer who is removed
     leaves behind what they defined until someone rewrites the role.
+  - **Parking power.** Where a template grants `/role/define` without
+    `["==", ".mine", false]`, a definer can write power into a role she
+    keeps, or nest it in one she defines, and keep it after losing the
+    role that let her define (§2). With it, two colluding definers can
+    still define roles for each other.
+  - **Rival definitions** hold their intersection (§2): a definer can
+    weaken a role, even empty it, by writing a rival definition apart from
+    the others, until a definition that saw both is written. It fails
+    closed, never open.
   - A member with two accounts sidesteps `.self` (§2). With only roles
     holding grants, the second account must be a member assigned the role,
     visible and unassignable; it is no longer just a fresh key.
   - Contracts judge versions cited, not current ones (§3): a withdrawal
     doesn't un-fame a claim, before or after it.
-  - A colluding payer can double-spend a payment a payee built on; the
-    payee recovers with a correction but loses what they received from it.
-    A correction restates the payee's own payments, so it can't unpay
-    anyone (§3).
+  - A payer can double-spend a payment a payee built on; the payee loses
+    that version and everything after it in that line, for good, since v1
+    has no corrections (§3).
   - An honest account whose two offline devices pay in one line kills that
-    line for good; corrections don't cover it (§3).
+    line for good (§3).
+  - **Closed line keys.** A line declaration with a key a peer doesn't
+    know leaves that collection unjudged by it, so a newer declaration
+    splits old and new peers' verdicts on that collection until they
+    update; they never disagree silently.
   - Until quorum lands, a co-op's votes can be padded and backdated (§5);
     after, an old majority can still outvote members it hasn't seen.

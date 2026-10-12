@@ -22,30 +22,28 @@
  *
  * - a version in a line collection at any other key fails;
  * - two versions of a line after the same one (or two first versions) are
- *   a double spend, and neither counts, nor anything after either;
- * - except a correction: a version that had seen its twin, where the twin
- *   failed only because of something it cited (it would pass if what it
- *   cited stood). The payee who built on a double spend writes it after
- *   their last counted version and carries on;
- * - a correction restates the failed version, and the versions after it
- *   restate the failed ones after that, in order: the same `restate`
- *   fields, and the same `once` citations less those that fail. Past the
- *   end of the failed chain, the line is free again;
+ *   a double spend, and neither counts, nor anything after either. There
+ *   are no corrections in v1 (the plan, §3);
  * - each `once` field's citations appear at most once along the line, which
- *   is the counted chain: a failed version's citations don't count.
+ *   is the counted chain;
+ * - a declaration with a key the host doesn't know is not judged
+ *   (`unjudged`), like a space with an unknown resolver.
  */
 import { runChecks, type Check, type CheckedVersion } from '../../packages/core/src/records/checks.js';
 import type { Version } from './space.js';
 import { isRecord } from './ucan-policy.js';
 
-export type Verdict = 'pass' | 'fail' | 'pending';
+/** `unjudged`: its collection declares something this peer doesn't know */
+export type Verdict = 'pass' | 'fail' | 'pending' | 'unjudged';
 
-/** A line collection's declaration */
+/** The keys a line declaration may have; any other leaves the collection unjudged */
+const LINE_KEYS: ReadonlyArray<string> = ['once'];
+
+/** A line collection's declaration, as written: its keys are closed */
 export interface Line {
   /** Fields whose citations appear once along the line */
-  readonly once: ReadonlyArray<string>;
-  /** Fields a correction, and what follows it, carry unchanged from the failed versions they restate */
-  readonly restate?: ReadonlyArray<string>;
+  readonly once?: ReadonlyArray<string>;
+  readonly [key: string]: unknown;
 }
 
 export interface Host {
@@ -126,133 +124,62 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
     return p;
   };
 
-  /** A version's verdict before the twin rule, and whether it fails only for what it cites */
-  const owns = new Map<string, Promise<{ verdict: Verdict; forCitation: boolean }>>();
-  const own = (id: string) => {
-    let p = owns.get(id);
-    if (!p) owns.set(id, (p = judgeOwn(id)));
-    return p;
-  };
-
   async function judgeOne(id: string): Promise<Verdict> {
     const v = byId.get(id);
     if (!v) return 'pending';
-    const mine = await own(id);
-    const line = host.lines?.[v.collection];
-    if (mine.verdict !== 'pass' || !line) return mine.verdict;
-    for (const w of twins(v)) {
-      // v counts beside a twin only when v corrects it: v had seen it, and it fails only for what it cites.
-      const corrects = pastOf(v)?.has(w.id) ?? false;
-      const theirs = corrects ? await own(w.id) : null;
-      if (theirs?.verdict === 'pending') return 'pending';
-      if (!theirs?.forCitation) return 'fail';
-    }
-    const owed = await restating(v);
-    if (owed === 'pending') return 'pending';
-    if (owed === 'fork') return 'fail';
-    return owed ? restates(v, owed, line) : 'pass';
-  }
-
-  /** The other versions of `v`'s line after the same one */
-  const twins = (v: Version) =>
-    [...byId.values()].filter(
-      (w) => w.id !== v.id && w.key === v.key && w.author === v.author && w.prev === v.prev,
-    );
-
-  /** The failed version `v` must restate: its twin if it corrects one, else the one after what its previous restated */
-  async function restating(v: Version): Promise<Version | null | 'pending' | 'fork'> {
-    for (const w of twins(v)) {
-      if (!(pastOf(v)?.has(w.id) ?? false)) continue;
-      const theirs = await own(w.id);
-      if (theirs.verdict === 'pending') return 'pending';
-      if (theirs.forCitation) return w;
-    }
-    const prev = v.prev ? byId.get(v.prev) : undefined;
-    if (!prev) return null;
-    const owed = await restating(prev);
-    if (owed === null || typeof owed === 'string') return owed;
-    const after = [...byId.values()].filter(
-      (r) => r.key === owed.key && r.author === owed.author && r.prev === owed.id,
-    );
-    // A fork inside the failed chain is the writer's own double spend: nothing restates it.
-    if (after.length > 1) return 'fork';
-    return after[0] ?? null;
-  }
-
-  /** Whether `v` carries `r`'s payment unchanged, less the citations that fail */
-  async function restates(v: Version, r: Version, line: Line): Promise<Verdict> {
-    const field = (x: Version, f: string) => (isRecord(x.body) ? (x.body[f] ?? null) : null);
-    for (const f of line.restate ?? [])
-      if (JSON.stringify(field(v, f)) !== JSON.stringify(field(r, f))) return 'fail';
-    for (const f of line.once) {
-      const was = field(r, f);
-      const kept: unknown[] = [];
-      for (const c of Array.isArray(was) ? was : []) {
-        const fares = typeof c === 'string' ? await verdict(c) : 'fail';
-        if (fares === 'pending') return 'pending';
-        if (fares !== 'fail') kept.push(c);
-      }
-      if (JSON.stringify(field(v, f) ?? []) !== JSON.stringify(kept)) return 'fail';
-    }
-    return 'pass';
-  }
-
-  async function judgeOwn(id: string): Promise<{ verdict: Verdict; forCitation: boolean }> {
-    const only = (verdict: Verdict) => ({ verdict, forCitation: false });
-    const v = byId.get(id);
-    if (!v) return only('pending');
     if (v.prev) {
       const before = await verdict(v.prev);
-      if (before !== 'pass') return only(before);
+      if (before !== 'pass') return before;
     }
     const line = host.lines?.[v.collection];
     if (line) {
-      if (v.key !== lineKey(v.collection, v.author)) return only('fail');
+      // A declaration with a key this peer doesn't know is not judged, like an unknown resolver.
+      if (Object.keys(line).some((k) => !LINE_KEYS.includes(k))) return 'unjudged';
+      if (v.key !== lineKey(v.collection, v.author)) return 'fail';
       const prev = v.prev ? byId.get(v.prev) : undefined;
-      if (prev && (prev.author !== v.author || prev.key !== v.key)) return only('fail');
-      if (!onceAlong(v, line.once)) return only('fail');
+      if (prev && (prev.author !== v.author || prev.key !== v.key)) return 'fail';
+      // Two versions of the line after the same one: a double spend, and neither counts.
+      const twin = [...byId.values()].some(
+        (w) => w.id !== v.id && w.key === v.key && w.author === v.author && w.prev === v.prev,
+      );
+      if (twin) return 'fail';
+      if (!onceAlong(v, line.once ?? [])) return 'fail';
     }
     const members = await membersAsOf(id);
-    if (!members) return only('pending');
-    if (!members.has(v.author)) return only('fail');
+    if (!members) return 'pending';
+    if (!members.has(v.author)) return 'fail';
     const checks = host.contracts[v.collection];
-    if (!checks) return only('pass');
+    if (!checks) return 'pass';
     const prev = v.prev ? byId.get(v.prev) : undefined;
     const first = [...byId.values()].find((w) => w.key === v.key && w.seq === 0);
-    const run = (excuse: boolean) =>
-      runChecks(checks, {
-        values: {
-          body: v.body,
-          links: v.links,
-          key: v.key,
-          seq: v.seq,
-          collection: v.collection,
-          author: v.author,
-          creator: first?.author ?? v.author,
-          createdAt: '',
-          prev: prev ? checked(prev) : null,
-          ...host.values?.(v, members),
-        },
-        cite: async (cid) => {
-          const w = byId.get(cid);
-          if (!w) return { later: true };
-          const fares = await verdict(cid);
-          if (fares === 'pending') return { later: true };
-          // With `excuse`, what it cites is taken as standing: would it pass but for that?
-          if (excuse) return checked(w);
-          if (fares === 'fail') return { refused: 'it does not count' };
-          if (!members.has(w.author)) return { refused: 'its author was removed' };
-          return checked(w);
-        },
-        can: () => false,
-        member: (did) => members.has(did),
-      });
-    const outcome = await run(false);
-    if ('later' in outcome) return only('pending');
-    if ('unreadable' in outcome) return only('fail');
-    if (outcome.passed) return only('pass');
-    const excused = await run(true);
-    return { verdict: 'fail', forCitation: 'passed' in excused && excused.passed };
+    const outcome = await runChecks(checks, {
+      values: {
+        body: v.body,
+        links: v.links,
+        key: v.key,
+        seq: v.seq,
+        collection: v.collection,
+        author: v.author,
+        creator: first?.author ?? v.author,
+        createdAt: '',
+        prev: prev ? checked(prev) : null,
+        ...host.values?.(v, members),
+      },
+      cite: async (cid) => {
+        const w = byId.get(cid);
+        if (!w) return { later: true };
+        const fares = await verdict(cid);
+        if (fares === 'pending') return { later: true };
+        if (fares !== 'pass') return { refused: 'it does not count' };
+        if (!members.has(w.author)) return { refused: 'its author was removed' };
+        return checked(w);
+      },
+      can: () => false,
+      member: (did) => members.has(did),
+    });
+    if ('later' in outcome) return 'pending';
+    if ('unreadable' in outcome) return 'fail';
+    return outcome.passed ? 'pass' : 'fail';
   }
 
   /** Whether each citation in `fields` appears once along `v`'s line, `v` included */

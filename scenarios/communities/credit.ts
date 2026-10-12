@@ -67,5 +67,5 @@ export const host: Host = {
   founders: [],
   members: [ALICE, BOB, CAROL, DAVE],
   contracts: { 'app.pay': payContract },
-  lines: { 'app.pay': { once: ['received'], restate: ['to', 'amount'] } },
+  lines: { 'app.pay': { once: ['received'] } },
 };
