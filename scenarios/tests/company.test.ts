@@ -2,14 +2,15 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { may, type Assignment, type Authority } from '../host/grants.js';
-import { ANN, CEO, EVE, HAL, SOCK, WES, assignments, grants } from '../communities/company.js';
+import { may, type Assignment, type Authority, type Nesting } from '../host/grants.js';
+import { ANN, CEO, EVE, HAL, SOCK, WES, assignments, grants, nestings } from '../communities/company.js';
 
 describe('company: grants', () => {
-  const auth = (more: Assignment[] = []): Authority => ({
+  const auth = (more: Assignment[] = [], nested: Nesting[] = []): Authority => ({
     founders: [CEO],
     delegations: grants,
     assignments: [...assignments, ...more],
+    nestings: [...nestings, ...nested],
   });
   const doing = (a: Authority, who: string, cmd: string, collection: string) =>
     may(a, who, cmd, { collection });
@@ -40,5 +41,22 @@ describe('company: grants', () => {
     // "Manages hr but can't read it" holds only if someone else manages hr's membership.
     const a = auth([{ by: ANN, to: SOCK, role: 'hr' }]);
     assert.ok(doing(a, SOCK, '/record/read', 'app.hr'));
+  });
+
+  test('assigning hr to the role admin is refused: assigning puts accounts in roles, not roles', () => {
+    const a = auth([{ by: ANN, to: 'role:admin', role: 'hr' }]);
+    assert.ok(!doing(a, ANN, '/record/read', 'app.hr'));
+  });
+
+  test('nesting hr in admin is granting: Ann holds neither /role/define nor what hr holds', () => {
+    const a = auth([], [{ by: ANN, role: 'admin', holds: 'hr' }]);
+    assert.ok(!doing(a, ANN, '/record/read', 'app.hr'));
+  });
+
+  test('a nesting by someone who loses what it nests carries only what they still held then', () => {
+    // The CEO's nesting stands; one by Ann, who holds no eng grants, gives web nothing.
+    const a: Authority = { ...auth(), nestings: [{ by: ANN, role: 'web', holds: 'eng' }] };
+    assert.ok(!doing(a, WES, '/record/write', 'app.eng'));
+    assert.ok(doing(a, WES, '/record/write', 'app.web'));
   });
 });

@@ -1,5 +1,7 @@
 /**
  * 4. Hall of fame. A comment enters it when 5 different members react 🙂.
+ * The claim cites the reactions; a reaction withdrawn later, or before
+ * the claim, doesn't un-fame it (the plan, §3).
  */
 import type { Check } from '../../packages/core/src/records/checks.js';
 import type { Host } from '../host/cel-host.js';

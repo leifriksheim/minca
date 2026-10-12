@@ -24,10 +24,16 @@ describe('hall of fame: a reaction withdrawn', () => {
   test('after the claim: still famous, fixed by what was cited', async () => {
     assert.equal(await cel([...base, withdraw(['r3', 'f1'])], 'f1'), 'pass');
   });
-  test('before the claim, which had seen it: passes anyway, citing the old version (a gap the plan closes)', async () => {
-    // The plan (§3): a cited version must be current as of what the claim had seen.
-    const f2 = claim('f2', ['r1', 'r2', 'r3', 'r4', 'r5', 'd3']);
-    assert.equal(await cel([comment, ...reactions, withdraw(['r3']), f2], 'f2'), 'pass');
+  test('before the claim: passes, citing the version before the withdrawal, whatever the claim had seen', async () => {
+    // Accepted (plan §3): a version's `seen` is whatever its writer says, so
+    // "a cited version must be current" could be dodged by leaving the
+    // withdrawal out of it. Withdrawals don't un-fame a claim; the contract
+    // judges the versions cited, and a reaction once given counts.
+    const named = claim('f2', ['r1', 'r2', 'r3', 'r4', 'r5', 'd3']);
+    const unnamed = claim('f9', ['r1', 'r2', 'r3', 'r4', 'r5']);
+    const held = [comment, ...reactions, withdraw(['r3']), named, unnamed];
+    assert.equal(await cel(held, 'f2'), 'pass');
+    assert.equal(await cel(held, 'f9'), 'pass');
   });
 });
 

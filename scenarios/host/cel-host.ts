@@ -13,8 +13,21 @@
  *   until an add that had seen it.
  *
  * Optional host rules the examples need, which CEL can't express:
- * `forkKills` (a second version after the same one counts for neither) and
- * `values` (more names for a check, like `memberCount`).
+ * `lines` (the plan's line rule, §3) and `values` (more names for a check,
+ * like `memberCount`).
+ *
+ * A line is one account's sequence in a collection, at a key derived from
+ * the account (`lineKey`), a stand-in for #72's keys that belong to their
+ * creator. Only that account's own versions can be in it, or be twins:
+ *
+ * - a version in a line collection at any other key fails;
+ * - two versions of a line after the same one (or two first versions) are
+ *   a double spend, and neither counts, nor anything after either;
+ * - except a correction: a version that had seen its twin, where the twin
+ *   failed only because of something it cited (it would pass if what it
+ *   cited stood). The payee who built on a double spend writes it after
+ *   their last counted version and carries on;
+ * - each `once` field's citations appear at most once along the line.
  */
 import { runChecks, type Check, type CheckedVersion } from '../../packages/core/src/records/checks.js';
 import type { Version } from './space.js';
@@ -29,11 +42,14 @@ export interface Host {
   readonly members?: ReadonlyArray<string>;
   /** Contracts by collection */
   readonly contracts: Readonly<Record<string, ReadonlyArray<Check>>>;
-  /** Collections where two versions after the same one both fail */
-  readonly forkKills?: ReadonlyArray<string>;
+  /** Line collections, and the fields whose citations appear once along a line */
+  readonly lines?: Readonly<Record<string, { readonly once: ReadonlyArray<string> }>>;
   /** More names a check reads, given the members as of the version */
   readonly values?: (v: Version, members: ReadonlySet<string>) => Record<string, unknown>;
 }
+
+/** The one key of `did`'s line in `collection` */
+export const lineKey = (collection: string, did: string) => `${collection}/${did}`;
 
 export interface Judged {
   verdict(id: string): Promise<Verdict>;
@@ -97,52 +113,102 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
     return p;
   };
 
+  /** A version's verdict before the twin rule, and whether it fails only for what it cites */
+  const owns = new Map<string, Promise<{ verdict: Verdict; forCitation: boolean }>>();
+  const own = (id: string) => {
+    let p = owns.get(id);
+    if (!p) owns.set(id, (p = judgeOwn(id)));
+    return p;
+  };
+
   async function judgeOne(id: string): Promise<Verdict> {
     const v = byId.get(id);
     if (!v) return 'pending';
+    const mine = await own(id);
+    if (mine.verdict !== 'pass' || !host.lines?.[v.collection]) return mine.verdict;
+    for (const w of byId.values()) {
+      if (w.id === v.id || w.key !== v.key || w.author !== v.author || w.prev !== v.prev) continue;
+      // v counts beside a twin only when v corrects it: v had seen it, and it fails only for what it cites.
+      const corrects = pastOf(v)?.has(w.id) ?? false;
+      const theirs = corrects ? await own(w.id) : null;
+      if (theirs?.verdict === 'pending') return 'pending';
+      if (!theirs?.forCitation) return 'fail';
+    }
+    return 'pass';
+  }
+
+  async function judgeOwn(id: string): Promise<{ verdict: Verdict; forCitation: boolean }> {
+    const only = (verdict: Verdict) => ({ verdict, forCitation: false });
+    const v = byId.get(id);
+    if (!v) return only('pending');
     if (v.prev) {
       const before = await verdict(v.prev);
-      if (before !== 'pass') return before;
+      if (before !== 'pass') return only(before);
     }
-    if (host.forkKills?.includes(v.collection)) {
-      const twin = [...byId.values()].some((w) => w.id !== v.id && w.key === v.key && w.prev === v.prev);
-      if (twin) return 'fail';
+    const line = host.lines?.[v.collection];
+    if (line) {
+      if (v.key !== lineKey(v.collection, v.author)) return only('fail');
+      const prev = v.prev ? byId.get(v.prev) : undefined;
+      if (prev && (prev.author !== v.author || prev.key !== v.key)) return only('fail');
+      if (!onceAlong(v, line.once)) return only('fail');
     }
     const members = await membersAsOf(id);
-    if (!members) return 'pending';
-    if (!members.has(v.author)) return 'fail';
+    if (!members) return only('pending');
+    if (!members.has(v.author)) return only('fail');
     const checks = host.contracts[v.collection];
-    if (!checks) return 'pass';
+    if (!checks) return only('pass');
     const prev = v.prev ? byId.get(v.prev) : undefined;
     const first = [...byId.values()].find((w) => w.key === v.key && w.seq === 0);
-    const outcome = await runChecks(checks, {
-      values: {
-        body: v.body,
-        links: v.links,
-        key: v.key,
-        seq: v.seq,
-        collection: v.collection,
-        author: v.author,
-        creator: first?.author ?? v.author,
-        createdAt: '',
-        prev: prev ? checked(prev) : null,
-        ...host.values?.(v, members),
-      },
-      cite: async (cid) => {
-        const w = byId.get(cid);
-        if (!w) return { later: true };
-        const fares = await verdict(cid);
-        if (fares === 'pending') return { later: true };
-        if (fares === 'fail') return { refused: 'it does not count' };
-        if (!members.has(w.author)) return { refused: 'its author was removed' };
-        return checked(w);
-      },
-      can: () => false,
-      member: (did) => members.has(did),
-    });
-    if ('later' in outcome) return 'pending';
-    if ('unreadable' in outcome) return 'fail';
-    return outcome.passed ? 'pass' : 'fail';
+    const run = (excuse: boolean) =>
+      runChecks(checks, {
+        values: {
+          body: v.body,
+          links: v.links,
+          key: v.key,
+          seq: v.seq,
+          collection: v.collection,
+          author: v.author,
+          creator: first?.author ?? v.author,
+          createdAt: '',
+          prev: prev ? checked(prev) : null,
+          ...host.values?.(v, members),
+        },
+        cite: async (cid) => {
+          const w = byId.get(cid);
+          if (!w) return { later: true };
+          const fares = await verdict(cid);
+          if (fares === 'pending') return { later: true };
+          // With `excuse`, what it cites is taken as standing: would it pass but for that?
+          if (excuse) return checked(w);
+          if (fares === 'fail') return { refused: 'it does not count' };
+          if (!members.has(w.author)) return { refused: 'its author was removed' };
+          return checked(w);
+        },
+        can: () => false,
+        member: (did) => members.has(did),
+      });
+    const outcome = await run(false);
+    if ('later' in outcome) return only('pending');
+    if ('unreadable' in outcome) return only('fail');
+    if (outcome.passed) return only('pass');
+    const excused = await run(true);
+    return { verdict: 'fail', forCitation: 'passed' in excused && excused.passed };
+  }
+
+  /** Whether each citation in `fields` appears once along `v`'s line, `v` included */
+  function onceAlong(v: Version, fields: ReadonlyArray<string>): boolean {
+    const seen = new Set<string>();
+    for (let w: Version | undefined = v; w; w = w.prev ? byId.get(w.prev) : undefined) {
+      for (const f of fields) {
+        const cites = isRecord(w.body) ? w.body[f] : undefined;
+        for (const c of Array.isArray(cites) ? cites : []) {
+          const key = `${f} ${JSON.stringify(c)}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+        }
+      }
+    }
+    return true;
   }
 
   return { verdict, membersAsOf };

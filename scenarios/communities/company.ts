@@ -2,9 +2,11 @@
  * 3. Company team. Sub-teams: `hr` writes `app.hr`, `eng` writes `app.eng`
  * (and `web`, inside `eng`, writes `app.web`); the company's admins manage
  * them all but can't read `app.hr`, and can't assign themselves a team.
- * `web` is a sub-team: the role `web` holds the role `eng`.
+ * `web` is a sub-team: the role `web` holds the role `eng`, which only
+ * someone holding eng's grants may set up (the CEO here), since nesting
+ * grants rather than assigns.
  */
-import type { Assignment, Delegation } from '../host/grants.js';
+import type { Assignment, Delegation, Nesting } from '../host/grants.js';
 
 export const CEO = 'did:key:ceo'; // founder
 export const ANN = 'did:key:ann'; // company admin
@@ -39,14 +41,15 @@ export const grants: Delegation[] = [
 
 // -- The story ---------------------------------------------------------------------
 
-/** The CEO makes Ann admin; Ann staffs the teams, and puts the web team inside eng. */
+/** The CEO makes Ann admin and puts the web team inside eng; Ann staffs the teams. */
 export const assignments: Assignment[] = [
   { by: CEO, to: ANN, role: 'admin' },
   { by: ANN, to: HAL, role: 'hr' },
   { by: ANN, to: EVE, role: 'eng' },
   { by: ANN, to: WES, role: 'web' },
-  { by: ANN, to: 'role:web', role: 'eng' },
 ];
+
+export const nestings: Nesting[] = [{ by: CEO, role: 'web', holds: 'eng' }];
 
 /** A second account Ann controls */
 export const SOCK = 'did:key:ann-second-account';

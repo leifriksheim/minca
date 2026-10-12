@@ -86,3 +86,61 @@ describe('co-op: contracts', () => {
     assert.equal(await j.verdict('r1'), 'pending');
   });
 });
+
+/**
+ * Attacks the stand-in can't refuse yet: they need quorum as the plan has it
+ * (§5, a later step). Skipped, not passing: each asserts what quorum must
+ * do, and runs when it lands.
+ */
+describe('co-op: attacks that need quorum', () => {
+  const add = (id: string, by: string, who: string, seen: string[] = []) =>
+    version({ id, collection: 'std.member', author: by, body: { op: 'add', did: who }, seen });
+  const vote = (id: string, by: string, on: string, seen: string[]) =>
+    version({
+      id,
+      collection: 'coop.ballot',
+      author: by,
+      body: { yes: true },
+      links: [{ rel: 'on', to: on }],
+      seen,
+    });
+  const propose = (id: string, members: string[], seen: string[]) =>
+    version({ id, collection: 'coop.proposal', author: B, body: { member: D, members }, seen });
+  const remove = (id: string, p: string, cites: string[], seen: string[]) =>
+    version({
+      id,
+      collection: 'std.member',
+      author: B,
+      body: { op: 'remove', did: D, proposal: p, ballots: cites },
+      seen: [...cites, p, ...seen],
+    });
+
+  test.skip('needs quorum: B alone adds three accounts of his, then four of seven vote D out', async () => {
+    // Refused when adding a member falls under a quorum clause keyed by command and policy.
+    const socks = ['did:key:s1', 'did:key:s2', 'did:key:s3'];
+    const adds = socks.map((s, i) => add(`s${i}`, B, s));
+    const p = propose('p', [A, B, C, D, ...socks], ['s0', 's1', 's2']);
+    const votes = [B, ...socks].map((m, i) => vote(`v${i}`, m, 'p', ['p']));
+    const r = remove(
+      'r',
+      'p',
+      votes.map((v) => v.id),
+      [],
+    );
+    assert.equal(await judge([...adds, p, ...votes, r], host).verdict('r'), 'fail');
+  });
+
+  test.skip('needs quorum: a proposal naming an older point, with ballots that saw three new members', async () => {
+    // Refused when the electorate counts every member addition a cited ballot or the change had seen.
+    const added = ['did:key:n1', 'did:key:n2', 'did:key:n3'].map((n, i) => add(`n${i}`, D, n));
+    const old = propose('po', [A, B, C, D], []);
+    const votes = [A, B, C].map((m, i) => vote(`o${i}`, m, 'po', ['po', 'n0', 'n1', 'n2']));
+    const r = remove(
+      'ro',
+      'po',
+      votes.map((v) => v.id),
+      ['n0', 'n1', 'n2'],
+    );
+    assert.equal(await judge([...added, old, ...votes, r], host).verdict('ro'), 'fail', 'three of seven');
+  });
+});

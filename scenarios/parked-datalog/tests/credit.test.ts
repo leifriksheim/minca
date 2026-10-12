@@ -42,7 +42,6 @@ describe('mutual credit in Datalog: payments and the limit', () => {
       amount: 0,
       balance: 40,
       received: ['a0'],
-      claimed: ['a0', 'a0'],
     });
     assert.ok(!dl([a0, b0, again]).has('counts', 'b1'));
   });

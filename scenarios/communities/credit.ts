@@ -1,26 +1,19 @@
 /**
  * 5. Mutual credit, with a limit of −100. An account's payments are one
  * line: each names the account's previous payment (`prev`, as versions of
- * one record keyed by the account), carries the running balance, and claims
- * payments made to it (`received`), each once. Two payments after the same
- * one are a double spend, and neither counts, from whichever devices.
+ * one record at a key derived from the account), carries the running
+ * balance, and claims payments made to it (`received`), each once along the
+ * line. Two payments after the same one are a double spend, and neither
+ * counts, from whichever devices. Both are the host's line rule, not CEL.
  */
 import type { Check } from '../../packages/core/src/records/checks.js';
-import type { Host } from '../host/cel-host.js';
+import { lineKey, type Host } from '../host/cel-host.js';
 import { version, type Version } from '../host/space.js';
 
-// -- The community: a CEL contract, plus a host rule: a fork counts for neither ------
+// -- The community: a CEL contract, plus the line rule: `"line": { "once": ["received"] }` --
 
 export const payContract: Check[] = [
   { that: 'body.amount >= 0.0 && body.to != author', else: 'Pay someone else, an amount of at least 0' },
-  {
-    that: 'body.received.distinct().size() == body.received.size() && body.received.all(r, !(r in (prev == null ? [] : prev.body.claimed)))',
-    else: 'Claim each payment once',
-  },
-  {
-    that: 'body.claimed == (prev == null ? [] : prev.body.claimed) + body.received',
-    else: 'Carry the list of what was claimed',
-  },
   {
     that: "versions(body.received).all(r, r.collection == 'app.pay' && r.body.to == author)",
     else: 'Claim only payments to you',
@@ -44,23 +37,21 @@ interface Pay {
   amount: number;
   balance: number;
   received?: string[];
-  claimed?: string[];
   device?: string;
 }
 
 /** A payment: the next version of the payer's line, after `after` */
 export function pay(id: string, by: string, after: Version | null, p: Pay, seen: string[] = []): Version {
   const received = p.received ?? [];
-  const claimed = p.claimed ?? received;
   return version({
     id,
-    key: `line:${by}`,
+    key: lineKey('app.pay', by),
     collection: 'app.pay',
     author: by,
     device: p.device ?? 'laptop',
     seq: after ? after.seq + 1 : 0,
     prev: after?.id ?? null,
-    body: { to: p.to, amount: p.amount, balance: p.balance, received, claimed },
+    body: { to: p.to, amount: p.amount, balance: p.balance, received },
     seen: [...(after ? [after.id] : []), ...received, ...seen],
   });
 }
@@ -76,5 +67,5 @@ export const host: Host = {
   founders: [],
   members: [ALICE, BOB, CAROL, DAVE],
   contracts: { 'app.pay': payContract },
-  forkKills: ['app.pay'],
+  lines: { 'app.pay': { once: ['received'] } },
 };

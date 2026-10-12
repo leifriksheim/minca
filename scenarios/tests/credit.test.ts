@@ -2,8 +2,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { judge } from '../host/cel-host.js';
-import type { Version } from '../host/space.js';
+import { judge, lineKey } from '../host/cel-host.js';
+import { version, type Version } from '../host/space.js';
 import { ALICE, BOB, CAROL, a0, a1, a1phone, b0, host, pay, payContract } from '../communities/credit.js';
 
 const cel = (held: Version[]) => judge(held, host);
@@ -40,18 +40,23 @@ describe('mutual credit: payments and the limit', () => {
     assert.equal(await cel([a0, a1, liar]).verdict('a2'), 'fail');
   });
 
-  test('a payment claimed twice fails', async () => {
+  test('a payment claimed twice along the line fails (`once`)', async () => {
     const again = pay('b1', BOB, b0, {
       to: CAROL,
       amount: 0,
       balance: 40,
       received: ['a0'],
-      claimed: ['a0', 'a0'],
     });
     assert.equal(await cel([a0, b0, again]).verdict('b1'), 'fail');
   });
 
-  test("CEL's trap, which the plan fixes: sum([]) is the int 0, and an int plus a double is an error", async () => {
+  test('a payment claimed twice in one version fails (`once`)', async () => {
+    const twice = pay('b0', BOB, null, { to: CAROL, amount: 0, balance: 60, received: ['a0', 'a0'] });
+    assert.equal(await cel([a0, twice]).verdict('b0'), 'fail');
+  });
+
+  test("CEL's trap: sum([]) is the int 0 today, and an int plus a double is an error", async () => {
+    // Decided: sum([]) returns 0.0 (plan §3), in step 6; until then the contract pads with [0.0].
     const naive = payContract.map((c) => ({ ...c, that: c.that.replace(' + [0.0])', ')') }));
     const j = judge([a0], { ...host, contracts: { 'app.pay': naive } });
     assert.equal(await j.verdict('a0'), 'fail', 'a payment that claims nothing fails without "+ [0.0]"');
@@ -80,5 +85,77 @@ describe('mutual credit: a payment arriving before its previous one', () => {
   test('it waits', async () => {
     assert.equal(await cel([a1]).verdict('a1'), 'pending');
     assert.equal(await cel([a1, a0]).verdict('a1'), 'pass');
+  });
+});
+
+describe("mutual credit: a line is its account's own", () => {
+  test("Carol can't grief Alice's line with a first version at its key", async () => {
+    const fake = version({
+      id: 'x',
+      key: lineKey('app.pay', ALICE),
+      collection: 'app.pay',
+      author: CAROL,
+      body: {},
+    });
+    const j = cel([a0, a1, fake]);
+    assert.equal(await j.verdict('x'), 'fail');
+    assert.equal(await j.verdict('a0'), 'pass');
+    assert.equal(await j.verdict('a1'), 'pass');
+  });
+
+  test("Carol can't grief Alice's line with a next version after a0", async () => {
+    const fake = version({
+      id: 'y',
+      key: lineKey('app.pay', ALICE),
+      collection: 'app.pay',
+      author: CAROL,
+      seq: 1,
+      prev: 'a0',
+      body: {},
+    });
+    const j = cel([a0, a1, fake]);
+    assert.equal(await j.verdict('y'), 'fail');
+    assert.equal(await j.verdict('a1'), 'pass');
+  });
+
+  test("Bob can't claim one payment twice through a second line: there is one per account", async () => {
+    const b0 = pay('b0', BOB, null, { to: CAROL, amount: 0, balance: 30, received: ['a0'] });
+    const b0x = {
+      ...pay('b0x', BOB, null, { to: CAROL, amount: 0, balance: 30, received: ['a0'] }),
+      key: 'line2:' + BOB,
+    };
+    const j = cel([a0, b0, b0x]);
+    assert.equal(await j.verdict('b0'), 'pass');
+    assert.equal(await j.verdict('b0x'), 'fail');
+  });
+});
+
+describe('mutual credit: a payee recovers after a double spend', () => {
+  // Carol pays Bob 10, claims Alice's a1 (+50), pays Bob 30. Then Alice's phone double-spends.
+  const c0 = pay('c0', CAROL, null, { to: BOB, amount: 10, balance: -10 });
+  const c1 = pay('c1', CAROL, c0, { to: BOB, amount: 0, balance: 40, received: ['a1'] });
+  const c2 = pay('c2', CAROL, c1, { to: BOB, amount: 30, balance: 10 });
+  /** Her correction: after her last counted payment, having seen the ones that fell */
+  const c1x = pay('c1x', CAROL, c0, { to: BOB, amount: 30, balance: -40 }, ['c1', 'c2', 'a1p']);
+
+  test('what she built on a1 falls with it', async () => {
+    assert.equal(await cel([a0, a1, c0, c1, c2]).verdict('c2'), 'pass');
+    const j = cel([a0, a1, a1phone, c0, c1, c2]);
+    assert.equal(await j.verdict('c1'), 'fail');
+    assert.equal(await j.verdict('c2'), 'fail');
+  });
+
+  test('a correction after c0 counts, since c1 failed only for what it cited', async () => {
+    const held = [a0, a1, a1phone, c0, c1, c2, c1x];
+    assert.equal(await cel(held).verdict('c1x'), 'pass');
+    assert.equal(await celBalance(held, CAROL), -40);
+  });
+
+  test('a "correction" of a payment that still counts is a double spend: neither counts', async () => {
+    const fine = pay('c1', CAROL, c0, { to: BOB, amount: 5, balance: -15 });
+    const again = pay('c1y', CAROL, c0, { to: BOB, amount: 30, balance: -40 }, ['c1']);
+    const j = cel([c0, fine, again]);
+    assert.equal(await j.verdict('c1'), 'fail');
+    assert.equal(await j.verdict('c1y'), 'fail');
   });
 });
