@@ -22,7 +22,7 @@ Material specified elsewhere is linked, not repeated:
 
 | Topic                                                                                                                                                                                                                                            | Where                                           |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| Seeds, recovery codes, DIDs, the account vault and its wraps, UCANs, device keys, contact and member keys, phone pairing and the channel it runs on                                                                                              | [01 — Identity](01-identity.md)                 |
+| Seeds, recovery codes, DIDs, the account vault and its wraps, notes, device keys, contact and member keys, phone pairing and the channel it runs on                                                                                              | [01 — Identity](01-identity.md)                 |
 | Records, versions, `seq`, rules, topics and tags                                                                                                                                                                                                 | [02 — Records](02-records.md)                   |
 | Spaces, roles, the access log (`sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.keepers`), invites, encryption, the account registry (`sys.joined`, `sys.profile`, `sys.carrier`), profiles | [03 — Spaces](03-spaces.md)                     |
 | Relays, rooms, peer authentication, the network message envelope, the `who` note exchange, live messages and their limits, TURN                                                                                                                  | [04 — Network](04-network.md)                   |
@@ -33,8 +33,8 @@ Terms used here:
 
 - **Account** — an identity derived from a seed; its DID is the _root_ of every
   record it writes ([01](01-identity.md)).
-- **Note** — a UCAN delegation from an account (or a key holding one) to
-  another key. A **session note** is the note a node's session key writes under.
+- **Note** — a delegation from an account (or a key holding one) to
+  another key, in the UCAN 1.0 profile of [01](01-identity.md) §7. A **session note** is the note a node's session key writes under.
 - **Session key** — the P-256 key a node signs records with and proves on the
   wire. Its DID is the node's `sessionDid`.
 - **Account home** — a page that holds an account's seed and grants notes to
@@ -72,16 +72,17 @@ The root key never signs records. The node asks its signer for one note that
 lets the session key do everything the account can, everywhere:
 
 ```json
-{ "aud": "<sessionDid>", "att": [{ "with": "*", "can": "*" }], "exp": <now + ttl> }
+{ "aud": "<sessionDid>", "sub": "<account DID>", "cmd": "/", "pol": [], "exp": <now + ttl>, … }
 ```
 
-(The UCAN envelope and how peers verify it are in [01](01-identity.md).)
-Every record this node signs carries the current note as its `proof`, and every
-live connection opens with it (the `who` message, [04](04-network.md)).
+(The token and how peers verify it are in [01](01-identity.md) §7.)
+Every record this node signs carries the current note as its `proof`, a
+chain of one, and every live connection opens with it (the `who` message,
+[04](04-network.md)).
 
 The node asks for a new note before the one it holds runs out. A note's time
 bounds only live checks: knocks, live messages, a peer's proof when it
-connects ([01](01-identity.md) §7.4). Records are judged with no time at all,
+connects ([01](01-identity.md) §7.6). Records are judged with no time at all,
 so what a key signed counts until the key is revoked ([02](02-records.md)
 §9.3). Signing out writes a revoke of the session key in every space the node writes in,
 its carry spaces, the contacts space and the account registry, with a cutoff
@@ -97,7 +98,7 @@ renewed in place (§2.9).
 When and how the reference node renews, and how it passes a narrower note on,
 are in [the node](../packages/core/docs/node.md#renewing-the-session-note).
 
-_Source: `packages/core/src/node/node.ts` (`SESSION_CAPABILITY`, `scheduleRenewal`). Tests: `packages/core/tests/node.test.ts` ("the delegation is renewed before it expires", "records outlive the session that wrote them")._
+_Source: `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `scheduleRenewal`). Tests: `packages/core/tests/node.test.ts` ("the delegation is renewed before it expires", "records outlive the session that wrote them")._
 
 ### 1.3 The spaces a node keeps
 
@@ -115,7 +116,7 @@ passes or none.
 
 The account registry, the contacts space and carry spaces are the account's
 own machinery. In them a record counts only under a note that grants
-`account/write` ([01](01-identity.md) §8), and a node always holds them whole
+`/account/write` ([01](01-identity.md) §8), and a node always holds them whole
 ([05](05-sync-and-storage.md) §5). A node whose note lacks it, such as one
 granted records only, never writes the account registry: no `sys.joined`, no
 passes, no name, no hosting receipts (every peer would ignore them).
@@ -215,7 +216,7 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 | `create`       | `NewSpace[]`, optional          | Spaces the home should make for the app: at most 8, each with a non-empty `name` ≤ 80, `visibility`, and valid starting `roles`/`creatorRole` if given.                                                                                                                                                                                                                                                                  |
 | `contacts`     | boolean, optional               | The contacts space and the contact key.                                                                                                                                                                                                                                                                                                                                                                                  |
 | `chooseSpaces` | boolean, optional               | Whether to offer the person's existing spaces. Default true. UI only.                                                                                                                                                                                                                                                                                                                                                    |
-| `recordsOnly`  | boolean, optional               | A note that grants records only (`record/*` to write, `record/read` to read; [01](01-identity.md) §8).                                                                                                                                                                                                                                                                                                                   |
+| `recordsOnly`  | boolean, optional               | A note that grants records only (`/record` to write, `/record/read` to read; [01](01-identity.md) §8).                                                                                                                                                                                                                                                                                                                   |
 | `via`          | `code`, optional                | The audience is not the app's own key but a program's that reached the app over a connect code (§3).                                                                                                                                                                                                                                                                                                                     |
 | `days`         | integer 1–365, optional         | How long the note should last. The home decides; default 7.                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -293,15 +294,19 @@ When the person approves, the home:
 4. Computes the lifetime: `days` = the person's choice, else the request's,
    else 7, within the home's own bounds; `expiresAt = now + round(days × 86400)`
    (unix seconds).
-5. Signs a note with the account's root key:
-   `aud` = `request.audience`, `exp` = `expiresAt`, `att` =
-   `grantCapabilities(access, scope)`:
-   - `scope: account` → `[{ with: "*", can }]`
-   - `scope: spaces` → one `{ with: "space:<id>", can }` per granted space
+5. Signs a note with the account's root key ([01](01-identity.md) §7):
+   `aud` = `request.audience`, `exp` = `expiresAt`, `cmd` = `/` for
+   `write`, `/record` for `write` with `recordsOnly: true`
+   ([01](01-identity.md) §8), and `/record/read` for `read`; and, by the
+   spaces granted (`grantTerms(access, scope)`):
+   - `scope: account` → `sub` = the account's DID, `pol` = `[]`;
+   - `scope: spaces`, one space → `sub` = `space:<id>`, `pol` = `[]`;
+   - `scope: spaces`, several → `sub` = the account's DID, `pol` =
+     `[["or", [["==", ".space", "<id>"], …]]]`, the ids sorted;
+   - `scope: spaces`, none → `sub` = the account's DID, `pol` =
+     `[["not", ["and", []]]]`, which nothing satisfies.
 
-   where `can` is `*` for `write`, `record/*` for `write` with
-   `recordsOnly: true` ([01](01-identity.md) §8), and `record/read` for
-   `read`. The note carries no `fct`.
+   The note carries no `meta`.
 
 6. Remembers the connection (§2.10).
 7. Answers with the grant.
@@ -311,10 +316,10 @@ page it opened):
 
 | Field           | Type                                 | Meaning                                                                                                                                                                    |
 | --------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v`             | `1`                                  |                                                                                                                                                                            |
+| `v`             | `2`                                  | 2 since the note is a delegation in the UCAN 1.0 profile. An app MUST refuse any other, and drop a kept grant of another.                                                  |
 | `did`           | string                               | The account.                                                                                                                                                               |
 | `name`          | string                               | The account's name, for showing who is connected.                                                                                                                          |
-| `token`         | string                               | The encoded note.                                                                                                                                                          |
+| `note`          | object                               | The note: a token ([01](01-identity.md) §7.1).                                                                                                                             |
 | `access`        | `read` \| `write`                    |                                                                                                                                                                            |
 | `scope`         | `spaces` \| `account`                |                                                                                                                                                                            |
 | `spaces`        | `{ id, name, invite, memberKey? }[]` | Granted spaces; `memberKey` is base64url.                                                                                                                                  |
@@ -325,16 +330,29 @@ page it opened):
 | `expiresAt`     | number                               | Unix seconds.                                                                                                                                                              |
 | `home`          | string                               | Added by the app.                                                                                                                                                          |
 
-Example (token shortened):
+Example (shortened):
 
 ```json
 {
   "type": "weave:grant",
   "grant": {
-    "v": 1,
+    "v": 2,
     "did": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
     "name": "Leif",
-    "token": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsInVjdiI6IjAuMTAuMCJ9.eyJhdHQiOlt7ImNhbiI6…",
+    "note": {
+      "payload": {
+        "aud": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
+        "cmd": "/",
+        "exp": 1792614901,
+        "iss": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
+        "nbf": 1790022901,
+        "nonce": "pr0q7Vm5c2T8xkWa",
+        "pol": [],
+        "sub": "space:bafk…"
+      },
+      "sig": "…",
+      "type": "weave/ucan/dlg@1"
+    },
     "access": "write",
     "scope": "spaces",
     "spaces": [{ "id": "bafk…", "name": "Todos", "invite": "…", "memberKey": "q0v…" }],
@@ -344,34 +362,21 @@ Example (token shortened):
 }
 ```
 
-whose note's payload is
-
-```json
-{
-  "iss": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
-  "aud": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
-  "att": [{ "can": "*", "with": "space:bafk…" }],
-  "exp": 1792614901,
-  "nbf": 1790022901,
-  "nnc": "a6b6617b6ed4fba0",
-  "prf": []
-}
-```
-
-> Rationale: the note limits **writing**, per space, and every peer checks it.
+> Rationale: the note limits **writing**, per space (and, with a policy, per
+> collection), and every peer checks it.
 > It cannot limit **reading** a private space it was given: reading is holding
 > the space's key. Invites are view-only because what lets the app write is the
 > note, under the account's own role — never a secret of the space's.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `grantCapabilities`, `isRequest`, `keyProof`, `checkKeyProof`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `packages/core/src/session/connect.ts` (`ConnectRequest`, `Grant`, `GRANT_VERSION`, `grantTerms`, `isRequest`, `keyProof`, `checkKeyProof`). Tests: `packages/core/tests/connect.test.ts` ("connecting an app to an account home", "an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…")._
 
 ### 2.6 What the app checks
 
-Before using a grant the app MUST check that the note verifies
-([01](01-identity.md)), that its `aud` is the app's own key, and that its `iss`
-is `grant.did`. An app that asked for `recordsOnly: true` MUST refuse a note
-that grants anything but `record/` abilities, as a program connected by code
-MUST (§3).
+Before using a grant the app MUST check that `v` is `2`, that the note
+verifies as a chain of one ([01](01-identity.md) §7.5), that its `aud` is the
+app's own key, and that its `iss` is `grant.did`. An app that asked for
+`recordsOnly: true` MUST refuse a note whose command is not under `/record`,
+as a program connected by code MUST (§3).
 
 ### 2.7 Starting a connected node
 
@@ -388,14 +393,14 @@ _Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSig
 
 |                       | `scope: spaces`                                                    | `scope: account`                        |
 | --------------------- | ------------------------------------------------------------------ | --------------------------------------- |
-| Note                  | `with: "space:<id>"` per granted space                             | `with: "*"`                             |
+| Note                  | about the one space, or the account with a policy naming them      | about the account, no policy            |
 | Account key           | no                                                                 | yes                                     |
 | Sees                  | the granted spaces                                                 | every space; the account registry       |
 | Makes or joins spaces | the home makes them at grant time                                  | itself; they land in the account's list |
 | Contacts              | only with `contacts: true` (list and requests; not `ask`/`accept`) | yes, including `ask`/`accept`           |
 | Member keys           | one per granted private space                                      | derived from the account key            |
 
-With `recordsOnly` the note grants `record/*` (or `record/read`) under either
+With `recordsOnly` the note grants `/record` (or `/record/read`) under either
 scope, so every peer refuses from it what a records-only note can't do
 ([01](01-identity.md) §8): it never changes a space's collections or who may
 do what, and never writes in the account's own spaces. To make something new
@@ -411,21 +416,20 @@ from a key that writes records here and nothing more) is in
 [contacts](../packages/core/docs/contacts.md) and
 [calls](../packages/core/docs/calls.md#messages).
 
-_Source: `packages/core/src/session/connect.ts` (`grantCapabilities`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/records-only.test.ts` ("a definition signed by hand under a records-only note is ignored by every peer", "what counts is what the note grants", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand", "a program on a computer gets the whole account, records only, for as long as asked; each is its own connection"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
+_Source: `packages/core/src/session/connect.ts` (`grantTerms`), `packages/core/src/identity/abilities.ts` (`noteTerms`), `packages/core/src/session/auth.ts` (`grant`), `packages/core/src/identity/abilities.ts`, `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`, `write`, `upkeep`). Tests: `packages/core/tests/records-only.test.ts` ("a definition signed by hand under a records-only note is ignored by every peer", "what counts is what the note grants", "it never writes the account itself…", "in the account's own spaces, a version under a records-only note does not stand", "a program on a computer gets the whole account, records only, for as long as asked; each is its own connection"), `packages/core/tests/connect.test.ts` ("the grant is a note from the account to the app key, for the chosen spaces only")._
 
 Either way the app never gets the seed: it cannot sign in as the account, change
 its password or passkeys. Its note stops working for live checks at
 `expiresAt`, and its records stop counting once the account disconnects it
 (§2.9, §2.10).
 
-> **Planned: grants narrower than a space.** A note is per space, and reading
-> a private space is holding its key, so an app granted a private
-> space reads all of it until the space's key changes ([03](03-spaces.md),
-> `changeKey`). Grants per collection would need both a note capability per
-> collection (`with` narrower than `space:<id>`) and collection keys the home
-> can hand out alone. Not designed yet. Under UCAN 1.0 the note half is a
-> policy on `.collection` rather than new resource syntax ([01 §7.1](01-identity.md),
-> [#19](https://github.com/leifriksheim/weave/issues/19)).
+> **Planned: grants narrower than a space.** Reading a private space is
+> holding its key, so an app granted a private space reads all of it until
+> the space's key changes ([03](03-spaces.md), `changeKey`). A note can
+> already limit writing to some collections, with a policy on `.collection`
+> that every peer checks ([01](01-identity.md) §8), but a home doesn't offer
+> one yet; reading per collection would need collection keys the home can
+> hand out alone. Not designed yet.
 
 ### 2.9 Expiry and renewal
 
@@ -463,7 +467,8 @@ whose `app.origin` is its origin (§2.11, §4.4).
 
 Revoking writes a `sys.revoke` record naming the key ([03](03-spaces.md) §6.4).
 From then on nothing that key signed counts, except what the revoker had
-already seen of it. What the app could already read, it keeps. How the reference
+already seen of it, and nothing signed under a note it passed on counts at
+all. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
 key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
@@ -672,9 +677,9 @@ App                                                   Program
 - **The program** answers each `code:app` whose `origin` reads as above with
   `code:ask` on that exchange, its proof naming that origin, and takes the
   first peer whose `code:heard` opens as the app, ignoring every other from
-  then on. It MUST check a grant as an app does (§2.6): `v` is 1; the note
+  then on. It MUST check a grant as an app does (§2.6): `v` is 2; the note
   verifies; `aud` is its own key; `iss` is `grant.did`; and, when it asked
-  for records only, the note grants nothing but `record/` abilities. It MUST
+  for records only, the note's command is under `/record`. It MUST
   also refuse a grant whose `grant.did` does not have the account
   fingerprint the code names. Then it sends `code:done` and keeps the grant.
 

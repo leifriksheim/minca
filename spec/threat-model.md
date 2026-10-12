@@ -57,6 +57,10 @@ reference implementation, or any implementation, honestly.
     needs a role as of its `seen` (03 §5.2), and its access changes are never
     applied (03 §4.4, §4.5).
   - It cannot forge a version, a note or an invite (02 §3, 01 §7, 03 §7).
+  - It cannot give someone's note a second id, nor widen a chain: a token has
+    one form (low-S signatures only, one spelling, exact fields), and every
+    link of a chain must be no wider than the one above it, in command and
+    subject, with every link's policy checked (01 §7.1, §7.5).
 - **Does not hold yet.**
   - A leaked view-only invite carries the space key, can't be closed, and
     never causes a key change, so whoever holds it reads everything new
@@ -217,7 +221,7 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
 else. A stolen device key is treated like a stolen session token in
 an ordinary app: what it signed before it was revoked stands, and that is on
 whoever held it. The defence is revocation, and expiry where peers can judge
-it (live use, 01 §7.4). Weave does not try to detect a copied key: a fork
+it (live use, 01 §7.6). Weave does not try to detect a copied key: a fork
 proof (02 §4.10) withdraws a copy's writes only where it happens to be
 proven, and nothing relies on catching a copy. Reviews measure this section
 against that, not against catching the copy. It does not extend to removal
@@ -230,12 +234,17 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     seen of it stops counting, records and changes to who may do what alike, under every note to that key. A
     revoke the thief writes first, covering what it signed in advance, doesn't
     shield it: every revoke applies (03 §6.4).
+  - What it passed on falls with it: once the owner revokes the key,
+    everything signed under a chain through it stops counting, with no
+    cutoff, whatever key signed it (03 §6.4). Keys it passes the note on to
+    are no wider than its note (01 §7.5), and their live use ends when its
+    note does (01 §7.6).
   - Once a fork of the key's line in a collection is proven, what it signed
     in that collection from the proven place on stops counting, records and
     changes to who may do what alike (02 §4.10, 03 §4.3, §6.5).
 - **Does not hold yet.**
   - It can revoke the owner's other keys, with a cutoff of its choosing: a key
-    whose note grants `*` is the account while it lasts
+    whose note grants `/` is the account while it lasts
     ([#168](https://github.com/leifriksheim/weave/issues/168)).
   - A fork it makes at the start of a line withdraws everything the owner's
     device wrote in that collection ([#166](https://github.com/leifriksheim/weave/issues/166)).
@@ -251,14 +260,14 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     the others standing.
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
-    live messages, connecting) ends with the note (01 §7.4). Signing out
+    live messages, connecting) ends with the note (01 §7.6). Signing out
     writes a revoke of the session key, delivered when that device next
     syncs, but a device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
     keys ([#26](https://github.com/leifriksheim/weave/issues/26)). A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
-_Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a stolen key is answered by its revoke…")._
+_Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…", "revoking a key withdraws what keys it passed its note on to signed"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a revoked key takes what keys it passed its note on to signed", "a stolen key is answered by its revoke…")._
 
 ### 3.5 Root thief
 
@@ -295,7 +304,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
     more than records. A request with `recordsOnly` never gets the contact
     key (06 §2.8).
   - The note carries no label a peer reads: what a version, a live message or
-    a knock may do is what its note grants, whatever its `fct` says (01 §8).
+    a knock may do is what its note grants, whatever its `meta` says (01 §8).
+  - A policy on its note (a limit to some collections, say) binds it at
+    every peer, and binds every key it passes the note on to; what it passes
+    on is no wider than its own note, and falls when its key is revoked
+    (01 §7.4, §7.5, 03 §6.4).
   - It can't take the account's `onePer` key in one collection with a record
     of another: every peer that reads the definition refuses a first version
     at a key of a `onePer` key's form outside a `onePer` that gives it

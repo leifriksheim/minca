@@ -9,7 +9,7 @@ and what a peer checks before it keeps one.
 
 Out of scope here, and specified elsewhere:
 
-- Keys, DIDs and the UCAN delegations carried in `proof`: [01 — Identity](01-identity.md).
+- Keys, DIDs and the delegations carried in `proof`: [01 — Identity](01-identity.md).
 - Roles, the access history that `seen` refers to, encrypted bodies and space keys: [03 — Spaces](03-spaces.md).
 - How versions travel and how they are stored: [05 — Sync and storage](05-sync-and-storage.md).
 - Not protocol, and described in the package docs instead: querying records
@@ -89,7 +89,7 @@ _Source: `packages/core/src/schema/version.ts` (`canonicalize`). Tests: `package
 ## 2. Content ids
 
 The **id** of a version, and the content id of anything else hashed the
-same way (a space's genesis, a UCAN note in [01](01-identity.md) and
+same way (a space's genesis, a delegation in [01](01-identity.md) §7.1 and
 [03](03-spaces.md)), is:
 
 ```
@@ -135,7 +135,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3) and no standing (§9.3); for display, and as a sync hint ([05](05-sync-and-storage.md)).                                                        |
 | `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, a sealed body `{ "sealed", "keyId" }` ([03 — Spaces](03-spaces.md) §8.3).                               |
 | `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                                        |
-| `proof`      | string   | no         | Encoded UCAN delegating to `author` the right to write here ([01 — Identity](01-identity.md)). Absent when the author signs for itself.                                                                                                           |
+| `proof`      | array    | no         | The delegations that let `author` write here, root first: 1–10 tokens ([01 — Identity](01-identity.md) §7.5). Absent when the author signs for itself; never empty.                                                                               |
 | `key`        | string   | yes        | The record's identity within the space, stable across versions (§4.1).                                                                                                                                                                            |
 | `seq`        | integer  | yes        | `0` for the first version; each later version one more than the one it replaces.                                                                                                                                                                  |
 | `prev`       | string   | seq > 0    | Id of the version this one replaces.                                                                                                                                                                                                              |
@@ -940,7 +940,7 @@ question: creating a definition needs the permission `define`; changing or
 deleting one needs `manage`, or being whoever first defined it (while still a
 member). Deleting a definition that doesn't exist, as of what the delete saw,
 is refused. A definition counts only under a note that grants
-`collection/define` ([01 — Identity](01-identity.md) §8), whatever the
+`/collection/define` ([01 — Identity](01-identity.md) §8), whatever the
 writer's role.
 
 **Who first defined it.** A definition's key, `collection:<name>`, is the
@@ -1398,27 +1398,24 @@ signature verifies, and a body that is present hashes to `bodyHash`.
 
 ### 9.3 Delegation (the capability gate)
 
-The capability every write in space `S` needs is
-`{ "with": "space:<S>", "can": "record/write" }`.
+Every write in space `S` requires `/record/write` in `S`, with arguments
+`{ "space": S, "collection": <its collection> }` ([01 — Identity](01-identity.md)
+§8). `S` is the space the peer judges it in, not the one it claims (§9.4
+refuses a claim of another).
 
 - No `proof`: the author signs for itself; its root is `author`.
 - With `proof`:
   1. `createdAt` MUST parse as a time, which sync orders by (05); else
      refuse. It decides nothing else here.
-  2. The UCAN chain MUST be valid, judged with no time at all
-     ([01 — Identity](01-identity.md) §7.4): not the note's `exp` or `nbf`,
-     not `createdAt`, by no one's clock. So records outlive the session that
+  2. The chain MUST be valid ([01 — Identity](01-identity.md) §7.5), judged
+     with no time at all (§7.6): not any link's `exp` or `nbf`, not
+     `createdAt`, by no one's clock. So records outlive the session that
      signed them, and every peer judges a version the same whenever it
      arrives. What ends a key's writes is a revoke ([03](03-spaces.md) §6.4).
-  3. The chain's audience MUST equal `author`.
-  4. Some capability in the chain MUST cover the one required.
-  5. The root is the chain's root issuer.
-
-> **Known defect:** a chain deeper than one link never validates here, because
-> no proof resolver is wired and a record carries only its leaf token
-> ([01 — Identity](01-identity.md) §7.5). Planned there: "Proof chains that
-> travel".
-> Tracked in [#17](https://github.com/leifriksheim/weave/issues/17).
+  3. The chain's audience (its last link's `aud`) MUST equal `author`.
+  4. The chain MUST grant the requirement: every link's command, subject and
+     policy (01 §7.5).
+  5. The root is the chain's root: its first link's issuer.
 
 ### 9.4 Standing (the stateful check)
 
@@ -1499,7 +1496,7 @@ hold, and refusing would leave peers disagreeing forever. A reader may flag
 such a record instead. A writer
 checks them before signing and SHOULD NOT write what does not conform.
 
-_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/node/space-runtime.ts` (`writeCapability`, `judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/checks.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/abilities.ts` (`writeRequirement`), `packages/core/src/node/space-runtime.ts` (`judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/checks.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
 
 ---
 

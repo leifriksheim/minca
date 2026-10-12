@@ -9,7 +9,7 @@ messages, and ICE/TURN.
 
 What travels _inside_ an authenticated connection — the sync protocol — is
 in [05 — Sync and storage](05-sync-and-storage.md). Keys, DIDs and notes
-(UCAN delegations) are in [01 — Identity](01-identity.md). Read keys, space
+(delegations) are in [01 — Identity](01-identity.md). Read keys, space
 keys, roles and the access log are in [03 — Spaces](03-spaces.md). The relay
 mailbox used by doors is in [07 — Doors](07-doors.md).
 
@@ -33,7 +33,8 @@ Terms used below:
   ([01 — Identity](01-identity.md)). It is a peer's identity on the wire:
   in rooms, in handshakes and in every message's `from`.
 - **account DID** — the root DID behind a session, proven by the session's
-  **note** (the delegation from the account to the session key).
+  **note**: its proof, the chain of delegations from the account to the
+  session key, root first ([01](01-identity.md) §7.5).
 - **room** — a name on a relay under which peers are introduced.
 - **space id**, **read key**, **space key** — see [03 — Spaces](03-spaces.md).
 
@@ -105,8 +106,9 @@ fixes the socket's DID for the life of the socket.
 > §2.1). (The processes of a program connected by code can't collide any
 > more: only one may hold its key.) The refused tab says so (§2, and `refused` in `spaces.status`), but
 > it cannot sync until the first closes. A key per tab, delegated from the
-> app's key, would fix it; that needs peers to accept a two-link chain
-> ([01](01-identity.md) §7.5). Tracked in
+> app's key, would fix it; peers now accept chains of more than one link
+> ([01](01-identity.md) §7.5), and the library doesn't make the per-tab key
+> yet. Tracked in
 > [#55](https://github.com/leifriksheim/weave/issues/55).
 
 _Source: `packages/relay/relay.mjs` (`handleMessage`, `isDid`, `CLOSE_DID_TAKEN`). Tests: `packages/core/tests/relay-refusal.test.ts` ("one DID per room")._
@@ -442,8 +444,8 @@ refuse (close `4002`) a welcome unless:
 
 - the node DID is the pinned DID (a node that signs with its own key, as a
   host does); or
-- the welcome's `note` is a valid delegation (01 §7.5) whose audience is the
-  node DID and whose root is the pinned DID. This is how a node whose session
+- the welcome's `note` is a valid proof (01 §7.5, checked at the client's
+  time, §7.6) whose audience is the node DID and whose root is the pinned DID. This is how a node whose session
   key changes on restart, such as `weave run`, is pinned by its account.
 
 A client SHOULD pin a host by the key its `sys.hosting` record names, or, for
@@ -455,7 +457,7 @@ The handshake is three text frames, then binary frames either way:
 ```
 1. node   → client   {"type":"challenge","nonce":<Nₛ>,"did":<node DID>}
 2. client → node     {"type":"hello","did":<client session DID>,"nonce":<N꜀>,"sig":…,"read"?:…,"readKey"?:…,"member"?:…,"earlier"?:[…]}
-3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>,"note"?:<the node's delegation>}
+3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>,"note"?:<the node's proof>}
 4. binary frames of UTF-8 JSON, either way
 ```
 
@@ -539,7 +541,7 @@ W  = "weave-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
   also check the read proof (§6.3) over the same `H`.
 - The welcome carries `sig` = node session key signs `W`. The client MUST
   verify it against the node DID from the challenge.
-- A node whose key acts for an account SHOULD also send its delegation as
+- A node whose key acts for an account SHOULD also send its proof as
   `note`, so a client can pin the account (§5.2). It is not covered by `sig`
   and need not be: it is checked on its own, and binds to the node DID that
   `sig` verified.
@@ -609,7 +611,7 @@ proof:
 
   ```
   member = base64url( envelope(sealKey, "weave/membership/v1", { space: spaceId },
-                               UTF-8(JSON.stringify(noteString))) )
+                               UTF-8(JSON.stringify(proof))) )
   ```
 
   where `sealKey` is the seal key of that space key ([03](03-spaces.md) §8.1) and
@@ -627,10 +629,10 @@ The verifier:
    `did:key:` fails this step);
 3. accepts if that holds and `claimed` is the current read key, except that
    while a new key is due ([03](03-spaces.md) §9.2) it rejects a prover whose
-   `member` it can open to a valid note, made out to the prover's session DID,
+   `member` it can open to a valid proof (01 §7.5), made out to the prover's session DID,
    whose root account is a **former member** (03 §9.2);
 4. accepts if that holds and it holds the space key whose read key is
-   `claimed`, can open `member` with it, the note inside is valid, is made
+   `claimed`, can open `member` with it, the proof inside is valid, is made
    out to the prover's session DID, and its root account is a reader of the
    space now. A verifier without that key (a host) cannot;
 5. otherwise accepts only if an entry among the first 4 of `earlier` names
@@ -700,11 +702,12 @@ _Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MA
 
 A handshake proves a session DID, not whose it is. So the first message each
 side sends on a space's connection, as soon as the peer is admitted, is
-`who` (§9.1), carrying its note. The receiver resolves the note's
-delegation chain ([01 — Identity](01-identity.md)) and takes the root DID as
-the peer's account **only if** the chain is valid and its audience is the
-peer's proven session DID. A note longer than 16 384 characters, invalid, or
-made out to another key gives the peer **no account** (`null`). Nothing else
+`who` (§9.1), carrying its note: its proof. The receiver checks the chain
+([01 — Identity](01-identity.md) §7.5, at its own time, §7.6) and takes the
+root DID as the peer's account **only if** the chain is valid and its
+audience is the peer's proven session DID. A proof whose canonical JSON is
+longer than 16 384 characters, invalid, or made out to another key gives
+the peer **no account** (`null`). Nothing else
 in the note is read here; what the library tells apps about the sender is in
 [the node](../packages/core/docs/node.md#live-messages-and-status).
 
@@ -901,11 +904,11 @@ On every transport, a space's peers exchange messages of the form
 added), on a node socket as the whole binary frame. The
 receiver MUST attribute a message to the connection's peer, not to `from`.
 
-| `type` | Payload              | Specified in                                    |
-| ------ | -------------------- | ----------------------------------------------- |
-| `sync` | a sync message       | [05 — Sync and storage](05-sync-and-storage.md) |
-| `who`  | `{ "note": string }` | §6.4, §9.1                                      |
-| `live` | any JSON             | §9.2                                            |
+| `type` | Payload             | Specified in                                    |
+| ------ | ------------------- | ----------------------------------------------- |
+| `sync` | a sync message      | [05 — Sync and storage](05-sync-and-storage.md) |
+| `who`  | `{ "note": proof }` | §6.4, §9.1                                      |
+| `live` | any JSON            | §9.2                                            |
 
 A channel's rooms carry their own types (`packages/core/src/session/pairing.ts`,
 `packages/core/src/session/connect-code.ts`); see [01 — Identity](01-identity.md) §15 and
@@ -916,7 +919,7 @@ ignored.
 
 Sent by each side to each newly admitted peer of a space, **before any
 `live` message**: `{"type":"who","from":<session DID>,"payload":{"note":<the
-session's encoded note>}}`. Handling is in §6.4. A peer that sends none has no
+session's proof, an array of tokens>}}`. Handling is in §6.4. A peer that sends none has no
 account.
 
 ### 9.2 Live messages

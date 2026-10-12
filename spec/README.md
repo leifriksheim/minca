@@ -14,13 +14,13 @@ the code disagree, that is a bug in one of them: open an issue, and say which.
 **The core.** What every peer implements to sync with others, store what they
 store, and judge every record the same way:
 
-| Part                                            | Covers                                                                                                                                                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, root and session signers, UCAN delegations, what a note lets a key do, envelopes and HPKE, contact keys, the account vault, device keys, pairing |
-| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline                                |
-| [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                                       |
-| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                            |
-| [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                                                  |
+| Part                                            | Covers                                                                                                                                                                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, root and session signers, delegations (UCAN 1.0, JSON profile), what a note lets a key do, envelopes and HPKE, contact keys, the account vault, device keys, pairing |
+| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline                                                    |
+| [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                                                           |
+| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                                                |
+| [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                                                                      |
 
 **Built on the core.** Exchanges between two parties that a peer needs only
 if it takes part in them; a peer that doesn't still syncs, stores and judges
@@ -36,7 +36,7 @@ everything the same:
 
 A peer that joins spaces and syncs them needs, from the core:
 
-- 01 §1–9: keys, DIDs, UCAN notes, what a note lets a key do, and envelopes;
+- 01 §1–9: keys, DIDs, notes, what a note lets a key do, and envelopes;
   §10.2 and §11.1 for the member keys a private space's new keys are boxed to;
 - 02 whole;
 - 03 §1–7, and §8–9 for private spaces;
@@ -143,11 +143,9 @@ they are described; the smaller ones share
 | Planned                                                                                           | Where                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                            |
-| One spelling per key; one valid form per token; strict token shape                                | [01 §4, §7](01-identity.md)                                                                                                                |
-| Proof chains that travel (fixes a known defect)                                                   | [01 §7.5](01-identity.md), [#17](https://github.com/leifriksheim/weave/issues/17)                                                          |
-| Delegations as UCAN 1.0                                                                           | [01 §7](01-identity.md), [#19](https://github.com/leifriksheim/weave/issues/19)                                                            |
-| Grants narrower than a space                                                                      | [01 §7.1](01-identity.md), [06 §2](06-nodes-and-sessions.md), [#19](https://github.com/leifriksheim/weave/issues/19)                       |
-| Removing a lost device from another one (sign-out already revokes)                                | [01 §7.4](01-identity.md), [#26](https://github.com/leifriksheim/weave/issues/26)                                                          |
+| One spelling per key                                                                              | [01 §4](01-identity.md)                                                                                                                    |
+| Grants narrower than a space (reading)                                                            | [06 §2.8](06-nodes-and-sessions.md)                                                                                                        |
+| Removing a lost device from another one (sign-out already revokes)                                | [01 §7.6](01-identity.md), [#26](https://github.com/leifriksheim/weave/issues/26)                                                          |
 | Merging inside one record                                                                         | [02 §4.8](02-records.md)                                                                                                                   |
 | Forgetting in blob stores                                                                         | [02 §4.9](02-records.md)                                                                                                                   |
 | References to records in other spaces                                                             | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/weave/issues/38)                                                           |
@@ -177,7 +175,7 @@ Proposed in an issue but not yet designed into the spec, so listed under
 ## The shape of it, in one page
 
 ```
- account (seed) ──derives──▶ root key ──signs UCAN──▶ session key ──signs──▶ records
+ account (seed) ──derives──▶ root key ──signs note──▶ session key ──signs──▶ records
                                                                            │
                                                           stored per space │ synced by Negentropy
                                                                            ▼
@@ -188,7 +186,7 @@ Proposed in an issue but not yet designed into the spec, so listed under
 
 - An **account** is a 16-byte seed. Everything else about it is derived.
 - The **root key** almost never signs data. It signs short-lived delegations
-  (UCANs) to **session keys**, which sign **records**.
+  (notes, a JSON profile of UCAN 1.0) to **session keys**, which sign **records**.
 - A **record** is a signed, versioned JSON document in a **collection** of a
   **space**. Private spaces encrypt record bodies with the space key.
 - A **space** carries its own rules: roles, who holds them, what each
