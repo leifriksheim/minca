@@ -113,10 +113,10 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     until members witness each other's heads
     ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Only three kinds of misconduct earn a warrant, and a peer that
-    can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
+    can't read the rules flags no one. More kinds are planned after v1 ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
-    by revoking its key or forking their line in the warrants' collection ([#166](https://github.com/leifriksheim/weave/issues/166)),
+    by revoking its key or forking their line in the warrants' collection,
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Fork proofs don't reliably catch a copy of a key that writes where its
     other branch never reaches (§3.4): a fork counts once a member holding
@@ -228,7 +228,7 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     writes a revoke of the session key, delivered when that device next
     syncs, but a device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
-    keys ([#165](https://github.com/leifriksheim/weave/issues/165)). A revocation does not reach spaces created after it
+    keys. A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
 _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a stolen key is answered by its revoke…")._
@@ -347,7 +347,7 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#166](https://github.com/leifriksheim/weave/issues/166)) _(traced)_.
 
-_Source: 03 §8; 02 §3; 06 §4; 05 §15. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
+_Source: 03 §8; 02 §3; 06 §4. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
 
 ### 3.9 Network attacker
 
