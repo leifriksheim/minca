@@ -62,7 +62,7 @@ export const API = Object.freeze({
   records: {
     list: 'scoped',
     get: 'scoped',
-    checks: 'scoped',
+    contracts: 'scoped',
     keyFor: 'scoped',
     onePerKey: 'scoped',
     put: 'scoped',

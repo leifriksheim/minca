@@ -23,7 +23,7 @@ import {
   RECORD_READ,
   RECORD_WRITE,
 } from '@weaveprotocol/core';
-import type { Check, SpaceRole } from '@weaveprotocol/core';
+import type { Contract, SpaceRole } from '@weaveprotocol/core';
 import { fragments } from '@weaveprotocol/core/schemas';
 
 const { typed, words, text, markdown, count, choice, people, one } = fragments;
@@ -250,7 +250,7 @@ export const decision = typed<Decision>()({
         that: `(body.outcome == "passed" ? ${authorsOf('body.votes')} >= ${toPassOf('body.proposal')} : ${authorsOf('body.votes')} + ${toPassOf('body.proposal')} > size(body.voters))`,
         else: 'A proposal passes once as many voters as it needs voted for, and fails once that can’t happen',
       },
-    ] satisfies ReadonlyArray<Check>,
+    ] satisfies ReadonlyArray<Contract>,
   },
 });
 interface Decision {
@@ -297,7 +297,7 @@ export const conflict = typed<Conflict>()({
         ].join(' && '),
         else: 'A conflict cites two first versions of one vote or party roll that say different things',
       },
-    ] satisfies ReadonlyArray<Check>,
+    ] satisfies ReadonlyArray<Contract>,
   },
 });
 interface Conflict {
@@ -361,7 +361,7 @@ export const party = typed<Party>()({
         that: 'body.decides == "representative" ? (has(body.representative) && body.representative in body.members) : !has(body.representative)',
         else: 'A party that decides by representative names one of its members, and only then',
       },
-    ] satisfies ReadonlyArray<Check>,
+    ] satisfies ReadonlyArray<Contract>,
   },
 });
 interface Party {
@@ -426,7 +426,7 @@ export const partyRoll = typed<PartyRoll>()({
         that: `(${decidesIs('representative')}) ? (has(body.representative) && body.representative == ${citedOne('body.party', 'body.representative')} && body.representative in body.members && !has(body.toTake)) : (!has(body.representative) && has(body.toTake) && body.toTake == ${sharePerRule('size(body.members)')})`,
         else: 'A party roll freezes how the party decides, as the party says, and its representative is a member',
       },
-    ] satisfies ReadonlyArray<Check>,
+    ] satisfies ReadonlyArray<Contract>,
   },
 });
 interface PartyRoll {
@@ -489,7 +489,7 @@ export const partyBallot = typed<PartyBallot>()({
         that: `!${citedHas('body.roll', 'body.representative')} ? ${authorsOf('body.votes')} >= ${citedOne('body.roll', 'body.toTake')} : (${authorsOf('body.votes')} >= 1 && versions(body.votes).all(it, it.author == ${citedOne('body.roll', 'body.representative')}))`,
         else: 'A party takes a position once as many members as its roll needs voted that way, or its representative did',
       },
-    ] satisfies ReadonlyArray<Check>,
+    ] satisfies ReadonlyArray<Contract>,
   },
 });
 interface PartyBallot {

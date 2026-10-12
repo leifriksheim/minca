@@ -867,7 +867,7 @@ function first(checks: ReadonlyArray<() => string | null>): string | null {
 
 /** Stops an evaluation outright: a cited version not here yet, one that can't be read or doesn't stand, or too many steps */
 export interface CelStop {
-  readonly stop: 'later' | 'unreadable' | 'fail';
+  readonly stop: 'later' | 'unreadable' | 'unjudged' | 'fail';
   readonly why: string;
 }
 /** A stop, thrown */
@@ -1263,7 +1263,8 @@ async function callGlobal(fn: string, args: ReadonlyArray<CelValue>, env: CelEnv
       return a;
     case 'sum': {
       if (!isList(a)) return err('no matching overload');
-      if (a.length === 0) return 0n;
+      // Every number read from a body is a double, so an empty sum is one too.
+      if (a.length === 0) return 0;
       let total: CelValue = a[0]!;
       if (!isNumber(total)) return err('no matching overload');
       for (const item of a.slice(1)) {

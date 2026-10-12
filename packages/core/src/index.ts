@@ -498,8 +498,8 @@ export { checkRules, onePerKey, onePerSecret } from './records/rules.js';
 export { keyKind, lineKey, ownedKey } from './records/key.js';
 export { describeCollection } from './records/describe.js';
 export type { CollectionRules } from './records/rules.js';
-export type { Check, Condition } from './records/checks.js';
-export { checkCostHints } from './records/checks.js';
+export type { Contract, Condition } from './records/contracts.js';
+export { contractCostHints } from './records/contracts.js';
 /** Conditions over one record, in a check's language: a subscription's `where`, and an app's own filters */
 
 // Hosting: a subscription key, signed requests to a host, and a client for one

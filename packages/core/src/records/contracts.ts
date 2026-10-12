@@ -1,8 +1,8 @@
 /**
- * Checks: conditions a collection's records must meet, written in CEL
- * (`./cel.ts`) and judged by every peer that can read them.
+ * Contracts: what a collection's records must be to count, written in CEL
+ * (`./cel.ts`) and judged by every reader that can read them (spec 09).
  *
- * A check is a condition over the version being judged (its body, the
+ * A contract is a list of conditions; each is over the version being judged (its body, the
  * version before it, who wrote it) and over versions it cites as evidence,
  * by id. Peers only check; they never search. Whatever is hard to work out
  * (who voted, what adds up, which move is legal) the writer works out and
@@ -22,6 +22,7 @@
  * versions citing versions build on each other the way a ledger does.
  */
 import { isObject } from '../utils/guards.js';
+import { canonicalize } from '../schema/version.js';
 import type { Link } from '../types.js';
 import { LINK_REL_PATTERN } from './links.js';
 import {
@@ -40,11 +41,53 @@ import {
   type CelValue,
 } from './cel.js';
 
-/** A check's condition: a CEL expression, like `body.amount > 0.0`. Checked by `checkChecks`. */
+/**
+ * A line collection's declaration (spec 09 §6): one line per account, at
+ * `lineKey(root, collection)`. `once` names body fields whose citations
+ * appear at most once along a line. Its keys are closed.
+ */
+export interface Line {
+  readonly once?: ReadonlyArray<string>;
+}
+
+/** The keys a line declaration may have */
+const LINE_KEYS: ReadonlyArray<string> = ['once'];
+
+/**
+ * Whether a line declaration can be judged: null when it can, `unknown` when
+ * it has a key this library doesn't know (the collection is then unjudged),
+ * or why it is malformed.
+ */
+export function checkLine(line: unknown): string | null {
+  if (!isObject(line)) return 'line must be an object';
+  if (Object.keys(line).some((k) => !LINE_KEYS.includes(k))) return 'unknown';
+  const once = line.once;
+  if (
+    once !== undefined &&
+    !(Array.isArray(once) && once.every((f) => typeof f === 'string' && f.length > 0 && f.length <= 64))
+  )
+    return 'line.once must be a list of field names';
+  return null;
+}
+
+/** The citations a version claims under `once`: each element of a listed field that is a list, as canonical JSON */
+export function onceCitations(body: unknown, fields: ReadonlyArray<string>): string[] {
+  if (!isObject(body)) return [];
+  const out: string[] = [];
+  for (const field of fields) {
+    const value = Object.hasOwn(body, field) ? body[field] : undefined;
+    if (!Array.isArray(value)) continue;
+    const items: ReadonlyArray<unknown> = value;
+    for (const item of items) out.push(`${field}\n${canonicalize(item)}`);
+  }
+  return out;
+}
+
+/** A check's condition: a CEL expression, like `body.amount > 0.0`. Checked by `checkContracts`. */
 export type Condition = string;
 
-/** One check a collection's records must pass: `that` must be true, else the version is refused and `else` says why */
-export interface Check {
+/** One condition of a collection's contract: `that` must be true, else the version doesn't count and `else` says why */
+export interface Contract {
   readonly that: Condition;
   readonly else: string;
 }
@@ -56,7 +99,7 @@ const MAX_CONDITION_LENGTH = 4000;
 /** Parts (literals, names, operations) in one collection's checks together */
 const MAX_CHECK_NODES = 2000;
 /** Steps one version's checks may take, together */
-export const MAX_CHECK_STEPS = MAX_CEL_STEPS;
+export const MAX_CONTRACT_STEPS = MAX_CEL_STEPS;
 /** Distinct versions one version's checks may cite */
 const MAX_CITED = 256;
 
@@ -93,7 +136,7 @@ function parse(condition: unknown, at: string): CelNode | string {
 }
 
 /** Why a collection's checks can't be kept, or null */
-export function checkChecks(checks: unknown, at = 'rules.check'): string | null {
+export function checkContracts(checks: unknown, at = 'rules.check'): string | null {
   if (!Array.isArray(checks) || checks.length === 0 || checks.length > MAX_CHECKS)
     return `${at} must be a list of 1 to ${MAX_CHECKS} checks`;
   const count = { nodes: 0 };
@@ -115,7 +158,7 @@ export function checkChecks(checks: unknown, at = 'rules.check'): string | null 
 }
 
 /** A version a check reads: the one before, or one it cites */
-export interface CheckedVersion {
+export interface CitedVersion {
   readonly id: string;
   readonly key: string;
   readonly collection: string;
@@ -130,29 +173,36 @@ export interface CheckedVersion {
 }
 
 /** Why a cited version can't be read: not here yet, can't be opened, or can't count */
-export type Uncited = { readonly later: true } | { readonly unreadable: true } | { readonly refused: string };
+export type Uncited =
+  | { readonly later: true }
+  | { readonly unreadable: true }
+  /** In a collection this reader doesn't judge (spec 09 §2) */
+  | { readonly unjudged: true }
+  | { readonly refused: string };
 
 /** What a check reads, and asks, when judging one version */
-export interface CheckScope {
+export interface ContractScope {
   /** `body`, `links`, `key`, `seq`, `collection`, `author`, `creator`, `createdAt`, `prev` */
   readonly values: Readonly<Record<string, unknown>>;
   /** A version cited by id */
-  readonly cite: (id: string) => Promise<CheckedVersion | Uncited>;
+  readonly cite: (id: string) => Promise<CitedVersion | Uncited>;
   /** Whether an account held any role, as of what the version saw */
   readonly member: (did: string) => boolean;
 }
 
 /** How a version's checks came out */
-export type CheckOutcome =
+export type ContractOutcome =
   | { readonly passed: true }
   | { readonly passed: false; readonly reason: string }
   /** It cites a version not held yet: judge it again when more arrives */
   | { readonly later: true }
   /** Something it reads is sealed with a key this peer doesn't hold: it can't tell */
-  | { readonly unreadable: true };
+  | { readonly unreadable: true }
+  /** It cites a version in a collection this reader doesn't judge */
+  | { readonly unjudged: true };
 
 /** A version as a check reads it */
-function versionValue(v: CheckedVersion): CelValue {
+function versionValue(v: CitedVersion): CelValue {
   return celMap([
     ['id', v.id],
     ['key', v.key],
@@ -166,7 +216,10 @@ function versionValue(v: CheckedVersion): CelValue {
   ]);
 }
 
-export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope): Promise<CheckOutcome> {
+export async function runContracts(
+  checks: ReadonlyArray<Contract>,
+  scope: ContractScope,
+): Promise<ContractOutcome> {
   const vars = new Map<string, CelValue>();
   for (const [name, value] of Object.entries(scope.values)) {
     if (name === 'seq' && typeof value === 'number') vars.set(name, BigInt(value));
@@ -174,7 +227,7 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
     else vars.set(name, fromJson(value));
   }
   // Steps and citations are counted across all of a version's checks.
-  const budget = { steps: 0, max: MAX_CHECK_STEPS, work: 0, maxWork: MAX_CEL_WORK };
+  const budget = { steps: 0, max: MAX_CONTRACT_STEPS, work: 0, maxWork: MAX_CEL_WORK };
   const cited = new Map<string, CelValue>();
   const versions = async (ids: ReadonlyArray<string>): Promise<CelValue> => {
     const out: CelValue[] = [];
@@ -185,6 +238,7 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
         const found = await scope.cite(id);
         if ('later' in found) throw celStop('later', `${id} is not here yet`);
         if ('unreadable' in found) throw celStop('unreadable', `${id} can't be opened`);
+        if ('unjudged' in found) throw celStop('unjudged', `${id} can't be judged here`);
         // One that doesn't stand fails the check outright, saying why.
         if ('refused' in found) throw celStop('fail', `${id} does not stand: ${found.refused}`);
         value = versionValue(found);
@@ -213,6 +267,7 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
       if (!isCelStop(error)) throw error;
       if (error.stop === 'later') return { later: true };
       if (error.stop === 'unreadable') return { unreadable: true };
+      if (error.stop === 'unjudged') return { unjudged: true };
       return { passed: false, reason: `${check.else} (${error.why})` };
     }
     if (result !== true) return { passed: false, reason: check.else };
@@ -220,7 +275,7 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
   return { passed: true };
 }
 
-function isCheckedVersion(value: unknown): value is CheckedVersion {
+function isCheckedVersion(value: unknown): value is CitedVersion {
   return isObject(value) && typeof value.id === 'string' && typeof value.seq === 'number';
 }
 
@@ -230,7 +285,7 @@ function isCheckedVersion(value: unknown): value is CheckedVersion {
  * small records may run out of steps or work on large ones. Not protocol:
  * a verdict never depends on it.
  */
-export function checkCostHints(checks: ReadonlyArray<Check>): string[] {
+export function contractCostHints(checks: ReadonlyArray<Contract>): string[] {
   const hints: string[] = [];
   checks.forEach((check, i) => {
     const node = parse(check.that, `check[${i}]`);

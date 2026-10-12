@@ -1,4 +1,4 @@
-/** Checks are read by the library: a version that fails or waits for ever can't hold a key, or be laundered (packages/core/docs/checks.md). */
+/** Contracts are judged by readers: a version that fails or waits for ever can't hold a key, or be laundered (spec/09-contracts.md). */
 import { test } from 'node:test';
 import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';

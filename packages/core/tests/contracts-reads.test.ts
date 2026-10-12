@@ -1,4 +1,4 @@
-/** Checks are read by the library: a version that fails them is kept and synced, and counted on no read path (packages/core/docs/checks.md). */
+/** Contracts are judged by readers: a version that fails them is kept and synced, and counted on no read path (spec/09-contracts.md). */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -70,7 +70,7 @@ describe('probe: failing versions on read paths', () => {
       version: { key, seq: 0 },
     });
     await hold(bob.node, space);
-    await until(async () => (await alice.node.records.checks(space, key))?.passes === false, 4000, 'held');
+    await until(async () => (await alice.node.records.contracts(space, key))?.passes === false, 4000, 'held');
     assert.equal(await alice.node.records.get(space, key), null, 'get hides it');
     assert.equal(
       (await alice.node.records.list(space, { collection: 'app.proposal.passed' })).length,

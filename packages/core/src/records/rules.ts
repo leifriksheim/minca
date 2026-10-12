@@ -8,10 +8,10 @@
  * them all). It is made true by construction: the record's key is derived from
  * what must be unique, so a second vote *is* the first one's next version.
  *
- * What the others can't say, `check` can: conditions over the body, the
- * version before and versions it cites (`records/checks.ts`).
+ * What the others can't say, a contract (`check`) can: conditions over the body, the
+ * version before and versions it cites (`records/contracts.ts`).
  */
-import { type Check } from './checks.js';
+import { type Contract } from './contracts.js';
 import { ownedKey } from './key.js';
 import { canonicalize } from '../schema/version.js';
 import { bytesToHex, utf8Encode } from '../utils/encoding.js';
@@ -30,9 +30,9 @@ export interface CollectionRules {
   readonly fixed?: ReadonlyArray<string>;
   /**
    * Conditions every created or edited version must meet to count, read by
-   * the library and not judged by peers. See `records/checks.ts`.
+   * the library and not judged by peers. See `records/contracts.ts`.
    */
-  readonly check?: ReadonlyArray<Check>;
+  readonly check?: ReadonlyArray<Contract>;
   /**
    * Records are written once: no edit and no delete, by anyone. A vote, a
    * ballot or a proof that others count on stays what it was.
@@ -63,7 +63,7 @@ export function checkRules(rules: unknown, at = 'rules'): string | null {
       return `${at}.${list} must be a non-empty list of names`;
     }
   }
-  // Checks are read by the library, not judged by peers (packages/core/docs/checks.md):
+  // Contracts are judged by readers, not by peers (spec/09-contracts.md):
   // a peer keeps whatever list a definition carries, and its author's node checks it.
   if (r.check !== undefined && !Array.isArray(r.check)) return `${at}.check must be a list`;
   return null;

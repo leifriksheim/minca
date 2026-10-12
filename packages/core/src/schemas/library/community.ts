@@ -6,7 +6,7 @@
  * A decision and a goal reached are proven, not declared: each cites the
  * records that prove it, and every device checks the proof (02 §7.6).
  */
-import type { Check } from '../../records/checks.js';
+import type { Contract } from '../../records/contracts.js';
 import { blob, choice, count, markdown, one, person, text, define, when, words } from '../fragments.js';
 import type { BodyOf } from '../../query/types.js';
 
@@ -121,7 +121,7 @@ export const ballot = define({
 });
 export type Ballot = BodyOf<typeof ballot>;
 
-const DECIDES: ReadonlyArray<Check> = [
+const DECIDES: ReadonlyArray<Contract> = [
   {
     that: citesWhatItIsAbout('body.proposal', 'std.proposal'),
     else: 'A decision cites the proposal it decides, as it was first put',
@@ -213,7 +213,7 @@ export const pledge = define({
 export type Pledge = BodyOf<typeof pledge>;
 
 const PLEDGES = citedAbout('body.pledges', 'std.pledge');
-const REACHES: ReadonlyArray<Check> = [
+const REACHES: ReadonlyArray<Contract> = [
   {
     that: citesWhatItIsAbout('body.goal', 'std.goal'),
     else: 'It cites the goal it reaches, as it was first set',
