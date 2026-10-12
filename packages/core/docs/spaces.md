@@ -67,8 +67,9 @@ _Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `STA
   view-only invite. Opening an invite for a role needs the same grant as
   assigning it to someone holding nothing. Peers judge each join as the
   assignment the invite's opener makes, to whoever joins (spec 03 §4.5): an
-  opener whose grant says `.self == false` can't join its own invite, and one
-  who has lost the grant since lets nobody in.
+  opener whose grant says `.self == false` can't join its own invite. A
+  joiner judged in a view from before the opener lost the grant still gets
+  in: to stop an invite, close it.
 - `write: false` always makes a view-only invite.
 - Each role invite gets its own fresh secret and its own `sys.invite` record,
   so one can be closed without the others.

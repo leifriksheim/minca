@@ -597,6 +597,12 @@ e`'s place in that collection's line, `log.n`, §6.3) and, unless `r` is a
    owner reacting to a thief has seen what the thief did. Revokes and forks
    are never struck.
 
+   An unassignment never strikes a removal of its own author: a removed
+   member can't undo its removal by taking a role from its remover, backdated
+   to a view where it still could. Removals of each other strike each other
+   and both stand, and so do unassignments of each other, since neither pair
+   can be told from one made honestly apart.
+
    > Rationale: an unassignment strikes what its account did concurrently,
    > not only what needed the role. What an event needed could only be judged
    > in `V(e)`, a view its author chooses by naming an older point, while
@@ -694,8 +700,9 @@ because it is one of the changes anyone may make for themselves:
   makes: for every account `o` in the invite's `by`,
   `may(S, o, /role/assign, { role, self: o = did, roles: rolesOf(S, did) })`.
   So an opener's `.self` and `.roles` policies hold for whoever joins, the
-  opener included, and an opener who lost the grant since opening it lets
-  nobody in.
+  opener included. `S` is the join's own view, which the joiner chooses: one
+  naming a view from before the opener lost the grant still gets in, so an
+  invite is stopped by closing it.
 - _Leaving a role_ (`assigned: false`, `A = did`): allowed when `did` holds
   `role` now.
 - _Otherwise_: `did` is not a founder, unless `A = did`; the role exists;

@@ -93,9 +93,9 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     "backdating past an unassignment").
   - A join through an invite is judged as the assignment its opener makes, to
     whoever joins: an opener whose grant says `.self == false` can't join its
-    own invite, its `.roles` policy reads the joiner's roles, and one who lost
-    the grant since lets nobody in (03 §4.5; `access-attacks.test.ts`, "an
-    invite is the assignment its opener makes…").
+    own invite, and its `.roles` policy reads the joiner's roles (03 §4.5;
+    `access-attacks.test.ts`, "an invite is the assignment its opener
+    makes…").
   - Sending a stub ahead of its version gets nothing past a reader: a verdict
     on a stub, judged without its body, never stands for the whole version,
     and a reader holds a stub whose grant reads its body as not yet judged
@@ -178,6 +178,21 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     what its cutoff doesn't cover: peers converge, but no verdict is final
     until members witness each other's heads
     ([#166](https://github.com/leifriksheim/weave/issues/166)).
+  - The unassigner chooses what was unseen. A member holding any
+    `/role/unassign` can name an old view in which it held the grant and the
+    target held the role, leave out the cutoff, and strike everything the
+    target did since. A `.roles` policy doesn't stop it, since it is read in
+    that old view. Two unassignments of each other made this way both stand,
+    as an honest pair made apart would (03 §4.3; `access-attacks.test.ts`,
+    "unassignments of each other both stand…";
+    [#166](https://github.com/leifriksheim/weave/issues/166)). Only a removal
+    of the unassigner, which its unassignment can't strike back, settles it.
+  - An invite outlives its opener's demotion or removal for a joiner who names
+    a view from before it: the join is judged there, where the opener still
+    held the grant. To stop an invite, close it: a close strikes joins that
+    hadn't seen it (03 §4.3, §4.5; `access-attacks.test.ts`, "an invite
+    outlives its opener’s demotion…";
+    [#170](https://github.com/leifriksheim/weave/issues/170)).
   - Only three kinds of misconduct earn a warrant, and a peer that
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who may remove every
@@ -285,6 +300,11 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
   - What it writes claiming to have seen its removal does not count, a
     revoke included, since a revoke needs a place. Ordinary records it writes claiming not
     to have seen it are withdrawn, unless the removal's cutoff covers them (03 §5.1, §6.3).
+  - It can't undo its removal by reducing its remover: an unassignment never
+    strikes a removal of its own author, so a backdated unassignment of the
+    remover's role is struck by the removal, and strikes nothing (03 §4.3;
+    `access-attacks.test.ts`, "a removed member’s backdated unassignment of
+    its remover…").
   - An assignment or definition it makes concurrently with its removal, or
     with the loss of any role, or backdates, is struck, and gives no power to
     anything resting on it, a record citing it included, whether or not that

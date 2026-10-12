@@ -102,6 +102,13 @@ the runner says so, and what they ask
 in it may be done. What it quotes, and the messages before it, stay data. A
 runner without one leaves rules that ask to one that has.
 
+Holding every grant of the bot's roles is not holding what the bot can do
+with them. `.byCreator` reads whose record it is, and when the bot acts, its
+own records are the ones it wrote: a reply, a summary, an app it made for
+someone. So whoever may instruct a bot can have it edit or delete a record
+it wrote for someone else, though their own `.byCreator` grant would never
+reach that record.
+
 _Source:_ `packages/cli/src/agent-rules.ts` (`triggerPrompt`, `ruleContext`,
 `writerInstructs`); `packages/cli/tests/agent-rules.test.ts`.
 
