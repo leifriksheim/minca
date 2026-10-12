@@ -34,8 +34,9 @@ CI whenever `spec/`, `packages/core/` or `scenarios/` change.
   policies), its CEL contracts, and its story.
 - `tests/`: the scenarios themselves, one file per community.
 - `host/`: a small stand-in for what a peer does around the contracts
-  (chains, pending, membership as of a version) and for grants. The CEL
-  itself is the real evaluator from `packages/core`. The plan is to point
+  (chains, pending, membership as of a version) and for grants. The CEL,
+  and UCAN policies (`host/ucan-policy.ts`), are the real evaluators from
+  `packages/core`. The plan is to point
   the scenarios at the library as each part lands, and delete the stand-ins.
 - `parked-datalog/`: the same communities in Datalog, from
   [the comparison](../spec/drafts/contracts-comparison.md). Datalog is parked
