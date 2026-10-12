@@ -1,0 +1,11 @@
+{
+  "name": "@weaveprotocol/prototype-contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CEL against Datalog for Weave's contracts: five examples in both, and a small evaluator for each. Not published.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-vm-modules --import tsx --test tests/*.test.ts"
+  }
+}
