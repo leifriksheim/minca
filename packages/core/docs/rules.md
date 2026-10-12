@@ -53,7 +53,7 @@ who made it:
 or the bot in `by`. So "a message mentioning me" is `{ "mentions":
 { "$contains": "$me" } }` for a person and for a bot alike. `from` lists role
 names; only records written by someone holding one of them set the rule off,
-and `"member"` is any member at all, the founder included.
+and `"member"` is any member at all, the founders included.
 
 `every` uses `*`, a number, a range `a-b`, a step `/n` and lists with commas;
 weekday 0 or 7 is Sunday; a day and a weekday both given means either. At
@@ -165,7 +165,7 @@ A bot answering mentions, from anyone holding a role, run by the bot:
   who may direct a bot there. It is a command of the library's own: peers
   never check it, and a space grants it like any other, to a role
   ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
-  The space's founder holds it.
+  The space's founders hold it.
 - A rule whose current version was written under a records-only note
   (`recordsOnly`, an agent's) runs nowhere: an agent may suggest one, and it
   waits until the person saves it themselves.

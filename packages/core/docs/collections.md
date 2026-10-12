@@ -300,7 +300,7 @@ await node.spaces.assign(space.id, did, 'host');
 - A definition holds only what its writer could do: you can't grant what you
   don't hold. Roles defining roles, assigning, removing and the rest are in
   the spec.
-- The space's founder holds every command.
+- The space's founders, if it has any, hold every command.
 
 `node.spaces.may(space.id, cmd, args)` says whether this account may do
 something now; `node.records.can(space, action, target)` asks it for a

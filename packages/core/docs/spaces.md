@@ -10,24 +10,34 @@ an app shows a subscription.
 
 ## Presets
 
-A preset is a constitution template: the roles a space is founded with, and
-the grants each holds ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
-The protocol reads whatever roles a space's genesis names and never looks at
-a preset's name; these are a sensible start for an app. Pass one's `roles`
-when creating a space, change them, or write your own. The creator is the
-space's founder and holds every command whatever the preset says, so no
-preset needs a role for it.
+A preset is a constitution template: who sits at the top, the roles a space
+is founded with and the grants each holds, and the roles the creator starts
+with ([spec 03 §1–§2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+The protocol reads whatever a constitution names and never looks at a
+preset's name; these are a sensible start for an app. Spread one into
+`spaces.create`, change it, or write your own:
 
-| Preset      | Roles and their grants                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `solo`      | none: the founder alone                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `team`      | editor: `/record`; `/collection/define`; `/role/assign` with `.role == "editor"`                                                                                                                                                                                                                                                                                                                                                 |
-| `community` | admin: `/record`, `/collection/define`, `/role/assign`, `/role/define` for every role but admin, `/role/unassign` and `/member/remove` of anyone not an admin, `/std.rule/instruct`, `/key/change`, `/space/relays`, `/space/keepers`; moderator: `/record`, `/role/assign` with `.role == "member"`, `/std.rule/instruct`; member: `/record/write` and `/record/delete` where `.byCreator` is true, outside `STAFF_COLLECTIONS` |
+```ts
+await node.spaces.create({ name: 'Bike co-op', visibility: 'private', ...rolePresets.coop });
+```
+
+| Preset      | `top`      | Roles and their grants                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `solo`      | `founders` | none: the founder alone                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `team`      | `founders` | editor: `/record`; `/collection/define`; `/role/assign` with `.role == "editor"`                                                                                                                                                                                                                                                                                                                                                                   |
+| `community` | `founders` | admin: `/record`, `/collection/define`, `/role/assign`, `/role/define` for every role but admin, `/role/unassign` and `/member/remove` of anyone not an admin, `/std.rule/instruct`, `/space/succeed`, `/key/change`, `/space/relays`, `/space/keepers`; moderator: `/record`, `/role/assign` with `.role == "member"`, `/std.rule/instruct`; member: `/record/write` and `/record/delete` where `.byCreator` is true, outside `STAFF_COLLECTIONS` |
+| `coop`      | `none`     | steward (the creator's): `/record`, `/collection/define`, `/role/define` for member, `/role/assign` and `/role/unassign` of member or steward, `/member/remove` of anyone, `/std.rule/instruct`, `/space/succeed`, `/key/change`, `/space/relays`, `/space/keepers`; member: as in `community`, and `/space/succeed`                                                                                                                               |
+
+Under `top: founders` the creator is the space's founder and holds every
+command whatever the roles say, so no `founders` preset needs a role for it.
+`cofounders` names others who found it too. Under `top: none` (`coop`) there
+is no founder: the creator holds only `creatorRoles`, here `steward`, and
+another steward can remove it.
 
 Each preset must say explicitly whether members may change each other's
 records: a grant of `/record/write` without a policy on `.byCreator` lets
-them. In `community`, members change only what they made, and moderators
-anything.
+them. In `community` and `coop`, members change only what they made, and
+moderators or stewards anything.
 
 What `.roles` protects, and what it doesn't. "Of anyone not an admin" is a
 policy on the target's roles, read as of the remover's own view, which the
@@ -36,14 +46,16 @@ admin who has seen another's promotion. It doesn't stop one who names a view
 from before it, or acts concurrently with it: `community` admins can still
 remove or demote each other that way. `.roles` protects only against a
 remover whose view includes the target's role. A space where that matters
-gives removal to fewer people, or to the founder alone.
+gives removal to fewer people, or to the founders alone.
 
 A role that may define itself can be locked by rival definitions (spec 03
 §2): two of its holders who rewrite it apart and disagree leave it holding
 only what they share, and if that drops `/role/define`, nobody in it can
 settle them. So a preset gives `/role/define` for a role to another role, or
-to the founder alone: in `community` the founder defines admin, and admins
-define the rest.
+to the founders alone: in `community` the founders define admin, and admins
+define the rest. In `coop` stewards define member, and nobody defines
+steward: its grants are the constitution's, and changing them takes a
+successor.
 
 `STAFF_COLLECTIONS` are the standard collections only moderators start in a
 community: announcements, badges, awards, pins, labels, channels and hosts.
@@ -55,7 +67,64 @@ byte: their ids depend on it
 ([spec 03 §13.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
 Changing `solo` would change those ids, so it must not change.
 
-_Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts` ("definitions", "`community` admins can remove each other by naming a view before the promotion")._
+_Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `coop`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`), `packages/core/src/node/node.ts` (`spaces.create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts` ("definitions", "`community` admins can remove each other by naming a view before the promotion"), `packages/core/tests/constitution.test.ts` ("the templates are well formed", "a co-op: no founders…")._
+
+## The top and founders
+
+`spaces.access(id)` says who is at the top: `top` (`founders` or `none`),
+each member's `founder`, and `founder` for this account. A founder may:
+
+- **step down** with `spaces.stepDown(id, { keep? })`: it stays, with the
+  roles it holds, and is a founder no more. Given `keep`, it assigns itself
+  that role first. With no role it would be no member, so the library
+  refuses; to go altogether, `leave`. Stepping down strikes whatever this
+  account did elsewhere that hadn't seen it, as leaving does, so do it from
+  a device that has synced;
+- **leave**, with `spaces.leave(id)`, as anyone may.
+
+Nobody removes or demotes a founder but the founder itself, so an app shows
+no remove button on a founder, and a "Step down" button on your own row when
+you are one.
+
+**Headless.** `access.headless` is true when no founder is left and no
+member may define or assign any role. Members keep what their roles allow,
+but nobody can change roles, and nothing in the constitution can change. An
+app says so plainly ("No one can change roles here any more") and offers the
+way on: naming a successor (below), which any member may do once no member holds `/space/succeed`.
+
+_Source: `packages/core/src/node/space-runtime.ts` (`stepDown`, `access`), `packages/core/src/space/roles.ts` (`headless`). Tests: `packages/core/tests/constitution.test.ts` ("stepping down", "a founder steps down, keeping a role…")._
+
+## Successors
+
+A space whose constitution must change, or a headless one, moves on to a
+successor (spec 03 §2.7). With the library:
+
+1. Create the new space naming the old: `spaces.create({ …, succeeds: oldId })`.
+2. Name it in the old space: `spaces.succeed(oldId, newId)`. It needs
+   `/space/succeed`, or a place in a space where no member holds it. Where
+   this node holds the new space, it refuses one whose constitution doesn't
+   say it succeeds the old.
+3. Tell members how to join it: an invite to the new space, posted in the
+   old one (an announcement, a message). The succeed record carries only the
+   new space's id.
+
+`spaces.access(oldId).successors` lists every space named, each with the
+accounts that named it: `[{ space, by }]`. A successor changes nothing in
+the old space; whoever stays carries on there.
+
+What an app shows:
+
+- every successor named, **in no order**: never one as first, and never one
+  picked for the member, since which community a member joins is theirs to
+  choose. The list's order means nothing;
+- who named each, and whether they hold a role there now;
+- that a space is a successor only once both hold: the new space's
+  `succeeds` (`SpaceSummary.succeeds`, `preview(invite).space.succeeds`)
+  names the old one, and the old one's `successors` names the new. An
+  invite to a space that claims to succeed another, with no succeed for it
+  there, is a copy, and is shown as one.
+
+_Source: `packages/core/src/node/node.ts` (`spaces.succeed`), `packages/core/src/node/space-runtime.ts` (`succeed`, `access`), `packages/core/src/space/space-manager.ts` (`previewInvite`). Tests: `packages/core/tests/constitution.test.ts` ("/space/succeed", "a successor: made with succeeds…")._
 
 ## Invites
 
@@ -79,7 +148,7 @@ _Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `STA
 `node.spaces.preview(invite)` decodes an invite without storing anything:
 
 ```
-{ space: { id, name, visibility, creator, createdAt }, invitedBy,
+{ space: { id, name, visibility, founders, createdAt, succeeds? }, invitedBy,
   carriesKey, carriesWrite, role }      // role is null for a view-only invite
 ```
 
