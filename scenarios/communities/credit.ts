@@ -1,79 +1,89 @@
 /**
  * 5. Mutual credit, with a limit of −100. An account's payments are one
- * line: each names the account's previous payment (`prev`, as versions of
- * one record at a key derived from the account), carries the running
+ * line (spec 09 §6): each names the account's previous payment (`prev`, as
+ * versions of one record at the account's line key), carries the running
  * balance, and claims payments made to it (`received`), each once along the
  * line. Two payments after the same one are a double spend, and neither
- * counts, from whichever devices. Both are the host's line rule, not CEL.
+ * counts, from whichever devices. Judged by the library: a founder's node
+ * holds the space, and every member signs their own payments.
  */
-import type { Check } from '../../packages/core/src/records/checks.js';
+import type { Contract } from '../../packages/core/src/records/contracts.js';
+import type { DefineCollection } from '../../packages/core/src/node/types.js';
+import type { Version } from '../../packages/core/src/types.js';
 import { lineKey } from '../../packages/core/src/records/key.js';
-import type { Host } from '../host/cel-host.js';
-import { version, type Version } from '../host/space.js';
+import { communityNode, type Community } from '../../packages/core/tests/helpers/community.js';
+import type { Person } from '../../packages/core/tests/helpers/person.js';
 
-// -- The community: a CEL contract, plus the line rule: `"line": { "once": ["received"] }` --
+// -- The community: a CEL contract, and the line rule: `"line": { "once": ["received"] }` --
 
-export const payContract: Check[] = [
+const payContract: Contract[] = [
   { that: 'body.amount >= 0.0 && body.to != author', else: 'Pay someone else, an amount of at least 0' },
   {
     that: "versions(body.received).all(r, r.collection == 'app.pay' && r.body.to == author)",
     else: 'Claim only payments to you',
   },
   {
-    that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount + sum(versions(body.received).map(r, r.body.amount) + [0.0])',
+    // `sum([])` is `0.0`: a payment that claims nothing adds up without padding.
+    that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount + sum(versions(body.received).map(r, r.body.amount))',
     else: 'The balance follows from the one before',
   },
   { that: 'body.balance >= -100.0', else: 'No account goes below −100' },
 ];
 
+const pays = (line: Readonly<Record<string, unknown>> = { once: ['received'] }): DefineCollection => ({
+  name: 'app.pay',
+  schema: { type: 'object' },
+  rules: { check: payContract },
+  line,
+});
+
 // -- The story ---------------------------------------------------------------------
 
-export const ALICE = 'did:key:alice';
-export const BOB = 'did:key:bob';
-export const CAROL = 'did:key:carol';
-const DAVE = 'did:key:dave';
-
 interface Pay {
-  to: string;
-  amount: number;
-  balance: number;
-  received?: string[];
-  device?: string;
+  readonly to: Person;
+  readonly amount: number;
+  readonly balance: number;
+  readonly received?: ReadonlyArray<Version>;
 }
 
-/** Each account's line key in `app.pay` */
-const lines = new Map(
-  await Promise.all(
-    [ALICE, BOB, CAROL, DAVE].map(async (did) => [did, await lineKey(did, 'app.pay')] as const),
-  ),
-);
+/** Alice founds it; Bob, Carol and Dave are members */
+export async function story(line?: Readonly<Record<string, unknown>>) {
+  const c: Community = await communityNode(3, [pays(line)]);
+  const bob = c.members[0]!;
+  const carol = c.members[1]!;
+  const dave = c.members[2]!;
+  const alice = c.founder;
 
-/** A payment: the next version of the payer's line, after `after` */
-export function pay(id: string, by: string, after: Version | null, p: Pay, seen: string[] = []): Version {
-  const received = p.received ?? [];
-  return version({
-    id,
-    key: lines.get(by) ?? '',
-    collection: 'app.pay',
-    author: by,
-    device: p.device ?? 'laptop',
-    seq: after ? after.seq + 1 : 0,
-    prev: after?.id ?? null,
-    body: { to: p.to, amount: p.amount, balance: p.balance, received },
-    seen: [...(after ? [after.id] : []), ...received, ...seen],
-  });
+  /** A payment: the next version of the payer's line, after `after`, from a device of its own */
+  const pay = async (by: Person, after: Version | null, p: Pay): Promise<Version> =>
+    c.sign(by, {
+      collection: 'app.pay',
+      body: {
+        to: p.to.node.did,
+        amount: p.amount,
+        balance: p.balance,
+        received: (p.received ?? []).map((v) => v.id),
+      },
+      version: after
+        ? { key: after.key, seq: after.seq + 1, prev: after.id, genesis: after.genesis ?? after.id }
+        : { key: await lineKey(by.node.did, 'app.pay'), seq: 0 },
+    });
+
+  const a0 = await pay(alice, null, { to: bob, amount: 30, balance: -30 });
+  const a1 = await pay(alice, a0, { to: carol, amount: 50, balance: -80 });
+  /** Bob spends 20 of the 30 Alice paid him. */
+  const b0 = await pay(bob, null, { to: carol, amount: 20, balance: 10, received: [a0] });
+  /** Alice's phone pays after a0 too: a double spend of the same line. */
+  const a1phone = await pay(alice, a0, { to: dave, amount: 60, balance: -90 });
+
+  /** An account's balance: the newest version of its line that counts */
+  const balance = async (who: Person): Promise<number | null> => {
+    const head = await alice.node.records.get<{ balance: number }>(
+      c.space,
+      await lineKey(who.node.did, 'app.pay'),
+    );
+    return head?.body?.balance ?? null;
+  };
+
+  return { c, alice, bob, carol, dave, pay, balance, a0, a1, b0, a1phone };
 }
-
-export const a0 = pay('a0', ALICE, null, { to: BOB, amount: 30, balance: -30 });
-export const a1 = pay('a1', ALICE, a0, { to: CAROL, amount: 50, balance: -80 });
-/** Bob spends 20 of the 30 Alice paid him. */
-export const b0 = pay('b0', BOB, null, { to: CAROL, amount: 20, balance: 10, received: ['a0'] });
-/** Alice's phone spends after a0 too: a double spend of the same line. */
-export const a1phone = pay('a1p', ALICE, a0, { to: DAVE, amount: 60, balance: -90, device: 'phone' });
-
-export const host: Host = {
-  founders: [],
-  members: [ALICE, BOB, CAROL, DAVE],
-  contracts: { 'app.pay': payContract },
-  lines: { 'app.pay': { once: ['received'] } },
-};

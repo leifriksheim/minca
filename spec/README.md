@@ -32,6 +32,14 @@ everything the same:
 | [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock |
 | [08 — Hosting](08-hosting.md)                             | Hosts: subscriptions and payment, a space's own fund, bots a host runs                                                            |
 
+**Judged by readers.** What a version must be to count. Peers keep and sync
+every version whatever it says; two readers that judge it must count the
+same records:
+
+| Part                              | Covers                                                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [09 — Contracts](09-contracts.md) | Contracts in a strict subset of CEL, cost limits, citing evidence, the verdicts (passes, fails, pending, unjudged), lines and double spends |
+
 ### A minimal peer
 
 A peer that joins spaces and syncs them needs, from the core:
@@ -68,9 +76,6 @@ change without touching this spec:
   ([spaces](../packages/core/docs/spaces.md)).
 - **The query format** a node answers ([query format](../packages/core/docs/query-format.md)).
   Peers never exchange queries.
-- **Checks**: the CEL conditions a definition's `rules.check` holds, what a
-  version cites as evidence, and counting only versions that pass. Peers keep
-  `check` and every version that fails it ([checks](../packages/core/docs/checks.md)).
 - **Node actions** and the tools the CLI, MCP and WebMCP make of them
   ([actions](../packages/core/docs/actions.md)).
 - **The standard collections** (`std.*`), which are a naming convention, not
@@ -165,6 +170,8 @@ they are described; the smaller ones share
 | Subscriptions delivered per device, by Web Push to an app that is closed                          | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/weave/issues/60)                        |
 | Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#117](https://github.com/leifriksheim/weave/issues/117), [#128](https://github.com/leifriksheim/weave/issues/128) |
 | Names: handles that lead to a door                                                                | [07 §9](07-doors.md)                                                                                                                       |
+| Corrections in a line, after a double spend                                                       | [09 §7.5](09-contracts.md)                                                                                                                 |
+| Asking for what a version cites                                                                   | [09 §9](09-contracts.md), [#79](https://github.com/leifriksheim/weave/issues/79)                                                           |
 | Content-addressed definitions; definition tiers, additive-only                                    | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/weave/issues/11), [#12](https://github.com/leifriksheim/weave/issues/12)   |
 
 Proposed in an issue but not yet designed into the spec, so listed under

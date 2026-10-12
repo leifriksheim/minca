@@ -1,4 +1,4 @@
-/** A delete continues a record's chain under checks: one after a failing step fails too (packages/core/docs/checks.md). */
+/** A delete continues a record's chain under a contract: one after a failing step fails too (spec/09-contracts.md). */
 /** A forged failing step then a delete locks every honest writer out of the key for good. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

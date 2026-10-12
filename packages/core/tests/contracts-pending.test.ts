@@ -1,5 +1,4 @@
-/** Checks are read by the library: a version that fails or waits for ever can't hold a key, or be laundered (packages/core/docs/checks.md). */
-/** Checks are read by the library: a version that fails them is kept and synced, and counted on no read path (packages/core/docs/checks.md). */
+/** Contracts are judged by readers: a version that fails them is kept and synced, and counted on no read path (spec/09-contracts.md). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -7,14 +6,15 @@ import { joined } from './helpers/joined.js';
 import { ownRecords } from './helpers/own-records.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
-import { forge, person } from './helpers/person.js';
+import { forge, person, settle } from './helpers/person.js';
+import { createStorageProvider } from '../src/storage/storage-provider.js';
 
 const TWO_YES = {
   that: 'versions(body.votes).filter(it, it.collection == "app.proposal.vote" && it.link("about") == link("about") && it.body.choice == "yes").map(it, it.author).distinct().size() >= 2',
   else: 'A proposal passes with yes votes from at least two members',
 };
 
-test('a failing decision squats its onePer key: the real one can never be written', async () => {
+test('a pending decision becomes visible in list once its cited vote arrives', async () => {
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
@@ -27,7 +27,6 @@ test('a failing decision squats its onePer key: the real one can never be writte
     links: { about: { to: ['app.proposal'], cardinality: 'one' } },
     rules: { onePer: ['@author', 'link:about'] },
   });
-  // As std.decision: one per proposal, only its creator edits.
   await alice.node.collections.define(space, {
     name: 'app.proposal.passed',
     schema: { type: 'object' },
@@ -45,40 +44,54 @@ test('a failing decision squats its onePer key: the real one can never be writte
 
   const proposal = await alice.node.records.put(space, 'app.proposal', { title: 'Logo' });
   const about = [{ rel: 'about', to: proposal.key }];
-  await until(async () => (await bob.node.records.get(space, proposal.key)) !== null, 4000, 'p');
-  const theirs = await bob.node.records.put(space, 'app.proposal.vote', { choice: 'yes' }, { links: about });
-  const key = (await bob.node.records.onePerKey(space, 'app.proposal.passed', {}, { links: about }))!;
-  // Bob, who opposes it, signs a decision with no evidence first.
+  const mine = await alice.node.records.put(space, 'app.proposal.vote', { choice: 'yes' }, { links: about });
+  await until(async () => (await bob.node.records.get(space, mine.key)) !== null, 4000, 'vote to bob');
+  const bobRoot = (await bob.node.records.put(space, 'app.proposal', { title: 'mine' })).root!;
+  const voteKey = (await bob.node.records.onePerKey(
+    space,
+    'app.proposal.vote',
+    { choice: 'yes' },
+    { links: about, account: bobRoot },
+  ))!;
+  const passedKey = (await bob.node.records.onePerKey(space, 'app.proposal.passed', {}, { links: about }))!;
+
   await letGo(bob.node, space);
+  const vote = await forge(
+    bob,
+    space,
+    {
+      author: '',
+      collection: 'app.proposal.vote',
+      body: { choice: 'yes' },
+      links: about,
+      retain: true,
+      version: { key: voteKey, seq: 0 },
+    },
+    { keep: false },
+  );
   await forge(bob, space, {
     author: '',
     collection: 'app.proposal.passed',
-    body: { votes: [theirs.version.replace(/.$/, (ch) => (ch === 'a' ? 'b' : 'a'))] },
+    body: { votes: [mine.version, vote.id] },
     links: about,
     retain: true,
-    version: { key, seq: 0 },
+    version: { key: passedKey, seq: 0 },
+    log: { n: 0 },
   });
   await hold(bob.node, space);
   await until(
-    async () => (await alice.node.records.checks(space, key))?.pending === true,
+    async () => (await alice.node.records.contracts(space, passedKey))?.pending === true,
     4000,
-    'squat at alice',
+    'pending at alice',
   );
-  await until(async () => (await alice.node.records.get(space, theirs.key)) !== null, 4000, 'bob vote');
-  const mine = await alice.node.records.put(space, 'app.proposal.vote', { choice: 'yes' }, { links: about });
+  assert.equal((await alice.node.records.list(space, { collection: 'app.proposal.passed' })).length, 0);
 
-  // Alice now has two real yes votes and tries to record the decision.
-  let error = '';
-  try {
-    await alice.node.records.put(
-      space,
-      'app.proposal.passed',
-      { votes: [mine.version, theirs.version] },
-      { links: about },
-    );
-  } catch (e) {
-    error = String(e);
-  }
-  assert.equal(error, '', 'the honest decision cannot be written');
-  assert.ok(await alice.node.records.get(space, key));
+  await letGo(bob.node, space);
+  await createStorageProvider(await bob.stores(`spaces/${space}`)).addVersion(vote);
+  await hold(bob.node, space);
+  await until(async () => (await alice.node.records.get(space, voteKey)) !== null, 4000, 'vote at alice');
+  await settle(300);
+  const listed = await alice.node.records.list(space, { collection: 'app.proposal.passed' });
+  assert.ok(await alice.node.records.get(space, passedKey), 'get shows it');
+  assert.equal(listed.length, 1, 'list still hides the decision after its vote arrived');
 });

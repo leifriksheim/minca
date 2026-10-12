@@ -6,6 +6,7 @@
 import type { MailboxClient } from '../network/mailbox.js';
 import type { BodyOf, Query, ResultOf } from '../query/types.js';
 import type { CollectionRules } from '../records/rules.js';
+import type { Line } from '../records/contracts.js';
 import type {
   CollectionDef,
   CryptoProvider,
@@ -311,6 +312,8 @@ export interface DefineCollection {
   readonly rules?: CollectionRules;
   /** Fields whose values are topics — `channel`, `mentions` — so a keeper can match them without reading (`StoredCollection.topics`) */
   readonly topics?: ReadonlyArray<string>;
+  /** One line per account, at `lineKey(account, name)`: `once` fields claim each citation once along it (packages/core/docs/contracts.md) */
+  readonly line?: Line;
 }
 
 export interface NodeCollections {
@@ -324,14 +327,16 @@ export interface NodeCollections {
   tag(spaceId: string, collection: string, field: string, value: string | number | boolean): Promise<string>;
 }
 
-/** A version under its collection's checks: `passes` null when it has none, or this node can't judge them */
-export interface RecordChecks {
+/** A version under its collection's contract: `passes` null when it has none, or this node can't judge it */
+export interface RecordContracts {
   readonly version: string;
   readonly passes: boolean | null;
-  /** Why it fails */
+  /** Why it fails, or why it is unjudged */
   readonly reason?: string;
-  /** A version it cites hasn't arrived yet */
+  /** A version it cites, or the one before it, hasn't arrived yet */
   readonly pending?: true;
+  /** Its collection declares something this library doesn't know: counted by no one here, and failed by no one */
+  readonly unjudged?: true;
 }
 
 export interface ListOptions {
@@ -492,11 +497,12 @@ export interface NodeRecords {
   /** A record's current version, or null when there is none or it was deleted */
   get<T = unknown>(spaceId: string, key: string): Promise<NodeRecord<T> | null>;
   /**
-   * How a record's newest version fares under its collection's checks. A
-   * version that fails is kept and synced by every peer, but `get`, `list`
-   * and queries count only versions that pass (packages/core/docs/checks.md).
+   * How a record's newest version that stands fares under its collection's
+   * contract, or the version named. A version that fails is kept and synced
+   * by every peer, but `get`, `list` and queries count only versions that
+   * pass (packages/core/docs/contracts.md).
    */
-  checks(spaceId: string, key: string): Promise<RecordChecks | null>;
+  contracts(spaceId: string, key: string, version?: string): Promise<RecordContracts | null>;
   /**
    * The key `name` has in an account's namespace (this one's unless another
    * is named): where `put(…, { key: name })` writes. Keys belong to the

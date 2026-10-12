@@ -116,12 +116,12 @@ who may create, change and delete records is the space's grants, held by its
 roles ([roles](#roles)). Its rules are about the records alone
 ([spec 02 §7](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)):
 
-| Rule     | Means                                                      | Default |
-| -------- | ---------------------------------------------------------- | ------- |
-| `onePer` | At most one record per combination of these                | none    |
-| `fixed`  | Fields that keep the value the record was created with     | none    |
-| `check`  | Conditions a version must meet to count ([below](#checks)) | none    |
-| `final`  | `true`: written once, then never edited or deleted         | none    |
+| Rule     | Means                                                         | Default |
+| -------- | ------------------------------------------------------------- | ------- |
+| `onePer` | At most one record per combination of these                   | none    |
+| `fixed`  | Fields that keep the value the record was created with        | none    |
+| `check`  | Conditions a version must meet to count ([below](#contracts)) | none    |
+| `final`  | `true`: written once, then never edited or deleted            | none    |
 
 A definition with `create`, `edit` or `delete` is invalid: every peer treats
 it as no definition at all, and the node refuses to write it.
@@ -148,10 +148,10 @@ the key a body would have, to read a record without searching for it.
 
 _Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerKey`). Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/record-keys.test.ts` ("onePer keys")._
 
-## Checks
+## Contracts
 
 Grants say who may write, and the rules above what a record must keep to;
-every peer enforces both. `check` says
+every peer enforces both. A contract, the definition's `check`, says
 what a version must be to count: conditions over the body, the version before
 it, and other versions it **cites** as evidence. With them a space can hold things
 that normally need a server or a smart contract: a proposal that passes only
@@ -192,12 +192,12 @@ the work (finds the votes, adds up the balances, picks the move) and cites
 what proves it. Every reader then checks that exactly what was cited proves
 it.
 
-Checks are read by the library, not enforced by peers
-([checks.md](checks.md)). A version that fails them is kept and synced
+Contracts are judged by readers, not enforced by peers
+([spec 09](../../../spec/09-contracts.md), [contracts.md](contracts.md)). A version that fails them is kept and synced
 everywhere like any other, but `get`, `list` and queries count only a
 record's newest version that passes: one that fails is skipped, and the
 version before shows instead. Your own node refuses to sign a version that
-fails, with the check's `else` as the reason. `node.records.checks(space, key)`
+fails, with the check's `else` as the reason. `node.records.contracts(space, key)`
 says how a record's newest version fares, and why. A version citing one that
 hasn't arrived yet is pending, and doesn't count until it does.
 
@@ -223,13 +223,21 @@ Some things to know:
 - A condition holds only when it gives `true`, and a check always ends: its
   only loops are over lists in hand, and there is a step limit.
 
-`checkCostHints(checks)` flags what makes a check costly as records grow:
+`contractCostHints(checks)` flags what makes a check costly as records grow:
 macros nested three deep, or `versions()` called inside a macro. A check
 over more than its limits is refused, so a check that passes on small
 records can fail on large ones; the hints say where to look.
 
 Bytes, timestamps, durations, regular expressions and types as values are
-left out. The exact subset, and its limits, are in [checks.md](checks.md).
+left out. The exact subset, and its limits, are in [spec 09](../../../spec/09-contracts.md).
+
+**Lines.** A collection declared with `line: { once: [...] }` is one line per
+account, at `lineKey(account, collection)`: each version names the account's
+previous one, so a payment can carry a running balance its contract checks.
+Two versions after the same one are a double spend, and neither counts, nor
+anything after either; there is no way back, so keep a line on one device at
+a time. Each citation in a `once` field may appear only once along the line
+([spec 09 §7](../../../spec/09-contracts.md#7-lines)).
 
 **What can be cited.** Only versions kept whole, so every device reads the
 same thing however late it joins: any version in a collection with

@@ -25,17 +25,17 @@ Weave's scenario suite, and the Datalog side moved to
 `scenarios/parked-datalog/`. The file names below are as they were when this
 was written; the table after it says where each is now.
 
-| File                 | What                                                                                                                                                                                             | Lines (code) |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
-| `src/datalog.ts`     | Datalog: parser, safety, stratification, semi-naive evaluation, negation, `count`/`sum`, arithmetic, a fact limit                                                                                | 715 (596)    |
-| `src/ucan-policy.ts` | UCAN 1.0 policies: every operator, the common selectors                                                                                                                                          | 128 (104)    |
-| `src/grants.ts`      | Delegation chains to a founder, roles, roles holding roles                                                                                                                                       | 78 (54)      |
-| `src/cel-host.ts`    | What a peer does around `runChecks` (`packages/core/src/records/checks.ts`): chains, pending, standing as of `seen`, a membership replay, and two optional host rules (`forkKills`, extra names) | 170 (132)    |
-| `src/space.ts`       | Versions, and the mapping from versions to Datalog facts                                                                                                                                         | 100 (69)     |
-| `src/examples/*.ts`  | The five examples, in both languages, as quoted below                                                                                                                                            | 275          |
-| `tests/*.test.ts`    | 66 tests: the evaluator alone (15), and each example in both languages, with order-shuffling for every Datalog example                                                                           | 883          |
+| File                 | What                                                                                                                                                                                                   | Lines (code) |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
+| `src/datalog.ts`     | Datalog: parser, safety, stratification, semi-naive evaluation, negation, `count`/`sum`, arithmetic, a fact limit                                                                                      | 715 (596)    |
+| `src/ucan-policy.ts` | UCAN 1.0 policies: every operator, the common selectors                                                                                                                                                | 128 (104)    |
+| `src/grants.ts`      | Delegation chains to a founder, roles, roles holding roles                                                                                                                                             | 78 (54)      |
+| `src/cel-host.ts`    | What a peer does around `runContracts` (`packages/core/src/records/contracts.ts`): chains, pending, standing as of `seen`, a membership replay, and two optional host rules (`forkKills`, extra names) | 170 (132)    |
+| `src/space.ts`       | Versions, and the mapping from versions to Datalog facts                                                                                                                                               | 100 (69)     |
+| `src/examples/*.ts`  | The five examples, in both languages, as quoted below                                                                                                                                                  | 275          |
+| `tests/*.test.ts`    | 66 tests: the evaluator alone (15), and each example in both languages, with order-shuffling for every Datalog example                                                                                 | 883          |
 
-The CEL side reuses the real evaluator; it imports `runChecks` from
+The CEL side reuses the real evaluator; it imports `runContracts` from
 `packages/core/src` by relative path, since the package doesn't export it.
 
 | Then                                             | Now                                                                                   |
@@ -545,4 +545,4 @@ And two smaller CEL fixes worth making with the spec part: `sum([])` of
 doubles (an int `0` today), and a `let` (CEL's `cel.bind`) so a cited
 version can be named once.
 
-_Source: `scenarios/parked-datalog/datalog.ts` (`parse`, `evaluate`), `scenarios/host/library.ts` (`mayIn`), `packages/core/src/identity/policy.ts` (`evaluatePolicy`), `scenarios/host/cel-host.ts` (`judge`), `scenarios/parked-datalog/facts.ts` (`factsOf`), `scenarios/communities/`, `scenarios/parked-datalog/programs/`. Tests: `scenarios/tests/` and `scenarios/parked-datalog/tests/` (all), with `packages/core/src/records/checks.ts` (`runChecks`) as the CEL evaluator._
+_Source: `scenarios/parked-datalog/datalog.ts` (`parse`, `evaluate`), `scenarios/host/library.ts` (`mayIn`), `packages/core/src/identity/policy.ts` (`evaluatePolicy`), `scenarios/host/cel-host.ts` (`judge`), `scenarios/parked-datalog/facts.ts` (`factsOf`), `scenarios/communities/`, `scenarios/parked-datalog/programs/`. Tests: `scenarios/tests/` and `scenarios/parked-datalog/tests/` (all), with `packages/core/src/records/contracts.ts` (`runContracts`) as the CEL evaluator._

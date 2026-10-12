@@ -16,8 +16,8 @@ Out of scope here, and specified elsewhere:
   ([query format](../packages/core/docs/query-format.md)), the optional standard collections
   ([standard library](../packages/core/docs/standard-library.md)), and collections
   proposed for a space and their review ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)),
-  and the conditions a collection's `check` sets, which the library reads
-  and no peer enforces ([checks](../packages/core/docs/checks.md)).
+  and what a version must be to count, which readers judge and no peer
+  enforces: a definition's `check` and `line` ([09 — Contracts](09-contracts.md)).
 
 **Terms.** A _record_ is a thing in a space, named by its `key`: a message, a
 task, a vote. It changes by gaining _versions_: a _version_ is one signed state
@@ -482,7 +482,7 @@ of the next one, and each verifies on its own.
 > Stubs rather than nothing, so that every later version can be checked
 > against the one before it (§4.7) by a peer that never saw the bodies.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/schema/version.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`, `write`, `judgeStanding`, `currentOf`, `genesisOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/checks.test.ts` ("keeping versions under a check whole is the writer’s part…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/schema/version.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`, `write`, `judgeStanding`, `currentOf`, `genesisOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/contracts.test.ts` ("keeping versions under a check whole is the writer’s part…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
 
 ### 4.6 Shape of a version, alone
 
@@ -840,6 +840,7 @@ history. In a private space its body is encrypted like any other record's.
 | `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                     |
 | `rules`       | object                | no   | §7                                                                                                                                                                           |
 | `topics`      | string[]              | no   | §8                                                                                                                                                                           |
+| `line`        | object                | no   | A line, judged by readers ([09](09-contracts.md) §7); peers keep it and don't read it (§7.6)                                                                                 |
 
 A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
@@ -1077,7 +1078,7 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 
 A definition's `rules` say what must be unique, which fields are fixed, and
 whether a record is written once. Every peer enforces them on every version
-it receives. They may also carry `check`, conditions a version must meet to
+it receives. They may also carry `check`, a contract a version must meet to
 count, which peers keep but do not enforce (§7.6).
 
 ```json
@@ -1267,18 +1268,19 @@ invalid (§6.1).
 
 _Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
-### 7.6 `check`
+### 7.6 `check` and `line`
 
-A definition's `rules` may carry `check`, a list. Peers keep it as it is and
-do not read what is in it: they never refuse, withdraw or hold back a version
-because of it, and a version that fails it stands like any other. The
-library reads it as conditions a version must meet to count, citing other
-versions as evidence, and counts only versions that pass; its language,
-citations and limits are in [checks](../packages/core/docs/checks.md). A peer
-that has never heard of checks syncs, stores and judges every version the
-same.
+A definition's `rules` may carry `check`, a list, and the definition may
+carry `line`, an object (§6.1). Peers keep both as they are and do not read
+what is in them: they never refuse, withdraw or hold back a version because
+of them, and a version that fails them stands like any other. Readers judge
+them as the collection's contract, citing other versions as evidence, and
+count only versions that pass; the language, citations, limits, verdicts
+and the line rule are in [09 — Contracts](09-contracts.md). A peer that has
+never heard of contracts syncs, stores and judges every version's standing
+the same.
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/checks.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader")._
 
 ---
 
@@ -1460,7 +1462,7 @@ A withdrawn version is kept so that every peer stores the same versions,
 whatever order changes reach it in: a peer that dropped it would hold less
 than peers that stored it before the change. It is also what lets the
 library judge a version that cites it the same on every peer, however late
-the peer joins ([checks](../packages/core/docs/checks.md#citing-a-version)).
+the peer joins ([09 — Contracts](09-contracts.md) §6.2).
 It adds nothing a removed author could not have written while a member: it
 must pass every rule as of what it claims to have seen.
 
@@ -1492,7 +1494,7 @@ hold, and refusing would leave peers disagreeing forever. A reader may flag
 such a record instead. A writer
 checks them before signing and SHOULD NOT write what does not conform.
 
-_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/abilities.ts` (`writeRequirement`), `packages/core/src/node/space-runtime.ts` (`judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/checks.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`), `packages/core/src/validation/crypto-gate.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/identity/abilities.ts` (`writeRequirement`), `packages/core/src/node/space-runtime.ts` (`judge`, `judgeStanding`, `chainStanding`, `admit`, `currentOf`, `contentIssues`), `packages/core/src/sync/sync-engine.ts` (`admit`, `retryWaiting`). Tests: `packages/core/tests/validation.test.ts` (all), `packages/core/tests/rules.test.ts` ("a forged edit is refused by every peer…", "arriving in any order"), `packages/core/tests/space-catalog.test.ts` ("a record that does not fit is kept and flagged"), `packages/core/tests/links.test.ts` ("declared links"), `packages/core/tests/topics.test.ts` ("a record whose tags don’t match…"), `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"; "a proof stays a proof…"), `packages/core/tests/space-access.test.ts` ("a removed member cannot write…"), `packages/core/tests/attacks.test.ts`._
 
 ---
 

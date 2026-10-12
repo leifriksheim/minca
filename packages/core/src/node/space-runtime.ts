@@ -48,9 +48,26 @@ import {
 } from '../schema/version.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
 import { chainProblem, MAX_SEEN, nextVersion } from '../records/version.js';
-import { keyKind, newRecordKey, onePerForm, ownedKey, ownsKey, RECORD_KEY_PATTERN } from '../records/key.js';
+import {
+  keyKind,
+  lineKey,
+  newRecordKey,
+  onePerForm,
+  ownedKey,
+  ownsKey,
+  RECORD_KEY_PATTERN,
+} from '../records/key.js';
 import { checkLinks } from '../records/links.js';
-import { checkChecks, runChecks, type Check, type CheckedVersion, type Uncited } from '../records/checks.js';
+import {
+  checkContracts,
+  checkLine,
+  onceCitations,
+  runContracts,
+  type Contract,
+  type CitedVersion,
+  type Line,
+  type Uncited,
+} from '../records/contracts.js';
 import { changedFixedField, onePerKey, onePerSecret } from '../records/rules.js';
 import type { Link } from '../types.js';
 import { reconcileFolder } from '../storage/folder-reconcile.js';
@@ -426,13 +443,15 @@ const ACCESS_LATER: Standing = Object.freeze({
 });
 
 /** Whether a version goes in the store: it stands, or stood until a later change withdrew it */
-/** How a version fares under its collection's checks, as this node reads them */
-import type { RecordChecks } from './types.js';
+/** How a version fares under its collection's contract, as this node reads them */
+import type { RecordContracts } from './types.js';
 type ChecksVerdict =
   | { readonly passes: true }
   | { readonly passes: false; readonly reason: string }
-  /** No checks, or none this node can judge */
+  /** No contract, or none this node can judge */
   | { readonly passes: null }
+  /** Its collection declares a line this library doesn't know: counted by no one here (spec 09 §7.1) */
+  | { readonly passes: null; readonly unjudged: string }
   /** A version it cites hasn't arrived */
   | { readonly pending: true };
 const NO_CHECKS: ChecksVerdict = { passes: null };
@@ -463,6 +482,7 @@ function isFolderAdapter(adapter: StorageAdapter): adapter is FolderAdapter {
 }
 
 const isLinks = (links: unknown): links is ReadonlyArray<Link> => checkLinks(links) === null;
+const isLine = (line: unknown): line is Line => checkLine(line) === null;
 const areKeepers = (keepers: unknown): keepers is Keeper[] => checkKeepers(keepers) === null;
 
 function isPending(value: unknown): value is Pending {
@@ -1148,6 +1168,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   ): Promise<{
     rules: NonNullable<StoredCollection['rules']>;
     topics: ReadonlyArray<string>;
+    line: unknown;
   } | null> {
     if (collection.startsWith('sys.')) return null;
     const id = await inForce(state, collection);
@@ -1158,6 +1179,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       : {
           rules: found.definition.rules ?? {},
           topics: found.definition.topics ?? [],
+          line: found.definition.line,
         };
   }
 
@@ -1387,7 +1409,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function checkedVersion(
     version: Version,
     whole: boolean,
-  ): Promise<CheckedVersion | { readonly unreadable: true }> {
+  ): Promise<CitedVersion | { readonly unreadable: true }> {
     let body: unknown = null;
     // Public links are on the outside, the same for every peer; sealed ones only with the body.
     let links: ReadonlyArray<Link> = version.links ?? [];
@@ -1411,7 +1433,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   }
 
   /** A version a check cites: here, kept whole, and standing — or why it can't count */
-  async function cited(id: string, within: ReadonlyArray<string>): Promise<CheckedVersion | Uncited> {
+  async function cited(id: string, within: ReadonlyArray<string>): Promise<CitedVersion | Uncited> {
     const version = await storage.getVersion(id);
     if (!version) return { later: true };
     // Whether it was kept is on the version, signed: the same answer on every peer.
@@ -1425,6 +1447,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const passes = await checksOf(version, within);
     if ('pending' in passes) return { later: true };
     if (passes.passes === false) return { refused: `it cites ${id}, which fails its checks` };
+    if ('unjudged' in passes) return { unjudged: true };
     return checkedVersion(version, true);
   }
 
@@ -1448,11 +1471,20 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const state = (await access()).history.at(version.seen ?? [], within);
       if (!state) return { pending: true };
       const defined = await rulesAt(state, version.collection);
-      const checks: unknown = defined?.rules.check;
-      if (checks === undefined || (Array.isArray(checks) && checks.length === 0)) return NO_CHECKS;
+      const listed: unknown = defined?.rules.check;
+      const checks: unknown = Array.isArray(listed) && listed.length === 0 ? undefined : listed;
+      const line = defined?.line;
+      if (checks === undefined && line === undefined) return NO_CHECKS;
       // Peers keep any list; one its author's node would have refused can't be read, so nothing passes it.
-      if (checkChecks(checks, 'rules.check') !== null || !Array.isArray(checks))
-        return { passes: false, reason: `The checks of ${version.collection} can't be read` };
+      if (checks !== undefined && (checkContracts(checks, 'rules.check') !== null || !Array.isArray(checks)))
+        return { passes: false, reason: `The contract of ${version.collection} can't be read` };
+      // A line declaration with a key this library doesn't know: not judged, as a space with an unknown resolver.
+      const lineProblem = line === undefined ? null : checkLine(line);
+      if (lineProblem === 'unknown')
+        return { passes: null, unjudged: `${version.collection} declares a line this library doesn't know` };
+      if (lineProblem !== null)
+        return { passes: false, reason: `The line of ${version.collection} can't be read` };
+      if (line !== undefined) lineCollections.add(version.collection);
       // What this node can't open, it can't judge: it counts on the rest, as a peer without the key does.
       if (!version.deleted) {
         const opened = await openBody(version);
@@ -1462,6 +1494,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // or a forged step would be laundered by the next.
       let previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
       if (version.seq > 0 && version.prev && !previous) return { pending: true };
+      // In a line, a delete is a step that ends it for good: nothing after it counts (spec 09 §7.5).
+      if (line !== undefined && previous?.deleted)
+        return { passes: false, reason: 'It follows a delete, which ends its line' };
       // A delete in between hides nothing: the chain is judged by the step before it.
       while (previous?.deleted && previous.seq > 0 && previous.prev) {
         const before: Version | null = await storage.getVersion(previous.prev);
@@ -1472,9 +1507,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // one that wasn't can't be judged, and what follows it doesn't count.
       if (previous && !previous.retain && !previous.deleted) {
         const then = (await access()).history.at(previous.seen ?? []);
-        const before = then ? (await rulesAt(then, previous.collection))?.rules.check : undefined;
-        if (Array.isArray(before) && before.length > 0)
-          return { passes: false, reason: 'It follows a version under checks that was not kept whole' };
+        const before = then ? await rulesAt(then, previous.collection) : null;
+        const check = before?.rules.check;
+        if ((Array.isArray(check) && check.length > 0) || before?.line !== undefined)
+          return { passes: false, reason: 'It follows a version under a contract that was not kept whole' };
       }
       if (previous && !isStub(previous)) {
         if (previous.retain && !previous.deleted) {
@@ -1487,13 +1523,21 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         if ('pending' in before) return { pending: true };
         // A step this node couldn't judge leaves what follows unjudged too, so neither is kept as a pass.
         if (before === UNJUDGED) return UNJUDGED;
+        if ('unjudged' in before) return before;
         if (before.passes === false)
           return { passes: false, reason: `It follows a version that fails its checks: ${before.reason}` };
       }
       // A delete has no content to check, but it continues the chain like any step: one that follows a
       // failing step fails too, so it can't hide the record from readers or make its key unwritable.
-      if (version.deleted) return NO_CHECKS;
+      if (line !== undefined) {
+        const broken = await lineBreak(version, root, isLine(line) ? (line.once ?? []) : []);
+        if (broken === UNJUDGED) return UNJUDGED;
+        if (typeof broken === 'string') return { passes: false, reason: broken };
+      }
+      if (version.deleted || checks === undefined || !Array.isArray(checks)) return NO_CHECKS;
       const outcome = await checkStanding(version, first, root, state, checks);
+      if (outcome === 'unjudged')
+        return { passes: null, unjudged: 'It cites a version in a collection this library doesn’t judge' };
       if (outcome.ok) return { passes: true };
       return outcome.later ? { pending: true } : { passes: false, reason: outcome.reason };
     })();
@@ -1506,13 +1550,75 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     return verdict;
   }
 
-  /** Whether a version counts for this node's reader: it stands, and passes its checks */
+  /** Whether a version counts for this node's reader: it stands, and passes its contract */
   async function counts(version: Version): Promise<boolean> {
     if (!(await standingOf(version)).ok) return false;
     const passes = await checksOf(version);
     // Bounded: past it, a waiting record is read again only when the index is rebuilt.
     if ('pending' in passes && pendingKeys.size < MAX_PENDING_REREAD) pendingKeys.add(version.key);
-    return !('pending' in passes) && passes.passes !== false;
+    return !('pending' in passes) && !('unjudged' in passes) && passes.passes !== false;
+  }
+
+  /** Collections this node has judged as lines: a version arriving in one can undo a verdict (a double spend) */
+  const lineCollections = new Set<string>();
+  /**
+   * Every version held in a line collection, by key and the version it
+   * names before it: deletes and stubs included, whatever `retain` says, so
+   * no twin hides from the double-spend check. Dropped when one arrives.
+   */
+  const lineIndexes = new Map<string, Promise<Map<string, Version[]>>>();
+  const twinKey = (version: Version) => `${version.key}\n${version.prev ?? ''}`;
+  function lineIndex(collection: string): Promise<Map<string, Version[]>> {
+    let index = lineIndexes.get(collection);
+    if (!index) {
+      index = storage.keptVersions(collection).then((held) => {
+        const byPlace = new Map<string, Version[]>();
+        for (const version of held) {
+          const at = byPlace.get(twinKey(version));
+          if (at) at.push(version);
+          else byPlace.set(twinKey(version), [version]);
+        }
+        return byPlace;
+      });
+      lineIndexes.set(collection, index);
+    }
+    return index;
+  }
+
+  /**
+   * Why a version breaks its line's rule (spec 09 §6), or null. Its key is its
+   * author's line key; no other version at that key names the same version
+   * before it (a double spend: neither counts, nor anything after either);
+   * and no citation in a `once` field appears twice along the counted chain,
+   * this version and every one before it.
+   */
+  async function lineBreak(
+    version: Version,
+    root: string,
+    once: ReadonlyArray<string>,
+  ): Promise<string | null | typeof UNJUDGED> {
+    if (version.key !== (await lineKey(root, version.collection)))
+      return 'It is not at its author’s line key';
+    for (const other of (await lineIndex(version.collection)).get(twinKey(version)) ?? []) {
+      if (other.id === version.id || other.seq !== version.seq) continue;
+      // At an owned key only its owner's versions stand; one that doesn't is no twin.
+      if ((await judge(other)).root !== root) continue;
+      return 'A double spend: another version of this line follows the same one';
+    }
+    if (once.length === 0 || version.deleted) return null;
+    const claimed = new Set<string>();
+    for (let step: Version | null = version; step;) {
+      if (!step.deleted) {
+        const opened = await openBody(step);
+        if (opened.body === null && opened.encrypted) return UNJUDGED;
+        for (const citation of onceCitations(opened.body, once)) {
+          if (claimed.has(citation)) return 'It claims something its line has already claimed';
+          claimed.add(citation);
+        }
+      }
+      step = step.seq > 0 && step.prev ? await storage.getVersion(step.prev) : null;
+    }
+    return null;
   }
 
   async function checkStanding(
@@ -1520,15 +1626,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     first: Version,
     root: string,
     state: AccessState,
-    checks: ReadonlyArray<Check>,
-  ): Promise<Standing> {
+    checks: ReadonlyArray<Contract>,
+  ): Promise<Standing | 'unjudged'> {
     const opened = await openBody(version);
     // Without the key, a peer can't tell: it accepts on the other checks, as with onePer.
     if (opened.body === null && opened.encrypted) return STANDS;
     const previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
     const prev = previous ? await checkedVersion(previous, !!previous.retain) : null;
     if (prev && 'unreadable' in prev) return STANDS;
-    const outcome = await runChecks(checks, {
+    const outcome = await runContracts(checks, {
       values: {
         body: opened.body,
         links: opened.links,
@@ -1545,6 +1651,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     });
     if ('later' in outcome)
       return { ok: false, reason: 'Versions it cites have not arrived yet', later: true };
+    if ('unjudged' in outcome) return 'unjudged';
     if ('unreadable' in outcome || outcome.passed) return STANDS;
     return { ok: false, reason: outcome.reason };
   }
@@ -1973,6 +2080,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // A record waiting on a version it cites may count now.
       for (const key of pendingKeys) staleKeys.add(key);
       pendingKeys.clear();
+      // A version in a line can make a double spend of one that counted, and undo what cites it.
+      if (placed.some((version) => lineCollections.has(version.collection))) {
+        checkVerdicts.clear();
+        countedIndex = null;
+        for (const version of placed) lineIndexes.delete(version.collection);
+      }
       return;
     }
     countedIndex = null;
@@ -1982,6 +2095,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     accessCache = placed && accessCache ? extendAccess(accessCache, placed) : null;
     standings.clear();
     checkVerdicts.clear();
+    lineIndexes.clear();
     keepUp();
     // The access history may name keepers now, or none.
     void refreshHolds().catch(() => {});
@@ -2978,8 +3092,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       collection === CARRIER_COLLECTION ||
       definition?.history === 'all' ||
       (version.seq === 0 && !!(definition?.rules?.onePer || definition?.rules?.fixed)) ||
-      // Every version under a check: it reads the one before, and others cite it.
-      (!deleted && !!definition?.rules?.check?.length);
+      // Every version under a contract: it reads the one before, and others cite it.
+      (!deleted && (!!definition?.rules?.check?.length || definition?.line !== undefined));
 
     // The next place in this key's line for the collection: given back if the version is refused below.
     const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
@@ -2990,7 +3104,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         const then = history.at(seen);
         return then ? rulesAt(then, collection) : null;
       })();
-      const keep = retain || (!deleted && !!(await checkedThen)?.rules.check?.length);
+      const then = await checkedThen;
+      const keep = retain || (!deleted && (!!then?.rules.check?.length || then?.line !== undefined));
       const made = await signer.sign(
         createVersion({
           author: writer.did,
@@ -3030,6 +3145,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         // Its checks, here, before anyone else sees it: peers would keep it, but no reader would count it.
         const passes = await checksOf(made);
         if ('pending' in passes) throw new Error('Versions it cites have not arrived yet');
+        if ('unjudged' in passes) throw new Error(passes.unjudged);
         if (passes.passes === false) throw new Error(passes.reason);
       }
       return made;
@@ -3047,13 +3163,29 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * How a record's newest version that stands fares under its checks: kept and
    * synced by every peer either way, counted by a reader only when it passes.
    */
-  async function checksFor(recordKey: string): Promise<RecordChecks | null> {
-    for (const version of await storage.history(recordKey)) {
-      if (isStub(version) || !(await consistent(version)) || !(await standingOf(version)).ok) continue;
+  async function contractsFor(recordKey: string, versionId?: string): Promise<RecordContracts | null> {
+    // A version named is judged even when the history leaves it out (a superseded delete, say).
+    const named = versionId !== undefined ? await storage.getVersion(versionId) : null;
+    const candidates =
+      versionId === undefined ? await storage.history(recordKey) : named?.key === recordKey ? [named] : [];
+    for (const version of candidates) {
+      if (isStub(version)) continue;
+      // One named whose first version hasn't arrived waits for it.
+      if (!(await consistent(version))) {
+        if (versionId !== undefined && version.seq > 0)
+          return { version: version.id, passes: null, pending: true };
+        continue;
+      }
+      const stands = await standingOf(version);
+      // One named that waits for what it follows is pending, as a contract waiting on what it cites.
+      if (!stands.ok && stands.later && versionId !== undefined)
+        return { version: version.id, passes: null, pending: true };
+      if (!stands.ok) continue;
       const verdict = await checksOf(version);
-      return 'pending' in verdict
-        ? { version: version.id, passes: null, pending: true }
-        : { version: version.id, ...verdict };
+      if ('pending' in verdict) return { version: version.id, passes: null, pending: true };
+      if ('unjudged' in verdict)
+        return { version: version.id, passes: null, unjudged: true, reason: verdict.unjudged };
+      return { version: version.id, ...verdict };
     }
     return null;
   }
@@ -3702,7 +3834,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     get,
-    checks: checksFor,
+    contracts: contractsFor,
 
     /** The note a record's current version was signed under; null when its account signed it itself */
     noteOf: async (recordKey: string): Promise<Delegation | null> =>
@@ -3884,10 +4016,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ...(input.links !== undefined ? { links: input.links } : {}),
         ...(input.rules !== undefined ? { rules: input.rules } : {}),
         ...(input.topics !== undefined ? { topics: input.topics } : {}),
+        ...(input.line !== undefined ? { line: input.line } : {}),
       };
+      const lineProblem = definition.line !== undefined ? checkLine(definition.line) : null;
       const problem =
         checkStoredCollection(definition) ??
-        (definition.rules?.check !== undefined ? checkChecks(definition.rules.check, 'rules.check') : null);
+        (definition.rules?.check !== undefined
+          ? checkContracts(definition.rules.check, 'rules.check')
+          : null) ??
+        (lineProblem === 'unknown' ? 'line takes only "once"' : lineProblem);
       if (problem) throw new Error(problem);
       if (current && version <= current.definition.version) {
         throw new Error(

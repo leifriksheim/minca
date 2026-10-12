@@ -34,6 +34,7 @@ import type { StandardJSONSchemaV1, StandardSchemaV1 } from '../types.js';
 import { LINK_REL_PATTERN, type LinkDeclaration } from '../records/links.js';
 import type { DefineCollection } from '../node/types.js';
 import { checkRules, type CollectionRules } from '../records/rules.js';
+import type { Line } from '../records/contracts.js';
 import { checkTopics } from '../records/topics.js';
 import { isObject, isRecord } from '../utils/guards.js';
 
@@ -113,6 +114,11 @@ export interface StoredCollection {
    * a topic, never which topic. At most 8; exact values only.
    */
   readonly topics?: ReadonlyArray<string>;
+  /**
+   * A line: one sequence per account at `lineKey(root, collection)`, judged
+   * by readers with the contract (spec 09 §6). Peers keep it and don't read it.
+   */
+  readonly line?: Line;
 }
 
 /** The reserved collection that collection definitions live in. */

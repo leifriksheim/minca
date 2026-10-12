@@ -944,9 +944,9 @@ Given a record's `id`, its root, its `seen`, its `author`, collection and
 `log.n`, a predicate `needs(S)` (whether the root may do what the record
 does in `S`), and optionally
 `within`, the `seen` of a version that cites this one. Peers never pass
-`within` when judging a version's standing; the library's checks do, to judge
-a version they cite as of what the citer saw
-([checks](../packages/core/docs/checks.md#citing-a-version)):
+`within` when judging a version's standing; readers judging a contract do,
+to judge a version it cites as of what the citer saw
+([09 — Contracts](09-contracts.md) §6.2):
 
 1. If anything in `seen`, or in `within`, is missing or waiting → not yet
    (retry later).
@@ -982,7 +982,7 @@ Withdrawn is a refusal for every purpose but two: the version is still
 stored, and the library's checks can count it as evidence cited by a version
 that had not seen what withdrew it ([02](02-records.md) §9.5).
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `at`, `seenAs`, `cutOf`). Tests: `packages/core/tests/roles.test.ts` ("records against the history", "a definition concurrent with its author’s unassignment… (Q1)"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment"), `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `at`, `seenAs`, `cutOf`). Tests: `packages/core/tests/roles.test.ts` ("records against the history", "a definition concurrent with its author’s unassignment… (Q1)"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment"), `packages/core/tests/contracts.test.ts` ("a proof stays a proof…")._
 
 ### 5.2 Standing of an ordinary record
 

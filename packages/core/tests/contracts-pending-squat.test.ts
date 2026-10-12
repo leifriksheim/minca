@@ -1,4 +1,5 @@
-/** Checks are read by the library: a version that fails them is kept and synced, and counted on no read path (packages/core/docs/checks.md). */
+/** Contracts are judged by readers: a version that fails or waits for ever can't hold a key, or be laundered (spec/09-contracts.md). */
+/** Contracts are judged by readers: a version that fails them is kept and synced, and counted on no read path (spec/09-contracts.md). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -52,14 +53,14 @@ test('a failing decision squats its onePer key: the real one can never be writte
   await forge(bob, space, {
     author: '',
     collection: 'app.proposal.passed',
-    body: { votes: [] },
+    body: { votes: [theirs.version.replace(/.$/, (ch) => (ch === 'a' ? 'b' : 'a'))] },
     links: about,
     retain: true,
     version: { key, seq: 0 },
   });
   await hold(bob.node, space);
   await until(
-    async () => (await alice.node.records.checks(space, key))?.passes === false,
+    async () => (await alice.node.records.contracts(space, key))?.pending === true,
     4000,
     'squat at alice',
   );

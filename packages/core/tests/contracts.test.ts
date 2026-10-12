@@ -8,15 +8,15 @@ import assert from 'node:assert/strict';
 import { bodyHashOf } from '../src/schema/version.js';
 import { checkRules } from '../src/records/rules.js';
 import {
-  checkChecks,
-  checkCostHints,
-  runChecks,
-  MAX_CHECK_STEPS,
-  type Check,
-  type CheckScope,
-  type CheckedVersion,
+  checkContracts,
+  contractCostHints,
+  runContracts,
+  MAX_CONTRACT_STEPS,
+  type Contract,
+  type ContractScope,
+  type CitedVersion,
   type Condition,
-} from '../src/records/checks.js';
+} from '../src/records/contracts.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
 import { team } from '../src/space/presets.js';
@@ -31,7 +31,7 @@ import { forge, person, type Person } from './helpers/person.js';
 const ALICE = 'did:key:zAlice';
 const BOB = 'did:key:zBob';
 
-function version(id: string, fields: Partial<CheckedVersion> = {}): CheckedVersion {
+function version(id: string, fields: Partial<CitedVersion> = {}): CitedVersion {
   return {
     id,
     key: `k-${id}`,
@@ -46,7 +46,7 @@ function version(id: string, fields: Partial<CheckedVersion> = {}): CheckedVersi
   };
 }
 
-function scope(values: Record<string, unknown> = {}, held: ReadonlyArray<CheckedVersion> = []): CheckScope {
+function scope(values: Record<string, unknown> = {}, held: ReadonlyArray<CitedVersion> = []): ContractScope {
   return {
     values: { body: null, links: [], author: ALICE, prev: null, ...values },
     cite: async (id) => held.find((v) => v.id === id) ?? { later: true },
@@ -55,29 +55,29 @@ function scope(values: Record<string, unknown> = {}, held: ReadonlyArray<Checked
 }
 
 /** Why a version was refused, or '' when it wasn't */
-const passed = (outcome: Awaited<ReturnType<typeof runChecks>>) => 'passed' in outcome && outcome.passed;
-const why = (outcome: Awaited<ReturnType<typeof runChecks>>) =>
+const passed = (outcome: Awaited<ReturnType<typeof runContracts>>) => 'passed' in outcome && outcome.passed;
+const why = (outcome: Awaited<ReturnType<typeof runContracts>>) =>
   'passed' in outcome && !outcome.passed ? outcome.reason : '';
 
-const run = (that: Condition, values?: Record<string, unknown>, held?: ReadonlyArray<CheckedVersion>) =>
-  runChecks([{ that, else: 'No' }], scope(values, held));
+const run = (that: Condition, values?: Record<string, unknown>, held?: ReadonlyArray<CitedVersion>) =>
+  runContracts([{ that, else: 'No' }], scope(values, held));
 
 describe('checks: a definition', () => {
   test('takes a list of { that, else }, each a CEL expression', () => {
-    assert.equal(checkChecks([{ that: 'body.amount > 0', else: 'Give something' }]), null);
+    assert.equal(checkContracts([{ that: 'body.amount > 0', else: 'Give something' }]), null);
     assert.equal(
       checkRules({ check: [{ that: 'true', else: 'Always' }] }),
       null,
       'rules take check alongside the rest',
     );
-    assert.match(checkChecks([]) ?? '', /1 to 16 checks/);
-    assert.match(checkChecks([{ that: 'true' }]) ?? '', /else says why/);
-    assert.match(checkChecks([{ that: 'true', else: 'x', also: 1 }]) ?? '', /only "that" and "else"/);
-    assert.match(checkChecks([{ that: true, else: 'x' }]) ?? '', /CEL expression/);
+    assert.match(checkContracts([]) ?? '', /1 to 16 checks/);
+    assert.match(checkContracts([{ that: 'true' }]) ?? '', /else says why/);
+    assert.match(checkContracts([{ that: 'true', else: 'x', also: 1 }]) ?? '', /only "that" and "else"/);
+    assert.match(checkContracts([{ that: true, else: 'x' }]) ?? '', /CEL expression/);
   });
 
   test('refuses what no peer could judge the same way', () => {
-    const problem = (that: string) => checkChecks([{ that, else: 'x' }], 'rules.check') ?? '';
+    const problem = (that: string) => checkContracts([{ that, else: 'x' }], 'rules.check') ?? '';
     assert.match(problem('eval(1)'), /eval\(\) is not in the subset/);
     assert.match(problem('size(1, 2)'), /takes 1 arguments/);
     assert.match(problem('body.x =='), /unexpected end/);
@@ -103,12 +103,12 @@ describe('checks: a definition', () => {
 
 describe('checks: cost hints, for whoever writes them', () => {
   test('flag macros three deep, and citing inside a loop; plain checks get none', () => {
-    assert.deepEqual(checkCostHints([{ that: 'body.items.all(it, it.price > 0)', else: 'x' }]), []);
-    const [deep] = checkCostHints([
+    assert.deepEqual(contractCostHints([{ that: 'body.items.all(it, it.price > 0)', else: 'x' }]), []);
+    const [deep] = contractCostHints([
       { that: 'body.a.all(x, body.b.all(y, body.c.all(z, x == y)))', else: 'x' },
     ]);
     assert.match(deep ?? '', /nest 3 deep/);
-    const [cites] = checkCostHints([{ that: 'body.ids.all(i, versions([i])[0].seq == 0)', else: 'x' }]);
+    const [cites] = contractCostHints([{ that: 'body.ids.all(i, versions([i])[0].seq == 0)', else: 'x' }]);
     assert.match(cites ?? '', /versions\(\) inside a macro/);
   });
 });
@@ -162,6 +162,8 @@ describe('checks: judging', () => {
     await yes('body.items.exists(it, it.price == 4)');
     await yes(`body.items.filter(it, it.by == "${ALICE}").size() == 2`);
     await yes('sum(body.items.map(it, it.price)) == 12.0');
+    // Every number in a body is a double, so an empty sum is one too.
+    await yes('sum([]) == 0.0 && sum([]) + 1.5 == 1.5');
     await yes('body.items.map(it, it.by).distinct().size() == 2');
     await yes(`"${BOB}" in body.items.map(it, it.by)`);
     await yes('[].all(it, false) && ![].exists(it, true)');
@@ -178,14 +180,14 @@ describe('checks: judging', () => {
     );
     assert.equal(passed(outcome), false);
     assert.match(why(outcome), /too many steps/);
-    assert.equal(MAX_CHECK_STEPS, 100_000);
+    assert.equal(MAX_CONTRACT_STEPS, 100_000);
   });
 
   test('costs what it builds: a list or text grown by reuse runs out of steps, not memory', async () => {
     // Each level makes a list eight times the last: without charging for size, 8^10 elements.
     let grow = '[[1]]';
     for (let i = 0; i < 10; i++) grow = `${grow}.map(a${i}, ${Array(8).fill(`a${i}`).join(' + ')})`;
-    assert.equal(checkChecks([{ that: `size(${grow}) > 0`, else: 'x' }]), null);
+    assert.equal(checkContracts([{ that: `size(${grow}) > 0`, else: 'x' }]), null);
     assert.match(why(await run(`size(${grow}) > 0`)), /too much/);
     let text = `"${'a'.repeat(1000)}"`;
     for (let i = 0; i < 13; i++) text = `[${text}].map(s${i}, s${i} + s${i})[0]`;
@@ -228,9 +230,9 @@ describe('checks: judging', () => {
 
   test('never throws instead of judging: depth is bounded, whatever the chain', async () => {
     for (const deep of ['!'.repeat(3994) + 'true', `has(body${'.a'.repeat(1990)})`, '1' + ' + 1'.repeat(900)])
-      assert.match(checkChecks([{ that: deep, else: 'x' }]) ?? '', /nested more than 64 deep/);
+      assert.match(checkContracts([{ that: deep, else: 'x' }]) ?? '', /nested more than 64 deep/);
     // A chain of && is one part, however long.
-    assert.equal(checkChecks([{ that: Array(200).fill('true').join(' && '), else: 'x' }]), null);
+    assert.equal(checkContracts([{ that: Array(200).fill('true').join(' && '), else: 'x' }]), null);
     let body: unknown = 1;
     for (let i = 0; i < 100; i++) body = [body];
     assert.equal(passed(await run('body == body', { body })), false, 'JSON nested past 64 reads as an error');
@@ -238,7 +240,7 @@ describe('checks: judging', () => {
 
   test('syntax: quoted and reserved field names; a lone surrogate reads as U+FFFD', async () => {
     for (const that of ['has(body.`content-type`)', 'has(body.as)', 'body.namespace == "x"'])
-      assert.equal(checkChecks([{ that, else: 'x' }]), null, that);
+      assert.equal(checkContracts([{ that, else: 'x' }]), null, that);
     assert.deepEqual(await run('body.`content-type` == "a"', { body: { 'content-type': 'a' } }), {
       passed: true,
     });
@@ -275,25 +277,25 @@ describe('checks: judging', () => {
   });
 
   test('the first check that is not true decides', async () => {
-    const checks: Check[] = [
+    const checks: Contract[] = [
       { that: 'true', else: 'First' },
       { that: 'false', else: 'Second' },
       { that: 'false', else: 'Third' },
     ];
-    assert.deepEqual(await runChecks(checks, scope()), { passed: false, reason: 'Second' });
+    assert.deepEqual(await runContracts(checks, scope()), { passed: false, reason: 'Second' });
   });
 });
 
 // ─── Between peers ─────────────────────────────────────────────────
 
 /** "Passed" cites at least two distinct members' yes votes on the same proposal */
-const TWO_YES: Check = {
+const TWO_YES: Contract = {
   that: 'versions(body.votes).filter(it, it.collection == "app.proposal.vote" && it.link("about") == link("about") && it.body.choice == "yes").map(it, it.author).distinct().size() >= 2',
   else: 'A proposal passes with yes votes from at least two members',
 };
 
 /** A counter counts up by one: the version before decides what comes next */
-const BY_ONE: Check = {
+const BY_ONE: Contract = {
   that: 'prev == null ? body.n == 0.0 : body.n == prev.body.n + 1.0',
   else: 'A counter starts at 0 and counts up by one',
 };
@@ -403,11 +405,11 @@ describe('checks: between peers', () => {
     await hold(bob.node, space);
     // Kept and synced, as any version that stands; failing its check, shown as such and counted by no one.
     await until(
-      async () => (await alice.node.records.checks(space, key))?.passes === false,
+      async () => (await alice.node.records.contracts(space, key))?.passes === false,
       4000,
       'Alice to hold it, failing its check',
     );
-    assert.match((await alice.node.records.checks(space, key))?.reason ?? '', /at least two members/);
+    assert.match((await alice.node.records.contracts(space, key))?.reason ?? '', /at least two members/);
     assert.equal(await alice.node.records.get(space, key), null);
   });
 
@@ -616,11 +618,11 @@ describe('checks: std.decision and std.goal-reached', () => {
     });
     await hold(bob.node, space);
     await until(
-      async () => (await alice.node.records.checks(space, key))?.passes === false,
+      async () => (await alice.node.records.contracts(space, key))?.passes === false,
       4000,
       'Alice to hold it, failing its check',
     );
-    assert.match((await alice.node.records.checks(space, key))?.reason ?? '', /quorum/);
+    assert.match((await alice.node.records.contracts(space, key))?.reason ?? '', /quorum/);
     assert.equal(await alice.node.records.get(space, key), null);
   });
 });
