@@ -24,8 +24,10 @@
  * version before and versions it cites (`records/checks.ts`).
  */
 import { PERMISSION_PATTERN, type Check } from './checks.js';
-import { hashedKey } from '../utils/hash.js';
-import { isList, isRecord, readField } from '../utils/guards.js';
+import { ownedKey } from './key.js';
+import { canonicalize } from '../schema/version.js';
+import { bytesToHex, utf8Encode } from '../utils/encoding.js';
+import { bufferSource, isList, isRecord, readField } from '../utils/guards.js';
 import type { Link } from '../types.js';
 
 /**
@@ -148,11 +150,36 @@ export function describeWho(who: Who | ReadonlyArray<Who> | undefined): string {
 }
 
 /**
+ * What a space's `onePer` keys are keyed with (spec 02 §7.3): from its first
+ * space key in a private space, which every reader holds and which never
+ * changes, so only readers can compute or test a key; from its id in a
+ * public one, where anyone can.
+ */
+export async function onePerSecret(
+  material: { readonly spaceKey: Uint8Array } | { readonly spaceId: string },
+): Promise<CryptoKey> {
+  const secret =
+    'spaceKey' in material
+      ? bufferSource(material.spaceKey)
+      : utf8Encode(`weave/public-one-per/v1|${material.spaceId}`);
+  const base = await globalThis.crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
+  return globalThis.crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: utf8Encode('weave/one-per/v1') },
+    base,
+    { name: 'HMAC', hash: 'SHA-256', length: 256 },
+    false,
+    ['sign'],
+  );
+}
+
+/**
  * The key a record must have under `onePer`, or null when something it names
- * is missing (no such link, no such field). Lower-case hex, so it is a valid
- * record key.
+ * is missing (no such link, no such field). With `@author` among the parts,
+ * an owned key of the author's (`records/key.ts`), so no one else can write
+ * its first version; without, a shared `one:` key.
  */
 export async function onePerKey(
+  secret: CryptoKey,
   collection: string,
   onePer: ReadonlyArray<string>,
   record: { root: string; links: ReadonlyArray<Link>; body: unknown },
@@ -169,10 +196,14 @@ export async function onePerKey(
     } else {
       const value = readField(record.body, part);
       if (value === undefined) return null;
-      parts.push(`${part}=${JSON.stringify(value)}`);
+      parts.push(`${part}=${canonicalize(value)}`);
     }
   }
-  return hashedKey('one', parts.join('\n'));
+  const mac = new Uint8Array(
+    await globalThis.crypto.subtle.sign('HMAC', secret, utf8Encode(parts.join('\n'))),
+  );
+  const name = `one:${bytesToHex(mac.subarray(0, 20))}`;
+  return onePer.includes('@author') ? ownedKey(record.root, name) : name;
 }
 
 /** The first fixed field whose value differs from the record's first version, or null */
@@ -184,7 +215,9 @@ export function changedFixedField(
   for (const field of fixed ?? []) {
     const a = readField(first, field);
     const b = readField(next, field);
-    if (JSON.stringify(a) !== JSON.stringify(b)) return field;
+    // Canonical, so a reordered object is the same value; `undefined` is absent on both sides alike.
+    if ((a === undefined) !== (b === undefined) || (a !== undefined && canonicalize(a) !== canonicalize(b)))
+      return field;
   }
   return null;
 }

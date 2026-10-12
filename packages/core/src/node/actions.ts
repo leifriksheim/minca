@@ -658,14 +658,18 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     name: 'records_put',
     description:
       'Create a record in a collection. Collections are named like "app.todo.item"; the body is any JSON object. ' +
-      'It gets a random key unless one is given. It is signed by this node and synced to the space.',
+      'It gets a fresh key of this account’s unless a name is given, which is put in this account’s namespace. It is signed by this node and synced to the space.',
     input: {
       type: 'object',
       properties: {
         space,
         collection: { type: 'string' },
         body: { type: 'object' },
-        key: { type: 'string', description: 'Optional chosen key: a–z, 0–9 and : . _ -' },
+        key: {
+          type: 'string',
+          description:
+            'Optional name for the key, 1–101 of a–z, 0–9 and : . _ -: written at <your owner part>.<name>',
+        },
         links,
       },
       required: ['space', 'collection', 'body'],

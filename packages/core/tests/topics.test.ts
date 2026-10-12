@@ -4,6 +4,7 @@
  * what it's about — and a writer can't lie about it to anyone who can read.
  */
 import { test, describe } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -190,6 +191,7 @@ describe('topic tags on records', () => {
         log: { n: 0 },
         proof: ucan.encoded,
         collection: 'app.chat',
+        version: { key: await newRecordKey(alice.node.did), seq: 0 },
         body: { text: 'psst', channel: 'random' },
         tags: [await alice.node.collections.tag(space, 'app.chat', 'channel', 'design')],
       }),
@@ -288,6 +290,7 @@ describe('topic tags on links', () => {
         log: { n: 0 },
         proof: ucan.encoded,
         collection: rooms.name,
+        version: { key: await newRecordKey(alice.node.did), seq: 0 },
         body: { text: 'psst' },
         links: [{ rel: 'channel', to: 'randomrandomrandomrandom00' }],
         tags: [

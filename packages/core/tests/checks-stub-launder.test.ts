@@ -1,5 +1,6 @@
 /** Checks are read by the library: a version that fails or waits for ever can't hold a key, or be laundered (packages/core/docs/checks.md). */
 import { test } from 'node:test';
+import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
@@ -36,25 +37,26 @@ test('a failing first version, not kept whole, is laundered by the next', async 
     else: 'Created with at most 10',
   });
   await letGo(bob.node, space);
+  const k1 = await ownedKey(bob.node.did, 'k1');
   const bad = await forge(bob, space, {
     author: '',
     collection: 'app.claim',
     body: { n: 100 },
     retain: false,
-    version: { key: 'k1', seq: 0 },
+    version: { key: k1, seq: 0 },
   });
   await forge(bob, space, {
     author: '',
     collection: 'app.claim',
     body: { n: 100 },
     retain: true,
-    version: { key: 'k1', seq: 1, prev: bad.id, genesis: bad.id },
+    version: { key: k1, seq: 1, prev: bad.id, genesis: bad.id },
   });
   await hold(bob.node, space);
-  await until(async () => (await alice.node.records.history(space, 'k1')).length >= 2, 4000, 'sync').catch(
+  await until(async () => (await alice.node.records.history(space, k1)).length >= 2, 4000, 'sync').catch(
     () => {},
   );
   await settle(300);
-  const got = await alice.node.records.get<{ n: number }>(space, 'k1');
+  const got = await alice.node.records.get<{ n: number }>(space, k1);
   assert.equal(got, null, 'n=100 counts by way of a failing seq 0 that was not kept whole');
 });

@@ -57,7 +57,6 @@ import { isRecord, unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
 import { serial } from '../utils/serial.js';
 import { buildNamespaces, callMethod, givenFor, type Namespace, type OwnMethods } from './api.js';
-import { onePerKey } from '../records/rules.js';
 import {
   contactKeyPair,
   contactPublicKey,
@@ -1538,11 +1537,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   // The key `onePer: ['did']` derives, so the record for someone is the same one on every device.
   const contactRecordKey = async (did: string) =>
-    (await onePerKey(contactSchema.name, contactSchema.rules.onePer, {
-      root: config.signer.did,
-      links: [],
-      body: { did },
-    }))!;
+    (await contactsRuntime()).onePerKey(contactSchema.name, { did }, { onePer: contactSchema.rules.onePer });
   /** The HPKE label a contact request is sealed under; bound to `{ space, from, to }` */
   const REQUEST_LABEL = 'weave/contact-request/v1';
 
@@ -1713,7 +1708,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const found = await contacts.get(did);
       if (!found) return;
       await leavePairSpace(found.space, did);
-      await (await contactsRuntime()).remove(await contactRecordKey(did));
+      const key = await contactRecordKey(did);
+      if (key) await (await contactsRuntime()).remove(key);
     },
 
     async block(did) {
@@ -2287,6 +2283,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       list: async <T>(spaceId: string, options?: ListOptions) => (await runtime(spaceId)).list<T>(options),
       get: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).get<T>(key),
       checks: async (spaceId: string, key: string) => (await runtime(spaceId)).checks(key),
+      keyFor: async (spaceId: string, name: string, account?: string) =>
+        (await runtime(spaceId)).keyFor(name, account),
+      onePerKey: async (
+        spaceId: string,
+        collection: string,
+        body: unknown,
+        options?: { links?: ReadonlyArray<Link>; account?: string },
+      ) => (await runtime(spaceId)).onePerKey(collection, body, options),
       put: async <T>(
         spaceId: string,
         collection: CollectionRef,

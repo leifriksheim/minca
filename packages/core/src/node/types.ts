@@ -426,7 +426,27 @@ export interface NodeRecords {
    * and queries count only versions that pass (packages/core/docs/checks.md).
    */
   checks(spaceId: string, key: string): Promise<RecordChecks | null>;
-  /** Creates a record, under a random key unless given. Writing a deleted key brings it back */
+  /**
+   * The key `name` has in an account's namespace (this one's unless another
+   * is named): where `put(…, { key: name })` writes. Keys belong to the
+   * account that creates them (packages/core/docs/records-and-queries.md#keys).
+   */
+  keyFor(spaceId: string, name: string, account?: string): Promise<string>;
+  /**
+   * The key a record with this body and links has under its collection's
+   * `onePer`, written by `account` (this one unless named): null when the
+   * collection has no `onePer`, or the body lacks a part it names.
+   */
+  onePerKey(
+    spaceId: string,
+    collection: string,
+    body: unknown,
+    options?: { links?: ReadonlyArray<Link>; account?: string },
+  ): Promise<string | null>;
+  /**
+   * Creates a record, under a fresh key of this account's, or the name given
+   * as `key` in its namespace. Writing a deleted key brings it back
+   */
   put<T = unknown>(
     spaceId: string,
     collection: string,

@@ -74,16 +74,17 @@ describe('links', () => {
     const me = await person();
     const { id: space } = await me.spaces.create({ name: 'Todos', visibility: 'public' });
     await useSchemas(me, space, [reactionSchema]);
+    const later = await me.records.keyFor(space, 'not-here-yet');
     const reaction = await me.records.put(
       space,
       'std.reaction',
       { emoji: '🎉' },
-      { links: [{ rel: 'about', to: 'not-here-yet' }] },
+      { links: [{ rel: 'about', to: later }] },
     );
     assert.equal(reaction.conforms, true);
     await me.records.put(space, 'app.todo.item', { text: 'late' }, { key: 'not-here-yet' });
     assert.deepEqual(
-      (await me.records.linked(space, 'not-here-yet')).map((r) => r.key),
+      (await me.records.linked(space, later)).map((r) => r.key),
       [reaction.key],
     );
   });

@@ -5,6 +5,7 @@
  * at every peer.
  */
 import { test, describe } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
@@ -63,7 +64,15 @@ async function handKey(bob: Person, space: string) {
       createSigner(provider).sign(
         // Its log as given, which may be one a writer would never sign.
         {
-          ...createVersion({ author: did, collection, space, body: { text }, proof: note.encoded, seen }),
+          ...createVersion({
+            author: did,
+            collection,
+            space,
+            version: { key: await newRecordKey(bob.node.did), seq: 0 },
+            body: { text },
+            proof: note.encoded,
+            seen,
+          }),
           log,
         },
         pair.privateKey,

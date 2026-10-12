@@ -245,7 +245,6 @@ describe('asking to be added', () => {
     await forge(leif, club, {
       collection: 'std.contact-request',
       body: real.body,
-      version: { key: 'copy-from-one-space', seq: 0 },
     });
     await hold(leif.node, club);
     await until(

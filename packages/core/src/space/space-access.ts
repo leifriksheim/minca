@@ -23,7 +23,6 @@
 import type { CryptoProvider, Space } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
 import { canonicalize } from '../schema/version.js';
-import { newRecordKey } from '../records/version.js';
 import { cidFromBytes, hashedKey } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
@@ -182,11 +181,6 @@ export const revokeKey = (keyDid: string, accountDid: string) =>
  * checks its proof only to decide whether to show a flag (docs/warrants.md).
  */
 export const WARRANT_COLLECTION = 'std.warrant';
-/**
- * A fresh key for a warrant: random, so nobody can claim it before its writer
- * does. What a warrant proves is in its body, not its key.
- */
-export const newWarrantKey = () => `warrant:${newRecordKey()}`;
 /** The key of the record proving a writer's log forked, from the writer's key */
 export const forkKey = (writerDid: string) => hashedKey('fork', writerDid);
 /** The key of a role's record */

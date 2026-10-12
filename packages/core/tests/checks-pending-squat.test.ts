@@ -8,7 +8,6 @@ import { team } from '../src/space/presets.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
 import { forge, person } from './helpers/person.js';
-import { onePerKey } from '../src/records/rules.js';
 
 const TWO_YES = {
   that: 'versions(body.votes).filter(it, it.collection == "app.proposal.vote" && it.link("about") == link("about") && it.body.choice == "yes").map(it, it.author).distinct().size() >= 2',
@@ -48,7 +47,7 @@ test('a failing decision squats its onePer key: the real one can never be writte
   const about = [{ rel: 'about', to: proposal.key }];
   await until(async () => (await bob.node.records.get(space, proposal.key)) !== null, 4000, 'p');
   const theirs = await bob.node.records.put(space, 'app.proposal.vote', { choice: 'yes' }, { links: about });
-  const key = (await onePerKey('app.proposal.passed', ['link:about'], { root: '', links: about, body: {} }))!;
+  const key = (await bob.node.records.onePerKey(space, 'app.proposal.passed', {}, { links: about }))!;
   // Bob, who opposes it, signs a decision with no evidence first.
   await letGo(bob.node, space);
   await forge(bob, space, {

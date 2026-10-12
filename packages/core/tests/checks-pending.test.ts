@@ -7,7 +7,6 @@ import { team } from '../src/space/presets.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
 import { forge, person, settle } from './helpers/person.js';
-import { onePerKey } from '../src/records/rules.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 
 const TWO_YES = {
@@ -48,16 +47,13 @@ test('a pending decision becomes visible in list once its cited vote arrives', a
   const mine = await alice.node.records.put(space, 'app.proposal.vote', { choice: 'yes' }, { links: about });
   await until(async () => (await bob.node.records.get(space, mine.key)) !== null, 4000, 'vote to bob');
   const bobRoot = (await bob.node.records.put(space, 'app.proposal', { title: 'mine' })).root!;
-  const voteKey = (await onePerKey('app.proposal.vote', ['@author', 'link:about'], {
-    root: bobRoot,
-    links: about,
-    body: { choice: 'yes' },
-  }))!;
-  const passedKey = (await onePerKey('app.proposal.passed', ['link:about'], {
-    root: '',
-    links: about,
-    body: {},
-  }))!;
+  const voteKey = (await bob.node.records.onePerKey(
+    space,
+    'app.proposal.vote',
+    { choice: 'yes' },
+    { links: about, account: bobRoot },
+  ))!;
+  const passedKey = (await bob.node.records.onePerKey(space, 'app.proposal.passed', {}, { links: about }))!;
 
   await letGo(bob.node, space);
   const vote = await forge(

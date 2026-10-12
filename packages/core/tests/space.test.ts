@@ -13,10 +13,14 @@ import { createVersion } from '../src/schema/version.js';
 import { createCapabilityGate } from '../src/validation/capability-gate.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
 import { openBody, sealBody, spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
-import { newRecordKey } from '../src/records/version.js';
+import { base32Encode } from '../src/utils/hash.js';
+
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { team } from '../src/space/presets.js';
 import { makeKey } from './helpers/person.js';
+
+/** Any key: sealing binds the body to it, whoever's it is */
+const newRecordKey = () => base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)));
 
 const provider = createP256Provider();
 const signer = createSigner(provider);

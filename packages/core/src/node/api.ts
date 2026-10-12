@@ -58,6 +58,8 @@ export const API = Object.freeze({
     list: 'scoped',
     get: 'scoped',
     checks: 'scoped',
+    keyFor: 'scoped',
+    onePerKey: 'scoped',
     put: 'scoped',
     update: 'scoped',
     linked: 'scoped',

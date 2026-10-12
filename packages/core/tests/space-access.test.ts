@@ -5,6 +5,7 @@
  * as a member.
  */
 import { test, describe } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import { isRecord } from '../src/utils/guards.js';
 
@@ -484,12 +485,13 @@ describe('space access: taking it back', () => {
       capabilities: [{ with: `space:${space}`, can: '*' }],
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
-    const sign = (text: string, log: Version['log']) =>
+    const sign = async (text: string, log: Version['log']) =>
       createSigner(provider).sign(
         createVersion({
           author: keyDid,
           collection: 'app.board',
           space,
+          version: { key: await newRecordKey(bob.node.did), seq: 0 },
           body: { text },
           proof: note.encoded,
           seen: seenThen,
@@ -543,6 +545,7 @@ describe('space access: taking it back', () => {
           author: appDid,
           collection: 'app.note',
           space,
+          version: { key: await newRecordKey(bob.node.did), seq: 0 },
           body: { text },
           proof: note.encoded,
           seen: heads,

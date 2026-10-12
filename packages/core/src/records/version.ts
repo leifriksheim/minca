@@ -16,17 +16,11 @@
  * disagree about which version is current. It is pinned by tests.
  */
 import type { Version } from '../types.js';
-import { base32Encode } from '../utils/hash.js';
 import { checkLinks } from './links.js';
 import { RECORD_KEY_PATTERN } from './key.js';
 
 /** How many access changes a version may say it saw — normally one or two */
 export const MAX_SEEN = 64;
-
-/** A fresh key: 128 random bits. Random rather than time-based, so it says nothing about when. */
-export function newRecordKey(): string {
-  return base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)));
-}
 
 /** The parts of a version the ordering rule looks at */
 export interface Versioned {
