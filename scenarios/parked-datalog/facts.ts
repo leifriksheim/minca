@@ -1,50 +1,7 @@
-/**
- * Weave records as both sides see them: a space's held versions, and the
- * Datalog facts they become. Simplified from spec 02: no signatures, keys
- * or sealing; `seen` names versions directly; a version's id is a label.
- */
+/** The versions a scenario holds, as the facts a Datalog program reads. */
 import { fact, type Fact, type Term } from './datalog.js';
-import type { Json } from './ucan-policy.js';
-
-export interface Link {
-  readonly rel: string;
-  readonly to: string;
-}
-
-export interface Version {
-  readonly id: string;
-  readonly key: string;
-  readonly collection: string;
-  readonly seq: number;
-  /** The account (root DID), whichever of its devices signed */
-  readonly author: string;
-  /** Which of the account's devices signed: neither side reads it */
-  readonly device?: string;
-  readonly deleted: boolean;
-  readonly body: Json;
-  readonly links: ReadonlyArray<Link>;
-  /** The version before it in this record, by id */
-  readonly prev: string | null;
-  /** Versions its writer had seen, by id */
-  readonly seen: ReadonlyArray<string>;
-}
-
-/** A version, with defaults: a first version, seen nothing, key = id */
-export const version = (v: Partial<Version> & Pick<Version, 'id' | 'collection' | 'author'>): Version =>
-  Object.freeze({ key: v.id, seq: 0, deleted: false, body: {}, links: [], prev: null, seen: [], ...v });
-
-/** The next version of `before`: a delete when `body` is null */
-export const next = (before: Version, v: Partial<Version> & Pick<Version, 'id'>): Version =>
-  version({
-    ...before,
-    seq: before.seq + 1,
-    prev: before.id,
-    seen: [before.id],
-    deleted: v.body === null,
-    body: v.body === null ? null : before.body,
-    links: v.body === null ? [] : before.links,
-    ...v,
-  });
+import type { Json } from '../host/ucan-policy.js';
+import type { Version } from '../host/space.js';
 
 /**
  * Versions as Datalog facts, the same for every reader:

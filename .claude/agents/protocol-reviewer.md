@@ -45,6 +45,13 @@ Check the bookkeeping too. Every "Holds" claim the change touches cites a test
 that shows a peer refusing the attack: open the test and check it does. Every
 issue the threat model links says what its bullet says, and links back.
 
+Run the scenarios (`npm run scenarios`, `scenarios/README.md`): kinds of
+community written as tests, each with the attacks on it. A failing scenario
+is a finding. Read the ones the change touches, and ask whether the change
+opens an attack on a community none of them covers; if so, say which
+community and what it would test. A probe may import a scenario's community
+from `scenarios/communities/` as its starting point.
+
 Write each attack as concrete steps: who holds what, what they sign or send,
 and what each honest peer then does. Check each against the spec and the
 code. **Confirm every blocker by running it** as a probe test that shows the

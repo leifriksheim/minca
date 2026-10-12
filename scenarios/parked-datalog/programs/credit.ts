@@ -1,36 +1,4 @@
-/**
- * 5. Mutual credit, with a limit of −100. An account's payments are one
- * line: each names the account's previous payment (`prev`, as versions of
- * one record keyed by the account), carries the running balance, and claims
- * payments made to it (`received`), each once. Two payments after the same
- * one are a double spend, and neither counts, from whichever devices.
- */
-import type { Check } from '../../../../packages/core/src/records/checks.js';
-
-// -- (A) CEL contract, plus a host rule: a fork counts for neither -------------------
-
-export const payContract: Check[] = [
-  { that: 'body.amount >= 0.0 && body.to != author', else: 'Pay someone else, an amount of at least 0' },
-  {
-    that: 'body.received.distinct().size() == body.received.size() && body.received.all(r, !(r in (prev == null ? [] : prev.body.claimed)))',
-    else: 'Claim each payment once',
-  },
-  {
-    that: 'body.claimed == (prev == null ? [] : prev.body.claimed) + body.received',
-    else: 'Carry the list of what was claimed',
-  },
-  {
-    that: "versions(body.received).all(r, r.collection == 'app.pay' && r.body.to == author)",
-    else: 'Claim only payments to you',
-  },
-  {
-    that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount + sum(versions(body.received).map(r, r.body.amount) + [0.0])',
-    else: 'The balance follows from the one before',
-  },
-  { that: 'body.balance >= -100.0', else: 'No account goes below −100' },
-];
-
-// -- (C) Datalog -------------------------------------------------------------------
+/** 5. Mutual credit, in Datalog. Parked; see the scenarios README. */
 
 export const datalog = `
 pay($p, $a, $to, $amt, $bal) <- record($p, "app.pay", $a), field($p, "to", $to), field($p, "amount", $amt), field($p, "balance", $bal);

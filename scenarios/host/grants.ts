@@ -3,7 +3,8 @@
  * §2): UCAN 1.0 delegations to people or roles, with UCAN policies, and
  * role assignments. Only the authority logic, not UCAN's envelopes or
  * signatures. This is the code a peer would run, written in TypeScript:
- * the policy language only ever sees one invocation's arguments.
+ * the policy language only ever sees one invocation's arguments, which the
+ * host fills in for each command (`byCreator`, `self` and the rest).
  */
 import { allows, type Json, type Policy } from './ucan-policy.js';
 
@@ -15,7 +16,11 @@ export interface Delegation {
   readonly pol: Policy;
 }
 
-/** `by` gives `to` (a DID, or `role:<name>`) the role `role`: an invocation of `/role/assign` */
+/**
+ * `by` puts `to` (a DID, or `role:<name>`) in the role `role`: an invocation
+ * of `/role/assign`, with the arguments `{ role, self }`. It grants nothing
+ * itself: the role's grants are the delegations to it.
+ */
 export interface Assignment {
   readonly by: string;
   readonly to: string;
@@ -69,7 +74,7 @@ function rolesOf(auth: Authority, who: string, visiting = new Set<string>()): st
     for (const a of auth.assignments) {
       const role = `role:${a.role}`;
       if (a.to !== p || out.has(role)) continue;
-      if (!may(auth, a.by, '/role/assign', { role: a.role, to: a.to }, visiting)) continue;
+      if (!may(auth, a.by, '/role/assign', { role: a.role, self: a.to === a.by }, visiting)) continue;
       out.add(role);
       queue.push(role);
     }

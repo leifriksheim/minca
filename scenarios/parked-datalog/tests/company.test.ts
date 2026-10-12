@@ -1,55 +1,15 @@
-/** 3. Company team, in both languages. */
+/** 3. Company team, in Datalog: the team tree to any depth, and "not by oneself". */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluate, fact, parse, type Fact } from '../src/datalog.js';
-import { may, type Assignment, type Authority } from '../src/grants.js';
-import { factsOf, version } from '../src/space.js';
-import { ANN, CEO, EVE, HAL, WES, datalog, grants } from '../src/examples/company.js';
+import { evaluate, fact, parse, type Fact } from '../datalog.js';
+import { factsOf } from '../facts.js';
+import { datalog } from '../programs/company.js';
+import { ANN, CEO, EVE, HAL, SOCK, WES } from '../../communities/company.js';
+import { version } from '../../host/space.js';
 import { shuffles } from './helpers.js';
 
-const SOCK = 'did:key:ann-second-account';
-
-describe('company (A): UCAN grants', () => {
-  const base: Assignment[] = [
-    { by: CEO, to: ANN, role: 'admin' },
-    { by: ANN, to: HAL, role: 'hr' },
-    { by: ANN, to: EVE, role: 'eng' },
-    { by: ANN, to: WES, role: 'web' },
-    { by: ANN, to: 'role:web', role: 'eng' }, // the web team holds eng
-  ];
-  const auth = (more: Assignment[] = []): Authority => ({
-    founders: [CEO],
-    delegations: grants,
-    assignments: [...base, ...more],
-  });
-  const doing = (a: Authority, who: string, cmd: string, collection: string) =>
-    may(a, who, cmd, { collection });
-
-  test('each team writes its own collection; web, inside eng, writes both', () => {
-    const a = auth();
-    assert.ok(doing(a, HAL, '/record/write', 'app.hr'));
-    assert.ok(doing(a, EVE, '/record/write', 'app.eng'));
-    assert.ok(!doing(a, EVE, '/record/read', 'app.hr'));
-    assert.ok(doing(a, WES, '/record/write', 'app.web'));
-    assert.ok(doing(a, WES, '/record/write', 'app.eng'));
-  });
-
-  test("the admin manages every team but doesn't read app.hr", () => {
-    const a = auth();
-    assert.ok(doing(a, ANN, '/record/read', 'app.eng'));
-    assert.ok(!doing(a, ANN, '/record/read', 'app.hr'));
-    assert.ok(may(a, ANN, '/role/assign', { role: 'hr', to: SOCK }));
-  });
-
-  test('a hole: the admin assigns herself hr, and reads app.hr; no policy can refuse it', () => {
-    // A policy compares a selector with a literal; "to != the invoker" compares two values.
-    const a = auth([{ by: ANN, to: ANN, role: 'hr' }]);
-    assert.ok(doing(a, ANN, '/record/read', 'app.hr'));
-  });
-});
-
-describe('company (C): Datalog', () => {
+describe('company in Datalog', () => {
   const program = parse(datalog);
   const joins = (list: Array<[string, string, string, string]>) =>
     list.map(([by, to, team, as], i) =>

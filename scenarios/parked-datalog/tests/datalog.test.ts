@@ -5,7 +5,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluate, fact, parse, type Fact } from '../src/datalog.js';
+import { evaluate, fact, parse, type Fact } from '../datalog.js';
 import { shuffles } from './helpers.js';
 
 const run = (src: string, facts: Fact[] = []) => evaluate(parse(src), facts);

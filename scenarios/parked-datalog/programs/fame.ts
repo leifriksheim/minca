@@ -1,18 +1,4 @@
-/**
- * 4. Hall of fame. A comment enters it when 5 different members react 🙂.
- */
-import type { Check } from '../../../../packages/core/src/records/checks.js';
-
-// -- (A) CEL contract, on a claim that cites the reactions ----------------------
-
-export const claimContract: Check[] = [
-  {
-    that: "versions(body.reactions).filter(r, r.collection == 'app.reaction' && !r.deleted && r.link('on') == link('on') && r.body.emoji == '🙂').map(r, r.author).distinct().size() >= 5",
-    else: "A comment enters the hall of fame with 5 different people's 🙂",
-  },
-];
-
-// -- (C) Datalog -----------------------------------------------------------------
+/** 4. Hall of fame, in Datalog. Parked; see the scenarios README. */
 
 /** Over whatever the reader holds: no claim needed */
 export const datalog = `

@@ -16,7 +16,7 @@
  * `forkKills` (a second version after the same one counts for neither) and
  * `values` (more names for a check, like `memberCount`).
  */
-import { runChecks, type Check, type CheckedVersion } from '../../../packages/core/src/records/checks.js';
+import { runChecks, type Check, type CheckedVersion } from '../../packages/core/src/records/checks.js';
 import type { Version } from './space.js';
 import { isRecord } from './ucan-policy.js';
 

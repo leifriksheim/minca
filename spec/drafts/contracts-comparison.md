@@ -18,8 +18,12 @@ do. The reasons are in §8.
 
 ## 1. What was built
 
-Everything is in `prototypes/contracts/`, a private workspace that is
-typechecked, linted and tested with the rest (`npm test`, `npm run check`).
+Everything is in `scenarios/`, a private workspace that is typechecked,
+linted and tested with the rest (`npm test`, `npm run check`). It was
+`prototypes/contracts/`; after the decision (§8) the five examples became
+Weave's scenario suite, and the Datalog side moved to
+`scenarios/parked-datalog/`. The file names below are as they were when this
+was written; the table after it says where each is now.
 
 | File                 | What                                                                                                                                                                                             | Lines (code) |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
@@ -33,6 +37,18 @@ typechecked, linted and tested with the rest (`npm test`, `npm run check`).
 
 The CEL side reuses the real evaluator; it imports `runChecks` from
 `packages/core/src` by relative path, since the package doesn't export it.
+
+| Then                                             | Now                                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `src/datalog.ts`                                 | `scenarios/parked-datalog/datalog.ts`                                                 |
+| `src/space.ts`                                   | `scenarios/host/space.ts`, and `factsOf` in `scenarios/parked-datalog/facts.ts`       |
+| `src/ucan-policy.ts`, `grants.ts`, `cel-host.ts` | `scenarios/host/`                                                                     |
+| `src/examples/*.ts`                              | `scenarios/communities/*.ts` (A), `scenarios/parked-datalog/programs/*.ts` (C)        |
+| `tests/*.test.ts`                                | `scenarios/tests/` (A), `scenarios/parked-datalog/tests/` (C and the evaluator alone) |
+
+Since then the scenarios follow the decisions: the chess club and company
+team use the `.byCreator` and `.self` arguments, which close the "own move"
+and "assigns herself hr" cases below.
 
 ### Facts from records
 
@@ -74,8 +90,9 @@ past 2^53, comparing a string with a number) gives no fact for that binding.
 ## 2. The examples, side by side
 
 Each (A) block is the UCAN delegations and CEL checks as written; each (C)
-block is the whole Datalog program. Both are quoted from
-`prototypes/contracts/src/examples/`.
+block is the whole Datalog program. Both are quoted as they were in the
+prototype; now in `scenarios/communities/` and
+`scenarios/parked-datalog/programs/`.
 
 ### 2.1 Chess club
 
@@ -528,4 +545,4 @@ And two smaller CEL fixes worth making with the spec part: `sum([])` of
 doubles (an int `0` today), and a `let` (CEL's `cel.bind`) so a cited
 version can be named once.
 
-_Source: `prototypes/contracts/src/datalog.ts` (`parse`, `evaluate`), `prototypes/contracts/src/ucan-policy.ts` (`allows`), `prototypes/contracts/src/grants.ts` (`may`), `prototypes/contracts/src/cel-host.ts` (`judge`), `prototypes/contracts/src/space.ts` (`factsOf`), `prototypes/contracts/src/examples/`. Tests: `prototypes/contracts/tests/` (all), with `packages/core/src/records/checks.ts` (`runChecks`) as the CEL evaluator._
+_Source: `scenarios/parked-datalog/datalog.ts` (`parse`, `evaluate`), `scenarios/host/ucan-policy.ts` (`allows`), `scenarios/host/grants.ts` (`may`), `scenarios/host/cel-host.ts` (`judge`), `scenarios/parked-datalog/facts.ts` (`factsOf`), `scenarios/communities/`, `scenarios/parked-datalog/programs/`. Tests: `scenarios/tests/` and `scenarios/parked-datalog/tests/` (all), with `packages/core/src/records/checks.ts` (`runChecks`) as the CEL evaluator._
