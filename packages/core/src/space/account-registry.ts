@@ -8,7 +8,7 @@
  * account syncs that record and joins by itself.
  *
  * The registry's key and nonce are derived from the account key, and
- * its id is the hash of its genesis like any space's — so nothing needs to be
+ * its id is the hash of its constitution like any space's — so nothing needs to be
  * exchanged to find it, and nobody without the account can. The DID alone is
  * not enough: it appears in everything the account signs, and a room named
  * after it could be found by anyone who had seen its data.
@@ -18,7 +18,9 @@ import type { SpaceRecord } from './space-manager.js';
 import { spaceKeyFromRaw } from '../privacy/space-encryption.js';
 import { base64UrlEncode } from '../utils/encoding.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
-import { deriveReadKey, expandSecret, spaceGenesis, spaceIdOf } from './space-access.js';
+import { deriveReadKey, expandSecret } from './space-access.js';
+import { CONSTITUTION, spaceIdOf, type Constitution } from './constitution.js';
+import { STRONG_REMOVE } from './roles.js';
 import { solo } from './presets.js';
 import { FOUNDER } from './space-manager.js';
 
@@ -104,19 +106,18 @@ async function deriveAccountSpace(
   const nonce = base64UrlEncode((await expandSecret(accountKey, `${label}/nonce/v1`)).subarray(0, 12));
   const createdAt = new Date(0).toISOString(); // fixed, so every device derives the same record
   const key = await spaceKeyFromRaw(await expandSecret(accountKey, `${label}/key/v1`), createdAt);
-  const fixed = {
-    visibility: 'private' as const,
-    creator: owner,
+  const fixed: Constitution = {
+    weave: CONSTITUTION,
+    name,
+    visibility: 'private',
+    resolver: STRONG_REMOVE,
+    top: { founders: [owner] },
     roles: solo.roles,
     createdAt,
     nonce,
     readKey: (await deriveReadKey(key, provider)).did,
     encryptionKeyId: key.id,
   };
-  const space: Space = Object.freeze({
-    id: await spaceIdOf(spaceGenesis(fixed)),
-    ...fixed,
-    name,
-  });
+  const space: Space = Object.freeze({ id: await spaceIdOf(fixed), ...fixed });
   return { space, key, invite: null, role: FOUNDER };
 }

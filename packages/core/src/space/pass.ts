@@ -5,7 +5,7 @@
  * stores a space's records, checks them the way every peer does, and passes
  * them on. For that it needs two things, and must get nothing more:
  *
- * - **the space itself** (its genesis), which hashes to its id, so the carrier
+ * - **the space itself** (its constitution), which hashes to its id, so the carrier
  *   runs the same gates as any member;
  * - **in a private space, the read key pair's seed**, because every peer must
  *   prove it may read before anything moves (`network/peer-auth.ts`). The read
@@ -24,7 +24,8 @@
  */
 import type { CryptoProvider, Space } from '../types.js';
 import type { SpaceRecord } from './space-manager.js';
-import { checkSpace, deriveReadSeed, readKeyFromSeed, type SpaceKeyPair } from './space-access.js';
+import { deriveReadSeed, readKeyFromSeed, type SpaceKeyPair } from './space-access.js';
+import { checkSpace } from './constitution.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { hashedKey } from '../utils/hash.js';
 import { createP256Provider } from '../identity/crypto-p256.js';

@@ -22,7 +22,8 @@ const person = async (hub: FakeHub, relays: string[]) => (await somebody(hub, { 
 
 const genesis: AccessGenesis = {
   id: 'space',
-  creator: 'alice',
+  resolver: 'strong-remove/1',
+  founders: ['alice'],
   roles: [
     { name: 'admin', grants: [{ cmd: SPACE_RELAYS, pol: [] }] },
     { name: 'member', grants: [{ cmd: '/record', pol: [] }] },

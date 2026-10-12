@@ -20,14 +20,14 @@ library's and the CLI's use of §3), and
 
 Material specified elsewhere is linked, not repeated:
 
-| Topic                                                                                                                                                                                                                                                                     | Where                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Seeds, recovery codes, DIDs, the account vault and its wraps, notes, device keys, contact and member keys, phone pairing and the channel it runs on                                                                                                                       | [01 — Identity](01-identity.md)                 |
-| Records, versions, `seq`, rules, topics and tags                                                                                                                                                                                                                          | [02 — Records](02-records.md)                   |
-| Spaces, roles and grants, the access log (`sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.keepers`), invites, encryption, the account registry (`sys.joined`, `sys.profile`, `sys.carrier`), profiles | [03 — Spaces](03-spaces.md)                     |
-| Relays, rooms, peer authentication, the network message envelope, the `who` note exchange, live messages and their limits, TURN                                                                                                                                           | [04 — Network](04-network.md)                   |
-| Negentropy, stores, storage adapters, data folders, mirrors, what a node that holds part of a space says it holds                                                                                                                                                         | [05 — Sync and storage](05-sync-and-storage.md) |
-| Names, doors, the relay mailbox                                                                                                                                                                                                                                           | [07 — Doors](07-doors.md)                       |
+| Topic                                                                                                                                                                                                                                                                                                                                  | Where                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Seeds, recovery codes, DIDs, the account vault and its wraps, notes, device keys, contact and member keys, phone pairing and the channel it runs on                                                                                                                                                                                    | [01 — Identity](01-identity.md)                 |
+| Records, versions, `seq`, rules, topics and tags                                                                                                                                                                                                                                                                                       | [02 — Records](02-records.md)                   |
+| Spaces, roles and grants, the access log (`sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`, `sys.relays`, `sys.keepers`, `sys.fork`, `sys.stepdown`, `sys.succeed`), the constitution, invites, encryption, the account registry (`sys.joined`, `sys.profile`, `sys.carrier`), profiles | [03 — Spaces](03-spaces.md)                     |
+| Relays, rooms, peer authentication, the network message envelope, the `who` note exchange, live messages and their limits, TURN                                                                                                                                                                                                        | [04 — Network](04-network.md)                   |
+| Negentropy, stores, storage adapters, data folders, mirrors, what a node that holds part of a space says it holds                                                                                                                                                                                                                      | [05 — Sync and storage](05-sync-and-storage.md) |
+| Names, doors, the relay mailbox                                                                                                                                                                                                                                                                                                        | [07 — Doors](07-doors.md)                       |
 
 Terms used here:
 
@@ -731,7 +731,7 @@ read them. It holds:
 - its own P-256 key (its DID is what peers and keepers lists name);
 - the key of its **carry space**, which holds nothing but passes and
   subscriptions;
-- for each carried space, a **pass**: the space's genesis and, for a private
+- for each carried space, a **pass**: the space's constitution and, for a private
   space, its read key seed;
 - the records of each carried space exactly as they travel.
 
@@ -773,12 +773,12 @@ step with the account (§1.3): one `sys.pass` record per space, and one
 **Pass records.** Collection `sys.pass`, key
 `pass:<hex of the first 20 bytes of SHA-256(utf8(space id))>`, body `SpacePass`:
 
-| Field     | Meaning                                                                                                                               |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `v`       | `1`                                                                                                                                   |
-| `space`   | The space's genesis (`Space`, [03](03-spaces.md)).                                                                                    |
-| `read`    | Private spaces: the read key seed (`deriveReadSeed(spaceKey)`), base64url.                                                            |
-| `readKey` | Present once the space's key has changed since it began: the read key's DID, which the space's history (not its genesis) vouches for. |
+| Field     | Meaning                                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `v`       | `1`                                                                                                                                        |
+| `space`   | The space's constitution (`Space`, [03](03-spaces.md)).                                                                                    |
+| `read`    | Private spaces: the read key seed (`deriveReadSeed(spaceKey)`), base64url.                                                                 |
+| `readKey` | Present once the space's key has changed since it began: the read key's DID, which the space's history (not its constitution) vouches for. |
 
 Passes are written for the account registry, the contacts space, and every
 space in `sys.joined` that this device holds with its key (a private space held
@@ -830,7 +830,9 @@ earlier carrier from the same origin, adds the carrier (§4.2) with
 
 `pod` is `null` when the account lives in the home's browser storage. The
 carrier MUST check that `kind` is `carry`, that the invite is to the named
-space, that the space is private, created by `did`, and that the invite carries
+space, that the space is private, with `did` its one founder and no roles
+assigned
+([03](03-spaces.md) §1.1), and that the invite carries
 its key; and that `pod.dataPath` has no empty or `..` segments. A carry
 connection has no expiry and no note to revoke; disconnecting it removes the
 carrier (§4.2).

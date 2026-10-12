@@ -195,19 +195,33 @@ export interface SpaceRole {
 }
 
 /**
- * A space. Its id is the hash of what is fixed at creation — creator,
- * visibility, starting roles, time, nonce and read key (`space/space-access.ts`)
- * — so whoever hands over a space cannot change who started it or with which
- * roles. `name` is a description, not part of that.
+ * Who no one else can remove from a space: its founders, each of whom holds
+ * every command and may only step down themselves; or `none`, so anyone may
+ * be removed by whoever holds the grant.
+ */
+export type SpaceTop = { readonly founders: ReadonlyArray<string> } | 'none';
+
+/**
+ * A space: its constitution, and the constitution's hash as its id
+ * (`space/constitution.ts`). Everything here is fixed at creation, its name
+ * included, so whoever hands a space on can change nothing about it.
  */
 export interface Space {
-  readonly id: string; // hash of the space's genesis
+  readonly id: string; // hash of the space's constitution
+  /** The constitution's format: `constitution/1` */
+  readonly weave: 'constitution/1';
+  readonly name: string;
   readonly visibility: SpaceVisibility; // 'private' means the bodies are encrypted
-  /** The account that made it: its founder, who holds every command */
-  readonly creator: string;
+  /** How changes made apart resolve: `strong-remove/1` */
+  readonly resolver: string;
+  /** Its founders, or `none` */
+  readonly top: SpaceTop;
   /** The roles it was founded with, the constitution's grants — later redefined by records in `sys.role` */
   readonly roles: ReadonlyArray<SpaceRole>;
-  readonly name: string;
+  /** Roles the constitution assigns: account → role names. Absent when it assigns none */
+  readonly assigned?: Readonly<Record<string, ReadonlyArray<string>>>;
+  /** The space this one succeeds, when it was started as a successor */
+  readonly succeeds?: string;
   readonly createdAt: string;
   /** Random, so two spaces made alike still differ */
   readonly nonce: string;

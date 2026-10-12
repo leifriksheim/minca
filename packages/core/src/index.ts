@@ -23,6 +23,7 @@ export type {
   Link,
   Space,
   SpaceRole,
+  SpaceTop,
   SpaceGrant,
   SpaceVisibility,
   CollectionDef,
@@ -213,17 +214,26 @@ export {
   generateInviteSecret,
   deriveInviteKey,
   deriveReadKey,
-  spaceGenesis,
-  spaceIdOf,
-  checkSpace,
   assignKey,
   removalKey,
+  stepDownKey,
+  succeedKey,
   inviteKey,
   revokeKey,
   roleKey,
   signInvite,
   verifyInvite,
 } from './space/space-access.js';
+export {
+  CONSTITUTION,
+  constitutionOf,
+  constitutionProblem,
+  spaceIdOf,
+  checkSpace,
+  foundersOf,
+  accessGenesisOf,
+} from './space/constitution.js';
+export type { Constitution } from './space/constitution.js';
 export {
   replayAccess,
   may,
@@ -237,6 +247,9 @@ export {
   REMOVE_COLLECTION,
   INVITE_COLLECTION,
   REVOKE_COLLECTION,
+  STEPDOWN_COLLECTION,
+  SUCCEED_COLLECTION,
+  STRONG_REMOVE,
   ACCESS_COLLECTIONS,
 } from './space/roles.js';
 export type {
@@ -249,7 +262,7 @@ export type {
   EventStatus,
   RecordVerdict,
 } from './space/roles.js';
-export { rolePresets, solo, team, community, STAFF_COLLECTIONS } from './space/presets.js';
+export { rolePresets, solo, team, community, coop, STAFF_COLLECTIONS } from './space/presets.js';
 // Grants: what a role may do (spec 03 §2)
 export {
   RECORD_READ,
@@ -263,13 +276,14 @@ export {
   KEY_CHANGE,
   SPACE_RELAYS,
   SPACE_KEEPERS,
+  SPACE_SUCCEED,
   checkFoundingRoles,
   grantFits,
 } from './space/grants.js';
 export type { FoundingRole } from './space/grants.js';
 export { displayName } from './space/names.js';
 export type { RolePreset } from './space/presets.js';
-export type { SpaceGenesis, SpaceKeyPair } from './space/space-access.js';
+export type { SpaceKeyPair } from './space/space-access.js';
 
 // Phase 4: P2P Networking
 export { createSignalingClient, CLOSE_DID_TAKEN } from './network/signaling.js';

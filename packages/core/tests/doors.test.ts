@@ -5,6 +5,7 @@
  * owner clear it; knocks that prove who knocked, with authority to, when; and
  * two people who shared no space becoming contacts through one.
  */
+import { team } from '../src/space/presets.js';
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -387,6 +388,19 @@ describe('a knock', () => {
       provider,
     );
     assert.equal(await openKnock(door.key, stolen, Date.now(), provider), null);
+    // Nor to a space he founded with someone else, or one that assigns anyone a role: it is not his alone.
+    for (const shared of [
+      await leif.spaces.create({ name: 'Ours', visibility: 'private', cofounders: [anna.did] }),
+      await leif.spaces.create({ name: 'Ours', visibility: 'private', ...team, creatorRoles: ['editor'] }),
+    ]) {
+      const knock = await sealKnock(
+        door.publicKey,
+        { from: leif.did, name: 'Leif', invite: await leif.spaces.invite(shared.id, { write: false }) },
+        session,
+        provider,
+      );
+      assert.equal(await openKnock(door.key, knock, Date.now(), provider), null);
+    }
     // A note the session passes on is no note: alone, it is not from the account…
     const deeper = await provider.generateKeyPair();
     const deeperDid = publicKeyToDid(await provider.exportPublicKey(deeper.publicKey), P256_MULTICODEC);

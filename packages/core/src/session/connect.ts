@@ -27,6 +27,7 @@ import type { Version } from '../types.js';
 import type { CacheConfig, NewSpace, NodeNetworkConfig, P2PNode } from '../node/types.js';
 import { checkFoundingRoles } from '../space/grants.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
+import { soleFounder } from '../space/constitution.js';
 import { checkProposal, MAX_PROPOSALS, type NotifyProposal } from '../space/notify.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 import { isObject } from '../utils/guards.js';
@@ -473,7 +474,7 @@ function checkCarryGrant(grant: CarryGrant): void {
   const invite = parseSpaceInvite(grant.carry.invite);
   if (
     invite.space.id !== grant.carry.space ||
-    invite.space.creator !== grant.did ||
+    soleFounder(invite.space) !== grant.did ||
     invite.space.visibility !== 'private' ||
     !invite.key
   ) {

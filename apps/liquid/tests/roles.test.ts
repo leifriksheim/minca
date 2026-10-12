@@ -11,7 +11,12 @@ import { assign } from '../../../packages/core/tests/helpers/access.js';
 import { assemblyRoles, delegation, membership, proposal, support } from '../src/schema';
 
 describe('an assembly’s roles', () => {
-  const genesis: AccessGenesis = { id: 'space', creator: 'alice', roles: assemblyRoles() };
+  const genesis: AccessGenesis = {
+    id: 'space',
+    resolver: 'strong-remove/1',
+    founders: ['alice'],
+    roles: assemblyRoles(),
+  };
   const mo = assign('alice', 'mo', 'moderator', []);
   const ann = assign('alice', 'ann', 'admin', [mo.id]);
   const bob = assign('alice', 'bob', 'member', [ann.id]);

@@ -460,7 +460,7 @@ their own view of the definition. A writer MUST set `retain: true` when:
 - the collection's definition in force says `history: "all"` (§6); or
 - the collection is one of the access-history collections (`sys.role`,
   `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`,
-  `sys.key`, `sys.relays`, `sys.keepers`, `sys.fork`). A peer MUST refuse a version of
+  `sys.key`, `sys.relays`, `sys.keepers`, `sys.fork`, `sys.stepdown`, `sys.succeed`). A peer MUST refuse a version of
   one of these without `retain` ([03 — Spaces](03-spaces.md)); or
 - the version is a first version (`seq 0`) and the rules in force (§7) have
   `onePer` or `fixed`. Both are checked against the first version's body,
@@ -1004,7 +1004,7 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   formats and checks are specified where they are used:
   `sys.collection` (here); the access history, keys, profiles and the account
   registry — `sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.fork`,
-  `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
+  `sys.stepdown`, `sys.succeed`, `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
   `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
   passes and notifications — `sys.carrier`, `sys.pass`, `sys.notify`,
   `sys.subscription` — in [03](03-spaces.md) §13–15, and how a node uses them

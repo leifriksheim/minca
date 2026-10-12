@@ -59,7 +59,8 @@ const provider = createP256Provider();
 
 const genesis: AccessGenesis = {
   id: 'space',
-  creator: 'alice',
+  resolver: 'strong-remove/1',
+  founders: ['alice'],
   roles: [
     { name: 'admin', grants: [{ cmd: '/', pol: [] }] },
     { name: 'member', grants: [{ cmd: '/record', pol: [] }] },

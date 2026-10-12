@@ -92,8 +92,10 @@ export interface SpaceSummary {
   readonly id: string;
   readonly name: string;
   readonly visibility: SpaceVisibility;
-  /** The account that made it */
-  readonly creator: string;
+  /** Its founders, as its constitution names them: none under `top: "none"`. Some may have stepped down since (`access`) */
+  readonly founders: ReadonlyArray<string>;
+  /** The space it succeeds, as its constitution says. Whether that space names it back is `spaces.successors` there */
+  readonly succeeds?: string;
   readonly createdAt: string;
   /** Whether this node can read the space: always for public ones, only with the key for private */
   readonly readable: boolean;
@@ -111,10 +113,22 @@ export interface NewSpace {
   readonly visibility: SpaceVisibility;
   /** The roles it is founded with, and their grants (`rolePresets` has some). Default: none, the creator, its founder, alone */
   readonly roles?: ReadonlyArray<SpaceRole>;
+  /**
+   * `founders` (the default): you, and any `cofounders`, hold every command
+   * and no one else can remove you. `none`: no one is above the roles, and
+   * you hold only `creatorRoles`
+   */
+  readonly top?: 'founders' | 'none';
+  /** Under `top: founders`, accounts that found it with you */
+  readonly cofounders?: ReadonlyArray<string>;
+  /** Roles the constitution gives you. Under `top: none` you need one */
+  readonly creatorRoles?: ReadonlyArray<string>;
+  /** The space this one succeeds. Name it there too, with `spaces.succeed`, so members can tell it from a copy */
+  readonly succeeds?: string;
 }
 
 export interface InvitePreview {
-  readonly space: Pick<SpaceSummary, 'id' | 'name' | 'visibility' | 'creator' | 'createdAt'>;
+  readonly space: Pick<SpaceSummary, 'id' | 'name' | 'visibility' | 'founders' | 'createdAt' | 'succeeds'>;
   readonly invitedBy: string;
   /** Whether the invite carries the key to a private space */
   readonly carriesKey: boolean;
@@ -143,8 +157,21 @@ export interface SpaceAccess {
   }>;
   /** Open and closed invites, by their public key */
   readonly invites: ReadonlyArray<{ readonly key: string; readonly role: string; readonly open: boolean }>;
-  /** Whether this account founded the space: it holds every command */
+  /** Whether this account is a founder of the space, and has not stepped down: it holds every command */
   readonly founder: boolean;
+  /** `founders` or `none`, as the constitution says */
+  readonly top: 'founders' | 'none';
+  /**
+   * No founder is left, and no member may change roles: nobody can run the
+   * space any more, so a successor is the way on (`spaces.succeed`)
+   */
+  readonly headless: boolean;
+  /**
+   * Spaces named as this one's successors, each with the accounts that named
+   * it. In no order: which to follow is each member's choice, and an app
+   * must not pick one for them
+   */
+  readonly successors: ReadonlyArray<{ readonly space: string; readonly by: ReadonlyArray<string> }>;
   /** The roles assigned to this account, by name */
   readonly mine: ReadonlyArray<string>;
   /** The latest access changes held — what a record written now names as `seen` */
@@ -426,6 +453,18 @@ export interface NodeSpaces {
   unassign(spaceId: string, did: string, role: string): Promise<void>;
   /** Removes an account and every role it holds; yourself, to leave, needs nothing. Otherwise `/member/remove` */
   removeMember(spaceId: string, did: string): Promise<void>;
+  /**
+   * Stops being a founder and stays, with the roles you hold: given `keep`,
+   * you take that role first. To go altogether, `leave`. Only a founder steps
+   * down, and only itself
+   */
+  stepDown(spaceId: string, options?: { readonly keep?: string }): Promise<void>;
+  /**
+   * Names a space that succeeds this one (its constitution's `succeeds`
+   * naming this one). It changes nothing here. Needs `/space/succeed`, or,
+   * where no member holds it, a place here
+   */
+  succeed(spaceId: string, successor: string): Promise<void>;
   /** Closes an invite — by the link itself, or by its key from `access().invites`. Who joined with it before stays. */
   closeInvite(spaceId: string, keyOrLink: string): Promise<void>;
   /** Gives a private space a new key, as happens when someone is removed: for a lost device. Needs `/key/change` */

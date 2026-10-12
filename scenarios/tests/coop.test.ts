@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { mayIn } from '../host/library.js';
+import { mayIn, maySucceed } from '../host/library.js';
 import { judge } from '../host/cel-host.js';
 import { version } from '../host/space.js';
 import {
@@ -26,8 +26,10 @@ import {
 } from '../communities/coop.js';
 
 describe('co-op: grants', () => {
+  // `top: "none"`: the constitution grants and assigns; no founder is above the roles.
   const auth = {
-    founders: [CONSTITUTION],
+    founders: [],
+    constitution: CONSTITUTION,
     delegations: grants,
     assignments: [
       ...FOUNDING.map((to) => ({ by: CONSTITUTION, to, role: 'member' })),
@@ -37,6 +39,20 @@ describe('co-op: grants', () => {
   test('members add members; others cannot', () => {
     assert.ok(mayIn(auth, E, '/role/assign', { role: 'member', self: false }), 'E, added by A, adds F');
     assert.ok(!mayIn(auth, F, '/role/assign', { role: 'member', self: false }));
+  });
+
+  test('top: "none": no one holds every command, founding members included', () => {
+    for (const who of FOUNDING) {
+      assert.ok(!mayIn(auth, who, '/role/define', { role: 'member' }));
+      assert.ok(!mayIn(auth, who, '/key/change', {}));
+      assert.ok(!mayIn(auth, who, '/member/remove', { self: false, roles: ['member'] }));
+    }
+  });
+
+  test('no role holds /space/succeed, so any member may name a successor; a stranger may not', () => {
+    assert.ok(maySucceed(auth, A), 'a founding member');
+    assert.ok(maySucceed(auth, E), 'a member added since');
+    assert.ok(!maySucceed(auth, F), 'never added');
   });
 });
 

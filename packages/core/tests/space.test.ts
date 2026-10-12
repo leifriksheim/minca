@@ -54,7 +54,7 @@ describe('space manager', () => {
 
     assert.equal(privatePersonal.space.encryptionKeyId, privatePersonal.key?.id);
     assert.equal(publicShared.space.encryptionKeyId, undefined);
-    assert.equal(publicPersonal.space.creator, OWNER);
+    assert.deepEqual(publicPersonal.space.top, { founders: [OWNER] });
     assert.deepEqual(publicPersonal.space.roles, [], 'just the founder');
     assert.deepEqual(
       publicShared.space.roles.map((role) => role.name),
@@ -125,7 +125,7 @@ describe('invites', () => {
     );
 
     assert.deepEqual(joined.space.roles, record.space.roles);
-    assert.equal(joined.space.creator, OWNER);
+    assert.deepEqual(joined.space.top, { founders: [OWNER] });
     assert.deepEqual(joined.invite, secret, 'the secret waits until its record arrives');
     assert.equal(joined.role, null);
   });

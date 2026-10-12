@@ -9,7 +9,7 @@ import { version } from '../host/space.js';
 
 // -- The community: UCAN grants, CEL contracts --------------------------------------
 
-/** `top: "none"`: no founder, so the constitution itself is the root of every grant */
+/** `top: "none"`: no founder, so the constitution itself grants and assigns (03 §2.1) */
 export const CONSTITUTION = 'space:coop';
 
 /** Members add members */

@@ -176,7 +176,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     description:
       'Create a space. "private" encrypts every record; "public" signs them in the clear. Roles decide who may ' +
       'write: "solo" (the default) is you alone, and invites only let others read; "team" gives everyone invited ' +
-      'the Editor role; "community" has Admin, Moderator and Member.',
+      'the Editor role; "community" has Admin, Moderator and Member, under you as founder; "coop" has no founder: ' +
+      'you start as a Steward, whom another Steward can remove.',
     input: {
       type: 'object',
       properties: {
@@ -184,7 +185,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
         visibility: { type: 'string', enum: ['private', 'public'] },
         roles: {
           type: 'string',
-          enum: ['solo', 'team', 'community'],
+          enum: ['solo', 'team', 'community', 'coop'],
           description: 'The roles it starts with',
         },
       },
@@ -194,7 +195,11 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       node.spaces.create({
         name: str(input, 'name'),
         visibility: oneOf(input, 'visibility', ['private', 'public']),
-        ...rolePresets[input.roles === 'team' || input.roles === 'community' ? input.roles : 'solo'],
+        ...rolePresets[
+          input.roles === 'team' || input.roles === 'community' || input.roles === 'coop'
+            ? input.roles
+            : 'solo'
+        ],
       }),
   },
   {
@@ -253,8 +258,9 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     name: 'spaces_access',
     description:
       'Who holds what in a space: its roles, each with its grants (a command and a policy on its arguments), its ' +
-      'members by identity (did) with the roles assigned to them, its invites, and whether you are its founder and ' +
-      'which roles you hold. What you may do is what your roles grant; the founder may do anything.',
+      'members by identity (did) with the roles assigned to them and whether each is a founder, its invites, whether ' +
+      'you are a founder and which roles you hold, whether it is headless (no one can change roles), and the spaces ' +
+      'named as its successors, in no order. What you may do is what your roles grant; a founder may do anything.',
     input: { type: 'object', properties: { space }, required: ['space'] },
     readOnly: true,
     run: (node, input) => node.spaces.access(str(input, 'space')),
@@ -287,7 +293,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     name: 'spaces_remove_member',
     description:
       'Remove someone from a space, every role they hold with them. Needs a grant of /member/remove; you may always ' +
-      'remove yourself. Nobody else can remove the founder. Records they wrote that this node has seen stay.',
+      'remove yourself. Nobody else can remove a founder. Records they wrote that this node has seen stay.',
     input: {
       type: 'object',
       properties: { space, did: { type: 'string', description: 'Their identity' } },
@@ -296,6 +302,40 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     destructive: true,
     run: async (node, input) => {
       await node.spaces.removeMember(str(input, 'space'), str(input, 'did'));
+      return node.spaces.access(str(input, 'space'));
+    },
+  },
+  {
+    name: 'spaces_step_down',
+    description:
+      'Stop being a founder of a space and stay, with the roles you hold: keep names a role to take first. Only ' +
+      'a founder steps down, and only itself. To go altogether, spaces_leave.',
+    input: {
+      type: 'object',
+      properties: { space, keep: { type: 'string', description: 'A role to take first' } },
+      required: ['space'],
+    },
+    destructive: true,
+    run: async (node, input) => {
+      const keep = typeof input.keep === 'string' ? input.keep : undefined;
+      await node.spaces.stepDown(str(input, 'space'), keep !== undefined ? { keep } : {});
+      return node.spaces.access(str(input, 'space'));
+    },
+  },
+  {
+    name: 'spaces_succeed',
+    description:
+      'Name a space as the successor of another, whose constitution says it succeeds it. It changes nothing in ' +
+      'the old space; members choose whether to follow. Needs /space/succeed, or a place in a space where no one ' +
+      'holds it.',
+    input: {
+      type: 'object',
+      properties: { space, successor: { type: 'string', description: 'The successor space id' } },
+      required: ['space', 'successor'],
+    },
+    destructive: true,
+    run: async (node, input) => {
+      await node.spaces.succeed(str(input, 'space'), str(input, 'successor'));
       return node.spaces.access(str(input, 'space'));
     },
   },
@@ -873,6 +913,8 @@ export const PERSON_ONLY: ReadonlySet<string> = new Set([
   'spaces_leave',
   'spaces_assign',
   'spaces_remove_member',
+  'spaces_step_down',
+  'spaces_succeed',
   'spaces_close_invite',
   'collections_define',
   'collections_delete',

@@ -18,8 +18,9 @@ keeps (a `mine` argument, then nest-only permissions) each opened a new
 hole, and are **dropped** (Decided, 2026-10-12): under the owner's
 principle of no more security than ordinary apps, whoever may define
 roles is trusted to, as in Discord or Slack (§2). Grants and the resolver
-(step 4) are built, and their text has moved into the specification (§2, §4);
-what is left here is the rest of the plan.
+(step 4) and the constitution (step 5) are built, and their text has moved
+into the specification (§1, §2, §4); what is left here is the rest of the
+plan.
 
 ## In one paragraph
 
@@ -60,69 +61,43 @@ Proven by others, not invented:
 
 ## 1. The constitution
 
-The first record of a space. The space's ID is the hash of it, so it can't be
-changed or swapped.
+**Built** (step 5, October 2026): now the specification, in
+[03 §1](../03-spaces.md#1-the-space-and-its-id) (the constitution, its
+format and id, and a constitution a peer can't read, which it doesn't
+judge), [§2.1](../03-spaces.md#21-the-top-founders-and-founding-roles)
+(`top`, founders, `top: "none"`, headless spaces),
+[§2.5](../03-spaces.md#25-assignments-and-removals) (stepping down),
+[§2.7](../03-spaces.md#27-successor-spaces) (successor spaces) and §4 (the
+replay). The library's side, presets as constitution templates, stepping
+down, successors and what an app shows, is in
+[the library's docs](../../packages/core/docs/spaces.md#presets). Its
+threat-model changes are in [the threat model](../threat-model.md) §3.1,
+§3.2 and §3.5.
 
-```json
-{
-  "weave": "constitution/1",
-  "name": "Chess club",
-  "resolver": "strong-remove/1",
-  "top": { "founders": ["did:key:zAlice", "did:key:zBob"] },
-  "roles": { "...": "the founding roles, as in §2" },
-  "clauses": { "...": "optional, later: what a change of power needs (§5)" }
-}
-```
+What step 5 settled at implementation, each with a test
+(`packages/core/tests/constitution.test.ts`):
 
-- **`top`** (Decided). Who can't be removed by anyone else:
-  - `{"founders": [...]}`, **the default**: no one else can remove or demote
-    the listed people. Matrix arrived at this in 2025 after years of admins
-    locking each other out.
-  - `"none"`: anyone may be removed, so a space can end up with no admin.
-    Members keep what their roles allow; once no role holds a command
-    (changing roles or the key, say), nobody can run it. The way out is a
-    successor space (below).
-  - Later: a group at the top ("any 3 of these 5"), the first step to
-    democracy.
-- **A founder may step down** (Decided). Leaving is always their own choice:
-  a founder's `/member/remove` of themselves (`self: true`) is built in, and
-  so is leaving `top`. So a space with founders can lose its last one and
-  become **headless**, like a `top: "none"` space with no admin.
-- **`resolver`**: a name from a fixed list in the spec, never code. A peer that
-  doesn't know a space's resolver doesn't judge that space. v1 has one:
-  `strong-remove/1` (§4).
-- **What changes in place, and what can't** (Decided). Roles, grants,
-  members and collections change in place, as the rules allow; no migration
-  is needed to add a role. **The constitution's grants for a role are that
-  role's first definition**: a later definition that stands (and so saw
-  them, as every placed record saw the founding state) supersedes them, so
-  founding roles change in place like any other. After the founding,
-  founders grant through `/role/define` like anyone. The resolver and
-  `top` can't change: to change them, or to leave a headless space,
-  members move to a **successor space** (Matrix's room upgrade).
+- **Stepping down** is offered both ways: leaving (`sys.remove` of oneself)
+  and staying without founder status (`sys.stepdown`). Stepping down is a
+  reduction, so founder power used afterwards by naming an older view is
+  struck.
+- **Several founders are equals**: none can remove, demote or step down
+  another; what each does to others resolves as anyone's does.
+- **`top: "none"`**: the constitution assigns the creator its roles
+  (`assigned`), and those assignments end like any other.
+- **Who may run `/space/succeed`**: a founder, a role granted it, or any
+  member where no member holds it. A succeed carries only the successor's
+  id; every one stands, and none replaces another.
+- **The name** is part of the constitution, so part of the id.
+- **The co-op template** (`coop`) is `top: "none"`, with stewards whom
+  nobody may define.
 
-### Successor spaces
+Still open, later:
 
-**Decided**: a successor is started by a recorded command in the old space,
-`/space/succeed`, naming the new space's constitution, and judged by the
-replay like any change of power. The new constitution names the old space,
-so a member can tell a successor from a copy. **A succeed record changes
-nothing in the old space**: no one loses a role, no record stops counting,
-and the old space carries on for whoever stays. It only says where a
-successor is. The rest is proposed:
-
-- **Who may run it.** A founder, or a role the constitution or a later
-  `/role/define` grants `/space/succeed` to; a `top: "none"` space can grant
-  it to a role in its constitution like any command. Where no role holds it
-  (a headless space, or one whose constitution never granted it), the
-  proposal is that **any member** may run it, and a quorum (§5) once there
-  is one. Any member is safe enough because a successor binds no one: each
-  member chooses whether to follow.
-- **Rival successors.** Two `/space/succeed` that neither saw can both
-  stand. Both are shown, **in no order**: a lowest id can be ground (a
-  writer tries nonces until theirs sorts first), so it must not decide
-  which looks like the real one. An app must not pick one silently, since
-  which community a member joins is theirs to choose.
+- **A group at the top** ("any 3 of these 5"), the first step to democracy
+  (§5).
+- **Who may run `/space/succeed`** where no one holds it: any member now, a
+  quorum (§5) once there is one.
 
 ## 2. Grants and roles
 
@@ -376,8 +351,11 @@ Resolved on 2026-10-12, kept for the record:
   dropped.
 - ~~**Corrections in a line**~~: deferred from v1; a payee who built on a
   double spend loses that line from there (§3).
-- ~~**Headless spaces**~~, in part: founders may step down, so any space
-  can become headless; the way out is `/space/succeed` (§1).
+- ~~**Headless spaces**~~: founders may step down, so any space can become
+  headless; the way out is `/space/succeed` (§1, built in step 5).
+- ~~**Successors**~~: any member may run `/space/succeed` where no member
+  holds it; an app shows every successor in no order, and a headless space
+  plainly (§1, built in step 5). A quorum for it comes with §5.
 
 Open:
 
@@ -385,10 +363,7 @@ Open:
    implement identically. A constitution contract in CEL is more general, but
    puts CEL in what peers enforce. Either way it meets the requirements in
    §5.
-2. **Successors.** Who may run `/space/succeed` where no role holds it
-   (any member now, a quorum later, as proposed). What an app shows in a
-   headless space, and how it shows rival successors in no order.
-3. **Corrections, later.** The narrow trigger (a cited version is one of a
+2. **Corrections, later.** The narrow trigger (a cited version is one of a
    double-spent pair), restating, and a restart record for an honest
    account's forked devices (§3).
 
@@ -419,11 +394,13 @@ Each step is its own PR with an adversarial review.
    convergence and attack suites over grants
    (`packages/core/tests/access-*.test.ts`, `roles.test.ts`) and the chess
    club, company team and co-op scenarios asking the real library
-   (`scenarios/host/library.ts`). Sync and segment versions went to 6. The
-   space's creator stands in for the founders until step 5.
+   (`scenarios/host/library.ts`). Sync and segment versions went to 6.
 
-5. **The constitution record**, with `top`, founders stepping down, the
-   resolver name and `/space/succeed`.
+5. **The constitution record.** Done: 03 §1, §2.1, §2.5, §2.7 and §4, with
+   `top`, several founders or none, stepping down, the resolver's name
+   (a peer that doesn't know it doesn't judge the space) and
+   `/space/succeed`; presets are constitution templates, with a co-op
+   (`top: "none"`). Sync and segment versions went to 7.
 6. **Contracts in the spec.** The CEL subset as a spec part with its
    conformance suite; checks renamed; the line rule with `once` and closed
    keys (corrections later); `sum([])` as `0.0`; the hall of fame and
@@ -438,15 +415,10 @@ ranks), #201 (simpler roles).
 
 ## 9. Threat model changes still to make
 
-The changes for grants (step 4) are made in
+The changes for grants (step 4) and the constitution (step 5) are made in
 [the threat model](../threat-model.md). What is left comes with later
 steps:
 
-- **Successors** (step 5). A `/space/succeed` changes nothing in the old
-  space, so it can't be used to strip anyone of anything there. Rival
-  successors are shown in no order, since a lowest id can be ground; a
-  member who follows a successor chooses it. Several founders, and `top:
-"none"`, change §3.2's line on founders.
 - **Contracts** (step 6).
   - Contracts judge versions cited, not current ones (§3): a withdrawal
     doesn't un-fame a claim, before or after it.

@@ -143,7 +143,6 @@ they are described; the smaller ones share
 | Planned                                                                                           | Where                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                            |
-| The constitution record: founders, stepping down, the resolver's name, successor spaces           | [03 §2.1](03-spaces.md), [the plan](drafts/constitution-grants-contracts.md) §1                                                            |
 | One spelling per key                                                                              | [01 §4](01-identity.md)                                                                                                                    |
 | Grants narrower than a space (reading)                                                            | [06 §2.8](06-nodes-and-sessions.md)                                                                                                        |
 | Removing a lost device from another one (sign-out already revokes)                                | [01 §7.6](01-identity.md), [#165](https://github.com/leifriksheim/weave/issues/165)                                                        |
@@ -190,8 +189,9 @@ Proposed in an issue but not yet designed into the spec, so listed under
   (notes, a JSON profile of UCAN 1.0) to **session keys**, which sign **records**.
 - A **record** is a signed, versioned JSON document in a **collection** of a
   **space**. Private spaces encrypt record bodies with the space key.
-- A **space** carries its own rules: its founder, roles and the grants they
-  hold, who is assigned which, what each collection accepts. Every peer replays the same history and reaches the
+- A **space** carries its own rules: its constitution (its founders, or
+  none, and the roles it starts with), whose hash is its id; then roles and
+  the grants they hold, who is assigned which, what each collection accepts. Every peer replays the same history and reaches the
   same answer about who may write what. There is no server to ask.
 - **Relays** only introduce peers. **Carriers** and **hosts** keep spaces
   online without being able to read them. Neither has authority.

@@ -550,7 +550,8 @@ describe('who first defined a collection', () => {
   // their definitions: a change that saw it is judged without the grant, by whether it is its definer's.
   const genesis: AccessGenesis = {
     id: 'space',
-    creator: 'root',
+    resolver: 'strong-remove/1',
+    founders: ['root'],
     roles: [{ name: 'steward', grants: [{ cmd: COLLECTION_DEFINE, pol: [] }] }],
   };
   const member = (did: string, id: string): AccessEvent => ({

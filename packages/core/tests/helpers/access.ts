@@ -136,3 +136,23 @@ export function collection(
 
 /** Writing in a collection, as a record's arguments say it */
 export const writes = (collection: string, byCreator = true) => ({ collection, byCreator });
+
+/** `root`, a founder, steps down: itself, keeping its roles */
+export function stepDown(
+  root: string,
+  did: string,
+  seen: ReadonlyArray<string>,
+  extra: Extra = {},
+): AccessEvent {
+  return { ...base('sd', root, seen, extra), key: `stepdown:${did}`, kind: 'stepdown', did };
+}
+
+/** `root` names `space` as a successor */
+export function succeed(
+  root: string,
+  space: string,
+  seen: ReadonlyArray<string>,
+  extra: Extra = {},
+): AccessEvent {
+  return { ...base('sc', root, seen, extra), key: `succeed:${space}`, kind: 'succeed', space };
+}

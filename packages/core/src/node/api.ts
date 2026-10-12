@@ -45,6 +45,8 @@ export const API = Object.freeze({
     assign: 'change who is in a space',
     unassign: 'change who is in a space',
     removeMember: 'change who is in a space',
+    stepDown: 'step down as a founder',
+    succeed: 'name a successor space',
     closeInvite: 'close invites',
     changeKey: "change a space's key",
     setRelays: "change a space's relays",

@@ -45,7 +45,7 @@ import { noteCovers, verifyNote, UCAN_CLOCK_SKEW_SECONDS, type Delegation } from
 import { ACCOUNT_REQUIREMENT } from '../identity/abilities.js';
 import { canonicalize } from '../schema/version.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
-import { checkSpace } from '../space/space-access.js';
+import { checkSpace, soleFounder } from '../space/constitution.js';
 import { checkRelays } from '../space/roles.js';
 import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
@@ -321,7 +321,7 @@ export async function openKnock(
   } catch {
     return null;
   }
-  if (invited.space.creator !== body.from || invited.space.visibility !== 'private' || !invited.key)
+  if (soleFounder(invited.space) !== body.from || invited.space.visibility !== 'private' || !invited.key)
     return null;
   if ((await checkSpace(invited.space)) !== null) return null;
 

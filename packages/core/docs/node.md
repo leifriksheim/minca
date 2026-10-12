@@ -278,7 +278,9 @@ _Source: `packages/core/src/node/node.ts` (`runtime`, `hold`, `closeRuntime`). T
 ([spec 03 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)):
 it writes the account's own removal, `sys.remove` naming itself, so the
 others stop counting it a reader and a private space's key changes. Leaving
-needs no grant. A founder who leaves steps down for good. Then it deletes
+needs no grant. A founder who leaves is a founder no more, for good; to stay
+without being one, `spaces.stepDown`
+([spaces](spaces.md#the-top-and-founders)). Then it deletes
 the space's `sys.joined` record in the account registry, closes the space and
 forgets it with its keys. The account registry and the contacts space cannot
 be left.
@@ -532,14 +534,16 @@ same calls can be exposed over a command line, MCP and WebMCP
 ([actions](actions.md)).
 
 - `node.spaces` — create, invite, preview, join, leave, access, `may`,
-  `holdsRole`, `defineRole`, `assign`, `unassign`, `removeMember`, `closeInvite`,
+  `holdsRole`, `defineRole`, `assign`, `unassign`, `removeMember`, `stepDown`,
+  `succeed`, `closeInvite`,
   `changeKey`, `setRelays`, `setKeepers`, `revoke`, `profiles`,
   `authenticator` ([03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md),
   [04](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)). Default invite role: `member` when
   the inviter may assign it, else the first role by name it may assign; with
   none, a view-only invite ([spaces](spaces.md#invites)).
-  - `access(id)` answers `{ roles, members, invites, founder, mine, heads,
-key, relays, keepers, copies, forks, flagged }`. Each role has its
+  - `access(id)` answers `{ roles, members, invites, founder, top, headless,
+successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
+    ([spaces](spaces.md#the-top-and-founders)). Each role has its
     current `definitions` (one, or rivals that hold only the grants they
     share), each with `event`, `by` (null for the constitution's), `grants`
     and `nests`. Each member is `{ did, founder, roles }`. `founder` and
