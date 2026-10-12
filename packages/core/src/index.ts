@@ -91,7 +91,7 @@ export type { IdentityManager, Identity } from './identity/identity-manager.js';
 export { createDeviceKey, getDeviceKey, deleteDeviceKey } from './identity/device-key.js';
 export type { DeviceKey } from './identity/device-key.js';
 export { createLocalRootSigner } from './identity/root-signer.js';
-export type { RootSigner } from './identity/root-signer.js';
+export type { RootSigner, NoteRequest } from './identity/root-signer.js';
 export {
   newPairingSecret,
   pairingCommitment,
@@ -109,25 +109,45 @@ export {
 } from './identity/channel.js';
 export type { Channel, ChannelKind, ChannelSide } from './identity/channel.js';
 export {
-  issueUCAN,
-  parseUCAN,
-  verifyUCAN,
-  isCapabilitySubset,
-  delegateCapabilities,
-  resolveDelegationRoot,
+  DELEGATION_TYPE,
+  issueDelegation,
+  parseDelegation,
+  parseProof,
+  verifyDelegation,
+  verifyProof,
+  proofGrants,
+  extendProof,
+  delegationId,
+  commandCovers,
+  isCommand,
 } from './identity/ucan.js';
 export type {
-  UCANHeader,
-  UCANPayload,
-  UCANToken,
-  Capability,
-  Fact,
-  IssueUCANOptions,
-  UCANValidation,
-  ChainResolution,
-  ProofResolver,
-  DelegateOptions,
+  Delegation,
+  DelegationPayload,
+  Proof,
+  Requirement,
+  IssueOptions,
+  VerifyOptions,
+  Verified,
+  ChainCheck,
 } from './identity/ucan.js';
+export { evaluatePolicy, policyProblem } from './identity/policy.js';
+export type { Policy, Statement } from './identity/policy.js';
+export {
+  ALL_COMMAND,
+  RECORDS_COMMAND,
+  WRITE_COMMAND,
+  READ_COMMAND,
+  DEFINE_COMMAND,
+  ACCESS_COMMAND,
+  ACCOUNT_COMMAND,
+  noteGrants,
+  noteTerms,
+  noteSpaces,
+  writeRequirement,
+  grantsRecordsOnly,
+} from './identity/abilities.js';
+export type { NoteTerms } from './identity/abilities.js';
 
 // Phase 2: Schema & Data Structures
 export { createSchemaEngine } from './schema/schema-engine.js';
@@ -326,8 +346,7 @@ export {
   serveSigner,
   remoteSigner,
   startNodeInWorker,
-  SESSION_CAPABILITY,
-  writeCapability,
+  SESSION_COMMAND,
   relayRoom,
   indexedDBStores,
   folderStores,

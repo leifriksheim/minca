@@ -8,7 +8,8 @@
 import type { CryptoProvider } from '../types.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { didToPublicKey } from '../identity/did.js';
-import { resolveDelegationRoot } from '../identity/ucan.js';
+import { verifyProof, type Proof } from '../identity/ucan.js';
+import { canonicalize } from '../schema/version.js';
 import { isObject } from '../utils/guards.js';
 
 /** What a client sends to prove itself: its own signature, and in a private space the read key's */
@@ -161,8 +162,8 @@ export interface ClientAuth {
 export interface ServerAuth {
   checkHello(clientDid: string, nodeDid: string, nodeNonce: string, proof: unknown): Promise<boolean>;
   welcome(nodeDid: string, clientNonce: string): Promise<string>;
-  /** The node's note, sent with its welcome so a client can pin the account rather than a session key that changes */
-  note(): string | null;
+  /** The node's proof, sent with its welcome so a client can pin the account rather than a session key that changes */
+  note(): Proof | null;
 }
 
 /** Longest note a welcome may carry */
@@ -176,9 +177,9 @@ async function pinned(
   note: unknown,
 ): Promise<boolean> {
   if (nodeDid === pin) return true;
-  if (typeof note !== 'string' || note.length > MAX_NOTE_LENGTH) return false;
-  const chain = await resolveDelegationRoot(note, () => null, provider).catch(() => null);
-  return !!chain?.valid && chain.audience === nodeDid && chain.rootDid === pin;
+  if (!Array.isArray(note) || canonicalize(note).length > MAX_NOTE_LENGTH) return false;
+  const chain = await verifyProof(note, provider).catch(() => null);
+  return !!chain?.valid && chain.audience === nodeDid && chain.root === pin;
 }
 
 /** A fresh random nonce */
@@ -241,7 +242,7 @@ export function createServerAuth(
   read: ReadAccess | string | null,
   nodeKey: CryptoKey,
   provider: CryptoProvider,
-  note: () => string | null = () => null,
+  note: () => Proof | null = () => null,
 ): ServerAuth {
   const access = readAccessOf(read);
   return Object.freeze({

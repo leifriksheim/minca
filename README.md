@@ -79,9 +79,9 @@ const provider = manager.getProvider();
 const root = createLocalRootSigner(me, provider);
 const session = await provider.generateKeyPair();
 const sessionDid = publicKeyToDid(await provider.exportPublicKey(session.publicKey), P256_MULTICODEC);
-const ucan = await root.delegate({
+const note = await root.delegate({
   audience: sessionDid,
-  capabilities: [{ with: '*', can: '*' }],
+  command: '/', // everything the account may do
   expiration: Math.floor(Date.now() / 1000) + 3600,
 });
 
@@ -97,7 +97,7 @@ const signed = await createSigner(provider).sign(
     collection: 'app.example.note',
     space: space.id,
     body: { text: 'Hello, decentralized world!' },
-    proof: ucan.encoded,
+    proof: [note], // the chain of notes from the account to this key, root first
     // This key's first version here: its place in its log (spec 02 §4.10). A node keeps count for you.
     log: { n: 0, c: { n: 0 } },
   }),
@@ -234,7 +234,7 @@ Covers key derivation — checked against the public keys Web Crypto generates
 for the same private scalars, and pinned to recorded DIDs so an accidental
 change cannot slip through; recovery codes; account vaults, wraps and account
 stores; data folders with several writers; spaces, invites and
-encrypt-then-sign; UCAN issuing, attenuation and chain validation; phone
+encrypt-then-sign; delegations (UCAN 1.0 policies, attenuation, chains); phone
 pairing; peer introductions; Negentropy, checked against the reference
 implementation; the validation gates; and two peers reconciling, including the forged, stolen,
 unauthorized and malformed versions their gatekeepers reject. Above those:

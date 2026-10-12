@@ -26,7 +26,7 @@ import {
 } from '../src/identity/contact-key.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import type { Capability } from '../src/identity/ucan.js';
+import type { NoteTerms } from '../src/identity/abilities.js';
 import {
   clip,
   doorTopic,
@@ -323,12 +323,8 @@ describe("the relay's mailbox", () => {
 // ─── Knocks ─────────────────────────────────────────────────────────
 
 describe('a knock', () => {
-  /** Leif's account, a session under it with a note saying `capabilities`, and a space for two he made */
-  async function leifWith(
-    hub: FakeHub,
-    capabilities: Capability[] = [{ with: '*', can: '*' }],
-    expiresIn = 3600,
-  ) {
+  /** Leif's account, a session under it with a note on these terms, and a space for two he made */
+  async function leifWith(hub: FakeHub, terms: NoteTerms = { command: '/' }, expiresIn = 3600) {
     const seed = generateSeed();
     const leif = await person(hub, 'Leif', seed);
     const provider = createP256Provider();
@@ -338,7 +334,7 @@ describe('a knock', () => {
     const sessionDid = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const token = await root.delegate({
       audience: sessionDid,
-      capabilities,
+      ...terms,
       expiration: Math.floor(Date.now() / 1000) + expiresIn,
     });
     const pair = await leif.spaces.create({ name: 'Leif & Anna', visibility: 'private' });
@@ -348,7 +344,7 @@ describe('a knock', () => {
       provider,
       invite,
       pair,
-      session: { did: sessionDid, key: keys.privateKey, proof: token.encoded },
+      session: { did: sessionDid, key: keys.privateKey, proof: [token] },
     };
   }
 
@@ -390,38 +386,64 @@ describe('a knock', () => {
       provider,
     );
     assert.equal(await openKnock(door.key, stolen, Date.now(), provider), null);
-    // A note passed on again (root → session → another key) is not the account's own: knocks carry one link.
+    // A note passed on again (root → session → another key) counts with its whole chain, root first…
     const deeper = await provider.generateKeyPair();
     const deeperDid = publicKeyToDid(await provider.exportPublicKey(deeper.publicKey), P256_MULTICODEC);
-    const { token: passedOn } = await leif.delegate({
-      audience: deeperDid,
-      capabilities: [{ with: '*', can: '*' }],
-    });
+    const { token: passedOn, proof: chain } = await leif.delegate({ audience: deeperDid, command: '/' });
     const relayed = await sealKnock(
       door.publicKey,
       { from: leif.did, name: 'Leif', invite },
-      { did: deeperDid, key: deeper.privateKey, proof: passedOn.encoded },
+      { did: deeperDid, key: deeper.privateKey, proof: chain },
       provider,
     );
-    assert.equal(await openKnock(door.key, relayed, Date.now(), provider), null);
+    assert.equal((await openKnock(door.key, relayed, Date.now(), provider))?.from, leif.did);
+    // …and alone, its last link is the session's, not the account's.
+    const leafOnly = await sealKnock(
+      door.publicKey,
+      { from: leif.did, name: 'Leif', invite },
+      { did: deeperDid, key: deeper.privateKey, proof: [passedOn] },
+      provider,
+    );
+    assert.equal(await openKnock(door.key, leafOnly, Date.now(), provider), null);
+    // Passed on for records only, the chain can't knock.
+    const { proof: narrowed } = await leif.delegate({ audience: deeperDid, command: '/record' });
+    const narrow = await sealKnock(
+      door.publicKey,
+      { from: leif.did, name: 'Leif', invite },
+      { did: deeperDid, key: deeper.privateKey, proof: narrowed },
+      provider,
+    );
+    assert.equal(await openKnock(door.key, narrow, Date.now(), provider), null);
   });
 
-  test('needs a note that grants account/write: an app given one space, a key given records only, or one only to read, cannot knock', async () => {
+  test('needs a note that grants /account/write: an app given one space or several, a key given records only, or one only to read, cannot knock', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const door = await someDoor('door-cccccccccccc');
-    for (const capabilities of [
-      [{ with: 'space:bafyonespace', can: '*' }],
-      [{ with: '*', can: 'record/*' }],
-      [{ with: '*', can: 'record/read' }],
+    for (const terms of [
+      { command: '/', subject: 'space:bafyonespace' },
+      {
+        command: '/',
+        policy: [
+          [
+            'or',
+            [
+              ['==', '.space', 'bafyone'],
+              ['==', '.space', 'bafytwo'],
+            ],
+          ],
+        ],
+      },
+      { command: '/record' },
+      { command: '/record/read' },
     ]) {
-      const { leif, provider, invite, session } = await leifWith(hub, capabilities);
+      const { leif, provider, invite, session } = await leifWith(hub, terms);
       const blob = await sealKnock(
         door.publicKey,
         { from: leif.did, name: 'Leif', invite },
         session,
         provider,
       );
-      assert.equal(await openKnock(door.key, blob, Date.now(), provider), null, JSON.stringify(capabilities));
+      assert.equal(await openKnock(door.key, blob, Date.now(), provider), null, JSON.stringify(terms));
     }
   });
 
@@ -444,13 +466,13 @@ describe('a knock', () => {
     try {
       const token = await root.delegate({
         audience: sessionDid,
-        capabilities: [{ with: '*', can: '*' }],
+        command: '/',
         expiration: Math.floor(Date.now() / 1000) + 1800,
       });
       blob = await sealKnock(
         door.publicKey,
         { from: leif.did, name: 'Leif', invite },
-        { did: sessionDid, key: keys.privateKey, proof: token.encoded },
+        { did: sessionDid, key: keys.privateKey, proof: [token] },
         provider,
       );
     } finally {
@@ -698,15 +720,15 @@ describe('node.doors', () => {
     const note = await createLocalRootSigner(await manager.fromSeed(seed), provider).delegate({
       audience: did,
       // What it may do is what the note grants, whatever holds the key.
-      capabilities: [{ with: '*', can: 'record/*' }],
+      command: '/record',
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const agent = await createNode({
       signer: grantSigner({
-        v: 1,
+        v: 2,
         did: (await manager.fromSeed(seed)).did,
         name: 'Ada',
-        token: note.encoded,
+        note,
         access: 'write',
         scope: 'account',
         spaces: [],

@@ -37,10 +37,10 @@ of 1–64 characters (the library makes 12 random bytes in lowercase hex). A
 receiver must ignore a call message that is not one of these types, lacks a
 valid `call`, comes from a peer with no account (`from: null`), or comes from
 a key whose note writes records somewhere but can't define collections in
-this space (`recordsOnly: true`, a `record/*` note), judged on the whole note,
+this space (`recordsOnly: true`, a `/record` note), judged on the whole note,
 so a key given records in another space doesn't pass as the account here. The account trusts such a key less
 than itself, and in a call it would speak as the account. A key whose note
-only reads (`record/read`) is not one: it may take part, as an app that only
+only reads (`/record/read`) is not one: it may take part, as an app that only
 reads may. Its note can't tell whether it was asked for records only, since
 both kinds of read note are the same. This keeps an honest records-only program out of calls; it is
 not a boundary against a hostile app, which can ask the account for a read

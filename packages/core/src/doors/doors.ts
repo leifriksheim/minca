@@ -24,7 +24,7 @@
  * code   = base64url(JSON { v: 1, key, sign, relays, name? })
  * topic  = base64url(SHA-256("weave/door-topic/v1|" + sign))
  * knock  = sealTo(key, "weave/knock/v1", { door: key }, JSON { body, sig })   // HPKE
- * body   = { v: 1, door: key, from, name, invite, note?, at, session, proof }
+ * body   = { v: 2, door: key, from, name, invite, note?, at, session, proof }
  * sig    = session key signs canonical(body)
  * ```
  *
@@ -41,13 +41,8 @@ import {
 } from '../identity/contact-key.js';
 import { openValueFrom, sealValueTo } from '../identity/hpke.js';
 import { didToPublicKey } from '../identity/did.js';
-import {
-  isCapabilitySubset,
-  resolveDelegationRoot,
-  UCAN_CLOCK_SKEW_SECONDS,
-  type Capability,
-} from '../identity/ucan.js';
-import { ACCOUNT_ABILITY } from '../identity/abilities.js';
+import { proofGrants, verifyProof, UCAN_CLOCK_SKEW_SECONDS, type Proof } from '../identity/ucan.js';
+import { ACCOUNT_REQUIREMENT } from '../identity/abilities.js';
 import { canonicalize } from '../schema/version.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
 import { checkSpace } from '../space/space-access.js';
@@ -55,9 +50,6 @@ import { checkRelays } from '../space/roles.js';
 import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
 import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
-
-/** What a knock's note must grant: writing for the whole account */
-const KNOCK_CAPABILITY: Capability = { with: '*', can: ACCOUNT_ABILITY };
 
 /** A door names at most this many relays: enough that one going away doesn't matter */
 export const MAX_DOOR_RELAYS = 3;
@@ -90,7 +82,7 @@ export interface DoorCode {
 
 /** What a knock carries, signed by the knocker's session key */
 export interface KnockBody {
-  readonly v: 1;
+  readonly v: 2;
   /** The door knocked on: its key. Binds the knock to this door. */
   readonly door: string;
   /** The knocker's account */
@@ -104,8 +96,8 @@ export interface KnockBody {
   readonly at: number;
   /** The session key that signed it */
   readonly session: string;
-  /** The note from `from` to `session`: a UCAN whose chain ends at `from` */
-  readonly proof: string;
+  /** The chain of delegations from `from` to `session`, root first */
+  readonly proof: Proof;
 }
 
 /** A knock that opened and checked out */
@@ -249,12 +241,12 @@ const KNOCK_LABEL = 'weave/knock/v1';
 export async function sealKnock(
   door: string,
   knock: { readonly from: string; readonly name: string; readonly invite: string; readonly note?: string },
-  session: { readonly did: string; readonly key: CryptoKey; readonly proof: string },
+  session: { readonly did: string; readonly key: CryptoKey; readonly proof: Proof },
   provider: CryptoProvider,
 ): Promise<string> {
   const note = knock.note ? clip(knock.note.trim(), MAX_NOTE) : undefined;
   const body: KnockBody = {
-    v: 1,
+    v: 2,
     door,
     from: knock.from,
     name: clip(knock.name.trim(), MAX_NAME) || 'Someone',
@@ -288,12 +280,12 @@ export async function openKnock(
   if (!isObject(opened)) return null;
   const { body, sig } = opened;
   if (!isObject(body) || typeof sig !== 'string') return null;
-  if (body.v !== 1 || body.door !== door) return null;
+  if (body.v !== 2 || body.door !== door) return null;
   if (typeof body.from !== 'string' || typeof body.session !== 'string' || typeof body.name !== 'string')
     return null;
   if (Array.from(body.name).length > MAX_NAME) return null;
   if (typeof body.invite !== 'string' || body.invite.length > MAX_INVITE) return null;
-  if (typeof body.proof !== 'string' || body.proof.length > MAX_PROOF) return null;
+  if (!Array.isArray(body.proof) || canonicalize(body.proof).length > MAX_PROOF) return null;
   if (body.note !== undefined && (typeof body.note !== 'string' || Array.from(body.note).length > MAX_NOTE))
     return null;
   if (typeof body.at !== 'number' || !Number.isSafeInteger(body.at) || !Number.isFinite(receivedAt))
@@ -315,14 +307,12 @@ export async function openKnock(
   }
   if (!signed) return null;
   // …which the account it claims had delegated to when it signed.
-  const chain = await resolveDelegationRoot(body.proof, () => null, provider, { at: body.at }).catch(
-    () => null,
-  );
-  if (!chain?.valid || chain.audience !== body.session || chain.rootDid !== body.from) return null;
+  const chain = await verifyProof(body.proof, provider, { at: body.at }).catch(() => null);
+  if (!chain?.valid || chain.audience !== body.session || chain.root !== body.from) return null;
   // Knocking makes a space and hands out its invite: only a note that may write
   // for the whole account may. An app given one space, or a key the account
   // trusts less, may not.
-  if (!chain.capabilities.some((capability) => isCapabilitySubset(capability, KNOCK_CAPABILITY))) return null;
+  if (!proofGrants(chain.proof, ACCOUNT_REQUIREMENT)) return null;
 
   // A private space the knocker made, with its key: anything else isn't a space for two from them.
   let invited;

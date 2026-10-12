@@ -14,9 +14,10 @@ import { createNode } from '../src/node/node.js';
 import { runAction } from '../src/node/actions.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { noteTerms } from '../src/identity/abilities.js';
+import type { Policy } from '../src/identity/policy.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import { parseUCAN } from '../src/identity/ucan.js';
 import { deriveAccountRegistry } from '../src/space/account-registry.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion, type CreateVersionParams } from '../src/schema/version.js';
@@ -58,17 +59,24 @@ import { isRecord } from '../src/utils/guards.js';
 import { until } from './helpers/until.js';
 import { asked, open, person, settle, testAppKey, type Person } from './helpers/person.js';
 
-/** A key for this person, and a note from their account for these spaces: records only, unless `can` says otherwise */
-async function agentFor(who: Person, spaces: ReadonlyArray<string>, can = 'record/*') {
+/** A key for this person, and a note from their account for these spaces: records only, unless `command` says otherwise */
+async function agentFor(
+  who: Person,
+  spaces: ReadonlyArray<string>,
+  command = '/record',
+  policy: Policy = [],
+) {
   const provider = who.manager.getProvider();
   const keys = await provider.generateKeyPair();
   const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
+  const terms = noteTerms(command, spaces);
   const note = await createLocalRootSigner(who.me, provider).delegate({
     audience: did,
-    capabilities: spaces.map((id) => ({ with: `space:${id}`, can })),
+    ...terms,
+    policy: [...(terms.policy ?? []), ...policy],
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
-  return { keys, did, note: note.encoded };
+  return { keys, did, note };
 }
 
 /** A version signed by hand under such a note — past every check its node would make — slipped into the person's store */
@@ -76,9 +84,9 @@ async function forgeAsAgent(
   who: Person,
   space: string,
   fields: Omit<CreateVersionParams<unknown>, 'author' | 'space' | 'proof'>,
-  note: { can?: string } = {},
+  note: { command?: string; policy?: Policy } = {},
 ) {
-  const agent = await agentFor(who, [space], note.can);
+  const agent = await agentFor(who, [space], note.command, note.policy);
   const provider = who.manager.getProvider();
   const signed = await createSigner(provider).sign(
     createVersion({
@@ -86,7 +94,7 @@ async function forgeAsAgent(
       ...fields,
       author: agent.did,
       space,
-      proof: agent.note,
+      proof: [agent.note],
       log: { n: 0 },
     }),
     agent.keys.privateKey,
@@ -210,7 +218,7 @@ describe('an agent acting for a person', () => {
 
   test('a note that grants more than records will not do', async () => {
     const { alice, space } = await setup();
-    const wide = await agentFor(alice, [space], '*');
+    const wide = await agentFor(alice, [space], '/');
     await assert.rejects(
       () => alice.node.asAgent({ keys: wide.keys, note: wide.note }),
       /grants more than records/,
@@ -263,7 +271,7 @@ describe('an agent acting for a person', () => {
         retain: true,
         version: { key: 'collection:app.granted', seq: 0 },
       },
-      { can: '*' },
+      { command: '/' },
     );
     await hold(alice.node, space);
     await until(
@@ -279,6 +287,47 @@ describe('an agent acting for a person', () => {
       (await bob.node.collections.list(space)).some((c) => c.name === 'app.narrow' && c.version !== null),
       false,
     );
+  });
+
+  test('a note’s policy is checked by every peer: a key limited to one collection writes in no other', async () => {
+    const { alice, bob, space } = await setup();
+    await letGo(alice.node, space);
+    const policy: Policy = [['==', '.collection', 'app.note']];
+    const inside = await forgeAsAgent(
+      alice,
+      space,
+      {
+        collection: 'app.note',
+        body: { text: 'in' },
+        version: { key: await ownedKey(alice.node.did, 'in'), seq: 0 },
+      },
+      { policy },
+    );
+    const outside = await forgeAsAgent(
+      alice,
+      space,
+      {
+        collection: 'app.other',
+        body: { text: 'out' },
+        version: { key: await ownedKey(alice.node.did, 'out'), seq: 0 },
+      },
+      { policy },
+    );
+    await hold(alice.node, space);
+    await until(
+      async () =>
+        (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(inside.id)) !== null,
+      4000,
+      'the version its note allows',
+    );
+    await settle(300);
+    // Refused on arrival: its note's policy doesn't hold for `{ collection: "app.other", space }`.
+    assert.equal(
+      await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(outside.id),
+      null,
+    );
+    assert.equal((await bob.node.records.get(space, outside.key))?.verified ?? null, null);
+    assert.equal((await bob.node.records.get(space, inside.key))?.verified, true);
   });
 
   test('taking someone out of the space, under a records-only note, is ignored too', async () => {
@@ -801,7 +850,8 @@ describe('a program connected by code, through the account home', () => {
       recordsOnly: true,
       network,
     });
-    assert.deepEqual(parseUCAN(grant.token).payload.att, [{ with: '*', can: 'record/*' }]);
+    assert.equal(grant.note.payload.cmd, '/record');
+    assert.equal(grant.note.payload.sub, grant.did, 'about the whole account');
     assert.equal(grant.contactKey, undefined);
 
     // Gone again: its proof is refused from another origin, and still good from the app's.
@@ -898,10 +948,12 @@ describe('a program connected by code, through the account home', () => {
       ),
       spaceIds: [gym.id],
     });
-    assert.equal(parseUCAN(agent.token).payload.fct, undefined, 'no label: the note says what it grants');
+    assert.equal(agent.note.payload.meta, undefined, 'no label: the note says what it grants');
     // What keeps it from defining collections anywhere: its note grants records only.
-    assert.deepEqual(parseUCAN(agent.token).payload.att, [{ with: `space:${gym.id}`, can: 'record/*' }]);
-    assert.deepEqual(parseUCAN(app.token).payload.att, [{ with: `space:${gym.id}`, can: '*' }]);
+    assert.equal(agent.note.payload.cmd, '/record');
+    assert.equal(agent.note.payload.sub, `space:${gym.id}`);
+    assert.equal(app.note.payload.cmd, '/');
+    assert.equal(app.note.payload.sub, `space:${gym.id}`);
     assert.equal(agent.accountKey, undefined);
     assert.equal(auth.connections().length, 2, 'the program does not replace the app');
 
@@ -981,7 +1033,8 @@ describe('a program connected by code, through the account home', () => {
       spaceIds: [],
     });
     assert.ok(laptop.accountKey, 'it follows the account, so spaces made later reach it');
-    assert.deepEqual(parseUCAN(laptop.token).payload.att, [{ with: '*', can: 'record/*' }]);
+    assert.equal(laptop.note.payload.cmd, '/record');
+    assert.equal(laptop.note.payload.sub, laptop.did);
     assert.equal(
       laptop.contactKey,
       undefined,
@@ -1019,14 +1072,14 @@ describe('an agent running a node of its own', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(who.me, provider).delegate({
       audience: did,
-      capabilities: [{ with: '*', can: 'record/*' }],
+      command: '/record',
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const grant: Grant = {
-      v: 1,
+      v: 2,
       did: who.me.did,
       name: 'Ada',
-      token: note.encoded,
+      note,
       access: 'write',
       scope: 'account',
       spaces: [],
@@ -1043,7 +1096,7 @@ describe('an agent running a node of its own', () => {
       network: { transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)] },
     });
     open.push(base);
-    return { base, node: await base.asAgent({ keys, note: note.encoded }), did };
+    return { base, node: await base.asAgent({ keys, note }), did };
   }
 
   async function accountHolder(hub: FakeHub) {
@@ -1099,24 +1152,27 @@ describe('an agent running a node of its own', () => {
     await ada.node.account.setName('Ada');
     const registry = (await deriveAccountRegistry(await deriveAccountKey(ada.seed), ada.me.did)).space.id;
     const provider = ada.manager.getProvider();
-    const slipIn = async (can: string) => {
+    const slipIn = async (command: string) => {
       const pair = await provider.generateKeyPair();
       const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
       const note = await createLocalRootSigner(ada.me, provider).delegate({
         audience: did,
-        capabilities: [{ with: '*', can }],
+        command,
         expiration: Math.floor(Date.now() / 1000) + 3600,
       });
       const signed = await createSigner(provider).sign(
         createVersion({
           seen: await seenBy(ada.node, registry),
           collection: 'app.note',
-          version: { key: await ownedKey(ada.node.did, `note-${can === '*' ? 'all' : 'records'}`), seq: 0 },
+          version: {
+            key: await ownedKey(ada.node.did, `note-${command === '/' ? 'all' : 'records'}`),
+            seq: 0,
+          },
           body: { text: 'Joined somewhere' },
           author: did,
           space: registry,
           log: { n: 0 },
-          proof: note.encoded,
+          proof: [note],
         }),
         pair.privateKey,
       );
@@ -1124,8 +1180,8 @@ describe('an agent running a node of its own', () => {
       return ada.node.records.get(registry, signed.key);
     };
     // Past every writer's check, straight into the account's store: judged on reading, as from a peer.
-    assert.equal(await slipIn('record/*'), null, 'records only: it does not count');
-    assert.equal((await slipIn('*'))?.verified, true, 'a note that grants account/write: it does');
+    assert.equal(await slipIn('/record'), null, 'records only: it does not count');
+    assert.equal((await slipIn('/'))?.verified, true, 'a note that grants /account/write: it does');
   });
 
   test('it never writes the account itself: not its list of spaces, not its name', async () => {

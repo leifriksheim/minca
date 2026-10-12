@@ -164,11 +164,11 @@ export async function createCarryCore(config: CarryCoreConfig) {
   const { emit } = config;
   const did = await didOf(config.key.publicKey, provider);
   // It never writes, so it never needs a note; the session only names it on the wire.
-  const session = { did, key: config.key.privateKey, proof: () => '' };
+  const session = { did, key: config.key.privateKey, proof: () => undefined };
   // The pod copy is a peer of its own on the local link, so it needs a name of its own.
   const podKeys = await provider.generateKeyPair();
   const podDid = await didOf(podKeys.publicKey, provider);
-  const podSession = { did: podDid, key: podKeys.privateKey, proof: () => '' };
+  const podSession = { did: podDid, key: podKeys.privateKey, proof: () => undefined };
   // Its own key outlives it, so its places in each log are kept; the pod's dies with it.
   const kept = await config.stores('writers');
   const writers = createWriters((writer) => (writer === did ? kept : null));

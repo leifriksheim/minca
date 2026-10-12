@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { issueUCAN, type Capability } from '../src/identity/ucan.js';
+import { issueDelegation } from '../src/identity/ucan.js';
+import { writeRequirement } from '../src/identity/abilities.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
@@ -21,13 +22,17 @@ const provider = createP256Provider();
 const signer = createSigner(provider);
 
 const COLLECTION = 'app.test.note';
-const WRITE: Capability = { with: `space:${COLLECTION}`, can: 'record/write' };
+/** A note's terms: writing records in the space named after the collection */
+const WRITE = { command: '/record/write', subject: `space:${COLLECTION}` } as const;
 
 /** A storage provider plus the validating sync engine in front of it. */
 function createPeer(send: (peerId: string, message: SyncMessage) => void) {
   const storage = createStorageProvider(createMemoryAdapter());
 
-  const check = createVersionCheck({ provider, requiredCapability: () => WRITE });
+  const check = createVersionCheck({
+    provider,
+    required: (version) => writeRequirement(COLLECTION, version.collection),
+  });
 
   const sync = createSyncEngine({
     storageProvider: storage,
@@ -80,12 +85,12 @@ function createPair() {
 /** Signs a note carrying a UCAN from `root` to the signing key. */
 async function delegatedNote(root: { did: string; privateKey: CryptoKey }, text: string) {
   const session = await makeKey();
-  const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [WRITE] }, provider);
+  const ucan = await issueDelegation({ issuer: root, audience: session.did, ...WRITE }, provider);
   const unsigned = createVersion({
     author: session.did,
     collection: COLLECTION,
     body: { text },
-    proof: ucan.encoded,
+    proof: [ucan],
   });
   return await signer.sign(unsigned, session.privateKey);
 }
@@ -149,11 +154,11 @@ describe('sync engine', () => {
     // is not writing for itself either — a stranger with a valid signature.
     const stranger = await makeKey();
     const root = await makeKey();
-    const ucan = await issueUCAN(
+    const ucan = await issueDelegation(
       {
         issuer: root,
         audience: root.did, // issued to the root, not to the signer
-        capabilities: [WRITE],
+        ...WRITE,
       },
       provider,
     );
@@ -161,7 +166,7 @@ describe('sync engine', () => {
       author: stranger.did,
       collection: COLLECTION,
       body: { text: 'not mine to write' },
-      proof: ucan.encoded,
+      proof: [ucan],
     });
     const note = await signer.sign(unsigned, stranger.privateKey);
 
@@ -183,12 +188,12 @@ describe('sync engine', () => {
     const root = await makeKey();
     const session = await makeKey();
 
-    const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [WRITE] }, provider);
+    const ucan = await issueDelegation({ issuer: root, audience: session.did, ...WRITE }, provider);
     const unsigned = createVersion({
       author: session.did,
       collection: COLLECTION,
       body: { text: 'fine' },
-      proof: ucan.encoded,
+      proof: [ucan],
     });
     const note = await signer.sign({ ...unsigned, key: 'Has Spaces' }, session.privateKey);
 

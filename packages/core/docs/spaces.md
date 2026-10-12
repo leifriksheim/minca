@@ -101,7 +101,7 @@ writer that does not hold the contact key must carry forward the
 as `sys.profile` at key `profile` with body `{ name }`; the newest version
 wins. `node.account.setName` writes it. The node publishes that name into
 every space it opens, and again on a rename, except the registry, the
-contacts space and nodes whose note lacks `account/write` (an agent's); a
+contacts space and nodes whose note lacks `/account/write` (an agent's); a
 non-member publishes nothing
 ([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 

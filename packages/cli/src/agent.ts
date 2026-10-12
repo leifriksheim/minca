@@ -19,7 +19,13 @@ import {
   type P2PNode,
 } from '@weaveprotocol/core';
 import { profile } from '@weaveprotocol/core/schemas';
-import { checkGrant, connectWithCode, grantSigner, type Grant } from '@weaveprotocol/core/session';
+import {
+  checkGrant,
+  connectWithCode,
+  GRANT_VERSION,
+  grantSigner,
+  type Grant,
+} from '@weaveprotocol/core/session';
 import { base64UrlDecode } from '@weaveprotocol/core';
 import { openFsDirectory } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
@@ -107,7 +113,7 @@ async function loadAgentGrant(home: string): Promise<Grant | null> {
 /** Whether this computer's agent was connected to an account, and its note still runs */
 export async function hasConnectedAgent(home: string): Promise<boolean> {
   const grant = await loadAgentGrant(home);
-  return !!grant && grant.expiresAt > Date.now() / 1000;
+  return !!grant && grant.v === GRANT_VERSION && grant.expiresAt > Date.now() / 1000;
 }
 
 /** "Agent on leifs-macbook" — what the person sees in the app and their account */
@@ -170,6 +176,10 @@ export async function startAgentNode(
     throw new Error(
       'No agent is connected on this computer. In the app, choose “Connect an agent” and run the command it shows.',
     );
+  if (grant.v !== GRANT_VERSION)
+    throw new Error(
+      'The agent was connected by an older version, whose access no peer reads now. In the app, choose “Connect an agent” and run the new command.',
+    );
   if (grant.expiresAt <= Date.now() / 1000)
     throw new Error(
       "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
@@ -216,7 +226,7 @@ async function startWithKey(
   for (const space of grant.spaces)
     if (!held.has(space.id)) await base.spaces.join(space.invite).catch(() => {});
 
-  const node = await base.asAgent({ keys: key.keys, note: grant.token });
+  const node = await base.asAgent({ keys: key.keys, note: grant.note });
   const stopHolding = await holdEverySpace(node);
   return {
     node,

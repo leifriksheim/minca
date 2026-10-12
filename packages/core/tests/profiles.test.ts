@@ -98,7 +98,8 @@ describe('profiles', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const ucan = await createLocalRootSigner(mallory.me, provider).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      command: '/record/write',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const authored = await createSigner(provider).sign(
@@ -107,7 +108,7 @@ describe('profiles', () => {
         collection: PROFILE_COLLECTION,
         space,
         body: { name: 'Evil Alice' },
-        proof: ucan.encoded,
+        proof: [ucan],
         version: nextVersion(aliceCurrent!),
         log: { n: 0 },
         retain: true,

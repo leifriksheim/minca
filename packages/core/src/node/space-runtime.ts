@@ -27,13 +27,14 @@ import type { Version, CryptoProvider, StorageAdapter } from '../types.js';
 import type { Signer } from '../schema/signer.js';
 import type { SchemaEngine } from '../schema/schema-engine.js';
 import type { SpaceRecord } from '../space/space-manager.js';
-import type { Capability } from '../identity/ucan.js';
-import { parseUCAN, resolveDelegationRoot } from '../identity/ucan.js';
+import { parseProof, verifyProof, type Proof } from '../identity/ucan.js';
 import {
-  ACCESS_ABILITY,
-  ACCOUNT_ABILITY,
-  DEFINE_ABILITY,
+  ACCESS_COMMAND,
+  accessRequirement,
+  accountSpaceRequirement,
+  DEFINE_COMMAND,
   noteGrants,
+  writeRequirement,
   writesRecords,
 } from '../identity/abilities.js';
 import {
@@ -153,7 +154,7 @@ import {
 } from '../schema/collection-def.js';
 import { CARRIER_COLLECTION, MEMBERSHIP_COLLECTION, PROFILE_COLLECTION } from '../space/account-registry.js';
 import { PASS_COLLECTION } from '../space/pass.js';
-import { base32Encode, cidFromBytes, cidOfDigest, hashedKey, sha256 } from '../utils/hash.js';
+import { base32Encode, cidOfDigest, hashedKey, sha256 } from '../utils/hash.js';
 import { sameTags, tagsFor, topicKey, topicTag } from '../records/topics.js';
 import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
@@ -283,23 +284,17 @@ export function meshFor(network: NodeNetworkConfig | undefined, did: string): Me
 export const usableRelays = (network: NodeNetworkConfig | undefined) =>
   (network?.relays ?? []).filter((url) => checkRelays([url]) === null);
 
-/** The capability a record in a space requires */
-export const writeCapability = (spaceId: string): Capability => ({
-  with: `space:${spaceId}`,
-  can: 'record/write',
-});
+/**
+ * Whether a proof would let its key do anything in a space beyond writing
+ * records: define a collection there, or change who may do what. For what a
+ * node offers and shows; a version's own needs are judged on its own.
+ */
+const grantsBeyondRecords = (proof: unknown, spaceId: string, cmd: string) =>
+  noteGrants(proof, { space: spaceId, cmd, args: { space: spaceId } });
 
-/** What a change to the access history requires: defining collections, or changing who may do what */
-const accessCapability = (spaceId: string, collection: string): Capability => ({
-  with: `space:${spaceId}`,
-  can: collection === DEFINITION_COLLECTION ? DEFINE_ABILITY : ACCESS_ABILITY,
-});
-
-/** What a write in one of the account's own spaces requires */
-const accountCapability = (spaceId: string): Capability => ({
-  with: `space:${spaceId}`,
-  can: ACCOUNT_ABILITY,
-});
+/** The keys a proof passed authority through: every issuer but the root's (spec 01 §7.5) */
+const viaOf = (proof: unknown): ReadonlyArray<string> =>
+  (parseProof(proof) ?? []).slice(1).map((token) => token.payload.iss);
 
 /** Said when a key's note doesn't let it define collections — it can propose them instead */
 export const CANNOT_DEFINE =
@@ -308,15 +303,12 @@ const CANNOT_CHANGE_ACCESS =
   "This key's note doesn't let it change who may do what in a space. Ask the person.";
 const NOT_ACCOUNT = "This key's note doesn't let it change the account itself. Ask the person.";
 
-/** The CID a note is known by — what a revoke names */
-export const noteCid = (encoded: string) => cidFromBytes(utf8Encode(encoded));
-
 /** The key that signs, and the delegation that lets it */
 export interface ActiveSession {
   readonly did: string;
   readonly key: CryptoKey;
-  /** The current delegation — it is renewed, so always read it fresh */
-  readonly proof: () => string;
+  /** The current chain of delegations, root first — it is renewed, so always read it fresh. None for a key that signs for itself. */
+  readonly proof: () => Proof | undefined;
 }
 
 export interface SpaceRuntimeDeps {
@@ -557,7 +549,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // Body shape is checked when a record is written here, and reported as
   // `conforms` when it is read. The note behind a key must cover this space;
   // whether its account may write here is the access history's question, asked below.
-  const checkVersion = createVersionCheck({ provider, requiredCapability: () => writeCapability(space.id) });
+  // Judged for this space, whatever space a version claims: standing refuses a claim of another.
+  const checkVersion = createVersionCheck({
+    provider,
+    required: (version) => writeRequirement(space.id, version.collection),
+  });
 
   // A signature never changes, so a verdict on one holds forever. Keyed on the
   // id *and* the signature: the id does not cover it, so a copy with a broken
@@ -600,10 +596,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!result.passed) {
       verdict = { verified: false, root: null, ...(result.reason ? { reason: result.reason } : {}) };
     } else {
-      const chain = version.proof
-        ? await resolveDelegationRoot(version.proof, () => null, provider, { untimed: true })
-        : null;
-      verdict = { verified: true, root: chain?.valid ? chain.rootDid : version.author };
+      const chain =
+        version.proof !== undefined ? await verifyProof(version.proof, provider, { untimed: true }) : null;
+      verdict = { verified: true, root: chain?.valid ? chain.root : version.author };
       verdicts.set(verdictKey(version), verdict);
     }
     return verdict;
@@ -787,15 +782,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function buildEvent(version: Version): Promise<AccessEvent | null> {
     if (!ACCESS_COLLECTIONS.has(version.collection) || !version.retain) return null;
     // Only a note that grants it changes the space's collections, or who may do what.
-    if (!noteGrants(version.proof, accessCapability(space.id, version.collection))) return null;
+    if (!noteGrants(version.proof, accessRequirement(space.id, version.collection, version.key))) return null;
     const verdict = await judge(version);
     if (!verdict.verified || !verdict.root) return null;
     const seen = version.seen ?? [];
+    const via = viaOf(version.proof);
     const base = {
       id: version.id,
       key: version.key,
       root: verdict.root,
       author: version.author,
+      ...(via.length ? { via } : {}),
       seen,
       cutoff: NO_CUTOFF,
       ...(version.log ? { line: version.log.n } : {}),
@@ -1176,7 +1173,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const verdict = await judge(version);
     if (!verdict.verified || !verdict.root)
       return { ok: false, reason: verdict.reason ?? 'Its signature does not check out' };
-    if (deps.accountOnly && !noteGrants(version.proof, accountCapability(space.id)))
+    if (deps.accountOnly && !noteGrants(version.proof, accountSpaceRequirement(space.id, version.collection)))
       return { ok: false, reason: "Its note doesn't let it write in the account's own spaces" };
     const { history } = await access();
 
@@ -1249,6 +1246,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         root,
         seen,
         writer: version.author,
+        via: viaOf(version.proof),
         collection: version.collection,
         ...(version.log ? { line: version.log.n } : {}),
       },
@@ -1731,7 +1729,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       links,
       encrypted,
       verified: verdict.verified && stands.ok,
-      ...(!noteGrants(version.proof, { with: `space:${space.id}`, can: DEFINE_ABILITY })
+      ...(!grantsBeyondRecords(version.proof, space.id, DEFINE_COMMAND)
         ? { recordsOnly: true as const }
         : {}),
       ...(reason ? { reason } : {}),
@@ -2206,7 +2204,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    */
   async function upkeep(): Promise<void> {
     // A note that can't change access keeps no keys for others: it only reads.
-    if (!noteGrants(session.proof(), { with: `space:${space.id}`, can: ACCESS_ABILITY })) {
+    if (!grantsBeyondRecords(session.proof(), space.id, ACCESS_COMMAND)) {
       if (space.visibility === 'private') await learnKeys();
       return;
     }
@@ -2475,16 +2473,15 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const liveAllowance = new Map<string, { tokens: number; at: number }>();
 
   async function accountOf(peer: string, note: unknown): Promise<PeerAccount> {
-    if (typeof note !== 'string' || note.length > MAX_NOTE_LENGTH) return NO_ACCOUNT;
-    const chain = await resolveDelegationRoot(note, () => null, provider).catch(() => null);
-    if (!chain?.valid || chain.audience !== peer || !chain.rootDid) return NO_ACCOUNT;
-    const here = `space:${space.id}`;
+    if (!Array.isArray(note) || canonicalize(note).length > MAX_NOTE_LENGTH) return NO_ACCOUNT;
+    const chain = await verifyProof(note, provider).catch(() => null);
+    if (!chain?.valid || chain.audience !== peer) return NO_ACCOUNT;
     return {
-      account: chain.rootDid,
+      account: chain.root,
       // A key that writes records somewhere but can't define here. Judged on the
-      // whole note, so a key for another space doesn't pass as the account here.
+      // whole chain, so a key for another space doesn't pass as the account here.
       // A note that only reads is not one: it writes nothing.
-      recordsOnly: writesRecords(note) && !noteGrants(note, { with: here, can: DEFINE_ABILITY }),
+      recordsOnly: writesRecords(chain.proof) && !grantsBeyondRecords(chain.proof, space.id, DEFINE_COMMAND),
     };
   }
 
@@ -2906,12 +2903,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     options: { joining?: boolean; as?: ActiveSession } = {},
   ): Promise<Version> {
     const writer = options.as ?? session;
-    if (deps.accountOnly && !noteGrants(writer.proof(), accountCapability(space.id)))
+    if (deps.accountOnly && !noteGrants(writer.proof(), accountSpaceRequirement(space.id, collection)))
       throw new Error(NOT_ACCOUNT);
     // Every peer would ignore it (see buildEvent); say why here instead.
     if (
       ACCESS_COLLECTIONS.has(collection) &&
-      !noteGrants(writer.proof(), accessCapability(space.id, collection))
+      !noteGrants(writer.proof(), accessRequirement(space.id, collection, version.key))
     ) {
       throw new Error(collection === CATALOG_COLLECTION ? CANNOT_DEFINE : CANNOT_CHANGE_ACCESS);
     }
@@ -3190,7 +3187,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (closed) return;
     const known = (await access()).history.forked(writer, collection);
     if (known && known.from <= from) return;
-    if (!noteGrants(session.proof(), accessCapability(space.id, FORK_COLLECTION)) || (await cannotWrite()))
+    if (
+      !noteGrants(session.proof(), accessRequirement(space.id, FORK_COLLECTION, await forkKey(writer))) ||
+      (await cannotWrite())
+    )
       return;
     await upsert(FORK_COLLECTION, await forkKey(writer), forkProof(a, b));
   }
@@ -3689,7 +3689,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     checks: checksFor,
 
     /** The note a record's current version was signed under; null when its account signed it itself */
-    noteOf: async (recordKey: string): Promise<string | null> => (await currentOf(recordKey))?.proof ?? null,
+    noteOf: async (recordKey: string): Promise<Proof | null> => (await currentOf(recordKey))?.proof ?? null,
 
     async put<T>(
       collection: string,
@@ -4031,8 +4031,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       });
     },
 
-    async revoke(token: string) {
-      const key = parseUCAN(token).payload.aud;
+    async revoke(key: string) {
       const cutoff = await cutoffFor(deps.rootDid, key);
       await upsert(REVOKE_COLLECTION, await revokeKey(key, deps.rootDid), {
         key,
@@ -4040,8 +4039,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       });
     },
 
-    async isRevoked(token: string) {
-      return (await access()).history.revoked(parseUCAN(token).payload.aud, deps.rootDid).length > 0;
+    async isRevoked(key: string) {
+      return (await access()).history.revoked(key, deps.rootDid).length > 0;
     },
 
     async versionsOf(keys: ReadonlyArray<string>) {

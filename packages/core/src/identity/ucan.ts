@@ -1,377 +1,423 @@
+/**
+ * @module identity/ucan
+ * Delegations in Weave's JSON profile of UCAN 1.0 (spec 01 §7).
+ *
+ * UCAN 1.0's fields, command paths, policy language and chain rules, written
+ * as canonical JSON and signed with ES256 over those bytes, in place of
+ * DAG-CBOR and a varsig header. Not byte-compatible with other UCAN tools.
+ *
+ * A token is a plain JSON object, `{ payload, sig, type }`. A proof is the
+ * chain of tokens behind a key, root first, as a version carries it: each
+ * link's audience is the next link's issuer, and the last link's audience is
+ * the key that uses it.
+ */
 import type { CryptoProvider } from '../types.js';
-import { base64UrlEncode, base64UrlDecode, utf8Encode, utf8Decode } from '../utils/encoding.js';
+import { base64UrlEncode, base64UrlDecode, utf8Encode } from '../utils/encoding.js';
 import { cidFromBytes } from '../utils/hash.js';
+import { isRecord } from '../utils/guards.js';
 import { canonicalize } from '../schema/version.js';
-import { didToPublicKey } from './did.js';
+import { didToPublicKey, publicKeyToDid, P256_MULTICODEC } from './did.js';
+import { evaluatePolicy, isJson, policyProblem, type Policy } from './policy.js';
 
-/** UCAN header */
-export interface UCANHeader {
-  readonly alg: string; // 'ES256' for P-256
-  readonly typ: 'JWT';
-  readonly ucv: '0.10.0'; // UCAN spec version
+/** The type tag: which profile, and which kind of token */
+export const DELEGATION_TYPE = 'weave/ucan/dlg@1';
+
+/** What a delegation says */
+export interface DelegationPayload {
+  /** Who signs it: a P-256 did:key */
+  readonly iss: string;
+  /** Who it is made out to: a did:key, for a note */
+  readonly aud: string;
+  /** What it is about: the account (its DID, the chain's root), or one space, `space:<id>` */
+  readonly sub: string;
+  /** The command it covers, and everything under it: `/` is every command */
+  readonly cmd: string;
+  /** Conditions on the arguments of what it is used for (`identity/policy.ts`) */
+  readonly pol: Policy;
+  /** Makes each token unique */
+  readonly nonce: string;
+  /** Signed, and read by no peer */
+  readonly meta?: Readonly<Record<string, unknown>>;
+  /** Unix seconds: not valid at or after. A note has one; only live checks read it. */
+  readonly exp?: number;
+  /** Unix seconds: not valid before. A note has one; only live checks read it. */
+  readonly nbf?: number;
 }
 
-/** A capability (attenuation) */
-export interface Capability {
-  readonly with: string; // Resource URI, e.g. 'space:*' or 'space:did:key:z...'
-  readonly can: string; // Action namespace, e.g. 'space/write', 'record/create', '*'
+/** A signed delegation, exactly as it travels */
+export interface Delegation {
+  readonly type: typeof DELEGATION_TYPE;
+  readonly payload: DelegationPayload;
+  /** ES256 over the canonical JSON of `{ payload, type }`: `r ‖ s`, low S, base64url */
+  readonly sig: string;
 }
 
-/** Optional fact attached to UCAN */
-export interface Fact {
-  readonly [key: string]: unknown;
-}
+/** The tokens behind a key, root first */
+export type Proof = ReadonlyArray<Delegation>;
 
-/** UCAN payload */
-export interface UCANPayload {
-  readonly iss: string; // Issuer DID
-  readonly aud: string; // Audience DID (delegatee)
-  readonly exp: number; // Expiration (Unix seconds)
-  readonly nbf?: number; // Not before (Unix seconds)
-  readonly nnc?: string; // Nonce for replay prevention
-  readonly att: ReadonlyArray<Capability>; // Capabilities granted
-  readonly prf: ReadonlyArray<string>; // Proof chain (CIDs of parent UCANs)
-  readonly fct?: ReadonlyArray<Fact>; // Optional facts
-}
-
-/** A complete encoded UCAN token */
-export interface UCANToken {
-  readonly header: UCANHeader;
-  readonly payload: UCANPayload;
-  readonly signature: string; // Base64URL encoded
-  readonly encoded: string; // Full JWT string: header.payload.signature
-  readonly cid: string; // Content ID of the token for proof chains
-}
-
-/** Options for issuing a UCAN */
-export interface IssueUCANOptions {
-  readonly issuer: { readonly did: string; readonly privateKey: CryptoKey };
-  readonly audience: string; // Audience DID
-  readonly capabilities: ReadonlyArray<Capability>;
-  readonly expiration?: number; // Unix seconds, default 1 hour from now
-  readonly notBefore?: number;
-  readonly nonce?: string;
-  readonly proofs?: ReadonlyArray<string>; // CIDs of parent UCANs in the delegation chain
-  readonly facts?: ReadonlyArray<Fact>;
-}
-
-/** Result of UCAN validation */
-export interface UCANValidation {
-  readonly valid: boolean;
-  readonly issuer: string;
-  readonly audience: string;
-  readonly capabilities: ReadonlyArray<Capability>;
-  readonly reason?: string;
-}
-
-/** Options for delegating capabilities */
-export interface DelegateOptions {
-  readonly parent: UCANToken; // Parent UCAN to delegate from
-  readonly issuer: { readonly did: string; readonly privateKey: CryptoKey };
-  readonly audience: string;
-  readonly capabilities: ReadonlyArray<Capability>; // Must be subset of parent
-  readonly expiration?: number; // Must be <= parent expiration
-}
-
-/** How far a token's start is set back for clocks that disagree — the allowance peers give a record's date. */
+/** How far a token's start is set back for clocks that disagree */
 export const UCAN_CLOCK_SKEW_SECONDS = 300;
 
-/** Creates and signs a UCAN token. */
-export async function issueUCAN(options: IssueUCANOptions, provider: CryptoProvider): Promise<UCANToken> {
-  const header: UCANHeader = { alg: 'ES256', typ: 'JWT', ucv: '0.10.0' };
+/** The longest chain a peer follows */
+const MAX_CHAIN_LENGTH = 10;
+/** The most bytes one token's canonical form may take */
+const MAX_TOKEN_BYTES = 16 * 1024;
 
-  const now = Math.floor(Date.now() / 1000);
-  const exp = options.expiration ?? now + 3600;
-  // Records are judged at the time they claim to have been signed, so a token
-  // with no start would let a leaked key write "last year" for as long as the
-  // token lives. Set back by the clock skew peers already allow for.
-  const nbf = options.notBefore ?? now - UCAN_CLOCK_SKEW_SECONDS;
+const PAYLOAD_FIELDS = new Set(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'meta', 'exp', 'nbf']);
+const REQUIRED_FIELDS = ['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce'] as const;
+const NONCE = /^[A-Za-z0-9_-]{1,64}$/;
+const SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
+const SPACE_SUBJECT = /^space:[A-Za-z0-9._~-]{1,128}$/;
 
-  let nnc = options.nonce;
-  if (!nnc) {
-    const bytes = new Uint8Array(8);
-    globalThis.crypto.getRandomValues(bytes);
-    nnc = Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+/** The order of the P-256 group, and half of it: a signature's `s` above half is the high form */
+const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+const HALF_N = N >> 1n;
+
+const scalar = (bytes: Uint8Array): bigint => bytes.reduce((value, byte) => (value << 8n) | BigInt(byte), 0n);
+
+/** The same signature with `s` in its low form, `n − s` when it was high */
+function lowS(signature: Uint8Array): Uint8Array {
+  const s = scalar(signature.subarray(32, 64));
+  if (s <= HALF_N) return signature;
+  const out = new Uint8Array(signature);
+  let low = N - s;
+  for (let i = 63; i >= 32; i--) {
+    out[i] = Number(low & 0xffn);
+    low >>= 8n;
   }
+  return out;
+}
 
-  const payload: UCANPayload = {
+/** Whether a command is well formed: lower case, starting with `/`, no empty segment, no trailing `/` */
+export function isCommand(cmd: unknown): cmd is string {
+  return (
+    typeof cmd === 'string' &&
+    cmd.length <= 256 &&
+    cmd === cmd.toLowerCase() &&
+    (cmd === '/' || /^(\/[^/]+)+$/.test(cmd))
+  );
+}
+
+/** Whether a command covers another: itself, and every command under it */
+export function commandCovers(granted: string, needed: string): boolean {
+  return granted === '/' || granted === needed || needed.startsWith(`${granted}/`);
+}
+
+/** Whether a string is a P-256 did:key in its one spelling */
+function isP256Did(did: unknown): did is string {
+  if (typeof did !== 'string' || did.length > 128) return false;
+  try {
+    const { publicKeyBytes, multicodecPrefix } = didToPublicKey(did);
+    return (
+      multicodecPrefix.length === 2 &&
+      multicodecPrefix[0] === P256_MULTICODEC[0] &&
+      multicodecPrefix[1] === P256_MULTICODEC[1] &&
+      publicKeyBytes.length === 33 &&
+      publicKeyToDid(publicKeyBytes, P256_MULTICODEC) === did
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Whether a subject is one a delegation may name: a did:key, or one space */
+const isSubject = (sub: unknown): sub is string =>
+  typeof sub === 'string' && (SPACE_SUBJECT.test(sub) || isP256Did(sub));
+
+/** Whether a time bound is present and usable */
+const isTime = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+/** The canonical bytes a token's signature covers */
+const signedBytes = (payload: DelegationPayload) =>
+  utf8Encode(canonicalize({ payload, type: DELEGATION_TYPE }));
+
+/** A token in canonical JSON: what its id hashes, and what caches know it by */
+const delegationBytes = (token: Delegation) => utf8Encode(canonicalize(token));
+
+/** A token's id: the content id of its canonical form, signature included (spec 02 §2) */
+export const delegationId = (token: Delegation): Promise<string> => cidFromBytes(delegationBytes(token));
+
+/** What is wrong with a token's shape, or null: the type, the exact fields, each one's form */
+function shapeProblem(value: unknown): string | null {
+  if (!isRecord(value)) return 'A token is an object';
+  const fields = Object.keys(value);
+  if (fields.length !== 3 || !('payload' in value) || !('sig' in value) || !('type' in value))
+    return 'A token has exactly payload, sig and type';
+  if (value.type !== DELEGATION_TYPE) return `Not a ${DELEGATION_TYPE} token`;
+  if (typeof value.sig !== 'string' || !SIGNATURE.test(value.sig)) return 'Its signature is not 64 bytes';
+  if (base64UrlEncode(base64UrlDecode(value.sig)) !== value.sig)
+    return 'Its signature is not in its one spelling';
+  const { payload } = value;
+  if (!isRecord(payload)) return 'Its payload is not an object';
+  for (const field of Object.keys(payload))
+    if (!PAYLOAD_FIELDS.has(field)) return `Unknown payload field ${JSON.stringify(field)}`;
+  for (const field of REQUIRED_FIELDS) if (!(field in payload)) return `Its payload has no ${field}`;
+  if (!isP256Did(payload.iss)) return 'Its issuer is not a P-256 did:key';
+  if (typeof payload.aud !== 'string' || payload.aud.length === 0 || payload.aud.length > 256)
+    return 'Its audience is not a name';
+  if (!isSubject(payload.sub)) return 'Its subject is neither a did:key nor space:<id>';
+  if (!isCommand(payload.cmd)) return 'Its command is not a command path';
+  const policy = policyProblem(payload.pol);
+  if (policy) return policy;
+  if (typeof payload.nonce !== 'string' || !NONCE.test(payload.nonce)) return 'Its nonce is not base64url';
+  if ('meta' in payload && !(isRecord(payload.meta) && isJson(payload.meta)))
+    return 'Its meta is not an object';
+  if ('exp' in payload && !isTime(payload.exp)) return 'Its exp is not Unix seconds';
+  if ('nbf' in payload && !isTime(payload.nbf)) return 'Its nbf is not Unix seconds';
+  if (utf8Encode(canonicalize(value)).length > MAX_TOKEN_BYTES) return 'The token is too long';
+  return null;
+}
+
+/**
+ * A token from the wire, or null when it is not one in its exact shape. A
+ * copy: nothing the caller holds changes it later. The signature is not checked.
+ */
+export function parseDelegation(value: unknown): Delegation | null {
+  return shapeProblem(value) === null ? copyOf(value) : null;
+}
+
+/** A frozen copy through canonical JSON, after `shapeProblem` passed */
+function copyOf(value: unknown): Delegation {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- shapeProblem checked every field
+  return deepFreeze(JSON.parse(canonicalize(value))) as Delegation;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null) {
+    for (const inner of Object.values(value)) deepFreeze(inner);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+/** A proof from the wire: one to {@link MAX_CHAIN_LENGTH} tokens, each in its exact shape; else null */
+export function parseProof(value: unknown): Proof | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CHAIN_LENGTH) return null;
+  const tokens: Delegation[] = [];
+  for (const item of value) {
+    const token = parseDelegation(item);
+    if (!token) return null;
+    tokens.push(token);
+  }
+  return Object.freeze(tokens);
+}
+
+/** What to sign */
+export interface IssueOptions {
+  readonly issuer: { readonly did: string; readonly privateKey: CryptoKey };
+  readonly audience: string;
+  /** Default: the issuer's own DID, everything it may do */
+  readonly subject?: string;
+  readonly command: string;
+  /** Default: no conditions */
+  readonly policy?: Policy;
+  /** Unix seconds. Default: an hour from now. `null`: none, for a token that time doesn't end */
+  readonly expiration?: number | null;
+  /** Unix seconds. Default: now, less the clock skew peers allow. `null`: none. */
+  readonly notBefore?: number | null;
+  readonly nonce?: string;
+  readonly meta?: Readonly<Record<string, unknown>>;
+}
+
+/** Signs a delegation, its signature in the low-S form */
+export async function issueDelegation(options: IssueOptions, provider: CryptoProvider): Promise<Delegation> {
+  const now = Math.floor(Date.now() / 1000);
+  const exp = options.expiration === undefined ? now + 3600 : options.expiration;
+  const nbf = options.notBefore === undefined ? now - UCAN_CLOCK_SKEW_SECONDS : options.notBefore;
+  const payload: DelegationPayload = {
     iss: options.issuer.did,
     aud: options.audience,
-    exp,
-    nbf,
-    nnc,
-    att: options.capabilities,
-    prf: options.proofs ?? [],
-    fct: options.facts,
+    sub: options.subject ?? options.issuer.did,
+    cmd: options.command,
+    pol: options.policy ?? [],
+    nonce: options.nonce ?? base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(12))),
+    ...(options.meta ? { meta: options.meta } : {}),
+    ...(exp !== null ? { exp } : {}),
+    ...(nbf !== null ? { nbf } : {}),
   };
-
-  // A JSON round trip drops undefined fields, so what is signed is what a reader parses.
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the round trip keeps the shape it was given
-  const cleanPayload = JSON.parse(JSON.stringify(payload)) as UCANPayload;
-
-  const encodedHeader = base64UrlEncode(utf8Encode(canonicalize(header)));
-  const encodedPayload = base64UrlEncode(utf8Encode(canonicalize(cleanPayload)));
-
-  const dataToSign = `${encodedHeader}.${encodedPayload}`;
-  const signatureBytes = await provider.sign(options.issuer.privateKey, utf8Encode(dataToSign));
-  const signature = base64UrlEncode(signatureBytes);
-
-  const encoded = `${dataToSign}.${signature}`;
-  const cid = await cidFromBytes(utf8Encode(encoded));
-
-  return Object.freeze({
-    header: Object.freeze(header),
-    payload: Object.freeze(cleanPayload),
-    signature,
-    encoded,
-    cid,
-  });
+  const signature = lowS(await provider.sign(options.issuer.privateKey, signedBytes(payload)));
+  const token = { type: DELEGATION_TYPE, payload, sig: base64UrlEncode(signature) };
+  const problem = shapeProblem(token);
+  if (problem) throw new Error(`Not a delegation to sign: ${problem}`);
+  return copyOf(token);
 }
 
-/** Parses an encoded UCAN string without verifying its signature. */
-export function parseUCAN(encoded: string): {
-  readonly header: UCANHeader;
-  readonly payload: UCANPayload;
-  readonly signature: string;
-} {
-  const parts = encoded.split('.');
-  if (parts.length !== 3) {
-    throw new Error('Invalid UCAN token format');
-  }
-
-  const headerStr = utf8Decode(base64UrlDecode(parts[0]!));
-  const payloadStr = utf8Decode(base64UrlDecode(parts[1]!));
-
-  // Unverified by design: verifyUCAN checks the fields it relies on, and a
-  // stricter parse here would change which tokens peers accept.
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- wire input, checked by verifyUCAN
-  const header = JSON.parse(headerStr) as UCANHeader;
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- wire input, checked by verifyUCAN
-  const payload = JSON.parse(payloadStr) as UCANPayload;
-
-  return {
-    header,
-    payload,
-    signature: parts[2]!,
-  };
-}
-
-/** When to judge a token's time bounds */
+/** When to judge time bounds */
 export interface VerifyOptions {
-  /**
-   * Unix seconds to check `exp` and `nbf` against. Default: now.
-   *
-   * A record is judged at the moment it was signed, not the moment someone
-   * reads it. Checking against now would make every record stop verifying
-   * the hour its session's delegation ran out — and a peer arriving later
-   * would refuse all of it.
-   */
+  /** Unix seconds to check `exp` and `nbf` against. Default: now. */
   readonly at?: number;
   /**
    * Judge no time at all: for a record, whose standing every peer must agree
-   * on, so no clock may decide it (spec 01 §7.4). Live checks — a knock, a
+   * on, so no clock may decide it (spec 01 §7.5). Live checks — a knock, a
    * live message, a handshake — are one node's own, and use the time.
    */
   readonly untimed?: boolean;
 }
 
-/** Tokens whose signature checked out, the oldest let go first */
+/** The outcome of checking one token */
+export type Verified =
+  { readonly valid: true; readonly token: Delegation } | { readonly valid: false; readonly reason: string };
+
+/** Tokens whose signature checked out, by canonical form; the oldest let go first */
 const signedTokens = new Set<string>();
 const MAX_SIGNED_TOKENS = 1000;
 
-function invalid(reason: string, payload?: UCANPayload): UCANValidation {
-  return {
-    valid: false,
-    issuer: payload?.iss ?? '',
-    audience: payload?.aud ?? '',
-    capabilities: payload?.att ?? [],
-    reason,
-  };
-}
-
-/** Verifies a UCAN token's signature and time bounds */
-export async function verifyUCAN(
-  encoded: string,
+/**
+ * Checks one token: its shape, its signature by its issuer (low S only), and,
+ * unless untimed, that `nbf ≤ at < exp`. A token without both bounds is never
+ * valid at a time.
+ */
+export async function verifyDelegation(
+  value: unknown,
   provider: CryptoProvider,
   options: VerifyOptions = {},
-): Promise<UCANValidation> {
-  try {
-    const parts = encoded.split('.');
-    if (parts.length !== 3) return invalid('Invalid UCAN token format');
-
-    const { payload, signature } = parseUCAN(encoded);
-    const now = options.at ?? Math.floor(Date.now() / 1000);
-
-    // Both bounds are required: a token without `exp` would never expire
-    // (`undefined <= now` is false), and one without `nbf` could vouch for
-    // records dated any time before it was issued.
-    if (
-      typeof payload.exp !== 'number' ||
-      !Number.isFinite(payload.exp) ||
-      typeof payload.nbf !== 'number' ||
-      !Number.isFinite(payload.nbf)
-    ) {
-      return invalid('Token must say when it starts and ends', payload);
-    }
-    if (!options.untimed && payload.exp <= now) return invalid('Token has expired', payload);
-    if (!options.untimed && payload.nbf > now) return invalid('Token not yet valid', payload);
-
-    // The signature is part of the token, so a token that checked out once
-    // always does; only its time bounds, above, depend on when.
-    if (!signedTokens.has(encoded)) {
-      const { publicKeyBytes } = didToPublicKey(payload.iss);
-      const publicKey = await provider.importPublicKey(publicKeyBytes);
-      const signed = await provider.verify(
-        publicKey,
-        base64UrlDecode(signature),
-        utf8Encode(`${parts[0]}.${parts[1]}`),
-      );
-      if (!signed) return invalid('Invalid signature', payload);
-      signedTokens.add(encoded);
-      if (signedTokens.size > MAX_SIGNED_TOKENS) signedTokens.delete(signedTokens.values().next().value!);
-    }
-
-    return { valid: true, issuer: payload.iss, audience: payload.aud, capabilities: payload.att };
-  } catch (error) {
-    return invalid(error instanceof Error ? error.message : 'Unknown verification error');
+): Promise<Verified> {
+  const problem = shapeProblem(value);
+  if (problem) return { valid: false, reason: problem };
+  const token = copyOf(value);
+  const { payload } = token;
+  if (!options.untimed) {
+    const at = options.at ?? Math.floor(Date.now() / 1000);
+    if (payload.exp === undefined || payload.nbf === undefined)
+      return { valid: false, reason: 'Token must say when it starts and ends' };
+    if (payload.exp <= at) return { valid: false, reason: 'Token has expired' };
+    if (payload.nbf > at) return { valid: false, reason: 'Token not yet valid' };
   }
+  const known = canonicalize(token);
+  if (!signedTokens.has(known)) {
+    const signature = base64UrlDecode(token.sig);
+    // One token, one id: the other form of the same signature is refused.
+    if (scalar(signature.subarray(32, 64)) > HALF_N)
+      return { valid: false, reason: 'Its signature is in the high-S form' };
+    try {
+      const publicKey = await provider.importPublicKey(didToPublicKey(payload.iss).publicKeyBytes);
+      if (!(await provider.verify(publicKey, signature, signedBytes(payload))))
+        return { valid: false, reason: 'Invalid signature' };
+    } catch {
+      return { valid: false, reason: 'Invalid signature' };
+    }
+    signedTokens.add(known);
+    if (signedTokens.size > MAX_SIGNED_TOKENS) signedTokens.delete(signedTokens.values().next().value!);
+  }
+  return { valid: true, token };
 }
 
-/** Checks if a child capability is a valid subset of a parent capability. */
-export function isCapabilitySubset(parent: Capability, child: Capability): boolean {
-  const withMatch = parent.with === '*' || parent.with === child.with;
-  if (!withMatch) {
-    return false;
-  }
+/** The outcome of checking a proof */
+export type ChainCheck =
+  | {
+      readonly valid: true;
+      readonly proof: Proof;
+      /** The account at the root: the first link's issuer */
+      readonly root: string;
+      /** The key the proof is for: the last link's audience */
+      readonly audience: string;
+    }
+  | { readonly valid: false; readonly reason: string };
 
-  if (parent.can === '*' || parent.can === child.can) {
-    return true;
-  }
-
-  if (parent.can.endsWith('/*')) {
-    const prefix = parent.can.slice(0, -1);
-    return child.can.startsWith(prefix);
-  }
-
-  return false;
-}
+/** Whether a link's subject is the account, the chain's root */
+const isAccount = (sub: string, root: string) => sub === root;
 
 /**
- * What is wrong with one link of a chain, or null: every proof the child
- * names must be this parent, which must check out, be made out to the child's
- * issuer, and grant at least what the child does.
+ * What is wrong with a chain whose tokens each checked out, or null: a note's
+ * shape on every link (a did:key audience, both time bounds), each link's
+ * audience the next one's issuer, and each link no wider than its parent — a
+ * command under the parent's, the same subject or one space of the account's.
+ * Policies need no comparing: every link's policy is checked where the proof is used.
  */
-async function linkIssue(
-  child: UCANPayload,
-  parentEncoded: string,
-  provider: CryptoProvider,
-  options: VerifyOptions,
-): Promise<string | null> {
-  const cid = await cidFromBytes(utf8Encode(parentEncoded));
-  const missing = child.prf.find((required) => required !== cid);
-  if (missing !== undefined) return `Missing proof token with CID: ${missing}`;
-  const checked = await verifyUCAN(parentEncoded, provider, options);
-  if (!checked.valid) return `Invalid proof token in chain: ${checked.reason}`;
-  const parent = parseUCAN(parentEncoded).payload;
-  if (parent.aud !== child.iss) return 'Delegation chain broken: audience/issuer mismatch';
-  if (!child.att.every((cap) => parent.att.some((held) => isCapabilitySubset(held, cap)))) {
-    return 'Delegated capability is not a subset of parent capability';
+function chainProblem(proof: Proof): string | null {
+  const root = proof[0]!.payload.iss;
+  for (let i = 0; i < proof.length; i++) {
+    const link = proof[i]!.payload;
+    if (!isP256Did(link.aud)) return `Link ${i} is not made out to a key`;
+    if (link.exp === undefined || link.nbf === undefined) return `Link ${i} has no exp or nbf`;
+    if (link.sub.startsWith('did:') && !isAccount(link.sub, root))
+      return `Link ${i} is about an account other than its root`;
+    if (i === 0) continue;
+    const parent = proof[i - 1]!.payload;
+    if (parent.aud !== link.iss) return `Link ${i} is not signed by the key link ${i - 1} names`;
+    if (!commandCovers(parent.cmd, link.cmd)) return `Link ${i} widens its command`;
+    // The same subject, or one space where the parent had the whole account.
+    if (link.sub !== parent.sub && !isAccount(parent.sub, root)) return `Link ${i} widens its subject`;
   }
   return null;
 }
 
-/** Helper to delegate capabilities from a parent UCAN token. */
-export async function delegateCapabilities(
-  options: DelegateOptions,
+/**
+ * Checks a proof: every token (shape, signature, and time unless untimed)
+ * and every link (`chainProblem`). The root is the first link's issuer.
+ */
+export async function verifyProof(
+  value: unknown,
   provider: CryptoProvider,
-): Promise<UCANToken> {
-  // The delegator must be the audience of the parent token
-  if (options.parent.payload.aud !== options.issuer.did) {
-    throw new Error('Delegation chain broken: issuer must be the audience of the parent UCAN');
+  options: VerifyOptions = {},
+): Promise<ChainCheck> {
+  if (!Array.isArray(value) || value.length === 0) return { valid: false, reason: 'No delegation chain' };
+  if (value.length > MAX_CHAIN_LENGTH)
+    return { valid: false, reason: `Delegation chain longer than ${MAX_CHAIN_LENGTH} links` };
+  const tokens: Delegation[] = [];
+  for (const item of value) {
+    const checked = await verifyDelegation(item, provider, options);
+    if (!checked.valid) return { valid: false, reason: `Invalid token in chain: ${checked.reason}` };
+    tokens.push(checked.token);
   }
+  const proof = Object.freeze(tokens);
+  const problem = chainProblem(proof);
+  if (problem) return { valid: false, reason: `Delegation chain broken: ${problem}` };
+  return { valid: true, proof, root: proof[0]!.payload.iss, audience: proof[proof.length - 1]!.payload.aud };
+}
 
-  // Validate capabilities attenuation
-  for (const childCap of options.capabilities) {
-    const isSubset = options.parent.payload.att.some((parentCap) => isCapabilitySubset(parentCap, childCap));
-    if (!isSubset) {
-      throw new Error(`Capability ${JSON.stringify(childCap)} is not a subset of parent capabilities`);
-    }
-  }
+/**
+ * What a key needs for one thing it does: a command, where (a space, or
+ * `null` for the account as a whole), and the arguments every link's policy
+ * is checked against (spec 01 §8).
+ */
+export interface Requirement {
+  readonly space: string | null;
+  readonly cmd: string;
+  readonly args: Readonly<Record<string, unknown>>;
+}
 
-  // Validate expiration
-  if (options.expiration !== undefined && options.expiration > options.parent.payload.exp) {
-    throw new Error('Delegated expiration cannot exceed parent expiration');
-  }
-
-  return await issueUCAN(
-    {
-      issuer: options.issuer,
-      audience: options.audience,
-      capabilities: options.capabilities,
-      expiration: options.expiration ?? options.parent.payload.exp,
-      proofs: [options.parent.cid],
-    },
-    provider,
+/**
+ * Whether a proof grants a requirement: on every link, the command covers
+ * it, the subject is the account or the space, and the policy holds for its
+ * arguments. Reads the tokens only; whether the chain is sound is
+ * {@link verifyProof}'s question.
+ */
+export function proofGrants(proof: Proof, required: Requirement): boolean {
+  const root = proof[0]?.payload.iss;
+  if (root === undefined) return false;
+  return proof.every(
+    ({ payload }) =>
+      commandCovers(payload.cmd, required.cmd) &&
+      (isAccount(payload.sub, root) ||
+        (required.space !== null && payload.sub === `space:${required.space}`)) &&
+      evaluatePolicy(payload.pol, required.args),
   );
 }
 
-/** Resolves a proof token by its CID, returning null when it cannot be found. */
-export type ProofResolver = (cid: string) => Promise<string | null> | string | null;
-
-/** The outcome of walking a delegation chain back to its root */
-export interface ChainResolution {
-  readonly valid: boolean;
-  /** The DID at the root of the chain — the identity ultimately being acted for */
-  readonly rootDid: string | null;
-  /** Capabilities the leaf token holds, once the chain is known to be sound */
-  readonly capabilities: ReadonlyArray<Capability>;
-  /** Audience of the leaf: the key allowed to use these capabilities */
-  readonly audience: string | null;
-  readonly reason?: string;
-}
-
-/** Guards against a cyclic or absurdly deep proof chain. */
-const MAX_CHAIN_DEPTH = 10;
-
 /**
- * Walks a delegation chain from a leaf token back to its root, verifying every
- * link: each token's signature, each parent's audience matching its child's
- * issuer, and attenuation at every step.
- *
- * Each token is followed through the first entry of its `prf` array, so this
- * resolves single-parent chains — the shape delegation takes in practice.
+ * Passes on part of what a proof grants: a token from the proof's audience
+ * to another key, no wider than the last link, and no longer-lived.
+ * @returns The longer proof, root first
  */
-export async function resolveDelegationRoot(
-  encoded: string,
-  resolveProof: ProofResolver,
+export async function extendProof(
+  proof: Proof,
+  options: Omit<IssueOptions, 'subject'> & { readonly subject?: string },
   provider: CryptoProvider,
-  options: VerifyOptions = {},
-): Promise<ChainResolution> {
-  const fail = (reason: string): ChainResolution => ({
-    valid: false,
-    rootDid: null,
-    capabilities: [],
-    audience: null,
-    reason,
-  });
-  const leafValidation = await verifyUCAN(encoded, provider, options);
-  if (!leafValidation.valid) return fail(leafValidation.reason ?? 'Invalid token');
-
-  const leaf = parseUCAN(encoded).payload;
-  let current = leaf;
-  for (let depth = 0; depth < MAX_CHAIN_DEPTH; depth++) {
-    const parentCid = current.prf[0];
-    // No proof left to follow: this issuer is the root of the chain.
-    if (parentCid === undefined) {
-      return { valid: true, rootDid: current.iss, capabilities: leaf.att, audience: leaf.aud };
-    }
-    const parentEncoded = await resolveProof(parentCid);
-    if (!parentEncoded) return fail(`Missing proof token with CID: ${parentCid}`);
-    const issue = await linkIssue(current, parentEncoded, provider, options);
-    if (issue) return fail(issue);
-    current = parseUCAN(parentEncoded).payload;
-  }
-  return fail(`Delegation chain deeper than ${MAX_CHAIN_DEPTH} links`);
+): Promise<Proof> {
+  const last = proof[proof.length - 1]?.payload;
+  if (!last) throw new Error('There is no proof to extend');
+  if (last.aud !== options.issuer.did) throw new Error('Only the key a proof is made out to can extend it');
+  if (!commandCovers(last.cmd, options.command))
+    throw new Error('That command is wider than the proof grants');
+  const subject = options.subject ?? last.sub;
+  const root = proof[0]!.payload.iss;
+  if (subject !== last.sub && !isAccount(last.sub, root))
+    throw new Error('That subject is wider than the proof grants');
+  const exp = options.expiration === undefined || options.expiration === null ? last.exp : options.expiration;
+  if (exp === undefined || (last.exp !== undefined && exp > last.exp))
+    throw new Error('A delegation cannot outlive the one it passes on');
+  const token = await issueDelegation({ ...options, subject, expiration: exp }, provider);
+  return Object.freeze([...proof, token]);
 }

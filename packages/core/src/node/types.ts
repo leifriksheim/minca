@@ -17,7 +17,8 @@ import type {
 } from '../types.js';
 import type { LinkDeclaration } from '../records/links.js';
 import type { RootSigner } from '../identity/root-signer.js';
-import type { Capability, UCANToken } from '../identity/ucan.js';
+import type { Delegation, Proof } from '../identity/ucan.js';
+import type { Policy } from '../identity/policy.js';
 import type { PeerTransport, SignalledTransport } from '../network/transport.js';
 import type { MeshStatus } from '../network/mesh.js';
 import type { ServerAuth } from '../network/peer-auth.js';
@@ -402,8 +403,8 @@ export interface NodeSpaces {
   setRelays(spaceId: string, relays: ReadonlyArray<string>): Promise<void>;
   /** Names the nodes that keep the space whole (at most 16), and how many a write should reach. Needs `manage` */
   setKeepers(spaceId: string, keepers: ReadonlyArray<Keeper>, copies?: number | null): Promise<void>;
-  /** Revokes a note this account signed: nothing written under it counts from then on, except what was seen */
-  revoke(spaceId: string, token: string): Promise<void>;
+  /** Revokes one of this account's keys (a session's, an app's, by DID): nothing it writes counts from then on, except what was seen */
+  revoke(spaceId: string, key: string): Promise<void>;
   /** Keeps a space syncing until the function it returns is called; it stops once nothing holds it */
   hold(spaceId: string): Promise<() => Promise<void>>;
   /** A live message to the peers connected now, kept nowhere, at most 64 KB; `to` an account or a session DID. Arrives as a `message` event */
@@ -496,16 +497,20 @@ export interface NodeRecords {
 export interface DelegateParams {
   /** The key being given permission — an agent's, a guest's */
   readonly audience: string;
-  /** Must be no broader than the node's own */
-  readonly capabilities: ReadonlyArray<Capability>;
-  /** Unix seconds; capped at the node's own delegation. Default: the same. */
+  /** The command it may use, and everything under it: no wider than the node's own */
+  readonly command: string;
+  /** Default: the node's own subject. `space:<id>` narrows a note for the whole account to one space. */
+  readonly subject?: string;
+  /** Conditions, on top of every policy above it */
+  readonly policy?: Policy;
+  /** Unix seconds; no later than the node's own delegation. Default: the same. */
   readonly expiration?: number;
 }
 
 export interface Delegated {
-  readonly token: UCANToken;
-  /** The chain above it, root first, for anyone verifying it */
-  readonly proofs: ReadonlyArray<string>;
+  readonly token: Delegation;
+  /** The whole chain, root first, ending with `token`: what the key it is made out to signs with */
+  readonly proof: Proof;
 }
 
 export interface AccountProfileView {
@@ -655,8 +660,8 @@ export interface NodeAccount {
   profile(): Promise<AccountProfileView | null>;
   /** Renames the account on every device and app that opens it. Needs an account key. */
   setName(name: string): Promise<AccountProfileView>;
-  /** Revokes a note this account signed in the account registry. Needs an account key */
-  revoke(token: string): Promise<void>;
+  /** Revokes one of this account's keys, by DID, in the account registry. Needs an account key */
+  revoke(key: string): Promise<void>;
 }
 
 /** Someone in the account's contact list */
@@ -838,7 +843,7 @@ export interface P2PNode {
   /** Doors: how people you share no space with can ask to become your contact */
   readonly doors: NodeDoors;
   /** The delegation the session key currently writes under (root → session) */
-  delegation(): UCANToken;
+  delegation(): Delegation;
   /** ICE servers for the app's own WebRTC, like a call's: the configured ones, and a relay's TURN servers */
   iceServers(): Promise<ReadonlyArray<RTCIceServer>>;
   /** Relays and connections, for showing why a peer is or is not there */
@@ -850,7 +855,7 @@ export interface P2PNode {
    * its note names, refusing what needs a person (`node/api.ts`).
    * @throws When the note is not an agent's, has run out, or is not made out to `keys`
    */
-  asAgent(agent: { readonly keys: CryptoKeyPair; readonly note: string }): Promise<P2PNode>;
+  asAgent(agent: { readonly keys: CryptoKeyPair; readonly note: Delegation }): Promise<P2PNode>;
   subscribe(listener: (event: NodeEvent) => void): () => void;
   /**
    * Revokes this node's own session key in every space it writes in, its

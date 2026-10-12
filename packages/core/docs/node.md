@@ -76,14 +76,15 @@ which hides where the key lives and is asked only for notes. This is an
 in-process interface, not a wire format; what a note must be is
 [spec 01 §7](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
 
-| Member                                                   | Type                    | Meaning                                                                                          |
-| -------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `did`                                                    | string                  | The account DID                                                                                  |
-| `custody`                                                | `'local'` \| `'remote'` | `local`: the seed is unlocked in this page. `remote`: another context (an account home) holds it |
-| `delegate({audience, capabilities, expiration, facts?})` | → UCAN                  | Issue a note from the account to `audience`                                                      |
+| Member                                                         | Type                    | Meaning                                                                                          |
+| -------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
+| `did`                                                          | string                  | The account DID                                                                                  |
+| `custody`                                                      | `'local'` \| `'remote'` | `local`: the seed is unlocked in this page. `remote`: another context (an account home) holds it |
+| `delegate({audience, command, subject?, policy?, expiration})` | → `Delegation`          | Issue a note from the account to `audience`                                                      |
 
-- The **local** signer (`createLocalRootSigner`) calls `issueUCAN` with the
-  root key. It includes `fct` only when `facts` is non-empty.
+- The **local** signer (`createLocalRootSigner`) calls `issueDelegation` with
+  the root key. `subject` defaults to the account's own DID (the whole
+  account), `policy` to none. It never sets `meta`.
 - The **grant** signer an app uses returns the one note the account home
   already issued to the app's key, unchanged, and refuses once the grant's
   `expiresAt` has passed. It cannot mint new notes
@@ -93,32 +94,40 @@ The **session note** a node asks for when it starts:
 
 ```
 aud = session DID
-att = [{ "with": "*", "can": "*" }]          (SESSION_CAPABILITY; a node acting as an agent signs under its grant, `record/*`)
-exp = now + sessionTtlSeconds                     (default 3600)
-nbf = now − 300                                   (issueUCAN's default)
-fct = absent
-prf = []
+sub = the account's DID
+cmd = "/"                     (SESSION_COMMAND; a node acting as an agent signs under its grant, `/record`)
+pol = []
+exp = now + sessionTtlSeconds (default 3600)
+nbf = now − 300               (issueDelegation's default)
 ```
 
-Peers check only that the note covers what each record needs, so `att` is
-this node's choice, not a rule. The note is renewed before it runs out
+Its proof is that one token. Peers check only that the proof grants what each
+record needs, so the command is this node's choice, not a rule. The note is renewed before it runs out
 ([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
-**Issuing.** `issueUCAN` defaults `exp` to now + 3600, `nbf` to now − 300
+**Issuing.** `issueDelegation` defaults `exp` to now + 3600, `nbf` to now − 300
 (`UCAN_CLOCK_SKEW_SECONDS`, so a peer whose clock is a little behind still
-accepts it), `nnc` to 16 random hex characters, and `prf` to `[]`.
-`delegateCapabilities` issues a child of an existing note, with
-`prf = [CID(parent)]` and no facts, and refuses when:
+accepts it), `nonce` to 12 random bytes in base64url, `subject` to the
+issuer's own DID and `policy` to `[]`; it signs in the low-S form only.
+`extendProof` adds a link to an existing proof and refuses when:
 
-- the issuer is not the parent's `aud`;
-- a child capability is not covered by some parent capability
-  ([spec 01 §7.6](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md));
-- the requested `exp` is later than the parent's (default: the parent's `exp`).
+- the issuer is not the last link's `aud`;
+- the command is not under the last link's, or the subject is wider
+  ([spec 01 §7.5](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md));
+- the requested `exp` is later than the last link's (default: the last link's `exp`).
 
 These refusals only save issuing a note that would not verify: a verifier
-checks the chain itself ([spec 01 §7.5](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+checks the chain itself.
 
-_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/identity/ucan.ts` (`issueUCAN`, `delegateCapabilities`), `packages/core/src/node/node.ts` (`SESSION_CAPABILITY`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantCapabilities`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
+**What a home grants.** `grantTerms(access, spaces)` (and `noteTerms` under it)
+turns a grant into a note's terms: `/`, `/record` or `/record/read`; the
+whole account, or one space as the subject, or several named by a policy on
+`.space`; none, as a policy nothing satisfies. `noteSpaces(note)` reads that
+back, for showing which spaces a note reaches; peers judge each use against
+the note itself
+([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+
+_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/identity/ucan.ts` (`issueDelegation`, `extendProof`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
 
 ## Renewing the session note
 
@@ -140,14 +149,17 @@ refuses once `grant.expiresAt` has passed. A node started from a grant
 therefore never gets a fresh note: its "renewal" returns the same note, and when
 it runs out the app must connect again ([spec 06 §2.9](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
-`node.delegate({ audience, capabilities, expiration? })` passes a narrower note
-from the session key on to another key. The capabilities must be no broader
-than the session note's, and `expiration` is capped at the session note's. It
-returns `{ token, proofs: [<session note>] }`.
+`node.delegate({ audience, command, subject?, policy?, expiration? })` passes a
+narrower note from the session key on to another key. The command and subject
+must be no wider than the session note's, and `expiration` no later. It
+returns `{ token, proof }`: the new token, and the whole chain, root first,
+that the other key signs with. Revoking the session key withdraws what the
+other key signs too
+([spec 03 §6.4](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
 
 `node.delegation()` returns the note the session key writes under now.
 
-_Source: `packages/core/src/node/node.ts` (`delegate`, `scheduleRenewal`, `SESSION_CAPABILITY`), `packages/core/src/session/connect.ts` (`grantSigner`). Tests: `packages/core/tests/node.test.ts` ("the delegation is renewed before it expires")._
+_Source: `packages/core/src/node/node.ts` (`delegate`, `scheduleRenewal`, `SESSION_COMMAND`), `packages/core/src/session/connect.ts` (`grantSigner`). Tests: `packages/core/tests/node.test.ts` ("the delegation is renewed before it expires")._
 
 ## Stores
 
@@ -415,7 +427,7 @@ account's profile in that space: `{ name, contactKey? }`, with the name taken
 from the account registry's `sys.profile` record and `contactKey` only when
 the node holds the contact key. It does this only in spaces other than the
 account registry and the contacts space, only with an account name to publish,
-and never under a note that lacks `account/write`, such as an agent's. The profile record format is in
+and never under a note that lacks `/account/write`, such as an agent's. The profile record format is in
 [03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md).
 
 **Joining.** `spaces.join(invite)` accepts a bare invite or any link carrying
@@ -496,12 +508,12 @@ sender's account is established are in
 A received live message is emitted as a `message` event,
 `{ type: "message", space, from, peer, recordsOnly, message }`:
 
-| Field         | Meaning                                                                                                                                                                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `from`        | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets).                                                                   |
-| `peer`        | The sending device's session DID — also where a reply to that device goes.                                                                                                                                                                                   |
-| `recordsOnly` | `true` when the sender's note grants writing records in this space and nothing more (`record/*`): it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)). `false` for a note that only reads. |
-| `message`     | The value sent.                                                                                                                                                                                                                                              |
+| Field         | Meaning                                                                                                                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `from`        | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets).                                                                  |
+| `peer`        | The sending device's session DID — also where a reply to that device goes.                                                                                                                                                                                  |
+| `recordsOnly` | `true` when the sender's note grants writing records in this space and nothing more (`/record`): it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)). `false` for a note that only reads. |
+| `message`     | The value sent.                                                                                                                                                                                                                                             |
 
 `spaces.status(id)` returns `SpaceStatus`:
 
@@ -539,7 +551,7 @@ same calls can be exposed over a command line, MCP and WebMCP
   with at most one more queued.
 - `node.account` — `profile()`, `setName(name)` (writes `sys.profile`, key
   `profile`, in the account registry, then republishes the profile in every
-  open space), `revoke(token)` (in the account registry). All need the account
+  open space), `revoke(key)` (one of the account's keys, by DID, in the account registry). All need the account
   key.
 - `node.contacts` — [contacts.md](contacts.md). `ask` and `accept` make or join a space
   for two, so they need a session note with `with: "*"` (whole-account access).
@@ -623,11 +635,12 @@ _Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`, `Rel
 ## A node acting as an agent
 
 `node.asAgent({ keys, note })` returns the same node acting as an agent. It
-throws unless the note verifies, grants records only (every capability a
-`record/` one), is made out to `keys`, and was issued by `node.did`. The agent:
+throws unless the note verifies, grants records only (its command is under
+`/record`), is made out to `keys`, and was issued by `node.did`. The agent:
 
 - signs with its own key, under its note, so what it writes is `recordsOnly`;
-- reaches only spaces its note names (`space:<id>`), or every space for `*`;
+- reaches only spaces its note names (`noteSpaces`: its subject, or a policy
+  on `.space`), or every space for a note about the whole account;
   events for other spaces are filtered out;
 - refuses, locally, everything that needs a person: making, inviting, joining
   or leaving spaces; changing members, roles, invites or revocations; changing
@@ -642,7 +655,7 @@ throws unless the note verifies, grants records only (every capability a
 Closing the agent leaves the underlying node running.
 
 An agent granted `scope: account` gets a records-only note for every space
-(`{ "with": "*", "can": "record/*" }`) and the account key in its
+(`/record`, about the whole account) and the account key in its
 grant ([spec 06 §2.8](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home never
 gives a records-only key the contact key: with it, it could open contact
 requests and knocks on the account's doors ([doors.md](doors.md)).
@@ -695,7 +708,8 @@ is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
 `connecting`, `ready`, `expired`. It keeps the grant in `localStorage` under
 `weave.grant` and the person's chosen home under `weave.home` (`home` in the
 config is only a default). It switches to `expired` at `expiresAt` and does not
-load an expired grant from storage. When the node sees its own note revoked in
+load an expired grant from storage, nor one of another format (`v` other
+than `GRANT_VERSION`, 2): the person connects again. When the node sees its own note revoked in
 a space it emits `revoked` ([events](#events)), and the connection forgets the
 grant and the app key. `propose(notify)` sends a proposal to the grant's home
 ([spec 06 §2.11](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
@@ -789,7 +803,7 @@ anyone adds to, which pays for keeping it online and for its bots
 ([spec 08 §2](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)).
 
 Every device holding the space's key (not one whose note lacks
-`account/write`, such as an agent's, nor a carrier) looks at the hosts its space names when it takes a role there and
+`/account/write`, such as an agent's, nor a carrier) looks at the hosts its space names when it takes a role there and
 on changes after that: at once when the list of hosts changed, else at most
 every ten minutes. For each, it reads the description, refuses a host whose
 key is not the one the record names, asks for the status, and hands over the

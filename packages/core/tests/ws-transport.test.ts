@@ -10,7 +10,7 @@ import { WebSocketServer, type RawData, type WebSocket as ServerSocket } from 'w
 import { portOf, textOf } from './helpers/net.js';
 
 import { createWebSocketTransport, nodeAddress } from '../src/network/ws-transport.js';
-import { issueUCAN } from '../src/identity/ucan.js';
+import { issueDelegation } from '../src/identity/ucan.js';
 import { createClientAuth, createServerAuth, peerNonce, type ServerAuth } from '../src/network/peer-auth.js';
 import { generateSpaceKey } from '../src/privacy/space-encryption.js';
 import { deriveReadKey } from '../src/space/space-access.js';
@@ -205,13 +205,10 @@ describe('WebSocket transport', () => {
     async function sessionNode() {
       const account = await nodeIdentity();
       const session = await nodeIdentity();
-      const note = await issueUCAN(
-        { issuer: account, audience: session.did, capabilities: [{ with: '*', can: '*' }] },
-        provider,
-      );
+      const note = await issueDelegation({ issuer: account, audience: session.did, command: '/' }, provider);
       const node = startNode(0, {
         did: session.did,
-        authenticator: createServerAuth('space-1', null, session.privateKey, provider, () => note.encoded),
+        authenticator: createServerAuth('space-1', null, session.privateKey, provider, () => [note]),
       });
       return { account, session, node };
     }

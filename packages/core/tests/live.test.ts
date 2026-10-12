@@ -109,7 +109,7 @@ describe('live messages', () => {
     // Mallory holds a session key of her own, and a note she copied off one of Alice's records.
     const manager = createIdentityManager();
     const mallory = await manager.fromSeed(generateSeed());
-    const copied = alice.node.delegation().encoded;
+    const copied = [alice.node.delegation()];
     const wire = hub.transport(mallory.did, space);
     await wire.connect?.();
     await until(
@@ -137,15 +137,15 @@ describe('live messages', () => {
     const provider = alice.manager.getProvider();
 
     for (const [can, recordsOnly] of [
-      ['record/read', false],
-      ['record/*', true],
-      ['*', false],
+      ['/record/read', false],
+      ['/record', true],
+      ['/', false],
     ] as const) {
       const pair = await provider.generateKeyPair();
       const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
       const note = await createLocalRootSigner(alice.me, provider).delegate({
         audience: did,
-        capabilities: [{ with: '*', can }],
+        command: can,
         expiration: Math.floor(Date.now() / 1000) + 3600,
       });
       const wire = hub.transport(did, space);
@@ -157,7 +157,7 @@ describe('live messages', () => {
       );
       const say = (type: string, payload: unknown) =>
         wire.send(alice.node.sessionDid, utf8Encode(JSON.stringify({ type, from: did, payload })));
-      say('who', { note: note.encoded });
+      say('who', { note: [note] });
       say('live', { type: 'hello', can });
       await until(() => heard.some((m) => m.peer === did), 4000, `the ${can} message`);
       const message = heard.find((m) => m.peer === did)!;

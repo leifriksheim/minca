@@ -12,7 +12,6 @@
  */
 import type { PeerTransport } from '../network/transport.js';
 import { channelKeyPair, CODE_CHANNEL, deriveChannel, type Channel } from '../identity/channel.js';
-import { parseUCAN } from '../identity/ucan.js';
 import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Encode } from '../utils/encoding.js';
 import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
@@ -221,10 +220,9 @@ export async function offerConnectCode(
         kind: 'asking',
         asking,
         allow: async (grant) => {
-          if (parseUCAN(grant.token).payload.aud !== asking.did)
-            throw new Error('That note is for a different key.');
+          if (grant.note.payload.aud !== asking.did) throw new Error('That note is for a different key.');
           if (grant.did !== options.account) throw new Error('That note is from a different account.');
-          if (asking.recordsOnly && !grantsRecordsOnly(grant.token))
+          if (asking.recordsOnly && !grantsRecordsOnly(grant.note))
             throw new Error('That note grants more than the program asked for.');
           await room.seal(peer, ANSWER, channel, { grant } satisfies Answer);
         },

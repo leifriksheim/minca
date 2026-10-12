@@ -25,7 +25,7 @@ Anyone in a space may write a blueprint. It is how a key that may only write
 records asks for collections: an agent's, whose note grants records only, or
 a person's, whose role does not hold `define`. Both take the same path, and
 neither needs to know which they are. Every peer refuses a definition from a
-key whose note doesn't grant `collection/define`, so a blueprint is the only
+key whose note doesn't grant `/collection/define`, so a blueprint is the only
 way such a key gets a collection.
 
 `applyBlueprint` defines each collection the space doesn't have as the

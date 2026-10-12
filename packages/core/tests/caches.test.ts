@@ -204,7 +204,8 @@ describe('holding part of a space', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await alice.signer.delegate({
       audience: did,
-      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      command: '/record/write',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const { heads: seen } = await alice.node.spaces.access(space);
@@ -216,7 +217,7 @@ describe('holding part of a space', () => {
           space,
           version: { key: await newRecordKey(alice.node.did), seq: 0 },
           body: { text },
-          proof: note.encoded,
+          proof: [note],
           seen,
           log,
         }),

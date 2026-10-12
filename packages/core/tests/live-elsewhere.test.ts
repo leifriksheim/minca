@@ -29,7 +29,8 @@ test('a records-only note for another space is not recordsOnly here', async () =
   // What the home signs for a program given records in one chosen space (scope: spaces).
   const note = await createLocalRootSigner(alice.me, provider).delegate({
     audience: did,
-    capabilities: [{ with: 'space:bsomewhereelse', can: 'record/*' }],
+    command: '/record',
+    subject: 'space:bsomewhereelse',
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const wire = hub.transport(did, space);
@@ -37,7 +38,7 @@ test('a records-only note for another space is not recordsOnly here', async () =
   await until(async () => (await alice.node.spaces.status(space)).peers.includes(did), 4000, 'connect');
   const say = (type: string, payload: unknown) =>
     wire.send(alice.node.sessionDid, utf8Encode(JSON.stringify({ type, from: did, payload })));
-  say('who', { note: note.encoded });
+  say('who', { note: [note] });
   say('live', { type: 'hello' });
   await until(() => heard.some((m) => m.peer === did), 4000, 'message');
   const message = heard.find((m) => m.peer === did)!;

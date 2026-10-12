@@ -247,7 +247,7 @@ npx @weaveprotocol/cli connect wv_…      # in this repo: npm run weave -- conn
 
 It makes a key for this computer's agent (it never leaves `~/.weave/agent/`),
 finds the app through the relay, and waits while you allow it at your account
-home, which signs a records-only note (`record/*`) for every space in your
+home, which signs a records-only note (`/record`) for every space in your
 account, for as long as you chose. Then it adds `weave` to Claude Code (`claude mcp add`), Claude Desktop
 and Cursor, where it finds them. `--no-configure` prints the config instead,
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds

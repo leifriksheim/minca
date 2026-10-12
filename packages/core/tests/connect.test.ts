@@ -17,7 +17,6 @@ import {
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import { parseUCAN } from '../src/identity/ucan.js';
 import type { P2PNode } from '../src/node/types.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { memoryStores } from './helpers/memory-stores.js';
@@ -99,10 +98,13 @@ describe('connecting an app to an account home', () => {
     );
     const grant = await auth.grant({ origin: 'https://todo.test', request, spaceIds: [groceries.id] });
 
-    const { payload } = parseUCAN(grant.token);
+    const { payload } = grant.note;
     assert.equal(payload.iss, auth.getState().session!.did);
     assert.equal(payload.aud, key.did);
-    assert.deepEqual(payload.att, [{ with: `space:${groceries.id}`, can: '*' }]);
+    // One space: a note about that space, for every command there.
+    assert.equal(payload.sub, `space:${groceries.id}`);
+    assert.equal(payload.cmd, '/');
+    assert.deepEqual(payload.pol, []);
     assert.deepEqual(
       grant.spaces.map((space) => space.name),
       ['Groceries'],
@@ -199,7 +201,10 @@ describe('connecting an app to an account home', () => {
     });
     assert.equal(grant.scope, 'account');
     assert.ok(grant.accountKey);
-    assert.deepEqual(parseUCAN(grant.token).payload.att, [{ with: '*', can: '*' }]);
+    // The whole account: a note about the account itself, every command, no conditions.
+    assert.equal(grant.note.payload.sub, grant.did);
+    assert.equal(grant.note.payload.cmd, '/');
+    assert.deepEqual(grant.note.payload.pol, []);
 
     const browser = await app(hub, grant, key);
     await until(
@@ -531,7 +536,7 @@ describe('connecting a carrier to an account home', () => {
 
     assert.equal(grant.kind, 'carry');
     assert.equal(grant.did, did);
-    assert.equal('token' in grant, false, 'no note: a carrier never writes');
+    assert.equal('note' in grant, false, 'no note: a carrier never writes');
     const carry = parseSpaceInvite(grant.carry.invite);
     assert.equal(carry.space.id, grant.carry.space);
     assert.equal(carry.space.creator, did);

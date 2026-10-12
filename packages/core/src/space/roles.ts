@@ -145,6 +145,12 @@ interface EventBase {
   readonly root: string;
   /** The key that signed it */
   readonly author: string;
+  /**
+   * The keys its authority passed through on the way from the account to
+   * `author`: every issuer in its proof but the root's (spec 01 §7.5). A
+   * revoke of any of them reaches it, with no cutoff: they signed none of it.
+   */
+  readonly via?: ReadonlyArray<string>;
   /** The latest access changes its author knew of */
   readonly seen: ReadonlyArray<string>;
   /** Its place in its key's line for its collection here: what forks and cutoffs reach */
@@ -394,6 +400,8 @@ export interface AccessHistory {
       readonly seen: ReadonlyArray<string>;
       /** The key that signed it */
       readonly writer?: string;
+      /** The keys its authority passed through, as {@link EventBase.via} */
+      readonly via?: ReadonlyArray<string>;
       /** Its collection, and its place in its key's line for that collection */
       readonly collection?: string;
       readonly line?: number;
@@ -1095,7 +1103,10 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
       (reduction.cutoff.get(event.author)?.get(KIND_COLLECTION[event.kind]) ?? -1) >= event.line);
   const reaches = (reduction: AccessEvent, event: AccessEvent): boolean => {
     if (reduction.kind === 'revoke')
-      return event.root === reduction.root && event.author === reduction.target;
+      return (
+        event.root === reduction.root &&
+        (event.author === reduction.target || (event.via?.includes(reduction.target) ?? false))
+      );
     if (reduction.kind === 'fork')
       return (
         event.author === reduction.writer &&
@@ -1424,6 +1435,10 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     ...(r.revokes.get(event.author) ?? [])
       .filter((revoke) => revoke.root === event.root && uncovered(revoke.event))
       .map((revoke) => revoke.event),
+    // A key its authority passed through, revoked: no cutoff covers what that key never signed.
+    ...(event.via ?? []).flatMap((key) =>
+      (r.revokes.get(key) ?? []).filter((revoke) => revoke.root === event.root).map((revoke) => revoke.event),
+    ),
     ...(fork && (event.line ?? 0) >= fork.from ? [fork.event] : []),
   ];
   if (strikers.length > 0) {
@@ -1557,6 +1572,10 @@ function historyOf(r: Replay): AccessHistory {
           if (revoke.root === record.root && counts(revoke.event) && !covered(revoke.event))
             return { ok: false, reason: 'The key that signed it was revoked', withdrawn: true };
       }
+      for (const key of record.via ?? [])
+        for (const revoke of r.revokes.get(key) ?? [])
+          if (revoke.root === record.root && counts(revoke.event))
+            return { ok: false, reason: 'A key its note passed through was revoked', withdrawn: true };
       const fork =
         record.writer === undefined || record.collection === undefined
           ? undefined

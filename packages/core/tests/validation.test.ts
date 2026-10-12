@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { didToPublicKey } from '../src/identity/did.js';
-import { issueUCAN, type Capability } from '../src/identity/ucan.js';
+import { extendProof, issueDelegation, type Proof } from '../src/identity/ucan.js';
+import { writeRequirement } from '../src/identity/abilities.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
 import { createCryptoGate } from '../src/validation/crypto-gate.js';
@@ -19,9 +20,11 @@ const provider = createP256Provider();
 const signer = createSigner(provider);
 
 const COLLECTION = 'app.test.note';
-const WRITE: Capability = { with: `space:${COLLECTION}`, can: 'record/write' };
-const ALL: Capability = { with: `space:${COLLECTION}`, can: 'record/*' };
-const OTHER: Capability = { with: 'space:something.else', can: 'record/*' };
+/** What writing a note needs: `/record/write` in the space named after the collection */
+const WRITE = (version: { readonly collection: string }) => writeRequirement(COLLECTION, version.collection);
+/** A note's terms: records in that space, or in another */
+const ALL = { command: '/record', subject: `space:${COLLECTION}` } as const;
+const OTHER = { command: '/record', subject: 'space:something.else' } as const;
 
 const resolvePublicKey = async (did: string) => provider.importPublicKey(didToPublicKey(did).publicKeyBytes);
 
@@ -29,7 +32,7 @@ const resolvePublicKey = async (did: string) => provider.importPublicKey(didToPu
 async function signNote(
   key: { did: string; privateKey: CryptoKey },
   text: string,
-  proof?: string,
+  proof?: Proof,
 ): Promise<Version<{ text: string }>> {
   const unsigned = createVersion({
     author: key.did,
@@ -83,7 +86,7 @@ describe('crypto gate', () => {
 });
 
 describe('version check', () => {
-  const check = createVersionCheck({ provider, requiredCapability: () => WRITE });
+  const check = createVersionCheck({ provider, required: WRITE });
 
   test('refuses a malformed version, however well signed', async () => {
     const author = await makeKey();
@@ -110,7 +113,7 @@ describe('version check', () => {
 });
 
 describe('capability gate', () => {
-  const gate = createCapabilityGate({ provider, requiredCapability: () => WRITE });
+  const gate = createCapabilityGate({ provider, required: WRITE });
 
   test('accepts an author writing for itself', async () => {
     const author = await makeKey();
@@ -123,9 +126,9 @@ describe('capability gate', () => {
   test('accepts a delegated author carrying a valid proof', async () => {
     const root = await makeKey();
     const session = await makeKey();
-    const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
+    const ucan = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
 
-    const version = await signNote(session, 'delegated note', ucan.encoded);
+    const version = await signNote(session, 'delegated note', [ucan]);
     const result = await gate.validate(version);
     assert.equal(result.passed, true, result.reason ?? 'no reason given');
   });
@@ -136,9 +139,9 @@ describe('capability gate', () => {
     const thief = await makeKey();
 
     // A perfectly valid UCAN — for somebody else.
-    const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
+    const ucan = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
 
-    const version = await signNote(thief, 'stolen proof', ucan.encoded);
+    const version = await signNote(thief, 'stolen proof', [ucan]);
     const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /different key/i);
@@ -147,12 +150,68 @@ describe('capability gate', () => {
   test('rejects a proof that does not grant the required capability', async () => {
     const root = await makeKey();
     const session = await makeKey();
-    const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [OTHER] }, provider);
+    const ucan = await issueDelegation({ issuer: root, audience: session.did, ...OTHER }, provider);
 
-    const version = await signNote(session, 'wrong space', ucan.encoded);
+    const version = await signNote(session, 'wrong space', [ucan]);
     const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /does not grant/i);
+  });
+
+  test('a note’s policy is checked against the version: its collection and its space', async () => {
+    const root = await makeKey();
+    const session = await makeKey();
+    const ucan = await issueDelegation(
+      {
+        issuer: root,
+        audience: session.did,
+        command: '/record/write',
+        policy: [
+          ['==', '.collection', COLLECTION],
+          ['==', '.space', COLLECTION],
+        ],
+      },
+      provider,
+    );
+    const allowed = await signNote(session, 'in its collection', [ucan]);
+    assert.equal((await gate.validate(allowed)).passed, true);
+    const elsewhere = await signer.sign(
+      createVersion({
+        author: session.did,
+        collection: 'app.test.other',
+        body: { text: 'x' },
+        proof: [ucan],
+      }),
+      session.privateKey,
+    );
+    const result = await gate.validate(elsewhere);
+    assert.equal(result.passed, false);
+    assert.match(result.reason ?? '', /does not grant/i);
+  });
+
+  test('a chain travels on the version: root → session → guest, and no wider', async () => {
+    const root = await makeKey();
+    const session = await makeKey();
+    const guest = await makeKey();
+    const parent = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
+    const proof = await extendProof(
+      [parent],
+      { issuer: session, audience: guest.did, command: '/record/write' },
+      provider,
+    );
+    assert.equal((await gate.validate(await signNote(guest, 'two links', proof))).passed, true);
+    // Its leaf alone roots at the session, not the account; and without the leaf it is the session's.
+    const leafOnly = await gate.validate(await signNote(guest, 'one link', [proof[1]!]));
+    assert.equal(leafOnly.passed, true, 'a valid chain of one, rooted at the session key');
+    assert.equal((await gate.validate(await signNote(guest, 'parent only', [parent]))).passed, false);
+    // A guest link wider than its parent: refused.
+    const wider = await issueDelegation(
+      { issuer: session, audience: guest.did, command: '/', subject: `space:${COLLECTION}` },
+      provider,
+    );
+    const widened = await gate.validate(await signNote(guest, 'wider', [parent, wider]));
+    assert.equal(widened.passed, false);
+    assert.match(widened.reason ?? '', /widens its command/);
   });
 
   test('a record’s standing judges no time: an expired note, and any date it claims, all stand', async () => {
@@ -160,11 +219,11 @@ describe('capability gate', () => {
     const session = await makeKey();
     const now = Math.floor(Date.now() / 1000);
     // A note that ran out an hour ago: live checks refuse it, but what its key signed is judged without a clock.
-    const ucan = await issueUCAN(
+    const ucan = await issueDelegation(
       {
         issuer: root,
         audience: session.did,
-        capabilities: [ALL],
+        ...ALL,
         notBefore: now - 7200,
         expiration: now - 3600,
       },
@@ -175,7 +234,7 @@ describe('capability gate', () => {
         author: session.did,
         collection: COLLECTION,
         body: { text: `dated ${when}` },
-        proof: ucan.encoded,
+        proof: [ucan],
         createdAt: new Date(when * 1000).toISOString(),
       });
       const result = await gate.validate(await signer.sign(unsigned, session.privateKey));
@@ -191,12 +250,12 @@ describe('capability gate', () => {
 
     const strictGate = createCapabilityGate({
       provider,
-      requiredCapability: () => WRITE,
+      required: WRITE,
       isTrustedRoot: (did) => did === trusted.did,
     });
 
-    const ucan = await issueUCAN({ issuer: root, audience: session.did, capabilities: [ALL] }, provider);
-    const version = await signNote(session, 'stranger', ucan.encoded);
+    const ucan = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
+    const version = await signNote(session, 'stranger', [ucan]);
 
     const result = await strictGate.validate(version);
     assert.equal(result.passed, false);
