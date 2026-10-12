@@ -52,23 +52,30 @@ export function describeGrant(grant: Grant): string {
 
 /**
  * The roles this account may give someone new, by name, `member` first:
- * what an invite or a bot can be given. Empty until known.
+ * what an invite or a bot can be given. With `held`, only roles whose every
+ * grant this account holds itself: a bot acts on what its members ask, so
+ * it must not hold more than they do. Empty until known.
  */
 export function useAssignable(
   spaceId: string,
+  options: { readonly held?: boolean } = {},
 ): ReadonlyArray<{ readonly name: string; readonly title?: string }> {
+  const held = !!options.held;
   return (
     useLive(
       spaceId,
       async (node) => {
         const { roles } = await node.spaces.access(spaceId);
         const out: Array<{ name: string; title?: string }> = [];
-        for (const role of roles)
-          if (await node.spaces.may(spaceId, '/role/assign', { role: role.name, self: false, roles: [] }))
-            out.push({ name: role.name, ...(role.title !== undefined ? { title: role.title } : {}) });
+        for (const role of roles) {
+          if (!(await node.spaces.may(spaceId, '/role/assign', { role: role.name, self: false, roles: [] })))
+            continue;
+          if (held && !(await node.spaces.holdsRole(spaceId, role.name))) continue;
+          out.push({ name: role.name, ...(role.title !== undefined ? { title: role.title } : {}) });
+        }
         return out.sort((a, b) => Number(b.name === 'member') - Number(a.name === 'member'));
       },
-      [],
+      [held],
     ) ?? []
   );
 }

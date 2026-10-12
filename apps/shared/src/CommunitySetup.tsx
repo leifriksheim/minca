@@ -262,8 +262,9 @@ export function AddBotDialog({
   const host = onlineHost(hosts);
   const profiles = collections.some((c) => c.name === profile.name && c.version !== null);
   const mayDefine = useMay(spaceId, COLLECTION_DEFINE, { collection: profile.name });
-  // The roles one may give, `member` first: a bot needs no more than it must.
-  const roles = useAssignable(spaceId);
+  // The roles one may give and holds every grant of, `member` first: a bot does what members
+  // ask, so it holds no more than whoever adds it, and needs no more than it must.
+  const roles = useAssignable(spaceId, { held: true });
   const [role, setRole] = useState<string | null>(null);
   const [name, setName] = useState('');
   const { run, busy, error: problem, setError: setProblem } = useAction();

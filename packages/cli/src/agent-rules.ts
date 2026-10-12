@@ -176,8 +176,11 @@ export async function ruleContext(node: P2PNode, trigger: RuleTrigger): Promise<
 /**
  * Whether whoever wrote the record that set a rule off may instruct the one
  * running it. A bot: the rule's maker, or any member granted `/std.rule/instruct`
- * in the space, as for making rules for it. A person's own agent: only the
- * person.
+ * in the space, as for making rules for it, and only one who holds every grant
+ * of the bot's roles: what they ask is done with the bot's power, so it must
+ * not be more than theirs. Which grants a request in plain words would use
+ * can't be told before the model acts, so all of them are asked for. A
+ * person's own agent: only the person.
  */
 export async function writerInstructs(
   node: P2PNode,
@@ -187,6 +190,14 @@ export async function writerInstructs(
   const writer = trigger.match?.record.createdBy;
   if (!writer) return false;
   if (!runner.bot) return writer === runner.account;
-  if (writer === trigger.rule.maker) return true;
-  return node.spaces.may(trigger.rule.space, INSTRUCT, {}, writer).catch(() => false);
+  const space = trigger.rule.space;
+  if (
+    writer !== trigger.rule.maker &&
+    !(await node.spaces.may(space, INSTRUCT, {}, writer).catch(() => false))
+  )
+    return false;
+  const { members } = await node.spaces.access(space);
+  const roles = members.find((member) => member.did === runner.account)?.roles ?? [];
+  for (const role of roles) if (!(await node.spaces.holdsRole(space, role, writer))) return false;
+  return true;
 }
