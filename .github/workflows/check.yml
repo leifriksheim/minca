@@ -41,3 +41,39 @@ jobs:
       - if: steps.modules.outputs.cache-hit != 'true'
         run: npm ci
       - run: ${{ matrix.run }}
+
+  # The scenario suite (scenarios/README.md), as its own check, when the spec,
+  # the protocol library or the scenarios change.
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        # When the base can't be read (a new branch), run them anyway.
+        run: |
+          files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) || files=scenarios/
+          if grep -qE '^(spec|packages/core|scenarios)/' <<<"$files"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changed.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.changed.outputs.run == 'true'
+        id: modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.changed.outputs.run == 'true' && steps.modules.outputs.cache-hit != 'true'
+        run: npm ci
+      - if: steps.changed.outputs.run == 'true'
+        run: npm run scenarios
