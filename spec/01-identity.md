@@ -260,9 +260,9 @@ this one own the use; this table is the registry.
 | `weave/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                                   | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:18`           | 01     |
 | `weave/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                                      | room id                    | Room for connecting by code                                  | `identity/channel.ts:46`           | 06     |
 | `weave/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                              | AES-256-GCM key            | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`           | 06     |
-| `weave/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                             | `session/connect-code.ts:28`       | 06     |
-| `weave/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                   | `space/space-access.ts:33`         | 03     |
-| `weave/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                                      | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:32`         | 03     |
+| `weave/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                             | `session/connect-code.ts:27`       | 06     |
+| `weave/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                   | `space/space-access.ts:34`         | 03     |
+| `weave/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                                      | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:33`         | 03     |
 | `weave/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                                      | AES-256-GCM key            | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
 | `weave/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                                      | key id (22 characters)     | A space key's id                                             | `privacy/space-encryption.ts:16`   | 03     |
 | `weave/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:79,103` | 03     |
@@ -271,8 +271,8 @@ this one own the use; this table is the registry.
 | `weave/contacts/key/v1`                  | as above                                  | account key                                                                                      | space key K                | Contacts space                                               | `space/account-registry.ts:92,105` | 03     |
 | `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
 | `weave/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `weave/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:164,167`         | 02     |
-| `weave/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:42`                | 02     |
-| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:269`        | 04     |
+| `weave/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                | 02     |
+| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:274`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -284,13 +284,13 @@ CLI's own node reads:
 | `weave/record-body/v1`     | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
 | `weave/earlier-keys/v1`    | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
 | `weave/membership/v1`      | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
-| `weave/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:207`          | 03     |
+| `weave/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:193`          | 03     |
 | `weave/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
 | `weave/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
 | `weave/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
 | `weave/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
 | `weave/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:235`                 | 07     |
-| `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1542`                  | docs   |
+| `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1552`                  | docs   |
 | `weave/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
 | `weave/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
 | `weave/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
@@ -300,7 +300,7 @@ new labels do not collide with them:
 
 | String                                                 | Kind                                                   | Defined in                                                    | Part |
 | ------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | ---- |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:211`                                   | 03   |
+| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:197`                                   | 03   |
 | `{"audience":…,"proof":"weave/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:281` (`keyStatement`)                     | 06   |
 | `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
 | `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
@@ -455,15 +455,15 @@ two spellings fold to the same command. As a pattern:
 itself and every command under it, by whole segments: `/record` covers
 `/record/write` but not `/recordings`, and `/` covers everything.
 
-| Command              | What it permits                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `/`                  | Everything below                                                                                                   |
-| `/record`            | Every `/record/…` command: records, and nothing more                                                               |
-| `/record/write`      | Write records (every version in a space needs it)                                                                  |
-| `/record/read`       | Nothing a peer checks: a note for an app given read access, which writes nothing                                   |
-| `/collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                          |
-| `/access/change`     | Every other change to a space's access history: roles, members, invites, revocations, keys, relays, keepers, forks |
-| `/account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                                    |
+| Command              | What it permits                                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                  | Everything below                                                                                                                            |
+| `/record`            | Every `/record/…` command: records, and nothing more                                                                                        |
+| `/record/write`      | Write records (every version in a space needs it)                                                                                           |
+| `/record/read`       | Nothing a peer checks: a note for an app given read access, which writes nothing                                                            |
+| `/collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                                                   |
+| `/access/change`     | Every other change to a space's access history: role definitions, assignments, removals, invites, revocations, keys, relays, keepers, forks |
+| `/account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                                                             |
 
 What each command permits in a space is specified in
 [02 — Records](02-records.md), [03 — Spaces](03-spaces.md) and
@@ -645,7 +645,7 @@ that reads anything else finds `null` (a missing member) or nothing.
   do anything (§6).
 - A peer MUST ignore a change to the access history whose proof does not
   grant what it requires: it is not an event in the history, whatever the
-  writer's role ([03 — Spaces](03-spaces.md)). A version in one of the
+  writer's roles ([03 — Spaces](03-spaces.md)). A version in one of the
   account's own spaces whose proof lacks `/account/write` MUST NOT count
   there.
 

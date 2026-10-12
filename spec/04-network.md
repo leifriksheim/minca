@@ -351,7 +351,7 @@ are configured with different relays still meet.
 - They are the body of the single record with key `relays:space` in the
   collection **`sys.relays`**: `{ "relays": [url, …] }`, stored in the clear
   even in a private space. It is part of the access log and only an author
-  holding the `manage` permission may change it; see
+  granted `/space/relays` may change it; see
   [03 — Spaces](03-spaces.md) for how the current value is chosen.
 - A valid list has at most **8** entries, no duplicates, each a string of at
   most 200 characters that parses as a URL with scheme `wss:` — or `ws:` when

@@ -15,9 +15,9 @@ rules are written is in [02 — Records](02-records.md). Seeds, DIDs, notes
 How peers connect and prove they may read is in [04 — Network](04-network.md).
 
 - [1. The space and its id](#1-the-space-and-its-id)
-- [2. Roles and permissions](#2-roles-and-permissions)
+- [2. Roles and grants](#2-roles-and-grants)
 - [3. The access history](#3-the-access-history)
-- [4. Replaying the access history](#4-replaying-the-access-history)
+- [4. Replaying the access history: `strong-remove/1`](#4-replaying-the-access-history-strong-remove1)
 - [5. Judging a record against the history](#5-judging-a-record-against-the-history)
 - [6. Changing who may do what](#6-changing-who-may-do-what)
 - [7. Invites](#7-invites)
@@ -36,10 +36,12 @@ Terms used throughout:
 
 | Term                  | Meaning                                                                                                                                                                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **account**           | An identity's root DID (`did:key:zDn…`, [01](01-identity.md)). What a role is held by.                                                                                                                                     |
+| **account**           | An identity's root DID (`did:key:zDn…`, [01](01-identity.md)). What roles are assigned to.                                                                                                                                 |
 | **root** of a version | The account the signing key speaks for: the issuer of the version's note, checked with no time ([01](01-identity.md) §7.5, §7.6), or the author itself when there is no proof ([01](01-identity.md), [02](02-records.md)). |
-| **member**            | An account that holds a role that still exists, in a given state of the history.                                                                                                                                           |
+| **founder**           | The account that created the space, until it leaves (§2.1). It holds every command.                                                                                                                                        |
+| **member**            | In a given state of the history, a founder or an account assigned at least one role.                                                                                                                                       |
 | **reader**            | Same as member, as far as key distribution is concerned (`readers()`).                                                                                                                                                     |
+| **grant**             | A delegation to a role of a command, under a policy on the command's arguments (§2.2).                                                                                                                                     |
 | **hex40(x)**          | The first 20 bytes of SHA-256(UTF-8 `x`), as 40 lower-case hex characters.                                                                                                                                                 |
 | **cid(x)**            | `"b"` + lower-case RFC 4648 base32 (no padding) of SHA-256(`x`). The id format of [02](02-records.md).                                                                                                                     |
 
@@ -57,9 +59,8 @@ JSON object:
 | `id`              | string                    | `cid(canonical(genesis))`, see 1.2                                                   |
 | `name`            | string                    | Display name. **Not** part of the id; unauthenticated and may differ between copies. |
 | `visibility`      | `"public"` \| `"private"` | Fixed at creation. Private means record bodies are encrypted (§8).                   |
-| `creator`         | string                    | The creator's account DID. Starts holding `creatorRole`.                             |
-| `roles`           | Role[]                    | The roles it starts with (§2). 1–64 roles, names unique.                             |
-| `creatorRole`     | string                    | Name of one of `roles`.                                                              |
+| `creator`         | string                    | The creator's account DID: the space's founder (§2.1).                               |
+| `roles`           | FoundingRole[]            | The roles it is founded with, and their grants (§2.1). 0–64 roles, names unique.     |
 | `createdAt`       | string                    | ISO 8601 timestamp.                                                                  |
 | `nonce`           | string                    | base64url of 12 random bytes (16 characters). Keeps two spaces made alike apart.     |
 | `readKey`         | string                    | Private only: the `did:key` of the space's first read key (§8.4).                    |
@@ -71,104 +72,289 @@ The **genesis** is the space object without `id` and `name`, with a version
 field:
 
 ```
-genesis = { v: 2, creator, visibility, roles, creatorRole, createdAt, nonce,
+genesis = { v: 3, creator, visibility, roles, createdAt, nonce,
             readKey?,           // private only
             encryptionKeyId? }  // private only
 id = cid( canonical-JSON(genesis) )
 ```
 
 Canonical JSON is defined in [02 — Records](02-records.md) (sorted keys, no
-whitespace). Role objects inside keep their fields as given (`title` omitted
-when absent).
+whitespace). Role objects inside keep their fields as given (`title` and
+`nests` omitted when absent).
 
 A peer handed a space — in an invite, a pass, from a host — **MUST** refuse it
 unless all of these hold (`checkSpace`):
 
 1. `id`, `nonce` and `creator` are strings;
 2. `visibility` is `public` or `private`;
-3. `roles` is a list of 1–64 well-formed roles (§2.1) with distinct names, and
-   `creatorRole` names one of them;
+3. `roles` is a list of at most 64 well-formed founding roles (§2.1) with
+   distinct names;
 4. a private space has both `readKey` and `encryptionKeyId`; a public space
    has neither;
 5. `cid(canonical(genesis))` equals `id`.
 
-> Rationale: nobody who passes a space on can change who started it, with which
-> roles, or with which first key. The name is left out so it can change.
+> Rationale: nobody who passes a space on can change who founded it, with
+> which grants, or with which first key. The name is left out so it can
+> change.
 
 **Example.** Creator `did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg`
-(the account of seed `01 02 … 10`), two roles — `owner` (title `Owner`, rank
-100, permissions `["*"]`) and `editor` (title `Editor`, rank 10, permissions
-`["invite","define"]`), the creator holding `owner` — a fixed time and nonce:
+(the account of seed `01 02 … 10`), founded with one role, `editor` (title
+`Editor`), which may do anything to records, define collections and assign
+`editor`; a fixed time and nonce:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","creator":"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg","creatorRole":"owner","nonce":"AAECAwQFBgcICQoL","roles":[{"name":"owner","permissions":["*"],"rank":100,"title":"Owner"},{"name":"editor","permissions":["invite","define"],"rank":10,"title":"Editor"}],"v":2,"visibility":"public"}
-→ id biypcptbxz4vneknbgueo46ksdldc57anajp3kit5wuevkqeh4i6q
+{"createdAt":"2026-01-01T00:00:00.000Z","creator":"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg","nonce":"AAECAwQFBgcICQoL","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"v":3,"visibility":"public"}
+→ id bzwgno6q3imhf6eirh7hbowfzmdva6qcfqd7dfrprl6p77jjrrr7q
 ```
 
 The same space made private with the AES key whose raw bytes are
-`ff fe fd … e0` (base64url `__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA`):
+`ff fe fd … e0` (base64url `__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA`), its
+id and read key as §8.1 and §8.4 derive them:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","creator":"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg","creatorRole":"owner","encryptionKeyId":"GGXACDHnP37iP8E8stD1iLnDQYNcp0cvjsA1q6S3idY","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf","roles":[…as above…],"v":2,"visibility":"private"}
-→ id b63yb6wiefzfrngbgbmozhv7zcf5ikunjr4al6njqyxvbf62dvi7a
+{"createdAt":"2026-01-01T00:00:00.000Z","creator":"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg","encryptionKeyId":"aLhvw5pkV65_lcQHEcUOug","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf","roles":[…as above…],"v":3,"visibility":"private"}
+→ id bvm5is7n2nm7ex3vy7hn2yllhsoi3dxezkrwvv6thhlfb5dioxdta
 ```
 
 ### 1.3 Creating a space
 
-To create a space a peer picks the starting roles and `creatorRole`, takes the
+To create a space a peer picks the founding roles and their grants, takes the
 current time and a fresh 12-byte random nonce, and for a private space
 generates a space key (§8.1) and derives its read key (§8.4). Then it computes
 the id. Nothing is written into the space at creation: the genesis alone
-makes the creator a member. (The library's defaults for roles and
-`creatorRole` are in [its docs](../packages/core/docs/spaces.md#presets).)
+makes the creator its founder. (The library's constitution templates are in
+[its docs](../packages/core/docs/spaces.md#presets).)
 
-_Source: `packages/core/src/space/space-access.ts` (`spaceGenesis`, `spaceIdOf`, `checkSpace`, `checkStartingRoles`), `packages/core/src/space/space-manager.ts` (`create`), `packages/core/src/types.ts` (`Space`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/space-access.test.ts` ("the space vouches for itself")._
+_Source: `packages/core/src/space/space-access.ts` (`spaceGenesis`, `spaceIdOf`, `checkSpace`), `packages/core/src/space/grants.ts` (`checkFoundingRoles`), `packages/core/src/space/space-manager.ts` (`create`), `packages/core/src/types.ts` (`Space`, `SpaceRole`). Tests: `packages/core/tests/constitution.test.ts` ("the genesis examples"), `packages/core/tests/space.test.ts`, `packages/core/tests/space-access.test.ts` ("the space vouches for itself")._
 
 ---
 
-## 2. Roles and permissions
+## 2. Roles and grants
 
-### 2.1 Roles
+Who may do what in a space is a set of **grants**: delegations, in the JSON
+profile of UCAN 1.0 ([01](01-identity.md) §7), each to a **role** of the
+space, of a command path under a policy on the command's arguments. An
+account holds power in a space only through the roles assigned to it. Every
+peer judges every change, and every record, by the grants its author held as
+of what it saw, and resolves changes made apart by one algorithm,
+`strong-remove/1` (§4).
+
+### 2.1 Founders and founding roles
+
+The genesis is, for now, the space's **constitution**. Its `creator` is the
+space's **founder**: it holds every command, and nobody but itself can
+remove it or change its roles. It stops being the founder only by leaving the
+space itself (§2.5), which it may always do; a space whose founder has left
+is run by whoever its roles let, and may end up with nobody who can change
+roles or the key.
+
+Its `roles` are the **founding roles**:
 
 ```
-Role = { name: string, title?: string, rank: number, permissions: string[] }
+FoundingRole = { name: string, title?: string, grants: Grant[], nests?: string[] }
+Grant        = { cmd: string, pol: Policy }
 ```
 
-A role is well-formed (`checkRole`) when:
+A founding role is well-formed (`checkFoundingRole`) when it has no other
+members and:
 
 - `name` matches `^[a-z0-9][a-z0-9._-]{0,39}$`;
 - `title`, if present, is a string of at most 80 characters;
-- `rank` is a finite number (any sign, may be fractional);
-- `permissions` is a list of non-empty strings of at most 200 characters each.
+- `grants` is a list of at most 64 grants, each with exactly `cmd`, a command
+  path ([01](01-identity.md) §7, `isCommand`), and `pol`, a well-formed policy
+  ([01](01-identity.md) §7.4);
+- `nests`, if present, is a list of at most 16 distinct role names, none its
+  own.
 
-### 2.2 Permissions and matching
+The constitution's grants for a role are issued by the space itself, the
+root of every chain: they are the role's **first definition** (§2.4), and a
+later definition that stands replaces them, so founding roles change in place
+like any other.
 
-A permission is a plain string. Three are checked by the protocol itself:
+> **Planned: the constitution record** (step 5 of
+> [the plan](drafts/constitution-grants-contracts.md) §8). The genesis will
+> become a `constitution/1` record: `top`, the founders (several, or none),
+> each of whom may step down; the name of the conflict resolver, from a fixed
+> list of which `strong-remove/1` is the first; and `/space/succeed`, which
+> names a successor space. What this section says of the creator is what
+> `top: { founders: [creator] }` will say, and the founding roles move into
+> the record as they are.
 
-| Permission | Lets its holder                                                                                                           |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `manage`   | change roles and members (§6), change the space key (§9), name relays and keepers (§10), change any collection definition |
-| `invite`   | open and close invites (§7)                                                                                               |
-| `define`   | define a new collection (§3.1)                                                                                            |
+### 2.2 Grants
 
-Every other permission belongs to a collection and is named
-`<collection>/<permission>` — a rule `can:moderate` in collection `app.poll`
-asks for `app.poll/moderate` ([02](02-records.md)).
+A grant in a role's definition (§2.4) is a delegation payload of the JSON
+profile ([01](01-identity.md) §7.1) with exactly these members, and is signed
+by the version that carries it:
 
-A permission pattern in a role **matches** a permission when it is equal to it,
-or is `*`, or — when it contains `*` — when the pattern, with each `*` read as
-"any run of characters (possibly empty)" and everything else literal, matches
-the whole permission. So `*` is every permission, `*/*` every collection
-permission, `app.forum.*/moderate` matches `app.forum.post/moderate`. A role
-**holds** a permission when any of its patterns matches it.
+| Field   | Value                                                                                   |
+| ------- | --------------------------------------------------------------------------------------- |
+| `iss`   | The root of the version that carries it: the definition's author                        |
+| `aud`   | `role:<name>`, the role defined. In a space, a grant's audience is never anything else. |
+| `sub`   | `space:<id>`, this space                                                                |
+| `cmd`   | A command path; a grant of `/record` covers every command under it, `/` every command   |
+| `pol`   | A policy on the command's arguments (§2.3), in UCAN's policy language                   |
+| `nonce` | base64url, 1–64 characters                                                              |
+| `meta`  | Optional, a JSON object no peer reads                                                   |
 
-### 2.3 Presets
+`exp` and `nbf` **MUST** be absent: time decides nothing in a space
+([02](02-records.md) §4.3), and a grant ends only by a change the replay
+judges. A definition holding a payload with any other member, or one whose
+`iss`, `aud` or `sub` differ from the above, is not a well-formed change
+(§3.3).
 
-Not protocol: the protocol reads whatever roles a genesis names and never
-looks at a preset's name. The library's presets are in
-[its docs](../packages/core/docs/spaces.md#presets).
+A grant **fits** an invocation of a command with some arguments when its
+`cmd` covers the command and its `pol` holds for the arguments. A policy reads
+only the arguments its command defines (§2.3): a selector naming anything
+else finds no data, and no data never holds.
 
-_Source: `packages/core/src/space/roles.ts` (`checkRole`, `permissionMatches`, `roleHolds`), `packages/core/src/records/rules.ts` (`permissionName`). Tests: `packages/core/tests/roles.test.ts` ("permissions")._
+> Rationale: a grant to a key or an account, rather than a role, would let a
+> member hand power to a fresh key that nobody could take back, since nobody
+> can unassign a key that holds no role. Only roles hold grants, and an
+> account's power is only ever its roles'.
+
+**Arguments a peer cannot read.** A policy on `body` is judged only by a peer
+that can open the version's body. One that can't (a private space without
+the key, a stub) takes a statement that reads `body` and finds no data as
+holding, and judges the rest; readers judge it whole. This is the rule
+[02](02-records.md) §7.3 and §7.4 follow for `onePer` and `fixed`. JSON has one
+kind of number, so `1` and `1.0` are one value in a policy's `==`.
+
+### 2.3 Commands and their arguments
+
+The commands every peer checks, and the arguments a peer fills in before a
+policy runs:
+
+| Command              | Arguments                         | Filled in from                                                                                                                          |
+| -------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `/record/write`      | `collection`, `byCreator`, `body` | `byCreator`: whether the writer's root is the root of the record's first version, true for a first version (§5.2); `body`: the new body |
+| `/record/delete`     | `collection`, `byCreator`         | As for `/record/write`                                                                                                                  |
+| `/collection/define` | `collection`                      | The collection defined, changed or deleted                                                                                              |
+| `/member/remove`     | `self`, `roles`                   | `self`: whether the account removed is the invoker's; `roles`: the roles assigned to it in the invocation's own view, sorted names      |
+| `/role/define`       | `role`                            | The role whose definition, its grants and nestings, is written                                                                          |
+| `/role/assign`       | `role`, `self`, `roles`           | `self`: whether the assignee is the invoker's account; `roles`: the assignee's roles in the invocation's own view. Also opens invites.  |
+| `/role/unassign`     | `role`, `self`, `roles`           | As for `/role/assign`                                                                                                                   |
+| `/key/change`        | (none)                            | A new key for a private space (§9)                                                                                                      |
+| `/space/relays`      | (none)                            | The relays the space names (§10)                                                                                                        |
+| `/space/keepers`     | (none)                            | The nodes that keep the space whole (§10)                                                                                               |
+
+`/record/read` (`collection`) is a command a grant may hold, for the
+library's use; no peer checks it, since the space key opens every collection
+alike. A grant may name any other command path, for an app's own use, and
+peers ignore it.
+
+`byCreator` compares accounts, not keys: any device of the creator's account
+counts. It reads the root of the record's first version as 02 §4.1 fixes it:
+at an owned key the key's owner, and at a shared `one:` key whoever wrote
+the first version the record's chain starts from, so anyone granted
+`/record/write` there can start a rival chain ([02](02-records.md) §7.3).
+
+Examples:
+
+- "Members may delete their own moves":
+  `{ "cmd": "/record/delete", "pol": [["==", ".collection", "app.chess"], ["==", ".byCreator", true]] }`.
+- "Admins assign Treasurer, not to themselves":
+  `{ "cmd": "/role/assign", "pol": [["==", ".role", "treasurer"], ["==", ".self", false]] }`.
+- "Moderators may remove members but not admins":
+  `{ "cmd": "/member/remove", "pol": [["==", ".self", false], ["not", ["any", ".roles", ["==", ".", "admin"]]]] }`.
+
+A space that grants `/member/remove` or `/role/unassign` without a policy on
+`.roles` lets it reach everyone but the founder. `.roles` is read as of the
+invocation's own view, so it protects a target only from an invoker whose
+view included the target's role: one acting concurrently with a promotion,
+or naming a view from before it, isn't stopped by it (§4.3).
+
+### 2.4 Roles and their definitions
+
+A role's grants are written in its **definition**: a `sys.role` record at
+`role:<name>` (§3.1) holding the role's grants as delegation payloads (§2.2)
+and the roles it **nests**: every member of a role holds what the roles it
+nests hold. Only the constitution and a definition issue grants; a grant
+anywhere else counts for nothing.
+
+- **Who may define.** A definition stands when its author held `/role/define`
+  for the role (`{ role: <name> }`) as of its own view, as any change does
+  (§4.3).
+- **The latest replaces.** A definition replaces every definition of the role
+  it saw, the constitution's included. Taking grants from a role is writing
+  its definition again without them.
+- **Attenuation.** A definition holds only what its author could do, as of
+  the definition's own view: a grant in it fits an invocation only if its
+  author could itself have invoked that command with those arguments in that
+  view. So does a nesting: through it, a member of the role may do only what
+  the definition's author could. The constitution's grants hold whatever they
+  say.
+- **Judged where it was written.** A definition's grants are judged in its
+  own view, once. A role keeps its grants when its author later loses the
+  power to define it: the role holds them until someone who may define it
+  writes it again.
+- **Rivals hold what they share.** Definitions of one role none of which saw
+  the others are **rivals**. While they are, the role holds only the grants
+  found in every rival, compared as the canonical JSON of `{ cmd, pol }`
+  (ignoring `iss`, `nonce` and `meta`), each judged in its own rival's view,
+  and a nesting only if every rival has it. The rivalry ends when a
+  definition that saw them all stands. An empty intersection leaves the role
+  holding nothing: it fails closed. No id decides between rivals, and no
+  peer decides whether one policy implies another.
+
+A role exists once the constitution or a definition names it; assigning a
+role that doesn't exist is refused.
+
+> Rationale: a definer could weaken a role by writing a rival apart from the
+> others, but never strengthen it, since the role holds only what every
+> rival holds.
+
+**A role that defines itself can lock.** If a role holds `/role/define` for
+itself, two of its members' rival definitions that disagree on that grant
+leave the role without it, and then nobody in it can write the definition
+that ends the rivalry. The founder can; without one it takes a new space. So
+`/role/define` for a role is best held by another role than itself: the
+library's templates have the founder, or a steward role, define `admin`.
+
+### 2.5 Assignments and removals
+
+An account holds a role when a `sys.assign` record (§3.1) assigns it and
+nothing has taken it since. The account is then a **member**; an account with
+no role, and not a founder, is no member and may invoke nothing.
+
+- **Assigning** a role to an account is `/role/assign` with
+  `{ role, self, roles }`. It grants nothing the role didn't hold already, so
+  the assigner needs only `/role/assign` for that role. The assignee is always
+  an account: assigning to a role (`role:<name>`) is refused, since putting a
+  role inside another is nesting, which only a definition does.
+- **Unassigning** is `/role/unassign`, with the same arguments. **Leaving a
+  role** is built in: an account may always unassign itself.
+- **Removing** an account is `/member/remove` with `{ self, roles }`. It
+  ends every role assigned to the account that the removal had not seen
+  undone, including one assigned concurrently with it: after a re-add, only
+  assignments that saw the removal count. **Leaving the space** is built in:
+  an account may always remove itself, and a founder that does is a founder
+  no more.
+- Nobody but a founder removes a founder or changes its roles.
+- **Invites** are assignments to whoever holds the invite's secret (§7):
+  opening, changing or closing an invite for a role needs `/role/assign` for
+  that role, with `{ role, self: false, roles: [] }`.
+
+There is no separate command for adding a member: a member is an account
+holding a role, and becomes one when the first role is assigned to it.
+
+### 2.6 What a space trusts its definers with
+
+**Whoever may define roles is trusted to.** A definer can write power into a
+role it holds itself, or nest it in a role it defines, and keep it after the
+role that let it define is taken: unassigning takes only that assignment, and
+what the definer wrote stays until someone who may define the role writes it
+again. A space that doesn't trust someone to define roles doesn't grant them
+`/role/define`.
+
+A member with two accounts sidesteps `.self`: an admin who may assign `hr`
+can assign it to her second account. That account is a member holding `hr`,
+visible as one and unassignable like any other.
+
+The library's templates of founding roles are in
+[its docs](../packages/core/docs/spaces.md#presets); the protocol reads
+whatever roles a genesis names and never looks at a template's name.
+
+_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `roleMay`, `refusal`, `rolesOf`, `isMember`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts`._
 
 ---
 
@@ -182,26 +368,31 @@ space itself. These records form the **access history**.
 Each access record lives at a fixed record key, derived from what it changes.
 Bodies are JSON objects; `cutoff` is optional everywhere it appears (§6.3).
 
-| Collection       | Record key                                     | Body                                                                                 | Event kind   |
-| ---------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------ | ------------ |
-| `sys.role`       | `role:<name>`                                  | `{ name, title?, rank, permissions, cutoff? }` or `{ name, removed: true, cutoff? }` | `role`       |
-| `sys.member`     | `member:<hex40(account DID)>`                  | `{ did, role: string \| null, cutoff?, invite?: { key, signature } }`                | `member`     |
-| `sys.invite`     | `invite:<hex40(invite DID)>`                   | `{ key: <invite DID>, role, open: boolean }`                                         | `invite`     |
-| `sys.revoke`     | `revoke:<hex40(key DID + "\|" + account DID)>` | `{ key: <key DID>, cutoff? }`                                                        | `revoke`     |
-| `sys.collection` | `collection:<name>`                            | a collection definition ([02](02-records.md)); may be encrypted                      | `definition` |
-| `sys.key`        | `key:space`                                    | `{ keyId, readKey, earlier }` (§9)                                                   | `key`        |
-| `sys.relays`     | `relays:space`                                 | `{ relays: string[] }` (§10)                                                         | `relays`     |
-| `sys.keepers`    | `keepers:space`                                | `{ keepers: [{ did, name }], copies: number \| null }` (§10)                         | `keepers`    |
-| `sys.fork`       | `fork:<hex40(writer DID)>`                     | `{ a, b }`: two versions without bodies (§6.5)                                       | `fork`       |
+| Collection       | Record key                                     | Body                                                                     | Event kind   |
+| ---------------- | ---------------------------------------------- | ------------------------------------------------------------------------ | ------------ |
+| `sys.role`       | `role:<name>`                                  | `{ name, title?, grants: Delegation[], nests: string[] }` (§2.4)         | `role`       |
+| `sys.assign`     | `assign:<hex40(account DID + "\|" + role)>`    | `{ did, role, assigned: boolean, cutoff?, invite?: { key, signature } }` | `assign`     |
+| `sys.remove`     | `remove:<hex40(account DID)>`                  | `{ did, cutoff? }`                                                       | `remove`     |
+| `sys.invite`     | `invite:<hex40(invite DID)>`                   | `{ key: <invite DID>, role, open: boolean }`                             | `invite`     |
+| `sys.revoke`     | `revoke:<hex40(key DID + "\|" + account DID)>` | `{ key: <key DID>, cutoff? }`                                            | `revoke`     |
+| `sys.collection` | `collection:<name>`                            | a collection definition ([02](02-records.md)); may be encrypted          | `definition` |
+| `sys.key`        | `key:space`                                    | `{ keyId, readKey, earlier }` (§9)                                       | `key`        |
+| `sys.relays`     | `relays:space`                                 | `{ relays: string[] }` (§10)                                             | `relays`     |
+| `sys.keepers`    | `keepers:space`                                | `{ keepers: [{ did, name }], copies: number \| null }` (§10)             | `keepers`    |
+| `sys.fork`       | `fork:<hex40(writer DID)>`                     | `{ a, b }`: two versions without bodies (§6.5)                           | `fork`       |
 
 A `sys.revoke` key names the key revoked and the account revoking it, so no
-other account's revoke can sit where it belongs.
+other account's revoke can sit where it belongs. A `sys.assign` key names the
+account and the role, so assigning and unassigning one role to one account
+are versions of one record, and two made apart are rivals (§4.4).
 
 > Rationale: record keys are lower case and DIDs are not, so a key names a
 > hash of the thing and the body names the thing itself.
 
-Example keys for the account above: `member:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`;
-for the invite DID `did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
+Example keys for the account above: its assignment of `editor`,
+`assign:0ce7d5918bd19e9cbf36c04809fd02ff2b61e3af`; its removal,
+`remove:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; for the invite DID
+`did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
 `invite:fd8ebfa892a6c4bae7cd265123b7844e49fa50e8`.
 
 ### 3.2 Every record names what it saw
@@ -212,21 +403,21 @@ them (§4.6), at most 64. `seen` is optional ([02](02-records.md) §3.1): a
 version without it is judged as having seen nothing but the genesis. A writer **SHOULD** name its current heads, and MAY name fewer: what it
 leaves out it is judged as not having seen, which can only take something
 away from it (§5.1). One with more than 64 names first those its own standing
-rests on (its `member:` and `role:` records, its collection's definition),
-then the most recently applied. The space id itself may appear in `seen` and stands for
-the genesis. Access records **MUST** carry
-`retain: true` ([02](02-records.md)); a version without it is not an access
-event.
+rests on (its `remove:` record, its `assign:` and `role:` records, its
+collection's definition), then the most recently applied. The space id
+itself may appear in `seen` and stands for the genesis. Access records
+**MUST** carry `retain: true` ([02](02-records.md)); a version without it is
+not an access event.
 
 ### 3.3 From a version to an event
 
 A peer turns each stored version in an access collection into an **event**, or
 into nothing. It **MUST** collect versions by record key prefix — every
 version, not only current ones — and use only those whose collection is the
-one the prefix belongs to (`role:`→`sys.role`, `member:`→`sys.member`,
-`invite:`→`sys.invite`, `revoke:`→`sys.revoke`, `collection:`→`sys.collection`,
-`key:`→`sys.key`, `relays:`→`sys.relays`, `keepers:`→`sys.keepers`,
-`fork:`→`sys.fork`).
+one the prefix belongs to (`role:`→`sys.role`, `assign:`→`sys.assign`,
+`remove:`→`sys.remove`, `invite:`→`sys.invite`, `revoke:`→`sys.revoke`,
+`collection:`→`sys.collection`, `key:`→`sys.key`, `relays:`→`sys.relays`,
+`keepers:`→`sys.keepers`, `fork:`→`sys.fork`).
 
 A version yields no event when any of these hold:
 
@@ -234,7 +425,7 @@ A version yields no event when any of these hold:
 - its proof does not grant what it requires: `/collection/define` for a
   `sys.collection` version, `/access/change` for any other, with the
   arguments of [01](01-identity.md) §8. A key whose note grants records
-  only never changes access, whatever its writer's role;
+  only never changes access, whatever its writer's roles;
 - its signature, or the note behind it, does not verify ([02](02-records.md));
 - it is not a `sys.collection` version and it is deleted, or its body is
   encrypted, or its body is not an object;
@@ -244,19 +435,20 @@ Otherwise the event is `{ id: version.id, key: version.key, root, author: versio
 where `cutoff` is `body.cutoff` read as a map from key DID to a map from
 collection to a non-negative integer (absent: empty; anything else, or more
 than 1024 places in all: no event),
-always empty for `definition`, `key`, `relays`, `keepers` and `fork`, and:
+always empty for `role`, `definition`, `key`, `relays`, `keepers` and `fork`, and:
 
-| Kind         | Checks                                                                                                                                                | Event fields                                                                                                |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `definition` | key starts with `collection:`                                                                                                                         | `name` = key after `collection:`; `deleted` = version is deleted                                            |
-| `role`       | `body.name` is a string, key = `role:<name>`                                                                                                          | `removed: true` → `role: null`; else `role = {name, title?, rank, permissions}` which must pass `checkRole` |
-| `member`     | `did` string, `role` string or null, key = `member:<hex40(did)>`; if `invite` present it must be `{key: string, signature: string}` and verify (§7.3) | `did`, `role`, `viaInvite` = `invite.key` when present                                                      |
-| `invite`     | `key` string, `role` string, `open` boolean, record key = `invite:<hex40(key)>`                                                                       | `inviteKey`, `role`, `open`                                                                                 |
-| `key`        | record key `key:space`, `keyId` string ≤ 64 chars, `readKey` starts with `did:key:`                                                                   | `keyId`, `readKey`                                                                                          |
-| `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                              | `relays`                                                                                                    |
-| `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                      | `keepers`, `copies`                                                                                         |
-| `revoke`     | `key` a `did:key`; record key = `revoke:<hex40(key + "\|" + root)>`                                                                                   | `target` = `key`                                                                                            |
-| `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                          | `writer` = their `author`, `collection` = the forked line's, `from` = its place (§6.5)                      |
+| Kind         | Checks                                                                                                                                                                                                    | Event fields                                                                           |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `definition` | key starts with `collection:`                                                                                                                                                                             | `name` = key after `collection:`; `deleted` = version is deleted                       |
+| `role`       | no `cutoff`; `readDefinition` passes: `name`, `title?`, `grants` and `nests` as §2.1, each grant a payload as §2.2 with `iss` = root; key = `role:<name>`                                                 | `name`, `title?`, `grants` = each `{ cmd, pol }`, `nests` (absent: `[]`)               |
+| `assign`     | `did` a string starting `did:key:`, `role` a string, `assigned` a boolean, key = `assign:<hex40(did + "\|" + role)>`; if `invite` present it must be `{key: string, signature: string}` and verify (§7.3) | `did`, `role`, `assigned`, `viaInvite` = `invite.key` when present                     |
+| `remove`     | `did` a string, key = `remove:<hex40(did)>`                                                                                                                                                               | `did`                                                                                  |
+| `invite`     | `key` string, `role` string, `open` boolean, record key = `invite:<hex40(key)>`                                                                                                                           | `inviteKey`, `role`, `open`                                                            |
+| `key`        | record key `key:space`, `keyId` string ≤ 64 chars, `readKey` starts with `did:key:`                                                                                                                       | `keyId`, `readKey`                                                                     |
+| `relays`     | record key `relays:space`, `relays` list of strings, ≤ 8                                                                                                                                                  | `relays`                                                                               |
+| `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                                                                          | `keepers`, `copies`                                                                    |
+| `revoke`     | `key` a `did:key`; record key = `revoke:<hex40(key + "\|" + root)>`                                                                                                                                       | `target` = `key`                                                                       |
+| `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                                                                              | `writer` = their `author`, `collection` = the forked line's, `from` = its place (§6.5) |
 
 A deleted version in any access collection other than `sys.collection` is
 therefore ignored: access is taken away by writing a change, never by deleting.
@@ -270,50 +462,72 @@ access version from outside (a peer, a folder) unless:
 1. its `space` is this space's id and it has `retain`;
 2. it yields an event (§3.3);
 3. everything its `seen` names is present and not waiting (§4.1);
-4. its root is **named** by the history — the creator, or the `did` of any
-   `member` event with a non-null role, whatever became of it — or it is a
-   `member` event joining by an invite key that some held `invite` event
+4. its root is **named** by the history — the founder, or the `did` of any
+   `assign` event with `assigned: true`, whatever became of it — or it is an
+   `assign` event joining by an invite key that some held `invite` event
    names.
 
 > Rationale: a stranger who knows a space's id can mint signed records for
 > free. Only accounts the history has heard of can get anything stored, and
 > "named" only grows, so two peers never disagree for good.
 
-_Source: `packages/core/src/space/roles.ts` (collection constants), `packages/core/src/space/space-access.ts` (record keys), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/space/roles.ts` (collection constants), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
 
 ---
 
-## 4. Replaying the access history
+## 4. Replaying the access history: `strong-remove/1`
 
 Every peer runs the same pure function over the same events and gets the same
 state, whatever order they arrived in. No order decides anything: whether a
 change counts follows from what saw what, and from what the changes are.
-This section is normative in full.
+This section is normative in full. The algorithm is named `strong-remove/1`:
+a removal strikes what its account did concurrently with it, as in p2panda's
+strong removal and the eventually consistent access control of Jacob and
+Hartenstein (CODASPY 2025).
 
 ### 4.1 State
 
 ```
 State = {
-  roles:       Map<name, Role>,
-  members:     Map<accountDid, roleName>,
+  founders:    Set<accountDid>,
+  roles:       Map<name, RoleDefinition[]>,   // one, or rivals
+  assigned:    Map<accountDid, Map<roleName, assignmentId>>,
   invites:     Map<inviteDid, { role, open, event }>,
   definitions: Map<collectionName, { event, definedBy }>,
+  contested:   Map<collectionName, eventId[]>,
   keys:        [{ keyId, readKey, event }],   // oldest first; last is current
   keyDue:      boolean,
   relays:      string[],
   keepers:     [{ did, name }],
   copies:      number | null,
 }
+RoleDefinition = { event, by: accountDid | null, title?, grants: Grant[], nests: string[], view: State | null }
 ```
 
-The **start state** comes from the genesis: `roles` = the starting roles;
-`members` = `{ creator → creatorRole }`; for a private space `keys` =
+The **start state** comes from the genesis: `founders` = `{ creator }`;
+`roles[name]` = one definition per founding role, `{ event: <space id>, by:
+null, grants, nests: nests ?? [], view: null }`; for a private space `keys` =
 `[{ keyId: encryptionKeyId, readKey, event: <space id> }]`, else `[]`;
 everything else empty, `false` or `null`.
 
-`role(state, did)` is `state.roles[state.members[did]]`, or null when either
-lookup fails. `rank(null)` is −∞. `readers(state)` is every `did` in `members`
-whose role name is in `roles`.
+`rolesOf(S, did)` is the names in `S.assigned[did]`, sorted. `isMember(S,
+did)` is `did ∈ S.founders` or `rolesOf(S, did)` is not empty.
+`readers(S)` is every member.
+
+**`may(S, did, cmd, args)`**, whether an account may invoke a command with
+these arguments in a state, is true when `did ∈ S.founders`; otherwise when
+some role `r` in `rolesOf(S, did)` **holds** it, where a role `r` holds it in
+`S`, with `D = S.roles[r]` (false when absent or empty), when:
+
+1. some grant `g` of `D[0]` fits (§2.2) and every other definition in `D` has
+   a grant with the same `{ cmd, pol }`, **or** some role `n` in `D[0].nests`,
+   other than `r` and present in every other definition's `nests`, holds it in
+   `S` (a role already being asked about holds nothing: nestings that loop end);
+2. **and** for every definition `d` in `D` with `d.by` not null:
+   `may(d.view, d.by, cmd, args)`.
+
+Step 2 is attenuation: a definition holds only what its author could do as
+of its own view. It recurses into ever older views, so it ends.
 
 ### 4.2 Input and waiting
 
@@ -334,21 +548,32 @@ what `e` **saw**. Two events neither of which saw the other are
 1. **Allowed.** An event `e` is allowed when `refusal(e, V(e))` (§4.5) is null,
    where `V(e)`, its **own view**, is the merge (§4.4) of the allowed events
    in `ancestors(e)`. That depends only on what `e` saw, so it never changes.
-2. **Reductions.** An allowed event is a **reduction** of an account when, in
-   its own view, it lowers that account's role (§4.5): a `member` event for
-   that account, or a `role` event for a role it holds. A `revoke` is a
-   reduction of the keys it names for its own account, a `fork` of the key
-   whose line forked, and closing an invite of the joins through it.
+2. **Reductions.** An allowed event is a **reduction** when, in its own view,
+   it takes something from an account: a `remove` of a member takes
+   everything from it; an `assign` with `assigned: false` of a role the
+   account holds takes that role. A `revoke` is a reduction of the keys it
+   names for its own account, a `fork` of the key whose line forked, and
+   closing an invite of the joins through it. A definition is never a
+   reduction: it binds what saw it.
 3. **Strikes.** A reduction `r` **strikes** an allowed event `e` it reaches
-   (`e`'s root is the lowered account; for a revoke, `e`'s author is the key
-   and its root the revoke's; for a fork, `e`'s author is the key, `e` is in
-   the forked collection and its `log.n` is at least the fork's place; for a
-   closed invite, `e` joins through it) when `r`'s cutoff does not cover `e`
-   (`r.cutoff[e.author][e's collection] ≥ e`'s place in that collection's
-   line, `log.n`, §6.3) and, unless `r` is a revoke or a fork, neither had
-   seen the other. A revoke or a fork proof reaches its key's events whatever
-   either saw: an owner reacting to a thief has seen what the thief did.
-   Revokes and forks are never struck.
+   when `r`'s cutoff does not cover `e` (`r.cutoff[e.author][e's collection] ≥
+e`'s place in that collection's line, `log.n`, §6.3) and, unless `r` is a
+   revoke or a fork, neither had seen the other. It reaches:
+   - for a removal of `did`: every event whose root is `did`;
+   - for an unassignment of role `x` from `did`: every event whose root is
+     `did` that **needed** `x`: `refusal(e, V(e))` is null but
+     `refusal(e, V(e) with x taken from rolesOf(did) alone)` is not. Only the
+     author's own assignments change in that question; every definition is
+     judged as before, in its own view;
+   - for a revoke: events whose author is the revoked key and whose root is
+     the revoke's; for a fork: events whose author is the key, in the forked
+     collection, with `log.n` at least the fork's place; for a closed invite:
+     joins through it.
+
+   A revoke or a fork proof reaches its key's events whatever either saw: an
+   owner reacting to a thief has seen what the thief did. Revokes and forks
+   are never struck.
+
 4. **Valid among a set** `S` (closed under `ancestors`), in two passes:
    1. Take the strongly connected components of the strikes between allowed
       events in `S`, and visit them so that every component comes after the
@@ -358,8 +583,9 @@ what `e` **saw**. Two events neither of which saw the other are
       concurrent revocations do in Keyhive.
    2. Then, ancestors first, an unstruck event is **valid** when
       `refusal(e, W(e))` is null, where `W(e)` is the merge of the valid
-      events in `ancestors(e)`. So a struck grant gives no power to anything
-      that rests on it, whether or not that cited the removal.
+      events in `ancestors(e)`, each definition in it judged in its own `W`.
+      So a struck grant, assignment or definition gives no power to anything
+      that rests on it, whether or not that cited the reduction.
 
    The history's valid events are those valid among all placeable events.
 
@@ -369,103 +595,97 @@ allowed but not valid is dropped as struck. Valid events are **applied**.
 ### 4.4 Merging
 
 The state of a set of events is the start state with, for each record key,
-the winning event among those **latest** on it (no other event on that key
-saw them) applied:
+the events **latest** on it (no other event on that key saw them) merged:
 
-| Kind                              | Among latest events that didn't see each other, the winner is                                                                                                                                                                                                                             |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `member`, `invite`                | the one giving least: closed before open (invites), then one whose role gives no more than any other's — none, or no higher rank and every permission covered by the other's — by the roles as **its own view** had them; where two can't be compared, the lower rank, then the lowest id |
-| `role`                            | the one giving least, by coverage in the same way, by the role it sets                                                                                                                                                                                                                    |
-| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and managers, made: otherwise none (below)                                                                                                                                                        |
-| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                                                           |
-| `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                                                           |
+| Kind                              | Of the latest events on a key                                                                                                                                                                            |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `role`                            | All stand: `roles[name]` = each as a definition `{ event, by: root, title?, grants, nests, view }`, sorted by id, `view` its own view (`V`, or `W` among valid events). More than one are rivals (§2.4). |
+| `assign`                          | If any is `assigned: false`, the role is not assigned. Otherwise it is assigned when some latest one saw every latest `remove` of its account in the set; `assigned[did][role]` = the lowest such id.    |
+| `remove`                          | Change no entry of their own; they decide assignments (above). If any `remove` of a founder in the set has the founder as its root, `founders` loses it.                                                 |
+| `invite`                          | Closed if any is closed, or if they name different roles; otherwise open. `invites[inviteDid]` = `{ role, open, event }` of the lowest closed one, or of the lowest id.                                  |
+| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and those who may define it, made: otherwise none (below)                                                        |
+| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                          |
+| `revoke`, `fork`                  | change no state                                                                                                                                                                                          |
 
-Applying sets `roles[name]`, `members[did]`, `invites[inviteDid]`,
-`relays`, `keepers` and `copies` as the event says, or removes the entry when
-its role is null. A `definition` sets `definitions[name] = { event,
-definedBy }`. Of the definitions of that name in the set that saw every
-removal the winner saw, those that saw no other are its first definitions;
-`definedBy` is their root if they are all one account's, and null if not
-([02](02-records.md) §6.3): no id decides it. Where several changes to a
-definition are latest, the lowest id wins only when they are one account's,
-or when none is a delete and their definitions name the same first definer;
-otherwise none is set in `definitions`, and `contested[name]` lists the
-latest ones instead, for readers to judge by what they say (02 §6.3). While
-it does, only someone holding `manage` may change the definition. A change applied on top, having
-seen them, removes `contested[name]`. A deleted one removes the entry.
+Where an id picks the event an entry names, the outcome is the same either
+way: two assignments of one role to one account give the same power, and a
+closed invite is closed. No id decides between definitions, or between
+accounts.
+
+A `definition` sets `definitions[name] = { event, definedBy }`. Of the
+definitions of that name in the set that saw every removal the winner saw,
+those that saw no other are its first definitions; `definedBy` is their root
+if they are all one account's, and null if not ([02](02-records.md) §6.3): no
+id decides it. Where several changes to a definition are latest, the lowest
+id wins only when they are one account's, or when none is a delete and their
+definitions name the same first definer; otherwise none is set in
+`definitions`, and `contested[name]` lists the latest ones instead, for
+readers to judge by what they say (02 §6.3). While it does, only someone
+holding `/collection/define` for it may change the definition. A change
+applied on top, having seen them, removes `contested[name]`. A deleted one
+removes the entry.
 
 `keyDue` is true, in a private space, when some event in the set took
 reading from someone (in its own view, a reader before and not after) and the
 current key's event had not seen it; and, for the current state, when anyone
-who held the current key (a reader as it was made, or made a reader by a
-change it had not seen) reads no more, however that came about.
+who held the current key (a reader as it was made, or made a reader by an
+assignment it had not seen) reads no more, however that came about.
 
 The **current state** is the merge of the valid events.
 
-> Rationale: least power wins, so a grant racing a restriction beats it only
-> when neither role covers the other, and then by lower rank: a grant its
-> author could have made anyway. An id decides only between two equally
-> restrictive writes, where either outcome is safe. Rivals are compared by the roles as each one's own
-> view had them, so a later edit to a role can't reorder them.
+> Rationale: rivals resolve toward less power. An unassignment beats an
+> assignment, a closed invite an open one, and rival definitions hold only
+> what they share. An id picks only between outcomes that are the same.
 
-### 4.5 Refusals — the rank rule
+### 4.5 Refusals — the grant rule
 
-`refusal(e, S)` with `A = role(S, e.root)` is:
+`refusal(e, S)` is null when the event's root, `A`, may make the change in
+`S`, by `may(S, A, cmd, args)` with the command and arguments of §2.3, or
+because it is one of the changes anyone may make for themselves:
 
-**`role`**
+**`role`** — `may(S, A, /role/define, { role: name })`.
 
-- `A` must hold `manage`;
-- if the role exists, its rank must be below `A.rank`;
-- removing: the role must exist;
-- otherwise the new rank must be below `A.rank`, and every permission in the
-  new role must be matched by some pattern of `A` (a `*` in `A`'s pattern
-  matches anything, including a `*`).
+**`assign`**
 
-**`member`**
+- `did` starting `role:`: refused (roles go to accounts).
+- _Joining by invite_ (`viaInvite` set): `assigned` is true; `A = did`; the
+  invite exists and is open; its role equals `role`; `did` does not hold
+  `role` now; the role exists.
+- _Leaving a role_ (`assigned: false`, `A = did`): allowed when `did` holds
+  `role` now.
+- _Otherwise_: `did` is not a founder; the role exists;
+  `args = { role, self: A = did, roles: rolesOf(S, did) }`; assigning needs
+  `may(S, A, /role/assign, args)`; unassigning needs `did` to hold `role` now
+  and `may(S, A, /role/unassign, args)`.
 
-- _Joining by invite_ (`viaInvite` set): `root` must equal `did`; the invite
-  must exist and be open; its role must equal `e.role`; `did` must have no
-  role now; the invite's role must exist.
-- _Leaving_: `root = did` and `role` null is allowed when `did` has a role now.
-- _Otherwise_: `A` must hold `manage`; if `did` has a role now, its rank must
-  be below `A.rank`; removing requires `did` to have a role; a new role must
-  exist and its rank must be **at most** `A.rank`.
+**`remove`** — `did` must be a member now. Leaving (`A = did`) is allowed,
+a founder's included. Otherwise `did` is not a founder, and
+`may(S, A, /member/remove, { self: false, roles: rolesOf(S, did) })`.
 
-**`invite`**
+**`invite`** — for a role `x`, `assigns(x)` is: `x` exists and
+`may(S, A, /role/assign, { role: x, self: false, roles: [] })`. If the invite
+exists, `assigns(its role)`; closing (`open: false`) requires the invite to
+exist; opening requires `assigns(role)`.
 
-- `A` must hold `invite`;
-- if the invite exists and its current role exists, that role's rank must be
-  at most `A.rank`;
-- closing (`open: false`) requires the invite to exist;
-- opening requires the role to exist with rank at most `A.rank`.
-
-**`revoke`** — `A` must hold a role. A revoke only ever reaches versions its
+**`revoke`** — `A` must be a member. A revoke only ever reaches versions its
 own account signed (§5.1), so a member may revoke only its own keys in effect.
 
-**`fork`** — `A` must be non-null: any member may bring the proof, which
+**`fork`** — `A` must be a member: any member may bring the proof, which
 stands on its own.
 
-**`definition`**
+**`definition`** — with `defines` = `may(S, A, /collection/define, { collection: name })`:
 
-- a new collection: `A` must hold `define`;
-- an existing one (change or delete): `A` holds `manage`, or `A` is non-null
-  and `root` is the collection's `definedBy` (never when that is null).
+- a new collection: `defines`;
+- an existing one (change or delete): `defines`, or `A` is a member and
+  `A` is the collection's `definedBy` (never when that is null);
+- a contested one: `defines`.
 
-**`key`** — the space must have keys (private); `A` must hold `manage`; the
-`keyId` and the `readKey` must both differ from every key already in `keys`.
+**`key`** — the space must have keys (private); `may(S, A, /key/change, {})`;
+the `keyId` and the `readKey` must both differ from every key already in `keys`.
 
-**`relays`** — `A` must hold `manage`, and the list must pass `checkRelays` (§10).
+**`relays`** — `may(S, A, /space/relays, {})`, and the list must pass `checkRelays` (§10).
 
-**`keepers`** — `A` must hold `manage`, and the list must pass `checkKeepers` (§10).
-
-A consequence of the rank rule: two accounts of equal rank can never remove or
-demote each other, only themselves.
-
-**Reductions.** When an applied `member` or `role` event lowers an affected
-account's role — the `did` of a `member` event; every current holder of the
-role for a `role` event — it is a **reduction** of that account. Lowered means
-the role is gone, ranked lower, or lacks a permission it had. A promotion takes
-nothing away and is not one. Reductions drive §5.
+**`keepers`** — `may(S, A, /space/keepers, {})`, and the list must pass `checkKeepers` (§10).
 
 ### 4.6 What the replay exposes
 
@@ -482,14 +702,22 @@ nothing away and is not one. Reductions drive §5.
 - `revoked(key, account)` — every applied revoke of that key by that account.
 - `named(did)`, `knownInvite(inviteDid)` — as used in §3.4.
 
-**Example (a removal against a concurrent ban).** Admin Alice makes Bob a
-moderator and gives moderators `manage`, then adds Carol. Apart, Alice removes
-Bob and Bob removes Carol; both saw Carol's addition. Each is allowed in its
-own view. Alice's removal is a reduction of Bob that Bob's removal had not
-seen, and its cutoff doesn't cover it, so it strikes it; nothing strikes
-Alice's. Every arrival order gives Bob: none, Carol: member.
+**Example (a removal against a concurrent ban).** Alice founds the space with
+a role `mod` holding `/member/remove`. She assigns it to Bob, and `member` to
+Carol. Apart, Alice removes Bob and Bob removes Carol; both saw Carol's
+assignment. Each is allowed in its own view. Alice's removal reaches Bob's,
+which had not seen it, and its cutoff doesn't cover it, so it strikes it;
+nothing strikes Alice's. Every arrival order gives Bob: no member, Carol:
+`member`.
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `componentsOf`, `merge`, `least`, `definerOf`, `extended`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/access-attacks.test.ts`, `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/roles.test.ts` (all of "the rank rule", "invites", "offline conflicts"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
+**Example (a definition concurrent with its author's unassignment).** Erin
+holds `admin`, which may define `member`. Alice unassigns her from `admin`;
+apart, Erin redefines `member` to hold `/member/remove`, and Bob, a member
+who saw her definition, removes Carol. Erin's definition needed `admin`, so
+the unassignment strikes it; Bob's removal rests on it, and with it gone
+from his view, is refused. Carol stays.
+
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `validWithin`, `componentsOf`, `merge`, `may`, `refusal`, `reductionOf`, `definerOf`, `extended`). Tests: `packages/core/tests/roles.test.ts` ("what a struck change carries with it"), `packages/core/tests/access-attacks.test.ts`, `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions, removals), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
 
 ---
 
@@ -512,10 +740,12 @@ above the version's place in that key's line for that collection (`log.n`). What
 whatever the change took away.
 
 Given a record's `id`, its root, its `seen`, its `author`, collection and
-`log.n`, a predicate `needs(role, state)`, and optionally `within`, the `seen` of a
-version that cites this one. Peers never pass `within` when judging a
-version's standing; the library's checks do, to judge a version they cite as
-of what the citer saw ([checks](../packages/core/docs/checks.md#citing-a-version)):
+`log.n`, a predicate `needs(S, without?)` (whether the root may do what the
+record does in `S`, with the role `without` taken from it), and optionally
+`within`, the `seen` of a version that cites this one. Peers never pass
+`within` when judging a version's standing; the library's checks do, to judge
+a version they cite as of what the citer saw
+([checks](../packages/core/docs/checks.md#citing-a-version)):
 
 1. If anything in `seen`, or in `within`, is missing or waiting → not yet
    (retry later).
@@ -526,30 +756,29 @@ of what the citer saw ([checks](../packages/core/docs/checks.md#citing-a-version
    The same for a fork: if a fork of `author`'s line in the record's
    collection is recorded (§6.5) whose `from` is at most `log.n`, and (with
    `within`) its event is in `within ∪ ancestors(within)` → withdrawn.
-3. `S_seen = at(seen)`. If `needs(role(S_seen, root), S_seen)` is false → refused.
-4. Let `U` be the reductions of `root` (§4.5) whose events are **not** in
-   `seen ∪ ancestors(seen)`, that do not cover it, and (with `within`) **are**
-   in `within ∪ ancestors(within)`. If `U` is not empty, let
-   `S' = at(seen ∪ U)`, the record's own view with those changes and everything
-   they saw, the rules included. If the record would not stand by §5.2
-   steps 6–9 with `S'` in place of `at(seen)` → withdrawn ("its author's access
-   was taken away").
+3. `S_seen = at(seen)`. If `needs(S_seen)` is false → refused.
+4. For each applied reduction `u` of `root` (§4.3) whose event is **not** in
+   `seen ∪ ancestors(seen)`, that does not cover it, and (with `within`) **is**
+   in `within ∪ ancestors(within)`: if `u` is a removal → withdrawn ("its
+   author's access was taken away"); if `u` takes role `x` and
+   `needs(S_seen, x)` is false → withdrawn.
 5. Otherwise it stands.
 
 So a record stands if its author was allowed as of what it saw, and still is
-once every change to its standing it had not seen is added, along with what
-those changes saw, unless the change covers it. A writer can't escape a
-removal, a demotion, or the rules a demotion saw, by naming an older point. A
-narrowed rule on its own binds what saw it: without trusted time, a version
-naming an older point can't be told from one written offline then, and it
-counts if its author could have written it then. For a version that another
-cites, judged `within` the citer's `seen`, only what the citer had seen can take it away.
+once every removal and unassignment it had not seen is taken into account,
+unless the change covers it. A writer can't escape a removal, or the loss of a
+role it needed, by naming an older point. A narrowed rule or a role written
+again binds only what saw it: without trusted time, a version naming an
+older point can't be told from one written offline then, and it counts if
+its author could have written it then. For a version that another cites,
+judged `within` the citer's `seen`, only what the citer had seen can take it
+away.
 
 Withdrawn is a refusal for every purpose but two: the version is still
 stored, and the library's checks can count it as evidence cited by a version
 that had not seen what withdrew it ([02](02-records.md) §9.5).
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `cutOf`), `packages/core/src/node/space-runtime.ts` (`underUnseen`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/rules.test.ts` ("a narrowed rule…"), `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `cutOf`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
 
 ### 5.2 Standing of an ordinary record
 
@@ -561,19 +790,21 @@ A version outside the access collections **stands** when, in this order:
    grants `/account/write` there ([01](01-identity.md) §8);
 4. its first version is present, is `seq` 0, has the same key and collection;
 5. `at(seen)` is available (else: not yet);
-6. with `rules` = the rules of the definition in force for its collection in
+6. its **invocation** is `/record/delete` with `{ collection, byCreator }` for
+   a deleted version, else `/record/write` with
+   `{ collection, byCreator, body }`, where `byCreator` is true for `seq` 0 and
+   otherwise whether the root of the first version is `root`, and `body` is
+   the version's body as this peer opens it (§2.2 for one it can't);
+   `needs(S, x) = isMember(S, root)` in a `sys.*` collection, and
+   `may(S, root, cmd, args)` with `x` taken from `root` otherwise;
+7. `root` is a member in `at(seen)` and `needs(at(seen))` holds;
+8. with `rules` = the rules of the definition in force for its collection in
    `at(seen)` (none for `sys.*` collections, or when the definition is missing
-   or unreadable), the action (`create` for `seq` 0, `delete` for a deleted
-   version, else `edit`), and `creator` = whether the root of the first
-   version is `root`:
-   `needs(role) = role ≠ null and (no rules or allows(rule for action, { member: true, creator, can: p → role holds <collection>/p }))`
-   ([02](02-records.md) for `allows`, `onePer`, `fixed` and topics);
-7. `role(at(seen), root)` is non-null and satisfies `needs`;
-8. `judge(...)` (§5.1) passes;
-9. the [02](02-records.md) checks on topic tags, `onePer` keys and `fixed`
-   fields pass (skipped where the body cannot be opened);
-10. §5.1 step 4 holds: with the changes to its author's standing it had not
-    seen, and what they saw, it would still have stood.
+   or unreadable), a `final` rule refuses every `seq > 0` version
+   ([02](02-records.md) §7.4);
+9. `judge(...)` (§5.1) passes;
+10. the [02](02-records.md) checks on topic tags, `onePer` keys and `fixed`
+    fields pass (skipped where the body cannot be opened).
 
 > **Known defect:** a peer applies step 3 only where it knows the space is
 > one of the account's own (`accountOnly` in
@@ -583,73 +814,72 @@ A version outside the access collections **stands** when, in this order:
 > from any other, and then lets stand a version the account's devices refuse.
 > Tracked in [#90](https://github.com/leifriksheim/weave/issues/90).
 
-So a record is judged by the rules it saw, and by any rules that a change to
-its author's standing it had not seen had seen. Rules that loosened take
-nothing away, since what kept to the stricter rules keeps to these.
-
 An access record stands when its event's status is `applied`.
 
 A non-member — including someone holding only a view-only invite — can
 therefore write nothing at all in a space, not even `sys.profile`.
 
-_Source: `packages/core/src/space/roles.ts` (`judge`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `rulesAt`, `underUnseen`, `underRules`, `definitionIn`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts` ("rules: changing them"), `packages/core/tests/access-convergence.test.ts`._
+_Source: `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `rulesAt`, `definitionIn`), `packages/core/src/space/roles.ts` (`judge`, `may`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/space-access.test.ts` ("who may write", "taking it back"), `packages/core/tests/rules.test.ts`, `packages/core/tests/access-convergence.test.ts`._
 
 ---
 
 ## 6. Changing who may do what
 
-### 6.1 Members and roles
+### 6.1 Roles, assignments and removals
 
-- **Add or change a member:** write `sys.member` at `member:<hex40(did)>` with
-  `{ did, role }`.
-- **Remove a member:** the same with `role: null`.
-- **Define or change a role:** write `sys.role` at `role:<name>` with the role.
-- **Remove a role:** `{ name, removed: true }`. Its holders stay in `members`
-  but hold nothing (they are no longer readers).
+- **Define or change a role:** write `sys.role` at `role:<name>` with its
+  grants, each a delegation payload from the writer's account (§2.2), and the
+  roles it nests. It replaces the definitions it saw.
+- **Assign a role:** write `sys.assign` at `assign:<hex40(did|role)>` with
+  `{ did, role, assigned: true }`.
+- **Take a role:** the same with `assigned: false`.
+- **Remove an account:** write `sys.remove` at `remove:<hex40(did)>` with
+  `{ did }`. Every role assigned to it that the removal saw ends.
 
-Each is judged by §4.5.
+Each is judged by §4.5. There is no record for removing a role: write its
+definition with no grants instead. Its holders stay members.
 
 ### 6.2 Leaving and handing over
 
-**Leaving the space's history:** an account writes its own member record with
-`role: null`. Anyone may do this, whatever their rank.
+**Leaving a role:** an account writes its own `sys.assign` for that role with
+`assigned: false`. **Leaving the space's history:** an account writes its own
+`sys.remove`. Anyone may do either, whatever their roles; a founder that
+leaves the space is a founder no more.
 
-**Handing over:** someone at the top gives another account their own role
-(allowed: a role up to your own rank), then removes themselves. The new holder
-keeps managing.
+**Handing over:** a founder assigns another account a role whose grants run
+the space, then leaves. The new holder keeps running it, as far as its role's
+grants go; nobody is the founder any more.
 
 **Leaving on a device:** when an account stops holding a space in which it
-holds a role, the device that leaves **SHOULD** first write the account's own
-`sys.member` with `role: null`, and give it to at least one peer of another
-account before it forgets the space, since nothing sends it afterwards. It
-then deletes the space's membership record in the account registry (§13.2)
-and forgets the space and its keys. The replay drops the account from
-`readers`, a key change becomes due (§9.2), and a manager changes the key
-(§9.3).
+holds a place, the device that leaves **SHOULD** first write the account's
+own `sys.remove`, and give it to at least one peer of another account before
+it forgets the space, since nothing sends it afterwards. It then deletes the
+space's membership record in the account registry (§13.2) and forgets the
+space and its keys. The replay drops the account from `readers`, a key change
+becomes due (§9.2), and someone granted `/key/change` changes the key (§9.3).
 
 - A device that follows a deleted membership in the registry, while the
-  account still holds a role in that space, **SHOULD** write the self-removal
-  too: the device where the person left may have had no peer to give it to,
-  or no note that may change access. Two such removals made apart are both
-  accepted.
-- An account with no role (a view-only holder) has nothing to remove and
+  account still holds a place in that space, **SHOULD** write the
+  self-removal too: the device where the person left may have had no peer to
+  give it to, or no note that may change access. Two such removals made apart
+  are both accepted.
+- An account with no place (a view-only holder) has nothing to remove and
   writes nothing.
 - An account that is the space's only reader writes nothing: nobody else
   holds a key to change.
-- Anyone may leave whatever their rank, so the last account at the top can
-  leave too. The space is then left with no one holding `manage`, and that
-  is accepted.
+- Anyone may leave, so the founder can leave too. The space is then left with
+  no one holding what the founder alone held, and that is accepted.
 
 What the library does, and how long it waits for a peer, is in
 [its docs](../packages/core/docs/node.md#leaving-a-space).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…")._
 
 ### 6.3 Cutoffs
 
-A change that takes power from people — lowering or removing a member, lowering
-or removing a role, revoking a key — **SHOULD** carry `cutoff`: for each key of
-the affected accounts and each collection, the end of the unbroken line its
+A change that takes power from an account — taking a role from it, removing
+it, revoking a key — **SHOULD** carry `cutoff`: for each key of the affected
+account and each collection, the end of the unbroken line its
 writer holds of that key's versions in that collection ([02](02-records.md)
 §4.10): from place 0 of `log`, each place held and naming the one before it
 as `log.prev`. A place held past a gap covers nothing, so one planted far ahead
@@ -660,16 +890,13 @@ orders each account's lines with defined collections first, then the rest,
 each in name order, and takes one line from each account in turn (accounts by
 DID), so no one's writing can crowd out anyone else's, and nobody can make
 themselves unremovable by writing into many collections. What is left out is
-judged with the change. A change reaching more than 1024 accounts, such as a role
-with that many holders, can't cover them all; lower or remove the role's
-holders in smaller changes first. A node covers only the collections it holds: one
+judged with the change. A node covers only the collections it holds: one
 holding part of a space, removing someone, leaves their writes elsewhere to be
 judged with the change ([#166](https://github.com/leifriksheim/weave/issues/166)).
 
 ```json
 {
   "did": "did:key:zDnae…bob",
-  "role": null,
   "cutoff": {
     "did:key:zDnae…bobLaptop": { "app.chat": 41, "app.photos": 3 },
     "did:key:zDnae…bobPhone": { "app.chat": 7 }
@@ -682,8 +909,8 @@ change goes. Anything else the affected account wrote that had not seen the
 change, whatever point in history it claims, is judged with it (§5.1 step 4):
 later places, and keys the change's writer had never seen. A cutoff names a
 place, not a branch: a second version at a covered place is a fork of that
-key's line, and a fork proof (§6.5) withdraws both. A change to a collection's definition carries no cutoff: it binds what
-saw it.
+key's line, and a fork proof (§6.5) withdraws both. A role's definition and a
+change to a collection's definition carry no cutoff: each binds what saw it.
 
 > Rationale: a cutoff is exact and small, one number per key, and doesn't
 > depend on which records the writer's node happens to hold, as a list of ids
@@ -703,7 +930,7 @@ not a note, so every note to that key goes with it.
 A key can't pass its note on ([01](01-identity.md) §7.5), so no other key
 acts through a revoked one: the revoke of a key is all there is to undo.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `removeRole`, `revoke`, `cutoffFor`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("handing over…", "a revoked key…"), `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
+_Source: `packages/core/src/node/space-runtime.ts` (`assign`, `removeAccount`, `revoke`, `cutoffFor`, `packCutoff`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("a revoked key…"), `packages/core/tests/cutoff-limits.test.ts`, `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
 
 ### 6.5 Proving a fork
 
@@ -769,9 +996,10 @@ A secret of any length other than 32 bytes **MUST** be refused.
 
 ### 7.2 Opening and closing an invite
 
-An account holding `invite` opens one by writing `sys.invite` at
-`invite:<hex40(inviteDid)>` with `{ key: inviteDid, role, open: true }`. Only
-the invite's public key goes into the space; the secret goes only into the link.
+An account granted `/role/assign` for a role (§2.5) opens an invite to it by
+writing `sys.invite` at `invite:<hex40(inviteDid)>` with
+`{ key: inviteDid, role, open: true }`. Only the invite's public key goes into
+the space; the secret goes only into the link.
 
 It is closed by writing the next version of the same record with `open: false`
 (same `key` and `role`). Whether deleting the record should also close it is
@@ -787,12 +1015,12 @@ view-only invite (§7.5) has no record and cannot be closed; only a key change
 > Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
 
 > **Planned:** a deleted access record cannot leave access standing. The
-> original design took access back by deleting the record (a member, an
-> invite, a role); the build writes a change instead (`role: null`,
-> `removed: true`, `open: false`). What is left is to settle the delete
+> original design took access back by deleting the record (an assignment,
+> an invite); the build writes a change instead (`assigned: false`,
+> `sys.remove`, `open: false`). What is left is to settle the delete
 > case, one of two ways: a deleted `sys.invite` version yields an `invite`
-> event with `open: false` (and likewise a deleted `sys.member` or
-> `sys.role` yields a removal), or a peer refuses to store a deleted version
+> event with `open: false` (and likewise a deleted `sys.assign` yields an
+> unassignment), or a peer refuses to store a deleted version
 > in any access collection other than `sys.collection` (§3.4). The second is
 > simpler and keeps "access is taken away by writing a change" as the only
 > rule. Fixes the known defect above, tracked in
@@ -801,11 +1029,11 @@ view-only invite (§7.5) has no record and cannot be closed; only a key change
 ### 7.3 Joining with a secret
 
 Once the invite's record has reached the joiner and is open in the current
-state, the joiner writes **its own** member record:
+state, the joiner writes **its own** assignment:
 
 ```
-sys.member at member:<hex40(joinerDid)>
-{ did: joinerDid, role: <the invite's role>,
+sys.assign at assign:<hex40(joinerDid + "|" + role)>
+{ did: joinerDid, role: <the invite's role>, assigned: true,
   invite: { key: inviteDid, signature: base64url(sig) } }
 
 sig = ECDSA-P256-SHA256 (P1363, 64 bytes) by the invite private key over
@@ -813,17 +1041,17 @@ sig = ECDSA-P256-SHA256 (P1363, 64 bytes) by the invite private key over
 ```
 
 Verification imports the public key from `inviteDid` and checks `sig` over
-the same bytes; a member record whose `invite` does not verify yields no event
+the same bytes; an assignment whose `invite` does not verify yields no event
 (§3.3). The signature binds the join to one account and one space.
 
-If the joiner already holds a role, joining is a no-op. If the invite's record
+If the joiner already holds the invite's role, joining is a no-op. If the invite's record
 has not arrived yet, the joiner keeps the secret and tries again as records
 arrive; once joined it forgets the secret. The joiner writes this record
 before it is a member; its `seen` must include the invite event.
 
 > **Known defect:** a joiner can count itself a member for a moment after the
 > invite was closed elsewhere, until the close reaches it. Other members
-> refuse its member record, and it converges, but the joiner's own view is
+> refuse its assignment, and it converges, but the joiner's own view is
 > optimistic until then. Other implementations MUST NOT treat a join as
 > accepted before the invite's current state says it is open. Tracked in
 > [#10](https://github.com/leifriksheim/weave/issues/10).
@@ -853,18 +1081,24 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
 ```json
 {
   "space": {
-    "id": "b63yb6wiefzfrngbgbmozhv7zcf5ikunjr4al6njqyxvbf62dvi7a",
+    "id": "bvm5is7n2nm7ex3vy7hn2yllhsoi3dxezkrwvv6thhlfb5dioxdta",
     "visibility": "private",
     "creator": "did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg",
     "roles": [
-      { "name": "owner", "title": "Owner", "rank": 100, "permissions": ["*"] },
-      { "name": "editor", "title": "Editor", "rank": 10, "permissions": ["invite", "define"] }
+      {
+        "name": "editor",
+        "title": "Editor",
+        "grants": [
+          { "cmd": "/record", "pol": [] },
+          { "cmd": "/collection/define", "pol": [] },
+          { "cmd": "/role/assign", "pol": [["==", ".role", "editor"]] }
+        ]
+      }
     ],
-    "creatorRole": "owner",
     "createdAt": "2026-01-01T00:00:00.000Z",
     "nonce": "AAECAwQFBgcICQoL",
     "readKey": "did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf",
-    "encryptionKeyId": "GGXACDHnP37iP8E8stD1iLnDQYNcp0cvjsA1q6S3idY",
+    "encryptionKeyId": "aLhvw5pkV65_lcQHEcUOug",
     "name": "Plans"
   },
   "invitedBy": "did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg",
@@ -875,7 +1109,7 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
 }
 ```
 
-encoded: `eyJzcGFjZSI6eyJpZCI6ImI2M3liNndpZWZ6ZnJuZ2JnYm1vemh2N3pjZjVpa3VuanI0YWw2bmpxeXh2YmY2MmR2aTdhIiwidmlzaWJpbGl0eSI6InByaXZhdGUi…`
+encoded: `eyJzcGFjZSI6eyJpZCI6ImJ2bTVpczduMm5tN2V4M3Z5N2huMnlsbGhzb2kzZHhlemtyd3Z2NnRoaGxmYjVkaW94ZHRhIiwi…`
 (the full string is the base64url of the JSON above).
 
 A private-space invite carries the space key, so the whole string is a
@@ -945,8 +1179,8 @@ seals under one key, and a space's seal key lasts until a member is removed
 In a private space, the body of every version is encrypted **before signing**,
 except in these collections, which stay in the clear:
 
-`sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.key`, `sys.box`,
-`sys.memberkey`, `sys.relays`, `sys.keepers` and `sys.fork` (§6.5): proof every peer must check, holding signed envelopes
+`sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.key`,
+`sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers` and `sys.fork` (§6.5): proof every peer must check, holding signed envelopes
 rather than anyone's words.
 
 Everything else is encrypted — application records, `sys.collection`
@@ -1034,7 +1268,7 @@ _Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `pa
 >
 > - **`profile:` keys** (§11) are `hex40` of the account, so anyone can
 >   confirm which known accounts have a profile in a space. Membership is
->   public anyway: `sys.member` bodies name each account in the clear (§8.2),
+>   public anyway: `sys.assign` bodies name each account in the clear (§8.2),
 >   by design, so a blind peer can judge writes. Hiding `profile:` keys hides
 >   nothing about who is a member until that changes.
 > - **Collection names.** `collection` travels in the clear, so the same
@@ -1091,18 +1325,18 @@ publish it again when it differs from what is published.
 ### 9.2 When a key change is due
 
 `keyDue` (§4.4) is true while some applied event that took reading from
-someone (removed, left, their role deleted) was not seen by the current key's
+someone (removed, left, or unassigned from their last role) was not seen by the current key's
 event. A key change made at the same time as a removal, not having seen it,
 leaves the key change due ([#173](https://github.com/leifriksheim/weave/issues/173)).
 
-A **former member** is an account named by an applied `member` event that is
-not a reader now: removed, left, or holding a role that was removed. Peers
+A **former member** is an account named by an applied `assign` or `remove`
+event that is not a reader now: removed, left, or holding no role. Peers
 send them no live messages, and while a key change is due, nothing at all
 ([04](04-network.md) §6.3, §9.2).
 
 ### 9.3 Changing the key (`sys.key`)
 
-A member holding `manage` and the current key, seeing `keyDue`, **SHOULD**
+A member granted `/key/change` and holding the current key, seeing `keyDue`, **SHOULD**
 change the key. One whose own change made it due SHOULD change it at once,
 before it writes anything else or closes the space: until then, the one who
 lost their place still reads what others write.
@@ -1130,9 +1364,9 @@ every reader needs it to derive `onePer` keys ([02 §7.3](02-records.md)). A
 key change whose `earlier` does not open, or leaves K₀ out, is
 **malformed**: the reader takes no key from it. The change still counts in
 the access history, which peers that can't open it judge the same way. A
-member holding `manage`, K₀ and the key a malformed change names **SHOULD**
-change the key, as when one is due; a manager **MUST NOT** change the key
-without holding K₀. Until someone does, a newcomer that holds only that key
+member granted `/key/change` and holding K₀ and the key a malformed change
+names **SHOULD** change the key, as when one is due. A writer **MUST NOT**
+change the key without holding K₀. Until someone does, a newcomer that holds only that key
 reads nothing sealed before it.
 
 ### 9.4 Boxes (`sys.box`)
@@ -1150,9 +1384,9 @@ sealed = HPKE(recipientMemberKey, "weave/space-key-box/v1",
 `HPKE` is sealing to a key ([01 §9.2](01-identity.md)), with that label and
 bound.
 
-A manager seals the current key to every reader who has published a member key
-and has no box for that key id yet from themselves or from anyone holding
-`manage`.
+A member granted `/key/change` seals the current key to every reader who has
+published a member key and has no box for that key id yet from themselves or
+from anyone granted `/key/change`.
 
 A recipient opens every box with `to` = its account and `keyId` naming a key
 it lacks in the history, with the bound built from the space, that `keyId`
@@ -1176,7 +1410,7 @@ _Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`
 **`sys.relays`** at `relays:space`: `{ relays: string[] }` — where the
 space's members meet. Valid (`checkRelays`) when it is a list of at most 8
 distinct URLs, each at most 200 characters, each `wss://`, or `ws://` only on
-`localhost`, `127.0.0.1` or `[::1]`. Only `manage` may set it. Until the space
+`localhost`, `127.0.0.1` or `[::1]`. Only someone granted `/space/relays` may set it. Until the space
 names some, members meet on relays they learn elsewhere, such as the invite
 that brought them (§7.4).
 
@@ -1185,7 +1419,8 @@ that brought them (§7.4).
 reach before a node holding only part lets go of it. Valid (`checkKeepers`)
 when there are at most 16 keepers, each `did` starts with `did:key:` and is
 at most 200 characters, each `name` a string of at most 80 characters, no
-`did` twice, and `copies` is null or an integer 1–16. Only `manage` may set it.
+`did` twice, and `copies` is null or an integer 1–16. Only someone granted
+`/space/keepers` may set it.
 What keepers do is in [05 — Sync and storage](05-sync-and-storage.md).
 
 _Source: `packages/core/src/space/roles.ts` (`checkRelays`, `checkKeepers`, `MAX_RELAYS`, `MAX_KEEPERS`), `packages/core/src/node/space-runtime.ts` (`nameRelays`, `setRelays`, `setKeepers`). Tests: `packages/core/tests/space-relays.test.ts`, `packages/core/tests/carrier.test.ts` ("is named a keeper…")._
@@ -1238,24 +1473,22 @@ and a label:
 ```
 nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1", 32)[0..12] )
 K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1", 32)      // the space key, §8.1
-space   = { visibility: "private", creator: accountDid,
-            roles: [{ name: "owner", title: "Owner", rank: 100, permissions: ["*"] }],
-            creatorRole: "owner", createdAt: "1970-01-01T00:00:00.000Z", nonce,
+space   = { visibility: "private", creator: accountDid, roles: [],
+            createdAt: "1970-01-01T00:00:00.000Z", nonce,
             readKey: readDid(K), encryptionKeyId: keyId(K) }
 id      = cid(canonical(genesis))            // §1.2
 ```
 
-The roles are exactly that one role, title included; in the genesis they
-read `[{"name":"owner","permissions":["*"],"rank":100,"title":"Owner"}]`. Any
-other bytes give another id.
+There are no founding roles: the account is the space's founder, and holds
+every command. Any other bytes give another id.
 
 | Label                    | Space                | Name               |
 | ------------------------ | -------------------- | ------------------ |
 | `weave/account-registry` | the account registry | `Account registry` |
 | `weave/contacts`         | the contacts space   | `Contacts`         |
 
-Example (seed `01 02 … 10`): registry `bvkbzgjhryaxdys2fyi4oifvardlc4b7bv3bvqn6d736v5ngl23iq`
-(nonce `Jx8Oo78z30WwKl1X`), contacts `bqg4jypdnk3lvna26eda7bmesxzhbsoisqs5xodhif4d4gyx2adnq`.
+Example (seed `01 02 … 10`): registry `bvlkecmz3ywm4lzqjcjs4iwy7gjyk6d2xou6di2rk3juquwffqarq`
+(nonce `Jx8Oo78z30WwKl1X`), contacts `b5fmel466vf72tqpijj4l5yj3pfmbjet5y55wp2db66vhswunomyq`.
 
 > Rationale: the DID alone is not enough to find them — it appears on
 > everything the account signs.
@@ -1450,6 +1683,9 @@ Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
   the background, are proposed in
   [#25](https://github.com/leifriksheim/weave/issues/25).
 - Expiry or single use of invites: an open invite stays open until closed.
+- An argument that tells writing a new record from editing one, so a grant
+  of `/record/write` can allow one and not the other: `byCreator` is true for
+  both ([the plan](drafts/constitution-grants-contracts.md) §7).
 - A way to re-establish a space's key for members who lost every key they held
   other than a fresh role invite.
 - `invitedBy` and the space `name` in invites are unauthenticated; no

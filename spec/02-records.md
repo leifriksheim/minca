@@ -430,7 +430,7 @@ must be of the same key and collection (§4.6) and which its chain leads to
 (§4.7). Every rule that asks about a record's first version asks about that
 one:
 
-- the `creator` rule (§7.1), and the rules checked against a first version
+- `byCreator`, the argument grants read (§7.1), and the rules checked against a first version
   (§7.3, §7.4), when judging a version;
 - `@createdBy`, and when the record was created, when reading its current
   version.
@@ -457,8 +457,8 @@ their own view of the definition. A writer MUST set `retain: true` when:
 
 - the collection's definition in force says `history: "all"` (§6); or
 - the collection is one of the access-history collections (`sys.role`,
-  `sys.member`, `sys.invite`, `sys.revoke`, `sys.collection`, `sys.key`,
-  `sys.relays`, `sys.keepers`, `sys.fork`). A peer MUST refuse a version of
+  `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.collection`,
+  `sys.key`, `sys.relays`, `sys.keepers`, `sys.fork`). A peer MUST refuse a version of
   one of these without `retain` ([03 — Spaces](03-spaces.md)); or
 - the version is a first version (`seq 0`) and the rules in force (§7) have
   `onePer` or `fixed`. Both are checked against the first version's body,
@@ -836,7 +836,6 @@ history. In a private space its body is encrypted like any other record's.
 | `version`     | integer ≥ 1           | yes  | Shape version (§6.3)                                                                                                                                                         |
 | `history`     | `"latest"` \| `"all"` | no   | Default `"latest"`. `"all"`: writers mark every version `retain` (§4.5).                                                                                                     |
 | `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                     |
-| `permissions` | string[]              | no   | Permissions its rules may name, each `^[a-z][a-zA-Z0-9]{0,39}$` (§7.1)                                                                                                       |
 | `rules`       | object                | no   | §7                                                                                                                                                                           |
 | `topics`      | string[]              | no   | §8                                                                                                                                                                           |
 
@@ -862,7 +861,7 @@ Example (the standard `std.vote`, as stored):
   },
   "version": 1,
   "links": { "about": { "to": ["std.poll"], "cardinality": "one", "description": "The poll voted on" } },
-  "rules": { "edit": "creator", "delete": "creator", "onePer": ["@author", "link:about"] }
+  "rules": { "onePer": ["@author", "link:about"] }
 }
 ```
 
@@ -929,35 +928,34 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 A definition's `version` is a whole number from 1. Records do not name the
 definition version they were written under; a record is judged by the
 definition **in force as of the access changes it saw** (`seen`), which every
-peer computes the same way, and by the rules of any later change to it that
-it had not seen and that did not keep it ([03 — Spaces](03-spaces.md) §5.2
-step 10).
+peer computes the same way ([03 — Spaces](03-spaces.md) §5.2). A narrowed rule
+binds what saw it.
 
 The definition in force for a collection is the latest change to
 `collection:<name>` that counted in the access-history replay — not the one
 with the highest `version`. Who may make such a change is also the replay's
-question: creating a definition needs the permission `define`; changing or
-deleting one needs `manage`, or being whoever first defined it (while still a
-member). Deleting a definition that doesn't exist, as of what the delete saw,
-is refused. A definition counts only under a note that grants
-`/collection/define` ([01 — Identity](01-identity.md) §8), whatever the
-writer's role.
+question: creating a definition needs a grant of `/collection/define` for it
+([03](03-spaces.md) §2.3); changing or deleting one needs that grant, or being
+whoever first defined it (while still a member). Deleting a definition that
+doesn't exist, as of what the delete saw, is refused. A definition counts only
+under a note that grants `/collection/define` ([01 — Identity](01-identity.md)
+§8), whatever the writer's roles.
 
 **Who first defined it.** A definition's key, `collection:<name>`, is the
-space's, not an account's (§4.1), so two members holding `define` can each
+space's, not an account's (§4.1), so two members granted `/collection/define` can each
 write a first definition without having seen the other's. Of the definitions
 that counted in a state, take those that saw every removal (a delete of the
 definition) the one in force saw; of those, the ones that saw none of the
 others are its first definitions. If they are all one account's, that
 account first defined it. If they are two accounts', **no one** did, and
-only someone holding `manage` may change or delete it. No id decides, since a
+only someone granted `/collection/define` for it may change or delete it. No id decides, since a
 writer can grind one.
 
 **Rival changes are not picked by id.** Where more than one change to
 `collection:<name>` is latest (none saw the others), the replay picks the
 lowest id only when they are one account's, or when none is a delete and all
 the definitions among them name the same first definer: changes by accounts
-that may each change it, the definer and managers, each of which could have
+that may each change it, the definer and those granted `/collection/define`, each of which could have
 been the latest alone. Otherwise, first definitions by two accounts or a
 delete beside another account's change, the collection is **contested**: the
 replay picks none of them, since picking by id would let whoever ground the
@@ -969,30 +967,30 @@ and a peer **MUST** refuse a version in that collection whose state as of
 collection, and no rules does not mean anything goes. A peer that can't read
 them all treats the collection as having a definition it can't read.
 
-Rivals are settled by a change that saw them all: only someone holding
-`manage` may make it, since no one first defined the collection; it is then
-in force, and names no definer, or the manager when it saw a delete (a delete
-starts the collection afresh). A manager's delete settles them too.
+Rivals are settled by a change that saw them all: only someone granted
+`/collection/define` for it may make it, since no one first defined the
+collection; it is then in force, and names no definer, or its author when it
+saw a delete (a delete starts the collection afresh). Such a delete settles
+them too.
 
-Example: Alice and Mallory both hold `define`, Bob holds `manage`. Alice
+Example: Alice and Mallory are both granted `/collection/define`. Alice
 defines `app.poll` (`d5`) and changes it (`d6`); Mallory writes a definition
 of it naming a point before Alice's, with a lower id (`d0`). Both count, no
 one first defined `app.poll`, and `d6` and `d0` are both latest, so neither is
-in force, since they differ. Neither Alice nor Mallory may change it, even
-having seen both. Bob
-writes `d8` having seen `d6` and `d0`, and `d8` is in force. If Mallory
-backdates another rival past `d8`, the collection is out of force again until
-Bob settles it again: a member holding `define` can stop a collection until
-a manager settles it, but can't choose its rules or write without them. Had
-Mallory instead written a delete as of before Alice's definition, it would be
-refused: there was nothing to delete. Had she defined her own rival and
-deleted it, ground low, the delete and `d6` would be latest together, from two
-accounts: contested again, and settled only by Bob.
+in force, since they differ. A change that saw both, by anyone granted
+`/collection/define` for it, settles it. If Mallory backdates another rival
+past that, the collection is out of force again until it is settled again: a
+member who may define a collection can stop it, but can't choose its rules by
+grinding an id, or have records written without them. Had Mallory instead
+written a delete as of before Alice's definition, it would be refused: there
+was nothing to delete. A member whose role holds no grant for `app.poll`, Alice
+included once hers is taken, can't write a rival at all; Alice, as its first
+definer, may still change it while it is hers alone.
 
 Two members who define a collection apart with the same body leave it in
-force, but with no first definer, so from then on only a manager may change
-it. A member holding `define` can do this on purpose to take a collection's
-definer's control away.
+force, but with no first definer, so from then on only those granted
+`/collection/define` for it may change it. A member who may define it can do
+this on purpose to take a collection's definer's control away.
 
 Peers do not check `version` against the definition it replaces. What the
 library does with it: [collections](../packages/core/docs/collections.md#versions-of-a-definition).
@@ -1003,7 +1001,7 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   `sys.*` collections have no schema, rules or topics from a definition; their
   formats and checks are specified where they are used:
   `sys.collection` (here); the access history, keys, profiles and the account
-  registry — `sys.role`, `sys.member`, `sys.invite`, `sys.revoke`, `sys.fork`,
+  registry — `sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.fork`,
   `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
   `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
   passes and notifications — `sys.carrier`, `sys.pass`, `sys.notify`,
@@ -1021,7 +1019,7 @@ Names are **local to a space**. Nothing registers or owns a name across
 spaces, so a name never says what shape a collection has; its definition in
 that space does.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and a manager changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
+_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and someone who may define it changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who may define it may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
 
 ### 6.5 Planned: compatible definitions
 
@@ -1068,68 +1066,67 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 > may point at more). That leaves new optional fields, new optional link
 > roles, and changes to `title`, `description` and other annotations.
 > Anything else needs a new name. A keyword the check has no rule for is a
-> break. Rules (`create`, `edit`, `delete`, `onePer`, `fixed`, `final`,
-> `check`, `permissions`) are the space's governance, not shape: under the same name
+> break. Rules (`onePer`, `fixed`, `final`, `check`) are the space's
+> governance, not shape: under the same name
 > they may tighten, never loosen. Why this line, after oasdiff:
 > [blueprints and guides](../packages/core/docs/blueprints-and-guides.md#what-additive-means).
 
 ## 7. Rules
 
-A definition's `rules` say who may create, edit and delete its records, what
-must be unique, and which fields are fixed. Every peer enforces them on every
-version it receives. They may also carry `check`, conditions a version must
-meet to count, which peers keep but do not enforce (§7.6).
+A definition's `rules` say what must be unique, which fields are fixed, and
+whether a record is written once. Every peer enforces them on every version
+it receives. They may also carry `check`, conditions a version must meet to
+count, which peers keep but do not enforce (§7.6).
 
 ```json
 "rules": {
-  "create": "member",
-  "edit":   "creator",
-  "delete": ["creator", "can:moderate"],
   "onePer": ["@author", "link:about"],
   "fixed":  ["options"]
 }
 ```
 
-### 7.1 Who
+Rules say nothing about people. **Who may write** a collection's records is
+the space's grants ([03 — Spaces](03-spaces.md) §2): a version invokes
+`/record/write`, or `/record/delete` for a delete, with the collection,
+whether its author created the record, and (to write) its body as the
+arguments, and stands only if a role its author holds grants that, as of its
+`seen`. "Only its creator edits it" is a policy on `.byCreator`; "moderators
+delete any" is a grant to the moderators' role. A definition with `create`,
+`edit` or `delete` rules, or the `permissions` an earlier format named, is
+invalid (§7.5).
 
-`create`, `edit` and `delete` each take one _who_ or a non-empty list of them
-(a list means any of them):
+> Rationale: a rule names a fact any peer can check from the record. Whether
+> someone may do something is a person's decision, and lives in the space's
+> roles, where it can be given and taken back.
 
-| Who       | Holds when                                                                                                                                                                                                           |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `member`  | The writer's root holds any role in the space (as of `seen`).                                                                                                                                                        |
-| `creator` | The writer's root is the root of the version's first version, the one its own chain names (§4.5). A fact about the record; nobody grants it.                                                                         |
-| `can:<p>` | The writer's role holds the permission `<collection>/<p>`, e.g. `app.poll/moderate` ([03 — Spaces](03-spaces.md)). `<p>` MUST match `^[a-z][a-zA-Z0-9]{0,39}$` and MUST be listed in the definition's `permissions`. |
+### 7.1 Whose record it is
 
-Defaults: `create` → `member`; `edit` → `member`; `delete` → whatever `edit`
-is. `create` MUST NOT include `creator`.
+`byCreator`, the argument a grant's policy reads ([03](03-spaces.md) §2.3),
+is whether the writer's root is the root of the version's first version, the
+one its own chain names (§4.5). It is true for a first version. A fact about
+the record; nobody grants it.
 
-At an owned key (§4.1), `creator` is the key's owner, whatever versions are
+At an owned key (§4.1), the creator is the key's owner, whatever versions are
 held and in whatever order they arrived: no one else's first version stands
 there. At a shared key there is no owner. Each first version there starts a
-chain of its own, and `creator` is whoever wrote the first version of the
-chain being edited: anyone the `create` rule allows can start another chain
-at the same key, and its later versions can outrank the first (§4.3). So in a
-collection whose `onePer` does not name `@author`, `edit: "creator"` keeps
-others from editing your version, not from replacing it with theirs; a
-collection that needs one writer per key restricts `create` instead
-(`can:<p>`), or names `@author`.
+chain of its own, and the creator is whoever wrote the first version of the
+chain being edited: anyone granted `/record/write` in the collection can start
+another chain at the same key, and its later versions can outrank the first
+(§4.3). So in a collection whose `onePer` does not name `@author`, a grant
+limited by `.byCreator` keeps others from editing your version, not from
+replacing it with theirs; a collection that needs one writer per key limits
+who may write it at all, or names `@author`.
 
-### 7.2 Which rule applies
+### 7.2 Which rules apply
 
 For a version of a collection that has a valid definition in force (as of its
-`seen`):
-
-| Version                | Action | Rule                                         |
-| ---------------------- | ------ | -------------------------------------------- |
-| `seq == 0`             | create | `create`                                     |
-| `seq > 0`, `deleted`   | delete | `delete`, else `edit`                        |
-| `seq > 0`, not deleted | edit   | `edit` (including re-creating a deleted key) |
-
-Independently of rules, the writer's root MUST hold a role in the space as of
-`seen`. With no definition in force, or in a `sys.*` collection, only that
-applies here (the access collections have their own checks, in
-[03 — Spaces](03-spaces.md)).
+`seen`), `final` refuses every version with `seq > 0`, deletes included
+(§7.4); `onePer` and `fixed` are checked on the versions §7.3 and §7.4 say.
+With no definition in force, or in a `sys.*` collection, no rules apply here
+(the access collections have their own checks, in
+[03 — Spaces](03-spaces.md)). In a `sys.*` collection other than the access
+collections, the writer's root needs only to be a member of the space as of
+`seen`; in any other collection, a grant for what the version does.
 
 ### 7.3 `onePer`: unique by construction
 
@@ -1210,12 +1207,12 @@ Later versions keep the key they have. The first version carries `retain`
 
 A writer derives the key and writes the next version after whatever it holds
 at that key (§4.2) — so "adding another" is an edit of the existing record,
-and the `edit` rule decides whether it is allowed.
+and the writer's grants decide whether it is allowed.
 
 **Without `@author`** (one decision per proposal), the key is shared: any
-account the `create` rule allows may write its first version, and two who do
-so apart both stand, as two first versions at any key do (§7.4). Whose such a
-record is, for `creator`, is per chain (§7.1).
+account granted `/record/write` in the collection may write its first
+version, and two who do so apart both stand, as two first versions at any key
+do (§7.4). Whose such a record is, for `byCreator`, is per chain (§7.1).
 
 > Rationale: the owner part makes "one per person" a check every peer makes,
 > not only those that can read the body: no one can write a first version at
@@ -1244,14 +1241,14 @@ stub once superseded, and nothing is compared against it, by any peer.
 
 `final` is `true`: a record is written once. A peer MUST refuse every version
 with `seq > 0` of a collection whose rules in force (as of the version's
-`seen`) have `final`, deletes included, whatever `edit` and `delete` say.
+`seen`) have `final`, deletes included, whatever the space's grants say.
 
 ```json
 "rules": { "onePer": ["@author", "link:about"], "final": true }
 ```
 
-It is the one way to say "nobody". `check` (§7.6) is not enforced by peers
-and is not run on deletes, and `edit` and `delete` name only who may. A vote that a
+It is the one way to say "nobody", whatever the space's grants say. `check`
+(§7.6) is not enforced by peers and is not run on deletes. A vote that a
 proof has counted, or the proof itself, must stay what it was.
 
 Two first versions at one key, written apart, both stand, and the ordering
@@ -1260,16 +1257,13 @@ prevent that; telling the two apart, where it matters, is the app's.
 
 ### 7.5 Checking a definition's rules
 
-`rules` MUST be an object with no members other than `create`, `edit`,
-`delete`, `onePer`, `fixed`, `check` and `final`, each valid as above
-(`onePer` and `fixed`: non-empty lists of non-empty strings; `check`: a list,
-§7.6; `final`: `true`). A definition with anything else is invalid (§6.1).
+`rules` MUST be an object with no members other than `onePer`, `fixed`,
+`check` and `final`, each valid as above (`onePer` and `fixed`: non-empty
+lists of non-empty strings; `check`: a list, §7.6; `final`: `true`). A
+definition with anything else, `create`, `edit` and `delete` included, is
+invalid (§6.1).
 
-> Rationale: a rule names either a fact any peer can check from the record
-> (`creator`) or a permission a person decided (`can:…`). "Did a person have to
-> decide it?" is the test for which one to use.
-
-_Source: `packages/core/src/records/rules.ts` (`checkRules`, `allows`, `onePerSecret`, `onePerKey`, `changedFixedField`, `permissionName`), `packages/core/src/records/checks.ts` (`PERMISSION_PATTERN`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
 ### 7.6 `check`
 
@@ -1437,11 +1431,11 @@ Given a valid signature and root, whether the version _stands_ in this space:
       as of then have a `onePer` that gives that form, unless the peer can't
       read them (§4.1). The collection is not contested with no definition
       in force as of then (§6.3).
-   3. The root holds a role as of `seen`, and the rule for the action allows it (§7.2), and the access history's own judgement of the writer passes (revoked keys, removals — [03](03-spaces.md)).
+   3. The root is a member as of `seen` and holds a grant for what the version does ([03](03-spaces.md) §5.2), `final` allows it (§7.2), and the access history's own judgement of the writer passes (revoked keys, removals, roles taken — [03](03-spaces.md)).
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`. `check` is not judged (§7.6).
 
-   When step 3 fails only on the access history's judgement of a change that came after the version (a change to its author's standing it had not seen, with what that change saw, its key revoked, or its key's line in its collection proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges steps 4 and 5, and the version is **withdrawn** if they pass, **refused** if they don't. So every peer that can read the body stores the same withdrawn versions, whatever order it checks in; a peer without the key skips what it can't read (§7.3, §8.4).
+   When step 3 fails only on the access history's judgement of a change that came after the version (a removal of its author, or a role taken that it needed, that it had not seen, its key revoked, or its key's line in its collection proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges steps 4 and 5, and the version is **withdrawn** if they pass, **refused** if they don't. So every peer that can read the body stores the same withdrawn versions, whatever order it checks in; a peer without the key skips what it can't read (§7.3, §8.4).
 
 ### 9.5 What a peer does with a refused version
 
