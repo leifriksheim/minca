@@ -245,10 +245,15 @@ describe('the launcher', () => {
     assert.deepEqual(titles(launcher.placed), ['chat', 'Not chat']);
 
     // Bob loses define: what he writes now stays a proposal.
-    await alice.node.spaces.putRole(space, { name: 'guest', title: 'Guest', rank: 1, permissions: [] });
-    await alice.node.spaces.setMember(space, bob.node.did, 'guest');
+    await alice.node.spaces.defineRole(space, {
+      name: 'guest',
+      title: 'Guest',
+      grants: [{ cmd: '/record/write', pol: [['==', '.byCreator', true]] }],
+    });
+    await alice.node.spaces.assign(space, bob.node.did, 'guest');
+    await alice.node.spaces.unassign(space, bob.node.did, 'editor');
     await waitFor(
-      async () => (await bob.node.spaces.access(space)).role?.name === 'guest',
+      async () => (await bob.node.spaces.access(space)).mine.join() === 'guest',
       'Bob to be a guest',
     );
     const his = await bob.node.records.put(space, launcherApp, {

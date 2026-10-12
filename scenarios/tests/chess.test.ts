@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { argsFor, may, strikes, type Authority, type Delegation } from '../host/grants.js';
+import { argsFor, mayIn, strikes, type Authority, type Delegation } from '../host/library.js';
 import { judge, type Host } from '../host/cel-host.js';
 import { version } from '../host/space.js';
 import { ownedKey } from '../../packages/core/src/records/key.js';
@@ -26,7 +26,7 @@ describe('chess: grants', () => {
   const auth: Authority = { founders: [ALICE], delegations: grants, assignments };
   /** The arguments a host fills in for a record command */
   const doing = (who: string, cmd: string, collection: string, byCreator = false) =>
-    may(auth, who, cmd, { collection, byCreator });
+    mayIn(auth, who, cmd, { collection, byCreator });
 
   test('members play', () => {
     assert.ok(doing(BOB, '/record/write', 'app.chess'));
@@ -45,9 +45,9 @@ describe('chess: grants', () => {
 
   test('only admins assign, only Referee, and not to themselves', () => {
     assert.ok(!doing(FRANK, '/record/delete', 'app.chess'), 'Bob is no admin, so Frank is no referee');
-    assert.ok(may(auth, ERIN, '/role/assign', { role: 'referee', self: false }));
-    assert.ok(!may(auth, ERIN, '/role/assign', { role: 'admin', self: false }));
-    assert.ok(!may(auth, ERIN, '/role/assign', { role: 'referee', self: true }));
+    assert.ok(mayIn(auth, ERIN, '/role/assign', { role: 'referee', self: false }));
+    assert.ok(!mayIn(auth, ERIN, '/role/assign', { role: 'admin', self: false }));
+    assert.ok(!mayIn(auth, ERIN, '/role/assign', { role: 'referee', self: true }));
   });
 
   test('Erin assigning herself Referee counts for nothing', () => {
@@ -55,13 +55,13 @@ describe('chess: grants', () => {
       ...auth,
       assignments: [...assignments, { by: ERIN, to: ERIN, role: 'referee' }],
     };
-    assert.ok(!may(self, ERIN, '/record/delete', { collection: 'app.chess', byCreator: false }));
+    assert.ok(!mayIn(self, ERIN, '/record/delete', { collection: 'app.chess', byCreator: false }));
   });
 });
 
 describe('chess: roles go to accounts, not roles', () => {
   const deletesAny = (a: Authority, who: string) =>
-    may(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
+    mayIn(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
   test('Erin assigning referee to role:admin is refused, so she gets no referee grants', () => {
     const a: Authority = {
       founders: [ALICE],
@@ -96,7 +96,7 @@ describe('chess: roles go to accounts, not roles', () => {
 
 describe('chess: grants go only to roles, so losing a role loses its power', () => {
   const deletesAny = (a: Authority, who: string) =>
-    may(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
+    mayIn(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
   const DAVE2 = 'did:key:dave-fresh-key';
 
   test("Dave delegates /record/delete to a fresh key: it counts for nothing, then or after he's unassigned", () => {
@@ -109,7 +109,7 @@ describe('chess: grants go only to roles, so losing a role loses its power', () 
     assert.ok(!deletesAny(a, DAVE));
     assert.ok(!deletesAny(a, DAVE2));
     assert.ok(
-      !may(a, DAVE2, '/record/delete', { collection: 'app.chess', byCreator: false }, 2),
+      !mayIn(a, DAVE2, '/record/delete', { collection: 'app.chess', byCreator: false }, 2),
       'not even before',
     );
   });
@@ -124,8 +124,8 @@ describe('chess: grants go only to roles, so losing a role loses its power', () 
         { by: ALICE, from: DAVE, role: 'member', at: 3 },
       ],
     };
-    assert.ok(!may(a, DAVE2, '/record/write', { collection: 'app.chess' }));
-    assert.ok(!may(a, DAVE, '/record/write', { collection: 'app.chess' }), 'Dave, removed, neither');
+    assert.ok(!mayIn(a, DAVE2, '/record/write', { collection: 'app.chess' }));
+    assert.ok(!mayIn(a, DAVE, '/record/write', { collection: 'app.chess' }), 'Dave, removed, neither');
   });
 
   test("Mo's /member/remove handed to a fresh key goes nowhere, and Mo's own goes with his role", () => {
@@ -136,8 +136,8 @@ describe('chess: grants go only to roles, so losing a role loses its power', () 
       assignments: [...assignments, ...moderation],
       unassignments: [{ by: ALICE, from: MO, role: 'moderator', at: 2 }],
     };
-    assert.ok(!may(a, MO, '/member/remove', argsFor(a, MO, BOB)));
-    assert.ok(!may(a, MO2, '/member/remove', argsFor(a, MO2, BOB)));
+    assert.ok(!mayIn(a, MO, '/member/remove', argsFor(a, MO, BOB)));
+    assert.ok(!mayIn(a, MO2, '/member/remove', argsFor(a, MO2, BOB)));
   });
 
   test("`.self` holds: Erin can't hand /role/assign to a key that then assigns her referee", () => {
@@ -158,11 +158,11 @@ describe('chess: moderators, and who protects an admin', () => {
     assignments: [...assignments, ...moderation],
   };
   test('a moderator removes a member', () => {
-    assert.ok(may(auth, MO, '/member/remove', argsFor(auth, MO, BOB)));
+    assert.ok(mayIn(auth, MO, '/member/remove', argsFor(auth, MO, BOB)));
   });
   test("a moderator can't remove the admin who appointed them: the policy reads `.roles`", () => {
     assert.deepEqual(argsFor(auth, MO, ERIN), { self: false, roles: ['admin'] });
-    assert.ok(!may(auth, MO, '/member/remove', argsFor(auth, MO, ERIN)));
+    assert.ok(!mayIn(auth, MO, '/member/remove', argsFor(auth, MO, ERIN)));
   });
 });
 
@@ -180,9 +180,9 @@ describe('chess: a limit of `.roles`', () => {
         { by: ALICE, to: FRED, role: 'admin', at: 3 },
       ],
     };
-    assert.ok(!may(a, MO, '/member/remove', argsFor(a, MO, FRED)), 'with Fred an admin in view: refused');
+    assert.ok(!mayIn(a, MO, '/member/remove', argsFor(a, MO, FRED)), 'with Fred an admin in view: refused');
     assert.ok(
-      may(a, MO, '/member/remove', argsFor(a, MO, FRED, undefined, 2), 2),
+      mayIn(a, MO, '/member/remove', argsFor(a, MO, FRED, undefined, 2), 2),
       'naming an older view: allowed',
     );
   });
@@ -190,7 +190,7 @@ describe('chess: a limit of `.roles`', () => {
 
 describe('chess: unassigning', () => {
   const deletesAny = (a: Authority, who: string) =>
-    may(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
+    mayIn(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
   const base: Authority = { founders: [ALICE], delegations: grants, assignments };
   test('Dave leaves referee on his own: built in, no grant needed', () => {
     const a: Authority = { ...base, unassignments: [{ by: DAVE, from: DAVE, role: 'referee', at: 1 }] };
@@ -240,9 +240,9 @@ describe('chess: a role keeps its grants when its definer is demoted (decided)',
     unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 4 }],
   };
   test("Coach's grants, judged as of their definition, stand after Erin loses admin", () => {
-    assert.ok(may(a, GUS, '/role/assign', argsFor(a, GUS, BOB, 'referee')));
-    assert.ok(!may(a, ERIN, '/role/assign', argsFor(a, ERIN, BOB, 'referee')));
-    assert.ok(!may(a, GUS, '/record/delete', { collection: 'app.chess', byCreator: false }));
+    assert.ok(mayIn(a, GUS, '/role/assign', argsFor(a, GUS, BOB, 'referee')));
+    assert.ok(!mayIn(a, ERIN, '/role/assign', argsFor(a, ERIN, BOB, 'referee')));
+    assert.ok(!mayIn(a, GUS, '/record/delete', { collection: 'app.chess', byCreator: false }));
   });
 });
 
@@ -254,7 +254,7 @@ describe('chess: whoever may define roles is trusted to (by design)', () => {
     { iss: ALICE, aud: 'role:admin', cmd: '/member/remove', pol: [['==', '.self', false]] },
   ];
   const removesBob = (a: Authority, who: string) =>
-    may(a, who, '/member/remove', argsFor(a, who, BOB, undefined, 9), 9);
+    mayIn(a, who, '/member/remove', argsFor(a, who, BOB, undefined, 9), 9);
   // Erin, an admin and a member, rewrites member at 2 to add /member/remove, and loses admin at 4.
   const parked: Authority = {
     founders: [ALICE],
@@ -344,7 +344,7 @@ describe('chess: whoever may define roles is trusted to (by design)', () => {
 describe("chess: the constitution's grants are a role's first definition", () => {
   const GUS = 'did:key:gus';
   const deletes = (a: Authority) =>
-    may(a, FRANK, '/record/delete', { collection: 'app.chess', byCreator: false });
+    mayIn(a, FRANK, '/record/delete', { collection: 'app.chess', byCreator: false });
 
   test('a later definition that saw them supersedes them: a rewrite removes a constitution grant', () => {
     const a: Authority = {
@@ -369,13 +369,13 @@ describe("chess: the constitution's grants are a role's first definition", () =>
       delegations: [{ iss: ALICE, aud: 'role:member', cmd: '/member/remove', pol: [], at: 10 }],
       assignments: [{ by: ALICE, to: FRANK, role: 'member', at: 1 }],
     };
-    assert.ok(!may(a, FRANK, '/member/remove', argsFor(a, FRANK, BOB)));
+    assert.ok(!mayIn(a, FRANK, '/member/remove', argsFor(a, FRANK, BOB)));
     const defined: Authority = {
       ...a,
       definitions: [{ id: 'm1', by: ALICE, role: 'member', at: 10 }],
       delegations: [{ iss: ALICE, aud: 'role:member', cmd: '/member/remove', pol: [], def: 'm1', at: 10 }],
     };
-    assert.ok(may(defined, FRANK, '/member/remove', argsFor(defined, FRANK, BOB)));
+    assert.ok(mayIn(defined, FRANK, '/member/remove', argsFor(defined, FRANK, BOB)));
   });
 });
 
@@ -414,8 +414,8 @@ describe('chess: rivals can lock a role that defines itself', () => {
   };
 
   test('the rivals share no /role/define, so no admin can write the definition that ends the rivalry', () => {
-    assert.ok(!may(locked, ERIN, '/role/define', { role: 'admin' }));
-    assert.ok(!may(locked, GUS, '/role/define', { role: 'admin' }));
+    assert.ok(!mayIn(locked, ERIN, '/role/define', { role: 'admin' }));
+    assert.ok(!mayIn(locked, GUS, '/role/define', { role: 'admin' }));
     const tries: Authority = {
       ...locked,
       definitions: [
@@ -425,7 +425,7 @@ describe('chess: rivals can lock a role that defines itself', () => {
       delegations: [...locked.delegations, ...a0(ERIN, 'a3', 4)],
     };
     assert.ok(
-      !may(tries, ERIN, '/role/define', { role: 'admin' }),
+      !mayIn(tries, ERIN, '/role/define', { role: 'admin' }),
       "Erin's settling definition doesn't stand",
     );
   });
@@ -439,7 +439,7 @@ describe('chess: rivals can lock a role that defines itself', () => {
       ],
       delegations: [...locked.delegations, ...a0(ALICE, 'a3', 4)],
     };
-    assert.ok(may(repaired, ERIN, '/role/define', { role: 'admin' }));
+    assert.ok(mayIn(repaired, ERIN, '/role/define', { role: 'admin' }));
   });
 
   test('the recommended template: a separate steward role defines admin, so rivals on admin lock nothing', () => {
@@ -452,7 +452,7 @@ describe('chess: rivals can lock a role that defines itself', () => {
       ],
       assignments: [...locked.assignments, { by: ALICE, to: STEW, role: 'steward' }],
     };
-    assert.ok(may(stewarded, STEW, '/role/define', { role: 'admin' }));
+    assert.ok(mayIn(stewarded, STEW, '/role/define', { role: 'admin' }));
   });
 });
 
@@ -460,7 +460,7 @@ describe('chess: rival definitions of a role hold only what they share', () => {
   const GUS = 'did:key:gus';
   const HAL = 'did:key:hal';
   const deletes = (a: Authority, collection: string) =>
-    may(a, HAL, '/record/delete', { collection, byCreator: false });
+    mayIn(a, HAL, '/record/delete', { collection, byCreator: false });
   const base: Authority = {
     founders: [ALICE],
     delegations: [
@@ -561,8 +561,8 @@ describe('chess: what an unassignment strikes', () => {
   };
   const welcome = { who: FRED, cmd: '/record/write', args: { collection: 'app.welcome' }, at: 4.5 };
 
-  test("unassigning greeter doesn't strike Fred's concurrent admin actions", () => {
-    assert.ok(!strikes(a, greeter, assignReferee));
+  test("unassigning greeter strikes Fred's concurrent admin actions too: everything he did unseen", () => {
+    assert.ok(strikes(a, greeter, assignReferee));
   });
   test('it strikes what needed greeter, and so does Fred leaving greeter himself (#168)', () => {
     assert.ok(strikes(a, greeter, welcome));
@@ -572,8 +572,58 @@ describe('chess: what an unassignment strikes', () => {
   });
 });
 
-describe('chess: the strike counterfactual takes the role from the author only', () => {
-  test("unassigning admin doesn't strike Erin's concurrent delete through member, which her earlier m1 gave", () => {
+describe('chess: a struck definition carries nothing (replayed by the library)', () => {
+  // Admins define member; Alice takes admin from Erin at 5.
+  const template: Delegation[] = [
+    ...grants,
+    { iss: ALICE, aud: 'role:admin', cmd: '/role/define', pol: [['==', '.role', 'member']] },
+    { iss: ALICE, aud: 'role:admin', cmd: '/member/remove', pol: [['==', '.self', false]] },
+  ];
+  const base: Authority = {
+    founders: [ALICE],
+    delegations: template,
+    assignments: [{ by: ALICE, to: ERIN, role: 'admin', at: 1 }, ...assignments],
+    unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 5 }],
+  };
+  const parked = (at: number, view: number): Authority => ({
+    ...base,
+    delegations: [
+      ...template,
+      { iss: ERIN, aud: 'role:member', cmd: '/record/write', pol: [], def: 'm1', at, view },
+      {
+        iss: ERIN,
+        aud: 'role:member',
+        cmd: '/member/remove',
+        pol: [['==', '.self', false]],
+        def: 'm1',
+        at,
+        view,
+      },
+    ],
+    definitions: [{ id: 'm1', by: ERIN, role: 'member', at, view }],
+  });
+  const removesBob = (a: Authority, who: string) =>
+    mayIn(a, who, '/member/remove', argsFor(a, who, BOB, undefined, 9), 9);
+
+  test('a definition concurrent with its author’s unassignment gives neither her nor anyone its grants (Q1)', () => {
+    // Written at 6 having seen up to 4: concurrent with the unassignment at 5.
+    assert.ok(!removesBob(parked(6, 4), FRANK), 'Frank, a member, gets nothing from it');
+    // The same definition written before the unassignment, and seen by it, stands (by design).
+    assert.ok(removesBob(parked(3, 2), FRANK));
+  });
+
+  test("a former definer's backdated rival definition is struck by the unassignment it hid from", () => {
+    // Written after losing admin, naming a view from before: it would empty member for everyone.
+    const a: Authority = {
+      ...base,
+      definitions: [{ id: 'm9', by: ERIN, role: 'member', at: 7, view: 4 }],
+    };
+    assert.ok(mayIn(a, BOB, '/record/write', { collection: 'app.chess' }), 'member keeps its grants');
+  });
+});
+
+describe('chess: an unassignment strikes whatever gave the action', () => {
+  test("unassigning admin strikes Erin's concurrent delete through member, which her earlier m1 gave", () => {
     const a: Authority = {
       founders: [ALICE],
       delegations: [
@@ -595,11 +645,8 @@ describe('chess: the strike counterfactual takes the role from the author only',
       args: { collection: 'app.chess', byCreator: false },
       at: 4.5,
     };
-    assert.ok(
-      !strikes(a, { who: ERIN, role: 'admin' }, del),
-      'm1, judged at its own view, still gives member it',
-    );
-    // What only admin gave her is struck.
+    assert.ok(strikes(a, { who: ERIN, role: 'admin' }, del), 'concurrent with the unassignment');
+    // And what only admin gave her.
     const write = { who: ERIN, cmd: '/record/write', args: { collection: 'app.chess' }, at: 4.5 };
     assert.ok(strikes(a, { who: ERIN, role: 'admin' }, write));
   });
@@ -607,8 +654,8 @@ describe('chess: the strike counterfactual takes the role from the author only',
 
 describe('chess: a removal ends the assignments that had not seen it', () => {
   const deletesAny = (a: Authority, who: string) =>
-    may(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
-  const writes = (a: Authority) => may(a, BOB, '/record/write', { collection: 'app.chess' });
+    mayIn(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
+  const writes = (a: Authority) => mayIn(a, BOB, '/record/write', { collection: 'app.chess' });
   // Alice removes Bob at 3; Erin, concurrently (seen up to 2), makes him referee at 4.
   const removed: Authority = {
     founders: [ALICE],

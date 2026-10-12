@@ -460,11 +460,11 @@ describe('encryption at rest', () => {
     const other = new Uint8Array(16).map((_, i) => i + 1);
     const did = (await manager.fromSeed(other)).did;
     const registry = await deriveAccountRegistry(await deriveAccountKey(other), did);
-    assert.equal(registry.space.id, 'bvkbzgjhryaxdys2fyi4oifvardlc4b7bv3bvqn6d736v5ngl23iq');
+    assert.equal(registry.space.id, 'bvlkecmz3ywm4lzqjcjs4iwy7gjyk6d2xou6di2rk3juquwffqarq');
     assert.equal(registry.space.nonce, 'Jx8Oo78z30WwKl1X');
     assert.equal(
       (await deriveContactsSpace(await deriveAccountKey(other), did)).space.id,
-      'bqg4jypdnk3lvna26eda7bmesxzhbsoisqs5xodhif4d4gyx2adnq',
+      'b5fmel466vf72tqpijj4l5yj3pfmbjet5y55wp2db66vhswunomyq',
     );
   });
 

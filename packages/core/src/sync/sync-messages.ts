@@ -11,8 +11,8 @@
 import type { Version } from '../types.js';
 import { isObject } from '../utils/guards.js';
 
-/** 5 since a version's proof is a note in the UCAN 1.0 profile (spec 01 §7) */
-export const SYNC_PROTOCOL_VERSION = 5;
+/** 6 since who may do what is grants held by roles (spec 03 §2), in a new access history */
+export const SYNC_PROTOCOL_VERSION = 6;
 
 type V = { readonly v: typeof SYNC_PROTOCOL_VERSION };
 

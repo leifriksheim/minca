@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import { checkRelays, MAX_RELAYS, roleHolds } from '@weaveprotocol/core';
+import { checkRelays, MAX_RELAYS, SPACE_RELAYS } from '@weaveprotocol/core';
+import { useMay } from '@weave/app-shared/may';
 import type { CarrierSummary, MeshStatus, RelayStatus, SpaceStatus, SpaceSummary } from '@weaveprotocol/core';
 import { useAccess, useAccount, useNetwork, useNode } from '@weaveprotocol/core/react';
 import { Avatar } from '@weave/app-shared/Avatar';
@@ -65,6 +66,7 @@ export function NetworkView({ space, status }: { space: SpaceSummary; status: Sp
   const node = useNode();
   const network = useNetwork();
   const access = useAccess(space.id);
+  const mayNameRelays = useMay(space.id, SPACE_RELAYS);
   const now = useNow();
   const health = healthOf(status, network);
 
@@ -83,7 +85,7 @@ export function NetworkView({ space, status }: { space: SpaceSummary; status: Sp
         <SpaceRelays
           space={space}
           named={access.relays}
-          manages={roleHolds(access.role, 'manage')}
+          manages={mayNameRelays}
           network={network}
           now={now}
         />

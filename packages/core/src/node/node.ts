@@ -39,7 +39,8 @@ import {
   type InviteLinkOptions,
   type SpaceRecord,
 } from '../space/space-manager.js';
-import { MANAGE, MAX_KEEPERS, MAX_RELAYS, roleHolds, type Keeper } from '../space/roles.js';
+import { MAX_KEEPERS, MAX_RELAYS, type Keeper } from '../space/roles.js';
+import { KEY_CHANGE, MEMBER_REMOVE, ROLE_ASSIGN, SPACE_KEEPERS } from '../space/grants.js';
 import { createWriters } from './writers.js';
 import {
   meshFor,
@@ -729,8 +730,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    */
   async function nameKeepers(spaceId: string, rt: SpaceRuntime): Promise<void> {
     if (!account || narrowNote || spaceId === accountSpaceId || hidden(spaceId)) return;
+    if (!(await rt.may(SPACE_KEEPERS))) return;
     const access = await rt.access();
-    if (!roleHolds(access.role, MANAGE)) return;
     const carriers = await carrierRecords();
     const active = await liveCarriers();
     const gone = new Set<string>();
@@ -846,7 +847,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         visibility: params.visibility,
         creator: config.signer.did,
         ...(params.roles ? { roles: params.roles } : {}),
-        ...(params.creatorRole ? { creatorRole: params.creatorRole } : {}),
       });
       await remember(record.space.id);
       emit({ type: 'spaces' });
@@ -856,15 +856,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async invite(spaceId, options = {}) {
       if (options.write === false) return inviteTo(spaceId);
       const open = await runtime(spaceId);
-      const { roles, role: mine } = await open.access();
-      // By default the lowest role below your own; with none below you, a view-only invite.
-      const role =
-        options.role ??
-        (mine ? [...roles].reverse().find((candidate) => candidate.rank < mine.rank)?.name : undefined);
+      const { roles, founder, mine } = await open.access();
+      const member = founder || mine.length > 0;
+      // By default `member` when you may give it, else the first role you may give; with none, a view-only invite.
+      const assignable: string[] = [];
+      for (const { name } of roles)
+        if (await open.may(ROLE_ASSIGN, { role: name, self: false, roles: [] })) assignable.push(name);
+      const role = options.role ?? (assignable.includes('member') ? 'member' : assignable[0]);
       if (!role) {
-        if (options.role !== undefined || !mine)
+        if (options.role !== undefined || !member)
           throw new Error(
-            mine
+            member
               ? `There is no role "${options.role}"`
               : 'You hold no role here, so you can only share it to view',
           );
@@ -937,9 +939,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     profiles: perSpace((rt) => rt.profiles()),
     access: perSpace((rt) => rt.access()),
-    setMember: perSpace((rt, did: string, role: string | null) => rt.setMember(did, role)),
-    putRole: perSpace((rt, role: SpaceRole) => rt.putRole(role)),
-    removeRole: perSpace((rt, name: string) => rt.removeRole(name)),
+    may: perSpace((rt, cmd: string, args?: Readonly<Record<string, unknown>>, account?: string) =>
+      rt.may(cmd, args, account),
+    ),
+    holdsRole: perSpace((rt, role: string, account?: string) => rt.holdsRole(role, account)),
+    defineRole: perSpace((rt, role: SpaceRole) => rt.defineRole(role)),
+    assign: perSpace((rt, did: string, role: string) => rt.assign(did, role)),
+    unassign: perSpace((rt, did: string, role: string) => rt.unassign(did, role)),
+    removeMember: perSpace((rt, did: string) => rt.removeMember(did)),
 
     async closeInvite(spaceId, keyOrLink) {
       let key = keyOrLink;
@@ -1495,10 +1502,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         if (origin === url) await rt.remove(record.key);
       }
       const access = await spaces.access(spaceId);
-      if (!roleHolds(access.role, MANAGE)) return { bots: [], newKey: false };
-      const members = new Set(access.members.map((member) => member.did));
-      const bots = view.bots.map((bot) => bot.bot).filter((did) => members.has(did));
-      for (const bot of bots) await spaces.setMember(spaceId, bot, null);
+      const members = new Map(access.members.map((member) => [member.did, member.roles]));
+      const bots: string[] = [];
+      for (const bot of view.bots.map((one) => one.bot)) {
+        const roles = members.get(bot);
+        if (roles && (await spaces.may(spaceId, MEMBER_REMOVE, { self: false, roles }))) bots.push(bot);
+      }
+      if (bots.length === 0 && !(await spaces.may(spaceId, KEY_CHANGE))) return { bots: [], newKey: false };
+      for (const bot of bots) await spaces.removeMember(spaceId, bot);
       // A host that can't say whether it holds a pass is taken to hold one.
       const handed = view.status ? view.status.carrying : true;
       const newKey = access.key !== null && (bots.length > 0 || handed);
@@ -1966,7 +1977,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (typeof door !== 'string' || typeof space !== 'string') continue;
       if (!(await registry.get(space))) continue;
       const open = await runtime(space);
-      if ((await open.access()).role === null) continue;
+      const { founder, mine } = await open.access();
+      if (!founder && mine.length === 0) continue;
       const { sign } = await doorKeys(door);
       try {
         await open.put<KnockAnswer>(knockAnswerSchema.name, {

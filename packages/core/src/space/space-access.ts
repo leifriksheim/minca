@@ -2,13 +2,14 @@
  * What a space is, fixed at creation — and the keys around it that anyone can
  * check without holding a secret.
  *
- * The space's **genesis** names its creator, its visibility, the roles it
- * starts with and which of them the creator holds, and — for a private space —
- * the public half of its read key. The space id is the genesis's hash. A space
- * someone hands you — in an invite, from a host — either hashes to its id or
- * is refused, so nobody can quietly change who started it or with which roles.
- * Everything after that — new roles, members, invites — is records in the
- * space's access history (`space/roles.ts`).
+ * The space's **genesis** is its constitution, for now: its creator, who is
+ * its founder, its visibility, the roles it is founded with and their grants,
+ * and — for a private space — the public half of its read key. The space id
+ * is the genesis's hash. A space someone hands you — in an invite, from a
+ * host — either hashes to its id or is refused, so nobody can quietly change
+ * who founded it or with which grants. Everything after that — definitions,
+ * assignments, invites — is records in the space's access history
+ * (`space/roles.ts`).
  *
  * A private space's **read key pair** is derived from its AES key, so everyone
  * who can read already has it. A node checks a connecting reader against its
@@ -27,7 +28,7 @@ import { cidFromBytes, hashedKey } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
 import { didOf, didToPublicKey } from '../identity/did.js';
-import { checkRole } from './roles.js';
+import { checkFoundingRoles } from './grants.js';
 
 const READ_INFO = 'weave/space-read/v1';
 const INVITE_INFO = 'weave/space-invite/v1';
@@ -40,11 +41,10 @@ export interface SpaceKeyPair {
 
 /** What a space is, fixed at creation. Its hash is the space id. */
 export interface SpaceGenesis {
-  readonly v: 2;
+  readonly v: 3;
   readonly creator: string;
   readonly visibility: Space['visibility'];
   readonly roles: Space['roles'];
-  readonly creatorRole: string;
   readonly createdAt: string;
   readonly nonce: string;
   readonly readKey?: string;
@@ -109,11 +109,10 @@ export async function readKeyFromSeed(seed: Uint8Array, provider: CryptoProvider
 /** The fields of a space its id is made from */
 export function spaceGenesis(space: Omit<Space, 'id' | 'name'>): SpaceGenesis {
   return {
-    v: 2,
+    v: 3,
     creator: space.creator,
     visibility: space.visibility,
     roles: space.roles,
-    creatorRole: space.creatorRole,
     createdAt: space.createdAt,
     nonce: space.nonce,
     ...(space.readKey ? { readKey: space.readKey } : {}),
@@ -126,21 +125,6 @@ export function spaceIdOf(genesis: SpaceGenesis): Promise<string> {
   return cidFromBytes(utf8Encode(canonicalize(genesis)));
 }
 
-/** Why a set of starting roles cannot found a space, or null */
-export function checkStartingRoles(roles: unknown, creatorRole: unknown): string | null {
-  if (!Array.isArray(roles) || roles.length === 0 || roles.length > 64)
-    return 'A space starts with 1–64 roles';
-  for (const role of roles) {
-    const problem = checkRole(role);
-    if (problem) return problem;
-  }
-  if (new Set(roles.map((role: { name: string }) => role.name)).size !== roles.length)
-    return 'Two starting roles share a name';
-  if (!roles.some((role: { name: string }) => role.name === creatorRole))
-    return "The creator's role is not one of the starting roles";
-  return null;
-}
-
 /**
  * Why a space someone handed over cannot be trusted, or null when it can:
  * its id must be its genesis's hash, and it must have the keys its kind needs.
@@ -151,7 +135,7 @@ export async function checkSpace(space: Space): Promise<string | null> {
   }
   if (space.visibility !== 'public' && space.visibility !== 'private')
     return 'Its visibility is not public or private';
-  const roles = checkStartingRoles(space.roles, space.creatorRole);
+  const roles = checkFoundingRoles(space.roles);
   if (roles) return roles;
   if (space.visibility === 'private' && (!space.readKey || !space.encryptionKeyId))
     return 'A private space must name its read key';
@@ -167,8 +151,10 @@ export async function checkSpace(space: Space): Promise<string | null> {
 // Record keys are lower case; DIDs and CIDs are not. So a key names a hash of
 // the thing, and the record's body names the thing itself.
 
-/** The key of an account's member record */
-export const memberKey = (did: string) => hashedKey('member', did);
+/** The key of the record assigning a role to an account, or taking it away */
+export const assignKey = (did: string, role: string) => hashedKey('assign', `${did}|${role}`);
+/** The key of the record removing an account from the space */
+export const removalKey = (did: string) => hashedKey('remove', did);
 /** The key of an invite's record, from its public key */
 export const inviteKey = (inviteDid: string) => hashedKey('invite', inviteDid);
 /** The key of an account's record revoking one of its keys: naming both, so no one else's can take its place */

@@ -1,46 +1,135 @@
 /**
- * Starting roles for a space — plain data, and nothing more.
+ * Constitution templates: the roles a space can be founded with, and their
+ * grants — plain data, and nothing more.
  *
  * The protocol takes no position on what roles a space should have: it reads
- * whatever roles a space's genesis names, and never looks at a preset's name.
- * These are for app developers who want a sensible start. Pass one when
- * creating a space, change it, or write your own.
+ * whatever roles a genesis names, and never looks at a template's name.
+ * These are for app developers who want a sensible start. Pass one's roles
+ * when creating a space, change them, or write your own. The space's creator
+ * is its founder and holds every command, whatever the template says.
  *
- * `*` alone is every permission. `*` + `/` + `*` is every permission a
- * collection declares — so a moderator here can moderate whatever apps the
- * space holds, now and later, without managing the space itself.
+ * Each template says explicitly whether members may change each other's
+ * records (`byCreator` in a policy), and gives `/role/define` for a role to
+ * another role than itself, or to the founder alone: rival definitions of a
+ * role that defines itself can leave it unable to settle them (spec 03 §2.6).
  */
-import type { SpaceRole } from '../types.js';
+import type { SpaceGrant, SpaceRole } from '../types.js';
+import {
+  COLLECTION_DEFINE,
+  KEY_CHANGE,
+  MEMBER_REMOVE,
+  RECORD_DELETE,
+  RECORD_WRITE,
+  ROLE_ASSIGN,
+  ROLE_DEFINE,
+  ROLE_UNASSIGN,
+  SPACE_KEEPERS,
+  SPACE_RELAYS,
+} from './grants.js';
 
 export interface RolePreset {
   readonly roles: ReadonlyArray<SpaceRole>;
-  /** Which of them the creator starts with */
-  readonly creatorRole: string;
 }
 
-/** Just the creator. Invites are view-only: there is no role below theirs. */
-export const solo: RolePreset = Object.freeze({
-  roles: Object.freeze([{ name: 'owner', title: 'Owner', rank: 100, permissions: ['*'] }]),
-  creatorRole: 'owner',
-});
+/** Every record command, in every collection */
+const RECORDS: SpaceGrant = Object.freeze({ cmd: '/record', pol: [] });
 
-/** A small group working together: everyone invited can write, invite and add collections. */
+/** Writing and deleting one's own records, in every collection but `except` */
+function ownRecords(except: ReadonlyArray<string> = []): ReadonlyArray<SpaceGrant> {
+  const mine = [['==', '.byCreator', true]] as const;
+  const elsewhere = except.length
+    ? [['not', ['or', except.map((collection) => ['==', '.collection', collection])]]]
+    : [];
+  return [
+    { cmd: RECORD_WRITE, pol: [...mine, ...elsewhere] },
+    { cmd: RECORD_DELETE, pol: [...mine, ...elsewhere] },
+  ];
+}
+
+/** Whose roles don't name any of these */
+const notHolding = (roles: ReadonlyArray<string>) =>
+  roles.map((role) => ['not', ['any', '.roles', ['==', '.', role]]] as const);
+
+/**
+ * Whose rules a bot in the space runs (`std.rule`'s `by`): a library command
+ * no peer checks, held as a grant like any other (docs/rules.md)
+ */
+const INSTRUCT_BOTS: SpaceGrant = Object.freeze({ cmd: '/std.rule/instruct', pol: [] });
+
+/** The space's own settings: its key, its relays, its keepers */
+const SETTINGS: ReadonlyArray<SpaceGrant> = [
+  { cmd: KEY_CHANGE, pol: [] },
+  { cmd: SPACE_RELAYS, pol: [] },
+  { cmd: SPACE_KEEPERS, pol: [] },
+];
+
+/**
+ * Collections of the standard library only those who keep order in a
+ * community start: announcements, badges and awards, pins, labels, channels
+ * and the space's hosts.
+ */
+export const STAFF_COLLECTIONS: ReadonlyArray<string> = Object.freeze([
+  'std.announcement',
+  'std.badge',
+  'std.award',
+  'std.pin',
+  'std.label',
+  'std.channel',
+  'std.host',
+]);
+
+/** Just the founder. Invites are view-only: there is no role to give. */
+export const solo: RolePreset = Object.freeze({ roles: Object.freeze([]) });
+
+/**
+ * A small group working together: editors change any record, invite more
+ * editors and add collections. The founder alone defines and removes.
+ */
 export const team: RolePreset = Object.freeze({
   roles: Object.freeze([
-    { name: 'owner', title: 'Owner', rank: 100, permissions: ['*'] },
-    { name: 'editor', title: 'Editor', rank: 10, permissions: ['invite', 'define'] },
+    {
+      name: 'editor',
+      title: 'Editor',
+      grants: [
+        RECORDS,
+        { cmd: COLLECTION_DEFINE, pol: [] },
+        { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'editor']] },
+      ],
+    },
   ]),
-  creatorRole: 'owner',
 });
 
-/** A community: admins run it, moderators keep order in every app, members take part. */
+/**
+ * A community: admins run it, moderators keep order in every app, members
+ * take part and change only what they made. The founder defines admin;
+ * admins define the other roles. An admin who has seen another's promotion
+ * can't remove or demote them; one who names a view from before it, or acts
+ * concurrently, can: `.roles` binds only a remover whose view holds the role
+ * (spec 03 §2.3).
+ */
 export const community: RolePreset = Object.freeze({
   roles: Object.freeze([
-    { name: 'admin', title: 'Admin', rank: 100, permissions: ['*'] },
-    { name: 'moderator', title: 'Moderator', rank: 50, permissions: ['invite', '*/*'] },
-    { name: 'member', title: 'Member', rank: 0, permissions: [] },
+    {
+      name: 'admin',
+      title: 'Admin',
+      grants: [
+        RECORDS,
+        { cmd: COLLECTION_DEFINE, pol: [] },
+        { cmd: ROLE_DEFINE, pol: [['!=', '.role', 'admin']] },
+        { cmd: ROLE_ASSIGN, pol: [] },
+        { cmd: ROLE_UNASSIGN, pol: notHolding(['admin']) },
+        { cmd: MEMBER_REMOVE, pol: notHolding(['admin']) },
+        INSTRUCT_BOTS,
+        ...SETTINGS,
+      ],
+    },
+    {
+      name: 'moderator',
+      title: 'Moderator',
+      grants: [RECORDS, { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] }, INSTRUCT_BOTS],
+    },
+    { name: 'member', title: 'Member', grants: ownRecords(STAFF_COLLECTIONS) },
   ]),
-  creatorRole: 'admin',
 });
 
 export const rolePresets = Object.freeze({ solo, team, community });

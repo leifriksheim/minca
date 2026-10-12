@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  DEFINE,
-  MANAGE,
-  roleHolds,
+  RECORD_WRITE,
+  SPACE_KEEPERS,
   type NodeCollection,
   type NodeRecord,
   type SpaceSummary,
 } from '@weaveprotocol/core';
-import { useAccess, useAccount, useNode } from '@weaveprotocol/core/react';
+import { useAccount, useNode } from '@weaveprotocol/core/react';
+import { useMay, useMayDefine } from '@weave/app-shared/may';
 import { Modal } from '@weave/app-shared/Modal';
 import { AddBotDialog, useSpaceBots } from '@weave/app-shared/CommunitySetup';
 import { clauseFields, clauseOn, type Clause, type ClauseField } from '../../derive/conditions';
@@ -76,7 +76,8 @@ export function RuleBuilder({
 }) {
   const node = useNode();
   const { did } = useAccount();
-  const access = useAccess(space.id);
+  const mayDefine = useMayDefine(space.id);
+  const mayManage = useMay(space.id, SPACE_KEEPERS);
   const here = usePeopleHere();
   const people: People = here?.people ?? new Map();
   const from = editing ?? copying;
@@ -164,8 +165,10 @@ export function RuleBuilder({
   const agentDoes = then.kind === 'ask' || timed;
   const botName = by ? (bots.find((b) => b.did === by)?.name ?? nameOf(by, people)) : null;
   // A bot runs a member's rules only while they may instruct it here.
-  const mayInstruct = roleHolds(access?.role, INSTRUCT);
-  const onlyTheirs = chosen?.rules.edit === 'creator';
+  const mayInstruct = useMay(space.id, INSTRUCT);
+  // Whether this account may change only what it added there, by its grants.
+  const changesOthers = useMay(space.id, RECORD_WRITE, { collection: chosen?.name ?? '', byCreator: false });
+  const onlyTheirs = !!chosen && !changesOthers;
 
   // What it holds for right now: shown, never acted on — a rule acts on what changes after it's made.
   const [found, setFound] = useState<{ for: typeof when; matches: ReadonlyArray<RuleMatch> } | null>(null);
@@ -195,14 +198,14 @@ export function RuleBuilder({
     await run(async () => {
       for (const definition of [ruleCollection, runCollection]) {
         if (has(definition.name)) continue;
-        if (!roleHolds(access?.role, DEFINE))
+        if (!mayDefine)
           throw new Error(
             'Rules aren’t set up in this space yet: someone who can add collections needs to make the first one.',
           );
         await node.collections.define(space.id, definition);
       }
       // Where the agent or bot says it is working on what set the rule off, for apps to show; not needed to run.
-      if (agentDoes && !has(activityCollection.name) && roleHolds(access?.role, DEFINE))
+      if (agentDoes && !has(activityCollection.name) && mayDefine)
         await node.collections.define(space.id, activityCollection).catch(() => {});
       const body: Rule = {
         name: shownName.trim() || 'Rule',
@@ -524,7 +527,7 @@ export function RuleBuilder({
               <p style={{ fontSize: 12.5, color: palette.ink.muted }}>
                 A bot run with <code>weave agent --bot</code> shows up here once {space.name} keeps profiles,
                 where it says it is one.{' '}
-                {space.writable && roleHolds(access?.role, DEFINE) ? (
+                {space.writable && mayDefine ? (
                   <button
                     type="button"
                     style={styles.linkButton}
@@ -540,7 +543,7 @@ export function RuleBuilder({
             {agentDoes && bots.length === 0 && has(profile.name) && (
               <p style={{ fontSize: 12.5, color: palette.ink.muted }}>
                 No bots in {space.name} yet.{' '}
-                {space.writable && roleHolds(access?.role, MANAGE) ? (
+                {space.writable && mayManage ? (
                   <button type="button" style={styles.linkButton} onClick={() => setAddingBot(true)}>
                     Add a bot
                   </button>

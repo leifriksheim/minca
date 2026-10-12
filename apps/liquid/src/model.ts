@@ -6,7 +6,7 @@
 import { useMemo } from 'react';
 import { useAccess, useAccount, useCan, useLive, useNames, useQuery } from '@weaveprotocol/core/react';
 import { profile, type Profile } from '@weaveprotocol/core/schemas';
-import type { SpaceRole } from '@weaveprotocol/core';
+import { ROLE_ASSIGN } from '@weaveprotocol/core';
 import {
   conflict,
   decision,
@@ -113,8 +113,9 @@ export interface Assembly {
   readonly members: ReadonlyArray<{ readonly did: string; readonly role: string }>;
   /** Members whose own profile here says they are a bot: their word, not checked */
   readonly bots: ReadonlySet<string>;
-  readonly roles: ReadonlyArray<SpaceRole>;
-  readonly myRole: SpaceRole | null;
+  readonly roles: ReadonlyArray<{ readonly name: string; readonly title?: string }>;
+  /** `founder`, or the first role this account holds; null with none */
+  readonly myRole: string | null;
   readonly mayModerate: boolean;
   readonly mayInvite: boolean;
   readonly topics: ReadonlyArray<TopicView>;
@@ -149,6 +150,12 @@ export function useAssembly(spaceId: string): Assembly {
   const name = useNames(spaceId);
   const access = useAccess(spaceId);
   const mayModerate = useCan(spaceId, 'create', topic.name);
+  const mayInvite =
+    useLive(
+      spaceId,
+      (node) => node.spaces.may(spaceId, ROLE_ASSIGN, { role: 'member', self: false, roles: [] }),
+      [],
+    ) ?? false;
   const bots = useBots(spaceId);
 
   const topics = useQuery(spaceId, { collection: topic, sort: { '@createdAt': 'asc' } }).result;
@@ -164,7 +171,11 @@ export function useAssembly(spaceId: string): Assembly {
   const ballots = useQuery(spaceId, { collection: partyBallot }).result;
 
   return useMemo(() => {
-    const members = access?.members ?? [];
+    // One role to show each by: founder, or the first they hold.
+    const members = (access?.members ?? []).map((m) => ({
+      did: m.did,
+      role: m.founder ? 'founder' : (m.roles[0] ?? 'member'),
+    }));
     const inAssembly = new Set(members.map((m) => m.did));
     /** Written by someone, under their own account */
     const signed = <R extends { readonly root: string | null }>(r: R): r is R & { root: string } =>
@@ -325,9 +336,9 @@ export function useAssembly(spaceId: string): Assembly {
       members,
       bots,
       roles: access?.roles ?? [],
-      myRole: access?.role ?? null,
+      myRole: access ? (access.founder ? 'founder' : (access.mine[0] ?? null)) : null,
       mayModerate,
-      mayInvite: access?.role?.permissions.some((p) => p === '*' || p === 'invite') ?? false,
+      mayInvite,
       topics: topicViews,
       topicOf: (key) => (key ? (topicByKey.get(key) ?? null) : null),
       proposals: proposalViews,
@@ -346,6 +357,7 @@ export function useAssembly(spaceId: string): Assembly {
     name,
     access,
     mayModerate,
+    mayInvite,
     bots,
     topics,
     proposals,

@@ -342,6 +342,26 @@ export function evaluatePolicy(policy: unknown, args: unknown): boolean {
   return policy.every((statement) => evaluate(asStatement(statement), args) === true);
 }
 
+/**
+ * A policy's outcome over arguments that may leave something out: true,
+ * false, or null for no data. A definite outcome stays the same whatever the
+ * missing part holds, since no data never turns into a pass or a fail on its
+ * own. A policy that isn't well formed is false.
+ */
+export function policyOutcome(policy: unknown, args: unknown): boolean | null {
+  if (policyProblem(policy) !== null || !Array.isArray(policy)) return false;
+  return every(policy.map((statement) => evaluate(asStatement(statement), args)));
+}
+
+/** Whether any selector in a policy reads `field` or something inside it: `.body`, `.body.amount` */
+export function policyReads(policy: unknown, field: string): boolean {
+  const reads = (value: unknown): boolean =>
+    typeof value === 'string'
+      ? value === `.${field}` || value.startsWith(`.${field}.`) || value.startsWith(`.${field}[`)
+      : Array.isArray(value) && value.some(reads);
+  return reads(policy);
+}
+
 /** What is wrong with a policy's shape, or null when it is well formed */
 export function policyProblem(policy: unknown): string | null {
   if (!Array.isArray(policy)) return 'A policy is a list of statements';

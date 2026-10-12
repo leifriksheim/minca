@@ -60,8 +60,6 @@ export const blueprint = typed<Blueprint>()({
     },
     required: ['title', 'collections'],
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 
 /**
@@ -92,8 +90,7 @@ export const guide = define({
     },
     required: ['name', 'title', 'text'],
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'], onePer: ['name'] },
+  rules: { onePer: ['name'] },
 });
 export type Guide = BodyOf<typeof guide>;
 

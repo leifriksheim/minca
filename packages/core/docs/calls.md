@@ -182,7 +182,7 @@ _Source: `packages/core/src/calls/calls.ts` (`createCalls`, `isCallMessage`, `RI
 >   watch. A host could run one. Not designed.
 > - **Listening without talking.** View-only readers are kept out of calls
 >   ([who takes part](#who-takes-part)). A space where readers may listen
->   could come as a role permission, e.g. `call: "listen" | "talk"`
+>   could come as a grant held by a role, e.g. a library command `/call/listen`
 >   ([spec 03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)). Open.
 > - **Calls across apps.** A call lives in the app that started it; another
 >   app on another origin does not see it. Moving a call between apps would

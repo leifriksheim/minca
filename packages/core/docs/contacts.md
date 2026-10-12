@@ -91,7 +91,7 @@ into another space, or re-posted by someone else, does not open.
   says about them.
 - `ask(space, did, { note? })` needs whole-account access and the askee's
   `contactKey` on their profile in that space. It defines
-  `std.contact-request` in the space if missing (needs `define`), creates a
+  `std.contact-request` in the space if missing (needs `/collection/define`), creates a
   private `team` space named `"<my name> & <their name>"`, opens an `editor`
   invite to it, writes a `std.contact` for them with that space, then posts
   the sealed request. It returns the space for two and the request's key.

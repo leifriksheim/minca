@@ -782,7 +782,9 @@ describe('bots a host runs', () => {
     assert.equal(bot.status.subscription, `space:${space}`, 'the answer is the space’s status');
     await until(
       async () =>
-        (await laptop.spaces.access(space)).members.some((m) => m.did === bot.bot && m.role !== 'admin'),
+        (await laptop.spaces.access(space)).members.some(
+          (m) => m.did === bot.bot && m.roles.length > 0 && !m.roles.includes('admin'),
+        ),
       15_000,
       'the bot to join, below its admin',
     );
@@ -1654,7 +1656,7 @@ describe('a space paying for itself', () => {
     const first = (await laptop.hosting.space(space))[0]?.status?.readKey;
     assert.ok(first);
 
-    await laptop.spaces.setMember(space, bob.did, null);
+    await laptop.spaces.removeMember(space, bob.did);
     await until(
       async () => (await laptop.hosting.space(space))[0]?.status?.readKey !== first,
       6000,

@@ -18,7 +18,7 @@ store, and judge every record the same way:
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, root and session signers, delegations (UCAN 1.0, JSON profile), what a note lets a key do, envelopes and HPKE, contact keys, the account vault, device keys, pairing |
 | [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline                                                    |
-| [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                                                           |
+| [03 — Spaces](03-spaces.md)                     | Spaces, roles and grants, the access log and its replay (`strong-remove/1`), invites, encryption and key distribution, the account registry, profiles                                                                |
 | [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                                                |
 | [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                                                                      |
 
@@ -143,6 +143,7 @@ they are described; the smaller ones share
 | Planned                                                                                           | Where                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                            |
+| The constitution record: founders, stepping down, the resolver's name, successor spaces           | [03 §2.1](03-spaces.md), [the plan](drafts/constitution-grants-contracts.md) §1                                                            |
 | One spelling per key                                                                              | [01 §4](01-identity.md)                                                                                                                    |
 | Grants narrower than a space (reading)                                                            | [06 §2.8](06-nodes-and-sessions.md)                                                                                                        |
 | Removing a lost device from another one (sign-out already revokes)                                | [01 §7.6](01-identity.md), [#165](https://github.com/leifriksheim/weave/issues/165)                                                        |
@@ -189,8 +190,8 @@ Proposed in an issue but not yet designed into the spec, so listed under
   (notes, a JSON profile of UCAN 1.0) to **session keys**, which sign **records**.
 - A **record** is a signed, versioned JSON document in a **collection** of a
   **space**. Private spaces encrypt record bodies with the space key.
-- A **space** carries its own rules: roles, who holds them, what each
-  collection accepts. Every peer replays the same history and reaches the
+- A **space** carries its own rules: its founder, roles and the grants they
+  hold, who is assigned which, what each collection accepts. Every peer replays the same history and reaches the
   same answer about who may write what. There is no server to ask.
 - **Relays** only introduce peers. **Carriers** and **hosts** keep spaces
   online without being able to read them. Neither has authority.

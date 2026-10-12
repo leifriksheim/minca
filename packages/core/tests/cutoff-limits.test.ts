@@ -1,6 +1,6 @@
 /**
- * What a cutoff may name is bounded (spec 03 §6.3), and shared: nobody can
- * make themselves unremovable, or crowd others out, by writing into many
+ * What a cutoff may name is bounded (spec 03 §6.3): nobody can make
+ * themselves unremovable, or crowd others out, by writing into many
  * collections. The thousand versions are signed by hand and put straight
  * into Alice's copy, as if they had synced: writing and syncing that many
  * would take most of a minute.
@@ -77,14 +77,14 @@ describe('cutoff limits', () => {
   test('nobody makes themselves unremovable by writing into more collections than a cutoff may name', async () => {
     const { alice, bob, space } = await sharedWithBob();
     await pad(bob, alice, space, 1030);
-    await alice.node.spaces.setMember(space, bob.node.did, null);
+    await alice.node.spaces.removeMember(space, bob.node.did);
     assert.equal(
       (await alice.node.spaces.access(space)).members.some((m) => m.did === bob.node.did),
       false,
     );
   });
 
-  test('a change reaching many accounts shares what its cutoff may name: one holder’s writing can’t crowd out another’s', async () => {
+  test('a change reaches one account, so another’s writing can’t crowd it out of the cutoff', async () => {
     const { hub, alice, bob, space } = await sharedWithBob();
     const carol = await person(hub);
     await carol.node.spaces.join(await alice.node.spaces.invite(space));
@@ -93,7 +93,8 @@ describe('cutoff limits', () => {
     await until(async () => (await alice.node.records.get(space, note.key)) !== null, 4000, 'the note');
     await letGo(carol.node, space);
     await pad(bob, alice, space, 1030);
-    await alice.node.spaces.removeRole(space, 'editor');
+    // Taking Carol's role covers her lines alone, however much Bob wrote.
+    await alice.node.spaces.unassign(space, carol.node.did, 'editor');
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.notEqual(
       await alice.node.records.get(space, note.key),

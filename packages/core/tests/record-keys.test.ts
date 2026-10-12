@@ -19,9 +19,11 @@ import {
   RECORD_KEY_PATTERN,
 } from '../src/records/key.js';
 import { changedFixedField, onePerKey, onePerSecret } from '../src/records/rules.js';
-import { replayAccess, type AccessEvent, type AccessGenesis, type Role } from '../src/space/roles.js';
-import { SYNC_PROTOCOL_VERSION } from '../src/sync/sync-messages.js';
+import { replayAccess, type AccessEvent, type AccessGenesis } from '../src/space/roles.js';
+import { COLLECTION_DEFINE, ROLE_ASSIGN } from '../src/space/grants.js';
+import { OWN } from './helpers/own-records.js';
 import { team } from '../src/space/presets.js';
+import { SYNC_PROTOCOL_VERSION } from '../src/sync/sync-messages.js';
 import type { Version } from '../src/types.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { hold, letGo } from './helpers/hold.js';
@@ -168,13 +170,26 @@ describe('onePer keys', () => {
   });
 });
 
-/** Alice, Bob and Carol in a public space where only a record's creator may edit it */
-async function club() {
+/**
+ * Alice, Bob and Carol in a public space where only a record's creator may
+ * edit it. Its editors may define `app.notice` only when `defines` says so.
+ */
+async function club(defines = false) {
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
   const carol = await person(hub);
-  const { id: space } = await alice.node.spaces.create({ name: 'Club', ...team, visibility: 'public' });
+  const roles = [
+    {
+      name: 'editor',
+      grants: [
+        ...OWN,
+        { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'editor']] },
+        ...(defines ? [{ cmd: COLLECTION_DEFINE, pol: [['==', '.collection', 'app.notice']] }] : []),
+      ],
+    },
+  ];
+  const { id: space } = await alice.node.spaces.create({ name: 'Club', roles, visibility: 'public' });
   for (const who of [bob, carol]) {
     await who.node.spaces.join(await alice.node.spaces.invite(space));
     await joined(who.node, space);
@@ -184,13 +199,12 @@ async function club() {
     await alice.node.collections.define(space, {
       name,
       schema: { type: 'object' },
-      rules: { edit: 'creator', delete: 'creator' },
     });
   await alice.node.collections.define(space, {
     name: 'app.vote',
     schema: { type: 'object' },
     links: { about: { to: '*', cardinality: 'one' } },
-    rules: { edit: 'creator', onePer: ['@author', 'link:about'] },
+    rules: { onePer: ['@author', 'link:about'] },
   });
   for (const who of [bob, carol])
     await until(
@@ -532,25 +546,37 @@ describe('a key in another collection', () => {
 });
 
 describe('who first defined a collection', () => {
-  const steward: Role = { name: 'steward', rank: 10, permissions: ['define'] };
-  const admin: Role = { name: 'admin', rank: 100, permissions: ['*'] };
+  // Stewards may define collections. The founder narrows steward at `narrow`, written apart from
+  // their definitions: a change that saw it is judged without the grant, by whether it is its definer's.
   const genesis: AccessGenesis = {
     id: 'space',
     creator: 'root',
-    roles: [admin, steward],
-    creatorRole: 'admin',
+    roles: [{ name: 'steward', grants: [{ cmd: COLLECTION_DEFINE, pol: [] }] }],
   };
   const member = (did: string, id: string): AccessEvent => ({
     id,
-    key: `member:${did}`,
-    kind: 'member',
+    key: `assign:${did}|steward`,
+    kind: 'assign',
     root: 'root',
     did,
     role: 'steward',
+    assigned: true,
     seen: [],
     author: 'k',
     cutoff: new Map(),
   });
+  const narrow: AccessEvent = {
+    id: 'n0',
+    key: 'role:steward',
+    kind: 'role',
+    root: 'root',
+    name: 'steward',
+    grants: [],
+    nests: [],
+    seen: ['m1', 'm2'],
+    author: 'k',
+    cutoff: new Map(),
+  };
   const define = (root: string, id: string, seen: string[], deleted = false): AccessEvent => ({
     id,
     key: 'collection:app.poll',
@@ -581,10 +607,11 @@ describe('who first defined a collection', () => {
         // Neither is in force: which would be is an id, and Mallory could grind hers lower.
         assert.equal(history.current.definitions.get('app.poll'), undefined);
         assert.ok(history.current.contested.has('app.poll'));
-        // Neither may change it now; only someone who manages the space.
-        const change = (root: string, id: string) => define(root, id, [hers, theirs]);
+        // Neither may change it once steward is narrowed; only someone who may define it.
+        const change = (root: string, id: string) => define(root, id, [hers, theirs, 'n0']);
         const after = replayAccess(genesis, [
           ...order,
+          narrow,
           change('mallory', 'x1'),
           change('alice', 'x2'),
           change('root', 'x3'),
@@ -592,7 +619,7 @@ describe('who first defined a collection', () => {
         assert.equal(after.status('x1')?.status, 'dropped');
         assert.equal(after.status('x2')?.status, 'dropped');
         assert.equal(after.status('x3')?.status, 'applied');
-        // The manager's, which saw them both, settles it; it names no definer.
+        // The founder's, which saw them both, settles it; it names no definer.
         assert.deepEqual(after.current.definitions.get('app.poll'), { event: 'x3', definedBy: null });
         assert.ok(!after.current.contested.has('app.poll'));
       }
@@ -612,8 +639,8 @@ describe('who first defined a collection', () => {
       const history = replayAccess(genesis, order);
       assert.equal(history.current.definitions.get('app.poll'), undefined, 'no definition in force');
       assert.ok(history.current.contested.has('app.poll'));
-      // Mallory, having seen both, can't settle it in her favour.
-      const again = replayAccess(genesis, [...order, define('mallory', 'd7', ['d6', 'd0'])]);
+      // Mallory, having seen both and the narrowing, can't settle it in her favour.
+      const again = replayAccess(genesis, [...order, narrow, define('mallory', 'd7', ['d6', 'd0', 'n0'])]);
       assert.equal(again.status('d7')?.status, 'dropped');
       assert.equal(again.current.definitions.get('app.poll'), undefined);
       // A rival raced against a manager's settling puts it out of force again, and still chooses nothing.
@@ -641,8 +668,8 @@ describe('who first defined a collection', () => {
     const history = replayAccess(genesis, events);
     assert.equal(history.status('a0')?.status, 'dropped');
     assert.deepEqual(history.current.definitions.get('app.poll'), { event: 'd6', definedBy: 'alice' });
-    // So her definition after it, having seen both, changes someone else's: refused.
-    const after = replayAccess(genesis, [...events, define('mallory', 'z9', ['d6', 'a0'])]);
+    // So her definition after it, having seen both and the narrowing, changes someone else's: refused.
+    const after = replayAccess(genesis, [...events, narrow, define('mallory', 'z9', ['d6', 'a0', 'n0'])]);
     assert.equal(after.status('z9')?.status, 'dropped');
     assert.equal(after.current.definitions.get('app.poll')?.definedBy, 'alice');
   });
@@ -660,15 +687,15 @@ describe('who first defined a collection', () => {
       const history = replayAccess(genesis, order);
       assert.equal(history.current.definitions.get('app.poll'), undefined);
       assert.deepEqual(history.current.contested.get('app.poll'), ['a1', 'd6']);
-      const after = replayAccess(genesis, [...order, define('mallory', 'z9', ['d6', 'a1'])]);
+      const after = replayAccess(genesis, [...order, narrow, define('mallory', 'z9', ['d6', 'a1', 'n0'])]);
       assert.equal(after.status('z9')?.status, 'dropped');
-      // A manager settles it; after a delete it saw, that starts the collection afresh, as the manager's.
+      // The founder settles it; after a delete it saw, that starts the collection afresh, as the founder's.
       const settled = replayAccess(genesis, [...order, define('root', 'z8', ['d6', 'a1'])]);
       assert.deepEqual(settled.current.definitions.get('app.poll'), { event: 'z8', definedBy: 'root' });
     }
   });
 
-  test('once settled with no definer, changes made apart by managers are picked between by id', () => {
+  test('once settled with no definer, changes made apart by those who may define it are picked between by id', () => {
     const settle = [
       member('alice', 'm1'),
       member('bob', 'm2'),
@@ -680,7 +707,7 @@ describe('who first defined a collection', () => {
       event: 'd8',
       definedBy: null,
     });
-    // One manager on two devices.
+    // The founder on two devices.
     const history = replayAccess(genesis, [
       ...settle,
       define('root', 'e2', ['d8']),
@@ -690,7 +717,7 @@ describe('who first defined a collection', () => {
     assert.equal(history.current.contested.size, 0);
   });
 
-  test('the definer and a manager changing it apart: picked between by id, not contested', () => {
+  test('the definer and someone who may define it changing it apart: picked between by id, not contested', () => {
     const history = replayAccess(genesis, [
       member('alice', 'm1'),
       define('alice', 'd1', ['m1']),
@@ -706,8 +733,7 @@ describe('who first defined a collection', () => {
     await alice.node.collections.define(space, {
       name: 'app.notice',
       schema: { type: 'object' },
-      rules: { create: 'can:post' },
-      permissions: ['post'],
+      rules: { fixed: ['text'] },
     });
     const listed = async () =>
       (await carol.node.collections.list(space)).find((c) => c.name === 'app.notice');
@@ -738,7 +764,7 @@ describe('who first defined a collection', () => {
     const his = await forge(bob, space, {
       collection: 'sys.collection',
       retain: true,
-      body: { ...Object(hers.body), rules: {}, permissions: [] },
+      body: { ...Object(hers.body), rules: {} },
       seen: [hers.id, removal.id],
       version: { key: 'collection:app.notice', seq: 1, prev: removal.id, genesis: removal.id },
       log: { n: 0 },
@@ -752,18 +778,17 @@ describe('who first defined a collection', () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     const shown = await listed();
     assert.equal(shown?.definedBy, alice.node.did);
-    assert.deepEqual(shown?.rules, { create: 'can:post' });
+    assert.deepEqual(shown?.rules, { fixed: ['text'] });
   });
 
   test('on real nodes, rivals that differ put no rules in force; rivals that agree do', async () => {
     for (const agree of [false, true]) {
-      const { alice, bob, carol, space } = await club();
+      const { alice, bob, carol, space } = await club(true);
       await alice.node.collections.define(space, {
         name: 'app.notice',
         title: 'Notice',
         schema: { type: 'object' },
-        rules: { create: 'can:post' },
-        permissions: ['post'],
+        rules: { fixed: ['text'] },
       });
       const inForce = async () =>
         (await carol.node.collections.list(space)).some((c) => c.name === 'app.notice');
@@ -772,7 +797,7 @@ describe('who first defined a collection', () => {
       const hers = (await store.queryVersions('sys.collection')).find(
         (v) => v.key === 'collection:app.notice',
       )!;
-      const body: unknown = agree ? hers.body : { ...Object(hers.body), rules: {}, permissions: [] };
+      const body: unknown = agree ? hers.body : { ...Object(hers.body), rules: {} };
       // Bob's rival, as of the same point as hers, so neither saw the other.
       await letGo(bob.node, space);
       const rival = await forge(bob, space, {
@@ -812,17 +837,16 @@ describe('who first defined a collection', () => {
         'Alice to refuse it',
       );
       assert.equal(await (await stored(alice.stores, space)).getVersion(slipped.id), null);
-      // Alice, who manages the space, settles it with hers.
+      // Alice, the founder, settles it with hers.
       await alice.node.collections.define(space, {
         name: 'app.notice',
         title: 'Notice',
         schema: { type: 'object' },
-        rules: { create: 'can:post' },
-        permissions: ['post'],
+        rules: { fixed: ['text'] },
       });
       await until(inForce, 4000, 'the settled definition');
       const settled = (await carol.node.collections.list(space)).find((c) => c.name === 'app.notice')!;
-      assert.deepEqual(settled.rules, { create: 'can:post' });
+      assert.deepEqual(settled.rules, { fixed: ['text'] });
       assert.equal(settled.definedBy, null);
     }
   });
@@ -833,7 +857,8 @@ describe('who first defined a collection', () => {
       member('mallory', 'm2'),
       define('alice', 'd1', ['m1', 'm2']),
       define('alice', 'd2', ['d1']),
-      define('mallory', 'd3', ['d2']),
+      narrow,
+      define('mallory', 'd3', ['d2', 'n0']),
     ]);
     assert.equal(history.current.definitions.get('app.poll')?.definedBy, 'alice');
     assert.equal(history.status('d2')?.status, 'applied');

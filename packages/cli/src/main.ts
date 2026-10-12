@@ -138,8 +138,8 @@ Agents (Claude Code, Claude Desktop, Cursor):
   folder of its own, bots/<name> in the data folder, with its model, key and
   spending; --name picks one, or makes it, and "weave bots" lists them.
   --invite joins a space. It says it is a bot on its std.profile where a
-  space keeps them, and runs the rules that name it (by) of members holding
-  std.rule/instruct there.
+  space keeps them, and runs the rules that name it (by) of its founder and
+  members granted /std.rule/instruct there.
   --daily-cap-each limits what each person who sets it off may spend a day
   (a quarter of --daily-cap unless given).
 

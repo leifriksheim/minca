@@ -318,7 +318,7 @@ describe('the daemon', () => {
       'the node to serve both',
     );
 
-    await daemon.node.spaces.setMember(space, carol.node.did, null);
+    await daemon.node.spaces.removeMember(space, carol.node.did);
     await until(async () => (await daemon.node.spaces.access(space)).key?.changes === 1, 5000, 'a new key');
     await until(async () => !(await served()).includes(carol.node.did), 5000, 'the node to let Carol go');
     assert.ok((await served()).includes(bob.node.did), 'Bob, still a member, stays');

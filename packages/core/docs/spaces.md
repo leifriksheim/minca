@@ -1,7 +1,7 @@
 # Spaces in the library
 
 What the library chooses when it creates, invites to, reads and keeps
-spaces: role presets, invite defaults, profiles, the space manager, and how
+spaces: constitution templates, invite defaults, profiles, the space manager, and how
 an app shows a subscription.
 
 > Not protocol. None of this is checked by a peer, and another implementation
@@ -10,34 +10,66 @@ an app shows a subscription.
 
 ## Presets
 
-A preset is a list of starting roles and the one the creator holds. The
-protocol reads whatever roles a space's genesis names and never looks at a
-preset's name; these are a sensible start for an app. Pass one when creating a
-space, change it, or write your own.
+A preset is a constitution template: the roles a space is founded with, and
+the grants each holds ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+The protocol reads whatever roles a space's genesis names and never looks at
+a preset's name; these are a sensible start for an app. Pass one's `roles`
+when creating a space, change them, or write your own. The creator is the
+space's founder and holds every command whatever the preset says, so no
+preset needs a role for it.
 
-| Preset      | Roles (name, title, rank, permissions)                                                   | Creator |
-| ----------- | ---------------------------------------------------------------------------------------- | ------- |
-| `solo`      | owner Owner 100 `["*"]`                                                                  | owner   |
-| `team`      | owner Owner 100 `["*"]`; editor Editor 10 `["invite","define"]`                          | owner   |
-| `community` | admin Admin 100 `["*"]`; moderator Moderator 50 `["invite","*/*"]`; member Member 0 `[]` | admin   |
+| Preset      | Roles and their grants                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `solo`      | none: the founder alone                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `team`      | editor: `/record`; `/collection/define`; `/role/assign` with `.role == "editor"`                                                                                                                                                                                                                                                                                                                                                 |
+| `community` | admin: `/record`, `/collection/define`, `/role/assign`, `/role/define` for every role but admin, `/role/unassign` and `/member/remove` of anyone not an admin, `/std.rule/instruct`, `/key/change`, `/space/relays`, `/space/keepers`; moderator: `/record`, `/role/assign` with `.role == "member"`, `/std.rule/instruct`; member: `/record/write` and `/record/delete` where `.byCreator` is true, outside `STAFF_COLLECTIONS` |
 
-When a space is created with no roles, it gets `solo`. With roles but no
-`creatorRole`, the creator holds the highest-ranked one.
+Each preset must say explicitly whether members may change each other's
+records: a grant of `/record/write` without a policy on `.byCreator` lets
+them. In `community`, members change only what they made, and moderators
+anything.
 
-The account's derived spaces (the registry, the contacts space) use `solo`'s
-roles, byte for byte: their ids depend on it
+What `.roles` protects, and what it doesn't. "Of anyone not an admin" is a
+policy on the target's roles, read as of the remover's own view, which the
+remover chooses by what it names as seen (spec 03 §2.3, §3.2). It stops an
+admin who has seen another's promotion. It doesn't stop one who names a view
+from before it, or acts concurrently with it: `community` admins can still
+remove or demote each other that way. `.roles` protects only against a
+remover whose view includes the target's role. A space where that matters
+gives removal to fewer people, or to the founder alone.
+
+A role that may define itself can be locked by rival definitions (spec 03
+§2): two of its holders who rewrite it apart and disagree leave it holding
+only what they share, and if that drops `/role/define`, nobody in it can
+settle them. So a preset gives `/role/define` for a role to another role, or
+to the founder alone: in `community` the founder defines admin, and admins
+define the rest.
+
+`STAFF_COLLECTIONS` are the standard collections only moderators start in a
+community: announcements, badges, awards, pins, labels, channels and hosts.
+Their definitions used to say so with `create` rules; now the template does.
+
+When a space is created with no roles, it gets `solo`. The account's derived
+spaces (the registry, the contacts space) use `solo`'s roles, none, byte for
+byte: their ids depend on it
 ([spec 03 §13.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
 Changing `solo` would change those ids, so it must not change.
 
-_Source: `packages/core/src/space/presets.ts`, `packages/core/src/space/space-manager.ts` (`create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts`._
+_Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts` ("definitions", "`community` admins can remove each other by naming a view before the promotion")._
 
 ## Invites
 
 `node.spaces.invite(id, options?)`:
 
-- With no role given, it opens an invite for the lowest-ranked role strictly
-  below the inviter's own. With none below (as in `solo`), it makes a
-  view-only invite.
+- With no role given, it opens an invite for `member` when the inviter may
+  assign it (`/role/assign` with `{ role, self: false, roles: [] }`), else for
+  the first role by name it may assign. With none (as in `solo`), it makes a
+  view-only invite. Opening an invite for a role needs the same grant as
+  assigning it to someone holding nothing. Peers judge each join as the
+  assignment the invite's opener makes, to whoever joins (spec 03 §4.5): an
+  opener whose grant says `.self == false` can't join its own invite. A
+  joiner judged in a view from before the opener lost the grant still gets
+  in: to stop an invite, close it.
 - `write: false` always makes a view-only invite.
 - Each role invite gets its own fresh secret and its own `sys.invite` record,
   so one can be closed without the others.
@@ -65,9 +97,11 @@ The node does the protocol's key upkeep by itself, in each space it opens:
 
 - On every upkeep it publishes this account's member key when it differs from
   the one published.
-- When a key change is due and it holds `manage` and the current key, it
-  changes the key. `node.spaces.changeKey` does the same by hand.
-- In a space with no relays named yet, a node holding `manage` names its own.
+- When a key change is due and its account may invoke `/key/change` and it
+  holds the current key, it changes the key. `node.spaces.changeKey` does the
+  same by hand.
+- In a space with no relays named yet, a node whose account may invoke
+  `/space/relays` names its own.
 
 _Source: `packages/core/src/node/space-runtime.ts` (`upkeep`, `rotateKey`, `nameRelays`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/space-relays.test.ts`._
 
@@ -135,7 +169,7 @@ The space manager keeps, per space, in a storage adapter (the node's
 | `space:<id>`          | JSON space object                                                                            |
 | `spacekey:<id>`       | JSON `{ keys: [{ id, raw, createdAt, version }], current }`: every key held, `raw` base64url |
 | `spaceinvite:<id>`    | base64url invite secret, until used                                                          |
-| `spacerole:<id>`      | the role last held: a hint for listing, never a gate                                         |
+| `spacerole:<id>`      | `founder`, or a role last held: a hint for listing, never a gate                             |
 | `spacememberkey:<id>` | base64url member key scalar, for a node given it without the account key                     |
 | `spacerelays:<id>`    | JSON relay list last heard                                                                   |
 

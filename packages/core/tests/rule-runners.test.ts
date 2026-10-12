@@ -272,6 +272,8 @@ async function club(fill: number) {
   const person = await member(hub, fill + 1);
   const bot = await member(hub, fill + 2);
   const { id: space } = await admin.spaces.create({ name: 'Club', ...community, visibility: 'private' });
+  // The founder holds every command; it holds the admin role too, so a rule's `from` names it.
+  await admin.spaces.assign(space, admin.did, 'admin');
   for (const definition of [message, rule, ruleRun]) await admin.collections.define(space, definition);
   await person.spaces.join(await admin.spaces.invite(space, { role: 'member' }));
   await bot.spaces.join(await admin.spaces.invite(space, { role: 'member' }));

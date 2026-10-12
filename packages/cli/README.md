@@ -420,10 +420,10 @@ you may add collections; `weave collections define --standard <std.name>`
 does that for any collection in the library. `$me` is whoever runs the rule:
 the bot, or you.
 
-It runs the rules in a space that name it in `by`, made by members holding
-`std.rule/instruct` there (admins and moderators in the community preset).
-What sets a rule off is data to it, except when its writer holds that
-permission too: then an "Answer when mentioned" rule lets them ask it for
+It runs the rules in a space that name it in `by`, made by its founder or
+members whose roles grant `/std.rule/instruct` there. What sets a rule off
+is data to it, except when its writer holds that grant too, and every grant
+of the bot's own roles: then an "Answer when mentioned" rule lets them ask it for
 things ("make us an expenses app"), and it sees the replies before it.
 A rule's `from` narrows what sets it off to records by some roles, so
 `"from": ["member"]` is "a mention from anyone with a role".

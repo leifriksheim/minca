@@ -3,7 +3,7 @@
  * Blocks and mutes are one person's choice, so they belong in that person's
  * own space rather than in a space others read.
  */
-import { address, blob, day, own, person, text, define, url, when, words } from '../fragments.js';
+import { address, blob, day, person, text, define, url, when, words } from '../fragments.js';
 import type { BodyOf } from '../../query/types.js';
 
 /**
@@ -38,7 +38,7 @@ export const profile = define({
       bot: { type: 'boolean', description: 'The account is software someone runs, not a person' },
     },
   },
-  rules: { ...own, onePer: ['@author'] },
+  rules: { onePer: ['@author'] },
 });
 export type Profile = BodyOf<typeof profile>;
 
@@ -91,7 +91,7 @@ export const follow = define({
     properties: { did: person('Who is followed'), space: text(256, 'The space they publish in') },
     required: ['did'],
   },
-  rules: { ...own, onePer: ['@author', 'did'] },
+  rules: { onePer: ['@author', 'did'] },
   topics: ['did'],
 });
 export type Follow = BodyOf<typeof follow>;
@@ -106,7 +106,7 @@ const avoided = (name: string, title: string, description: string) =>
       properties: { did: person(), until: when('Until when; forever without one') },
       required: ['did'],
     },
-    rules: { ...own, onePer: ['@author', 'did'] },
+    rules: { onePer: ['@author', 'did'] },
   });
 export type Avoid = BodyOf<typeof block>;
 
@@ -128,7 +128,7 @@ export const status = define({
     type: 'object',
     properties: { text: text(280), emoji: text(16), until: when('When it stops showing') },
   },
-  rules: { ...own, onePer: ['@author'] },
+  rules: { onePer: ['@author'] },
 });
 export type Status = BodyOf<typeof status>;
 

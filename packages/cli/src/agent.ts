@@ -14,8 +14,7 @@ import {
   createNode,
   folderStores,
   didOf,
-  DEFINE,
-  roleHolds,
+  COLLECTION_DEFINE,
   type P2PNode,
 } from '@weaveprotocol/core';
 import { profile } from '@weaveprotocol/core/schemas';
@@ -254,7 +253,7 @@ export async function forgetAgent(home: string): Promise<void> {
 export async function discloseBot(node: P2PNode, space: string): Promise<boolean> {
   const collections = await node.collections.list(space);
   if (!collections.some((c) => c.name === profile.name && c.version !== null)) {
-    if (!roleHolds((await node.spaces.access(space)).role, DEFINE)) return false;
+    if (!(await node.spaces.may(space, COLLECTION_DEFINE, { collection: profile.name }))) return false;
     await node.collections.define(space, profile);
   }
   const mine = (await node.records.list(space, { collection: profile.name })).find(

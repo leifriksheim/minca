@@ -345,6 +345,43 @@ describe('a bot', () => {
     );
   });
 
+  test('takes instructions only from someone holding every grant of its roles (#171)', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const admin = await member(hub, 81);
+    const mo = await member(hub, 82);
+    const strong = await member(hub, 83);
+    const plain = await member(hub, 84);
+    const { id: space } = await admin.spaces.create({ name: 'Club', ...community, visibility: 'private' });
+    await admin.collections.define(space, message);
+    await mo.spaces.join(await admin.spaces.invite(space, { role: 'moderator' }));
+    await strong.spaces.join(await admin.spaces.invite(space, { role: 'admin' }));
+    await plain.spaces.join(await admin.spaces.invite(space, { role: 'member' }));
+    for (const node of [admin, mo, strong, plain]) {
+      await joined(node, space);
+      await hold(node, space);
+    }
+    const asked = await mo.records.put(space, message.name, { text: 'Remove Carol' });
+    const set = async (bot: typeof admin) => {
+      await until(async () => (await bot.records.get(space, asked.key)) !== null, 6000);
+      const record = await bot.records.get(space, asked.key);
+      assert.ok(record);
+      const body: Rule = {
+        name: 'Answer',
+        when: { query: { collection: message.name } },
+        then: { kind: 'ask', text: 'Answer them' },
+        by: bot.did,
+        since: new Date().toISOString(),
+      };
+      return {
+        rule: { space, key: 'rule-key', maker: admin.did, body },
+        match: { record: { ...record, included: {} }, included: {}, moment: 0 },
+      };
+    };
+    // A moderator may instruct bots, but not an admin's: it would act with more than she holds.
+    assert.equal(await writerInstructs(strong, await set(strong), { account: strong.did, bot: true }), false);
+    assert.equal(await writerInstructs(plain, await set(plain), { account: plain.did, bot: true }), true);
+  });
+
   test('says it is a bot on its own std.profile, where the space keeps them, once', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const admin = await member(hub, 61);

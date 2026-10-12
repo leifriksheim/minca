@@ -535,7 +535,6 @@ describe('liquid: a decision fits in one check', () => {
         prev: null,
       },
       cite: async (id) => held.get(id) ?? { later: true },
-      can: () => false,
       member: () => true,
     });
     assert.deepEqual(outcome, { passed: true });
@@ -560,7 +559,6 @@ describe('liquid: a decision fits in one check', () => {
         prev: null,
       },
       cite: async (id) => heldStrict.get(id) ?? { later: true },
-      can: () => false,
       member: () => true,
     });
     assert.deepEqual(strictOutcome, { passed: true });

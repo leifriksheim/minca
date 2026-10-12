@@ -182,7 +182,6 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
         if (!members.has(w.author)) return { refused: 'its author was removed' };
         return checked(w);
       },
-      can: () => false,
       member: (did) => members.has(did),
     });
     if ('later' in outcome) return 'pending';

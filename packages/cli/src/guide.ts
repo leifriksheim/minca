@@ -6,7 +6,7 @@
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { DEFINE, roleHolds, type P2PNode } from '@weaveprotocol/core';
+import { COLLECTION_DEFINE, type P2PNode } from '@weaveprotocol/core';
 import {
   SCHEDULES,
   checkCron,
@@ -217,7 +217,7 @@ export async function addRule(node: P2PNode, flags: RuleFlags): Promise<unknown>
   const collections = await node.collections.list(space);
   for (const definition of [rule, ruleRun]) {
     if (collections.some((c) => c.name === definition.name && c.version !== null)) continue;
-    if (!roleHolds((await node.spaces.access(space)).role, DEFINE))
+    if (!(await node.spaces.may(space, COLLECTION_DEFINE, { collection: definition.name })))
       throw new Error(
         'This space has no rules yet, and you may not add collections to it. Ask someone who can, or `weave collections define --standard std.rule`.',
       );

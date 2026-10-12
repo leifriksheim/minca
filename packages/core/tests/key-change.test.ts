@@ -16,7 +16,8 @@ import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { deriveMemberKeyBytes } from '../src/identity/contact-key.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import { replayAccess, type AccessEvent, type AccessGenesis, type Role } from '../src/space/roles.js';
+import { replayAccess, type AccessEvent, type AccessGenesis } from '../src/space/roles.js';
+import { assign, remove } from './helpers/access.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
 import {
   BOX_LABEL,
@@ -56,29 +57,21 @@ const provider = createP256Provider();
 
 // ─── The replay ────────────────────────────────────────────────────
 
-const admin: Role = { name: 'admin', rank: 100, permissions: ['*'] };
-const member: Role = { name: 'member', rank: 0, permissions: [] };
 const genesis: AccessGenesis = {
   id: 'space',
   creator: 'alice',
-  roles: [admin, member],
-  creatorRole: 'admin',
+  roles: [
+    { name: 'admin', grants: [{ cmd: '/', pol: [] }] },
+    { name: 'member', grants: [{ cmd: '/record', pol: [] }] },
+  ],
   key: { keyId: 'k0', readKey: 'did:key:r0' },
 };
 
 let n = 0;
 const id = (label: string) => `${label}-${String(n++).padStart(3, '0')}`;
-const setRole = (root: string, did: string, role: string | null, seen: string[]): AccessEvent => ({
-  id: id('m'),
-  key: `member:${did}`,
-  kind: 'member',
-  root,
-  did,
-  role,
-  seen,
-  author: 'k',
-  cutoff: new Map(),
-});
+/** Gives `did` a role, or with null removes them */
+const setRole = (root: string, did: string, role: string | null, seen: string[]): AccessEvent =>
+  role === null ? remove(root, did, seen, { author: 'k' }) : assign(root, did, role, seen, { author: 'k' });
 const newKey = (root: string, keyId: string, seen: string[], eventId = id('k')): AccessEvent => ({
   id: eventId,
   key: 'key:space',
@@ -193,7 +186,7 @@ async function team3() {
 describe('removing someone from a private space', () => {
   test('changes the key by itself: the others read on, the one removed reads nothing new', async () => {
     const { alice, bob, carol, space } = await team3();
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     await until(async () => (await keyChanges(alice, space))?.changes === 1, 6000, 'a new key');
     await until(
       async () =>
@@ -216,7 +209,7 @@ describe('removing someone from a private space', () => {
 
   test('a newcomer after the change reads what came before it too', async () => {
     const { hub, alice, carol, space } = await team3();
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     await until(async () => (await keyChanges(alice, space))?.changes === 1, 6000, 'a new key');
     await alice.node.records.put(space, 'app.note', { text: 'after' });
 
@@ -233,7 +226,7 @@ describe('removing someone from a private space', () => {
   test('a member who was away catches up: the new key waits for them, sealed to them', async () => {
     const { alice, bob, carol, space } = await team3();
     await letGo(bob.node, space);
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     await until(async () => (await keyChanges(alice, space))?.changes === 1, 6000, 'a new key');
     await alice.node.records.put(space, 'app.note', { text: 'while away' });
 
@@ -248,7 +241,7 @@ describe('removing someone from a private space', () => {
   test('someone joining with a link made before the change gets the new key once they are in', async () => {
     const { hub, alice, carol, space } = await team3();
     const oldLink = await alice.node.spaces.invite(space);
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     await until(async () => (await keyChanges(alice, space))?.changes === 1, 6000, 'a new key');
     await alice.node.records.put(space, 'app.note', { text: 'after' });
 
@@ -261,7 +254,7 @@ describe('removing someone from a private space', () => {
 
   test('changes the key before the removal returns, so closing at once leaves nobody reading', async () => {
     const { alice, bob, carol, space } = await team3();
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     assert.equal((await keyChanges(alice, space))?.changes, 1, 'changed before it returned');
     await alice.node.close();
 
@@ -283,7 +276,7 @@ describe('removing someone from a private space', () => {
     bob.node.subscribe((event) => {
       if (event.type === 'message' && event.from === carol.node.did) heardFromCarol.push(event.message);
     });
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     await until(
       async () => !(await bob.node.spaces.access(space)).members.some((m) => m.did === carol.node.did),
       6000,
@@ -302,7 +295,7 @@ describe('removing someone from a private space', () => {
     // Alice, the only one who may change the key, is away.
     await letGo(alice.node, space);
     // Carol gives up her place but keeps the space open, holding the key.
-    await carol.node.spaces.setMember(space, carol.node.did, null);
+    await carol.node.spaces.removeMember(space, carol.node.did);
     await until(
       async () => (await bob.node.spaces.access(space)).members.length === 2,
       6000,
@@ -333,9 +326,9 @@ describe('removing someone from a private space', () => {
     await assert.rejects(alice.node.spaces.changeKey(space), /public space has no key/);
   });
 
-  test('only someone who manages the space changes its key by hand', async () => {
+  test('only someone granted /key/change changes its key by hand', async () => {
     const { bob, space } = await team3();
-    await assert.rejects(bob.node.spaces.changeKey(space), /Only someone who manages/);
+    await assert.rejects(bob.node.spaces.changeKey(space), /Only someone granted \/key\/change/);
   });
 });
 
@@ -395,7 +388,7 @@ describe('proving you may read, after the key changed', () => {
     const oldKey = await spaceKeyFromRaw(
       base64UrlDecode(parseSpaceInvite(await alice.node.spaces.invite(space, { write: false })).key!),
     );
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     await until(async () => (await keyChanges(alice, space))?.changes === 1, 6000, 'a new key');
     const newKey = await spaceKeyFromRaw(
       base64UrlDecode(parseSpaceInvite(await alice.node.spaces.invite(space, { write: false })).key!),
@@ -436,7 +429,7 @@ describe('proving you may read, while a new key is due', () => {
       base64UrlDecode(parseSpaceInvite(await bob.node.spaces.invite(space, { write: false })).key!),
     );
     await letGo(alice.node, space);
-    await carol.node.spaces.setMember(space, carol.node.did, null);
+    await carol.node.spaces.removeMember(space, carol.node.did);
     await until(
       async () => (await bob.node.spaces.access(space)).members.length === 2,
       6000,
@@ -487,7 +480,7 @@ describe('everything else that holds a space follows its new key', () => {
     await letGo(bob.node, space);
     await seedless.spaces.hold(space);
 
-    await alice.node.spaces.setMember(space, carol.node.did, null);
+    await alice.node.spaces.removeMember(space, carol.node.did);
     await alice.node.records.put(space, 'app.note', { text: 'after' });
     await until(() => readsOn(seedless, space, 'after'), 6000, 'the app to read the new note');
   });

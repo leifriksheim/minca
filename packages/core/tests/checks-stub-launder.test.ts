@@ -4,7 +4,7 @@ import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
-import { team } from '../src/space/presets.js';
+import { ownRecords } from './helpers/own-records.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
 import { forge, person, settle } from './helpers/person.js';
@@ -13,12 +13,12 @@ async function setup(name: string, check: { that: string; else: string }) {
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
-  const { id: space } = await alice.node.spaces.create({ name: 'Club', ...team, visibility: 'public' });
+  const { id: space } = await alice.node.spaces.create({ name: 'Club', ...ownRecords, visibility: 'public' });
   await bob.node.spaces.join(await alice.node.spaces.invite(space));
   await alice.node.collections.define(space, {
     name,
     schema: { type: 'object' },
-    rules: { edit: 'creator', check: [check] },
+    rules: { check: [check] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);

@@ -73,9 +73,6 @@ const CHECK_NAMES = new Set([
   'prev',
 ]);
 
-/** A permission a collection declares: lower camel case, like `moderate` or `closePolls` */
-export const PERMISSION_PATTERN = /^[a-z][a-zA-Z0-9]{0,39}$/;
-
 const parsed = new Map<string, CelNode>();
 
 /** A condition parsed, or why it can't be */
@@ -95,15 +92,8 @@ function parse(condition: unknown, at: string): CelNode | string {
   }
 }
 
-/**
- * Why a collection's checks can't be kept, or null.
- * @param permissions The permissions the collection declares — the only ones `can` may name
- */
-export function checkChecks(
-  checks: unknown,
-  at = 'rules.check',
-  permissions: ReadonlyArray<string> = [],
-): string | null {
+/** Why a collection's checks can't be kept, or null */
+export function checkChecks(checks: unknown, at = 'rules.check'): string | null {
   if (!Array.isArray(checks) || checks.length === 0 || checks.length > MAX_CHECKS)
     return `${at} must be a list of 1 to ${MAX_CHECKS} checks`;
   const count = { nodes: 0 };
@@ -116,11 +106,7 @@ export function checkChecks(
       return `${at}[${i}].else says why a version is refused: some text, at most 200 characters`;
     const node = parse(check.that, `${at}[${i}].that`);
     if (typeof node === 'string') return node;
-    const problem = checkCel(
-      node,
-      { names: CHECK_NAMES, permissions, space: true, linkRel: LINK_REL_PATTERN },
-      count,
-    );
+    const problem = checkCel(node, { names: CHECK_NAMES, space: true, linkRel: LINK_REL_PATTERN }, count);
     if (problem) return `${at}[${i}].that: ${problem}`;
     if (count.nodes > MAX_CHECK_NODES)
       return `${at}: checks are too large (at most ${MAX_CHECK_NODES} parts)`;
@@ -152,8 +138,6 @@ export interface CheckScope {
   readonly values: Readonly<Record<string, unknown>>;
   /** A version cited by id */
   readonly cite: (id: string) => Promise<CheckedVersion | Uncited>;
-  /** Whether an account held this permission of the collection, as of what the version saw */
-  readonly can: (permission: string, did: string) => boolean;
   /** Whether an account held any role, as of what the version saw */
   readonly member: (did: string) => boolean;
 }
@@ -189,7 +173,6 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
     else if (name === 'prev') vars.set(name, isCheckedVersion(value) ? versionValue(value) : null);
     else vars.set(name, fromJson(value));
   }
-  const author = scope.values.author;
   // Steps and citations are counted across all of a version's checks.
   const budget = { steps: 0, max: MAX_CHECK_STEPS, work: 0, maxWork: MAX_CEL_WORK };
   const cited = new Map<string, CelValue>();
@@ -222,9 +205,7 @@ export async function runChecks(checks: ReadonlyArray<Check>, scope: CheckScope)
           vars,
           links: vars.get('links'),
           versions,
-          can: scope.can,
           member: scope.member,
-          author: typeof author === 'string' ? author : undefined,
         },
         budget,
       );

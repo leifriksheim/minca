@@ -18,7 +18,7 @@ test('a forged step and a delete after it hide nothing: the honest record reads 
   await alice.node.collections.define(space, {
     name: 'app.setting',
     schema: { type: 'object' },
-    rules: { edit: 'member', check: [{ that: 'body.n <= 10.0', else: 'At most 10' }] },
+    rules: { check: [{ that: 'body.n <= 10.0', else: 'At most 10' }] },
   });
   const shared = (await alice.node.records.put(space, 'app.setting', { n: 5 }, { key: 'shared' })).key;
   await joined(bob.node, space);

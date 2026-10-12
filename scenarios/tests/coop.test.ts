@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { may } from '../host/grants.js';
+import { mayIn } from '../host/library.js';
 import { judge } from '../host/cel-host.js';
 import { version } from '../host/space.js';
 import {
@@ -35,8 +35,8 @@ describe('co-op: grants', () => {
     ],
   };
   test('members add members; others cannot', () => {
-    assert.ok(may(auth, E, '/role/assign', { role: 'member', self: false }), 'E, added by A, adds F');
-    assert.ok(!may(auth, F, '/role/assign', { role: 'member', self: false }));
+    assert.ok(mayIn(auth, E, '/role/assign', { role: 'member', self: false }), 'E, added by A, adds F');
+    assert.ok(!mayIn(auth, F, '/role/assign', { role: 'member', self: false }));
   });
 });
 

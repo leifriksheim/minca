@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { rolePresets, type NewSpace, type SpaceSummary } from '@weaveprotocol/core';
+import type { NewSpace, SpaceSummary } from '@weaveprotocol/core';
 import { useMyName, useNode } from '@weaveprotocol/core/react';
 // Defines collections in a space; not a React hook, whatever its name says.
 import { useSchemas as defineCollections } from '@weaveprotocol/core/schemas';
 import { Modal, Choice } from '@weave/app-shared/Modal';
-import { ASSEMBLY, topic } from './schema';
+import { ASSEMBLY, assemblyRoles, topic } from './schema';
 import { Problem, TopicPicker } from './ui';
 import { useAction } from '@weave/app-shared/action';
 
@@ -55,10 +55,7 @@ export function NewAssembly({
   const submit = () =>
     void action.run(async () => {
       await me.save();
-      const roles = rolePresets.community.roles.map((role) =>
-        role.name === 'member' && membersInvite ? { ...role, permissions: ['invite'] } : role,
-      );
-      const space = await create({ name: name.trim(), visibility, roles, creatorRole: 'admin' });
+      const space = await create({ name: name.trim(), visibility, roles: assemblyRoles(membersInvite) });
       if (!space) throw new Error('The assembly could not be made');
       await defineCollections(node, space.id, ASSEMBLY);
       for (const t of topics) await node.records.put(space.id, topic, { name: t.name, hue: t.hue });

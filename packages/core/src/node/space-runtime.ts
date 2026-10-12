@@ -51,15 +51,7 @@ import { chainProblem, MAX_SEEN, nextVersion } from '../records/version.js';
 import { keyKind, newRecordKey, onePerForm, ownedKey, ownsKey, RECORD_KEY_PATTERN } from '../records/key.js';
 import { checkLinks } from '../records/links.js';
 import { checkChecks, runChecks, type Check, type CheckedVersion, type Uncited } from '../records/checks.js';
-import {
-  allows,
-  changedFixedField,
-  describeWho,
-  onePerKey,
-  onePerSecret,
-  permissionName,
-  type CollectionRules,
-} from '../records/rules.js';
+import { changedFixedField, onePerKey, onePerSecret } from '../records/rules.js';
 import type { Link } from '../types.js';
 import { reconcileFolder } from '../storage/folder-reconcile.js';
 import type { BlobStore } from '../storage/blob-store.js';
@@ -102,7 +94,8 @@ import {
   deriveReadKey,
   generateInviteSecret,
   inviteKey as inviteRecordKey,
-  memberKey,
+  assignKey,
+  removalKey,
   revokeKey,
   roleKey,
   signInvite,
@@ -112,10 +105,10 @@ import {
 } from '../space/space-access.js';
 import {
   ACCESS_COLLECTIONS,
+  ASSIGN_COLLECTION,
   DEFINITION_COLLECTION,
   INVITE_COLLECTION,
   KEY_COLLECTION,
-  MANAGE,
   MAX_RELAYS,
   RELAYS_COLLECTION,
   checkRelays,
@@ -123,23 +116,34 @@ import {
   FORK_COLLECTION,
   checkKeepers,
   type Keeper,
-  MEMBER_COLLECTION,
+  REMOVE_COLLECTION,
   REVOKE_COLLECTION,
   ROLE_COLLECTION,
-  checkRole,
+  isMember,
+  holdsRole,
+  may,
   readers,
   replayAccess,
   refusal,
-  roleHolds,
-  standing,
+  rolesOf,
   type AccessEvent,
   type AccessGenesis,
   type AccessHistory,
   type AccessState,
-  permissionMatches,
   type Cutoff,
-  type Role,
+  type Needs,
 } from '../space/roles.js';
+import {
+  checkFoundingRole,
+  definitionBody,
+  KEY_CHANGE,
+  readDefinition,
+  RECORD_DELETE,
+  RECORD_WRITE,
+  SPACE_RELAYS,
+  type FoundingRole,
+} from '../space/grants.js';
+import { FOUNDER } from '../space/space-manager.js';
 import { createSyncEngine, type Holds } from '../sync/sync-engine.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import type { StoreFactory } from './stores.js';
@@ -194,7 +198,8 @@ const MANAGED = new Set([
  */
 const IN_THE_CLEAR = new Set([
   ROLE_COLLECTION,
-  MEMBER_COLLECTION,
+  ASSIGN_COLLECTION,
+  REMOVE_COLLECTION,
   INVITE_COLLECTION,
   REVOKE_COLLECTION,
   KEY_COLLECTION,
@@ -208,7 +213,8 @@ const IN_THE_CLEAR = new Set([
 /** Which collection each access record key belongs to */
 const ACCESS_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['role:', ROLE_COLLECTION],
-  ['member:', MEMBER_COLLECTION],
+  ['assign:', ASSIGN_COLLECTION],
+  ['remove:', REMOVE_COLLECTION],
   ['invite:', INVITE_COLLECTION],
   ['revoke:', REVOKE_COLLECTION],
   ['collection:', DEFINITION_COLLECTION],
@@ -396,6 +402,11 @@ type Standing =
       readonly later?: boolean;
       /** Passes every check but one: a later change took its author's access away. Kept, never counted (02 §9.5). */
       readonly withdrawn?: true;
+      /**
+       * A stub whose grant reads the body it doesn't carry, at a node that reads
+       * the space: kept, as its record's history, and judged once it is whole.
+       */
+      readonly bodyNeeded?: true;
     };
 type Refusal = Extract<Standing, { readonly ok: false }>;
 const STANDS: Standing = { ok: true };
@@ -404,10 +415,6 @@ const ACCESS_LATER: Standing = Object.freeze({
   reason: 'Access changes it depends on have not arrived yet',
   later: true,
 });
-
-/** Who a collection's rules let take an action on its records */
-const whoMay = (rules: CollectionRules, action: 'create' | 'edit' | 'delete') =>
-  action === 'create' ? rules.create : action === 'delete' ? (rules.delete ?? rules.edit) : rules.edit;
 
 /** Whether a version goes in the store: it stands, or stood until a later change withdrew it */
 /** How a version fares under its collection's checks, as this node reads them */
@@ -427,6 +434,14 @@ const UNJUDGED: ChecksVerdict = Object.freeze({ passes: null });
 
 const storable = (standing: Standing): boolean => standing.ok || !!standing.withdrawn;
 
+/**
+ * What the caches of verdicts on a version are keyed by: its id and signature,
+ * which a stub shares with the whole version, and which of the two it is. A
+ * verdict on a stub, judged without its body, never stands for the whole.
+ */
+const copyKey = (version: Version) =>
+  `${version.id}|${version.signature}|${isStub(version) ? 'stub' : 'whole'}`;
+
 const looksEncrypted = isSealedBody;
 
 /** The key a sealed body names, as the keyring is looked up by */
@@ -438,7 +453,6 @@ function isFolderAdapter(adapter: StorageAdapter): adapter is FolderAdapter {
   return 'reload' in adapter && typeof adapter.reload === 'function';
 }
 
-const isRole = (role: unknown): role is Role => checkRole(role) === null;
 const isLinks = (links: unknown): links is ReadonlyArray<Link> => checkLinks(links) === null;
 const areKeepers = (keepers: unknown): keepers is Keeper[] => checkKeepers(keepers) === null;
 
@@ -754,7 +768,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     id: space.id,
     creator: space.creator,
     roles: space.roles,
-    creatorRole: space.creatorRole,
     ...(space.visibility === 'private' && space.encryptionKeyId && space.readKey
       ? { key: { keyId: space.encryptionKeyId, readKey: space.readKey } }
       : {}),
@@ -810,22 +823,25 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     switch (version.collection) {
       case ROLE_COLLECTION: {
-        const name = typeof body.name === 'string' ? body.name : '';
-        if (version.key !== roleKey(name)) return null;
-        if (body.removed === true) return { ...base, cutoff, kind: 'role', name, role: null };
-        const role = {
-          name,
-          ...(typeof body.title === 'string' ? { title: body.title } : {}),
-          rank: body.rank,
-          permissions: body.permissions,
+        // A definition carries no cutoff: it takes nothing from anyone, and binds what saw it.
+        if (body.cutoff !== undefined) return null;
+        const defined = readDefinition(body, { root: verdict.root, spaceId: space.id });
+        if (!defined || version.key !== roleKey(defined.name)) return null;
+        return {
+          ...base,
+          kind: 'role',
+          name: defined.name,
+          ...(defined.title !== undefined ? { title: defined.title } : {}),
+          grants: defined.grants,
+          nests: defined.nests,
         };
-        return isRole(role) ? { ...base, cutoff, kind: 'role', name, role } : null;
       }
-      case MEMBER_COLLECTION: {
-        const did = body.did;
-        const role = body.role;
-        if (typeof did !== 'string' || !(role === null || typeof role === 'string')) return null;
-        if (version.key !== (await memberKey(did))) return null;
+      case ASSIGN_COLLECTION: {
+        const { did, role, assigned } = body;
+        // Roles go to accounts, never to roles: an assignee is a did:key.
+        if (typeof did !== 'string' || !did.startsWith('did:key:') || typeof role !== 'string') return null;
+        if (typeof assigned !== 'boolean') return null;
+        if (version.key !== (await assignKey(did, role))) return null;
         const invite = body.invite;
         let viaInvite: string | undefined;
         if (invite !== undefined) {
@@ -837,11 +853,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         return {
           ...base,
           cutoff,
-          kind: 'member',
+          kind: 'assign',
           did,
           role,
+          assigned,
           ...(viaInvite !== undefined ? { viaInvite } : {}),
         };
+      }
+      case REMOVE_COLLECTION: {
+        const { did } = body;
+        if (typeof did !== 'string' || version.key !== (await removalKey(did))) return null;
+        return { ...base, cutoff, kind: 'remove', did };
       }
       case INVITE_COLLECTION: {
         const inviteDid = body.key;
@@ -933,7 +955,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const allowed = readers(history.current);
     const gone = new Set<string>();
     for (const event of events) {
-      if (event.kind !== 'member' || allowed.has(event.did)) continue;
+      if ((event.kind !== 'assign' && event.kind !== 'remove') || allowed.has(event.did)) continue;
       if (history.status(event.id)?.status === 'applied') gone.add(event.did);
     }
     return gone;
@@ -1008,13 +1030,53 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   let reportedRole: string | null | undefined;
   function reportRole(state: AccessState): void {
-    const role = standing(state, deps.rootDid)?.name ?? null;
+    const role = placeOf(state, deps.rootDid);
     if (role === reportedRole) return;
     reportedRole = role;
     deps.onRole?.(role);
   }
 
   /** The note a version was written under, when it was delegated */
+
+  /**
+   * The command a version invokes, and its arguments (03 §5.2): a delete, or
+   * a write with its body. `opaque` when this node can't read the body, so
+   * policies on it are left to those who can.
+   */
+  async function invocationOf(
+    version: Version,
+    first: Version,
+    root: string,
+  ): Promise<{ readonly cmd: string; readonly args: Record<string, unknown>; readonly opaque: boolean }> {
+    const byCreator = version.seq === 0 || (await judge(first)).root === root;
+    const collection = version.collection;
+    if (version.deleted) return { cmd: RECORD_DELETE, args: { collection, byCreator }, opaque: false };
+    const opened = await openBody(version);
+    const opaque = isStub(version) || (opened.encrypted && opened.body === null);
+    return {
+      cmd: RECORD_WRITE,
+      args: { collection, byCreator, ...(opaque ? {} : { body: opened.body }) },
+      opaque,
+    };
+  }
+
+  /**
+   * What a version asks of its author: in `sys.*`, a place; elsewhere, a grant
+   * for what it does. `strict`: a body this node can't read holds no policy on it.
+   */
+  async function needsOf(
+    version: Version,
+    first: Version,
+    root: string,
+    options: { readonly strict?: boolean } = {},
+  ): Promise<Needs> {
+    if (version.collection.startsWith('sys.')) return (state) => isMember(state, root);
+    const { cmd, args, opaque } = await invocationOf(version, first, root);
+    return (state) => may(state, root, cmd, args, { opaque: opaque && !options.strict });
+  }
+
+  /** Whether this node reads the space's bodies: a public space, or a private one whose key it holds */
+  const readsBodies = () => space.visibility !== 'private' || keyring.size > 0;
 
   // ─── Rules ─────────────────────────────────────────────────────────
   //
@@ -1071,9 +1133,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     state: AccessState,
     collection: string,
   ): Promise<{
-    rules: CollectionRules;
+    rules: NonNullable<StoredCollection['rules']>;
     topics: ReadonlyArray<string>;
-    permissions: ReadonlyArray<string>;
   } | null> {
     if (collection.startsWith('sys.')) return null;
     const id = await inForce(state, collection);
@@ -1084,7 +1145,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       : {
           rules: found.definition.rules ?? {},
           topics: found.definition.topics ?? [],
-          permissions: found.definition.permissions ?? [],
         };
   }
 
@@ -1141,8 +1201,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const problem = await copyProblem(version);
     if (problem) return { ok: false, reason: problem };
     const cacheKey = within
-      ? `${verdictKey(version)}|${[...new Set(within)].sort().join(',')}`
-      : verdictKey(version);
+      ? `${copyKey(version)}|${[...new Set(within)].sort().join(',')}`
+      : copyKey(version);
     let found = standings.get(cacheKey);
     if (!found) {
       found = judgeStanding(version, within);
@@ -1189,8 +1249,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (owned) return owned;
 
     const seen = version.seen ?? [];
-    const state = history.at(seen);
-    if (!state) return ACCESS_LATER;
+    // Judged by the changes that stand; refused only by what its writer saw (03 §5.1).
+    const state = history.at(seen, within);
+    const wrote = history.seenAs(seen);
+    if (!state || !wrote) return ACCESS_LATER;
     const form = await onePerKeyProblem(version, state);
     if (form) return form;
     // Rival definitions that differ give no rules, which must not mean anything goes (02 §6.3).
@@ -1203,31 +1265,26 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const root = verdict.root;
     const found = await rulesAt(state, version.collection);
     const rules = found?.rules;
-    const action = version.seq === 0 ? 'create' : version.deleted ? 'delete' : 'edit';
-    const who = rules && whoMay(rules, action);
-    const creator = action !== 'create' && (await judge(first)).root === root;
-    const needs = (role: Role | null) =>
-      role !== null &&
-      (!rules ||
-        allows(who, {
-          member: true,
-          creator,
-          can: (permission) => roleHolds(role, permissionName(version.collection, permission)),
-        }));
+    const needs = await needsOf(version, first, root);
 
-    // The two refusals worth telling apart: not a member at all, and not allowed by the rules.
-    const role = standing(state, root);
-    if (!role)
+    // The two refusals worth telling apart: not a member at all, and no grant for what it does.
+    if (!isMember(wrote, root))
       return { ok: false, reason: 'Its author was not a member of this space, as of what it had seen' };
-    if (!needs(role)) {
+    if (!needs(wrote)) {
       return {
         ok: false,
-        reason:
-          action === 'create'
-            ? `Only ${describeWho(who)} can create ${version.collection} records`
-            : `Only ${describeWho(who)} can ${action} this ${version.collection} record`,
+        reason: `Its author holds no grant to ${version.deleted ? 'delete' : 'write'} this ${version.collection} record, as of what it had seen`,
       };
     }
+    // A stub's grant may hold only because its body isn't here to read. A node that reads the
+    // space waits for the body rather than take it on trust: it judges the whole version afresh.
+    if (isStub(version) && readsBodies() && !(await needsOf(version, first, root, { strict: true }))(wrote))
+      return {
+        ok: false,
+        reason: 'Its grant reads its body, which a stub does not carry',
+        later: true,
+        bodyNeeded: true,
+      };
     // Written once: no later version, not even a delete.
     if (rules?.final && version.seq > 0)
       return {
@@ -1250,69 +1307,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // is kept and others may cite it.
     if (!judged.ok && !judged.withdrawn) return judged;
     const content = await judgeContent(version, first, root, found);
-    if (judged.ok && content.ok && judged.unseen.length > 0) {
-      const taken = await underUnseen(version, first, root, seen, judged.unseen);
-      if (taken) return taken;
-    }
     return judged.ok || !content.ok ? content : judged;
-  }
-
-  /**
-   * Changes to its author's standing that a version had not seen, and that
-   * don't cover it, take it away if, with them and everything they saw — the
-   * rules they saw included — it would not have been allowed (03 §5.1): so a
-   * writer can't sign as of a point before its standing, or the rules over
-   * it, were narrowed. Null when nothing takes it away.
-   */
-  async function underUnseen(
-    version: Version,
-    first: Version,
-    root: string,
-    seen: ReadonlyArray<string>,
-    unseen: ReadonlyArray<string>,
-  ): Promise<Standing | null> {
-    const { history } = await access();
-    const state = history.at([...seen, ...unseen]);
-    if (!state) return ACCESS_LATER;
-    const role = standing(state, root);
-    if (!role) return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
-    const form = await onePerKeyProblem(version, state);
-    if (form) return { ok: false, reason: `${form.reason}, after a change it had not seen`, withdrawn: true };
-    const found = await rulesAt(state, version.collection);
-    const problem = await underRules(version, first, root, role, found?.rules ?? {});
-    if (problem.ok) return null;
-    return problem.later
-      ? problem
-      : { ok: false, reason: `${problem.reason}, after a change it had not seen`, withdrawn: true };
-  }
-
-  /**
-   * Whether a version keeps to one set of rules, with its author's role as of
-   * what it saw: who may, `final`, and what they ask of what it says. Not its
-   * topic tags, which follow the definition it saw.
-   */
-  async function underRules(
-    version: Version,
-    first: Version,
-    root: string,
-    role: Role,
-    rules: CollectionRules,
-  ): Promise<Standing> {
-    const action = version.seq === 0 ? 'create' : version.deleted ? 'delete' : 'edit';
-    const who = whoMay(rules, action);
-    const creator = action !== 'create' && (await judge(first)).root === root;
-    const can = (permission: string) => roleHolds(role, permissionName(version.collection, permission));
-    if (!allows(who, { member: true, creator, can }))
-      return {
-        ok: false,
-        reason:
-          action === 'create'
-            ? `Only ${describeWho(who)} can create ${version.collection} records`
-            : `Only ${describeWho(who)} can ${action} this ${version.collection} record`,
-      };
-    if (rules.final && version.seq > 0)
-      return { ok: false, reason: `A ${version.collection} record is final: it can't be edited or deleted` };
-    return judgeContent(version, first, root, { rules, topics: [], permissions: [] }, { tags: false });
   }
 
   /** The rest of a version's standing: what its definition's topics and rules ask of what it says */
@@ -1429,7 +1424,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    */
   async function checksOf(version: Version, within?: ReadonlyArray<string>): Promise<ChecksVerdict> {
     if (ACCESS_COLLECTIONS.has(version.collection) || version.collection.startsWith('sys.')) return NO_CHECKS;
-    const cacheKey = `${version.id}|${within ? [...new Set(within)].sort().join(',') : ''}`;
+    const cacheKey = `${copyKey(version)}|${within ? [...new Set(within)].sort().join(',') : ''}`;
     const cached = checkVerdicts.get(cacheKey);
     if (cached) return cached;
     const verdict = (async (): Promise<ChecksVerdict> => {
@@ -1437,13 +1432,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         version.seq === 0 ? version : version.genesis ? await storage.getVersion(version.genesis) : null;
       const root = (await judge(version)).root;
       if (!first || !root) return NO_CHECKS;
-      const state = (await access()).history.at(version.seen ?? []);
+      const state = (await access()).history.at(version.seen ?? [], within);
       if (!state) return { pending: true };
       const defined = await rulesAt(state, version.collection);
       const checks: unknown = defined?.rules.check;
       if (checks === undefined || (Array.isArray(checks) && checks.length === 0)) return NO_CHECKS;
       // Peers keep any list; one its author's node would have refused can't be read, so nothing passes it.
-      if (checkChecks(checks, 'rules.check', defined?.permissions ?? []) !== null || !Array.isArray(checks))
+      if (checkChecks(checks, 'rules.check') !== null || !Array.isArray(checks))
         return { passes: false, reason: `The checks of ${version.collection} can't be read` };
       // What this node can't open, it can't judge: it counts on the rest, as a peer without the key does.
       if (!version.deleted) {
@@ -1533,11 +1528,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         prev,
       },
       cite: (id) => cited(id, version.seen ?? []),
-      can: (permission, did) => {
-        const role = standing(state, did);
-        return !!role && roleHolds(role, permissionName(version.collection, permission));
-      },
-      member: (did) => standing(state, did) !== null,
+      member: (did) => isMember(state, did),
     });
     if ('later' in outcome)
       return { ok: false, reason: 'Versions it cites have not arrived yet', later: true };
@@ -1565,7 +1556,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!history.at(event.seen)) return ACCESS_LATER;
     const known =
       history.named(event.root) ||
-      (event.kind === 'member' && event.viaInvite !== undefined && history.knownInvite(event.viaInvite));
+      (event.kind === 'assign' && event.viaInvite !== undefined && history.knownInvite(event.viaInvite));
     return known ? STANDS : { ok: false, reason: 'Its author has never been a member of this space' };
   }
 
@@ -1602,7 +1593,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       return { ok: false, reason: 'A version its writer retained travels whole' };
     const chain = await chainStanding(version);
     if (!chain.ok) return chain;
-    return ACCESS_COLLECTIONS.has(version.collection) ? admissible(version) : standingOf(version);
+    if (ACCESS_COLLECTIONS.has(version.collection)) return admissible(version);
+    const standing = await standingOf(version);
+    // Kept as its record's history; it counts only once whole, and its body is judged then.
+    return !standing.ok && standing.bodyNeeded ? STANDS : standing;
   }
 
   /**
@@ -1850,7 +1844,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       history: definition?.history ?? 'latest',
       links: definition?.links ?? {},
       definedBy: entry?.definedBy ?? null,
-      permissions: definition?.permissions ?? [],
       rules: definition?.rules ?? {},
       topics: definition?.topics ?? [],
       records,
@@ -2123,8 +2116,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function rotateKey(): Promise<void> {
     if (space.visibility !== 'private') throw new Error('A public space has no key to change');
     const { history } = await access();
-    if (!roleHolds(standing(history.current, deps.rootDid), MANAGE))
-      throw new Error(`Only someone who manages "${space.name}" can change its key`);
+    if (!may(history.current, deps.rootDid, KEY_CHANGE, {}))
+      throw new Error(`Only someone granted ${KEY_CHANGE} in "${space.name}" can change its key`);
     if (!currentKey(history.current))
       throw new Error(`This device doesn't hold the current key of "${space.name}" yet`);
     // Every key change carries the first key, so every reader holds it (03 §9.3).
@@ -2171,7 +2164,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         )
           continue;
         const { root } = await judge(version);
-        if (root && (root === deps.rootDid || roleHolds(standing(state, root), MANAGE))) boxed.add(body.to);
+        if (root && (root === deps.rootDid || may(state, root, KEY_CHANGE, {}))) boxed.add(body.to);
       }
     }
     const memberKeys = await memberKeyMap();
@@ -2217,7 +2210,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const { history } = await access();
     const state = history.current;
     if (!currentKey(state)) return;
-    if (!roleHolds(standing(state, deps.rootDid), MANAGE)) return;
+    if (!may(state, deps.rootDid, KEY_CHANGE, {})) return;
     // A current key whose change left out the first key is replaced, as one that is due.
     const malformed = malformedKeys.has(state.keys.at(-1)?.keyId ?? '');
     if (state.keyDue || (malformed && space.encryptionKeyId && keyring.has(space.encryptionKeyId)))
@@ -2233,8 +2226,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const own = usableRelays(deps.network).slice(0, MAX_RELAYS);
     if (own.length === 0) return;
     const { history } = await access();
-    if (history.current.relays.length > 0 || !roleHolds(standing(history.current, deps.rootDid), MANAGE))
-      return;
+    if (history.current.relays.length > 0 || !may(history.current, deps.rootDid, SPACE_RELAYS, {})) return;
     await upsert(RELAYS_COLLECTION, SPACE_RELAYS_RECORD, { relays: own });
   }
 
@@ -2866,7 +2858,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** Why this account cannot write here at all, or null when it can */
   async function cannotWrite(): Promise<string | null> {
     const { history } = await access();
-    if (standing(history.current, deps.rootDid)) return null;
+    if (isMember(history.current, deps.rootDid)) return null;
     return waitingInvite
       ? `You've joined "${space.name}", but its invite hasn't reached this device yet — connect to someone in the space first`
       : `"${space.name}" was shared with you to view — you can't change it`;
@@ -2879,10 +2871,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * is safe: what it leaves out it is judged as not having seen (03 §3.2).
    */
   async function seenFor(history: AccessHistory, collection: string): Promise<ReadonlyArray<string>> {
-    const role = history.current.members.get(deps.rootDid);
+    const roles = rolesOf(history.current, deps.rootDid);
     const mine = [
-      await memberKey(deps.rootDid),
-      ...(role ? [roleKey(role)] : []),
+      await removalKey(deps.rootDid),
+      ...(await Promise.all(roles.map((role) => assignKey(deps.rootDid, role)))),
+      ...roles.map(roleKey),
       `collection:${collection}`,
     ];
     return history.headsFor(mine, MAX_SEEN);
@@ -3339,17 +3332,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     version: Version,
     root: string,
   ): Promise<WarrantVerdict> {
-    const role = standing(state, root);
-    if (!role) return 'holds';
+    if (!isMember(state, root)) return 'holds';
     if (version.collection.startsWith('sys.')) return 'false';
     const found = await rulesAt(state, version.collection);
-    // Rules this peer can't read: it can't say.
-    if (!found) return (await inForce(state, version.collection)) ? 'unjudgeable' : 'false';
-    const { rules } = found;
-    if (rules.final && version.seq > 0) return 'holds';
+    if (found?.rules.final && version.seq > 0) return 'holds';
+    // An edit's grant may rest on whose record it is; only a first version is judged here.
     if (version.seq !== 0) return 'false';
-    const can = (permission: string) => roleHolds(role, permissionName(version.collection, permission));
-    return allows(whoMay(rules, 'create'), { member: true, creator: false, can }) ? 'false' : 'holds';
+    const needs = await needsOf(version, version, root);
+    return needs(state) ? 'false' : 'holds';
   }
 
   /** Whether proof of one kind holds: the offending version first, then what checking it needs */
@@ -3388,7 +3378,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
   async function warrantVerdict(version: Version): Promise<WarrantVerdict> {
-    const cacheKey = verdictKey(version);
+    const cacheKey = copyKey(version);
     const known = judgedWarrants.get(cacheKey);
     if (known) return known;
     const warrant = await warrantShape(version);
@@ -3510,26 +3500,43 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** Display order: when a record was created, then its key. It decides nothing. */
   const createdAtOf = async (version: Version) => (await genesisOf(version))?.createdAt ?? version.createdAt;
 
-  /** Gives someone a role, or takes theirs away with null */
-  async function setMember(did: string, role: string | null): Promise<NodeRecord<unknown>> {
+  /**
+   * Assigns a role to an account, or with `assigned: false` takes it away:
+   * one's own, to leave it. Taking a role leaves what this node has seen
+   * them write in it standing.
+   */
+  async function assign(did: string, role: string, assigned: boolean): Promise<NodeRecord<unknown>> {
     const { history } = await access();
-    const was = standing(history.current, did);
-    const next = role === null ? null : history.current.roles.get(role);
-    if (role !== null && !next) throw new Error(`There is no role "${role}" in "${space.name}"`);
-    // Taking power away leaves what this node has seen them write.
-    const lowers =
-      was &&
-      (!next ||
-        next.rank < was.rank ||
-        was.permissions.some((p) => !next.permissions.some((q) => permissionMatches(q, p))));
-    const cutoff = lowers ? await cutoffFor(did) : {};
-    const written = await upsert(MEMBER_COLLECTION, await memberKey(did), {
+    if (!history.current.roles.has(role)) throw new Error(`There is no role "${role}" in "${space.name}"`);
+    const takes = !assigned && rolesOf(history.current, did).includes(role);
+    const cutoff = takes ? await cutoffFor(did) : {};
+    const written = await upsert(ASSIGN_COLLECTION, await assignKey(did, role), {
       did,
       role,
+      assigned,
       ...(Object.keys(cutoff).length ? { cutoff } : {}),
     });
     await changeKeyNow();
     return written;
+  }
+
+  /** Removes an account from the space, every role it holds with it: one's own, to leave */
+  async function removeAccount(did: string): Promise<NodeRecord<unknown>> {
+    const { history } = await access();
+    if (!isMember(history.current, did)) throw new Error(`They hold no place in "${space.name}"`);
+    const cutoff = await cutoffFor(did);
+    const written = await upsert(REMOVE_COLLECTION, await removalKey(did), {
+      did,
+      ...(Object.keys(cutoff).length ? { cutoff } : {}),
+    });
+    await changeKeyNow();
+    return written;
+  }
+
+  /** What this account is here, for listing: `founder`, a role it holds, or null */
+  function placeOf(state: AccessState, did: string): string | null {
+    if (state.founders.has(did)) return FOUNDER;
+    return rolesOf(state, did)[0] ?? null;
   }
 
   /**
@@ -3540,12 +3547,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    */
   async function changeKeyNow(): Promise<void> {
     if (space.visibility === 'private' && (await access()).history.current.keyDue) await keepingUp();
-  }
-
-  /** The same for several accounts at once, up to what a cutoff may name */
-  async function cutoffForAll(dids: ReadonlySet<string>): Promise<Record<string, Record<string, number>>> {
-    const lines = await linesOf(dids);
-    return packCutoff([...dids].sort().map((did) => lines.get(did) ?? []));
   }
 
   /**
@@ -3632,24 +3633,30 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     return byAccount;
   }
 
-  /** The rules and standing that decide whether this account may do something now */
+  /** Whether this account holds a grant, now, to do something to a record */
   async function mayNow(
     collection: string,
     action: 'create' | 'edit' | 'delete',
     first: Version | null,
   ): Promise<boolean> {
     const { history } = await access();
-    const role = standing(history.current, deps.rootDid);
-    if (!role) return false;
-    const found = await rulesAt(history.current, collection);
-    if (!found) return !history.current.contested.has(collection);
-    if (found.rules.final && action !== 'create') return false;
-    const creator = !!first && (await judge(first)).root === deps.rootDid;
-    return allows(whoMay(found.rules, action), {
-      member: true,
-      creator,
-      can: (permission) => roleHolds(role, permissionName(collection, permission)),
-    });
+    const state = history.current;
+    if (!isMember(state, deps.rootDid)) return false;
+    if (collection.startsWith('sys.')) return true;
+    const found = await rulesAt(state, collection);
+    if (!found && state.contested.has(collection)) return false;
+    if (found?.rules.final && action !== 'create') return false;
+    const byCreator = action === 'create' || (!!first && (await judge(first)).root === deps.rootDid);
+    // The body isn't known yet: a policy on it is decided when the version is written.
+    return may(
+      state,
+      deps.rootDid,
+      action === 'delete' ? RECORD_DELETE : RECORD_WRITE,
+      { collection, byCreator },
+      {
+        opaque: action !== 'delete',
+      },
+    );
   }
 
   // Once at open, then after every change.
@@ -3861,15 +3868,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         version,
         ...(input.history !== undefined ? { history: input.history } : {}),
         ...(input.links !== undefined ? { links: input.links } : {}),
-        ...(input.permissions !== undefined ? { permissions: input.permissions } : {}),
         ...(input.rules !== undefined ? { rules: input.rules } : {}),
         ...(input.topics !== undefined ? { topics: input.topics } : {}),
       };
       const problem =
         checkStoredCollection(definition) ??
-        (definition.rules?.check !== undefined
-          ? checkChecks(definition.rules.check, 'rules.check', definition.permissions ?? [])
-          : null);
+        (definition.rules?.check !== undefined ? checkChecks(definition.rules.check, 'rules.check') : null);
       if (problem) throw new Error(problem);
       if (current && version <= current.definition.version) {
         throw new Error(
@@ -3895,22 +3899,32 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     async access(): Promise<SpaceAccess> {
       const { history } = await access();
       const state = history.current;
-      const role = standing(state, deps.rootDid);
+      const members = [...readers(state)].sort();
       return Object.freeze({
-        roles: [...state.roles.values()].sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name)),
-        members: [...state.members]
-          .map(([did, name]) => ({ did, role: name }))
-          .sort(
-            (a, b) =>
-              (state.roles.get(b.role)?.rank ?? -1) - (state.roles.get(a.role)?.rank ?? -1) ||
-              a.did.localeCompare(b.did),
-          ),
+        roles: [...state.roles]
+          .map(([name, definitions]) => ({
+            name,
+            ...(definitions[0]?.title !== undefined ? { title: definitions[0].title } : {}),
+            definitions: definitions.map((definition) => ({
+              event: definition.event,
+              by: definition.by,
+              grants: definition.grants,
+              nests: definition.nests,
+            })),
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+        members: members.map((did) => ({
+          did,
+          founder: state.founders.has(did),
+          roles: rolesOf(state, did),
+        })),
         invites: [...state.invites].map(([inviteDid, invite]) => ({
           key: inviteDid,
           role: invite.role,
           open: invite.open,
         })),
-        role,
+        founder: state.founders.has(deps.rootDid),
+        mine: rolesOf(state, deps.rootDid),
         heads: history.heads(),
         key: state.keys.length ? { changes: state.keys.length - 1, held: currentKey(state) !== null } : null,
         relays: state.relays.length ? state.relays : relays,
@@ -3921,8 +3935,30 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       });
     },
 
-    async setMember(did: string, role: string | null) {
-      await setMember(did, role);
+    /** Whether this account, or another, may invoke a command with these arguments, now */
+    async may(
+      cmd: string,
+      args: Readonly<Record<string, unknown>> = {},
+      account: string = deps.rootDid,
+    ): Promise<boolean> {
+      return may((await access()).history.current, account, cmd, args);
+    },
+
+    /** Whether this account, or another, holds every grant a role gives, as wide or wider, now */
+    async holdsRole(role: string, account: string = deps.rootDid): Promise<boolean> {
+      return holdsRole((await access()).history.current, account, role);
+    },
+
+    async assign(did: string, role: string) {
+      await assign(did, role, true);
+    },
+
+    async unassign(did: string, role: string) {
+      await assign(did, role, false);
+    },
+
+    async removeMember(did: string) {
+      await removeAccount(did);
     },
 
     /**
@@ -3936,7 +3972,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     async giveUpPlace(waitMs: number): Promise<boolean> {
       const state = (await access()).history.current;
       // Shared to view, or already gone: there is nothing to remove.
-      if (!standing(state, deps.rootDid)) return true;
+      if (!isMember(state, deps.rootDid)) return true;
       // Nobody else holds a place, so nobody else needs to know.
       if ([...readers(state)].every((did) => did === deps.rootDid)) return true;
       const taken = new Set<string>();
@@ -3952,7 +3988,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // Listening before writing: a peer can answer before the write returns.
       sync.on('stored', onStored);
       try {
-        wanted = (await setMember(deps.rootDid, null)).version;
+        wanted = (await removeAccount(deps.rootDid)).version;
         if (taken.has(wanted)) return true;
         if (waitMs <= 0) return false;
         return await new Promise<boolean>((resolve) => {
@@ -3970,42 +4006,16 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
     },
 
-    async putRole(role: Role) {
-      const problem = checkRole(role);
+    /** Writes a role's definition: its grants, issued by this account, and the roles it nests */
+    async defineRole(role: FoundingRole) {
+      const problem = checkFoundingRole(role);
       if (problem) throw new Error(problem);
-      const { history } = await access();
-      const was = history.current.roles.get(role.name);
-      const lowers =
-        was &&
-        (role.rank < was.rank ||
-          was.permissions.some((p) => !role.permissions.some((q) => permissionMatches(q, p))));
-      const holders = new Set(
-        [...history.current.members].filter(([, name]) => name === role.name).map(([did]) => did),
+      const nonce = () => base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(12)));
+      await upsert(
+        ROLE_COLLECTION,
+        roleKey(role.name),
+        definitionBody(role, { root: deps.rootDid, spaceId: space.id }, nonce),
       );
-      const cutoff = lowers ? await cutoffForAll(holders) : {};
-      await upsert(ROLE_COLLECTION, roleKey(role.name), {
-        name: role.name,
-        ...(role.title !== undefined ? { title: role.title } : {}),
-        rank: role.rank,
-        permissions: [...role.permissions],
-        ...(Object.keys(cutoff).length ? { cutoff } : {}),
-      });
-      await changeKeyNow();
-    },
-
-    async removeRole(name: string) {
-      const { history } = await access();
-      if (!history.current.roles.has(name)) throw new Error(`There is no role "${name}" in "${space.name}"`);
-      const holders = new Set(
-        [...history.current.members].filter(([, held]) => held === name).map(([did]) => did),
-      );
-      const cutoff = await cutoffForAll(holders);
-      await upsert(ROLE_COLLECTION, roleKey(name), {
-        name,
-        removed: true,
-        ...(Object.keys(cutoff).length ? { cutoff } : {}),
-      });
-      await changeKeyNow();
     },
 
     async openInvite(role: string) {
@@ -4063,20 +4073,24 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     /** Uses an invite's secret, once its record has arrived. True when this account is a member. */
     async join(secret: Uint8Array) {
       const { history } = await access();
-      if (standing(history.current, deps.rootDid)) {
+      const pair = await deriveInviteKey(secret, provider);
+      const invite = history.current.invites.get(pair.did);
+      if (
+        isMember(history.current, deps.rootDid) &&
+        (!invite || rolesOf(history.current, deps.rootDid).includes(invite.role))
+      ) {
         waitingInvite = false;
         deps.onJoined?.();
         return true;
       }
-      const pair = await deriveInviteKey(secret, provider);
-      const invite = history.current.invites.get(pair.did);
       if (!invite?.open) return false;
       await upsert(
-        MEMBER_COLLECTION,
-        await memberKey(deps.rootDid),
+        ASSIGN_COLLECTION,
+        await assignKey(deps.rootDid, invite.role),
         {
           did: deps.rootDid,
           role: invite.role,
+          assigned: true,
           invite: { key: pair.did, signature: await signInvite(space.id, deps.rootDid, pair, provider) },
         },
         { joining: true },

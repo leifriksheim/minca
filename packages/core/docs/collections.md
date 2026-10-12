@@ -17,12 +17,7 @@ export const polls = collection({
   name: 'app.poll',
   title: 'Poll',
   schema: Poll,
-  permissions: ['moderate'],
-  rules: {
-    edit: 'creator',
-    delete: ['creator', 'can:moderate'],
-    fixed: ['options'],
-  },
+  rules: { fixed: ['options'] },
 });
 
 await node.collections.define(space.id, polls);
@@ -116,24 +111,20 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`), `packages/core/src
 
 ## Rules
 
-| Rule     | Means                                                      | Default        |
-| -------- | ---------------------------------------------------------- | -------------- |
-| `create` | Who may create a record                                    | `member`       |
-| `edit`   | Who may write later versions                               | `member`       |
-| `delete` | Who may delete                                             | same as `edit` |
-| `onePer` | At most one record per combination of these                | none           |
-| `fixed`  | Fields that keep the value the record was created with     | none           |
-| `check`  | Conditions a version must meet to count ([below](#checks)) | none           |
-| `final`  | `true`: written once, then never edited or deleted         | none           |
+A definition says what its records must keep to, not who may write them:
+who may create, change and delete records is the space's grants, held by its
+roles ([roles](#roles)). Its rules are about the records alone
+([spec 02 §7](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)):
 
-Who is one of these, or a list meaning any of them:
+| Rule     | Means                                                      | Default |
+| -------- | ---------------------------------------------------------- | ------- |
+| `onePer` | At most one record per combination of these                | none    |
+| `fixed`  | Fields that keep the value the record was created with     | none    |
+| `check`  | Conditions a version must meet to count ([below](#checks)) | none    |
+| `final`  | `true`: written once, then never edited or deleted         | none    |
 
-- `member`: anyone holding a role in the space.
-- `creator`: whoever wrote the record's first version: the owner of its key
-  (see [keys](records-and-queries.md#keys)). Not allowed for `create`.
-- `can:<permission>`: someone whose role holds a permission the collection
-  declares in `permissions`. `can:moderate` in `app.poll` is the permission
-  `app.poll/moderate`.
+A definition with `create`, `edit` or `delete` is invalid: every peer treats
+it as no definition at all, and the node refuses to write it.
 
 `onePer` names `@author` (the writer), `link:<rel>` (the record a link points
 at) or a body field. It works by construction: the record's key is derived
@@ -141,21 +132,26 @@ from those values, so a second vote from the same person on the same poll is
 the first vote's next version, not a new record.
 
 ```typescript
-rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:about'] }  // one vote per person per poll
+rules: {
+  onePer: ['@author', 'link:about'];
+} // one vote per person per poll
 ```
 
 With `@author`, the key is the writer's own, so nobody else can write their
 vote. Without it (one decision per proposal) the key is shared: anyone
-`create` allows may write first, and two who do so apart each start a
-version of their own, the later edits of one outranking the other's. There
-`creator` only keeps others from editing your version. If a collection needs
-one writer per key, restrict `create` (`can:decide`) or name `@author`.
-`node.records.onePerKey(space, collection, body, { links })` gives the key a
-body would have, to read a record without searching for it.
+allowed to write there may write first, and two who do so apart each start a
+version of their own, the later edits of one outranking the other's. A grant
+on `.byCreator` only keeps others from editing your version. If a collection
+needs one writer per key, grant creating it to fewer roles, or name
+`@author`. `node.records.onePerKey(space, collection, body, { links })` gives
+the key a body would have, to read a record without searching for it.
+
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerKey`). Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/record-keys.test.ts` ("onePer keys")._
 
 ## Checks
 
-The rules above say who may write, and every peer enforces them. `check` says
+Grants say who may write, and the rules above what a record must keep to;
+every peer enforces both. `check` says
 what a version must be to count: conditions over the body, the version before
 it, and other versions it **cites** as evidence. With them a space can hold things
 that normally need a server or a smart contract: a proposal that passes only
@@ -213,9 +209,8 @@ operators, `has()`, the macros `all` `exists` `exists_one` `filter` `map`,
 `size`, `contains` `startsWith` `endsWith`, the conversions `int` `uint`
 `double` `string` `bool`, and from CEL's extensions `distinct()`,
 `math.greatest` and `math.least`. Weave adds `sum(list)`, `hash(x)`,
-`link("rel")` and `v.link("rel")`, and three that ask the space:
-`versions(ids)` (read cited versions by id), `can("permission")` and
-`member(did)`.
+`link("rel")` and `v.link("rel")`, and two that ask the space:
+`versions(ids)` (read cited versions by id) and `member(did)`.
 
 Some things to know:
 
@@ -258,8 +253,9 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 
 **Patterns.**
 
-- **Quorums and multisig.** "Three admins approved": cite the approvals, and
-  check `distinct()` authors with `can("approve", v.author)`.
+- **Quorums and multisig.** "Three members approved": cite the approvals, and
+  check `distinct()` authors with `member(v.author)`. Who may approve at all
+  is the grant on the approvals' collection.
 - **State machines.** Check each version against `prev`: a task moves from
   `open` to `done` only, a counter goes up by one, a chess move is legal from
   the board before. Each step is small, and there is no limit on steps.
@@ -270,7 +266,7 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
   reveals it: `hash(body.secret) == "<the commitment>"`.
   Shared dice, lotteries and sealed bids need nothing else.
 - **Closing a set.** A check can prove that something exists, not that nothing
-  else does. For "a majority" or "nobody objected", someone with a permission
+  else does. For "a majority" or "nobody objected", someone granted it
   signs a record that closes the vote and lists what counts, and the result
   cites that.
 - **Time.** There is no clock. "Before Friday" is a record from someone
@@ -278,25 +274,37 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 
 ## Roles
 
-Roles live in the space, not in your code. Each has a name, a rank and a list
-of permissions:
+Who may write lives in the space, not in your code, and not in a
+definition. A role holds grants: a command and a UCAN policy over its
+arguments ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+"Members change only their own polls, hosts delete any" is:
 
 ```typescript
-await node.spaces.putRole(space.id, {
+import { RECORD_DELETE, RECORD_WRITE } from '@weaveprotocol/core';
+
+await node.spaces.defineRole(space.id, {
   name: 'host',
   title: 'Host',
-  rank: 50,
-  permissions: ['invite', 'app.poll/moderate'],
+  grants: [{ cmd: RECORD_DELETE, pol: [['==', '.collection', 'app.poll']] }],
+  nests: ['member'], // a host holds what a member holds too
 });
-await node.spaces.setMember(space.id, did, 'host');
+await node.spaces.assign(space.id, did, 'host');
 ```
 
-- `*` alone is every permission. `*/*` is every permission any collection
-  declares, so a moderator can moderate every app in the space.
-- Space permissions include `invite`, `define` (add or change collections)
-  and `manage`. Defining also needs a note that grants `collection/define`,
-  which an agent's doesn't (spec 01 §8).
-- You can only change people and roles ranked below your own.
+- `/record/write` and `/record/delete` see `collection` and `byCreator`
+  (whether the writer's account made the record's first version; true for a
+  new one); a write also sees `body`. So `['==', '.byCreator', true]` is
+  "only your own".
+- `/collection/define` adds or changes collections; it also needs a note that
+  grants `/collection/define`, which an agent's doesn't (spec 01 §8).
+- A definition holds only what its writer could do: you can't grant what you
+  don't hold. Roles defining roles, assigning, removing and the rest are in
+  the spec.
+- The space's founder holds every command.
+
+`node.spaces.may(space.id, cmd, args)` says whether this account may do
+something now; `node.records.can(space, action, target)` asks it for a
+record.
 
 ## Other options
 
@@ -321,9 +329,9 @@ as of the access changes it saw
 ([spec 03 §5](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
 A change to the rules is not retroactive: it binds what saw it. A record that
 names an older point counts if its writer could have written it then, since
-nobody can tell it from one written offline. To bind someone at once, change
-their role as well: a demotion takes the rules it saw along with it, so
-nothing they write past what you had seen of them dodges the new rules. A
+nobody can tell it from one written offline. To stop someone at once, take
+their role or remove them: what they wrote that you had not seen stops
+counting. A
 write that races a change to its collection's rules is retried once, under
 the new ones.
 
@@ -331,15 +339,16 @@ the new ones.
 no records left, since records left behind would lose their shape and their
 rules.
 
-Whoever first defined a collection may change it as well as anyone who holds
-`manage`. If two accounts each defined it first without seeing the other's,
-`definedBy` is `null` and only a manager may change it. Until one does, the
+Whoever first defined a collection may change it, while a member, as well as
+anyone granted `/collection/define` for it. If two accounts each defined it
+first without seeing the other's, `definedBy` is `null` and only those
+granted `/collection/define` may change it. Until one does, the
 collection has a definition only if the rivals say the same thing; if they
 differ, `collections.list` leaves it out and its records are judged by no
 rules
 ([spec 02 §6.3](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts` ("redefining bumps the version, and only the definer or someone who can manage the space may", "a definition can be removed once its collection is empty, by whoever may change it"), `packages/core/tests/rules.test.ts` ("rules: changing them")._
+_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts`, `packages/core/tests/rules.test.ts` ("grants: changing them")._
 
 ## The standard library
 

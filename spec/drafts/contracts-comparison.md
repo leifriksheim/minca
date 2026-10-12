@@ -545,4 +545,4 @@ And two smaller CEL fixes worth making with the spec part: `sum([])` of
 doubles (an int `0` today), and a `let` (CEL's `cel.bind`) so a cited
 version can be named once.
 
-_Source: `scenarios/parked-datalog/datalog.ts` (`parse`, `evaluate`), `scenarios/host/ucan-policy.ts` (`allows`), `scenarios/host/grants.ts` (`may`), `scenarios/host/cel-host.ts` (`judge`), `scenarios/parked-datalog/facts.ts` (`factsOf`), `scenarios/communities/`, `scenarios/parked-datalog/programs/`. Tests: `scenarios/tests/` and `scenarios/parked-datalog/tests/` (all), with `packages/core/src/records/checks.ts` (`runChecks`) as the CEL evaluator._
+_Source: `scenarios/parked-datalog/datalog.ts` (`parse`, `evaluate`), `scenarios/host/library.ts` (`mayIn`), `packages/core/src/identity/policy.ts` (`evaluatePolicy`), `scenarios/host/cel-host.ts` (`judge`), `scenarios/parked-datalog/facts.ts` (`factsOf`), `scenarios/communities/`, `scenarios/parked-datalog/programs/`. Tests: `scenarios/tests/` and `scenarios/parked-datalog/tests/` (all), with `packages/core/src/records/checks.ts` (`runChecks`) as the CEL evaluator._

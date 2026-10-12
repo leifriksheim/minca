@@ -53,7 +53,7 @@ who made it:
 or the bot in `by`. So "a message mentioning me" is `{ "mentions":
 { "$contains": "$me" } }` for a person and for a bot alike. `from` lists role
 names; only records written by someone holding one of them set the rule off,
-and `"member"` is anyone holding a role at all.
+and `"member"` is any member at all, the founder included.
 
 `every` uses `*`, a number, a range `a-b`, a step `/n` and lists with commas;
 weekday 0 or 7 is Sunday; a day and a weekday both given means either. At
@@ -95,10 +95,19 @@ that include found: `{messages}` above.
 `ask` is for an agent: `weave agent`, or a bot. It is told the rule's words
 as its maker's, and what set it off as data, never as instructions, with one
 exception: when whoever wrote that record may instruct it (for a bot, the
-rule's maker or anyone holding `std.rule/instruct` in the space; for a
-person's own agent, only the person), the runner says so, and what they ask
+rule's maker or any member granted `/std.rule/instruct` in the space, and
+only one who holds every grant of the bot's roles, so nobody reaches past
+their own grants through it; for a person's own agent, only the person),
+the runner says so, and what they ask
 in it may be done. What it quotes, and the messages before it, stay data. A
 runner without one leaves rules that ask to one that has.
+
+Holding every grant of the bot's roles is not holding what the bot can do
+with them. `.byCreator` reads whose record it is, and when the bot acts, its
+own records are the ones it wrote: a reply, a summary, an app it made for
+someone. So whoever may instruct a bot can have it edit or delete a record
+it wrote for someone else, though their own `.byCreator` grant would never
+reach that record.
 
 _Source:_ `packages/cli/src/agent-rules.ts` (`triggerPrompt`, `ruleContext`,
 `writerInstructs`); `packages/cli/tests/agent-rules.test.ts`.
@@ -151,8 +160,12 @@ A bot answering mentions, from anyone holding a role, run by the bot:
   follows, again after each change, and at the times they name. The example
   app runs them while it is open, but not those that ask or run at set times
   (`timed: false`); `weave agent` runs all of them.
-- With `by`, only that bot, and only while the maker holds `std.rule/instruct`
-  in the space: its roles say who may direct a bot there.
+- With `by`, only that bot, and only while the maker may invoke
+  `/std.rule/instruct` in the space (`INSTRUCT`): a grant held by a role says
+  who may direct a bot there. It is a command of the library's own: peers
+  never check it, and a space grants it like any other, to a role
+  ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+  The space's founder holds it.
 - A rule whose current version was written under a records-only note
   (`recordsOnly`, an agent's) runs nowhere: an agent may suggest one, and it
   waits until the person saves it themselves.

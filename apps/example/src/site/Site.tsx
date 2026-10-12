@@ -249,12 +249,8 @@ const Poll = z.object({
 const polls = collection({
   name: 'app.poll',
   schema: Poll, // stored in the space as plain JSON Schema
-  permissions: ['moderate'],
-  rules: {
-    edit: 'creator',                     // only the asker edits it
-    delete: ['creator', 'can:moderate'], // or a moderator removes it
-    fixed: ['options'],                  // votes point at these
-  },
+  rules: { fixed: ['options'] }, // votes point at these
+  // Who may edit or remove one is the space's roles, below
 });
 await node.collections.define(space.id, polls);
 `;
@@ -272,11 +268,7 @@ const votes = collection({
   name: 'app.poll.vote',
   schema: Vote,
   links: { about: { to: ['app.poll'], cardinality: 'one' } },
-  rules: {
-    edit: 'creator',
-    delete: 'creator',
-    onePer: ['@author', 'link:about'], // one per person per poll
-  },
+  rules: { onePer: ['@author', 'link:about'] }, // one per person per poll
 });
 await node.collections.define(space.id, votes);
 `;
@@ -352,7 +344,7 @@ const STEP_RULES = `
 // Bob tries to reword Anna's question
 await node.records.update(space.id, poll.key, { ...poll.body,
   question: 'Pizza or tacos?' });
-// ✗ Only whoever created it can edit this app.poll record
+// ✗ Its author holds no grant to write this app.poll record
 
 // Anna tries to swap the options after people voted
 await node.records.update(space.id, poll.key, { ...poll.body,
@@ -363,10 +355,14 @@ await node.records.update(space.id, poll.key, { ...poll.body,
 // Every other device refuses it on arrival:
 // ✗ app.poll.vote allows one per @author + link:about
 
-// Moderators are a role in the space, not code in your app
-await node.spaces.putRole(space.id, {
-  name: 'host', title: 'Host', rank: 50,
-  permissions: ['invite', 'app.poll/moderate'],
+// Roles are grants in the space, not code in your app:
+// members change their own polls, hosts remove any
+await node.spaces.defineRole(space.id, {
+  name: 'host', title: 'Host',
+  grants: [
+    { cmd: '/record/delete', pol: [['==', '.collection', 'app.poll']] },
+    { cmd: '/role/assign', pol: [['==', '.role', 'member']] },
+  ],
 });
 
 // Hide the button, rather than show the error
@@ -414,7 +410,7 @@ const PROTOCOLS = ['Weave', 'AT Protocol (Bluesky)', 'Nostr', 'Solid'] as const;
 const CONSENSUS: ReadonlyArray<Part> = [
   {
     title: 'Roles you design',
-    body: 'Owner, moderator, guest, or whatever your app needs. Each role has a rank and a list of what it may do, and it lives in the space, not in your code.',
+    body: 'Owner, moderator, guest, or whatever your app needs. Each role is a list of what it may do, as grants, and it lives in the space, not in your code.',
   },
   {
     title: 'Every device is the referee',

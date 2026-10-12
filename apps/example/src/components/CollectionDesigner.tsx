@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { roleHolds } from '@weaveprotocol/core';
+import { useMayDefine } from '@weave/app-shared/may';
 import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useAccess, useAccount, useCollections, useNode, useProfiles } from '@weaveprotocol/core/react';
+import { useAccount, useCollections, useNode, useProfiles } from '@weaveprotocol/core/react';
 import { useAction } from '@weave/app-shared/action';
 import { nameOf, peopleFrom } from '../derive/people';
 import { collectionLabel, humanize, isObject } from '../derive/schema-ui';
@@ -44,9 +44,6 @@ interface LinkDraft {
   to: ReadonlyArray<string>;
   many: boolean;
 }
-
-/** Who may change a record once it's there, in the two ways people mean it */
-type Who = 'anyone' | 'creator';
 
 /** Where a new collection starts: a few fields that thing usually has */
 const TEMPLATES: ReadonlyArray<{
@@ -154,15 +151,14 @@ export function useMayRedefine(
   collection: NodeCollection | null,
 ): { may: boolean; reason: string } {
   const account = useAccount();
-  const access = useAccess(space.id);
+  const defines = useMayDefine(space.id, collection?.name ?? '');
   const people = peopleFrom(useProfiles(space.id));
   if (!collection) return { may: false, reason: '' };
-  if (collection.definedBy === account.did || roleHolds(access?.role, 'manage'))
-    return { may: true, reason: '' };
+  if (collection.definedBy === account.did || defines) return { may: true, reason: '' };
   const definer = collection.definedBy ? nameOf(collection.definedBy, people) : 'whoever made it';
   return {
     may: false,
-    reason: `Only ${definer}, or someone who manages the space, can change what ${collectionLabel(collection)} is.`,
+    reason: `Only ${definer}, or someone the space lets define it, can change what ${collectionLabel(collection)} is.`,
   };
 }
 
@@ -192,9 +188,6 @@ export function CollectionEditor({
       to: d.to === '*' ? [] : [...d.to],
       many: d.cardinality !== 'one',
     })),
-  );
-  const [who, setWho] = useState<Who>(
-    collection ? (collection.rules.edit === 'creator' ? 'creator' : 'anyone') : 'creator',
   );
   const [onePer, setOnePer] = useState(false);
   const [template, setTemplate] = useState('Blank');
@@ -284,17 +277,11 @@ export function CollectionEditor({
         },
       ]),
     );
-    const { edit: _edit, delete: _delete, ...otherRules } = collection?.rules ?? {};
+    // Who may change a record is the space's grants, not the definition's.
     const rules = {
-      ...otherRules,
-      ...(who === 'creator'
-        ? { edit: 'creator' as const, delete: ['creator' as const, 'can:moderate' as const] }
-        : {}),
+      ...(collection?.rules ?? {}),
       ...(making && about && onePer ? { onePer: ['@author', 'link:about'] } : {}),
     };
-    const permissions = [
-      ...new Set([...(collection?.permissions ?? []), ...(who === 'creator' ? ['moderate'] : [])]),
-    ];
     await run(async () => {
       await node.collections.define(space.id, {
         name,
@@ -303,7 +290,6 @@ export function CollectionEditor({
         schema,
         ...(collection ? { history: collection.history } : {}),
         links: nextLinks,
-        permissions,
         rules,
       });
       onDone(name);
@@ -601,27 +587,9 @@ export function CollectionEditor({
 
         <section style={section}>
           <Heading
-            title="Who can do what"
-            about="Every device in the space enforces this, not just this app."
+            title="What it keeps to"
+            about="Every device in the space enforces this. Who may add or change records is the space's roles."
           />
-          <div style={styles.segmented} role="group" aria-label="Who can change one">
-            {(
-              [
-                ['creator', 'Only whoever added it can change it'],
-                ['anyone', 'Anyone in the space can change it'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={who === value}
-                onClick={() => setWho(value)}
-                style={who === value ? styles.segmentActive : styles.segment}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           {making && about && (
             <label style={{ ...toggle, fontSize: 13.5 }}>
               <input type="checkbox" checked={onePer} onChange={(e) => setOnePer(e.target.checked)} />

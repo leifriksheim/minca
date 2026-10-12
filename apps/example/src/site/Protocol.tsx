@@ -225,8 +225,8 @@ const PARTS: ReadonlyArray<Part> = [
         body: 'Every device replays that history the same way. Devices that were offline, or heard things in a different order, reach the same verdict.',
       },
       {
-        title: 'Rank decides who manages whom',
-        body: 'Managing roles takes the manage permission, and you can only change roles ranked below your own.',
+        title: 'Grants decide who may do what',
+        body: 'A role holds grants: a command and conditions on it, like “remove members, but not admins”. Nobody can give a role more than they may do themselves, and the founder answers to no one.',
       },
       {
         title: 'Encrypted before it leaves',

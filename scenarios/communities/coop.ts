@@ -3,7 +3,7 @@
  * ballots from more than half of the members, counted as of the proposal.
  */
 import type { Check } from '../../packages/core/src/records/checks.js';
-import type { Delegation } from '../host/grants.js';
+import type { Delegation } from '../host/library.js';
 import type { Host } from '../host/cel-host.js';
 import { version } from '../host/space.js';
 

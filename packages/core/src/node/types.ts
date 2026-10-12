@@ -11,6 +11,7 @@ import type {
   CryptoProvider,
   Version,
   Link,
+  SpaceGrant,
   SpaceRole,
   SpaceVisibility,
   StandardJSONSchemaV1,
@@ -98,7 +99,7 @@ export interface SpaceSummary {
   readonly readable: boolean;
   /** Whether this account holds a role here, and so may write, as far as this node last heard */
   readonly writable: boolean;
-  /** The role this account holds here, by name — null when it holds none */
+  /** What this account is here: `founder`, a role it holds by name, or null when it holds none */
   readonly role: string | null;
   /** Whether an invite is waiting to be used — its record has not reached this device yet */
   readonly joining: boolean;
@@ -108,10 +109,8 @@ export interface NewSpace {
   readonly name: string;
   /** `private` encrypts every body with the space key */
   readonly visibility: SpaceVisibility;
-  /** The roles it starts with (`rolePresets` has some). Default: the creator alone, holding everything */
+  /** The roles it is founded with, and their grants (`rolePresets` has some). Default: none, the creator, its founder, alone */
   readonly roles?: ReadonlyArray<SpaceRole>;
-  /** Which of them the creator holds. Default: the highest-ranked. */
-  readonly creatorRole?: string;
 }
 
 export interface InvitePreview {
@@ -134,13 +133,20 @@ export interface InviteOptions {
 
 /** Who holds what in a space, now */
 export interface SpaceAccess {
-  /** Highest rank first */
-  readonly roles: ReadonlyArray<SpaceRole>;
-  readonly members: ReadonlyArray<{ readonly did: string; readonly role: string }>;
+  /** The space's roles, by name, each with its current definitions: more than one are rivals, holding what they share */
+  readonly roles: ReadonlyArray<SpaceRoleView>;
+  /** Everyone with a place: the founders, and every account assigned a role */
+  readonly members: ReadonlyArray<{
+    readonly did: string;
+    readonly founder: boolean;
+    readonly roles: ReadonlyArray<string>;
+  }>;
   /** Open and closed invites, by their public key */
   readonly invites: ReadonlyArray<{ readonly key: string; readonly role: string; readonly open: boolean }>;
-  /** This account's own role — null when it holds none */
-  readonly role: SpaceRole | null;
+  /** Whether this account founded the space: it holds every command */
+  readonly founder: boolean;
+  /** The roles assigned to this account, by name */
+  readonly mine: ReadonlyArray<string>;
   /** The latest access changes held — what a record written now names as `seen` */
   readonly heads: ReadonlyArray<string>;
   /** A private space's key: how often it changed, and whether this device holds the current one. Null when public */
@@ -167,6 +173,20 @@ export interface SpaceAccess {
    * whoever manages the space to see; nothing is done about it by itself.
    */
   readonly flagged: ReadonlyArray<FlaggedAccount>;
+}
+
+/** A role as the history has it now */
+export interface SpaceRoleView {
+  readonly name: string;
+  readonly title?: string;
+  readonly definitions: ReadonlyArray<{
+    /** The definition's id; the space id for the constitution's */
+    readonly event: string;
+    /** Who wrote it; null for the constitution's */
+    readonly by: string | null;
+    readonly grants: ReadonlyArray<SpaceGrant>;
+    readonly nests: ReadonlyArray<string>;
+  }>;
 }
 
 /** An account a warrant stands against */
@@ -241,8 +261,6 @@ export interface NodeCollection {
   readonly links: Readonly<Record<string, LinkDeclaration>>;
   /** The identity that first defined it — it, and anyone who can manage the space, may change it */
   readonly definedBy: string | null;
-  /** The permissions its rules name — a role holds each as `<collection>/<permission>` */
-  readonly permissions: ReadonlyArray<string>;
   /** Who may create, edit and delete, what must be unique — for records created from now on */
   readonly rules: CollectionRules;
   /** Fields whose values are topics, tagged on the outside of each record so keepers can match them unread */
@@ -262,8 +280,6 @@ export interface DefineCollection {
   readonly history?: 'latest' | 'all';
   /** The link roles its records may carry, and what each may point at */
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
-  /** The permissions its rules may name, like `moderate` */
-  readonly permissions?: ReadonlyArray<string>;
   /** Who may create, edit and delete, what must be unique, which fields are fixed */
   readonly rules?: CollectionRules;
   /** Fields whose values are topics — `channel`, `mentions` — so a keeper can match them without reading (`StoredCollection.topics`) */
@@ -384,23 +400,39 @@ export interface NodeSpaces {
   preview(invite: string): InvitePreview;
   /** Joins a space from an invite. `memberKey`, for a node without the account key, lets a new key of the space reach it */
   join(invite: string, options?: { readonly memberKey?: Uint8Array }): Promise<SpaceSummary>;
-  /** Gives up the account's place in a space (its own member record, with no role), then forgets it on this node with its key */
+  /** Gives up the account's place in a space (its own removal record), then forgets it on this node with its key */
   leave(spaceId: string): Promise<void>;
   /** Roles, members and invites, as the space's access history says now */
   access(spaceId: string): Promise<SpaceAccess>;
-  /** Gives someone ranked below you a role, changes it, or with null takes it away */
-  setMember(spaceId: string, did: string, role: string | null): Promise<void>;
-  /** Adds or changes a role ranked below yours */
-  putRole(spaceId: string, role: SpaceRole): Promise<void>;
-  /** Removes a role ranked below yours; whoever held it holds nothing */
-  removeRole(spaceId: string, name: string): Promise<void>;
+  /** Whether this account, or `account`, may invoke a command with these arguments in a space now (spec 03 §2) */
+  may(
+    spaceId: string,
+    cmd: string,
+    args?: Readonly<Record<string, unknown>>,
+    account?: string,
+  ): Promise<boolean>;
+  /**
+   * Whether this account, or `account`, holds every grant a role gives, each as
+   * wide or wider: what it may hand to a bot or an agent without handing on
+   * more than it holds. Compares the policies' words, so it may say no where
+   * they would allow, never yes where they wouldn't.
+   */
+  holdsRole(spaceId: string, role: string, account?: string): Promise<boolean>;
+  /** Writes a role's definition, replacing the ones this node holds: its grants and the roles it nests. Needs `/role/define` */
+  defineRole(spaceId: string, role: SpaceRole): Promise<void>;
+  /** Assigns a role to an account. Needs `/role/assign` */
+  assign(spaceId: string, did: string, role: string): Promise<void>;
+  /** Takes a role from an account; your own, to leave it, needs nothing. Otherwise `/role/unassign` */
+  unassign(spaceId: string, did: string, role: string): Promise<void>;
+  /** Removes an account and every role it holds; yourself, to leave, needs nothing. Otherwise `/member/remove` */
+  removeMember(spaceId: string, did: string): Promise<void>;
   /** Closes an invite — by the link itself, or by its key from `access().invites`. Who joined with it before stays. */
   closeInvite(spaceId: string, keyOrLink: string): Promise<void>;
-  /** Gives a private space a new key, as happens when someone is removed: for a lost device. Needs `manage` */
+  /** Gives a private space a new key, as happens when someone is removed: for a lost device. Needs `/key/change` */
   changeKey(spaceId: string): Promise<void>;
-  /** Names the relays (wss://, at most 8) the space's members meet on, whatever relays their apps use. Needs `manage` */
+  /** Names the relays (wss://, at most 8) the space's members meet on, whatever relays their apps use. Needs `/space/relays` */
   setRelays(spaceId: string, relays: ReadonlyArray<string>): Promise<void>;
-  /** Names the nodes that keep the space whole (at most 16), and how many a write should reach. Needs `manage` */
+  /** Names the nodes that keep the space whole (at most 16), and how many a write should reach. Needs `/space/keepers` */
   setKeepers(spaceId: string, keepers: ReadonlyArray<Keeper>, copies?: number | null): Promise<void>;
   /** Revokes one of this account's keys (a session's, an app's, by DID): nothing it writes counts from then on, except what was seen */
   revoke(spaceId: string, key: string): Promise<void>;

@@ -23,6 +23,7 @@ export type {
   Link,
   Space,
   SpaceRole,
+  SpaceGrant,
   SpaceVisibility,
   CollectionDef,
   PeerInfo,
@@ -215,8 +216,8 @@ export {
   spaceGenesis,
   spaceIdOf,
   checkSpace,
-  checkStartingRoles,
-  memberKey,
+  assignKey,
+  removalKey,
   inviteKey,
   revokeKey,
   roleKey,
@@ -225,24 +226,22 @@ export {
 } from './space/space-access.js';
 export {
   replayAccess,
-  permissionMatches,
-  roleHolds,
-  holds,
-  standing,
-  checkRole,
+  may,
+  isMember,
+  rolesOf,
+  readers,
   checkRelays,
   MAX_RELAYS,
-  MANAGE,
-  INVITE,
-  DEFINE,
   ROLE_COLLECTION,
-  MEMBER_COLLECTION,
+  ASSIGN_COLLECTION,
+  REMOVE_COLLECTION,
   INVITE_COLLECTION,
   REVOKE_COLLECTION,
   ACCESS_COLLECTIONS,
 } from './space/roles.js';
 export type {
-  Role,
+  RoleDefinition,
+  Needs,
   AccessEvent,
   AccessGenesis,
   AccessHistory,
@@ -250,7 +249,24 @@ export type {
   EventStatus,
   RecordVerdict,
 } from './space/roles.js';
-export { rolePresets, solo, team, community } from './space/presets.js';
+export { rolePresets, solo, team, community, STAFF_COLLECTIONS } from './space/presets.js';
+// Grants: what a role may do (spec 03 §2)
+export {
+  RECORD_READ,
+  RECORD_WRITE,
+  RECORD_DELETE,
+  COLLECTION_DEFINE,
+  MEMBER_REMOVE,
+  ROLE_DEFINE,
+  ROLE_ASSIGN,
+  ROLE_UNASSIGN,
+  KEY_CHANGE,
+  SPACE_RELAYS,
+  SPACE_KEEPERS,
+  checkFoundingRoles,
+  grantFits,
+} from './space/grants.js';
+export type { FoundingRole } from './space/grants.js';
 export { displayName } from './space/names.js';
 export type { RolePreset } from './space/presets.js';
 export type { SpaceGenesis, SpaceKeyPair } from './space/space-access.js';
@@ -467,7 +483,7 @@ export { checkRules, onePerKey, onePerSecret } from './records/rules.js';
 // Keys: whose a record is (spec 02 §4.1)
 export { keyKind, lineKey, ownedKey } from './records/key.js';
 export { describeCollection } from './records/describe.js';
-export type { CollectionRules, Who } from './records/rules.js';
+export type { CollectionRules } from './records/rules.js';
 export type { Check, Condition } from './records/checks.js';
 export { checkCostHints } from './records/checks.js';
 /** Conditions over one record, in a check's language: a subscription's `where`, and an app's own filters */

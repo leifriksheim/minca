@@ -50,7 +50,6 @@ function scope(values: Record<string, unknown> = {}, held: ReadonlyArray<Checked
   return {
     values: { body: null, links: [], author: ALICE, prev: null, ...values },
     cite: async (id) => held.find((v) => v.id === id) ?? { later: true },
-    can: (permission, did) => permission === 'approve' && did === ALICE,
     member: (did) => did === ALICE || did === BOB,
   };
 }
@@ -78,8 +77,7 @@ describe('checks: a definition', () => {
   });
 
   test('refuses what no peer could judge the same way', () => {
-    const problem = (that: string, permissions: string[] = []) =>
-      checkChecks([{ that, else: 'x' }], 'rules.check', permissions) ?? '';
+    const problem = (that: string) => checkChecks([{ that, else: 'x' }], 'rules.check') ?? '';
     assert.match(problem('eval(1)'), /eval\(\) is not in the subset/);
     assert.match(problem('size(1, 2)'), /takes 1 arguments/);
     assert.match(problem('body.x =='), /unexpected end/);
@@ -93,8 +91,11 @@ describe('checks: a definition', () => {
     );
     assert.match(problem('b"bytes" == b"bytes"'), /bytes/);
     assert.match(problem('type(1) == int'), /type\(\) is not in the subset/);
-    assert.match(problem('can("approve")'), /declares/);
-    assert.equal(problem('can("approve")', ['approve']), '');
+    assert.match(
+      problem('can("approve")'),
+      /can\(\) is not in the subset/,
+      'what a role may do is its grants, not a check’s',
+    );
     assert.match(problem('link(body.rel) == ""'), /literal link role/);
     assert.match(problem(`${'['.repeat(70)}1${']'.repeat(70)} == 1`), /nested more than 64 deep/);
   });
@@ -268,9 +269,7 @@ describe('checks: judging', () => {
     assert.deepEqual(await run(enough, { body: { votes: ['v1', 'v3'] }, links }, held), { later: true });
   });
 
-  test('can and member: roles as of what the version saw', async () => {
-    assert.deepEqual(await run('can("approve")'), { passed: true });
-    assert.deepEqual(await run(`can("approve", "${BOB}")`), { passed: false, reason: 'No' });
+  test('member: a place as of what the version saw', async () => {
     assert.deepEqual(await run(`member("${BOB}")`), { passed: true });
     assert.equal(passed(await run('member("not a did")')), false);
   });
@@ -310,7 +309,7 @@ async function proposalSpace(visibility: 'public' | 'private' = 'public') {
     name: 'app.proposal.vote',
     schema: { type: 'object' },
     links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-    rules: { edit: 'creator', onePer: ['@author', 'link:about'] },
+    rules: { onePer: ['@author', 'link:about'] },
   });
   await alice.node.collections.define(space, {
     name: 'app.proposal.passed',
@@ -484,7 +483,7 @@ describe('checks: between peers', () => {
     );
 
     // Offline, Alice removes Bob, without having seen his votes, so the removal keeps none.
-    await alice.node.spaces.setMember(space, bob.node.did, null);
+    await alice.node.spaces.removeMember(space, bob.node.did);
     await hold(alice.node, space);
     await until(
       async () => (await carol.node.spaces.access(space)).members.every((m) => m.did !== bob.node.did),
