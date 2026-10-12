@@ -102,7 +102,8 @@ function usePowers(spaceId: string, me: string): Powers {
         for (const member of access.members) {
           const self = member.did === me;
           const args = { self, roles: member.roles };
-          if (!member.founder && (self || (await may(MEMBER_REMOVE, args)))) remove.add(member.did);
+          // Anyone may leave, a founder too; no one else removes a founder.
+          if (self || (!member.founder && (await may(MEMBER_REMOVE, args)))) remove.add(member.did);
           const gives = new Set<string>();
           const takes = new Set<string>();
           for (const name of names) {
@@ -524,6 +525,19 @@ function Members({
             })}
           </select>
         )}
+        {self && member.founder && member.roles.length > 0 && (
+          <button
+            onClick={() =>
+              confirmed(
+                'Step down as a founder? You stay, with the roles you hold, and can be removed like anyone else.',
+              ) && void run(() => node.spaces.stepDown(space.id))
+            }
+            data-variant="quiet"
+            style={styles.smallButton}
+          >
+            Step down
+          </button>
+        )}
         {members.has(did) && removes && (
           <button
             onClick={() =>
@@ -567,6 +581,31 @@ function Members({
       {inviteOpen && <Invite space={space} access={access} offered={powers.invite} />}
       {error && <p style={styles.error}>{plainError(error)}</p>}
       <ul style={{ ...list, gap: 0 }}>{access.members.map(row)}</ul>
+      {access.headless && (
+        <p style={{ ...styles.fieldLabel, fontWeight: 400 }}>
+          No one can change roles here any more. Members keep what their roles allow; to change more, move to
+          a successor space.
+        </p>
+      )}
+      {access.successors.length > 0 && (
+        <div>
+          {/* In no order: which to follow is each member's choice. */}
+          <p style={styles.fieldLabel}>Named as successors</p>
+          <ul style={{ ...list, gap: 0 }}>
+            {access.successors.map((next) => (
+              <li key={next.space} style={{ ...styles.row, padding: '8px 4px', fontSize: 13 }}>
+                <span style={{ flex: 1, color: palette.ink.body }}>
+                  …{next.space.slice(-8)}
+                  <span style={{ color: palette.ink.faint }}>
+                    {' '}
+                    · named by {next.by.map((did) => nameOf(did, people)).join(', ')}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {followers.length > 0 && (
         <div>

@@ -9,7 +9,7 @@ that community do and what it must refuse.
 | Scenario      | What it tests                                                                                                                                                                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Chess club    | Roles, a referee, "only your own move" (`.byCreator`), moderators who can't remove admins (`.roles`), unassigning and what it strikes, removal against re-add, rival definitions, struck definitions, definers trusted (by design), roles only to accounts, a contract on turn order |
-| Co-op         | No fixed top; removal by a majority counted as of the proposal; padding and backdating, skipped until quorum                                                                                                                                                                         |
+| Co-op         | `top: "none"`: no founder, the constitution assigns the founding members; any member may name a successor; removal by a majority counted as of the proposal; padding and backdating, skipped until quorum                                                                            |
 | Company team  | Teams and a nested sub-team, an admin who can't write in hr or assign herself (`.self`), nor nest or assign hr to her own role. Not reading: `/record/read` keeps no one out (spec 03 §2.3)                                                                                          |
 | Hall of fame  | A claim citing evidence; withdrawals and removals before and after it                                                                                                                                                                                                                |
 | Mutual credit | An account's line of payments, a credit limit, double spends from two devices, griefing and second lines refused, no corrections in v1 (a stated limit), closed line keys                                                                                                            |
@@ -35,7 +35,7 @@ CI whenever `spec/`, `packages/core/` or `scenarios/` change.
 - `tests/`: the scenarios themselves, one file per community.
 - `host/`: grants are the real library's. `host/library.ts` turns a story
   (entries placed in one linear history, each with what it had seen) into a
-  space's genesis and access history and asks the library's replay
+  space's constitution and access history and asks the library's replay
   (`packages/core/src/space/roles.ts`) every question. A small stand-in
   remains for what a peer does around the contracts (`host/cel-host.ts`:
   chains, pending, membership as of a version), until contracts land in the

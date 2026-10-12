@@ -82,8 +82,14 @@ export interface Removal extends Placed {
 }
 
 export interface Authority {
-  /** The space's founder, alone for now (03 §2.1); a constitution with no top is played by a placeholder */
+  /** The space's founders (03 §2.1): none under `top: "none"` */
   readonly founders: ReadonlyArray<string>;
+  /**
+   * Under `top: "none"`, the name that stands for the constitution itself:
+   * founding grants it issues are the founding roles', and founding
+   * assignments it makes are the constitution's own
+   */
+  readonly constitution?: string;
   readonly delegations: ReadonlyArray<Delegation>;
   readonly assignments: ReadonlyArray<Assignment>;
   readonly definitions?: ReadonlyArray<Definition>;
@@ -110,16 +116,18 @@ interface Built {
  * follow, each having seen everything placed before what it judged at.
  */
 function build(auth: Authority): Built {
-  const founder = auth.founders[0]!;
-  if (auth.founders.length !== 1)
-    throw new Error('One founder for now: the constitution record comes in step 5');
+  // Who writes the constitution: its founders, or the constitution itself under `top: "none"`.
+  const issuers = new Set([
+    ...auth.founders,
+    ...(auth.constitution !== undefined ? [auth.constitution] : []),
+  ]);
   const definitions = auth.definitions ?? [];
   const nestings = auth.nestings ?? [];
   // The constitution: the founder's founding grants and nestings, and every role the story names.
   const founding = (e: Placed & { readonly def?: string }) =>
     e.at === undefined &&
     (e.def === undefined ||
-      definitions.some((d) => d.id === e.def && d.at === undefined && d.by === founder));
+      definitions.some((d) => d.id === e.def && d.at === undefined && issuers.has(d.by)));
   const names = new Set<string>();
   for (const d of auth.delegations) if (roleOf(d.aud)) names.add(roleOf(d.aud)!);
   for (const a of auth.assignments) names.add(a.role);
@@ -128,13 +136,23 @@ function build(auth: Authority): Built {
   const roles: FoundingRole[] = [...names].sort().map((name) => ({
     name,
     grants: auth.delegations
-      .filter((d) => d.iss === founder && d.aud === `role:${name}` && founding(d))
+      .filter((d) => issuers.has(d.iss) && d.aud === `role:${name}` && founding(d))
       .map((d): Grant => ({ cmd: d.cmd, pol: d.pol })),
     nests: nestings
-      .filter((n) => n.by === founder && n.role === name && founding(n) && n.holds !== name)
+      .filter((n) => issuers.has(n.by) && n.role === name && founding(n) && n.holds !== name)
       .map((n) => n.holds),
   }));
-  const genesis: AccessGenesis = { id: GENESIS, creator: founder, roles };
+  // What the constitution assigns: founding assignments it makes itself.
+  const byConstitution = (a: Assignment) => a.at === undefined && a.by === auth.constitution;
+  const assigned: Record<string, string[]> = {};
+  for (const a of auth.assignments.filter(byConstitution)) (assigned[a.to] ??= []).push(a.role);
+  const genesis: AccessGenesis = {
+    id: GENESIS,
+    resolver: 'strong-remove/1',
+    founders: auth.founders,
+    roles,
+    ...(Object.keys(assigned).length ? { assigned } : {}),
+  };
 
   const entries: Array<{
     readonly placed: Placed;
@@ -147,7 +165,7 @@ function build(auth: Authority): Built {
     seen,
     cutoff: new Map(),
   });
-  for (const a of auth.assignments)
+  for (const a of auth.assignments.filter((a) => !byConstitution(a)))
     entries.push({
       placed: a,
       make: (seen, id) => ({
@@ -198,10 +216,10 @@ function build(auth: Authority): Built {
       }),
     });
   for (const d of definitions)
-    if (!(d.at === undefined && d.by === founder)) definition(d.role, d.by, d.id, d);
-  // A nesting outside any definition, by anyone but the founder: the definition it would have to be.
+    if (!(d.at === undefined && issuers.has(d.by))) definition(d.role, d.by, d.id, d);
+  // A nesting outside any definition, by anyone but the constitution: the definition it would have to be.
   for (const n of nestings)
-    if (n.def === undefined && !(n.at === undefined && n.by === founder))
+    if (n.def === undefined && !(n.at === undefined && issuers.has(n.by)))
       definition(n.role, n.by, undefined, n);
 
   const ordered = entries
@@ -269,7 +287,8 @@ export function strikes(
   action: { readonly who: string; readonly cmd: string; readonly args: Json; readonly at: number },
 ): boolean {
   const built = build(auth);
-  const founder = auth.founders[0]!;
+  const founder = auth.founders[0];
+  if (founder === undefined) throw new Error('A reduction the story does not make is made by a founder');
   const existing =
     reduction.role === undefined
       ? (auth.removals ?? []).some((r) => r.who === reduction.who && r.at > action.at)
@@ -328,4 +347,20 @@ export function strikes(
   if (without.status(event.id)?.status !== 'applied') return false;
   const history = replayAccess(built.genesis, [...built.events, ...reductionEvent, event]);
   return history.status(event.id)?.status !== 'applied';
+}
+
+/** Whether `who` may name a successor space, having seen the whole story (03 §2.7) */
+export function maySucceed(auth: Authority, who: string): boolean {
+  const built = build(auth);
+  const event: AccessEvent = {
+    id: 'zz-succeed',
+    root: who,
+    author: who,
+    seen: built.events.length ? built.events.map((e) => e.id) : [GENESIS],
+    cutoff: new Map(),
+    key: 'succeed:next',
+    kind: 'succeed',
+    space: 'next',
+  };
+  return replayAccess(built.genesis, [...built.events, event]).status(event.id)?.status === 'applied';
 }
