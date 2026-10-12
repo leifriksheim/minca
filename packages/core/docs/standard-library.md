@@ -220,7 +220,7 @@ anything, and only moderators and admins start the collections in
 
 **Proven outcomes.** A `std.decision` and a `std.goal-reached` are not
 declared by anyone: each cites the records that prove it, by version id, and
-every device checks the proof before it counts one ([checks.md](checks.md)). Anyone in the space may write one, once, when the
+every device checks the proof before it counts one ([checks.md](contracts.md)). Anyone in the space may write one, once, when the
 proof is there:
 
 - `std.decision` cites the proposal's first version (`proposal`) and ballots
@@ -241,7 +241,7 @@ versions are kept whole (`onePer`), so they can be cited. That is why
 { "outcome": 0, "proposal": "bay24o4l…", "ballots": ["bq7x…", "b3kd…", "bm2a…"] }
 ```
 
-_Source: `packages/core/src/schemas/library/community.ts` (`ballot`, `decision`, `goal`, `pledge`, `goalReached`), `apps/example/src/components/apps/Decisions.tsx`. Tests: `packages/core/tests/checks.test.ts` ("std.decision and std.goal-reached")._
+_Source: `packages/core/src/schemas/library/community.ts` (`ballot`, `decision`, `goal`, `pledge`, `goalReached`), `apps/example/src/components/apps/Decisions.tsx`. Tests: `packages/core/tests/contracts.test.ts` ("std.decision and std.goal-reached")._
 
 **Settings**
 

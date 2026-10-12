@@ -263,15 +263,34 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     collection in force but with no first definer, taking its definer's
     control away for good. Those who may define collections are trusted not
     to.
-  - A collection's checks bind only readers that judge them: peers keep and
-    sync a version that fails them, and only the library leaves it out of
-    what it counts, on every read path, along a record's chain, and without
-    letting it hold a `onePer` key ([checks](../packages/core/docs/checks.md);
-    `packages/core/tests/checks-reads.test.ts`, `checks-squat.test.ts`,
-    `checks-pending.test.ts`). Another
-    implementation that doesn't judge checks shows it. Every such version
-    costs every peer storage, like any record it may write
+  - A collection's contract binds only readers that judge it: peers keep and
+    sync a version that fails it, and readers leave it out of what they
+    count, on every read path, along a record's chain, and without letting
+    it hold a `onePer` key (09 §2, §4.1;
+    `packages/core/tests/contracts-reads.test.ts`, `contracts-squat.test.ts`,
+    `contracts-pending.test.ts`). An implementation that doesn't judge
+    contracts shows it. Every such version costs every peer storage, like
+    any record it may write
     ([#33](https://github.com/leifriksheim/weave/issues/33)).
+  - A contract judges the versions a claim cites, not whether they are
+    current (09 §6.2): a reaction withdrawn before or after a claim doesn't
+    un-fame it (`scenarios/tests/fame.test.ts`). By design.
+  - In a line, a payer can double-spend a payment a payee has built on: both
+    twins fail, and so does the payee's version that claimed one and
+    everything after it in the payee's line, for good, since there are no
+    corrections (09 §7.3, §7.5; `packages/core/tests/contracts-line.test.ts`,
+    `scenarios/tests/credit.test.ts`). The payer's own line ends there too.
+    Only waiting before building on a payment, or a witness, protects a
+    payee.
+  - A member can't write in another's line, or open a second line of its
+    own: only versions at the author's own line key count (09 §7.2).
+  - An honest account whose two devices write in one line while apart kills
+    that line for good, like a double spend (09 §7.5). Apps keep a line on
+    one device at a time.
+  - A newer line declaration with a key an older reader doesn't know leaves
+    that collection, and what cites it, unjudged by that reader: old and new
+    readers' counts split until the old one updates, but never silently
+    (09 §2, §7.1).
   - A grant of `/member/remove` or `/role/unassign` without a policy on
     `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).
@@ -374,12 +393,10 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
     included, survives it until someone writes the role again (§3.2, by
     design).
   - A version it backdates is withdrawn, but a colluding member can still cite
-    it as evidence in a version under checks, and the library's checks count
-    it, since they judge a cited version as of what the citer saw
-    ([#184](https://github.com/leifriksheim/weave/issues/184),
-    [checks](../packages/core/docs/checks.md#citing-a-version)). Checks are
-    not protocol, so this is a gap in what readers count, not in what peers
-    store.
+    it as evidence in a version under a contract, and readers count it,
+    since they judge a cited version as of what the citer saw
+    ([#184](https://github.com/leifriksheim/weave/issues/184), 09 §6.2).
+    This is a gap in what readers count, not in what peers store.
   - It can rejoin through any open role invite it saw: removal closes none
     ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_.
   - A key change is only a SHOULD, and only a member granted `/key/change`
@@ -430,6 +447,9 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     in that collection from the proven place on stops counting, records and
     changes to who may do what alike (02 §4.10, 03 §4.3, §6.5).
 - **Does not hold yet.**
+  - It can sign a twin in any of the account's lines (09 §7) in a space its
+    note reaches, a double spend that ends that line for good: there are no
+    corrections, and a revoke doesn't bring back a line (09 §7.5).
   - It can revoke the owner's other keys, with a cutoff of its choosing: a key
     whose note grants `/` is the account while it lasts
     ([#165](https://github.com/leifriksheim/weave/issues/165)).

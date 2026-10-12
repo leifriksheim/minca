@@ -22,8 +22,8 @@ specified in `spec/` in the repository: https://github.com/leifriksheim/weave/tr
   edits. Every edit is a new version.
 - **Rules** say who may create, edit and delete. Every device checks every
   record that arrives against them, so there is no server to write.
-  **Checks** say what a record must be, citing other records as evidence;
-  the library counts only records that pass them.
+  **Contracts** say what a record must be, citing other records as
+  evidence; every reader counts only records that pass them (spec 09).
 - **Queries** are plain JSON: Mongo-style filters, sorting, paging, and
   `include` to follow links.
 
@@ -54,7 +54,7 @@ the others wrote.
 | [standard-library.md](standard-library.md)           | Every `std.*` collection, and the conventions they follow                                                                                                                                |
 | [direct-messages.md](direct-messages.md)             | `std.direct` and `node.direct`: text sealed for some members of a space                                                                                                                  |
 | [blueprints-and-guides.md](blueprints-and-guides.md) | `std.blueprint` and `std.guide`: proposing collections, the review, updates, guides, compatibility                                                                                       |
-| [checks.md](checks.md)                               | `rules.check`: the CEL subset, citing versions, limits, and how the library counts only versions that pass                                                                               |
+| [contracts.md](contracts.md)                         | `rules.check` and `line`: how the library runs contracts (spec 09), counts only versions that pass, and refuses its own failing ones                                                     |
 | [rules.md](rules.md)                                 | `std.rule`: when a query finds records a condition holds for, or at set times, do something: in an app, an agent or a bot                                                                |
 | [calls.md](calls.md)                                 | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
 | [contacts.md](contacts.md)                           | `std.contact` and `std.contact-request`: the list, sealed requests, `node.contacts`                                                                                                      |
@@ -95,6 +95,6 @@ under **Planned** in each part. Library work that isn't protocol:
   compatible definitions).
 - **Asking for what a version cites.** A version pending on a cited version
   from a collection this node doesn't hold, asking for it
-  ([checks.md](checks.md#planned-asking-for-what-a-version-cites),
+  ([spec 09 §9](../../../spec/09-contracts.md#9-planned-asking-for-what-a-version-cites),
   [#79](https://github.com/leifriksheim/weave/issues/79)).
 - **Web components** for the standard schemas.

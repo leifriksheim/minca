@@ -18,9 +18,10 @@ keeps (a `mine` argument, then nest-only permissions) each opened a new
 hole, and are **dropped** (Decided, 2026-10-12): under the owner's
 principle of no more security than ordinary apps, whoever may define
 roles is trusted to, as in Discord or Slack (§2). Grants and the resolver
-(step 4) and the constitution (step 5) are built, and their text has moved
-into the specification (§1, §2, §4); what is left here is the rest of the
-plan.
+(step 4), the constitution (step 5) and contracts (step 6) are built, and
+their text has moved into the specification (§1, §2, §3, §4); what is left
+here is the rest of the plan: democracy and quorum, corrections in a line,
+and witnesses.
 
 ## In one paragraph
 
@@ -128,120 +129,23 @@ Still open: an argument that tells a new record from an edit (03 §17).
 
 ## 3. Contracts
 
-A contract decides what a group's records mean: whether a record counts, and
-what follows from it. Every device runs it over the same records and gets the
-same answer. Contracts are written in a subset of **CEL** (**Decided**),
-stored as strings inside the collection definition.
+Built in step 6: contracts, their CEL subset, citations, verdicts and the
+line rule are now [09 — Contracts](../09-contracts.md). What is left here is
+later work:
 
-Three kinds of result, and what each needs:
-
-1. **Results that only grow** need nothing more. "5 people reacted 🙂"
-   only becomes truer. Someone writes a claim citing the evidence, and
-   everyone checks it:
-
-   ```json
-   "contract": [{
-     "that": "versions(body.reactions).filter(r, r.collection == 'app.reaction' && !r.deleted && r.link('on') == link('on') && r.body.emoji == '🙂').map(r, r.author).distinct().size() >= 5",
-     "else": "A comment enters the hall of fame with 5 different people's 🙂"
-   }]
-   ```
-
-   **Withdrawals don't un-fame a claim once it has passed**, and a claim
-   may cite a version that has since been withdrawn. A contract judges the
-   versions a claim cites, not whether they are still current. An earlier
-   draft required "a cited version must be current as of the claim's past",
-   but a record's `seen` is whatever its writer says: records have no
-   causal past a peer can check, so a claim that left the withdrawal out of
-   what it names passed anyway. The rule is dropped rather than kept as a
-   promise it can't keep. A community that wants withdrawals to count
-   writes the claim later, or counts with a query rather than a claim.
-
-   _Source:_ `scenarios/tests/fame.test.ts` ("before the claim: passes,
-   citing the version before the withdrawal, whatever the claim had seen").
-
-2. **Limits on one person's own actions** need that person's own order.
-   Mutual credit: each payment names the payer's previous payment and carries
-   the running balance; the contract checks
-   `balance == previous.balance - amount && balance >= -limit`. That works
-   across an account's devices, because the line is the account's payments,
-   not a device's log.
-
-   **Lines are a built-in rule**, not a contract. A collection definition
-   declares itself a line (`"line": { "once": [...] }`). **Its keys are
-   closed**: a peer that finds a key it doesn't know in a line declaration
-   doesn't judge that collection, as it doesn't judge a space with a
-   resolver it doesn't know.
-
-   - **One line per account per collection, at a key derived from the
-     author**: `lineKey(account, collection)`, an owned key (02 §4.1,
-     `packages/core/src/records/key.ts`), so only that account's own signed
-     versions can be in its line, or be twins.
-     Without it, anyone could write a first version at someone else's line
-     key, or a next version after their payment, and kill the line; and an
-     account could open a second line and claim each payment once in each.
-   - **Double spends.** Two versions of a line naming the same previous
-     one (or two first versions) are a double spend: neither counts, nor
-     anything after either, whichever devices wrote them. CEL can't express
-     this, since a version never cites its twin, so every reader applies it
-     while judging the chain, as it already requires the whole line before a
-     version counts. It is not fixed by citation: a payment counts until its
-     twin arrives (the comparison, §2.5). A payee who waits before building
-     on a payment, or a witness, is the only cure.
-   - **No corrections in v1** (Decided). A payee who claims a payment that
-     is later double-spent loses that version and everything after it in
-     that line: any version after their last counted one is a twin of the
-     failed one, so the line ends there.
-   - **Claiming each payment once.** The line declaration names the fields
-     whose citations may appear only once along the line
-     (`"once": ["received"]`), indexed per account per collection
-     (**Decided**: `once` applies only to lines). "Along the line" means
-     the **counted chain**, a version's `prev` back to the start. The
-     reader already holds the whole line, so it checks this with an index,
-     and the body carries nothing extra. The prototype's `body.claimed`, a
-     list re-read on every payment, goes.
-   - **A known limit: an honest account's offline devices.** Two devices of
-     one account that pay in the same collection while apart write twins,
-     and the line is dead for good. Apps must keep a line on one device at
-     a time, or sync before paying.
-
-   **Later: corrections.** A way back for a payee, deferred from v1. The
-   starting point is the narrow trigger: a correction is allowed after the
-   payee's last counted version only when a version it cites is one of a
-   double-spent pair, a structural check with no second run of the
-   contract. The second review's rule stays: a correction restates the
-   failed versions' outgoing payments in order, dropping only the failed
-   citations, so it can't unpay anyone. The third review found that a
-   broad trigger ("would pass if what it cited stood") let a correction
-   revive a version that failed for its own reasons, and that a payee
-   restating can't claim the correction that repaid them. A restart record
-   for an honest account's forked devices belongs to the same later work.
-
-   _Source:_ `scenarios/host/cel-host.ts` (`lineKey`, `judgeOne`,
-   `onceAlong`); `scenarios/tests/credit.test.ts` ("a line is its account's
-   own", "a payee who built on a double spend", "line declarations have
-   closed keys"). The host derives the key with the library's `lineKey`.
-
-   **`sum` of an empty list** (Decided). Today `sum([])` is the int `0`,
-   and an int plus a double is an error, so a payment that claims nothing
-   fails unless the sum is padded with `[0.0]`. Every number read from a
-   body is a double. `sum` is Weave's function, not CEL's, so it changes:
-   **`sum([])` returns `0.0`**. There is no `sum(l, zero)`.
-
-3. **Results that need one global order** ("the first 10 get a ticket", "the
-   highest bid by Friday") are not possible without a witness, a separate
-   planned layer. The docs say so plainly.
-
-- **Who judges.** Every reader. A record that breaks its contract is kept and
-  synced, and counts for no one (as checks work today). Agreement doesn't need
-  peers to refuse it; it needs every reader to run the same contract the same
-  way.
-- **In the spec** (Decided). Communities must see the same results whichever
-  implementation they use, so the contract language returns to the spec: a
-  new part, with the CEL conformance suite as its tests. It is renamed from
-  "checks" to contracts.
-- **A strict subset of CEL.** Every expression Weave accepts means exactly what
-  it means in standard CEL. What is left out (protobuf types, timestamps and
-  durations, bytes) is listed, with a reason for each. Cost limits stay.
+- **Corrections in a line** (09 §7.5, Planned). The starting point is the
+  narrow trigger: a correction is allowed after the payee's last counted
+  version only when a version it cites is one of a double-spent pair, a
+  structural check with no second run of the contract. The second review's
+  rule stays: a correction restates the failed versions' outgoing payments
+  in order, dropping only the failed citations, so it can't unpay anyone.
+  The third review found that a broad trigger ("would pass if what it cited
+  stood") let a correction revive a version that failed for its own
+  reasons, and that a payee restating can't claim the correction that
+  repaid them. A restart record for an honest account's forked devices
+  belongs to the same later work.
+- **Results that need one global order** ("the first 10 get a ticket", "the
+  highest bid by Friday") need a witness, a separate planned layer (§5).
 
 ## 4. Resolving conflicts: `strong-remove/1`
 
@@ -401,10 +305,13 @@ Each step is its own PR with an adversarial review.
    (a peer that doesn't know it doesn't judge the space) and
    `/space/succeed`; presets are constitution templates, with a co-op
    (`top: "none"`). Sync and segment versions went to 7.
-6. **Contracts in the spec.** The CEL subset as a spec part with its
-   conformance suite; checks renamed; the line rule with `once` and closed
-   keys (corrections later); `sum([])` as `0.0`; the hall of fame and
-   mutual credit scenarios against the real library.
+6. **Contracts in the spec.** Done: [09 — Contracts](../09-contracts.md),
+   with CEL's conformance suite as the language's tests; checks renamed
+   contracts (the definition's field stays `check`); the line rule with
+   `once` and closed keys in the library
+   (`packages/core/tests/contracts-line.test.ts`); `sum([])` is `0.0`; the
+   hall of fame and mutual credit scenarios run on the library.
+   Corrections are later (09 §7.5).
 7. **Later: democracy.** Quorum clauses (question 1) meeting §5's
    requirements, which un-skips the co-op's "needs quorum" scenarios; then
    witnesses for deadlines.
@@ -415,22 +322,10 @@ ranks), #201 (simpler roles).
 
 ## 9. Threat model changes still to make
 
-The changes for grants (step 4) and the constitution (step 5) are made in
-[the threat model](../threat-model.md). What is left comes with later
+The changes for grants (step 4), the constitution (step 5) and contracts
+(step 6) are made in [the threat model](../threat-model.md). What is left comes with later
 steps:
 
-- **Contracts** (step 6).
-  - Contracts judge versions cited, not current ones (§3): a withdrawal
-    doesn't un-fame a claim, before or after it.
-  - A payer can double-spend a payment a payee built on; the payee loses
-    that version and everything after it in that line, for good, since v1
-    has no corrections (§3).
-  - An honest account whose two offline devices pay in one line kills that
-    line for good (§3).
-  - **Closed line keys.** A line declaration with a key a peer doesn't
-    know leaves that collection unjudged by it, so a newer declaration
-    splits old and new peers' verdicts on that collection until they
-    update; they never disagree silently.
 - **Democracy** (step 7). Until quorum lands, a co-op's votes can be padded
   and backdated (§5); after, an old majority can still outvote members it
   hasn't seen.
