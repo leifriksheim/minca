@@ -283,7 +283,13 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     Only waiting before building on a payment, or a witness, protects a
     payee.
   - A member can't write in another's line, or open a second line of its
-    own: only versions at the author's own line key count (09 §7.2).
+    own: only versions at the author's own line key count (09 §7.2). A delete
+    is a step of a line: one written as a payment's twin is a double spend,
+    whether or not it carries `retain`, and nothing after a delete counts, so
+    no account restarts its balance (09 §7.3, §7.5;
+    `packages/core/tests/contracts-line.test.ts`, "the line rule: deletes").
+    As with any narrowed rule, a version whose `seen` is from before the
+    `line` declaration escapes the line rule (09 §7.5).
   - An honest account whose two devices write in one line while apart kills
     that line for good, like a double spend (09 §7.5). Apps keep a line on
     one device at a time.

@@ -264,3 +264,74 @@ describe('the line rule: a twin arriving by sync', () => {
     assert.equal(await alice.node.records.get(space, a0.key), null, 'what claimed b1 falls with it');
   });
 });
+
+describe('the line rule: deletes', () => {
+  /** A line in which every claim cites a thing, so `once` can tell a second claim of the same thing */
+  async function claims() {
+    const c = await communityNode(1, [
+      { name: 'app.thing', schema: { type: 'object' } },
+      {
+        name: 'app.claim',
+        schema: { type: 'object' },
+        rules: {
+          check: [
+            { that: 'versions(body.claimed).all(v, v.collection == "app.thing")', else: 'Claim things' },
+          ],
+        },
+        line: { once: ['claimed'] },
+      },
+    ]);
+    const alice = c.founder;
+    const x = await c.sign(c.members[0]!, { collection: 'app.thing', body: { n: 1 } });
+    const key = await lineKey(alice.node.did, 'app.claim');
+    const a0 = await c.sign(alice, {
+      collection: 'app.claim',
+      body: { claimed: [] },
+      version: { key, seq: 0 },
+    });
+    const after = (v: Version) => ({ key, seq: v.seq + 1, prev: v.id, genesis: v.genesis ?? v.id });
+    return { c, alice, x, a0, after };
+  }
+
+  for (const retain of [false, true]) {
+    test(`a delete written as a twin of a payment is a double spend (retain: ${retain})`, async () => {
+      const { c, alice, x, a0, after } = await claims();
+      const a1 = await c.sign(alice, {
+        collection: 'app.claim',
+        body: { claimed: [x.id] },
+        version: after(a0),
+      });
+      const d = await c.sign(alice, {
+        collection: 'app.claim',
+        body: null,
+        deleted: true,
+        retain,
+        version: after(a0),
+      });
+      const e = await c.sign(alice, {
+        collection: 'app.claim',
+        body: { claimed: [x.id] },
+        version: after(d),
+      });
+      await c.add(x, a0, a1, d);
+      assert.deepEqual(await c.verdicts(a1, d), ['fail', 'fail']);
+      await c.add(e);
+      assert.deepEqual(await c.verdicts(a0, a1, d, e), ['pass', 'fail', 'fail', 'fail']);
+    });
+  }
+
+  test('a delete ends a line for good: nothing after it counts, so no balance starts again', async () => {
+    const { c, alice, x, a0, after } = await claims();
+    const d = await c.sign(alice, {
+      collection: 'app.claim',
+      body: null,
+      deleted: true,
+      retain: false,
+      version: after(a0),
+    });
+    const e = await c.sign(alice, { collection: 'app.claim', body: { claimed: [x.id] }, version: after(d) });
+    await c.add(x, a0, d, e);
+    assert.equal(await c.verdict(e), 'fail');
+    assert.match((await alice.node.records.contracts(c.space, e.key, e.id))?.reason ?? '', /ends its line/);
+  });
+});

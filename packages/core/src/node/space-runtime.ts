@@ -1494,6 +1494,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       // or a forged step would be laundered by the next.
       let previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
       if (version.seq > 0 && version.prev && !previous) return { pending: true };
+      // In a line, a delete is a step that ends it for good: nothing after it counts (spec 09 §7.5).
+      if (line !== undefined && previous?.deleted)
+        return { passes: false, reason: 'It follows a delete, which ends its line' };
       // A delete in between hides nothing: the chain is judged by the step before it.
       while (previous?.deleted && previous.seq > 0 && previous.prev) {
         const before: Version | null = await storage.getVersion(previous.prev);
@@ -1558,6 +1561,29 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Collections this node has judged as lines: a version arriving in one can undo a verdict (a double spend) */
   const lineCollections = new Set<string>();
+  /**
+   * Every version held in a line collection, by key and the version it
+   * names before it: deletes and stubs included, whatever `retain` says, so
+   * no twin hides from the double-spend check. Dropped when one arrives.
+   */
+  const lineIndexes = new Map<string, Promise<Map<string, Version[]>>>();
+  const twinKey = (version: Version) => `${version.key}\n${version.prev ?? ''}`;
+  function lineIndex(collection: string): Promise<Map<string, Version[]>> {
+    let index = lineIndexes.get(collection);
+    if (!index) {
+      index = storage.keptVersions(collection).then((held) => {
+        const byPlace = new Map<string, Version[]>();
+        for (const version of held) {
+          const at = byPlace.get(twinKey(version));
+          if (at) at.push(version);
+          else byPlace.set(twinKey(version), [version]);
+        }
+        return byPlace;
+      });
+      lineIndexes.set(collection, index);
+    }
+    return index;
+  }
 
   /**
    * Why a version breaks its line's rule (spec 09 §6), or null. Its key is its
@@ -1573,9 +1599,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   ): Promise<string | null | typeof UNJUDGED> {
     if (version.key !== (await lineKey(root, version.collection)))
       return 'It is not at its author’s line key';
-    for (const other of await storage.history(version.key)) {
-      if (other.id === version.id || other.collection !== version.collection) continue;
-      if ((other.prev ?? null) !== (version.prev ?? null)) continue;
+    for (const other of (await lineIndex(version.collection)).get(twinKey(version)) ?? []) {
+      if (other.id === version.id || other.seq !== version.seq) continue;
       // At an owned key only its owner's versions stand; one that doesn't is no twin.
       if ((await judge(other)).root !== root) continue;
       return 'A double spend: another version of this line follows the same one';
@@ -2059,6 +2084,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (placed.some((version) => lineCollections.has(version.collection))) {
         checkVerdicts.clear();
         countedIndex = null;
+        for (const version of placed) lineIndexes.delete(version.collection);
       }
       return;
     }
@@ -2069,6 +2095,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     accessCache = placed && accessCache ? extendAccess(accessCache, placed) : null;
     standings.clear();
     checkVerdicts.clear();
+    lineIndexes.clear();
     keepUp();
     // The access history may name keepers now, or none.
     void refreshHolds().catch(() => {});
@@ -3137,8 +3164,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * synced by every peer either way, counted by a reader only when it passes.
    */
   async function contractsFor(recordKey: string, versionId?: string): Promise<RecordContracts | null> {
-    for (const version of await storage.history(recordKey)) {
-      if (versionId !== undefined && version.id !== versionId) continue;
+    // A version named is judged even when the history leaves it out (a superseded delete, say).
+    const named = versionId !== undefined ? await storage.getVersion(versionId) : null;
+    const candidates =
+      versionId === undefined ? await storage.history(recordKey) : named?.key === recordKey ? [named] : [];
+    for (const version of candidates) {
       if (isStub(version)) continue;
       // One named whose first version hasn't arrived waits for it.
       if (!(await consistent(version))) {

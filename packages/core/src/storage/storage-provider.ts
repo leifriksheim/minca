@@ -64,6 +64,8 @@ export interface StorageProvider {
   queryVersions(collection: string): Promise<Version[]>;
   /** The id of every version this store keeps — current, first and retained. */
   versionIds(): Promise<string[]>;
+  /** Every version kept in one collection, current or not, superseded ones as their stubs. */
+  keptVersions(collection: string): Promise<Version[]>;
   /** The versions kept in one collection, as sync compares them: sorted, with sums. */
   items(collection: string): Promise<ItemSet>;
   /** Every collection this store keeps anything in, and the sum of its version ids. */
@@ -514,6 +516,10 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
       const held = await load((await loadKept()).get(collection)?.keys() ?? []);
       const current = await Promise.all(held.map(async (v) => (await readId(currentKey(v.key))) === v.id));
       return held.filter((_, i) => current[i]);
+    },
+
+    async keptVersions(collection: string): Promise<Version[]> {
+      return load((await loadKept()).get(collection)?.keys() ?? []);
     },
 
     async versionIds(): Promise<string[]> {

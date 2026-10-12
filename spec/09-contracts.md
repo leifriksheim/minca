@@ -129,8 +129,10 @@ A version counts only while every step before it does: one that follows a
 version failing its contract fails too, so a forged step can't be laundered
 by the next.
 
-1. A reader judges the version before (`prev`) first. A delete in between
-   hides nothing: the chain is judged by the step before it.
+1. A reader judges the version before (`prev`) first. Outside a line, a
+   delete in between hides nothing: the chain is judged by the step before
+   it. In a line, a version after a delete **fails**: a delete ends a line
+   (§7.5).
 2. If the version before is not held, the judged version is **pending**.
 3. If the version before is under a contract or a line, is not a delete and
    does not carry `retain`, the judged version **fails**: what it reads can't
@@ -139,7 +141,8 @@ by the next.
    or unjudged, so is the judged version.
 5. A delete has no content to judge, but it is a step like any other: one
    after a failing step fails, so it can neither hide the record nor make
-   its key unwritable.
+   its key unwritable. In a line it is also judged by the line rule (§7.2,
+   §7.3), so a delete can be a twin.
 6. Otherwise the line rule (§7) and then the conditions, in order; the first
    that is not `true` decides.
 
@@ -438,8 +441,10 @@ and an account could open a second line and claim each payment once in each.
 Two versions of a line naming the same previous version (or two first
 versions, naming none) are a **double spend**: a reader **MUST** fail both,
 whichever devices of the account wrote them, and so everything after
-either (§4.1). It checks every version it holds at the line key, in that
-collection, signed by the same account.
+either (§4.1). Deletes are versions here like any other. A reader **MUST**
+look for twins among every version it holds at the line key, in that
+collection, signed by the same account, deletes and versions without
+`retain` included, not only those a record's history keeps (02 §4.5).
 
 A version counts until its twin arrives. A contract can't express this,
 since a version never cites its twin, so a payee who claimed a payment that
@@ -453,11 +458,15 @@ For each field `once` names, every element of that field's list (when it is
 a list; anything else claims nothing) is a **citation**, compared as
 canonical JSON (02 §1). A reader **MUST** fail a version when one of its
 citations, under the same field, appears twice along its **counted chain**:
-the version and every version its `prev` names back to the start, deletes
-skipped. The reader already holds the whole chain (§4.1), so the body carries
+the version and every version its `prev` names back to the start. The reader already holds the whole chain (§4.1), so the body carries
 nothing extra.
 
 ### 7.5 No corrections
+
+**A delete ends a line for good.** In a line collection, no version after
+a delete counts, so an account can't delete its line to start its balance
+again; a delete that names the same previous version as a payment is that
+payment's twin (§7.3).
 
 There is no way back from a double spend. After one, any new version after
 the last that counts is a twin of a failed one, so the line ends there for
@@ -465,6 +474,11 @@ good: the account's later payments in that collection never count. Two
 devices of one honest account that pay in the same collection while apart
 write twins, and kill the line the same way; apps must keep a line on one
 device at a time, or sync before writing to it.
+
+As for every rule, a version is judged by the definition in force as of
+its `seen` (02 §6.3): one whose `seen` is from before the `line`
+declaration escapes the line rule, the known gap of a rule narrowed after
+the fact ([threat model](threat-model.md) §3.2).
 
 > **Planned: corrections.** A way back for a payee, and a restart record for
 > an honest account's forked devices. The starting point: a correction is
@@ -476,7 +490,7 @@ device at a time, or sync before writing to it.
 > correction revive a version that failed for its own reasons, and is ruled
 > out ([the plan](drafts/constitution-grants-contracts.md) §3).
 
-_Source: `packages/core/src/records/contracts.ts` (`checkLine`, `onceCitations`, `Line`), `packages/core/src/records/key.ts` (`lineKey`), `packages/core/src/node/space-runtime.ts` (`lineBreak`, `checksOf`, `recordsChanged`, `define`, `write`). Tests: `packages/core/tests/contracts-line.test.ts` (all: "two devices of one account pay after the same payment…", "no corrections…", "a payment claimed again later along the line fails…", "a second line of one account claims nothing…", "a payment arriving before the one it follows waits…", "a line declared with a key it doesn't know…", "a reader that counted a payment stops counting it…"), `scenarios/tests/credit.test.ts` (all)._
+_Source: `packages/core/src/records/contracts.ts` (`checkLine`, `onceCitations`, `Line`), `packages/core/src/records/key.ts` (`lineKey`), `packages/core/src/node/space-runtime.ts` (`lineBreak`, `lineIndex`, `checksOf`, `recordsChanged`, `define`, `write`), `packages/core/src/storage/storage-provider.ts` (`keptVersions`). Tests: `packages/core/tests/contracts-line.test.ts` (all: "two devices of one account pay after the same payment…", "no corrections…", "a payment claimed again later along the line fails…", "a second line of one account claims nothing…", "a payment arriving before the one it follows waits…", "a line declared with a key it doesn't know…", "a reader that counted a payment stops counting it…", "a delete written as a twin of a payment is a double spend…", "a delete ends a line for good…"), `scenarios/tests/credit.test.ts` (all)._
 
 ## 8. Checking a definition
 
