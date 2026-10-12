@@ -534,3 +534,98 @@ describe('backdating past an unassignment', () => {
     assert.equal(status(replayAccess(g2, [hal, tagged, open, join]), join), 'dropped');
   });
 });
+
+// Found by the second review of grants: with whole-account strikes, a removed member's backdated
+// reduction of its remover struck the removal back, and the two stood together.
+describe('fighting your own removal', () => {
+  const g: AccessGenesis = {
+    id: 'space',
+    creator: 'alice',
+    roles: [
+      {
+        name: 'admin',
+        grants: [
+          { cmd: ROLE_ASSIGN, pol: [] },
+          { cmd: MEMBER_REMOVE, pol: [] },
+          { cmd: ROLE_UNASSIGN, pol: [] },
+        ],
+      },
+      // Tidies up greeters, nothing else.
+      { name: 'tidy', grants: [{ cmd: ROLE_UNASSIGN, pol: [['==', '.role', 'greeter']] }] },
+      { name: 'greeter', grants: [{ cmd: RECORD_WRITE, pol: [['==', '.collection', 'app.welcome']] }] },
+      { name: 'member', grants: [{ cmd: RECORD_WRITE, pol: [] }] },
+    ],
+  };
+
+  test('a removed member’s backdated unassignment of its remover strikes nothing, and is struck', () => {
+    const adam = assign('alice', 'adam', 'admin', []);
+    const greet = assign('alice', 'adam', 'greeter', [adam.id]);
+    const tom = assign('alice', 'tom', 'tidy', [greet.id]);
+    const pat = assign('adam', 'pat', 'member', [tom.id]);
+    const quinn = assign('adam', 'quinn', 'member', [pat.id]);
+    const out = remove('adam', 'tom', [quinn.id]);
+    // Removed, Tom names a view from before Adam's work and takes greeter from him.
+    const spite = unassign('tom', 'adam', 'greeter', [tom.id]);
+    for (const h of [
+      [adam, greet, tom, pat, quinn, out, spite],
+      [spite, out, quinn, pat, tom, greet, adam],
+    ].map((order) => replayAccess(g, order))) {
+      assert.equal(status(h, spite), 'dropped');
+      assert.equal(status(h, out), 'applied');
+      assert.ok(!isMember(h.current, 'tom'));
+      assert.ok(isMember(h.current, 'pat') && isMember(h.current, 'quinn'), 'Adam’s work stands');
+      assert.deepEqual(rolesOf(h.current, 'adam'), ['admin', 'greeter']);
+      assert.ok(h.judge({ id: 'note', root: 'adam', seen: [quinn.id] }, (s) => isMember(s, 'adam')).ok);
+    }
+  });
+
+  test('unassignments of each other both stand: the unassigner chooses what was unseen (threat model §3.2)', () => {
+    const adam = assign('alice', 'adam', 'admin', []);
+    const greet = assign('alice', 'adam', 'greeter', [adam.id]);
+    const tom = assign('alice', 'tom', 'tidy', [greet.id]);
+    const pat = assign('adam', 'pat', 'member', [tom.id]);
+    const off = unassign('adam', 'tom', 'tidy', [pat.id]);
+    const back = unassign('tom', 'adam', 'greeter', [tom.id]);
+    const h = replayAccess(g, [adam, greet, tom, pat, off, back]);
+    assert.equal(status(h, off), 'applied');
+    assert.equal(status(h, back), 'applied', 'as an honest pair made apart would');
+    assert.equal(status(h, pat), 'dropped', 'what Adam did that it named as unseen');
+  });
+
+  test('two who remove each other both stand, as before', () => {
+    const bob = assign('alice', 'bob', 'admin', []);
+    const carol = assign('alice', 'carol', 'admin', [bob.id]);
+    const a = remove('bob', 'carol', [carol.id]);
+    const b = remove('carol', 'bob', [carol.id]);
+    const h = replayAccess(g, [bob, carol, a, b]);
+    assert.equal(status(h, a), 'applied');
+    assert.equal(status(h, b), 'applied');
+    assert.ok(!isMember(h.current, 'bob') && !isMember(h.current, 'carol'));
+  });
+
+  test('an invite outlives its opener’s demotion for a joiner naming an earlier view: close it to stop it', () => {
+    const g2: AccessGenesis = {
+      id: 'space',
+      creator: 'alice',
+      roles: [
+        { name: 'host', grants: [{ cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] }] },
+        { name: 'member', grants: [{ cmd: RECORD_WRITE, pol: [] }] },
+      ],
+    };
+    const hana = assign('alice', 'hana', 'host', []);
+    const open = invite('hana', 'did:key:zK', 'member', [hana.id]);
+    const demoted = unassign('alice', 'hana', 'host', [open.id]);
+    const late = assign('nick', 'nick', 'member', [demoted.id], { viaInvite: 'did:key:zK' });
+    assert.equal(
+      status(replayAccess(g2, [hana, open, demoted, late]), late),
+      'dropped',
+      'seeing the demotion',
+    );
+    const back = assign('nick', 'nick', 'member', [open.id], { viaInvite: 'did:key:zK' });
+    assert.deepEqual(rolesOf(replayAccess(g2, [hana, open, demoted, back]).current, 'nick'), ['member']);
+    // Closing it strikes the joins it had not seen.
+    const closed = invite('alice', 'did:key:zK', 'member', [demoted.id], false);
+    const h = replayAccess(g2, [hana, open, demoted, closed, back]);
+    assert.equal(status(h, back), 'dropped');
+  });
+});
