@@ -6,7 +6,10 @@ Status: the plan, October 2026. Not normative. It replaces
 the owner on 2026-10-12 are marked **Decided**; the rest is open. An
 adversarial review of the plan on 2026-10-12 found flaws; its fixes are
 adopted below, and each attack it showed is a scenario test in `scenarios/`
-that shows it refused, or a skipped test naming what it waits for.
+that shows it refused, or a skipped test naming what it waits for. A second,
+narrower review the same day found that delegations to accounts outlived
+their issuer; the fix (only roles hold grants, §2) and its other findings
+are adopted too.
 
 ## In one paragraph
 
@@ -66,8 +69,9 @@ changed or swapped.
     the listed people. Matrix arrived at this in 2025 after years of admins
     locking each other out.
   - `"none"`: anyone may be removed, so a space can end up with no admin.
-    Members keep what their grants allow; nobody can change roles or the key.
-    The way out is a successor space (below).
+    Members keep what their roles allow; once no role holds a command
+    (changing roles or the key, say), nobody can run it. The way out is a
+    successor space (below).
   - Later: a group at the top ("any 3 of these 5"), the first step to
     democracy.
 - **A founder may step down** (Decided). Leaving is always their own choice:
@@ -88,24 +92,50 @@ changed or swapped.
 **Decided**: a successor is started by a recorded command in the old space,
 `/space/succeed`, naming the new space's constitution, and judged by the
 replay like any change of power. The new constitution names the old space,
-so a member can tell a successor from a copy. The rest is proposed:
+so a member can tell a successor from a copy. **A succeed record changes
+nothing in the old space**: no one loses a role, no record stops counting,
+and the old space carries on for whoever stays. It only says where a
+successor is. The rest is proposed:
 
-- **Who may run it.** In a space with founders, a founder, or whoever a
-  grant allows. Under `top: "none"`, or once headless, nobody holds it by
-  grant, so the proposal is **any member** may run it for now, and a quorum
-  (§5) once there is one. Any member is safe enough because a successor
-  binds no one: each member chooses whether to follow.
+- **Who may run it.** A founder, or a role the constitution or a later
+  `/role/define` grants `/space/succeed` to; a `top: "none"` space can grant
+  it to a role in its constitution like any command. Where no role holds it
+  (a headless space, or one whose constitution never granted it), the
+  proposal is that **any member** may run it, and a quorum (§5) once there
+  is one. Any member is safe enough because a successor binds no one: each
+  member chooses whether to follow.
 - **Rival successors.** Two `/space/succeed` that neither saw can both
-  stand. The proposal is that both are shown, with the one of lowest id
-  first; an app must not pick one silently, since which community a member
-  joins is theirs to choose.
+  stand. Both are shown, **in no order**: a lowest id can be ground (a
+  writer tries nonces until theirs sorts first), so it must not decide
+  which looks like the real one. An app must not pick one silently, since
+  which community a member joins is theirs to choose.
 
 ## 2. Grants and roles
 
-A grant is a delegation: _who_ may do _what_, on _which_ part of the
-space, under _which_ conditions. Conditions are standard UCAN policies, with
-no extension: a policy compares one invocation's arguments with literals,
-and nothing else.
+A grant is a delegation to a role: _which role_ may do _what_, on _which_
+part of the space, under _which_ conditions. Conditions are standard UCAN
+policies, with no extension: a policy compares one invocation's arguments
+with literals, and nothing else.
+
+**Who issues grants, and to whom** (Decided, from the second review):
+
+- **Only the constitution and `/role/define` issue grants, and only to
+  roles.** An account gets power in a space only through `/role/assign`,
+  which `/role/unassign` or removal undoes. A grant whose `aud` is not a
+  role is refused.
+- **No member delegates to another key or account in a space.** Otherwise
+  a referee would hand `/record/delete` to a fresh key before being
+  unassigned, and the key would keep it for good, since nobody can unassign
+  a key that holds no role; and an admin limited by `.self` would hand
+  `/role/assign` to a fresh key that then assigns her.
+- **The account's own notes are separate** (01 §8: account to its own
+  device, app or program keys). They pass on only what the account holds
+  now, as of the note's use: a device key acts for its account, judged by
+  the account's roles as of the action's view, and falls away with them.
+  A note is not a grant in the space, and can't be used to give power to
+  another account.
+- **Only members may invoke.** An account with no role (and no place in
+  `top`) may invoke nothing, whatever it was handed.
 
 ```json
 {
@@ -132,8 +162,8 @@ It is **not byte-compatible** with other UCAN tools, and says so: a Weave
 grant can't be handed to a UCAN library, nor a UCAN token to a Weave peer.
 Three things would not survive the trip anyway:
 
-- **Role audiences.** `aud` may be `role:<name>`, a role of the space, which
-  is not a DID.
+- **Role audiences.** `aud` is `role:<name>`, a role of the space, which is
+  not a DID. In a space, it is never anything else.
 - **`space:` subjects.** `sub` is a space, `space:<id>`, whose root is its
   constitution, not a key.
 - **No expiry.** Time decides nothing in Weave (02 §4.3: `createdAt` orders
@@ -197,9 +227,11 @@ which account "made the first version" is whichever a peer holds first, so
 #72 lands before or with the command arguments (§8).
 
 `self` doesn't close a second account of the invoker's own: an admin who may
-assign `hr` can assign it to an account she also controls. No language
-closes that; "manages hr but can't read it" holds only if someone else
-manages hr's membership (the company scenario says so).
+assign `hr` can assign it to another account she controls. Since only roles
+hold grants, that account must be a member assigned `hr`, visible as one
+and unassignable like any other; it is no longer just a fresh key. No
+language closes the rest; "manages hr but can't read it" holds only if
+someone else manages hr's membership (the company scenario says so).
 
 **`roles` protects ranks that aren't founders.** Numeric ranks go (§6), and
 with them the rule that you can't act on someone at or above your own rank.
@@ -209,18 +241,28 @@ remove members but not admins" is plain UCAN, and so is "may assign referee
 only to someone who is not an admin". A space that grants `/member/remove`
 without such a policy has chosen to let it reach everyone but founders.
 
+**A limit:** `roles` is read as of the invoker's view. It protects a target
+only from an invoker whose view includes the target's role. A moderator
+appointed before Fred became an admin can remove Fred by naming a view
+before the promotion, or by acting concurrently with it; nobody can tell
+that from an action written offline. This is the same limit ranks have
+today (a demotion's own view decides it), and no new strike rule is added
+for it.
+
 _Source:_ `scenarios/host/grants.ts` (`may`, `argsFor`);
 `scenarios/tests/chess.test.ts` ("a moderator can't remove the admin who
-appointed them").
+appointed them", "a limit of `.roles`").
 
 ### Assigning a role is not granting
 
 A role's grants come from the space: the founding roles in the
 constitution, and later roles written by whoever holds `/role/define`. A
 role definition is a set of delegations whose issuer is the definer, so it
-holds only what the definer holds, as UCAN's attenuation requires; the
-constitution's roles are issued by the space itself, the root of every
-chain.
+holds only what the definer held, as of the definition, as UCAN's
+attenuation requires; the constitution's roles are issued by the space
+itself, the root of every chain. A policy on `/role/define` reads `role`
+and `holds`, so "eng may nest web inside eng, and nothing else" is plain
+UCAN.
 
 Assigning an account to a role is the command `/role/assign`, an
 invocation, not a delegation. It gives the assignee nothing the role didn't
@@ -241,15 +283,17 @@ an admin who may assign `hr` but can't read it would assign `hr` to
 assign `referee` would assign it to `role:member`, making every member a
 referee.
 
-_Source:_ `scenarios/host/grants.ts` (`Nesting`, `holderMay`);
+_Source:_ `scenarios/host/grants.ts` (`Nesting`, `holderMay`, `issued`);
 `scenarios/tests/company.test.ts` ("assigning hr to the role admin is
-refused", "nesting hr in admin is granting"); `scenarios/tests/chess.test.ts`
-("roles go to accounts, not roles").
+refused", "nesting hr in admin is granting", "a policy on `.holds`");
+`scenarios/tests/chess.test.ts` ("roles go to accounts, not roles", "grants
+go only to roles, so losing a role loses its power").
 
 **Unassigning is its own command** (Decided): `/role/unassign`, with the
 same arguments as `/role/assign`. **Leaving a role on one's own is built
 in**: an account may always unassign itself, whatever the policy says, as a
-founder may always step down.
+founder may always step down. Either is a reduction of the author's own
+account, so it strikes the author's own actions concurrent with it (§9).
 
 A peer judging an action checks both: the assignment (its author held
 `/role/assign` with a policy the arguments meet, as of what it had seen),
@@ -261,7 +305,11 @@ back to the space).
 **A role keeps its grants when its definer is later removed or demoted.**
 Role delegations are access events, judged in their own view, as 03 §4.3
 judges every access event: a definition that was allowed when it was made
-stays allowed. Only a reduction concurrent with the definition (one the
+stays allowed. This is not UCAN's chain semantics, where a delegation lives
+only as long as its issuer's proof; it is Weave's, and it is safe only
+because its audience is a role. **An account's power, by contrast, is its
+current assignments as of the action's view**: unassigning or removing it
+takes everything, since no grant ever names the account. Only a reduction concurrent with the definition (one the
 definition hadn't seen, and that hadn't seen it) strikes it, as
 `strong-remove/1` strikes anything concurrent with a removal. So a
 demotion doesn't take a whole role's grants from its members at once; to
@@ -326,7 +374,7 @@ Three kinds of result, and what each needs:
    not a device's log.
 
    **Lines are a built-in rule**, not a contract. A collection definition
-   declares itself a line (`"line": { "once": [...] }`):
+   declares itself a line (`"line": { "once": [...], "restate": [...] }`):
 
    - **One line per account per collection, at a key derived from the
      author.** This needs #72 (keys that belong to their creator): only
@@ -349,18 +397,43 @@ Three kinds of result, and what each needs:
      something it cited (it would pass if what it cited stood). The
      correction is not a twin of it. A "correction" of a version that still
      counts is a double spend like any other.
+   - **A correction restates; it doesn't rewrite.** The correction carries
+     the failed version's outgoing payment unchanged, and the versions after
+     it restate the failed ones after that, in order, until the failed chain
+     ends: the same fields the line declares
+     (`"restate": ["to", "amount"]`), and the same `once` citations less the
+     ones that failed.
+     Otherwise a payer could cite a payment they expect to fall, pay
+     someone, and "correct" the payment away once it falls. If the restated
+     balance breaks the limit, the correction fails and the line dies, as
+     any double spend's does. A fork inside the failed chain is the writer's
+     own double spend, and nothing restates it.
    - **Claiming each payment once.** The line declaration names the fields
      whose citations may appear only once along the line
      (`"once": ["received"]`), indexed per account per collection
-     (**Decided**: `once` applies only to lines). The reader already holds
-     the whole line, so it checks this with an index, and the body carries
-     nothing extra. The prototype's `body.claimed`, a list re-read on every
-     payment, goes.
+     (**Decided**: `once` applies only to lines). "Along the line" means the
+     **counted chain**, a version's `prev` back to the start: a version that
+     failed doesn't use up what it cited, so a correction may claim it
+     again. The reader already holds the whole line, so it checks this with
+     an index, and the body carries nothing extra. The prototype's
+     `body.claimed`, a list re-read on every payment, goes.
+   - **A known limit: an honest account's offline devices.** Two devices of
+     one account that pay in the same collection while apart write twins,
+     and the line is dead for good: neither version failed for something it
+     cited, so a correction doesn't cover it. Apps must keep a line on one
+     device at a time, or sync before paying. A way out could be a
+     **restart record**: after a fork, the account writes a version that had
+     seen both twins and restates both payments, in id order, from their
+     common previous version, under the limit; payees who built on either
+     twin then correct onto it. It is not adopted: it lets an account choose
+     to keep both halves of a double spend whenever the limit allows, which
+     needs its own review. Until then, it is a limit, stated in §9.
 
    _Source:_ `scenarios/host/cel-host.ts` (`lineKey`, `judgeOne`,
-   `onceAlong`); `scenarios/tests/credit.test.ts` ("a line is its account's
-   own", "a payee recovers after a double spend"). The host derives the key
-   as a stand-in for #72.
+   `restating`, `restates`, `onceAlong`); `scenarios/tests/credit.test.ts`
+   ("a line is its account's own", "a payee recovers after a double spend",
+   "a correction can't rewrite what she paid"). The host derives the key as
+   a stand-in for #72.
 
    **`sum` of an empty list** (Decided). Today `sum([])` is the int `0`,
    and an int plus a double is an error, so a payment that claims nothing
@@ -388,9 +461,13 @@ Three kinds of result, and what each needs:
 
 What Weave's replay does today, restated over grants:
 
-- A change is judged by the grants its author held as of what it had seen.
-  Grants, role definitions and nestings are access events, judged in their
-  own view, like the rest (§2).
+- A change is judged by the grants its author held as of what it had seen:
+  the grants of the roles assigned to it, as of the change's own view. An
+  account holds nothing else (§2).
+- Role definitions and nestings are access events, judged in their own
+  view, like the rest: a role keeps its grants when its definer later loses
+  power (§2). Assignments are judged in their own view too, and end when
+  unassigned or removed.
 - Removing or demoting someone strikes what they did concurrently with it.
 - Mutual removals both stand; no one else can remove a founder under
   `top`, so a space with founders has someone in charge until the last one
@@ -506,10 +583,12 @@ Open:
    member now, a quorum later, as proposed), and whether rival successors
    are shown side by side (proposed) or one is preferred by lowest id. What
    an app shows in a headless space.
-3. **Corrections in a line.** "Failed only because of something it cited"
-   is judged by running the contract again with what it cited taken as
-   standing. Whether that is the rule the spec states, or a narrower one
-   (only a cited version that fell to a double spend), is open.
+3. **Corrections in a line.** A correction must restate (§3), which the
+   second review asked for and the scenarios now check. Still open: "failed
+   only because of something it cited" is judged by running the contract
+   again with what it cited taken as standing. Whether that is the rule the
+   spec states, or a narrower one (only a cited version that fell to a
+   double spend), and whether a restart record (§3) is worth having.
 
 To settle at implementation, each with a test:
 
@@ -568,23 +647,54 @@ in the same PR:
 - **Member (§3.2).** "Can't act on an equal or higher rank" goes: a member
   with `/member/remove` or `/role/unassign` reaches everyone but founders,
   unless its grant's policy reads `.roles`. Restate the Holds claims in
-  grants. Nesting a role is attenuated, assigning to a role is refused (a
-  new Holds claim, with the company and chess scenarios as its tests). "The
-  top rank answers to no one" becomes "founders answer to no one but
-  themselves".
+  grants. New Holds claims, with the company and chess scenarios as their
+  tests: nesting a role is attenuated; assigning to a role is refused; only
+  the constitution and `/role/define` issue grants, only to roles, so a
+  member can hand no power to another key or account. "The top rank answers
+  to no one" becomes "founders answer to no one but themselves".
+- **`.roles` is as of the invoker's view** (§2). It protects a target only
+  from an invoker whose view includes the target's role: an invoker who
+  names a view before the target's promotion, or acts concurrently with it,
+  isn't stopped. The same limit as ranks today; a Does-not-hold-yet line.
+- **Former member (§3.3).** Restate in grants: its power was its roles'
+  grants, and its removal or unassignment takes all of it, since no grant
+  names an account; nothing it handed a key survives, because it could hand
+  nothing. What does survive is a role it defined while it held
+  `/role/define` (§2), until someone rewrites the role; that replaces "a
+  grant it makes concurrently with its removal is struck" for roles, which
+  still holds for definitions concurrent with the removal. The sock gap
+  (#191) becomes a sock it _assigned_ a role, which is visible and
+  unassignable.
 - **Top rank.** Founders replace the top rank. A founder can't be removed
   by anyone else, but can step down; a space can become headless.
 - **Root thief (§3.5).** A thief of a founder's account seed is a founder:
   it controls every space the account founded, for good, and can't be
   removed. The only way out is a successor space. "Ranks highest" becomes
   "is a founder".
+- **Leaving is a reduction.** Leaving a role on one's own, or a founder
+  stepping down, is a reduction of the author's own account, so it strikes
+  the author's own actions concurrent with it: an account can disown what
+  its other devices did while apart, as revoking its own key or forking
+  its own line already can
+  ([#168](https://github.com/leifriksheim/weave/issues/168)). Add it to that
+  line.
+- **Successors.** A `/space/succeed` changes nothing in the old space, so
+  it can't be used to strip anyone of anything there. Rival successors are
+  shown in no order, since a lowest id can be ground; a member who follows
+  a successor chooses it.
 - **New gaps.**
   - Roles outlive their definer's demotion (§2): a definer who is removed
     leaves behind what they defined until someone rewrites the role.
-  - A member with two accounts sidesteps `.self` (§2).
+  - A member with two accounts sidesteps `.self` (§2). With only roles
+    holding grants, the second account must be a member assigned the role,
+    visible and unassignable; it is no longer just a fresh key.
   - Contracts judge versions cited, not current ones (§3): a withdrawal
     doesn't un-fame a claim, before or after it.
   - A colluding payer can double-spend a payment a payee built on; the
-    payee recovers with a correction but loses what they built on it (§3).
+    payee recovers with a correction but loses what they received from it.
+    A correction restates the payee's own payments, so it can't unpay
+    anyone (§3).
+  - An honest account whose two offline devices pay in one line kills that
+    line for good; corrections don't cover it (§3).
   - Until quorum lands, a co-op's votes can be padded and backdated (§5);
     after, an old majority can still outvote members it hasn't seen.

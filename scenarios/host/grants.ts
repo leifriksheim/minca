@@ -1,7 +1,11 @@
 /**
  * Grants as the plan has them (spec/drafts/constitution-grants-contracts.md
- * §2): UCAN-shaped delegations to people or roles, with UCAN policies, role
- * assignments, nestings and unassignments. Only the authority logic, not
+ * §2): UCAN-shaped delegations to roles, with UCAN policies, role
+ * assignments, nestings and unassignments. Only the constitution (a
+ * founder, here) and `/role/define` issue grants, and only to roles: an
+ * account holds power only through its roles, which unassigning or
+ * removal take away. A delegation to an account or key counts for nothing,
+ * and only members (founders, or accounts holding a role) may invoke. Only the authority logic, not
  * envelopes or signatures. This is the code a peer would run, written in
  * TypeScript: the policy language only ever sees one invocation's
  * arguments, which the host fills in for each command (`byCreator`, `self`,
@@ -15,7 +19,7 @@
  */
 import { allows, type Json, type Policy } from './ucan-policy.js';
 
-/** `iss` lets `aud` (a DID, or `role:<name>`) invoke `cmd` and below, where `pol` holds */
+/** `iss` lets the role `aud` (`role:<name>`) invoke `cmd` and below, where `pol` holds. Any other `aud` counts for nothing. */
 export interface Delegation {
   readonly iss: string;
   readonly aud: string;
@@ -107,11 +111,12 @@ function mayIn(
   const key = `${who} ${cmd} ${JSON.stringify(args)} ${at}`;
   if (visiting.has(key)) return false;
   const inner = new Set(visiting).add(key);
-  const principals = [who, ...rolesIn(auth, who, at, inner).map((r) => `role:${r}`)];
-  return principals.some((p) => holderMay(auth, p, cmd, args, at, inner));
+  // An account's power is its roles as of the action's view; with none, it is no member.
+  const roles = rolesIn(auth, who, at, inner);
+  return roles.some((r) => holderMay(auth, `role:${r}`, cmd, args, at, inner));
 }
 
-/** What a principal (an account or a role) holds directly, or a role through its nestings */
+/** What a role holds: delegations to it, judged in their own view, and through its nestings */
 function holderMay(
   auth: Authority,
   principal: string,
@@ -128,14 +133,14 @@ function holderMay(
       allows(d.pol, args) &&
       issued(auth, d, cmd, args, visiting),
   );
-  if (direct || !isRole(principal)) return direct;
+  if (direct) return true;
   const role = roleName(principal);
   return (auth.nestings ?? []).some(
     (n) =>
       before(n, at) &&
       n.role === role &&
       n.holds !== role &&
-      mayIn(auth, n.by, '/role/define', { role }, n.at ?? NOW, visiting) &&
+      mayIn(auth, n.by, '/role/define', { role, holds: n.holds }, n.at ?? NOW, visiting) &&
       mayIn(auth, n.by, cmd, args, n.at ?? NOW, visiting) &&
       holderMay(auth, `role:${n.holds}`, cmd, args, at, visiting),
   );
@@ -143,10 +148,10 @@ function holderMay(
 
 /** A delegation stands when its issuer held what it delegates, as of the delegation */
 function issued(auth: Authority, d: Delegation, cmd: string, args: Json, visiting: ReadonlySet<string>) {
+  if (!isRole(d.aud)) return false;
   if (auth.founders.includes(d.iss)) return true;
   const as = d.at ?? NOW;
-  if (isRole(d.aud) && !mayIn(auth, d.iss, '/role/define', { role: roleName(d.aud) }, as, visiting))
-    return false;
+  if (!mayIn(auth, d.iss, '/role/define', { role: roleName(d.aud) }, as, visiting)) return false;
   return mayIn(auth, d.iss, cmd, args, as, visiting);
 }
 

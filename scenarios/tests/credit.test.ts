@@ -135,8 +135,9 @@ describe('mutual credit: a payee recovers after a double spend', () => {
   const c0 = pay('c0', CAROL, null, { to: BOB, amount: 10, balance: -10 });
   const c1 = pay('c1', CAROL, c0, { to: BOB, amount: 0, balance: 40, received: ['a1'] });
   const c2 = pay('c2', CAROL, c1, { to: BOB, amount: 30, balance: 10 });
-  /** Her correction: after her last counted payment, having seen the ones that fell */
-  const c1x = pay('c1x', CAROL, c0, { to: BOB, amount: 30, balance: -40 }, ['c1', 'c2', 'a1p']);
+  /** Her correction restates c1 without a1, after her last counted payment; then c2, restated */
+  const c1x = pay('c1x', CAROL, c0, { to: BOB, amount: 0, balance: -10 }, ['c1', 'c2', 'a1p']);
+  const c2x = pay('c2x', CAROL, c1x, { to: BOB, amount: 30, balance: -40 });
 
   test('what she built on a1 falls with it', async () => {
     assert.equal(await cel([a0, a1, c0, c1, c2]).verdict('c2'), 'pass');
@@ -145,10 +146,41 @@ describe('mutual credit: a payee recovers after a double spend', () => {
     assert.equal(await j.verdict('c2'), 'fail');
   });
 
-  test('a correction after c0 counts, since c1 failed only for what it cited', async () => {
-    const held = [a0, a1, a1phone, c0, c1, c2, c1x];
-    assert.equal(await cel(held).verdict('c1x'), 'pass');
+  test('a correction after c0 counts, since c1 failed only for what it cited, and so does c2 restated', async () => {
+    const held = [a0, a1, a1phone, c0, c1, c2, c1x, c2x];
+    const j = cel(held);
+    assert.equal(await j.verdict('c1x'), 'pass');
+    assert.equal(await j.verdict('c2x'), 'pass');
     assert.equal(await celBalance(held, CAROL), -40);
+    // Past the end of what fell, the line is free.
+    const c3 = pay('c3', CAROL, c2x, { to: ALICE, amount: 5, balance: -45 });
+    assert.equal(await cel([...held, c3]).verdict('c3'), 'pass');
+  });
+
+  test("a correction can't rewrite what she paid: Bob's 30 stays paid", async () => {
+    // Carol cites a1 (Alice will fork it) and pays Bob 30; after the fork she "corrects" to paying nothing.
+    const d0 = pay('c0', CAROL, null, { to: BOB, amount: 0, balance: 0 });
+    const d1 = pay('c1', CAROL, d0, { to: BOB, amount: 30, balance: 20, received: ['a1'] });
+    const unpay = pay('c1z', CAROL, d0, { to: BOB, amount: 0, balance: 0 }, ['c1', 'a1p']);
+    const after = pay('c2', CAROL, unpay, { to: BOB, amount: 0, balance: 0 });
+    const j = cel([a0, a1, a1phone, d0, d1, unpay, after]);
+    assert.equal(await j.verdict('c1z'), 'fail');
+    assert.equal(await j.verdict('c2'), 'fail');
+    // The honest correction restates the 30, and the limit still holds.
+    const restated = pay('c1r', CAROL, d0, { to: BOB, amount: 30, balance: -30 }, ['c1', 'a1p']);
+    assert.equal(await cel([a0, a1, a1phone, d0, d1, restated]).verdict('c1r'), 'pass');
+  });
+
+  test("a correction that restates c2 out of order, or skips it, doesn't count", async () => {
+    const skip = pay('c2x', CAROL, c1x, { to: ALICE, amount: 5, balance: -15 });
+    assert.equal(await cel([a0, a1, a1phone, c0, c1, c2, c1x, skip]).verdict('c2x'), 'fail');
+  });
+
+  test('a restatement past the limit kills the line, as before', async () => {
+    const e0 = pay('c0', CAROL, null, { to: BOB, amount: 60, balance: -60 });
+    const e1 = pay('c1', CAROL, e0, { to: BOB, amount: 70, balance: -80, received: ['a1'] });
+    const fix = pay('c1x', CAROL, e0, { to: BOB, amount: 70, balance: -130 }, ['c1', 'a1p']);
+    assert.equal(await cel([a0, a1, a1phone, e0, e1, fix]).verdict('c1x'), 'fail');
   });
 
   test('a "correction" of a payment that still counts is a double spend: neither counts', async () => {

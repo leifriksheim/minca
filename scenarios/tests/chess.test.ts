@@ -93,6 +93,63 @@ describe('chess: roles go to accounts, not roles', () => {
   });
 });
 
+describe('chess: grants go only to roles, so losing a role loses its power', () => {
+  const deletesAny = (a: Authority, who: string) =>
+    may(a, who, '/record/delete', { collection: 'app.chess', byCreator: false });
+  const DAVE2 = 'did:key:dave-fresh-key';
+
+  test("Dave delegates /record/delete to a fresh key: it counts for nothing, then or after he's unassigned", () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...grants, { iss: DAVE, aud: DAVE2, cmd: '/record/delete', pol: [], at: 1 }],
+      assignments,
+      unassignments: [{ by: ERIN, from: DAVE, role: 'referee', at: 2 }],
+    };
+    assert.ok(!deletesAny(a, DAVE));
+    assert.ok(!deletesAny(a, DAVE2));
+    assert.ok(
+      !may(a, DAVE2, '/record/delete', { collection: 'app.chess', byCreator: false }, 2),
+      'not even before',
+    );
+  });
+
+  test('a key that is no member invokes nothing, whatever it was handed', () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...grants, { iss: DAVE, aud: DAVE2, cmd: '/record', pol: [], at: 1 }],
+      assignments,
+      unassignments: [
+        { by: ERIN, from: DAVE, role: 'referee', at: 2 },
+        { by: ALICE, from: DAVE, role: 'member', at: 3 },
+      ],
+    };
+    assert.ok(!may(a, DAVE2, '/record/write', { collection: 'app.chess' }));
+    assert.ok(!may(a, DAVE, '/record/write', { collection: 'app.chess' }), 'Dave, removed, neither');
+  });
+
+  test("Mo's /member/remove handed to a fresh key goes nowhere, and Mo's own goes with his role", () => {
+    const MO2 = 'did:key:mo-fresh';
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...grants, { iss: MO, aud: MO2, cmd: '/member/remove', pol: [], at: 1 }],
+      assignments: [...assignments, ...moderation],
+      unassignments: [{ by: ALICE, from: MO, role: 'moderator', at: 2 }],
+    };
+    assert.ok(!may(a, MO, '/member/remove', argsFor(a, MO, BOB)));
+    assert.ok(!may(a, MO2, '/member/remove', argsFor(a, MO2, BOB)));
+  });
+
+  test("`.self` holds: Erin can't hand /role/assign to a key that then assigns her referee", () => {
+    const E2 = 'did:key:erin-fresh';
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...grants, { iss: ERIN, aud: E2, cmd: '/role/assign', pol: [], at: 1 }],
+      assignments: [...assignments, { by: E2, to: ERIN, role: 'referee', at: 2 }],
+    };
+    assert.ok(!deletesAny(a, ERIN));
+  });
+});
+
 describe('chess: moderators, and who protects an admin', () => {
   const auth: Authority = {
     founders: [ALICE],
@@ -105,6 +162,28 @@ describe('chess: moderators, and who protects an admin', () => {
   test("a moderator can't remove the admin who appointed them: the policy reads `.roles`", () => {
     assert.deepEqual(argsFor(auth, MO, ERIN), { self: false, roles: ['admin'] });
     assert.ok(!may(auth, MO, '/member/remove', argsFor(auth, MO, ERIN)));
+  });
+});
+
+describe('chess: a limit of `.roles`', () => {
+  test("it protects only from an invoker whose view holds the target's role", () => {
+    // Mo, appointed at 1, removes Fred, made admin at 3, by naming a view at 2 (or acting
+    // concurrently). The same limit as ranks today; no strike rule closes it (plan §2, §9).
+    const FRED = 'did:key:fred';
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: grants,
+      assignments: [
+        ...assignments,
+        { by: ERIN, to: MO, role: 'moderator', at: 1 },
+        { by: ALICE, to: FRED, role: 'admin', at: 3 },
+      ],
+    };
+    assert.ok(!may(a, MO, '/member/remove', argsFor(a, MO, FRED)), 'with Fred an admin in view: refused');
+    assert.ok(
+      may(a, MO, '/member/remove', argsFor(a, MO, FRED, undefined, 2), 2),
+      'naming an older view: allowed',
+    );
   });
 });
 

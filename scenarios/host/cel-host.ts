@@ -27,13 +27,26 @@
  *   failed only because of something it cited (it would pass if what it
  *   cited stood). The payee who built on a double spend writes it after
  *   their last counted version and carries on;
- * - each `once` field's citations appear at most once along the line.
+ * - a correction restates the failed version, and the versions after it
+ *   restate the failed ones after that, in order: the same `restate`
+ *   fields, and the same `once` citations less those that fail. Past the
+ *   end of the failed chain, the line is free again;
+ * - each `once` field's citations appear at most once along the line, which
+ *   is the counted chain: a failed version's citations don't count.
  */
 import { runChecks, type Check, type CheckedVersion } from '../../packages/core/src/records/checks.js';
 import type { Version } from './space.js';
 import { isRecord } from './ucan-policy.js';
 
 export type Verdict = 'pass' | 'fail' | 'pending';
+
+/** A line collection's declaration */
+export interface Line {
+  /** Fields whose citations appear once along the line */
+  readonly once: ReadonlyArray<string>;
+  /** Fields a correction, and what follows it, carry unchanged from the failed versions they restate */
+  readonly restate?: ReadonlyArray<string>;
+}
 
 export interface Host {
   /** Who can never be removed */
@@ -43,7 +56,7 @@ export interface Host {
   /** Contracts by collection */
   readonly contracts: Readonly<Record<string, ReadonlyArray<Check>>>;
   /** Line collections, and the fields whose citations appear once along a line */
-  readonly lines?: Readonly<Record<string, { readonly once: ReadonlyArray<string> }>>;
+  readonly lines?: Readonly<Record<string, Line>>;
   /** More names a check reads, given the members as of the version */
   readonly values?: (v: Version, members: ReadonlySet<string>) => Record<string, unknown>;
 }
@@ -125,14 +138,61 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
     const v = byId.get(id);
     if (!v) return 'pending';
     const mine = await own(id);
-    if (mine.verdict !== 'pass' || !host.lines?.[v.collection]) return mine.verdict;
-    for (const w of byId.values()) {
-      if (w.id === v.id || w.key !== v.key || w.author !== v.author || w.prev !== v.prev) continue;
+    const line = host.lines?.[v.collection];
+    if (mine.verdict !== 'pass' || !line) return mine.verdict;
+    for (const w of twins(v)) {
       // v counts beside a twin only when v corrects it: v had seen it, and it fails only for what it cites.
       const corrects = pastOf(v)?.has(w.id) ?? false;
       const theirs = corrects ? await own(w.id) : null;
       if (theirs?.verdict === 'pending') return 'pending';
       if (!theirs?.forCitation) return 'fail';
+    }
+    const owed = await restating(v);
+    if (owed === 'pending') return 'pending';
+    if (owed === 'fork') return 'fail';
+    return owed ? restates(v, owed, line) : 'pass';
+  }
+
+  /** The other versions of `v`'s line after the same one */
+  const twins = (v: Version) =>
+    [...byId.values()].filter(
+      (w) => w.id !== v.id && w.key === v.key && w.author === v.author && w.prev === v.prev,
+    );
+
+  /** The failed version `v` must restate: its twin if it corrects one, else the one after what its previous restated */
+  async function restating(v: Version): Promise<Version | null | 'pending' | 'fork'> {
+    for (const w of twins(v)) {
+      if (!(pastOf(v)?.has(w.id) ?? false)) continue;
+      const theirs = await own(w.id);
+      if (theirs.verdict === 'pending') return 'pending';
+      if (theirs.forCitation) return w;
+    }
+    const prev = v.prev ? byId.get(v.prev) : undefined;
+    if (!prev) return null;
+    const owed = await restating(prev);
+    if (owed === null || typeof owed === 'string') return owed;
+    const after = [...byId.values()].filter(
+      (r) => r.key === owed.key && r.author === owed.author && r.prev === owed.id,
+    );
+    // A fork inside the failed chain is the writer's own double spend: nothing restates it.
+    if (after.length > 1) return 'fork';
+    return after[0] ?? null;
+  }
+
+  /** Whether `v` carries `r`'s payment unchanged, less the citations that fail */
+  async function restates(v: Version, r: Version, line: Line): Promise<Verdict> {
+    const field = (x: Version, f: string) => (isRecord(x.body) ? (x.body[f] ?? null) : null);
+    for (const f of line.restate ?? [])
+      if (JSON.stringify(field(v, f)) !== JSON.stringify(field(r, f))) return 'fail';
+    for (const f of line.once) {
+      const was = field(r, f);
+      const kept: unknown[] = [];
+      for (const c of Array.isArray(was) ? was : []) {
+        const fares = typeof c === 'string' ? await verdict(c) : 'fail';
+        if (fares === 'pending') return 'pending';
+        if (fares !== 'fail') kept.push(c);
+      }
+      if (JSON.stringify(field(v, f) ?? []) !== JSON.stringify(kept)) return 'fail';
     }
     return 'pass';
   }
