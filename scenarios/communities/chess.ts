@@ -5,7 +5,7 @@
  * members but not admins (a policy on `.roles`, the target's roles).
  */
 import type { Check } from '../../packages/core/src/records/checks.js';
-import type { Assignment, Delegation } from '../host/grants.js';
+import type { Assignment, Delegation } from '../host/library.js';
 import { version } from '../host/space.js';
 
 export const ALICE = 'did:key:alice'; // founder

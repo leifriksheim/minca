@@ -5,7 +5,7 @@
  * `web` is a sub-team: the role `web` holds the role `eng`. Nesting is part
  * of web's definition, so whoever defines roles sets it up (the CEO here).
  */
-import type { Assignment, Delegation, Nesting } from '../host/grants.js';
+import type { Assignment, Delegation, Nesting } from '../host/library.js';
 
 export const CEO = 'did:key:ceo'; // founder
 export const ANN = 'did:key:ann'; // company admin

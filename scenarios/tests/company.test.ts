@@ -2,7 +2,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { may, type Assignment, type Authority, type Nesting } from '../host/grants.js';
+import { mayIn, type Assignment, type Authority, type Nesting } from '../host/library.js';
 import { ANN, CEO, EVE, HAL, SOCK, WES, assignments, grants, nestings } from '../communities/company.js';
 
 describe('company: grants', () => {
@@ -13,7 +13,7 @@ describe('company: grants', () => {
     nestings: [...nestings, ...nested],
   });
   const doing = (a: Authority, who: string, cmd: string, collection: string) =>
-    may(a, who, cmd, { collection });
+    mayIn(a, who, cmd, { collection });
 
   test('each team writes its own collection; web, a sub-team of eng, writes both', () => {
     const a = auth();
@@ -28,12 +28,12 @@ describe('company: grants', () => {
     const a = auth();
     assert.ok(doing(a, ANN, '/record/read', 'app.eng'));
     assert.ok(!doing(a, ANN, '/record/read', 'app.hr'));
-    assert.ok(may(a, ANN, '/role/assign', { role: 'hr', self: false }));
+    assert.ok(mayIn(a, ANN, '/role/assign', { role: 'hr', self: false }));
   });
 
   test('the admin cannot assign herself hr: the policy refuses `.self`', () => {
     const a = auth([{ by: ANN, to: ANN, role: 'hr' }]);
-    assert.ok(!may(a, ANN, '/role/assign', { role: 'hr', self: true }));
+    assert.ok(!mayIn(a, ANN, '/role/assign', { role: 'hr', self: true }));
     assert.ok(!doing(a, ANN, '/record/read', 'app.hr'));
   });
 
