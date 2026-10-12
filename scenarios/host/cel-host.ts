@@ -16,9 +16,15 @@
  * `lines` (the plan's line rule, §3) and `values` (more names for a check,
  * like `memberCount`).
  *
- * A line is one account's sequence in a collection, at a key derived from
- * the account (`lineKey`), a stand-in for #72's keys that belong to their
- * creator. Only that account's own versions can be in it, or be twins:
+ * A first version at an owned key (`<owner>.<name>`, spec 02 §4.1) fails
+ * unless its author owns the key, as every peer refuses one; and `creator`
+ * is the author of the first version a version's own chain starts from, not
+ * whichever first version at its key the host found. The scenarios' other
+ * keys are labels (`m0`), which a peer would refuse, kept short for reading.
+ *
+ * A line is one account's sequence in a collection, at the account's line
+ * key (`lineKey`, the library's derivation). Only that account's own
+ * versions can be in it, or be twins:
  *
  * - a version in a line collection at any other key fails;
  * - two versions of a line after the same one (or two first versions) are
@@ -30,6 +36,7 @@
  *   (`unjudged`), like a space with an unknown resolver.
  */
 import { runChecks, type Check, type CheckedVersion } from '../../packages/core/src/records/checks.js';
+import { keyKind, lineKey, ownsKey } from '../../packages/core/src/records/key.js';
 import type { Version } from './space.js';
 import { isRecord } from './ucan-policy.js';
 
@@ -58,9 +65,6 @@ export interface Host {
   /** More names a check reads, given the members as of the version */
   readonly values?: (v: Version, members: ReadonlySet<string>) => Record<string, unknown>;
 }
-
-/** The one key of `did`'s line in `collection` */
-export const lineKey = (collection: string, did: string) => `${collection}/${did}`;
 
 export interface Judged {
   verdict(id: string): Promise<Verdict>;
@@ -131,11 +135,13 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
       const before = await verdict(v.prev);
       if (before !== 'pass') return before;
     }
+    // Whose key it is: nobody else may write its first version.
+    if (v.seq === 0 && keyKind(v.key) === 'owned' && !(await ownsKey(v.key, v.author))) return 'fail';
     const line = host.lines?.[v.collection];
     if (line) {
       // A declaration with a key this peer doesn't know is not judged, like an unknown resolver.
       if (Object.keys(line).some((k) => !LINE_KEYS.includes(k))) return 'unjudged';
-      if (v.key !== lineKey(v.collection, v.author)) return 'fail';
+      if (v.key !== (await lineKey(v.author, v.collection))) return 'fail';
       const prev = v.prev ? byId.get(v.prev) : undefined;
       if (prev && (prev.author !== v.author || prev.key !== v.key)) return 'fail';
       // Two versions of the line after the same one: a double spend, and neither counts.
@@ -151,7 +157,9 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
     const checks = host.contracts[v.collection];
     if (!checks) return 'pass';
     const prev = v.prev ? byId.get(v.prev) : undefined;
-    const first = [...byId.values()].find((w) => w.key === v.key && w.seq === 0);
+    // The first version this one's own chain starts from.
+    let first: Version | undefined = v;
+    while (first?.prev) first = byId.get(first.prev);
     const outcome = await runChecks(checks, {
       values: {
         body: v.body,

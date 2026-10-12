@@ -7,7 +7,8 @@
  * counts, from whichever devices. Both are the host's line rule, not CEL.
  */
 import type { Check } from '../../packages/core/src/records/checks.js';
-import { lineKey, type Host } from '../host/cel-host.js';
+import { lineKey } from '../../packages/core/src/records/key.js';
+import type { Host } from '../host/cel-host.js';
 import { version, type Version } from '../host/space.js';
 
 // -- The community: a CEL contract, plus the line rule: `"line": { "once": ["received"] }` --
@@ -40,12 +41,19 @@ interface Pay {
   device?: string;
 }
 
+/** Each account's line key in `app.pay` */
+const lines = new Map(
+  await Promise.all(
+    [ALICE, BOB, CAROL, DAVE].map(async (did) => [did, await lineKey(did, 'app.pay')] as const),
+  ),
+);
+
 /** A payment: the next version of the payer's line, after `after` */
 export function pay(id: string, by: string, after: Version | null, p: Pay, seen: string[] = []): Version {
   const received = p.received ?? [];
   return version({
     id,
-    key: lineKey('app.pay', by),
+    key: lines.get(by) ?? '',
     collection: 'app.pay',
     author: by,
     device: p.device ?? 'laptop',

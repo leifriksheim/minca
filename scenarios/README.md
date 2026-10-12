@@ -15,7 +15,7 @@ that community do and what it must refuse.
 | Mutual credit | An account's line of payments, a credit limit, double spends from two devices, griefing and second lines refused, no corrections in v1 (a stated limit), closed line keys                                                                                      |
 
 A skipped test is an attack the stand-ins can't refuse yet, named for what
-it waits for ("needs quorum", "needs #72"). It asserts what that work must
+it waits for ("needs quorum"). It asserts what that work must
 do, and runs when it lands; it never passes by asserting the attack works.
 
 ## Running them

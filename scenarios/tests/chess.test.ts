@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { argsFor, may, strikes, type Authority, type Delegation } from '../host/grants.js';
 import { judge, type Host } from '../host/cel-host.js';
 import { version } from '../host/space.js';
+import { ownedKey } from '../../packages/core/src/records/key.js';
 import {
   ALICE,
   BOB,
@@ -650,23 +651,34 @@ describe('chess: the contract on moves', () => {
 });
 
 /**
- * Whose record it is (`creator` here, `byCreator` in a grant) needs keys that
- * belong to their creator (#72): today two first versions can share a key,
- * and the creator is whichever a peer holds first. Skipped until #72, which
- * lands before or with the command arguments (plan §8).
+ * Whose record it is (`creator` here, `byCreator` in a grant) is read from
+ * its key (#72, spec 02 §4.1): only Alice may write a first version at a key
+ * she owns, so a second first version there, Bob's, fails whatever its id,
+ * and an edit's creator is the author its own chain starts from, whichever
+ * first version the host held first.
  */
 describe('chess: whose record (#72)', () => {
-  test.skip('needs #72: two first versions at one key give one creator, whatever the order held', async () => {
+  test('two first versions at one key give one creator, whatever the order held', async () => {
     const h: Host = {
       founders: [ALICE],
       members: [BOB],
       contracts: { 'app.x': [{ that: 'seq == 0 || author == creator', else: 'Only its creator edits it' }] },
     };
-    const x0a = version({ id: 'x0a', key: 'k', collection: 'app.x', author: ALICE });
-    const x0b = version({ id: 'x0b', key: 'k', collection: 'app.x', author: BOB });
-    const edit = version({ id: 'e', key: 'k', collection: 'app.x', author: BOB, seq: 1, prev: 'x0a' });
-    const one = await judge([x0a, x0b, edit], h).verdict('e');
-    const two = await judge([x0b, x0a, edit], h).verdict('e');
-    assert.equal(one, two);
+    const key = await ownedKey(ALICE, 'k');
+    const hers = version({ id: 'x-alice', key, collection: 'app.x', author: ALICE });
+    // Bob's, with the lower id the lowest-id rule would have taken.
+    const his = version({ id: 'a-bob', key, collection: 'app.x', author: BOB });
+    const onHis = version({ id: 'e-his', key, collection: 'app.x', author: BOB, seq: 1, prev: 'a-bob' });
+    const onHers = version({ id: 'e-hers', key, collection: 'app.x', author: BOB, seq: 1, prev: 'x-alice' });
+    for (const held of [
+      [hers, his, onHis, onHers],
+      [his, hers, onHers, onHis],
+    ]) {
+      const j = judge(held, h);
+      assert.equal(await j.verdict('a-bob'), 'fail', "Bob's first version at Alice's key");
+      assert.equal(await j.verdict('x-alice'), 'pass');
+      assert.equal(await j.verdict('e-his'), 'fail', 'built on a first version that fails');
+      assert.equal(await j.verdict('e-hers'), 'fail', "Bob editing Alice's record");
+    }
   });
 });
