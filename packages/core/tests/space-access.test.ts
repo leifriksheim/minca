@@ -21,7 +21,6 @@ import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
 import { spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
 import {
-  checkSpace,
   deriveInviteKey,
   deriveReadKey,
   generateInviteSecret,
@@ -29,6 +28,7 @@ import {
   verifyInvite,
 } from '../src/space/space-access.js';
 import { community, team } from '../src/space/presets.js';
+import { checkSpace } from '../src/space/constitution.js';
 import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../src/utils/encoding.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
@@ -107,7 +107,7 @@ describe('space access: the keys', () => {
 });
 
 describe('space access: the space vouches for itself', () => {
-  test('a created space checks out, and its id does not depend on its name', async () => {
+  test('a created space checks out, and its name, founders and roles are part of its id', async () => {
     const registry = createSpaceManager(createMemoryAdapter(), provider);
     const { space } = await registry.create({
       name: 'Trip',
@@ -116,8 +116,11 @@ describe('space access: the space vouches for itself', () => {
       creator: 'did:key:zAlice',
     });
     assert.equal(await checkSpace(space), null);
-    assert.equal(await checkSpace({ ...space, name: 'Renamed' }), null);
-    assert.match(String(await checkSpace({ ...space, creator: 'did:key:zMallory' })), /id does not match/);
+    assert.match(String(await checkSpace({ ...space, name: 'Renamed' })), /id does not match/);
+    assert.match(
+      String(await checkSpace({ ...space, top: { founders: ['did:key:zMallory'] } })),
+      /id does not match/,
+    );
     assert.match(
       String(
         await checkSpace({
@@ -143,7 +146,7 @@ describe('space access: the space vouches for itself', () => {
     );
   });
 
-  test('a forged invite is refused: changed creator, changed roles', async () => {
+  test('a forged invite is refused: changed founders, changed roles', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const bob = await person(hub);
@@ -151,7 +154,7 @@ describe('space access: the space vouches for itself', () => {
     const invite = await alice.node.spaces.invite(space);
 
     await assert.rejects(
-      bob.node.spaces.join(tamper(invite, (p) => (p.space.creator = bob.node.did))),
+      bob.node.spaces.join(tamper(invite, (p) => (p.space.top = { founders: [bob.node.did] }))),
       /does not describe a real space/,
     );
     await assert.rejects(

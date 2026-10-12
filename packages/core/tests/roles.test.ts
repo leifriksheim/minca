@@ -55,7 +55,8 @@ const MODERATOR: ReadonlyArray<Grant> = [
 
 const genesis: AccessGenesis = {
   id: 'space',
-  creator: 'alice',
+  resolver: 'strong-remove/1',
+  founders: ['alice'],
   roles: [
     { name: 'admin', grants: ADMIN },
     { name: 'moderator', grants: MODERATOR },
@@ -728,7 +729,12 @@ describe('what a policy says, and what it does not', () => {
   });
 
   test('`community` admins can remove each other by naming a view before the promotion (03 §2.3)', () => {
-    const g: AccessGenesis = { id: 'space', creator: 'alice', roles: community.roles };
+    const g: AccessGenesis = {
+      id: 'space',
+      resolver: 'strong-remove/1',
+      founders: ['alice'],
+      roles: community.roles,
+    };
     const erin = assign('alice', 'erin', 'admin', []);
     const zed = assign('alice', 'zed', 'member', [erin.id]);
     const promoted = assign('alice', 'zed', 'admin', [zed.id]);

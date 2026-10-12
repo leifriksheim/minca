@@ -1,7 +1,9 @@
 /**
  * A convergence fuzzer for `strong-remove/1` (spec 03 §4), from the
  * adversarial review of grants: random histories with nestings, invites,
- * people changing their own roles and rival definitions. Every arrival order
+ * people changing their own roles, rival definitions, one founder or two or
+ * none, the constitution's own assignments, founders stepping down and
+ * successors named. Every arrival order
  * must give the same state, statuses, heads, judgements and views, and
  * extending one change at a time must give what replaying whole does.
  *
@@ -61,10 +63,15 @@ function generate(seed: number) {
   const r = random(seed);
   const grants = () => [...new Set(Array.from({ length: r.int(4) }, () => r.pick(POOL)))];
   const nests = (role: string) => (r.chance(0.4) ? [r.pick(ROLES.filter((x) => x !== role))] : []);
+  const founders = r.chance(0.2) ? [] : r.chance(0.3) ? ['p0', 'p1'] : ['p0'];
   const genesis: AccessGenesis = {
     id: 'space',
-    creator: 'p0',
+    resolver: 'strong-remove/1',
+    founders,
     roles: ROLES.map((name) => ({ name, grants: grants(), nests: nests(name) })),
+    ...(founders.length === 0 || r.chance(0.3)
+      ? { assigned: { p0: [r.pick(ROLES)], p2: [r.pick(ROLES)] } }
+      : {}),
   };
   const events: AccessEvent[] = [];
   const n = 5 + r.int(22);
@@ -86,7 +93,8 @@ function generate(seed: number) {
     const id = `e${String(i).padStart(3, '0')}${r.int(1000)}`;
     const base = { id, root, author: root, seen, cutoff: new Map(), line: i };
     const inviteKey = `k${r.int(2)}`;
-    const k = r.int(12);
+    const successor = `s${r.int(2)}`;
+    const k = r.int(14);
     const event: AccessEvent =
       k < 4
         ? { ...base, key: `assign:${did}|${role}`, kind: 'assign', did, role, assigned: true }
@@ -103,26 +111,30 @@ function generate(seed: number) {
                   grants: grants(),
                   nests: nests(role),
                 }
-              : k < 11
-                ? {
-                    ...base,
-                    key: `invite:${inviteKey}`,
-                    kind: 'invite',
-                    inviteKey,
-                    role,
-                    open: r.chance(0.6),
-                  }
-                : {
-                    ...base,
-                    root: did,
-                    author: did,
-                    key: `assign:${did}|${role}`,
-                    kind: 'assign',
-                    did,
-                    role,
-                    assigned: true,
-                    viaInvite: inviteKey,
-                  };
+              : k === 12
+                ? { ...base, key: `stepdown:${root}`, kind: 'stepdown', did: root }
+                : k === 13
+                  ? { ...base, key: `succeed:${successor}`, kind: 'succeed', space: successor }
+                  : k < 11
+                    ? {
+                        ...base,
+                        key: `invite:${inviteKey}`,
+                        kind: 'invite',
+                        inviteKey,
+                        role,
+                        open: r.chance(0.6),
+                      }
+                    : {
+                        ...base,
+                        root: did,
+                        author: did,
+                        key: `assign:${did}|${role}`,
+                        kind: 'assign',
+                        did,
+                        role,
+                        assigned: true,
+                        viaInvite: inviteKey,
+                      };
     events.push(event);
   }
   return { genesis, events, r };
@@ -140,6 +152,7 @@ function shape(h: AccessHistory, events: ReadonlyArray<AccessEvent>): string {
   const last = events.slice(-3);
   return JSON.stringify({
     founders: [...h.current.founders].sort(),
+    successors: [...h.current.successors].sort(),
     assigned: assignments(h.current),
     roles: [...h.current.roles].map(([n, ds]) => [n, ds.map((d) => d.event)]).sort(),
     invites: [...h.current.invites].sort(),

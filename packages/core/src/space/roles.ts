@@ -14,8 +14,10 @@
  * definitions written apart hold only the grants they share.
  *
  * **Accounts.** An account holds power only through the roles assigned to
- * it, and invokes nothing with none. The space's founder holds every command
- * and answers to no one but itself.
+ * it, and invokes nothing with none. Under `top: { founders }` the founders
+ * hold every command, and no one but each founder itself can remove one,
+ * change its roles or make it step down. Under `top: "none"` there are no
+ * founders, and anyone may be removed by whoever holds the grant.
  *
  * **The access history.** Every change to a role, an assignment, a removal,
  * an invite, a revoked key or a collection definition is a record whose
@@ -47,6 +49,7 @@ import {
   ROLE_UNASSIGN,
   SPACE_KEEPERS,
   SPACE_RELAYS,
+  SPACE_SUCCEED,
   type FoundingRole,
 } from './grants.js';
 import type { SpaceGrant as Grant } from '../types.js';
@@ -86,6 +89,15 @@ export const KEEPERS_COLLECTION = 'sys.keepers';
  * collection from that place on stop counting.
  */
 export const FORK_COLLECTION = 'sys.fork';
+/** A founder stepping down: it stays, with the roles it holds, and is a founder no more */
+export const STEPDOWN_COLLECTION = 'sys.stepdown';
+/** A space that succeeds this one, by its id. It changes nothing here. */
+export const SUCCEED_COLLECTION = 'sys.succeed';
+
+/** The one resolver there is: a removal strikes what its account did concurrently (spec 03 §4) */
+export const STRONG_REMOVE = 'strong-remove/1';
+/** Every resolver this peer knows. A space naming another is not judged here. */
+export const RESOLVERS: ReadonlySet<string> = new Set([STRONG_REMOVE]);
 
 /** Every collection whose records are part of the access history */
 export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set([
@@ -99,6 +111,8 @@ export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set([
   RELAYS_COLLECTION,
   KEEPERS_COLLECTION,
   FORK_COLLECTION,
+  STEPDOWN_COLLECTION,
+  SUCCEED_COLLECTION,
 ]);
 
 // ─── Events ───────────────────────────────────────────────────────────
@@ -157,6 +171,16 @@ export type AccessEvent = EventBase &
         /** `/member/remove`, or leaving when it is the account's own */
         readonly kind: 'remove';
         readonly did: string;
+      }
+    | {
+        /** A founder stepping down, built in: only its own */
+        readonly kind: 'stepdown';
+        readonly did: string;
+      }
+    | {
+        /** `/space/succeed`: the id of a space that succeeds this one */
+        readonly kind: 'succeed';
+        readonly space: string;
       }
     | { readonly kind: 'invite'; readonly inviteKey: string; readonly role: string; readonly open: boolean }
     | {
@@ -282,7 +306,7 @@ export interface RoleDefinition {
 
 /** Who holds what, at one point in the history */
 export interface AccessState {
-  /** The founders: they hold every command, and only they can take their place from themselves */
+  /** The founders: they hold every command, and only each founder itself takes its place or its roles */
   readonly founders: ReadonlySet<string>;
   /**
    * Role name → its current definitions: one, or rivals none of which saw
@@ -327,17 +351,27 @@ export interface AccessState {
   readonly keepers: ReadonlyArray<Keeper>;
   /** How many keepers a write should reach; null for whatever each node defaults to */
   readonly copies: number | null;
+  /**
+   * Spaces named as this one's successors → the accounts that named each,
+   * sorted. Every one stands, and none is first: which to follow is each
+   * member's choice.
+   */
+  readonly successors: ReadonlyMap<string, ReadonlyArray<string>>;
 }
 
-/** What a space starts with, from its genesis: its constitution, for now */
+/** What a space starts with, from its constitution (`space/constitution.ts`) */
 export interface AccessGenesis {
   /** The space id — also the id every change implicitly comes after */
   readonly id: string;
-  /** The founder: the space's creator, who holds every command */
-  readonly creator: string;
+  /** How changes made apart resolve. Only `strong-remove/1` is known; the replay refuses any other */
+  readonly resolver: string;
+  /** The founders, who hold every command: none under `top: "none"` */
+  readonly founders: ReadonlyArray<string>;
   /** The founding roles: the constitution's grants for each are its first definition */
   readonly roles: ReadonlyArray<FoundingRole>;
-  /** A private space's first key, from its genesis */
+  /** The roles the constitution assigns: account → role names */
+  readonly assigned?: Readonly<Record<string, ReadonlyArray<string>>>;
+  /** A private space's first key, from its constitution */
   readonly key?: { readonly keyId: string; readonly readKey: string };
 }
 
@@ -427,8 +461,8 @@ export interface AccessHistory {
   /** Every key whose line for a collection forked, and from where */
   forks(): ReadonlyArray<ForkedLine>;
   /**
-   * Whether an account appears anywhere in the history — the founder, or
-   * named by any assignment, whatever became of it. Only grows as changes
+   * Whether an account appears anywhere in the history — a founder, assigned
+   * a role by the constitution, or named by any assignment, whatever became of it. Only grows as changes
    * arrive, so it can decide what to store without two peers ever disagreeing
    * for good.
    */
@@ -457,6 +491,7 @@ interface MutableState {
   relays: ReadonlyArray<string>;
   keepers: ReadonlyArray<Keeper>;
   copies: number | null;
+  successors: Map<string, ReadonlyArray<string>>;
 }
 
 /** The constitution's definition of a founding role */
@@ -472,10 +507,14 @@ function founding(genesis: AccessGenesis, role: FoundingRole): RoleDefinition {
 }
 
 function startState(genesis: AccessGenesis): MutableState {
+  // The constitution's assignments are as if made by the space itself: their id is the space's.
+  const assigned = new Map<string, ReadonlyMap<string, string>>();
+  for (const [did, roles] of Object.entries(genesis.assigned ?? {}))
+    assigned.set(did, new Map(roles.map((role) => [role, genesis.id])));
   return {
-    founders: new Set([genesis.creator]),
+    founders: new Set(genesis.founders),
     roles: new Map(genesis.roles.map((role) => [role.name, [founding(genesis, role)]])),
-    assigned: new Map(),
+    assigned,
     invites: new Map(),
     definitions: new Map(),
     contested: new Map(),
@@ -484,6 +523,7 @@ function startState(genesis: AccessGenesis): MutableState {
     relays: [],
     keepers: [],
     copies: null,
+    successors: new Map(),
   };
 }
 
@@ -502,6 +542,23 @@ export function readers(state: AccessState): Set<string> {
   const out = new Set(state.founders);
   for (const [did, roles] of state.assigned) if (roles.size > 0) out.add(did);
   return out;
+}
+
+/**
+ * Whether nobody can run the space any more: no founder is left, and no
+ * member may define or assign any role. The library's word, not the
+ * protocol's: the way on from a headless space is a successor.
+ */
+export function headless(state: AccessState): boolean {
+  if (state.founders.size > 0) return false;
+  const roles = [...state.roles.keys()];
+  return ![...readers(state)].some((did) =>
+    roles.some(
+      (role) =>
+        may(state, did, ROLE_DEFINE, { role }) ||
+        may(state, did, ROLE_ASSIGN, { role, self: false, roles: [] }),
+    ),
+  );
 }
 
 /** How a question to {@link may} is asked */
@@ -656,7 +713,9 @@ const targetArgs = (state: AccessState, invoker: string, target: string, role?: 
 /**
  * Why a change is not allowed in a state, or null when it is: its author
  * held a grant for its command with these arguments, or it is one of the
- * few things anyone may do for themselves (leave a role, leave the space).
+ * few things anyone may do for themselves (leave a role, leave the space,
+ * step down as a founder), or it names a successor where no one holds
+ * `/space/succeed`.
  */
 export function refusal(event: AccessEvent, state: AccessState): string | null {
   const root = event.root;
@@ -688,7 +747,7 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
       // Leaving a role is built in.
       if (!event.assigned && root === event.did) return holds ? null : 'It does not hold that role';
       if (state.founders.has(event.did) && root !== event.did)
-        return "No one but a founder changes a founder's roles";
+        return "No one but a founder itself changes a founder's roles";
       if (!state.roles.has(event.role)) return `There is no role "${event.role}"`;
       const args = targetArgs(state, root, event.did, event.role);
       if (event.assigned)
@@ -700,7 +759,7 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
       if (!isMember(state, event.did)) return 'Not a member';
       // Leaving the space is built in, for a founder too.
       if (root === event.did) return null;
-      if (state.founders.has(event.did)) return 'No one but a founder removes a founder';
+      if (state.founders.has(event.did)) return 'No one but a founder itself removes a founder';
       return may(state, root, MEMBER_REMOVE, targetArgs(state, root, event.did))
         ? null
         : 'Its author may not remove them';
@@ -714,6 +773,18 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
       if (!event.open) return existing ? null : 'There is no such invite to close';
       if (!state.roles.has(event.role)) return `There is no role "${event.role}"`;
       return assigns(event.role) ? null : 'Its author may not invite to this role';
+    }
+    // Stepping down is built in, and only a founder's own.
+    case 'stepdown':
+      if (root !== event.did) return 'Only a founder itself steps down';
+      return state.founders.has(event.did) ? null : 'Not a founder';
+    // A successor binds no one, so where no one holds the command, any member may name one.
+    case 'succeed': {
+      if (!isMember(state, root)) return 'Only a member may name a successor';
+      if (may(state, root, SPACE_SUCCEED, {})) return null;
+      return [...readers(state)].some((did) => may(state, did, SPACE_SUCCEED, {}))
+        ? 'Its author may not name a successor'
+        : null;
     }
     // An account revokes its own keys: what a revoke takes away is only ever its own account's.
     case 'revoke':
@@ -762,6 +833,7 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
  */
 function reductionOf(event: AccessEvent, view: AccessState): string | null {
   if (event.kind === 'remove') return isMember(view, event.did) ? event.did : null;
+  if (event.kind === 'stepdown') return view.founders.has(event.did) ? event.did : null;
   if (event.kind === 'assign' && !event.assigned)
     return rolesOf(view, event.did).includes(event.role) ? event.did : null;
   return null;
@@ -769,7 +841,7 @@ function reductionOf(event: AccessEvent, view: AccessState): string | null {
 
 /** The people whose reading a change may end */
 function affected(event: AccessEvent): ReadonlyArray<string> {
-  return event.kind === 'assign' || event.kind === 'remove' ? [event.did] : [];
+  return event.kind === 'assign' || event.kind === 'remove' || event.kind === 'stepdown' ? [event.did] : [];
 }
 
 /** A role's definition from a change, judged in `view` */
@@ -806,6 +878,15 @@ function change(event: AccessEvent, state: MutableState, view: AccessState): voi
       // It ends every assignment it saw, since none of them saw it; a founder who leaves steps down.
       state.assigned.delete(event.did);
       if (event.root === event.did) state.founders.delete(event.did);
+      return;
+    case 'stepdown':
+      state.founders.delete(event.did);
+      return;
+    case 'succeed':
+      state.successors.set(
+        event.space,
+        [...new Set([...(state.successors.get(event.space) ?? []), event.root])].sort(),
+      );
       return;
     case 'invite':
       state.invites.set(event.inviteKey, {
@@ -870,6 +951,8 @@ const KIND_COLLECTION: Record<AccessEvent['kind'], string> = {
   relays: RELAYS_COLLECTION,
   keepers: KEEPERS_COLLECTION,
   fork: FORK_COLLECTION,
+  stepdown: STEPDOWN_COLLECTION,
+  succeed: SUCCEED_COLLECTION,
 };
 
 /**
@@ -1003,8 +1086,10 @@ function merge(
     if (group[0]?.kind !== 'remove') continue;
     const did = group[0].did;
     removals.set(did, latest(group));
-    // A founder steps down by leaving; no one else can remove one.
+    // A founder who leaves is one no more; no one else can remove one.
     if (group.some((event) => event.root === did)) state.founders.delete(did);
+    // Every removal saw the constitution: it ends the roles the constitution assigned.
+    state.assigned.delete(did);
   }
   let currentKey: AccessEvent | null = null;
   const keyEvents: AccessEvent[] = [];
@@ -1015,6 +1100,15 @@ function merge(
     switch (win.kind) {
       case 'remove':
         continue;
+      case 'stepdown':
+        state.founders.delete(win.did);
+        continue;
+      case 'succeed': {
+        // Every one stands, whoever named it: none is first.
+        const space = win.space;
+        state.successors.set(space, [...new Set(group.map((event) => event.root))].sort());
+        continue;
+      }
       case 'role':
         // Rivals all stand: the role holds what they share.
         state.roles.set(
@@ -1024,10 +1118,12 @@ function merge(
         continue;
       case 'assign': {
         // Taking a role away beats giving it; an assignment counts only if it saw its account's removals.
-        if (tops.some((event) => event.kind === 'assign' && !event.assigned)) continue;
+        // The changes on its key all saw the constitution, so they decide over its assignment too.
         const gone = removals.get(win.did) ?? [];
-        const counted = tops.find((event) => gone.every((removal) => saw.get(event.id)!.has(removal.id)));
-        if (counted) setAssigned(state, win.did, win.role, counted.id);
+        const counted = tops.some((event) => event.kind === 'assign' && !event.assigned)
+          ? undefined
+          : tops.find((event) => gone.every((removal) => saw.get(event.id)!.has(removal.id)));
+        setAssigned(state, win.did, win.role, counted ? counted.id : null);
         continue;
       }
       case 'invite': {
@@ -1089,6 +1185,7 @@ function applied(state: AccessState, event: AccessEvent, genesisId: string): Mut
     definitions: new Map(state.definitions),
     contested: new Map(state.contested),
     keys: [...state.keys],
+    successors: new Map(state.successors),
   };
   change(event, next, state);
   if (event.kind === 'key') {
@@ -1244,6 +1341,9 @@ const STRUCK = "Its author's power was taken away by a change it had not seen, o
 
 /** Replays a space's access history. */
 export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<AccessEvent>): AccessHistory {
+  // Another resolver would judge the same changes differently: this peer doesn't judge the space at all.
+  if (!RESOLVERS.has(genesis.resolver))
+    throw new Error(`This peer doesn't know the resolver ${genesis.resolver}, so it can't judge this space`);
   const byIdMap = new Map<string, AccessEvent>();
   for (const event of events) if (!byIdMap.has(event.id)) byIdMap.set(event.id, event);
 
@@ -1409,7 +1509,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
         forks.set(line, { event: id, writer: event.writer, collection: event.collection, from: event.from });
     }
   }
-  const named = new Set<string>([genesis.creator]);
+  const named = new Set<string>([...genesis.founders, ...Object.keys(genesis.assigned ?? {})]);
   const invites = new Set<string>();
   for (const event of byIdMap.values()) {
     if (event.kind === 'assign' && event.assigned) named.add(event.did);

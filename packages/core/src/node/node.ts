@@ -53,6 +53,7 @@ import {
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
 import { deriveInviteKey } from '../space/space-access.js';
+import { foundersOf } from '../space/constitution.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
@@ -179,7 +180,8 @@ function summarize(record: SpaceRecord): SpaceSummary {
     id: space.id,
     name: space.name,
     visibility: space.visibility,
-    creator: space.creator,
+    founders: foundersOf(space),
+    ...(space.succeeds !== undefined ? { succeeds: space.succeeds } : {}),
     createdAt: space.createdAt,
     readable: space.visibility === 'public' || key !== null,
     writable: record.role !== null,
@@ -842,11 +844,16 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
 
     async create(params) {
+      const me = config.signer.did;
       const record = await registry.create({
         name: params.name,
         visibility: params.visibility,
-        creator: config.signer.did,
+        creator: me,
         ...(params.roles ? { roles: params.roles } : {}),
+        ...(params.top ? { top: params.top } : {}),
+        ...(params.cofounders ? { cofounders: params.cofounders } : {}),
+        ...(params.creatorRoles?.length ? { assigned: { [me]: params.creatorRoles } } : {}),
+        ...(params.succeeds !== undefined ? { succeeds: params.succeeds } : {}),
       });
       await remember(record.space.id);
       emit({ type: 'spaces' });
@@ -947,6 +954,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     assign: perSpace((rt, did: string, role: string) => rt.assign(did, role)),
     unassign: perSpace((rt, did: string, role: string) => rt.unassign(did, role)),
     removeMember: perSpace((rt, did: string) => rt.removeMember(did)),
+    stepDown: perSpace((rt, options?: { readonly keep?: string }) => rt.stepDown(options?.keep)),
+
+    async succeed(spaceId, successor) {
+      // Where this node holds the successor, its constitution must name this space: else it is a copy.
+      const held = await registry.get(successor);
+      if (held && held.space.succeeds !== spaceId)
+        throw new Error(`"${held.space.name}" does not say it succeeds this space`);
+      await (await runtime(spaceId)).succeed(successor);
+    },
 
     async closeInvite(spaceId, keyOrLink) {
       let key = keyOrLink;
@@ -1669,7 +1685,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return null;
     }
     // A private space the asker made, and the key to it: anything else isn't a space for two from them.
-    if (invited.space.creator !== from || invited.space.visibility !== 'private' || !invited.key) return null;
+    if (!foundersOf(invited.space).includes(from) || invited.space.visibility !== 'private' || !invited.key)
+      return null;
     return {
       from,
       invite: value.invite,

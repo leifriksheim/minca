@@ -4,7 +4,7 @@
  *
  * A grant is a delegation to a role, in Weave's JSON profile of UCAN 1.0
  * (spec 01 §7): a command path, and a policy over the command's arguments.
- * Only the constitution (the space's genesis) and a role's definition issue
+ * Only the constitution (`space/constitution.ts`) and a role's definition issue
  * grants, and only to roles. An account holds power only through the roles
  * assigned to it, so nothing it was handed outlives its roles.
  *
@@ -43,6 +43,8 @@ export const KEY_CHANGE = '/key/change';
 export const SPACE_RELAYS = '/space/relays';
 /** Naming the nodes that keep the space whole: no arguments */
 export const SPACE_KEEPERS = '/space/keepers';
+/** Naming a space that succeeds this one: no arguments. It changes nothing here. */
+export const SPACE_SUCCEED = '/space/succeed';
 
 /** A grant's command and policy: all two grants are compared by */
 type Grant = SpaceGrant;

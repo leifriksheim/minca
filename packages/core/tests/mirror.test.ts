@@ -228,7 +228,7 @@ describe('a mirror', () => {
     const old = JSON.stringify({ v: 1, versions: [version] });
     assert.deepEqual(unpackSegment(new TextEncoder().encode(old)), []);
     // The example in spec 05 §16.3.
-    assert.equal(await segmentName(1, packSegment([])), '000001-d71174f02d82a2bc.seg');
+    assert.equal(await segmentName(1, packSegment([])), '000001-375639ae09b6f3ee.seg');
   });
 });
 

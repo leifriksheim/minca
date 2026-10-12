@@ -145,7 +145,8 @@ function generate(seed: number): History {
   const r = random(seed);
   const genesis: AccessGenesis = {
     id: 'genesis',
-    creator: 'p0',
+    resolver: 'strong-remove/1',
+    founders: ['p0'],
     roles: ROLES,
     ...(r.chance(0.8) ? { key: { keyId: 'k0', readKey: 'r0' } } : {}),
   };

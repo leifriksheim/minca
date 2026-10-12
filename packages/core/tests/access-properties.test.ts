@@ -68,7 +68,7 @@ const POOL: ReadonlyArray<Grant> = [
   { cmd: ROLE_DEFINE, pol: [['==', '.role', 'member']] },
 ];
 const PEOPLE = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'];
-const genesis: AccessGenesis = { id: 'space', creator: 'p0', roles: ROLES };
+const genesis: AccessGenesis = { id: 'space', resolver: 'strong-remove/1', founders: ['p0'], roles: ROLES };
 
 /** A small seeded generator: the same seed, the same history */
 function random(seed: number) {

@@ -2,14 +2,10 @@
  * What a space is, fixed at creation — and the keys around it that anyone can
  * check without holding a secret.
  *
- * The space's **genesis** is its constitution, for now: its creator, who is
- * its founder, its visibility, the roles it is founded with and their grants,
- * and — for a private space — the public half of its read key. The space id
- * is the genesis's hash. A space someone hands you — in an invite, from a
- * host — either hashes to its id or is refused, so nobody can quietly change
- * who founded it or with which grants. Everything after that — definitions,
- * assignments, invites — is records in the space's access history
- * (`space/roles.ts`).
+ * What a space is, fixed at creation, is its constitution
+ * (`space/constitution.ts`), whose hash is the space id. Everything after
+ * that — definitions, assignments, invites — is records in the space's
+ * access history (`space/roles.ts`); their keys are made here.
  *
  * A private space's **read key pair** is derived from its AES key, so everyone
  * who can read already has it. A node checks a connecting reader against its
@@ -21,14 +17,12 @@
  * the space and their identity — so the signature cannot be moved to anyone
  * else, or another space. Deleting the invite record closes the link.
  */
-import type { CryptoProvider, Space } from '../types.js';
+import type { CryptoProvider } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
-import { canonicalize } from '../schema/version.js';
-import { cidFromBytes, hashedKey } from '../utils/hash.js';
+import { hashedKey } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
 import { didOf, didToPublicKey } from '../identity/did.js';
-import { checkFoundingRoles } from './grants.js';
 
 const READ_INFO = 'weave/space-read/v1';
 const INVITE_INFO = 'weave/space-invite/v1';
@@ -37,18 +31,6 @@ const INVITE_INFO = 'weave/space-invite/v1';
 export interface SpaceKeyPair {
   readonly did: string;
   readonly privateKey: CryptoKey;
-}
-
-/** What a space is, fixed at creation. Its hash is the space id. */
-export interface SpaceGenesis {
-  readonly v: 3;
-  readonly creator: string;
-  readonly visibility: Space['visibility'];
-  readonly roles: Space['roles'];
-  readonly createdAt: string;
-  readonly nonce: string;
-  readonly readKey?: string;
-  readonly encryptionKeyId?: string;
 }
 
 /** A fresh secret for an invite link */
@@ -106,46 +88,6 @@ export async function readKeyFromSeed(seed: Uint8Array, provider: CryptoProvider
   return Object.freeze({ did, privateKey: pair.privateKey });
 }
 
-/** The fields of a space its id is made from */
-export function spaceGenesis(space: Omit<Space, 'id' | 'name'>): SpaceGenesis {
-  return {
-    v: 3,
-    creator: space.creator,
-    visibility: space.visibility,
-    roles: space.roles,
-    createdAt: space.createdAt,
-    nonce: space.nonce,
-    ...(space.readKey ? { readKey: space.readKey } : {}),
-    ...(space.encryptionKeyId ? { encryptionKeyId: space.encryptionKeyId } : {}),
-  };
-}
-
-/** The id a space with this genesis has */
-export function spaceIdOf(genesis: SpaceGenesis): Promise<string> {
-  return cidFromBytes(utf8Encode(canonicalize(genesis)));
-}
-
-/**
- * Why a space someone handed over cannot be trusted, or null when it can:
- * its id must be its genesis's hash, and it must have the keys its kind needs.
- */
-export async function checkSpace(space: Space): Promise<string | null> {
-  if (typeof space?.id !== 'string' || typeof space.nonce !== 'string' || typeof space.creator !== 'string') {
-    return 'It is missing what identifies it';
-  }
-  if (space.visibility !== 'public' && space.visibility !== 'private')
-    return 'Its visibility is not public or private';
-  const roles = checkFoundingRoles(space.roles);
-  if (roles) return roles;
-  if (space.visibility === 'private' && (!space.readKey || !space.encryptionKeyId))
-    return 'A private space must name its read key';
-  if (space.visibility === 'public' && (space.readKey || space.encryptionKeyId))
-    return 'A public space has no read key';
-  if ((await spaceIdOf(spaceGenesis(space))) !== space.id)
-    return 'Its id does not match what it says about itself';
-  return null;
-}
-
 // ─── Record keys in the access history ────────────────────────────────
 //
 // Record keys are lower case; DIDs and CIDs are not. So a key names a hash of
@@ -169,6 +111,10 @@ export const revokeKey = (keyDid: string, accountDid: string) =>
 export const WARRANT_COLLECTION = 'std.warrant';
 /** The key of the record proving a writer's log forked, from the writer's key */
 export const forkKey = (writerDid: string) => hashedKey('fork', writerDid);
+/** The key of the record by which a founder steps down, keeping its roles */
+export const stepDownKey = (did: string) => hashedKey('stepdown', did);
+/** The key of the record naming a successor space, from the successor's id */
+export const succeedKey = (spaceId: string) => hashedKey('succeed', spaceId);
 /** The key of a role's record */
 export const roleKey = (name: string) => `role:${name}`;
 /**

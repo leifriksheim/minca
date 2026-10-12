@@ -101,8 +101,11 @@ import {
   signInvite,
   verifyInvite,
   forkKey,
+  stepDownKey,
+  succeedKey,
   WARRANT_COLLECTION,
 } from '../space/space-access.js';
+import { accessGenesisOf, isSpaceId } from '../space/constitution.js';
 import {
   ACCESS_COLLECTIONS,
   ASSIGN_COLLECTION,
@@ -119,6 +122,9 @@ import {
   REMOVE_COLLECTION,
   REVOKE_COLLECTION,
   ROLE_COLLECTION,
+  STEPDOWN_COLLECTION,
+  SUCCEED_COLLECTION,
+  headless,
   isMember,
   holdsRole,
   may,
@@ -127,7 +133,6 @@ import {
   refusal,
   rolesOf,
   type AccessEvent,
-  type AccessGenesis,
   type AccessHistory,
   type AccessState,
   type Cutoff,
@@ -208,6 +213,8 @@ const IN_THE_CLEAR = new Set([
   RELAYS_COLLECTION,
   KEEPERS_COLLECTION,
   FORK_COLLECTION,
+  STEPDOWN_COLLECTION,
+  SUCCEED_COLLECTION,
 ]);
 
 /** Which collection each access record key belongs to */
@@ -222,6 +229,8 @@ const ACCESS_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['relays:', RELAYS_COLLECTION],
   ['keepers:', KEEPERS_COLLECTION],
   ['fork:', FORK_COLLECTION],
+  ['stepdown:', STEPDOWN_COLLECTION],
+  ['succeed:', SUCCEED_COLLECTION],
 ];
 
 /** How many keys a cutoff may name */
@@ -764,14 +773,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // into plain events and replayed. Rebuilt when records change; everything
   // about who may do what is read from the replay.
 
-  const accessGenesis: AccessGenesis = {
-    id: space.id,
-    creator: space.creator,
-    roles: space.roles,
-    ...(space.visibility === 'private' && space.encryptionKeyId && space.readKey
-      ? { key: { keyId: space.encryptionKeyId, readKey: space.readKey } }
-      : {}),
-  };
+  const accessGenesis = accessGenesisOf(space);
 
   /** Events, by version id — building one checks signatures and invites, so they are kept */
   const events = new Map<string, AccessEvent | null>();
@@ -864,6 +866,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         const { did } = body;
         if (typeof did !== 'string' || version.key !== (await removalKey(did))) return null;
         return { ...base, cutoff, kind: 'remove', did };
+      }
+      case STEPDOWN_COLLECTION: {
+        const { did } = body;
+        if (typeof did !== 'string' || version.key !== (await stepDownKey(did))) return null;
+        return { ...base, cutoff, kind: 'stepdown', did };
+      }
+      case SUCCEED_COLLECTION: {
+        // It names a space by id, never this one: the successor's constitution names this one, so can't be it.
+        if (body.cutoff !== undefined || !isSpaceId(body.space) || body.space === space.id) return null;
+        if (version.key !== (await succeedKey(body.space))) return null;
+        return { ...base, kind: 'succeed', space: body.space };
       }
       case INVITE_COLLECTION: {
         const inviteDid = body.key;
@@ -2874,6 +2887,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const roles = rolesOf(history.current, deps.rootDid);
     const mine = [
       await removalKey(deps.rootDid),
+      await stepDownKey(deps.rootDid),
       ...(await Promise.all(roles.map((role) => assignKey(deps.rootDid, role)))),
       ...roles.map(roleKey),
       `collection:${collection}`,
@@ -3924,6 +3938,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           open: invite.open,
         })),
         founder: state.founders.has(deps.rootDid),
+        top: space.top === 'none' ? 'none' : 'founders',
+        headless: headless(state),
+        successors: [...state.successors].map(([successor, by]) => ({ space: successor, by })),
         mine: rolesOf(state, deps.rootDid),
         heads: history.heads(),
         key: state.keys.length ? { changes: state.keys.length - 1, held: currentKey(state) !== null } : null,
@@ -3959,6 +3976,32 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     async removeMember(did: string) {
       await removeAccount(did);
+    },
+
+    /** Stops being a founder, keeping the roles held, and `keep` first when given */
+    async stepDown(keep?: string) {
+      const { history } = await access();
+      if (!history.current.founders.has(deps.rootDid))
+        throw new Error(`You are not a founder of "${space.name}"`);
+      if (keep !== undefined && !rolesOf(history.current, deps.rootDid).includes(keep))
+        await assign(deps.rootDid, keep, true);
+      if (rolesOf((await access()).history.current, deps.rootDid).length === 0)
+        throw new Error(
+          `You hold no role in "${space.name}", so stepping down would leave it: keep a role, or leave`,
+        );
+      const cutoff = await cutoffFor(deps.rootDid);
+      await upsert(STEPDOWN_COLLECTION, await stepDownKey(deps.rootDid), {
+        did: deps.rootDid,
+        ...(Object.keys(cutoff).length ? { cutoff } : {}),
+      });
+    },
+
+    /** Names a space that succeeds this one. It changes nothing here */
+    async succeed(successor: string) {
+      if (!isSpaceId(successor) || successor === space.id)
+        throw new Error('A successor is named by its space id');
+      // Refused here, with the reason, when this account may not: as every peer would.
+      await upsert(SUCCEED_COLLECTION, await succeedKey(successor), { space: successor });
     },
 
     /**

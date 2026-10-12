@@ -37,7 +37,8 @@ const OWNER: ReadonlyArray<Grant> = [
 ];
 const genesis: AccessGenesis = {
   id: 'space',
-  creator: 'alice',
+  resolver: 'strong-remove/1',
+  founders: ['alice'],
   roles: [
     { name: 'owner', grants: OWNER },
     {
@@ -164,7 +165,8 @@ describe('attacks on the access history', () => {
 describe('attacks on grants', () => {
   const company: AccessGenesis = {
     id: 'company',
-    creator: 'ceo',
+    resolver: 'strong-remove/1',
+    founders: ['ceo'],
     roles: [
       { name: 'hr', grants: [{ cmd: '/record', pol: [['==', '.collection', 'app.hr']] }] },
       {
@@ -390,7 +392,8 @@ describe('backdating past an unassignment', () => {
   ];
   const g: AccessGenesis = {
     id: 'space',
-    creator: 'alice',
+    resolver: 'strong-remove/1',
+    founders: ['alice'],
     roles: [
       { name: 'admin', grants: ADMIN },
       { name: 'member', grants: MEMBER },
@@ -474,7 +477,8 @@ describe('backdating past an unassignment', () => {
   test('an invite is the assignment its opener makes: `.self` holds for whoever joins', () => {
     const g2: AccessGenesis = {
       id: 'space',
-      creator: 'alice',
+      resolver: 'strong-remove/1',
+      founders: ['alice'],
       roles: [
         {
           name: 'admin',
@@ -509,7 +513,8 @@ describe('backdating past an unassignment', () => {
   test('an invite’s opener’s `.roles` policy reads the joiner’s roles', () => {
     const g2: AccessGenesis = {
       id: 'space',
-      creator: 'alice',
+      resolver: 'strong-remove/1',
+      founders: ['alice'],
       roles: [
         {
           name: 'host',
@@ -541,7 +546,8 @@ describe('backdating past an unassignment', () => {
 describe('reductions of each other', () => {
   const g: AccessGenesis = {
     id: 'space',
-    creator: 'alice',
+    resolver: 'strong-remove/1',
+    founders: ['alice'],
     roles: [
       {
         name: 'admin',
@@ -622,7 +628,8 @@ describe('reductions of each other', () => {
   test('an invite outlives its opener’s demotion for a joiner naming an earlier view: close it to stop it', () => {
     const g2: AccessGenesis = {
       id: 'space',
-      creator: 'alice',
+      resolver: 'strong-remove/1',
+      founders: ['alice'],
       roles: [
         { name: 'host', grants: [{ cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] }] },
         { name: 'member', grants: [{ cmd: RECORD_WRITE, pol: [] }] },

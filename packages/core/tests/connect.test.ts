@@ -539,7 +539,7 @@ describe('connecting a carrier to an account home', () => {
     assert.equal('note' in grant, false, 'no note: a carrier never writes');
     const carry = parseSpaceInvite(grant.carry.invite);
     assert.equal(carry.space.id, grant.carry.space);
-    assert.equal(carry.space.creator, did);
+    assert.deepEqual(carry.space.top, { founders: [did] });
     assert.equal(carry.invite, undefined, 'view-only');
     assert.equal(grant.pod, null, 'this account lives in the browser');
 
