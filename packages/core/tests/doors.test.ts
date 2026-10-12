@@ -590,8 +590,11 @@ describe('node.doors', () => {
     // Anyone else it reached is refused now: the space's members don't count them in.
     await dave.spaces.join(invite);
     await until(
-      async () => (await dave.spaces.access(space)).role,
-      (role) => role === null,
+      async () => {
+        const { founder, mine } = await dave.spaces.access(space);
+        return founder || mine.length > 0;
+      },
+      (holds) => !holds,
       'Dave to be refused',
       3000,
     );

@@ -6,7 +6,11 @@ import type { P2PNode } from '../../src/node/types.js';
 
 export async function joined(node: P2PNode, spaceId: string, ms = 4000): Promise<void> {
   const deadline = Date.now() + ms;
-  while ((await node.spaces.access(spaceId)).role === null) {
+  const holdsAPlace = async () => {
+    const { founder, mine } = await node.spaces.access(spaceId);
+    return founder || mine.length > 0;
+  };
+  while (!(await holdsAPlace())) {
     if (Date.now() > deadline) throw new Error('Timed out waiting for the join to finish');
     await new Promise((resolve) => setTimeout(resolve, 10));
   }

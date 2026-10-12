@@ -28,23 +28,39 @@ import { contactRequest } from '../src/schemas/contacts.js';
 import { until } from './helpers/until.js';
 import type { Version } from '../src/types.js';
 import { seenBy } from './helpers/as-member.js';
-import { memberKey } from '../src/space/space-access.js';
-import { MEMBER_COLLECTION } from '../src/space/roles.js';
+import { assignKey } from '../src/space/space-access.js';
+import { ASSIGN_COLLECTION } from '../src/space/roles.js';
+import { RECORD_DELETE, RECORD_WRITE } from '../src/space/grants.js';
 import { forge, open, person, settle } from './helpers/person.js';
 
-/** Alice owns a shared space with a creator-only poll collection; Bob is a member. */
+/** Editors here write and delete only what they made */
+const ownOnly = [
+  {
+    name: 'editor',
+    grants: [
+      { cmd: RECORD_WRITE, pol: [['==', '.byCreator', true]] },
+      { cmd: RECORD_DELETE, pol: [['==', '.byCreator', true]] },
+    ],
+  },
+];
+
+/** Alice founds a shared space whose editors change only their own records; Bob is an editor. */
 async function setup() {
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
-  const { id: space } = await alice.node.spaces.create({ name: 'Polls', ...team, visibility: 'public' });
+  const { id: space } = await alice.node.spaces.create({
+    name: 'Polls',
+    roles: ownOnly,
+    visibility: 'public',
+  });
   await bob.node.spaces.join(await alice.node.spaces.invite(space));
   await hold(alice.node, space);
   await joined(bob.node, space);
   await alice.node.collections.define(space, {
     name: 'app.poll',
     schema: { type: 'object' },
-    rules: { edit: 'creator', delete: 'creator', fixed: ['options'] },
+    rules: { fixed: ['options'] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);
@@ -124,7 +140,7 @@ describe('attacks on a shared space', () => {
     );
     const poll = (await alice.node.collections.list(space)).find((c) => c.name === 'app.poll');
     assert.equal(poll?.version, 1);
-    assert.deepEqual(poll?.rules, { edit: 'creator', delete: 'creator', fixed: ['options'] });
+    assert.deepEqual(poll?.rules, { fixed: ['options'] });
   });
 
   test('a member cannot freeze a record by skipping ahead to a seq nobody can outrank', async () => {
@@ -233,9 +249,9 @@ describe('attacks on a shared space', () => {
           bob,
           space,
           {
-            collection: MEMBER_COLLECTION,
-            body: { did, role: 'owner' },
-            version: { key: await memberKey(did), seq: 0 },
+            collection: ASSIGN_COLLECTION,
+            body: { did, role: 'editor', assigned: true },
+            version: { key: await assignKey(did, 'editor'), seq: 0 },
             retain: true,
             seen,
           },
@@ -255,7 +271,7 @@ describe('attacks on a shared space', () => {
     );
     assert.ok((await alice.node.spaces.access(space)).heads.length <= 2);
     await alice.node.records.put(space, 'app.note', { text: 'still here' });
-    await alice.node.spaces.setMember(space, bob.node.did, null);
+    await alice.node.spaces.removeMember(space, bob.node.did);
   });
 });
 

@@ -4,6 +4,7 @@
  */
 
 import type { Delegation } from './identity/ucan.js';
+import type { Policy } from './identity/policy.js';
 
 /** Crypto provider interface — abstraction over key algorithms for easy swapping */
 export interface CryptoProvider {
@@ -176,15 +177,21 @@ export interface Version<T = unknown> extends Omit<UnsignedVersion<T>, 'body'> {
 /** Whether a space's contents are readable by anyone who has them */
 export type SpaceVisibility = 'public' | 'private';
 
-/** A role, as a space defines it — see `space/roles.ts` */
+/** A grant: a command path, and a UCAN policy on its arguments — see `space/grants.ts` */
+export interface SpaceGrant {
+  readonly cmd: string;
+  readonly pol: Policy;
+}
+
+/** A role a space is founded with: the constitution's grants for it, its first definition */
 export interface SpaceRole {
-  /** Lower case, used as its key: `moderator` */
+  /** Lower case, used in its record key and its audience: `moderator` */
   readonly name: string;
   /** What people see: `Moderator` */
   readonly title?: string;
-  /** Higher can change lower. Equal ranks are equals. */
-  readonly rank: number;
-  readonly permissions: ReadonlyArray<string>;
+  readonly grants: ReadonlyArray<SpaceGrant>;
+  /** Roles whose grants it holds too */
+  readonly nests?: ReadonlyArray<string>;
 }
 
 /**
@@ -196,11 +203,10 @@ export interface SpaceRole {
 export interface Space {
   readonly id: string; // hash of the space's genesis
   readonly visibility: SpaceVisibility; // 'private' means the bodies are encrypted
-  /** The account that made it, holding `creatorRole` at the start */
+  /** The account that made it: its founder, who holds every command */
   readonly creator: string;
-  /** The roles it started with — later changed by records in `sys.role` */
+  /** The roles it was founded with, the constitution's grants — later redefined by records in `sys.role` */
   readonly roles: ReadonlyArray<SpaceRole>;
-  readonly creatorRole: string;
   readonly name: string;
   readonly createdAt: string;
   /** Random, so two spaces made alike still differ */

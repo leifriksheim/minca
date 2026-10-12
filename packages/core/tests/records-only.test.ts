@@ -52,7 +52,7 @@ import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { team } from '../src/space/presets.js';
-import { memberKey } from '../src/space/space-access.js';
+import { assignKey } from '../src/space/space-access.js';
 import { nextVersion } from '../src/records/version.js';
 import { hold, letGo } from './helpers/hold.js';
 import { isRecord } from '../src/utils/guards.js';
@@ -128,14 +128,13 @@ const carpool: Blueprint = {
         properties: { when: { type: 'string' }, seats: { type: 'integer', minimum: 1 } },
         required: ['when', 'seats'],
       },
-      rules: { edit: 'creator', delete: 'creator' },
     },
     {
       name: 'app.carpool.seat',
       title: 'Seat',
       schema: { type: 'object', properties: {} },
       links: { trip: { to: ['app.carpool.trip'], cardinality: 'one' } },
-      rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:trip'] },
+      rules: { onePer: ['@author', 'link:trip'] },
     },
   ],
 };
@@ -194,7 +193,8 @@ describe('an agent acting for a person', () => {
       /collections_propose/,
     );
     await assert.rejects(() => helper.spaces.invite(space), /Ask the person/);
-    await assert.rejects(() => helper.spaces.setMember(space, bob.node.did, null), /Ask the person/);
+    await assert.rejects(() => helper.spaces.removeMember(space, bob.node.did), /Ask the person/);
+    await assert.rejects(() => helper.spaces.unassign(space, bob.node.did, 'editor'), /Ask the person/);
     await assert.rejects(() => helper.spaces.join('anything'), /Ask the person/);
     await assert.rejects(
       () => runAction(helper, 'collections_define', { space, name: 'app.x', schema: { type: 'object' } }),
@@ -335,24 +335,27 @@ describe('an agent acting for a person', () => {
     // Bob knowing he joined is not Alice having heard it yet.
     await until(
       async () =>
-        (await (await stored(alice.stores, space)).getCurrent(await memberKey(bob.node.did))) !== null,
+        (await (await stored(alice.stores, space)).getCurrent(await assignKey(bob.node.did, 'editor'))) !==
+        null,
       4000,
-      "Alice to hold Bob's member record",
+      "Alice to hold Bob's assignment",
     );
-    const held = await (await stored(alice.stores, space)).getCurrent(await memberKey(bob.node.did));
+    const held = await (
+      await stored(alice.stores, space)
+    ).getCurrent(await assignKey(bob.node.did, 'editor'));
     await letGo(alice.node, space);
     await forgeAsAgent(alice, space, {
-      collection: 'sys.member',
-      body: { did: bob.node.did, role: null },
+      collection: 'sys.assign',
+      body: { did: bob.node.did, role: 'editor', assigned: false },
       retain: true,
       version: nextVersion(held!),
     });
     await hold(alice.node, space);
     await settle(500);
-    assert.equal((await bob.node.spaces.access(space)).role?.name, 'editor');
-    assert.equal(
-      (await alice.node.spaces.access(space)).members.find((m) => m.did === bob.node.did)?.role,
-      'editor',
+    assert.deepEqual((await bob.node.spaces.access(space)).mine, ['editor']);
+    assert.deepEqual(
+      (await alice.node.spaces.access(space)).members.find((m) => m.did === bob.node.did)?.roles,
+      ['editor'],
     );
   });
 });
@@ -499,10 +502,10 @@ describe('collections proposed in a blueprint', () => {
 
   test('a proposal that changes a collection the space has says so, and says how', async () => {
     const { alice, space } = await setup();
-    await alice.node.collections.define(space, { ...carpool.collections[0]!, rules: {} });
+    await alice.node.collections.define(space, { ...carpool.collections[0]!, rules: { fixed: ['seats'] } });
     const review = reviewBlueprint(carpool, await alice.node.collections.list(space));
     assert.equal(review.collections[0]?.status, 'change');
-    assert.deepEqual(review.collections[0]?.changes, ['changes who may do what']);
+    assert.deepEqual(review.collections[0]?.changes, ['changes what its records must keep to']);
     assert.equal(review.collections[1]?.status, 'new');
   });
 
@@ -645,8 +648,6 @@ describe('collections proposed in a blueprint', () => {
         properties: { text: { type: 'string', minLength: 1, maxLength: 10000 } },
         required: ['text'],
       },
-      rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
-      permissions: ['moderate'],
     };
     const oldChat: Blueprint = { title: 'Old chat', collections: [earlier] };
 
@@ -664,12 +665,15 @@ describe('collections proposed in a blueprint', () => {
     );
   });
 
-  test('a person whose role does not hold define proposes the same way, and someone who may applies it', async () => {
+  test('a person whose role holds no /collection/define proposes the same way, and someone who may applies it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const carol = await person(hub);
-    const { id: space } = await alice.node.spaces.create({ name: 'Choir', visibility: 'public' });
-    await alice.node.spaces.putRole(space, { name: 'singer', title: 'Singer', rank: 1, permissions: [] });
+    const { id: space } = await alice.node.spaces.create({
+      name: 'Choir',
+      visibility: 'public',
+      roles: [{ name: 'singer', title: 'Singer', grants: [{ cmd: '/record', pol: [] }] }],
+    });
     await carol.node.spaces.join(await alice.node.spaces.invite(space, { role: 'singer' }));
     await hold(alice.node, space);
     await joined(carol.node, space);
@@ -718,51 +722,30 @@ describe('collections proposed in a blueprint', () => {
 describe('what a collection allows, in words', () => {
   test('a vote, from its rules', () => {
     assert.deepEqual(describeCollection(vote), [
-      'Anyone in the space can add a vote.',
-      'Only whoever added a vote can change or remove it.',
       'One vote per person per poll or proposal — adding another changes the first.',
       'Each vote points at one thing: a poll or a proposal (“about”).',
     ]);
   });
 
-  test('a poll: different people change and remove, a fixed field, a permission', () => {
-    assert.deepEqual(describeCollection(poll), [
-      'Anyone in the space can add a poll.',
-      'Only whoever added a poll can change it.',
-      'Only whoever added a poll or those allowed to moderate can remove it.',
-      "Once a poll is added, its “options” can't be changed.",
-      'Roles in the space can be given permission to “moderate”.',
-    ]);
+  test('a poll: a fixed field', () => {
+    assert.deepEqual(describeCollection(poll), ["Once a poll is added, its “options” can't be changed."]);
   });
 
-  test("one per something that isn't per person: the first one holds it, unless anyone may change it", () => {
-    const seat = {
-      name: 'app.chess.seat',
-      title: 'Seat',
-      rules: { edit: 'creator' as const, onePer: ['color'] },
-    };
-    assert.ok(describeCollection(seat).includes('One seat per color — whoever adds it first holds it.'));
+  test("one per something that isn't per person: anyone adding another replaces the first", () => {
+    const seat = { name: 'app.chess.seat', title: 'Seat', rules: { onePer: ['color'] } };
     assert.ok(
-      describeCollection({ ...seat, rules: { onePer: ['color'] } }).includes(
-        'One seat per color — anyone adding another replaces the first.',
-      ),
+      describeCollection(seat).includes('One seat per color — anyone adding another replaces the first.'),
     );
   });
 
-  test('no rules still says something: the defaults', () => {
-    assert.deepEqual(describeCollection({ name: 'app.note' }), [
-      'Anyone in the space can add a note.',
-      'Anyone in the space can change or remove any note.',
-    ]);
+  test('no rules say nothing: who may write is the space’s grants, not the definition’s', () => {
+    assert.deepEqual(describeCollection({ name: 'app.note' }), []);
   });
 
   test('every rule the protocol accepts adds a sentence, and one it does not know is refused', () => {
     // The rule names checkRules lists in its error — the source of truth for what a rule can be.
     const known = /use ([^)]+)\)/.exec(checkRules({ nope: 1 })!)![1]!.split(', ');
     const samples: Record<string, CollectionRules> = {
-      create: { create: 'can:post' },
-      edit: { edit: 'creator' },
-      delete: { delete: 'creator' },
       onePer: { onePer: ['@author'] },
       fixed: { fixed: ['x'] },
       check: { check: [{ that: 'body.amount > 0', else: 'An amount is more than 0' }] },
@@ -774,15 +757,11 @@ describe('what a collection allows, in words', () => {
         rule in samples,
         `describe.ts has no sample for the rule "${rule}" — add one, and a sentence for it`,
       );
-      const said = describeCollection({ name: 'app.thing', rules: samples[rule]!, permissions: ['post'] });
-      assert.notDeepEqual(
-        said.filter((s) => !s.includes('permission')),
-        baseline,
-        `the rule "${rule}" changes nothing in the summary`,
-      );
+      const said = describeCollection({ name: 'app.thing', rules: samples[rule]! });
+      assert.notDeepEqual(said, baseline, `the rule "${rule}" changes nothing in the summary`);
     }
     // A rule from some later version, beside one this version knows.
-    const later = { edit: 'creator' as const, someday: true };
+    const later = { final: true as const, someday: true };
     assert.throws(() => describeCollection({ name: 'app.thing', rules: later }), /No way to describe/);
   });
 });

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
-import { team } from '../src/space/presets.js';
+import { ownRecords } from './helpers/own-records.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
 import { forge, person, settle } from './helpers/person.js';
@@ -18,14 +18,14 @@ test('a pending decision becomes visible in list once its cited vote arrives', a
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
-  const { id: space } = await alice.node.spaces.create({ name: 'Club', ...team, visibility: 'public' });
+  const { id: space } = await alice.node.spaces.create({ name: 'Club', ...ownRecords, visibility: 'public' });
   await bob.node.spaces.join(await alice.node.spaces.invite(space));
   await alice.node.collections.define(space, { name: 'app.proposal', schema: { type: 'object' } });
   await alice.node.collections.define(space, {
     name: 'app.proposal.vote',
     schema: { type: 'object' },
     links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-    rules: { edit: 'creator', onePer: ['@author', 'link:about'] },
+    rules: { onePer: ['@author', 'link:about'] },
   });
   await alice.node.collections.define(space, {
     name: 'app.proposal.passed',

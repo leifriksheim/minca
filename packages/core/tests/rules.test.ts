@@ -1,6 +1,7 @@
 /**
- * Collection rules: who may create, edit and delete; one per something; fixed
- * fields — enforced on write, and by every peer during sync.
+ * Collection rules (one per something, fixed fields, final) and the grants
+ * that say who may create, edit and delete — enforced on write, and by every
+ * peer during sync.
  */
 import { test, describe } from 'node:test';
 import { ownedKey } from '../src/records/key.js';
@@ -13,6 +14,9 @@ import { checkRules } from '../src/records/rules.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
 import { team } from '../src/space/presets.js';
+import { OWN } from './helpers/own-records.js';
+import { COLLECTION_DEFINE, RECORD_DELETE, ROLE_ASSIGN } from '../src/space/grants.js';
+import type { SpaceRole } from '../src/types.js';
 import { hold, letGo } from './helpers/hold.js';
 import { stored } from './helpers/stored.js';
 import { SYNC_PROTOCOL_VERSION } from '../src/sync/sync-messages.js';
@@ -26,23 +30,42 @@ const pollSchema = {
 };
 const voteSchema = { type: 'object', properties: { choice: { type: 'integer' } }, required: ['choice'] };
 
+/** Editors change only what they made; moderators may delete any poll, and change nothing */
+const editor = (grants = OWN): SpaceRole => ({
+  name: 'editor',
+  title: 'Editor',
+  grants: [
+    ...grants,
+    { cmd: COLLECTION_DEFINE, pol: [] },
+    { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'editor']] },
+  ],
+});
+const ROLES: ReadonlyArray<SpaceRole> = [
+  editor(),
+  {
+    name: 'moderator',
+    title: 'Moderator',
+    grants: [{ cmd: RECORD_DELETE, pol: [['==', '.collection', 'app.poll']] }],
+  },
+  { name: 'viewer', title: 'Viewer', grants: [] },
+];
+
 async function pollSpace(visibility: 'public' | 'private' = 'public') {
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
-  const { id: space } = await alice.node.spaces.create({ name: 'Trip', ...team, visibility });
-  await bob.node.spaces.join(await alice.node.spaces.invite(space));
+  const { id: space } = await alice.node.spaces.create({ name: 'Trip', roles: ROLES, visibility });
+  await bob.node.spaces.join(await alice.node.spaces.invite(space, { role: 'editor' }));
   await alice.node.collections.define(space, {
     name: 'app.poll',
     schema: pollSchema,
-    permissions: ['moderate'],
-    rules: { edit: 'creator', delete: ['creator', 'can:moderate'], fixed: ['options'] },
+    rules: { fixed: ['options'] },
   });
   await alice.node.collections.define(space, {
     name: 'app.poll.vote',
     schema: voteSchema,
     links: { about: { to: ['app.poll'], cardinality: 'one' } },
-    rules: { edit: 'creator', onePer: ['@author', 'link:about'] },
+    rules: { onePer: ['@author', 'link:about'] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);
@@ -57,22 +80,18 @@ async function pollSpace(visibility: 'public' | 'private' = 'public') {
 
 describe('rules: checking a definition', () => {
   test('refuses what it cannot enforce', () => {
-    assert.equal(
-      checkRules({ edit: 'creator', onePer: ['@author', 'link:about'], fixed: ['options'] }),
-      null,
-    );
-    assert.match(checkRules({ edit: 'admin' }) ?? '', /"member", "creator" or "can:<permission>"/);
-    assert.match(checkRules({ edit: 'owner' }) ?? '', /"member", "creator" or "can:<permission>"/);
-    assert.match(checkRules({ delete: 'can:moderate' }) ?? '', /does not declare "moderate"/);
-    assert.equal(checkRules({ delete: 'can:moderate' }, 'rules', ['moderate']), null);
-    assert.match(checkRules({ create: 'creator' }) ?? '', /no creator until/);
+    assert.equal(checkRules({ onePer: ['@author', 'link:about'], fixed: ['options'] }), null);
+    // Who may write is the space's grants: a definition that says it is refused.
+    assert.match(checkRules({ edit: 'creator' }) ?? '', /grants/);
+    assert.match(checkRules({ delete: 'can:moderate' }) ?? '', /grants/);
+    assert.match(checkRules({ create: 'member' }) ?? '', /grants/);
     assert.match(checkRules({ unique: ['x'] }) ?? '', /not a rule/);
     assert.equal(checkRules({ final: true, onePer: ['@author', 'link:about'] }), null);
     assert.match(checkRules({ final: false }) ?? '', /final must be true/);
   });
 });
 
-describe('rules: who may edit and delete', () => {
+describe('grants: who may edit and delete', () => {
   test('only the creator edits; the refusal comes before signing, with the reason', async () => {
     const { alice, bob, space } = await pollSpace();
     const poll = await alice.node.records.put(space, 'app.poll', {
@@ -85,7 +104,7 @@ describe('rules: who may edit and delete', () => {
     assert.equal(await alice.node.records.can(space, 'edit', poll.key), true);
     await assert.rejects(
       bob.node.records.update(space, poll.key, { question: 'Mine now', options: ['Oslo', 'Lisbon'] }),
-      /Only whoever created it can edit/,
+      /holds no grant to write/,
     );
     await alice.node.records.update(space, poll.key, {
       question: 'Where in May?',
@@ -114,24 +133,28 @@ describe('rules: who may edit and delete', () => {
     });
     await hold(bob.node, space);
     await until(async () => rejected !== '', 4000, 'Alice to refuse it');
-    assert.match(rejected, /Only whoever created it can edit/);
+    assert.match(rejected, /holds no grant to write/);
     assert.equal(
       (await alice.node.records.get<{ question: string }>(space, poll.key))?.body?.question,
       'Where?',
     );
   });
 
-  test('delete follows its own rule: someone allowed to moderate — the owner, here — may delete a member’s poll', async () => {
+  test('delete is its own grant: a moderator may delete a member’s poll, and not edit it', async () => {
     const { alice, bob, space } = await pollSpace();
-    const poll = await bob.node.records.put(space, 'app.poll', { question: 'Bob’s', options: ['a'] });
-    await until(async () => (await alice.node.records.get(space, poll.key)) !== null, 4000, 'Bob’s poll');
-    assert.equal(await alice.node.records.can(space, 'edit', poll.key), false);
-    assert.equal(await alice.node.records.can(space, 'delete', poll.key), true);
-    await alice.node.records.delete(space, poll.key);
+    const poll = await alice.node.records.put(space, 'app.poll', { question: 'Alice’s', options: ['a'] });
+    await alice.node.spaces.assign(space, bob.node.did, 'moderator');
     await until(
-      async () => (await bob.node.records.get(space, poll.key)) === null,
+      async () => bob.node.records.can(space, 'delete', poll.key),
       4000,
-      'the delete to reach Bob',
+      'the poll and Bob’s new role',
+    );
+    assert.equal(await bob.node.records.can(space, 'edit', poll.key), false);
+    await bob.node.records.delete(space, poll.key);
+    await until(
+      async () => (await alice.node.records.get(space, poll.key)) === null,
+      4000,
+      'the delete to reach Alice',
     );
   });
 
@@ -185,55 +208,50 @@ describe('rules: who may edit and delete', () => {
     );
   });
 
-  test('create can need a permission: the space decides which roles hold it', async () => {
-    const { alice, bob, space } = await pollSpace();
-    await alice.node.collections.define(space, {
-      name: 'app.announcement',
-      schema: { type: 'object' },
-      permissions: ['announce'],
-      rules: { create: 'can:announce' },
+  test('creating can need a grant: the space decides which roles hold it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const bob = await person(hub);
+    // Editors write their own records anywhere but announcements.
+    const notAnnouncing = OWN.map((grant) => ({
+      ...grant,
+      pol: [...grant.pol, ['!=', '.collection', 'app.announcement']],
+    }));
+    const { id: space } = await alice.node.spaces.create({
+      name: 'Trip',
+      roles: [editor(notAnnouncing)],
+      visibility: 'public',
     });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space, { role: 'editor' }));
+    await hold(alice.node, space);
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    await alice.node.collections.define(space, { name: 'app.announcement', schema: { type: 'object' } });
     await until(
       async () => (await bob.node.collections.list(space)).some((c) => c.name === 'app.announcement'),
       4000,
       'the definition',
     );
     assert.equal(await bob.node.records.can(space, 'create', 'app.announcement'), false);
-    await assert.rejects(
-      bob.node.records.put(space, 'app.announcement', { text: 'hi' }),
-      /Only those allowed to announce can create/,
-    );
+    await assert.rejects(bob.node.records.put(space, 'app.announcement', { text: 'hi' }), /holds no grant/);
     await alice.node.records.put(space, 'app.announcement', { text: 'Welcome' });
 
-    // The space gives Editors the permission: Bob may now, and no definition changed.
-    await alice.node.spaces.putRole(space, {
-      name: 'editor',
-      title: 'Editor',
-      rank: 10,
-      permissions: ['invite', 'define', 'app.announcement/announce'],
-    });
+    // The space redefines Editor to hold the grant: Bob may now, and no collection definition changed.
+    await alice.node.spaces.defineRole(space, editor());
     await until(
       async () => bob.node.records.can(space, 'create', 'app.announcement'),
       4000,
-      'the new permission to reach Bob',
+      'the new grant to reach Bob',
     );
     await bob.node.records.put(space, 'app.announcement', { text: 'hi' });
   });
 });
 
-describe('rules: changing them', () => {
-  /** Bob may post on a board with no rules; the rules then narrow to those who may post */
+describe('grants: changing them', () => {
+  /** Bob, an editor, may post on a board; the space then narrows editor so that he may not */
   async function narrowing() {
     const { alice, bob, space } = await pollSpace();
-    const board = { name: 'app.board', schema: { type: 'object' }, permissions: ['post'] };
-    // Editors may post, viewers not: what a demotion will take away.
-    await alice.node.spaces.putRole(space, {
-      name: 'editor',
-      title: 'Editor',
-      rank: 10,
-      permissions: ['invite', 'define', 'app.board/post'],
-    });
-    await alice.node.spaces.putRole(space, { name: 'viewer', title: 'Viewer', rank: 5, permissions: [] });
+    const board = { name: 'app.board', schema: { type: 'object' } };
     await alice.node.collections.define(space, board);
     await until(
       async () => (await bob.node.collections.list(space)).some((c) => c.name === 'app.board'),
@@ -244,11 +262,15 @@ describe('rules: changing them', () => {
     await until(async () => (await alice.node.records.get(space, early.key)) !== null, 4000, 'Bob’s post');
     // What a version Bob wrote now would name: read from his node, not a second copy of its store.
     const seenThen = (await bob.node.spaces.access(space)).heads;
-    await alice.node.collections.define(space, { ...board, rules: { create: 'can:post' } });
+    const offBoard = OWN.map((grant) => ({
+      ...grant,
+      pol: [...grant.pol, ['!=', '.collection', 'app.board']],
+    }));
+    await alice.node.spaces.defineRole(space, editor(offBoard));
     await until(
-      async () => (await bob.node.collections.list(space)).some((c) => !!c.rules?.create),
+      async () => !(await bob.node.records.can(space, 'create', 'app.board')),
       4000,
-      'the narrowed rules to reach Bob',
+      'the narrowed role to reach Bob',
     );
     /** Signs, as Bob, a post that claims to have been written before the change, and sends it */
     const backdate = async (text: string) => {
@@ -266,19 +288,23 @@ describe('rules: changing them', () => {
     return { alice, bob, space, early, backdate };
   }
 
-  test('a narrowed rule alone binds what saw it: a write that names an older point counts if it could have then', async () => {
+  test('a narrowed role alone binds what saw it: a write that names an older point counts if it could have then', async () => {
     const { alice, space, backdate } = await narrowing();
     // Nobody can tell this from a post written offline before the change, and Bob could post then.
     const backdated = await backdate('backdated');
     await until(async () => (await alice.node.records.get(space, backdated.key)) !== null, 4000, 'the post');
   });
 
-  test('a narrowed rule binds a backdated write through a demotion that saw it (#179)', async () => {
+  test('a backdated write that needed a role is withdrawn by the unassignment it had not seen (#179)', async () => {
     const { alice, bob, space, early, backdate } = await narrowing();
-    // Each harmless alone: the narrowing, which an editor still passes, and a demotion to viewer.
-    await alice.node.spaces.setMember(space, bob.node.did, 'viewer');
+    // Bob moves to viewer: his editor role, which the backdated post needed, is taken.
+    await alice.node.spaces.assign(space, bob.node.did, 'viewer');
+    await alice.node.spaces.unassign(space, bob.node.did, 'editor');
     await until(
-      async () => (await bob.node.spaces.access(space)).role?.name === 'viewer',
+      async () => {
+        const { mine } = await bob.node.spaces.access(space);
+        return mine.length === 1 && mine[0] === 'viewer';
+      },
       4000,
       'the demotion',
     );
@@ -288,12 +314,8 @@ describe('rules: changing them', () => {
       4000,
       'the backdated post to reach Alice',
     );
-    assert.equal(
-      await alice.node.records.get(space, backdated.key),
-      null,
-      'judged with the demotion and what it saw',
-    );
-    // What Alice had seen of Bob when she demoted him stays.
+    assert.equal(await alice.node.records.get(space, backdated.key), null, 'judged with the unassignment');
+    // What Alice had seen of Bob when she took his role stays.
     assert.notEqual(await alice.node.records.get(space, early.key), null);
   });
 });
@@ -413,11 +435,7 @@ describe('rules: arriving in any order', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const { id: space } = await alice.node.spaces.create({ name: 'Trip', ...team, visibility: 'public' });
-    await alice.node.collections.define(space, {
-      name: 'app.poll',
-      schema: pollSchema,
-      rules: { edit: 'creator' },
-    });
+    await alice.node.collections.define(space, { name: 'app.poll', schema: pollSchema });
     const poll = await alice.node.records.put(space, 'app.poll', { question: 'v0' });
     await alice.node.records.update(space, poll.key, { question: 'v1' });
     await alice.node.records.update(space, poll.key, { question: 'v2' });
@@ -474,11 +492,12 @@ describe('rules: arriving in any order', () => {
   test('records written before a collection had rules stand; changes to them after follow the rules', async () => {
     const { alice, bob, space } = await pollSpace();
     const other = 'app.trip.note';
-    const old = await alice.node.records.put(space, other, { text: 'Before' });
+    const old = await bob.node.records.put(space, other, { text: 'Before' });
+    await until(async () => (await alice.node.records.get(space, old.key)) !== null, 4000, 'the note');
     await alice.node.collections.define(space, {
       name: other,
       schema: { type: 'object' },
-      rules: { edit: 'creator' },
+      rules: { final: true },
     });
     await until(async () => (await bob.node.records.get(space, old.key)) !== null, 4000, 'the note');
     await until(
@@ -488,18 +507,15 @@ describe('rules: arriving in any order', () => {
       'the rules',
     );
     assert.equal((await bob.node.records.get(space, old.key))?.verified, true);
-    await assert.rejects(
-      bob.node.records.update(space, old.key, { text: 'Bob’s now' }),
-      /Only whoever created it can edit/,
-    );
+    await assert.rejects(bob.node.records.update(space, old.key, { text: 'Changed' }), /is final/);
   });
 
   test('agents see the rules, and can ask before acting', async () => {
     const { alice, bob, space } = await pollSpace();
     const listed = z
-      .array(z.object({ name: z.string(), rules: z.object({ edit: z.unknown() }) }))
+      .array(z.object({ name: z.string(), rules: z.object({ fixed: z.array(z.string()) }) }))
       .parse(await runAction(bob.node, 'collections_list', { space, names: ['app.poll'] }));
-    assert.equal(listed.find((c) => c.name === 'app.poll')?.rules.edit, 'creator');
+    assert.deepEqual(listed.find((c) => c.name === 'app.poll')?.rules.fixed, ['options']);
     const poll = await alice.node.records.put(space, 'app.poll', { question: 'Where?' });
     await until(async () => (await bob.node.records.get(space, poll.key)) !== null, 4000, 'the poll');
     assert.equal(

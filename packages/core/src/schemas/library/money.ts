@@ -4,7 +4,6 @@
  * fragment, a decimal string and a currency, never a float.
  */
 import {
-  authored,
   choice,
   count,
   day,
@@ -12,7 +11,6 @@ import {
   many,
   money,
   one,
-  own,
   person,
   placeRef,
   text,
@@ -76,7 +74,7 @@ export const settlement = define({
     },
     required: ['from', 'to', 'amount'],
   },
-  rules: { ...own, fixed: ['from', 'to', 'amount'] },
+  rules: { fixed: ['from', 'to', 'amount'] },
   topics: ['from', 'to'],
 });
 export type Settlement = BodyOf<typeof settlement>;
@@ -138,8 +136,6 @@ export const listing = define({
     },
     required: ['title'],
   },
-  permissions: ['moderate'],
-  rules: authored,
   topics: ['place.cells'],
 });
 export type Listing = BodyOf<typeof listing>;
@@ -172,7 +168,6 @@ export const order = define({
     required: ['items'],
   },
   links: { about: many(['std.listing'], 'The listings ordered') },
-  rules: own,
   topics: ['respondingTo'],
 });
 export type Order = BodyOf<typeof order>;
@@ -192,7 +187,6 @@ export const orderUpdate = define({
     required: ['status'],
   },
   links: { about: one(['std.order'], 'The order') },
-  rules: own,
   topics: ['respondingTo'],
 });
 export type OrderUpdate = BodyOf<typeof orderUpdate>;

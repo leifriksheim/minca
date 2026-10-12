@@ -78,7 +78,7 @@ describe('spaces', () => {
     const created = await node.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
 
     assert.equal(created.creator, node.did);
-    assert.equal(created.role, 'owner');
+    assert.equal(created.role, 'founder');
     assert.equal(created.readable, true);
     const listed = await node.spaces.list();
     assert.deepEqual(

@@ -19,7 +19,6 @@ await hold(alice, space);
 await alice.collections.define(space, {
   name: 'app.card',
   schema: { type: 'object', properties: { n: { type: 'integer' } }, required: ['n'] },
-  rules: { create: 'member', edit: 'member', delete: 'member' },
 });
 const keys: string[] = [];
 for (let i = 0; i < RECORDS; i++) keys.push((await alice.records.put(space, 'app.card', { n: 0 })).key);

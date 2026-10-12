@@ -7,20 +7,7 @@
  * records that prove it, and every device checks the proof (02 §7.6).
  */
 import type { Check } from '../../records/checks.js';
-import {
-  authored,
-  blob,
-  choice,
-  count,
-  markdown,
-  one,
-  own,
-  person,
-  text,
-  define,
-  when,
-  words,
-} from '../fragments.js';
+import { blob, choice, count, markdown, one, person, text, define, when, words } from '../fragments.js';
 import type { BodyOf } from '../../query/types.js';
 
 /**
@@ -40,8 +27,7 @@ export const poll = define({
     },
     required: ['question', 'options'],
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'], fixed: ['options'] },
+  rules: { fixed: ['options'] },
 });
 export type Poll = BodyOf<typeof poll>;
 
@@ -72,7 +58,7 @@ export const vote = define({
   links: {
     about: { to: ['std.poll', 'std.proposal'], cardinality: 'one', description: 'The poll voted on' },
   },
-  rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
   topics: ['respondingTo'],
 });
 export type Vote = BodyOf<typeof vote>;
@@ -94,8 +80,7 @@ export const proposal = define({
     },
     required: ['title', 'options'],
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'], fixed: ['options'] },
+  rules: { fixed: ['options'] },
 });
 export type Proposal = BodyOf<typeof proposal>;
 
@@ -131,7 +116,7 @@ export const ballot = define({
     required: ['choice'],
   },
   links: { about: one(['std.proposal'], 'The proposal') },
-  rules: { ...own, onePer: ['@author', 'link:about'], fixed: ['choice'] },
+  rules: { onePer: ['@author', 'link:about'], fixed: ['choice'] },
   topics: ['respondingTo'],
 });
 export type Ballot = BodyOf<typeof ballot>;
@@ -180,7 +165,7 @@ export const decision = define({
     required: ['outcome', 'proposal', 'ballots'],
   },
   links: { about: one(['std.proposal'], 'The proposal decided') },
-  rules: { edit: 'creator', delete: 'creator', onePer: ['link:about'], check: DECIDES },
+  rules: { onePer: ['link:about'], check: DECIDES },
 });
 export type Decision = BodyOf<typeof decision>;
 
@@ -203,8 +188,7 @@ export const goal = define({
     },
     required: ['title', 'target', 'unit'],
   },
-  permissions: ['moderate'],
-  rules: { ...authored, fixed: ['target', 'unit'] },
+  rules: { fixed: ['target', 'unit'] },
 });
 export type Goal = BodyOf<typeof goal>;
 
@@ -223,7 +207,7 @@ export const pledge = define({
     required: ['amount'],
   },
   links: { about: one(['std.goal'], 'The goal') },
-  rules: { ...own, onePer: ['@author', 'link:about'], fixed: ['amount'] },
+  rules: { onePer: ['@author', 'link:about'], fixed: ['amount'] },
   topics: ['respondingTo'],
 });
 export type Pledge = BodyOf<typeof pledge>;
@@ -264,7 +248,7 @@ export const goalReached = define({
     required: ['goal', 'pledges'],
   },
   links: { about: one(['std.goal'], 'The goal reached') },
-  rules: { edit: 'creator', delete: 'creator', onePer: ['link:about'], check: REACHES },
+  rules: { onePer: ['link:about'], check: REACHES },
 });
 export type GoalReached = BodyOf<typeof goalReached>;
 
@@ -278,8 +262,6 @@ export const announcement = define({
     properties: { title: words(300), text: markdown(20000) },
     required: ['title'],
   },
-  permissions: ['announce'],
-  rules: { create: 'can:announce', edit: 'creator', delete: ['creator', 'can:announce'] },
 });
 export type Announcement = BodyOf<typeof announcement>;
 
@@ -293,8 +275,6 @@ export const badge = define({
     properties: { name: words(100), description: text(1000), image: blob() },
     required: ['name'],
   },
-  permissions: ['award'],
-  rules: { create: 'can:award', edit: 'can:award' },
 });
 export type Badge = BodyOf<typeof badge>;
 
@@ -309,8 +289,7 @@ export const award = define({
     required: ['did'],
   },
   links: { about: one(['std.badge'], 'The badge') },
-  permissions: ['award'],
-  rules: { create: 'can:award', edit: 'can:award', onePer: ['link:about', 'did'] },
+  rules: { onePer: ['link:about', 'did'] },
   topics: ['did'],
 });
 export type Award = BodyOf<typeof award>;
@@ -329,7 +308,7 @@ export const setting = define({
     },
     required: ['app', 'key'],
   },
-  rules: { ...own, onePer: ['@author', 'app', 'key'] },
+  rules: { onePer: ['@author', 'app', 'key'] },
 });
 export type Setting = BodyOf<typeof setting>;
 
@@ -353,8 +332,7 @@ export const host = define({
     },
     required: ['url'],
   },
-  permissions: ['manage'],
-  rules: { create: 'can:manage', edit: 'can:manage', delete: 'can:manage', onePer: ['url'] },
+  rules: { onePer: ['url'] },
 });
 export type Host = BodyOf<typeof host>;
 

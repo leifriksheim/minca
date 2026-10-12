@@ -11,7 +11,6 @@ import {
   image,
   markdown,
   one,
-  own,
   placeFields,
   point,
   text,
@@ -47,7 +46,6 @@ export const visit = define({
     required: ['at'],
   },
   links: { about: one(['std.place'], 'The place') },
-  rules: own,
 });
 export type Visit = BodyOf<typeof visit>;
 
@@ -78,7 +76,7 @@ export const location = define({
     },
     required: ['lat', 'lon', 'at'],
   },
-  rules: { ...own, onePer: ['@author'] },
+  rules: { onePer: ['@author'] },
 });
 export type Location = BodyOf<typeof location>;
 
@@ -144,7 +142,7 @@ export const journalEntry = define({
     properties: { date: day(), content: markdown(200000), mood: text(32) },
     required: ['date'],
   },
-  rules: { ...own, onePer: ['@author', 'date'] },
+  rules: { onePer: ['@author', 'date'] },
 });
 export type JournalEntry = BodyOf<typeof journalEntry>;
 
@@ -164,7 +162,6 @@ export const measurement = define({
     },
     required: ['kind', 'value', 'unit', 'at'],
   },
-  rules: own,
 });
 export type Measurement = BodyOf<typeof measurement>;
 
@@ -185,7 +182,6 @@ export const workout = define({
     },
     required: ['type', 'start'],
   },
-  rules: own,
 });
 export type Workout = BodyOf<typeof workout>;
 
@@ -235,7 +231,7 @@ export const progress = define({
     required: ['status'],
   },
   links: { about: one(['std.work'], 'The work') },
-  rules: { ...own, onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
 });
 export type Progress = BodyOf<typeof progress>;
 

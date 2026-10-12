@@ -57,6 +57,12 @@ function tamper(
   return base64UrlEncode(utf8Encode(JSON.stringify(parsed)));
 }
 
+/** What an account is in a space, as its own node sees it: `founder`, its first role, or null */
+async function place(node: Person['node'], space: string): Promise<string | null> {
+  const { founder, mine } = await node.spaces.access(space);
+  return founder ? 'founder' : (mine[0] ?? null);
+}
+
 /** A space shared with Bob as an Editor, synced both ways */
 async function sharedWithBob() {
   const hub = createFakeHub({ latencyMs: 1 });
@@ -112,19 +118,28 @@ describe('space access: the space vouches for itself', () => {
     assert.equal(await checkSpace(space), null);
     assert.equal(await checkSpace({ ...space, name: 'Renamed' }), null);
     assert.match(String(await checkSpace({ ...space, creator: 'did:key:zMallory' })), /id does not match/);
-    assert.match(String(await checkSpace({ ...space, creatorRole: 'editor' })), /id does not match/);
     assert.match(
       String(
         await checkSpace({
           ...space,
-          roles: [...space.roles, { name: 'x', rank: 1000, permissions: ['*'] }],
+          roles: [...space.roles, { name: 'x', grants: [{ cmd: '/', pol: [] }] }],
+        }),
+      ),
+      /id does not match/,
+    );
+    // A grant widened in place changes the id too.
+    assert.match(
+      String(
+        await checkSpace({
+          ...space,
+          roles: space.roles.map((role) => ({ ...role, grants: [{ cmd: '/', pol: [] }] })),
         }),
       ),
       /id does not match/,
     );
     assert.match(
-      String(await checkSpace({ ...space, creatorRole: 'nobody' })),
-      /not one of the starting roles/,
+      String(await checkSpace({ ...space, roles: [...space.roles, ...space.roles] })),
+      /share a name/,
     );
   });
 
@@ -140,7 +155,9 @@ describe('space access: the space vouches for itself', () => {
       /does not describe a real space/,
     );
     await assert.rejects(
-      bob.node.spaces.join(tamper(invite, (p) => (p.space.creatorRole = 'editor'))),
+      bob.node.spaces.join(
+        tamper(invite, (p) => (p.space.roles = [{ name: 'editor', grants: [{ cmd: '/', pol: [] }] }])),
+      ),
       /does not describe a real space/,
     );
     assert.equal((await bob.node.spaces.list()).length, 0);
@@ -271,11 +288,14 @@ describe('space access: who may write', () => {
 });
 
 describe('space access: invites', () => {
-  test('an invite gives the lowest role below yours, once its record reaches the joiner', async () => {
+  test('an invite gives a role you may assign, once its record reaches the joiner', async () => {
     const { alice, bob, space } = await sharedWithBob();
     const access = await bob.node.spaces.access(space);
-    assert.equal(access.role?.name, 'editor');
-    assert.deepEqual(access.members.map((m) => m.role).sort(), ['editor', 'owner']);
+    assert.deepEqual(access.mine, ['editor']);
+    assert.deepEqual(access.members.map((m) => (m.founder ? 'founder' : m.roles.join())).sort(), [
+      'editor',
+      'founder',
+    ]);
     const note = await bob.node.records.put(space, 'app.note', { text: 'from Bob' });
     await until(
       async () => (await alice.node.records.get(space, note.key)) !== null,
@@ -285,7 +305,7 @@ describe('space access: invites', () => {
     assert.equal((await bob.node.spaces.get(space))?.writable, true);
   });
 
-  test('an invite for a named role; not above your own', async () => {
+  test('an invite for a named role; only one your grants let you assign', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const bob = await person(hub);
@@ -297,8 +317,10 @@ describe('space access: invites', () => {
     await bob.node.spaces.join(await alice.node.spaces.invite(space, { role: 'moderator' }));
     await hold(alice.node, space);
     await joined(bob.node, space);
-    assert.equal((await bob.node.spaces.access(space)).role?.name, 'moderator');
-    await assert.rejects(bob.node.spaces.invite(space, { role: 'admin' }), /up to their own rank/);
+    assert.equal(await place(bob.node, space), 'moderator');
+    // A moderator may assign member, so it invites to member and nothing else.
+    assert.equal(parseSpaceInvite(await bob.node.spaces.invite(space)).role, 'member');
+    await assert.rejects(bob.node.spaces.invite(space, { role: 'admin' }), /may not invite to this role/);
   });
 
   test('a closed invite lets nobody else in; who joined before stays', async () => {
@@ -316,12 +338,8 @@ describe('space access: invites', () => {
       'the close to reach Carol',
     );
     // Whether she used it before the close reached her or not, the close came first: she holds nothing.
-    await until(
-      async () => (await carol.node.spaces.access(space)).role === null,
-      4000,
-      'Carol to hold no role',
-    );
-    assert.equal((await bob.node.spaces.access(space)).role?.name, 'editor');
+    await until(async () => (await place(carol.node, space)) === null, 4000, 'Carol to hold no role');
+    assert.equal(await place(bob.node, space), 'editor');
   });
 
   test('a view-only invite to a private space reads everything and writes nothing', async () => {
@@ -370,12 +388,8 @@ describe('space access: taking it back', () => {
       (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(before.version))!.seen ??
       [];
 
-    await alice.node.spaces.setMember(space, bob.node.did, null);
-    await until(
-      async () => (await bob.node.spaces.access(space)).role === null,
-      4000,
-      'the removal to reach Bob',
-    );
+    await alice.node.spaces.removeMember(space, bob.node.did);
+    await until(async () => (await place(bob.node, space)) === null, 4000, 'the removal to reach Bob');
     await assert.rejects(
       bob.node.records.put(space, 'app.note', { text: 'after' }),
       /shared with you to view/,
@@ -401,10 +415,9 @@ describe('space access: taking it back', () => {
     assert.equal((await alice.node.records.get(space, before.key))?.verified, true);
   });
 
-  test('handing over: the creator gives their role and leaves, and the new owner keeps managing', async () => {
+  test('handing over: the founder steps down by leaving, and the editor keeps the space going', async () => {
     const { hub, alice, bob, space } = await sharedWithBob();
-    await alice.node.spaces.setMember(space, bob.node.did, 'owner');
-    await alice.node.spaces.setMember(space, alice.node.did, null);
+    await alice.node.spaces.removeMember(space, alice.node.did);
     await until(
       async () => (await bob.node.spaces.access(space)).members.every((m) => m.did !== alice.node.did),
       4000,
@@ -415,32 +428,46 @@ describe('space access: taking it back', () => {
     await carol.node.spaces.join(await bob.node.spaces.invite(space));
     await hold(carol.node, space);
     await joined(carol.node, space);
-    assert.equal((await carol.node.spaces.access(space)).role?.name, 'editor');
+    assert.equal(await place(carol.node, space), 'editor');
+    assert.equal(
+      (await carol.node.spaces.access(space)).members.some((m) => m.founder),
+      false,
+    );
     await assert.rejects(
       alice.node.records.put(space, 'app.note', { text: 'still here?' }),
       /shared with you to view/,
     );
   });
 
-  test('two owners cannot remove each other', async () => {
-    const { alice, bob, space } = await sharedWithBob();
-    await alice.node.spaces.setMember(space, bob.node.did, 'owner');
+  test('nobody removes the founder, and admins whose policy reads `.roles` cannot remove each other', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const bob = await person(hub);
+    const carol = await person(hub);
+    const { id: space } = await alice.node.spaces.create({
+      name: 'Club',
+      ...community,
+      visibility: 'public',
+    });
+    await hold(alice.node, space);
+    for (const who of [bob, carol]) {
+      await who.node.spaces.join(await alice.node.spaces.invite(space, { role: 'admin' }));
+      await hold(who.node, space);
+      await joined(who.node, space);
+    }
     await until(
-      async () => (await bob.node.spaces.access(space)).role?.name === 'owner',
+      async () => (await bob.node.spaces.access(space)).members.some((m) => m.did === carol.node.did),
       4000,
-      'Bob to be an owner',
+      'Bob to see Carol',
     );
-    await assert.rejects(bob.node.spaces.setMember(space, alice.node.did, null), /ranked below them/);
+    await assert.rejects(bob.node.spaces.removeMember(space, alice.node.did), /No one but a founder/);
+    await assert.rejects(bob.node.spaces.removeMember(space, carol.node.did), /may not remove them/);
+    assert.equal(await place(alice.node, space), 'founder');
   });
 
   test('the history a node keeps up as changes arrive is the one it would replay from its store', async () => {
+    // Editors assign editor, so both of them change who is in.
     const { alice, bob, space } = await sharedWithBob();
-    await alice.node.spaces.setMember(space, bob.node.did, 'owner');
-    await until(
-      async () => (await bob.node.spaces.access(space)).role?.name === 'owner',
-      4000,
-      'Bob to be an owner',
-    );
     const someone = async () =>
       publicKeyToDid(
         await provider.exportPublicKey((await provider.generateKeyPair()).publicKey),
@@ -449,7 +476,7 @@ describe('space access: taking it back', () => {
     // Both change who is in at once, so some changes arrive having not seen others.
     await Promise.all(
       [alice, bob].map(async ({ node }) => {
-        for (let i = 0; i < 6; i++) await node.spaces.setMember(space, await someone(), 'editor');
+        for (let i = 0; i < 6; i++) await node.spaces.assign(space, await someone(), 'editor');
       }),
     );
     const shape = async (node: Person['node']) => {
@@ -515,7 +542,7 @@ describe('space access: taking it back', () => {
       6000,
       'both at Alice',
     );
-    await alice.node.spaces.setMember(space, bob.node.did, null);
+    await alice.node.spaces.removeMember(space, bob.node.did);
     // After the removal, the next place in Bob's real line, naming the old point.
     const after = await sign('after removal', { n: 1, prev: first.id });
     await letGo(alice.node, space);

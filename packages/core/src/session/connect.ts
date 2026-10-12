@@ -25,7 +25,7 @@ import { startPageNode, type WorkerLike } from '../node/worker.js';
 import type { StoreFactory } from '../node/stores.js';
 import type { Version } from '../types.js';
 import type { CacheConfig, NewSpace, NodeNetworkConfig, P2PNode } from '../node/types.js';
-import { checkStartingRoles } from '../space/space-access.js';
+import { checkFoundingRoles } from '../space/grants.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
 import { checkProposal, MAX_PROPOSALS, type NotifyProposal } from '../space/notify.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
@@ -788,11 +788,7 @@ function isNewSpaces(value: unknown): boolean {
         space.name.trim().length > 0 &&
         space.name.length <= 80 &&
         (space.visibility === 'private' || space.visibility === 'public') &&
-        (space.roles === undefined ||
-          checkStartingRoles(
-            space.roles,
-            space.creatorRole ?? [...space.roles].sort((a, b) => b.rank - a.rank)[0]?.name,
-          ) === null),
+        (space.roles === undefined || checkFoundingRoles(space.roles) === null),
     )
   );
 }

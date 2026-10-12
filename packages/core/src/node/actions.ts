@@ -252,33 +252,50 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
   {
     name: 'spaces_access',
     description:
-      'Who holds what in a space: its roles (highest rank first, each with its permissions), its members by identity ' +
-      '(did) and role, its invites, and your own role. You may change people and roles ranked below you.',
+      'Who holds what in a space: its roles, each with its grants (a command and a policy on its arguments), its ' +
+      'members by identity (did) with the roles assigned to them, its invites, and whether you are its founder and ' +
+      'which roles you hold. What you may do is what your roles grant; the founder may do anything.',
     input: { type: 'object', properties: { space }, required: ['space'] },
     readOnly: true,
     run: (node, input) => node.spaces.access(str(input, 'space')),
   },
   {
-    name: 'spaces_set_member',
+    name: 'spaces_assign',
     description:
-      'Give someone a role in a space, change it, or take it away (role ""). You may change people ranked below you, ' +
-      'give roles up to your own rank, and always remove yourself. Records they wrote that this node has seen stay.',
+      'Assign a role to someone in a space, or with remove: true take it from them. Needs a grant of /role/assign ' +
+      '(or /role/unassign) for that role; you may always take a role from yourself. Records they wrote that this node ' +
+      'has seen stay.',
     input: {
       type: 'object',
       properties: {
         space,
         did: { type: 'string', description: 'Their identity' },
-        role: { type: 'string', description: 'The role name, or "" to take their role away' },
+        role: { type: 'string', description: 'The role name' },
+        remove: { type: 'boolean', description: 'Take the role away instead' },
       },
       required: ['space', 'did', 'role'],
     },
     destructive: true,
     run: async (node, input) => {
-      await node.spaces.setMember(
-        str(input, 'space'),
-        str(input, 'did'),
-        typeof input.role === 'string' && input.role !== '' ? input.role : null,
-      );
+      const [spaceId, did, role] = [str(input, 'space'), str(input, 'did'), str(input, 'role')];
+      if (input.remove === true) await node.spaces.unassign(spaceId, did, role);
+      else await node.spaces.assign(spaceId, did, role);
+      return node.spaces.access(spaceId);
+    },
+  },
+  {
+    name: 'spaces_remove_member',
+    description:
+      'Remove someone from a space, every role they hold with them. Needs a grant of /member/remove; you may always ' +
+      'remove yourself. Nobody else can remove the founder. Records they wrote that this node has seen stay.',
+    input: {
+      type: 'object',
+      properties: { space, did: { type: 'string', description: 'Their identity' } },
+      required: ['space', 'did'],
+    },
+    destructive: true,
+    run: async (node, input) => {
+      await node.spaces.removeMember(str(input, 'space'), str(input, 'did'));
       return node.spaces.access(str(input, 'space'));
     },
   },
@@ -315,7 +332,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'What a space holds and how it connects. Without names, each collection in a line: name, title, description, ' +
       'record count, the names of its link roles, and the guides people in the space wrote about it (std.guide records, ' +
       'by key: read one with records_get before writing to that collection, for how it is meant to be used). With names, ' +
-      'those in full: JSON Schema, links, rules, permissions. Read the ones you will write to before writing, to match ' +
+      'those in full: JSON Schema, links, rules. Read the ones you will write to before writing, to match ' +
       'the shapes and links others use; ask for several at once. Standard shapes (std.*) appear only once a space ' +
       'defines them; collections_standard lists them all.',
     input: {
@@ -398,9 +415,11 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'from its poll\'s options — add "x-choicesFrom": { "rel": "about", "field": "options" } to the field (a number is a ' +
       'position in that list; text is the option itself), so apps can show labels and tallies. ' +
       'Check collections_standard first: std.* names are the standard library\'s. Name your own after what it is for, e.g. "carpool.ride", not "app.ride", which another app may want for something else. ' +
-      'Redefining bumps the version; only whoever first defined it, or someone who can manage the space, may. Records are then checked against it when written. ' +
-      "A key whose note grants records only (an agent's) can't define collections, and every peer ignores one that tries; " +
-      'nor can someone whose role does not hold "define". Propose them with collections_propose instead.',
+      'Redefining bumps the version; only whoever first defined it, or someone granted /collection/define for it, may. ' +
+      "Records are then checked against it when written. Who may write its records is not the definition's to say: " +
+      "it is the space's grants (spaces_access). A key whose note grants records only (an agent's) can't define " +
+      'collections, and every peer ignores one that tries; nor can someone holding no grant of /collection/define. ' +
+      'Propose them with collections_propose instead.',
     input: {
       type: 'object',
       properties: {
@@ -420,20 +439,12 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
           description:
             'Link roles its records may carry: { "trip": { "to": ["carpool.trip"], "cardinality": "one" } }. "to" is "*" for any collection.',
         },
-        permissions: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Permissions its rules may name, like ["moderate"]. A space\'s roles hold them as "<collection>/<permission>".',
-        },
         rules: {
           type: 'object',
           description:
-            'What its records allow, enforced by every peer: { "create": "member", "edit": "creator", "delete": ["creator", "can:moderate"], ' +
-            '"onePer": ["@author", "link:about"], "fixed": ["options"] }. Who is "member" (anyone holding a role here, the default), ' +
-            '"creator" (whoever created that record) or "can:<permission>" (anyone whose role holds one of the permissions declared ' +
-            'above). onePer makes at most one record per author + linked record (+ body field): writing again changes it. fixed fields ' +
-            'keep their first value.',
+            'What its records must keep to, enforced by every peer: { "onePer": ["@author", "link:about"], "fixed": ["options"], ' +
+            '"final": true }. onePer makes at most one record per author + linked record (+ body field): writing again changes it. ' +
+            "fixed fields keep their first value. final records are written once. Who may write is the space's grants, not a rule.",
         },
         topics: {
           type: 'array',
@@ -464,7 +475,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'needs, such as a carpool, a sign-up sheet or a decision log. It writes one std.blueprint record: a title, a line on ' +
       'what it is for, and the collections. Use standard ones wherever they fit: read collections_standard and pass each ' +
       'by name ("std.event"); it is then exactly the standard shape, so other apps read its records. Give each collection ' +
-      'of your own exactly as collections_define takes it (name, title, description, schema, links, permissions, rules, ' +
+      'of your own exactly as collections_define takes it (name, title, description, schema, links, rules, ' +
       'topics, no version), named after what it is for ("carpool.ride"); std.* names are only the library\'s. Nothing is ' +
       'defined yet: everyone in the space sees it, with what each collection allows worked out from its rules. ' +
       'Read collections_list first and reuse what the space already has rather than inventing a twin; the guides it ' +
@@ -562,8 +573,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     name: 'collections_apply',
     description:
       'Apply a blueprint someone proposed: define each collection it proposes that the space does not have as it says. ' +
-      'Read it in collections_proposals first, and tell the person what each collection allows. Only someone whose role ' +
-      'holds "define", with a key whose note grants it, may.',
+      'Read it in collections_proposals first, and tell the person what each collection allows. Only someone granted ' +
+      '/collection/define, with a key whose note grants it, may.',
     input: {
       type: 'object',
       properties: {
@@ -582,7 +593,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     name: 'collections_delete',
     description:
       "Remove a collection's definition from a space. Refused while it still has records — delete those first. " +
-      'Only whoever first defined it, or someone who can manage the space, may.',
+      'Only whoever first defined it, or someone granted /collection/define for it, may.',
     input: {
       type: 'object',
       properties: { space, name: { type: 'string' } },
@@ -860,7 +871,8 @@ export const PERSON_ONLY: ReadonlySet<string> = new Set([
   'spaces_invite',
   'spaces_join',
   'spaces_leave',
-  'spaces_set_member',
+  'spaces_assign',
+  'spaces_remove_member',
   'spaces_close_invite',
   'collections_define',
   'collections_delete',

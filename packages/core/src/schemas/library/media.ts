@@ -8,7 +8,6 @@ import {
   count,
   many,
   one,
-  own,
   person,
   placeRef,
   position,
@@ -171,7 +170,6 @@ export const play = define({
     properties: { ...trackFields, playedAt: when() },
     required: ['title', 'playedAt'],
   },
-  rules: own,
 });
 export type Play = BodyOf<typeof play>;
 

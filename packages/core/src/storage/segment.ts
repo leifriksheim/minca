@@ -13,11 +13,11 @@ import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
 /**
- * The segment format. 5 since a version's proof is a note in the UCAN 1.0 profile
- * (spec 01 §7): an older segment's versions carry notes no peer reads now,
- * so a reader holds nothing for it instead.
+ * The segment format. 6 since who may do what is grants held by roles
+ * (spec 03 §2): an older segment's access records are ones no peer reads
+ * now, so a reader holds nothing for it instead.
  */
-const SEGMENT_VERSION = 5;
+const SEGMENT_VERSION = 6;
 
 /** Packs versions into a segment's bytes */
 export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {

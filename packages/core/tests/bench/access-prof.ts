@@ -12,7 +12,7 @@ import { person, someone, time, ms } from './common.js';
 const M = Number(process.argv[2] ?? 100);
 const alice = await person();
 const { id: space } = await alice.spaces.create({ name: 'Club', ...community, visibility: 'private' });
-for (let i = 1; i < M; i++) await alice.spaces.setMember(space, await someone(), 'member');
+for (let i = 1; i < M; i++) await alice.spaces.assign(space, await someone(), 'member');
 const extra = await Promise.all([someone(), someone(), someone()]);
 
 const session = new Session();
@@ -21,7 +21,7 @@ await session.post('Profiler.enable');
 await session.post('Profiler.setSamplingInterval', { interval: 50 });
 await session.post('Profiler.start');
 for (const did of extra)
-  console.log(`add at ${M}: ${ms(await time(() => alice.spaces.setMember(space, did, 'member')))}`);
+  console.log(`add at ${M}: ${ms(await time(() => alice.spaces.assign(space, did, 'member')))}`);
 const { profile } = await session.post('Profiler.stop');
 const out = `${process.env.PROF_OUT ?? '/tmp'}/access.cpuprofile`;
 writeFileSync(out, JSON.stringify(profile));

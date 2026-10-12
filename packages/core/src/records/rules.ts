@@ -1,20 +1,8 @@
 /**
- * What a collection allows: who may create its records, who may edit and
- * delete them, what must be unique, and which fields are fixed at creation.
- *
- * A rule names one of two things, and the difference matters:
- *
- * - **A fact about the record** — `creator`, whoever wrote its first version.
- *   Nobody decides it and nobody can take it away; any peer can check it from
- *   the record itself.
- * - **A permission** — `can:moderate`. Whether someone holds it was decided by
- *   a person, in the space's roles (`space/roles.ts`), and can change.
- *
- * `member` is anyone holding a role in the space at all.
- *
- * A version is judged by the definition in force, and the roles people held,
- * as of the access changes it says it saw (`seen`) — the same on every peer,
- * and never by a clock.
+ * What a collection's definition asks of its records, besides their shape:
+ * what must be unique, which fields are fixed at creation, and whether a
+ * record is written once. Who may write is not the definition's to say: it
+ * is the space's grants (`space/grants.ts`), held by roles.
  *
  * "At most one per…" is not checked against other records (no peer ever holds
  * them all). It is made true by construction: the record's key is derived from
@@ -23,30 +11,14 @@
  * What the others can't say, `check` can: conditions over the body, the
  * version before and versions it cites (`records/checks.ts`).
  */
-import { PERMISSION_PATTERN, type Check } from './checks.js';
+import { type Check } from './checks.js';
 import { ownedKey } from './key.js';
 import { canonicalize } from '../schema/version.js';
 import { bytesToHex, utf8Encode } from '../utils/encoding.js';
-import { bufferSource, isList, isRecord, readField } from '../utils/guards.js';
+import { bufferSource, isRecord, readField } from '../utils/guards.js';
 import type { Link } from '../types.js';
 
-/**
- * Who may do something. A list means any of them. `can:<permission>` names a
- * permission the collection declares — `can:moderate` in `app.poll` is the
- * permission `app.poll/moderate`, which a role may hold.
- */
-export type Who = 'member' | 'creator' | `can:${string}`;
-
-/** The full name a role holds for a collection's permission */
-export const permissionName = (collection: string, permission: string) => `${collection}/${permission}`;
-
 export interface CollectionRules {
-  /** Who may create a record. Default: `member` — anyone holding a role in the space. */
-  readonly create?: Who | ReadonlyArray<Who>;
-  /** Who may write later versions. Default: `member`. `creator` is whoever wrote the first version. */
-  readonly edit?: Who | ReadonlyArray<Who>;
-  /** Who may delete. Default: the same as `edit`. */
-  readonly delete?: Who | ReadonlyArray<Who>;
   /**
    * At most one record per combination of these — by construction: the key is
    * derived from them. `@author` is the writer's identity, `link:<rel>` the
@@ -57,9 +29,8 @@ export interface CollectionRules {
   /** Fields that keep the value the record was created with */
   readonly fixed?: ReadonlyArray<string>;
   /**
-   * Conditions every created or edited version must meet, judged by every
-   * peer that can read it: "at least ten members voted yes", "a move from
-   * the board before". See `records/checks.ts`.
+   * Conditions every created or edited version must meet to count, read by
+   * the library and not judged by peers. See `records/checks.ts`.
    */
   readonly check?: ReadonlyArray<Check>;
   /**
@@ -69,42 +40,18 @@ export interface CollectionRules {
   readonly final?: true;
 }
 
-const isWho = (w: unknown): w is Who =>
-  w === 'member' ||
-  w === 'creator' ||
-  (typeof w === 'string' && w.startsWith('can:') && PERMISSION_PATTERN.test(w.slice(4)));
-
-/**
- * Why a set of rules is malformed, or null when it is not.
- * @param permissions The permissions the collection declares — the only ones its rules may name
- */
-export function checkRules(
-  rules: unknown,
-  at = 'rules',
-  permissions: ReadonlyArray<string> = [],
-): string | null {
+/** Why a set of rules is malformed, or null when it is not */
+export function checkRules(rules: unknown, at = 'rules'): string | null {
   if (rules === undefined) return null;
   if (!isRecord(rules)) return `${at} must be an object`;
   const r = rules;
   for (const key of Object.keys(r)) {
-    if (!['create', 'edit', 'delete', 'onePer', 'fixed', 'check', 'final'].includes(key))
-      return `${at}.${key} is not a rule (use create, edit, delete, onePer, fixed, check, final)`;
+    if (['create', 'edit', 'delete'].includes(key))
+      return `${at}.${key} is gone: who may write is the space's grants (spec 02 §7)`;
+    if (!['onePer', 'fixed', 'check', 'final'].includes(key))
+      return `${at}.${key} is not a rule (use onePer, fixed, check, final)`;
   }
   if (r.final !== undefined && r.final !== true) return `${at}.final must be true`;
-  for (const action of ['create', 'edit', 'delete']) {
-    const who = r[action];
-    if (who === undefined) continue;
-    const list = Array.isArray(who) ? who : [who];
-    if (list.length === 0 || !list.every(isWho)) {
-      return `${at}.${action} must be "member", "creator" or "can:<permission>", or a list of them`;
-    }
-    const undeclared = list.find((w) => w.startsWith('can:') && !permissions.includes(w.slice(4)));
-    if (undeclared)
-      return `${at}.${action} names ${undeclared}, but the collection does not declare "${undeclared.slice(4)}" in its permissions`;
-  }
-  if (r.create !== undefined && (Array.isArray(r.create) ? r.create : [r.create]).includes('creator')) {
-    return `${at}.create cannot be "creator" — a record has no creator until it is created`;
-  }
   for (const list of ['onePer', 'fixed']) {
     const value = r[list];
     if (value === undefined) continue;
@@ -120,33 +67,6 @@ export function checkRules(
   // a peer keeps whatever list a definition carries, and its author's node checks it.
   if (r.check !== undefined && !Array.isArray(r.check)) return `${at}.check must be a list`;
   return null;
-}
-
-/** What a rule needs to know about the writer */
-export interface RuleContext {
-  /** Whether the writer holds any role in the space */
-  readonly member: boolean;
-  /** Whether the writer created the record — false when creating it */
-  readonly creator: boolean;
-  /** Whether the writer holds one of the collection's permissions */
-  readonly can: (permission: string) => boolean;
-}
-
-/** Whether a writer is among `who` */
-export function allows(who: Who | ReadonlyArray<Who> | undefined, context: RuleContext): boolean {
-  const list: ReadonlyArray<Who> = who === undefined ? ['member'] : isList(who) ? who : [who];
-  return list.some((w) =>
-    w === 'member' ? context.member : w === 'creator' ? context.creator : context.can(w.slice(4)),
-  );
-}
-
-/** "Only whoever created it or those allowed to moderate" — for error messages */
-export function describeWho(who: Who | ReadonlyArray<Who> | undefined): string {
-  const list: ReadonlyArray<Who> = who === undefined ? ['member'] : isList(who) ? who : [who];
-  const words = list.map((w) =>
-    w === 'member' ? 'members' : w === 'creator' ? 'whoever created it' : `those allowed to ${w.slice(4)}`,
-  );
-  return words.length === 1 ? words[0]! : `${words.slice(0, -1).join(', ')} or ${words.at(-1)}`;
 }
 
 /**

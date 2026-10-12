@@ -5,13 +5,11 @@
  */
 import {
   about,
-  authored,
   blob,
   choice,
   image,
   markdown,
   one,
-  own,
   people,
   person,
   position,
@@ -51,8 +49,6 @@ export const message = define({
     replyTo: { to: ['std.message'], cardinality: 'one', description: 'The message this replies to' },
     shares: { to: '*', cardinality: 'one', description: 'A record this message shares, like a poll' },
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 export type Message = BodyOf<typeof message>;
 
@@ -81,7 +77,6 @@ export const call = define({
     },
     required: ['status', 'startedAt'],
   },
-  rules: { edit: 'creator', delete: 'creator' },
   topics: ['to', 'people'],
 });
 export type Call = BodyOf<typeof call>;
@@ -96,8 +91,6 @@ export const channel = define({
     properties: { name: words(100), topic: text(500), position: position() },
     required: ['name'],
   },
-  permissions: ['moderate'],
-  rules: { create: 'can:moderate', edit: 'can:moderate' },
 });
 export type Channel = BodyOf<typeof channel>;
 
@@ -137,7 +130,6 @@ export const direct = define({
     required: ['to', 'data', 'boxes'],
   },
   topics: ['to'],
-  rules: { edit: 'creator', delete: 'creator' },
 });
 export type Direct = BodyOf<typeof direct>;
 
@@ -166,8 +158,6 @@ export const post = define({
     root: one(['std.post'], 'The first post of the thread'),
     shares: about('A record it quotes'),
   },
-  permissions: ['moderate'],
-  rules: authored,
 });
 export type Post = BodyOf<typeof post>;
 
@@ -181,7 +171,7 @@ export const repost = define({
     properties: { respondingTo: person('Whose record it responds to, so they can be told') },
   },
   links: { about: about('What is reposted') },
-  rules: { ...own, onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
   topics: ['respondingTo'],
 });
 export type Repost = BodyOf<typeof repost>;
@@ -206,8 +196,6 @@ export const article = define({
     required: ['title'],
   },
   links: { in: one(['std.publication'], 'The publication it is in') },
-  permissions: ['moderate'],
-  rules: authored,
   topics: ['mentions'],
 });
 export type Article = BodyOf<typeof article>;

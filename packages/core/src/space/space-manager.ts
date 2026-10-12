@@ -14,7 +14,6 @@ import { base64UrlEncode, base64UrlDecode, utf8Encode, utf8Decode } from '../uti
 import { generateSpaceKey, spaceKeyFromRaw, type SpaceKey } from '../privacy/space-encryption.js';
 import {
   checkSpace,
-  checkStartingRoles,
   deriveInviteKey,
   deriveReadKey,
   spaceGenesis,
@@ -24,6 +23,7 @@ import {
 import type { InvitePreview } from '../node/types.js';
 import { solo } from './presets.js';
 import { checkRelays } from './roles.js';
+import { checkFoundingRoles } from './grants.js';
 
 /** A space plus the secrets this node holds for it */
 export interface SpaceRecord {
@@ -65,10 +65,21 @@ export interface CreateSpaceParams {
   readonly name: string;
   readonly visibility: SpaceVisibility;
   readonly creator: string;
-  /** The roles it starts with. Default: the creator alone, holding everything (`presets.solo`). */
+  /** The roles it is founded with, and their grants. Default: none, so the creator, its founder, alone (`presets.solo`). */
   readonly roles?: ReadonlyArray<SpaceRole>;
-  readonly creatorRole?: string;
 }
+
+/** A frozen copy of a founding role, so nothing the caller holds changes the genesis later */
+const copyRole = (role: SpaceRole): SpaceRole =>
+  Object.freeze({
+    name: role.name,
+    ...(role.title !== undefined ? { title: role.title } : {}),
+    grants: Object.freeze(role.grants.map((grant) => Object.freeze({ cmd: grant.cmd, pol: grant.pol }))),
+    ...(role.nests !== undefined ? { nests: Object.freeze([...role.nests]) } : {}),
+  });
+
+/** What a space record says of the account that founded it, in place of a role */
+export const FOUNDER = 'founder';
 
 /** What an invite carries: enough to find the space, to read it if it is private, and to join it if it says so */
 export interface SpaceInvite {
@@ -223,21 +234,14 @@ export function createSpaceManager(
       // A nonce keeps two spaces made alike from colliding on one id.
       const nonce = base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(12)));
       const roles = params.roles ?? solo.roles;
-      const creatorRole =
-        params.creatorRole ??
-        (params.roles ? [...roles].sort((a, b) => b.rank - a.rank)[0]?.name : solo.creatorRole) ??
-        '';
-      const problem = checkStartingRoles(roles, creatorRole);
+      const problem = checkFoundingRoles(roles);
       if (problem) throw new Error(problem);
 
       const key = params.visibility === 'private' ? await generateSpaceKey() : null;
       const fixed = {
         visibility: params.visibility,
         creator: params.creator,
-        roles: roles.map((role) =>
-          Object.freeze({ ...role, permissions: Object.freeze([...role.permissions]) }),
-        ),
-        creatorRole,
+        roles: roles.map(copyRole),
         createdAt,
         nonce,
         ...(key ? { readKey: (await deriveReadKey(key, provider)).did, encryptionKeyId: key.id } : {}),
@@ -247,8 +251,8 @@ export function createSpaceManager(
 
       await writeSpace(space);
       if (key) await writeKey(id, key);
-      await adapter.put(`${ROLE_PREFIX}${id}`, utf8Encode(creatorRole));
-      return { space, key, keys: key ? [key] : [], invite: null, role: creatorRole };
+      await adapter.put(`${ROLE_PREFIX}${id}`, utf8Encode(FOUNDER));
+      return { space, key, keys: key ? [key] : [], invite: null, role: FOUNDER };
     },
 
     async get(spaceId: string): Promise<SpaceRecord | null> {

@@ -205,11 +205,6 @@ export const many = (to: ReadonlyArray<string> | '*', description: string): Link
   description,
 });
 
-/** Only its author changes it; its author or a moderator removes it */
-export const authored = { edit: 'creator', delete: ['creator', 'can:moderate'] } as const;
-/** Only its author changes or removes it */
-export const own = { edit: 'creator', delete: 'creator' } as const;
-
 /** Types for the fragments, as records carry them */
 export interface Money {
   readonly amount: string;

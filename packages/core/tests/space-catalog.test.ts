@@ -21,6 +21,14 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
+import { COLLECTION_DEFINE, ROLE_ASSIGN } from '../src/space/grants.js';
+import { OWN } from './helpers/own-records.js';
+
+/** Editors change their own records; planners define collections too, which lets them change any */
+const PLANNING = [
+  { name: 'editor', grants: [...OWN, { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'editor']] }] },
+  { name: 'planner', grants: [...OWN, { cmd: COLLECTION_DEFINE, pol: [] }] },
+];
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
@@ -170,14 +178,14 @@ describe('a space that describes itself', () => {
     );
   });
 
-  test('redefining bumps the version, and only the definer or someone who can manage the space may', async () => {
+  test('redefining bumps the version, and only the definer or someone who may define it may', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const owner = await person(hub);
     const member = await person(hub);
     const outsider = await person(hub);
-    const { id: space } = await owner.spaces.create({ name: 'Trip', ...team, visibility: 'private' });
-    const invite = await owner.spaces.invite(space);
-    await member.spaces.join(invite);
+    const { id: space } = await owner.spaces.create({ name: 'Trip', roles: PLANNING, visibility: 'private' });
+    const invite = await owner.spaces.invite(space, { role: 'editor' });
+    await member.spaces.join(await owner.spaces.invite(space, { role: 'planner' }));
     await outsider.spaces.join(invite);
     for (const node of [owner, member, outsider]) await hold(node, space);
     await joined(member, space);
@@ -193,9 +201,9 @@ describe('a space that describes itself', () => {
     // A third member may not redefine someone else's collection...
     await assert.rejects(
       outsider.collections.define(space, { name: 'app.trip.expense', schema: { type: 'object' } }),
-      /Only whoever defined it, or someone who manages the space, may change it/,
+      /Only whoever defined it, or someone who may define it, may change it/,
     );
-    // ...the definer may, and so may the owner.
+    // ...the definer may, and so may the founder.
     const v2 = await member.collections.define(space, {
       name: 'app.trip.expense',
       schema: { ...expense, required: ['what'] },
@@ -214,8 +222,8 @@ describe('a space that describes itself', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const owner = await person(hub);
     const member = await person(hub);
-    const { id: space } = await owner.spaces.create({ name: 'Trip', ...team, visibility: 'private' });
-    await member.spaces.join(await owner.spaces.invite(space));
+    const { id: space } = await owner.spaces.create({ name: 'Trip', roles: PLANNING, visibility: 'private' });
+    await member.spaces.join(await owner.spaces.invite(space, { role: 'editor' }));
     for (const node of [owner, member]) await hold(node, space);
     await joined(member, space);
 
@@ -239,7 +247,7 @@ describe('a space that describes itself', () => {
     // Someone else's definition is not a member's to remove.
     await assert.rejects(
       member.collections.delete(space, 'app.trip.expense'),
-      /Only whoever defined it, or someone who manages the space, may change it/,
+      /Only whoever defined it, or someone who may define it, may change it/,
     );
     await owner.collections.delete(space, 'app.trip.expense');
     assert.equal(await named(owner)(), false);
@@ -247,6 +255,8 @@ describe('a space that describes itself', () => {
     await assert.rejects(owner.collections.delete(space, 'app.trip.expense'), /not defined in this space/);
 
     // The name is free again, and whoever defines it next is its definer.
+    await owner.spaces.assign(space, member.did, 'planner');
+    await until(async () => (await member.spaces.access(space)).mine.includes('planner'), 3000, 'planner');
     const again = await member.collections.define(space, { name: 'app.trip.expense', schema: expense });
     assert.equal(again.definedBy, member.did);
   });

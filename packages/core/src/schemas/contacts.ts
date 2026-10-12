@@ -56,7 +56,6 @@ export const contactRequest = define({
     },
     required: ['to', 'sealed'],
   },
-  rules: { edit: 'creator', delete: 'creator' },
 });
 export type ContactRequestRecord = BodyOf<typeof contactRequest>;
 
@@ -147,6 +146,5 @@ export const knockAnswer = define({
     },
     required: ['sig'],
   },
-  rules: { edit: 'creator', delete: 'creator' },
 });
 export type KnockAnswer = BodyOf<typeof knockAnswer>;

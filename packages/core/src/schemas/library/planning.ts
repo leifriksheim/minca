@@ -4,13 +4,11 @@
  */
 import {
   about,
-  authored,
   choice,
   count,
   day,
   markdown,
   one,
-  own,
   people,
   placeRef,
   position,
@@ -84,7 +82,7 @@ export const rsvp = define({
     required: ['status'],
   },
   links: { about: one(['std.event'], 'The event') },
-  rules: { ...own, onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
   topics: ['respondingTo'],
 });
 export type Rsvp = BodyOf<typeof rsvp>;
@@ -100,8 +98,6 @@ export const slot = define({
     required: ['start', 'end'],
   },
   links: { in: one(['std.calendar'], 'The calendar it is in') },
-  permissions: ['moderate'],
-  rules: authored,
 });
 export type Slot = BodyOf<typeof slot>;
 
@@ -118,8 +114,7 @@ export const booking = define({
     },
   },
   links: { about: one(['std.slot'], 'The slot booked') },
-  permissions: ['moderate'],
-  rules: { ...authored, onePer: ['link:about'] },
+  rules: { onePer: ['link:about'] },
   topics: ['respondingTo'],
 });
 export type Booking = BodyOf<typeof booking>;
@@ -208,7 +203,6 @@ export const timeEntry = define({
     required: ['start'],
   },
   links: { about: about('What the time was spent on') },
-  rules: own,
 });
 export type TimeEntry = BodyOf<typeof timeEntry>;
 
@@ -223,7 +217,6 @@ export const reminder = define({
     required: ['at'],
   },
   links: { about: about('What it is about') },
-  rules: own,
 });
 export type Reminder = BodyOf<typeof reminder>;
 
@@ -243,7 +236,6 @@ export const habit = define({
     },
     required: ['name'],
   },
-  rules: own,
 });
 export type Habit = BodyOf<typeof habit>;
 
@@ -258,7 +250,7 @@ export const checkin = define({
     required: ['date'],
   },
   links: { about: one(['std.habit'], 'The habit') },
-  rules: { ...own, onePer: ['@author', 'link:about', 'date'] },
+  rules: { onePer: ['@author', 'link:about', 'date'] },
 });
 export type Checkin = BodyOf<typeof checkin>;
 

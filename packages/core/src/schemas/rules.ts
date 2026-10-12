@@ -34,7 +34,6 @@ import {
 import { checkFilter, checkQuery, matches } from '../query/filter.js';
 import { quickAddBody } from '../schema/quick-add.js';
 import { schemaProblem, type JsonSchema } from '../schema/collection-def.js';
-import { roleHolds } from '../space/roles.js';
 import { isObject } from '../utils/guards.js';
 import { checkCron, cronMatches } from './cron.js';
 import { about, define, one, person, text, typed, when as moment, words } from './fragments.js';
@@ -109,9 +108,6 @@ export const rule = typed<Rule>()({
     },
     required: ['name', 'then', 'since'],
   },
-  // `instruct`: whose rules a bot runs (`by`).
-  permissions: ['moderate', 'instruct'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 
 export const ruleRun = define({
@@ -127,8 +123,7 @@ export const ruleRun = define({
     rule: one([rule.name], 'The rule that ran'),
     about: about('The record it ran for'),
   },
-  permissions: ['moderate'],
-  rules: { onePer: ['link:rule', 'link:about'], edit: 'creator', delete: ['creator', 'can:moderate'] },
+  rules: { onePer: ['link:rule', 'link:about'] },
 });
 
 /** Where a bot, an agent or anyone's work on something stands */
@@ -157,7 +152,7 @@ export const activity = define({
     required: ['state', 'at'],
   },
   links: { about: about('What the work is on') },
-  rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
 });
 
 /**
@@ -207,8 +202,11 @@ export const IT = '$it';
 /** In a rule's query or condition, whoever runs it: its maker, or the bot named in `by` */
 export const ME = '$me';
 
-/** The permission a maker needs in a space for a bot there to run their rules */
-export const INSTRUCT = `${rule.name}/instruct`;
+/**
+ * The command a maker needs a grant of in a space for a bot there to run
+ * their rules: a library command, which no peer checks (docs/rules.md)
+ */
+export const INSTRUCT = `/${rule.name}/instruct`;
 
 const said = { type: 'string', pattern: '\\S' };
 const named = { type: 'string', minLength: 1 };
@@ -459,16 +457,13 @@ export async function act(
   }
 }
 
-/** The role someone holds in a space, or null */
-const roleIn = (access: SpaceAccess | undefined, did: string) => {
-  const name = access?.members.find((member) => member.did === did)?.role;
-  return access?.roles.find((role) => role.name === name) ?? null;
-};
-
-/** Whether someone holds one of these roles; `member` is any role at all */
+/** Whether someone holds one of these roles; `member` is any place at all, and a founder holds every role's power */
 const holdsOneOf = (access: SpaceAccess | undefined, did: string, names: ReadonlyArray<string>) => {
-  const role = roleIn(access, did);
-  return !!role && (names.includes('member') || names.includes(role.name));
+  const member = access?.members.find((one) => one.did === did);
+  return (
+    !!member &&
+    (member.founder || names.includes('member') || member.roles.some((role) => names.includes(role)))
+  );
 };
 
 /**
@@ -483,17 +478,22 @@ export async function rulesFor(
   access?: SpaceAccess,
 ): Promise<ReadonlyArray<ActiveRule>> {
   const records = await node.records.list(space, { collection: rule.name });
-  return records.flatMap((record: NodeRecord) => {
+  const active: ActiveRule[] = [];
+  for (const record of records) {
     const maker = record.createdBy;
     const body = ruleOf(record);
     // A key given records only, an agent's, may suggest a rule; it runs once the person saves it themselves.
-    if (!record.verified || record.recordsOnly || !maker || !body || body.paused) return [];
+    if (!record.verified || record.recordsOnly || !maker || !body || body.paused) continue;
     const runs =
       body.by === undefined
         ? maker === account
-        : body.by === account && (maker === account || roleHolds(roleIn(access, maker), INSTRUCT));
-    return runs ? [{ space, key: record.key, maker, body }] : [];
-  });
+        : body.by === account &&
+          (maker === account ||
+            (!!access?.members.some((member) => member.did === maker) &&
+              (await node.spaces.may(space, INSTRUCT, {}, maker))));
+    if (runs) active.push({ space, key: record.key, maker, body });
+  }
+  return active;
 }
 
 /** How many rules in a space an agent wrote for `account`, waiting for the person to save them */

@@ -20,6 +20,7 @@ import { base64UrlEncode } from '../utils/encoding.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { deriveReadKey, expandSecret, spaceGenesis, spaceIdOf } from './space-access.js';
 import { solo } from './presets.js';
+import { FOUNDER } from './space-manager.js';
 
 /**
  * Where the account's list of spaces lives, one record per space it follows.
@@ -107,7 +108,6 @@ async function deriveAccountSpace(
     visibility: 'private' as const,
     creator: owner,
     roles: solo.roles,
-    creatorRole: solo.creatorRole,
     createdAt,
     nonce,
     readKey: (await deriveReadKey(key, provider)).did,
@@ -118,5 +118,5 @@ async function deriveAccountSpace(
     ...fixed,
     name,
   });
-  return { space, key, invite: null, role: solo.creatorRole };
+  return { space, key, invite: null, role: FOUNDER };
 }

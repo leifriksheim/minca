@@ -55,8 +55,12 @@ describe('space manager', () => {
     assert.equal(privatePersonal.space.encryptionKeyId, privatePersonal.key?.id);
     assert.equal(publicShared.space.encryptionKeyId, undefined);
     assert.equal(publicPersonal.space.creator, OWNER);
-    assert.equal(publicPersonal.space.creatorRole, 'owner');
-    assert.equal(privateShared.role, 'owner');
+    assert.deepEqual(publicPersonal.space.roles, [], 'just the founder');
+    assert.deepEqual(
+      publicShared.space.roles.map((role) => role.name),
+      ['editor'],
+    );
+    assert.equal(privateShared.role, 'founder');
 
     const listed = await spaces.list();
     assert.equal(listed.length, 4);
