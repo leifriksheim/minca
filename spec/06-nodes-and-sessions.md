@@ -830,7 +830,8 @@ earlier carrier from the same origin, adds the carrier (§4.2) with
 
 `pod` is `null` when the account lives in the home's browser storage. The
 carrier MUST check that `kind` is `carry`, that the invite is to the named
-space, that the space is private, with `did` among its founders
+space, that the space is private, with `did` its one founder and no roles
+assigned
 ([03](03-spaces.md) §1.1), and that the invite carries
 its key; and that `pod.dataPath` has no empty or `..` segments. A carry
 connection has no expiry and no note to revoke; disconnecting it removes the

@@ -118,7 +118,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     view from before it: stepping down is a reduction of its account, and
     strikes everything it did that hadn't seen it, records included (03 §2.5,
     §4.3; `constitution.test.ts`, "stepping down strikes what the founder did
-    that had not seen it…"). Founder status is never given back.
+    that had not seen it…"). Founder status is never given back: nothing strikes
+    a stepping down, so neither the owner of the key that signed it, nor a
+    thief, nor a fork found by accident undoes it (03 §4.3;
+    `constitution.test.ts`, "stepping down is for good…";
+    `access-fuzz.test.ts`).
   - A successor it names changes nothing in the old space: no one loses a
     role there and no record stops counting. It can't hide or replace another
     member's successor: every succeed that stands is listed, and none is first
@@ -315,6 +319,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     successor from a copy by the succeed here and the successor's own
     `succeeds` together. Rival successors have no order: an app that ranked
     them would hand the choice to whoever grinds the lowest id (03 §2.7).
+    Nothing bounds how many succeed records a member writes, each one
+    stored and replayed by every peer
+    ([#33](https://github.com/leifriksheim/weave/issues/33)). A succeed that
+    stands stays named after its namer is removed, since the removal saw it;
+    an app shows whether each namer is still a member.
   - Whoever may take any role from an account strikes everything it did that
     hadn't seen that, as a removal does: unassigning a minor role strikes the
     target's concurrent actions, not only what needed it (03 §4.3).
@@ -426,9 +435,18 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
   - A fork it makes at the start of a line withdraws everything the owner's
     device wrote in that collection ([#166](https://github.com/leifriksheim/weave/issues/166)).
+  - Under a note granting `/access/change`, it can make a founder's account
+    step down, even with the key already revoked, and nothing gives founder
+    status back: a stepping down is never struck. That is all a revoked key
+    can do: one its revoke or a fork proof reaches strikes nothing and
+    withdraws nothing, and a leaving or anything else it signs is struck as
+    usual (03 §4.3; 01 §8; `constitution.test.ts`, "a revoked key stepping
+    down ends founder status, and does nothing else", "a revoke stops the
+    key…").
 - **By design** (the principle above).
   - What it signed before the revoke stands. The revoke stops the key from
-    then on, and its cutoff keeps what the revoking node held of the key's
+    then on, but for one thing: it can still end its account's founder
+    status (above), and its cutoff keeps what the revoking node held of the key's
     lines, so a copy's record or access change that reached that node first,
     an assignment in `sys.assign` say, keeps counting.
   - Only a fork proven in the same collection withdraws it. Lines are kept
@@ -455,7 +473,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     holds every command there, and nobody else, another founder included,
     can remove it. The owner can step down or leave, which takes founder
     power from the account, the thief's copy included, for good, and strikes
-    what the thief did that hadn't seen it; so can the thief, first. The
+    what the thief did that hadn't seen it; so can the thief, first. Nothing
+    undoes a stepping down; a leaving is undone by revoking the key that
+    signed it, and made again (03 §4.3). The
     others' way out is a successor space (03 §2.1, §2.5, §2.7;
     [#160](https://github.com/leifriksheim/weave/issues/160));
   - derives the account key, and from it every member key, so it reads every

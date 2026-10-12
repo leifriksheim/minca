@@ -671,6 +671,15 @@ the account as a whole (a knock, the account's own spaces) carries no
 excludes spaces (`["not", ["==", ".space", "<id>"]]`) holds for it. To keep
 a note to some spaces, name them, as above.
 
+A key whose note grants `/access/change` in a space with no policy on
+`.collection` changes anything there its account may: it can make the
+account leave, and, for a founder, step down (`sys.stepdown`), and it can
+name a successor (`sys.succeed`, [03](03-spaces.md) §2.5, §2.7). Revoking
+the key undoes all of it but stepping down, which nothing undoes (03 §4.3):
+a key revoked and still held can end its account's founder status, and
+nothing else. A home that gives an app the access command, and wants less,
+names the collections it may change.
+
 A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
 message or a knock differently for anything in `meta`: what the key may do is
 what the proof grants.

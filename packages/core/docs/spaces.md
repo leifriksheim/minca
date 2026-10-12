@@ -117,7 +117,8 @@ What an app shows:
 - every successor named, **in no order**: never one as first, and never one
   picked for the member, since which community a member joins is theirs to
   choose. The list's order means nothing;
-- who named each, and whether they hold a role there now;
+- who named each, and whether each namer is still a member: a succeed stays
+  named after its namer is removed;
 - that a space is a successor only once both hold: the new space's
   `succeeds` (`SpaceSummary.succeeds`, `preview(invite).space.succeeds`)
   names the old one, and the old one's `successors` names the new. An

@@ -65,10 +65,10 @@ nobody who hands a space on can change or swap any of it.
 | `roles`           | FoundingRole[]                         | The roles it is founded with, and their grants (§2.1). 0–64 roles, names unique.                                          |
 | `assigned`        | object, optional                       | Roles the constitution assigns: `did:key` account → 1–16 distinct names of founding roles. 1–64 accounts; absent if none. |
 | `succeeds`        | string, optional                       | The id of the space this one succeeds (§2.7).                                                                             |
-| `createdAt`       | string                                 | ISO 8601 timestamp.                                                                                                       |
-| `nonce`           | string                                 | base64url of 12 random bytes (16 characters). Keeps two spaces made alike apart.                                          |
-| `readKey`         | string                                 | Private only: the `did:key` of the space's first read key (§8.4).                                                         |
-| `encryptionKeyId` | string                                 | Private only: the id of the space's first key (§8.1).                                                                     |
+| `createdAt`       | string                                 | ISO 8601, as `toISOString` writes it: `YYYY-MM-DDTHH:mm:ss.sssZ`, a real time.                                            |
+| `nonce`           | string                                 | base64url of 12 random bytes: exactly 16 characters of `A–Z a–z 0–9 - _`. Keeps two spaces made alike apart.              |
+| `readKey`         | string                                 | Private only: the P-256 `did:key` of the space's first read key (§8.4).                                                   |
+| `encryptionKeyId` | string                                 | Private only: the id of the space's first key (§8.1), 22 base64url characters.                                            |
 
 Under `top: "none"` the constitution **MUST** assign at least one account a
 role: otherwise nobody could ever act in the space.
@@ -83,9 +83,10 @@ id = cid( canonical-JSON(constitution) )
 ```
 
 Canonical JSON is defined in [02 — Records](02-records.md) (sorted keys, no
-whitespace). Role objects inside keep their fields as given (`title` and
-`nests` omitted when absent); optional members of the constitution are
-omitted when absent, never `null`.
+whitespace). The constitution is hashed exactly as given: nothing is
+dropped, filled in or normalised first. Role objects inside keep their
+fields as given (`title` and `nests` omitted when absent); optional members
+of the constitution are omitted when absent, never `null` or empty.
 
 A peer handed a space — in an invite, a pass, from a host — **MUST** refuse it
 unless all of these hold (`checkSpace`, `constitutionProblem`):
@@ -102,8 +103,8 @@ unless all of these hold (`checkSpace`, `constitutionProblem`):
    `top: "none"` it is present;
 8. `succeeds`, if present, is a space id: `cid` of some bytes, in its one
    spelling (`b` and 52 lower-case base32 characters);
-9. a private space has both `readKey` and `encryptionKeyId`; a public space
-   has neither;
+9. a private space has both `readKey`, a P-256 `did:key`, and
+   `encryptionKeyId`, 22 base64url characters; a public space has neither;
 10. `cid(canonical(constitution))` equals `id`.
 
 **A constitution a peer can't read is not judged.** A peer that doesn't know
@@ -403,11 +404,13 @@ no role, and not a founder, is no member and may invoke nothing.
   at `stepdown:<hex40(did)>` with `{ did, cutoff? }`, `did` the founder's
   account. It stays, with the roles it holds, and is a founder no more; with
   no role it is then no member, so a founder that wants to stay assigns
-  itself a role first. Like leaving, stepping down strikes everything the
-  account did that hadn't seen it (§4.3): power used by naming a view from
-  before it is struck, and so is a record written as a founder in such a
-  view (§5.1). Once it has stepped down, it can be removed or demoted like
-  anyone, by a change that saw it step down.
+  itself a role first. Like leaving, stepping down is a reduction of the
+  account: it strikes every change the account made that hadn't seen it
+  (§4.3), and withdraws every record of the account that hadn't seen it,
+  whatever that record needed (§5.1 step 4), its other devices' included.
+  Once it has stepped down, it can be removed or demoted like anyone, by a
+  change that saw it step down. Nothing strikes a stepping down (§4.3), so
+  founder status is never given back.
 - **Invites** are assignments to whoever holds the invite's secret (§7):
   opening, changing or closing an invite for a role needs `/role/assign` for
   that role, with `{ role, self: false, roles: [] }`.
@@ -706,6 +709,16 @@ e`'s place in that collection's line, `log.n`, §6.3) and, unless `r` is a
    owner reacting to a thief has seen what the thief did. Revokes and forks
    are never struck.
 
+   **A `stepdown` is never struck**, by anything: founder status is the one
+   power that can't be granted again, so nothing may give it back. Every
+   allowed `stepdown` ends its account's founder status. One that a revoke or
+   a fork proof reaches (as above, whatever either saw) does nothing more: it
+   is no reduction, strikes nothing and withdraws no record (§5.1). So a
+   revoked key, or a copy of one, can end its account's founder status, and
+   nothing else. Leaving and leaving a role get no such exception: a revoke or
+   fork proof strikes them like anything else its key signed, and an owner
+   whose leaving was struck leaves again.
+
    Reductions that strike each other all stand, whatever their kinds: a
    removal and an unassignment of each other's authors both stand, as two
    removals do (step 4). Without consensus a backdate can't be told from a
@@ -945,8 +958,8 @@ a version they cite as of what the citer saw
    collection is recorded (§6.5) whose `from` is at most `log.n`, and (with
    `within`) its event is in `within ∪ ancestors(within)` → withdrawn.
 3. If `needs(seenAs(seen))` is false → refused.
-4. If an applied reduction `u` of `root` (§4.3), a removal or an
-   unassignment of any role, is **not** in `seen ∪ ancestors(seen)`, does not
+4. If an applied reduction `u` of `root` (§4.3), a removal, an
+   unassignment of any role or a stepping down, is **not** in `seen ∪ ancestors(seen)`, does not
    cover it, and (with `within`) **is** in `within ∪ ancestors(within)` →
    withdrawn ("its author's access was taken away").
 5. If `needs(at(seen, within))` is false → withdrawn ("it rests on a change
@@ -1748,7 +1761,8 @@ _Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/
 ## 14. Passes and carry spaces
 
 A **carrier** (an extension, a host) stores and forwards a space it cannot
-read. It gets a **carry space**: a private space the account creates, with itself the only member,
+read. It gets a **carry space**: a private space the account creates, with itself the only member:
+its constitution names the account as its one founder and assigns nothing,
 and shares with it by a view-only invite recorded in `sys.carrier` (§13.2). In
 it the account keeps one **pass** per space to carry:
 
