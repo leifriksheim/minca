@@ -307,8 +307,7 @@ export function strikes(
   const seen = cutBefore(built, action.at);
   if (action.cmd === RECORD_WRITE || action.cmd === RECORD_DELETE || action.cmd.startsWith('/record')) {
     const history = replayAccess(built.genesis, [...built.events, ...reductionEvent]);
-    const needs = (state: AccessState, without?: string) =>
-      libraryMay(state, action.who, action.cmd, action.args, without ? { without } : {});
+    const needs = (state: AccessState) => libraryMay(state, action.who, action.cmd, action.args);
     const verdict = history.judge({ id: 'zz-action', root: action.who, seen }, needs);
     return !verdict.ok && verdict.withdrawn === true;
   }

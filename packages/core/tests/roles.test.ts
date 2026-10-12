@@ -9,6 +9,7 @@ import type { SpaceGrant as Grant } from '../src/types.js';
 import assert from 'node:assert/strict';
 
 import {
+  holdsRole,
   isMember,
   may,
   replayAccess,
@@ -27,6 +28,7 @@ import {
   ROLE_UNASSIGN,
 } from '../src/space/grants.js';
 import { assign, collection, define, invite, remove, revoke, unassign, writes } from './helpers/access.js';
+import { community } from '../src/space/presets.js';
 
 const ADMIN: ReadonlyArray<Grant> = [
   { cmd: '/record', pol: [] },
@@ -378,15 +380,22 @@ describe('unassigning and removing', () => {
     ],
   };
 
-  test('unassigning one role strikes only the concurrent actions that needed it', () => {
+  test('unassigning one role strikes every concurrent action of the account, like a removal', () => {
     const fred = assign('alice', 'fred', 'admin', []);
     const greets = assign('alice', 'fred', 'greeter', [fred.id]);
     const bob = assign('alice', 'bob', 'member', [greets.id]);
     const off = unassign('alice', 'fred', 'greeter', [bob.id]);
-    // Fred, apart: as an admin he makes Bob a moderator; as himself he leaves greeter.
+    // Fred, apart, as an admin makes Bob a moderator: it needed admin, not greeter, and is struck all the same.
     const mod = assign('fred', 'bob', 'moderator', [bob.id]);
     const h = replayed([fred, greets, bob, off, mod], g);
-    assert.equal(status(h, mod), 'applied', 'it needed admin, not greeter');
+    assert.equal(status(h, mod), 'dropped');
+    assert.deepEqual(rolesOf(h.current, 'fred'), ['admin'], 'he keeps admin');
+    const again = assign('fred', 'bob', 'moderator', [off.id]);
+    assert.equal(
+      status(replayed([fred, greets, bob, off, again], g), again),
+      'applied',
+      'once he has seen it',
+    );
   });
 
   test('it strikes what needed the role, and so does leaving the role on one’s own (#168)', () => {
@@ -478,6 +487,13 @@ describe('what a struck change carries with it', () => {
     assert.equal(status(h, used), 'dropped', 'what rested on it falls with it');
     assert.ok(isMember(h.current, 'carol'));
     assert.ok(!may(h.current, 'bob', MEMBER_REMOVE, { self: false, roles: [] }));
+    // A record resting on it falls too, though it cites the definition and never the unassignment.
+    const removes = (state: Parameters<typeof may>[0]) =>
+      may(state, 'bob', MEMBER_REMOVE, { self: false, roles: ['member'] });
+    const record = h.judge({ id: 'r', root: 'bob', seen: [carol.id] }, removes);
+    assert.ok(!record.ok && record.withdrawn);
+    assert.ok(!removes(h.at([carol.id])!));
+    assert.ok(removes(h.seenAs([carol.id])!), 'as Bob saw it, he could');
   });
 
   test("a former definer's backdated rival definition is struck by the concurrent unassignment", () => {
@@ -535,7 +551,7 @@ describe('what a struck change carries with it', () => {
     );
   });
 
-  test("unassigning admin doesn't strike a concurrent delete her own earlier definition of member gave", () => {
+  test('unassigning admin strikes her concurrent actions, even one her own earlier definition of member gave', () => {
     const erin = assign('alice', 'erin', 'admin', []);
     const member = assign('alice', 'erin', 'member', [erin.id]);
     const m1 = define('erin', 'member', [...MEMBER, { cmd: COLLECTION_DEFINE, pol: [] }], [member.id]);
@@ -543,8 +559,11 @@ describe('what a struck change carries with it', () => {
     const defines = collection('erin', 'app.x', [m1.id]);
     const assigns = assign('erin', 'bob', 'member', [m1.id]);
     const h = replayed([erin, member, m1, off, defines, assigns]);
-    assert.equal(status(h, defines), 'applied', 'm1, judged at its own view, still gives member it');
-    assert.equal(status(h, assigns), 'dropped', 'only admin gave her that');
+    assert.equal(status(h, defines), 'dropped', 'concurrent with the unassignment');
+    assert.equal(status(h, assigns), 'dropped');
+    // Having seen it, m1 (judged where it was written) still gives member the grant.
+    const later = collection('erin', 'app.x', [off.id]);
+    assert.equal(status(replayed([erin, member, m1, off, later]), later), 'applied');
   });
 });
 
@@ -590,8 +609,8 @@ describe('invites', () => {
 describe('records against the history', () => {
   const needsWrite =
     (did: string, c = 'app.x', byCreator = true) =>
-    (state: Parameters<typeof may>[0], without?: string) =>
-      may(state, did, RECORD_WRITE, writes(c, byCreator), without ? { without } : {});
+    (state: Parameters<typeof may>[0]) =>
+      may(state, did, RECORD_WRITE, writes(c, byCreator));
 
   test('a removed member cannot write by claiming an old point in history', () => {
     const bob = assign('alice', 'bob', 'member', []);
@@ -602,7 +621,7 @@ describe('records against the history', () => {
     assert.ok(!verdict.ok && verdict.withdrawn);
   });
 
-  test('an unassignment it had not seen withdraws only what needed that role', () => {
+  test('an unassignment it had not seen withdraws everything, as a removal does', () => {
     const g: AccessGenesis = {
       ...genesis,
       roles: [
@@ -614,7 +633,9 @@ describe('records against the history', () => {
     const greets = assign('alice', 'bob', 'greeter', [bob.id]);
     const off = unassign('alice', 'bob', 'greeter', [greets.id]);
     const h = replayed([bob, greets, off], g);
-    assert.ok(h.judge({ id: 'r1', root: 'bob', seen: [greets.id] }, needsWrite('bob', 'app.x')).ok);
+    const own = h.judge({ id: 'r1', root: 'bob', seen: [greets.id] }, needsWrite('bob', 'app.x'));
+    assert.ok(!own.ok && own.withdrawn, 'member alone allowed it, and it is withdrawn all the same');
+    assert.ok(h.judge({ id: 'r3', root: 'bob', seen: [off.id] }, needsWrite('bob', 'app.x')).ok);
     // Editing someone else's welcome: only greeter allows it.
     const welcome = h.judge(
       { id: 'r2', root: 'bob', seen: [greets.id] },
@@ -655,5 +676,71 @@ describe('records against the history', () => {
     assert.equal(status(h, mine), 'applied');
     assert.equal(status(h, other), 'dropped');
     assert.equal(h.current.definitions.get('app.mine')?.definedBy, 'bob');
+  });
+});
+
+describe('holding what a role gives', () => {
+  test('an account holds a role’s grants when its own are as wide: what it may hand a bot', () => {
+    const g: AccessGenesis = {
+      ...genesis,
+      roles: [
+        ...genesis.roles,
+        { name: 'bot', grants: [{ cmd: RECORD_WRITE, pol: [['==', '.collection', 'app.x']] }] },
+        { name: 'helper', grants: [], nests: ['moderator'] },
+      ],
+    };
+    const ann = assign('alice', 'ann', 'admin', []);
+    const bob = assign('alice', 'bob', 'member', [ann.id]);
+    const mo = assign('alice', 'mo', 'moderator', [bob.id]);
+    const h = replayed([ann, bob, mo], g);
+    assert.ok(holdsRole(h.current, 'alice', 'admin'), 'a founder holds every grant');
+    assert.ok(holdsRole(h.current, 'ann', 'bot'), '/record covers it, with no policy');
+    assert.ok(holdsRole(h.current, 'ann', 'member'));
+    assert.ok(!holdsRole(h.current, 'bob', 'bot'), 'his own only is narrower');
+    assert.ok(!holdsRole(h.current, 'bob', 'moderator'));
+    assert.ok(holdsRole(h.current, 'mo', 'helper'), 'what it nests');
+    assert.ok(holdsRole(h.current, 'ann', 'helper'), 'one statement fewer is wider');
+    assert.ok(!holdsRole(h.current, 'bob', 'helper'));
+    assert.ok(!holdsRole(h.current, 'carol', 'member'), 'a stranger holds nothing');
+  });
+});
+
+describe('what a policy says, and what it does not', () => {
+  test('a missing argument reads as null: a negated statement holds, a positive one doesn’t (03 §2.2)', () => {
+    const g: AccessGenesis = {
+      ...genesis,
+      roles: [
+        { name: 'helper', grants: [{ cmd: '/', pol: [['!=', '.role', 'admin']] }] },
+        { name: 'careful', grants: [{ cmd: '/', pol: [['or', [['==', '.role', 'member']]]] }] },
+        { name: 'admin', grants: [] },
+      ],
+    };
+    const hal = assign('alice', 'hal', 'helper', []);
+    const cal = assign('alice', 'cal', 'careful', [hal.id]);
+    const h = replayed([hal, cal], g);
+    // /member/remove has no `role`: "anything but the admin role" holds for removing an admin.
+    assert.ok(may(h.current, 'hal', MEMBER_REMOVE, { self: false, roles: ['admin'] }));
+    assert.ok(
+      !may(h.current, 'cal', MEMBER_REMOVE, { self: false, roles: ['admin'] }),
+      'saying what is allowed',
+    );
+    assert.ok(may(h.current, 'cal', ROLE_ASSIGN, { role: 'member', self: false, roles: [] }));
+  });
+
+  test('`community` admins can remove each other by naming a view before the promotion (03 §2.3)', () => {
+    const g: AccessGenesis = { id: 'space', creator: 'alice', roles: community.roles };
+    const erin = assign('alice', 'erin', 'admin', []);
+    const zed = assign('alice', 'zed', 'member', [erin.id]);
+    const promoted = assign('alice', 'zed', 'admin', [zed.id]);
+    const zedWork = assign('zed', 'pat', 'member', [promoted.id]);
+    // Seeing the promotion, `.roles` stops her.
+    const seen = remove('erin', 'zed', [promoted.id]);
+    assert.equal(status(replayed([erin, zed, promoted, seen], g), seen), 'dropped');
+    // Naming a view before it, it doesn't: `.roles` binds only a remover whose view holds the role.
+    const ban = remove('erin', 'zed', [zed.id]);
+    const h = replayed([erin, zed, promoted, zedWork, ban], g);
+    assert.equal(status(h, ban), 'applied');
+    assert.ok(!isMember(h.current, 'zed'));
+    assert.equal(status(h, zedWork), 'dropped', 'and what he did unseen by it is struck');
   });
 });

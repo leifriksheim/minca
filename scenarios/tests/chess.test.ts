@@ -561,8 +561,8 @@ describe('chess: what an unassignment strikes', () => {
   };
   const welcome = { who: FRED, cmd: '/record/write', args: { collection: 'app.welcome' }, at: 4.5 };
 
-  test("unassigning greeter doesn't strike Fred's concurrent admin actions", () => {
-    assert.ok(!strikes(a, greeter, assignReferee));
+  test("unassigning greeter strikes Fred's concurrent admin actions too: everything he did unseen", () => {
+    assert.ok(strikes(a, greeter, assignReferee));
   });
   test('it strikes what needed greeter, and so does Fred leaving greeter himself (#168)', () => {
     assert.ok(strikes(a, greeter, welcome));
@@ -622,8 +622,8 @@ describe('chess: a struck definition carries nothing (replayed by the library)',
   });
 });
 
-describe('chess: the strike counterfactual takes the role from the author only', () => {
-  test("unassigning admin doesn't strike Erin's concurrent delete through member, which her earlier m1 gave", () => {
+describe('chess: an unassignment strikes whatever gave the action', () => {
+  test("unassigning admin strikes Erin's concurrent delete through member, which her earlier m1 gave", () => {
     const a: Authority = {
       founders: [ALICE],
       delegations: [
@@ -645,11 +645,8 @@ describe('chess: the strike counterfactual takes the role from the author only',
       args: { collection: 'app.chess', byCreator: false },
       at: 4.5,
     };
-    assert.ok(
-      !strikes(a, { who: ERIN, role: 'admin' }, del),
-      'm1, judged at its own view, still gives member it',
-    );
-    // What only admin gave her is struck.
+    assert.ok(strikes(a, { who: ERIN, role: 'admin' }, del), 'concurrent with the unassignment');
+    // And what only admin gave her.
     const write = { who: ERIN, cmd: '/record/write', args: { collection: 'app.chess' }, at: 4.5 };
     assert.ok(strikes(a, { who: ERIN, role: 'admin' }, write));
   });

@@ -120,6 +120,7 @@ import {
   REVOKE_COLLECTION,
   ROLE_COLLECTION,
   isMember,
+  holdsRole,
   may,
   readers,
   replayAccess,
@@ -401,6 +402,11 @@ type Standing =
       readonly later?: boolean;
       /** Passes every check but one: a later change took its author's access away. Kept, never counted (02 §9.5). */
       readonly withdrawn?: true;
+      /**
+       * A stub whose grant reads the body it doesn't carry, at a node that reads
+       * the space: kept, as its record's history, and judged once it is whole.
+       */
+      readonly bodyNeeded?: true;
     };
 type Refusal = Extract<Standing, { readonly ok: false }>;
 const STANDS: Standing = { ok: true };
@@ -427,6 +433,14 @@ const MAX_PENDING_REREAD = 256;
 const UNJUDGED: ChecksVerdict = Object.freeze({ passes: null });
 
 const storable = (standing: Standing): boolean => standing.ok || !!standing.withdrawn;
+
+/**
+ * What the caches of verdicts on a version are keyed by: its id and signature,
+ * which a stub shares with the whole version, and which of the two it is. A
+ * verdict on a stub, judged without its body, never stands for the whole.
+ */
+const copyKey = (version: Version) =>
+  `${version.id}|${version.signature}|${isStub(version) ? 'stub' : 'whole'}`;
 
 const looksEncrypted = isSealedBody;
 
@@ -1046,12 +1060,23 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     };
   }
 
-  /** What a version asks of its author: in `sys.*`, a place; elsewhere, a grant for what it does */
-  async function needsOf(version: Version, first: Version, root: string): Promise<Needs> {
+  /**
+   * What a version asks of its author: in `sys.*`, a place; elsewhere, a grant
+   * for what it does. `strict`: a body this node can't read holds no policy on it.
+   */
+  async function needsOf(
+    version: Version,
+    first: Version,
+    root: string,
+    options: { readonly strict?: boolean } = {},
+  ): Promise<Needs> {
     if (version.collection.startsWith('sys.')) return (state) => isMember(state, root);
     const { cmd, args, opaque } = await invocationOf(version, first, root);
-    return (state, without) => may(state, root, cmd, args, { opaque, ...(without ? { without } : {}) });
+    return (state) => may(state, root, cmd, args, { opaque: opaque && !options.strict });
   }
+
+  /** Whether this node reads the space's bodies: a public space, or a private one whose key it holds */
+  const readsBodies = () => space.visibility !== 'private' || keyring.size > 0;
 
   // ─── Rules ─────────────────────────────────────────────────────────
   //
@@ -1176,8 +1201,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const problem = await copyProblem(version);
     if (problem) return { ok: false, reason: problem };
     const cacheKey = within
-      ? `${verdictKey(version)}|${[...new Set(within)].sort().join(',')}`
-      : verdictKey(version);
+      ? `${copyKey(version)}|${[...new Set(within)].sort().join(',')}`
+      : copyKey(version);
     let found = standings.get(cacheKey);
     if (!found) {
       found = judgeStanding(version, within);
@@ -1224,8 +1249,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (owned) return owned;
 
     const seen = version.seen ?? [];
-    const state = history.at(seen);
-    if (!state) return ACCESS_LATER;
+    // Judged by the changes that stand; refused only by what its writer saw (03 §5.1).
+    const state = history.at(seen, within);
+    const wrote = history.seenAs(seen);
+    if (!state || !wrote) return ACCESS_LATER;
     const form = await onePerKeyProblem(version, state);
     if (form) return form;
     // Rival definitions that differ give no rules, which must not mean anything goes (02 §6.3).
@@ -1241,14 +1268,23 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const needs = await needsOf(version, first, root);
 
     // The two refusals worth telling apart: not a member at all, and no grant for what it does.
-    if (!isMember(state, root))
+    if (!isMember(wrote, root))
       return { ok: false, reason: 'Its author was not a member of this space, as of what it had seen' };
-    if (!needs(state)) {
+    if (!needs(wrote)) {
       return {
         ok: false,
         reason: `Its author holds no grant to ${version.deleted ? 'delete' : 'write'} this ${version.collection} record, as of what it had seen`,
       };
     }
+    // A stub's grant may hold only because its body isn't here to read. A node that reads the
+    // space waits for the body rather than take it on trust: it judges the whole version afresh.
+    if (isStub(version) && readsBodies() && !(await needsOf(version, first, root, { strict: true }))(wrote))
+      return {
+        ok: false,
+        reason: 'Its grant reads its body, which a stub does not carry',
+        later: true,
+        bodyNeeded: true,
+      };
     // Written once: no later version, not even a delete.
     if (rules?.final && version.seq > 0)
       return {
@@ -1388,7 +1424,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    */
   async function checksOf(version: Version, within?: ReadonlyArray<string>): Promise<ChecksVerdict> {
     if (ACCESS_COLLECTIONS.has(version.collection) || version.collection.startsWith('sys.')) return NO_CHECKS;
-    const cacheKey = `${version.id}|${within ? [...new Set(within)].sort().join(',') : ''}`;
+    const cacheKey = `${copyKey(version)}|${within ? [...new Set(within)].sort().join(',') : ''}`;
     const cached = checkVerdicts.get(cacheKey);
     if (cached) return cached;
     const verdict = (async (): Promise<ChecksVerdict> => {
@@ -1396,7 +1432,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         version.seq === 0 ? version : version.genesis ? await storage.getVersion(version.genesis) : null;
       const root = (await judge(version)).root;
       if (!first || !root) return NO_CHECKS;
-      const state = (await access()).history.at(version.seen ?? []);
+      const state = (await access()).history.at(version.seen ?? [], within);
       if (!state) return { pending: true };
       const defined = await rulesAt(state, version.collection);
       const checks: unknown = defined?.rules.check;
@@ -1557,7 +1593,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       return { ok: false, reason: 'A version its writer retained travels whole' };
     const chain = await chainStanding(version);
     if (!chain.ok) return chain;
-    return ACCESS_COLLECTIONS.has(version.collection) ? admissible(version) : standingOf(version);
+    if (ACCESS_COLLECTIONS.has(version.collection)) return admissible(version);
+    const standing = await standingOf(version);
+    // Kept as its record's history; it counts only once whole, and its body is judged then.
+    return !standing.ok && standing.bodyNeeded ? STANDS : standing;
   }
 
   /**
@@ -3339,7 +3378,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Whether a warrant record proves what it says, against the account its key names, and is its writer's own */
   async function warrantVerdict(version: Version): Promise<WarrantVerdict> {
-    const cacheKey = verdictKey(version);
+    const cacheKey = copyKey(version);
     const known = judgedWarrants.get(cacheKey);
     if (known) return known;
     const warrant = await warrantShape(version);
@@ -3903,6 +3942,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       account: string = deps.rootDid,
     ): Promise<boolean> {
       return may((await access()).history.current, account, cmd, args);
+    },
+
+    /** Whether this account, or another, holds every grant a role gives, as wide or wider, now */
+    async holdsRole(role: string, account: string = deps.rootDid): Promise<boolean> {
+      return holdsRole((await access()).history.current, account, role);
     },
 
     async assign(did: string, role: string) {

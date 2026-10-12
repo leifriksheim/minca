@@ -21,13 +21,12 @@ import {
   MEMBER_REMOVE,
   readDefinition,
   RECORD_DELETE,
-  RECORD_READ,
   RECORD_WRITE,
   ROLE_ASSIGN,
   ROLE_DEFINE,
   ROLE_UNASSIGN,
 } from '../src/space/grants.js';
-import { assign, define, remove, revoke, unassign } from './helpers/access.js';
+import { assign, define, invite, remove, revoke, unassign } from './helpers/access.js';
 
 const OWNER: ReadonlyArray<Grant> = [
   { cmd: '/record', pol: [] },
@@ -178,20 +177,21 @@ describe('attacks on grants', () => {
               ['==', '.self', false],
             ],
           },
-          { cmd: RECORD_READ, pol: [['!=', '.collection', 'app.hr']] },
+          { cmd: RECORD_WRITE, pol: [['!=', '.collection', 'app.hr']] },
         ],
       },
     ],
   };
-  const readsHr = (h: AccessHistory, did: string) =>
-    may(h.current, did, RECORD_READ, { collection: 'app.hr' });
+  // Writing, which peers check. A grant of /record/read keeps no one out: the space key opens every collection.
+  const writesHr = (h: AccessHistory, did: string) =>
+    may(h.current, did, RECORD_WRITE, { collection: 'app.hr', byCreator: true });
 
   test('`self` through a role: assigning hr to the role admin is refused', () => {
     const ann = assign('ceo', 'ann', 'admin', []);
     const intoRole = assign('ann', 'role:admin', 'hr', [ann.id]);
     const h = replayAccess(company, [ann, intoRole]);
     assert.equal(status(h, intoRole), 'dropped');
-    assert.ok(!readsHr(h, 'ann'));
+    assert.ok(!writesHr(h, 'ann'));
   });
 
   test('`self` through nesting: nesting is defining, and Ann may not define admin', () => {
@@ -199,7 +199,7 @@ describe('attacks on grants', () => {
     const nests = define('ann', 'admin', [], [ann.id], { nests: ['hr'] });
     const h = replayAccess(company, [ann, nests]);
     assert.equal(status(h, nests), 'dropped');
-    assert.ok(!readsHr(h, 'ann'));
+    assert.ok(!writesHr(h, 'ann'));
   });
 
   test('a nesting holds only what its writer could do: a definer who holds no hr grants nests nothing', () => {
@@ -211,7 +211,7 @@ describe('attacks on grants', () => {
           name: 'steward',
           grants: [
             { cmd: ROLE_DEFINE, pol: [['==', '.role', 'admin']] },
-            { cmd: RECORD_READ, pol: [['!=', '.collection', 'app.hr']] },
+            { cmd: RECORD_WRITE, pol: [['!=', '.collection', 'app.hr']] },
           ],
         },
       ],
@@ -221,8 +221,11 @@ describe('attacks on grants', () => {
     const nests = define('sam', 'admin', company.roles[1]!.grants, [sam.id], { nests: ['hr'] });
     const h = replayAccess(g, [ann, sam, nests]);
     assert.equal(status(h, nests), 'applied');
-    assert.ok(!readsHr(h, 'ann'), 'Sam can read no hr, so the nesting carries none');
-    assert.ok(may(h.current, 'ann', RECORD_READ, { collection: 'app.eng' }), 'what Sam could give, he gave');
+    assert.ok(!writesHr(h, 'ann'), 'Sam can write no hr, so the nesting carries none');
+    assert.ok(
+      may(h.current, 'ann', RECORD_WRITE, { collection: 'app.eng', byCreator: true }),
+      'what Sam could give, he gave',
+    );
   });
 
   test('a fresh key outliving its issuer: a grant to anything but its role counts for nothing', () => {
@@ -301,7 +304,7 @@ describe('attacks on grants', () => {
     assert.ok(may(h.current, 'bob', RECORD_WRITE, { collection: 'app.x', byCreator: false }));
   });
 
-  test('a scoped strike: taking one role leaves what another gave', () => {
+  test('taking one role strikes every concurrent action of the account, not only what needed it', () => {
     const g: AccessGenesis = {
       ...genesis,
       roles: [
@@ -314,9 +317,11 @@ describe('attacks on grants', () => {
     const off = unassign('alice', 'fred', 'greeter', [greets.id]);
     const act = assign('fred', 'bob', 'member', [greets.id]);
     const h = replayAccess(g, [fred, greets, off, act]);
-    assert.equal(status(h, act), 'applied');
+    assert.equal(status(h, act), 'dropped', 'concurrent with the unassignment: struck');
+    // Once he has seen it, what his other role gives stands.
+    const after = assign('fred', 'bob', 'member', [off.id]);
+    assert.equal(status(replayAccess(g, [fred, greets, off, after]), after), 'applied');
   });
-
   test('removal against re-add: an assignment concurrent with the removal stays dead after the re-add', () => {
     const bob = assign('alice', 'bob', 'member', []);
     const erin = assign('alice', 'erin', 'owner', [bob.id]);
@@ -362,5 +367,170 @@ describe('attacks on grants', () => {
     };
     assert.deepEqual(run('aaa', 'zzz'), run('zzz', 'aaa'));
     assert.deepEqual(run('aaa', 'zzz'), [false, false]);
+  });
+});
+
+// Found by the adversarial review of grants: a scoped strike (only what needed the role taken)
+// was judged in a view the demoted account chose, so it could hide the need.
+describe('backdating past an unassignment', () => {
+  const ADMIN: ReadonlyArray<Grant> = [
+    { cmd: '/record', pol: [] },
+    { cmd: ROLE_ASSIGN, pol: [] },
+    { cmd: ROLE_UNASSIGN, pol: [['not', ['any', '.roles', ['==', '.', 'admin']]]] },
+    { cmd: MEMBER_REMOVE, pol: [['not', ['any', '.roles', ['==', '.', 'admin']]]] },
+    { cmd: ROLE_DEFINE, pol: [['!=', '.role', 'admin']] },
+  ];
+  const MEMBER: ReadonlyArray<Grant> = [
+    { cmd: RECORD_WRITE, pol: [['==', '.byCreator', true]] },
+    { cmd: RECORD_DELETE, pol: [['==', '.byCreator', true]] },
+  ];
+  const MOD: ReadonlyArray<Grant> = [
+    { cmd: MEMBER_REMOVE, pol: [['==', '.self', false]] },
+    { cmd: RECORD_DELETE, pol: [] },
+  ];
+  const g: AccessGenesis = {
+    id: 'space',
+    creator: 'alice',
+    roles: [
+      { name: 'admin', grants: ADMIN },
+      { name: 'member', grants: MEMBER },
+      { name: 'mod', grants: MOD },
+      { name: 'mod2', grants: MOD },
+      { name: 'host', grants: [{ cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] }] },
+    ],
+  };
+  /** Every history, in two arrival orders */
+  const orders = (events: AccessEvent[]) => [events, [...events].reverse()].map((o) => replayAccess(g, o));
+  const deletesOthers = (did: string) => (state: Parameters<typeof may>[0]) =>
+    may(state, did, RECORD_DELETE, { collection: 'app.x', byCreator: false });
+
+  test('a backdated self-assignment of a second role hides no need: the removal it rests on is struck (B3)', () => {
+    const erin = assign('alice', 'erin', 'admin', []);
+    const carol = assign('alice', 'carol', 'host', [erin.id]);
+    const off = unassign('alice', 'erin', 'admin', [carol.id]);
+    // After `off` Erin holds nothing. Naming a view from before it, she assigns herself mod2, then removes Carol.
+    const self = assign('erin', 'erin', 'mod2', [carol.id]);
+    const ban = remove('erin', 'carol', [self.id]);
+    for (const h of orders([erin, carol, off, self, ban])) {
+      assert.ok(!isMember(h.current, 'erin'));
+      assert.equal(status(h, self), 'dropped');
+      assert.equal(status(h, ban), 'dropped');
+      assert.ok(isMember(h.current, 'carol'));
+      const record = h.judge({ id: 'r', root: 'erin', seen: [self.id] }, deletesOthers('erin'));
+      assert.ok(!record.ok && record.withdrawn, 'and her backdated records are withdrawn');
+    }
+  });
+
+  test('a demoted admin who keeps another role can’t backdate through a definition of it (B)', () => {
+    const erin = assign('alice', 'erin', 'admin', []);
+    const erinMember = assign('alice', 'erin', 'member', [erin.id]);
+    const carol = assign('alice', 'carol', 'host', [erinMember.id]);
+    const off = unassign('alice', 'erin', 'admin', [carol.id]);
+    const parked = define('erin', 'member', [...MEMBER, { cmd: MEMBER_REMOVE, pol: [] }], [carol.id]);
+    const ban = remove('erin', 'carol', [parked.id]);
+    for (const h of orders([erin, erinMember, carol, off, parked, ban])) {
+      assert.deepEqual(rolesOf(h.current, 'erin'), ['member']);
+      assert.equal(status(h, parked), 'dropped');
+      assert.equal(status(h, ban), 'dropped');
+      assert.ok(isMember(h.current, 'carol'));
+    }
+  });
+
+  test('two unassignments of redundant roles leave nothing to backdate with (C)', () => {
+    const mal = assign('alice', 'mal', 'mod', []);
+    const mal2 = assign('alice', 'mal', 'mod2', [mal.id]);
+    const carol = assign('alice', 'carol', 'member', [mal2.id]);
+    const off1 = unassign('alice', 'mal', 'mod', [carol.id]);
+    const off2 = unassign('alice', 'mal', 'mod2', [off1.id]);
+    const ban = remove('mal', 'carol', [carol.id]);
+    for (const h of orders([mal, mal2, carol, off1, off2, ban])) {
+      assert.ok(!isMember(h.current, 'mal'));
+      assert.equal(status(h, ban), 'dropped');
+      assert.ok(isMember(h.current, 'carol'));
+      const record = h.judge({ id: 'r', root: 'mal', seen: [carol.id] }, deletesOthers('mal'));
+      assert.ok(!record.ok && record.withdrawn);
+    }
+  });
+
+  test('a record citing a struck definition gets nothing from it, the definer’s or anyone’s (A)', () => {
+    const erin = assign('alice', 'erin', 'admin', []);
+    const erinMember = assign('alice', 'erin', 'member', [erin.id]);
+    const bob = assign('alice', 'bob', 'member', [erinMember.id]);
+    const off = unassign('alice', 'erin', 'admin', [bob.id]);
+    // Written after `off`, naming a view from before it.
+    const parked = define('erin', 'member', [...MEMBER, { cmd: RECORD_DELETE, pol: [] }], [bob.id]);
+    for (const h of orders([erin, erinMember, bob, off, parked])) {
+      assert.equal(status(h, parked), 'dropped');
+      for (const did of ['bob', 'erin']) {
+        const record = h.judge({ id: `r-${did}`, root: did, seen: [parked.id] }, deletesOthers(did));
+        assert.ok(!record.ok && record.withdrawn, `${did}'s record is withdrawn`);
+      }
+      // Bob's only power to delete came from the struck definition: the state he is judged by lacks it.
+      assert.ok(deletesOthers('bob')(h.seenAs([parked.id])!), 'as he saw it, he could');
+      assert.ok(!deletesOthers('bob')(h.at([parked.id])!), 'as it stands, he can’t');
+    }
+  });
+
+  test('an invite is the assignment its opener makes: `.self` holds for whoever joins', () => {
+    const g2: AccessGenesis = {
+      id: 'space',
+      creator: 'alice',
+      roles: [
+        {
+          name: 'admin',
+          grants: [
+            {
+              cmd: ROLE_ASSIGN,
+              pol: [
+                ['==', '.role', 'treasurer'],
+                ['==', '.self', false],
+              ],
+            },
+          ],
+        },
+        { name: 'treasurer', grants: [{ cmd: '/record', pol: [] }] },
+      ],
+    };
+    const erin = assign('alice', 'erin', 'admin', []);
+    const direct = assign('erin', 'erin', 'treasurer', [erin.id]);
+    assert.equal(status(replayAccess(g2, [erin, direct]), direct), 'dropped');
+    // Opening is allowed (it assigns someone else), but joining it herself is assigning herself.
+    const open = invite('erin', 'did:key:zInviteK', 'treasurer', [erin.id]);
+    const join = assign('erin', 'erin', 'treasurer', [open.id], { viaInvite: 'did:key:zInviteK' });
+    const h = replayAccess(g2, [erin, open, join]);
+    assert.equal(status(h, open), 'applied');
+    assert.equal(status(h, join), 'dropped');
+    assert.deepEqual(rolesOf(h.current, 'erin'), ['admin']);
+    // Anyone else joins it.
+    const bob = assign('bob', 'bob', 'treasurer', [open.id], { viaInvite: 'did:key:zInviteK' });
+    assert.deepEqual(rolesOf(replayAccess(g2, [erin, open, bob]).current, 'bob'), ['treasurer']);
+  });
+
+  test('an invite’s opener’s `.roles` policy reads the joiner’s roles', () => {
+    const g2: AccessGenesis = {
+      id: 'space',
+      creator: 'alice',
+      roles: [
+        {
+          name: 'host',
+          grants: [
+            {
+              cmd: ROLE_ASSIGN,
+              pol: [
+                ['==', '.role', 'guest'],
+                ['not', ['any', '.roles', ['==', '.', 'banned']]],
+              ],
+            },
+          ],
+        },
+        { name: 'guest', grants: [] },
+        { name: 'banned', grants: [] },
+      ],
+    };
+    const hal = assign('alice', 'hal', 'host', []);
+    const tagged = assign('alice', 'eve', 'banned', [hal.id]);
+    const open = invite('hal', 'did:key:zInviteG', 'guest', [tagged.id]);
+    const join = assign('eve', 'eve', 'guest', [open.id], { viaInvite: 'did:key:zInviteG' });
+    assert.equal(status(replayAccess(g2, [hal, tagged, open, join]), join), 'dropped');
   });
 });

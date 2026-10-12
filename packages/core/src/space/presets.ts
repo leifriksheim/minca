@@ -102,7 +102,10 @@ export const team: RolePreset = Object.freeze({
 /**
  * A community: admins run it, moderators keep order in every app, members
  * take part and change only what they made. The founder defines admin;
- * admins define the other roles, and can't remove or demote one another.
+ * admins define the other roles. An admin who has seen another's promotion
+ * can't remove or demote them; one who names a view from before it, or acts
+ * concurrently, can: `.roles` binds only a remover whose view holds the role
+ * (spec 03 §2.3).
  */
 export const community: RolePreset = Object.freeze({
   roles: Object.freeze([

@@ -32,6 +32,8 @@ import { assignKey } from '../src/space/space-access.js';
 import { ASSIGN_COLLECTION } from '../src/space/roles.js';
 import { RECORD_DELETE, RECORD_WRITE } from '../src/space/grants.js';
 import { forge, open, person, settle } from './helpers/person.js';
+import { stubOf } from '../src/schema/version.js';
+import type { SpaceRole } from '../src/types.js';
 
 /** Editors here write and delete only what they made */
 const ownOnly = [
@@ -383,5 +385,93 @@ describe('attacks on contacts', () => {
       'only the original, from Leif',
     );
     assert.deepEqual(await anna.node.contacts.requests(other), []);
+  });
+});
+
+// Found by the adversarial review of grants: a stub and its whole version share an id and a
+// signature, so a verdict on the stub, judged without its body, was kept for the whole.
+describe('a stub sent ahead of its body', () => {
+  /** Pushes versions to whoever connects, one at a time, as a stranger in the room */
+  async function push(hub: FakeHub, space: string, versions: ReadonlyArray<unknown>) {
+    const stranger = hub.transport('did:key:zstubber', space);
+    // One at a time, so each is judged before the next arrives.
+    const sendAll = async (peer: string) => {
+      for (const version of versions) {
+        const payload = { v: SYNC_PROTOCOL_VERSION, type: 'push-update', version };
+        stranger.send(
+          peer,
+          new TextEncoder().encode(JSON.stringify({ type: 'sync', from: 'did:key:zstubber', payload })),
+        );
+        await settle(300);
+      }
+    };
+    stranger.on('connected', (peer: string) => void sendAll(peer));
+    await stranger.connect();
+  }
+
+  async function space(roles: ReadonlyArray<SpaceRole>) {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const bob = await person(hub);
+    const { id } = await alice.node.spaces.create({ name: 'S', roles, visibility: 'public' });
+    await bob.node.spaces.join(await alice.node.spaces.invite(id, { role: 'editor' }));
+    await hold(alice.node, id);
+    await joined(bob.node, id);
+    await settle(300);
+    return { hub, alice, bob, space: id };
+  }
+
+  test('does not get the whole version past a policy on its body', async () => {
+    const {
+      hub,
+      alice,
+      bob,
+      space: id,
+    } = await space([
+      {
+        name: 'editor',
+        grants: [
+          {
+            cmd: RECORD_WRITE,
+            pol: [
+              ['==', '.collection', 'app.note'],
+              ['!=', '.body.text', 'spam'],
+            ],
+          },
+        ],
+      },
+    ]);
+    const bad = await forge(bob, id, { collection: 'app.note', body: { text: 'spam' } }, { keep: false });
+    const good = await forge(bob, id, { collection: 'app.note', body: { text: 'hello' } }, { keep: false });
+    await push(hub, id, [stubOf(bad), bad, stubOf(good), good]);
+    await until(async () => (await alice.node.records.get(id, good.key)) !== null, 6000, 'the honest note');
+    assert.equal(await alice.node.records.get(id, bad.key), null, 'the body its grant forbids');
+  });
+
+  test('does not get the whole edit past `fixed`', async () => {
+    const {
+      hub,
+      alice,
+      bob,
+      space: id,
+    } = await space([{ name: 'editor', grants: [{ cmd: '/record', pol: [] }] }]);
+    await alice.node.collections.define(id, {
+      name: 'app.poll',
+      schema: { type: 'object' },
+      rules: { fixed: ['options'] },
+    });
+    const poll = await alice.node.records.put(id, 'app.poll', { question: 'Q', options: ['a'] });
+    await until(async () => (await bob.node.records.get(id, poll.key)) !== null, 4000, 'the poll');
+    const current = await (await stored(bob.stores, id)).getCurrent(poll.key);
+    const bad = await forge(
+      bob,
+      id,
+      { collection: 'app.poll', body: { question: 'Q', options: ['zzz'] }, version: nextVersion(current!) },
+      { keep: false },
+    );
+    await push(hub, id, [stubOf(bad), bad]);
+    await settle(1200);
+    const read = await alice.node.records.get<{ options: string[] }>(id, poll.key);
+    assert.deepEqual(read?.body?.options, ['a']);
   });
 });

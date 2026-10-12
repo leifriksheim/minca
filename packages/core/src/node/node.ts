@@ -942,6 +942,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     may: perSpace((rt, cmd: string, args?: Readonly<Record<string, unknown>>, account?: string) =>
       rt.may(cmd, args, account),
     ),
+    holdsRole: perSpace((rt, role: string, account?: string) => rt.holdsRole(role, account)),
     defineRole: perSpace((rt, role: SpaceRole) => rt.defineRole(role)),
     assign: perSpace((rt, did: string, role: string) => rt.assign(did, role)),
     unassign: perSpace((rt, did: string, role: string) => rt.unassign(did, role)),

@@ -306,11 +306,9 @@ function generate(seed: number): History {
 /** What a record by `root` asks, three ways */
 const NEEDS: ReadonlyArray<(root: string) => Needs> = [
   (root) => (state) => isMember(state, root),
-  (root) => (state, without) =>
-    may(state, root, RECORD_DELETE, { collection: 'app.x', byCreator: false }, without ? { without } : {}),
-  (root) => (state, without) =>
-    may(state, root, COLLECTION_DEFINE, { collection: 'app.x' }, without ? { without } : {}) &&
-    state.definitions.has('app.x'),
+  (root) => (state) => may(state, root, RECORD_DELETE, { collection: 'app.x', byCreator: false }),
+  (root) => (state) =>
+    may(state, root, COLLECTION_DEFINE, { collection: 'app.x' }) && state.definitions.has('app.x'),
 ];
 
 /** Questions to ask of a state about each person: what a role's grants, judged where defined, give */

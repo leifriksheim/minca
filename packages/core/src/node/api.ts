@@ -40,6 +40,7 @@ export const API = Object.freeze({
     leave: 'leave spaces',
     access: 'scoped',
     may: 'scoped',
+    holdsRole: 'scoped',
     defineRole: 'change roles',
     assign: 'change who is in a space',
     unassign: 'change who is in a space',

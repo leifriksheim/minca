@@ -411,6 +411,13 @@ export interface NodeSpaces {
     args?: Readonly<Record<string, unknown>>,
     account?: string,
   ): Promise<boolean>;
+  /**
+   * Whether this account, or `account`, holds every grant a role gives, each as
+   * wide or wider: what it may hand to a bot or an agent without handing on
+   * more than it holds. Compares the policies' words, so it may say no where
+   * they would allow, never yes where they wouldn't.
+   */
+  holdsRole(spaceId: string, role: string, account?: string): Promise<boolean>;
   /** Writes a role's definition, replacing the ones this node holds: its grants and the roles it nests. Needs `/role/define` */
   defineRole(spaceId: string, role: SpaceRole): Promise<void>;
   /** Assigns a role to an account. Needs `/role/assign` */
