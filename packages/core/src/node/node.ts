@@ -53,7 +53,7 @@ import {
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
 import { deriveInviteKey } from '../space/space-access.js';
-import { foundersOf } from '../space/constitution.js';
+import { foundersOf, soleFounder } from '../space/constitution.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
 import { createListeners } from '../utils/events.js';
@@ -1685,7 +1685,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return null;
     }
     // A private space the asker made, and the key to it: anything else isn't a space for two from them.
-    if (!foundersOf(invited.space).includes(from) || invited.space.visibility !== 'private' || !invited.key)
+    if (soleFounder(invited.space) !== from || invited.space.visibility !== 'private' || !invited.key)
       return null;
     return {
       from,

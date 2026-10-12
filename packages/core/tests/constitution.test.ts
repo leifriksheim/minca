@@ -14,12 +14,15 @@ import {
   constitutionOf,
   constitutionProblem,
   CONSTITUTION,
+  soleFounder,
   spaceIdOf,
   type Constitution,
 } from '../src/space/constitution.js';
 import { spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { canonicalize } from '../src/schema/version.js';
+import { cidFromBytes } from '../src/utils/hash.js';
+import { utf8Encode } from '../src/utils/encoding.js';
 import {
   checkFoundingRoles,
   COLLECTION_DEFINE,
@@ -38,7 +41,7 @@ import {
   type AccessGenesis,
   type AccessHistory,
 } from '../src/space/roles.js';
-import { assign, remove, stepDown, succeed, unassign, writes } from './helpers/access.js';
+import { assign, remove, revoke, stepDown, succeed, unassign, writes } from './helpers/access.js';
 import { createSpaceManager } from '../src/space/space-manager.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createFakeHub } from './helpers/fake-transport.js';
@@ -154,6 +157,39 @@ describe('what a constitution may say', () => {
     assert.match(String(problem({ top: 'none', assigned: { [CREATOR]: [] } })), /1 to 16 roles/);
     assert.match(String(problem({ top: 'none', assigned: {} })), /1 to 64 accounts/);
     assert.match(String(problem({ top: 'none', assigned: { alice: ['editor'] } })), /did:key/);
+  });
+
+  test('its time, nonce and keys are exactly as §1.1 says, and it is hashed as given', async () => {
+    assert.match(String(problem({ createdAt: '2026-01-01' })), /ISO 8601/);
+    assert.match(String(problem({ createdAt: '2026-02-30T00:00:00.000Z' })), /ISO 8601/);
+    assert.match(String(problem({ nonce: 'n' })), /16 base64url/);
+    assert.match(String(problem({ nonce: 'AAECAwQFBgcICQo=' })), /16 base64url/);
+    const key = {
+      readKey: 'did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf',
+      encryptionKeyId: 'aLhvw5pkV65_lcQHEcUOug',
+    };
+    assert.equal(problem({ visibility: 'private', ...key }), null);
+    for (const bad of [
+      { readKey: '', encryptionKeyId: '' },
+      { ...key, readKey: '' },
+      { ...key, encryptionKeyId: '' },
+      { ...key, readKey: 'did:key:zAlice' },
+      { ...key, encryptionKeyId: 'short' },
+      { readKey: key.readKey },
+    ])
+      assert.match(String(problem({ visibility: 'private', ...bad })), /read key/, JSON.stringify(bad));
+    assert.match(String(problem({ readKey: '' })), /public space has no read key/);
+    // The id is the hash of the constitution exactly as given.
+    const given = { ...CHESS, visibility: 'private' as const, readKey: '', encryptionKeyId: '' };
+    assert.equal(await spaceIdOf(given), await cidFromBytes(utf8Encode(canonicalize(given))));
+    assert.notEqual(await checkSpace({ id: await spaceIdOf(given), ...given }), null);
+  });
+
+  test('a space for two or a carry space has its maker alone: one founder, nothing assigned', () => {
+    assert.equal(soleFounder(CHESS), CREATOR);
+    assert.equal(soleFounder({ top: { founders: [CREATOR, 'did:key:zOther'] } }), null);
+    assert.equal(soleFounder({ ...CHESS, assigned: { 'did:key:zOther': ['editor'] } }), null);
+    assert.equal(soleFounder({ top: 'none', assigned: { [CREATOR]: ['editor'] } }), null);
   });
 
   test('it succeeds a space named by its id', () => {
@@ -382,6 +418,93 @@ describe('stepping down (03 §2.5)', () => {
     assert.ok(!headless(replayed(g, [bob, admin, keeps, steps]).current));
     // Made apart from her stepping down, the admin is struck with everything else she did unseen.
     assert.ok(headless(replayed(g, [bob, admin, keep, down]).current));
+  });
+});
+
+describe('stepping down is for good; a revoke stops its key (03 §4.3)', () => {
+  const g = founders('alice', 'bob');
+
+  test('stepping down, then revoking the key that signed it: founder status is never given back', () => {
+    const keep = assign('alice', 'alice', 'member', [], { author: 'alice-laptop', line: 0 });
+    const down = stepDown('alice', 'alice', [keep.id], { author: 'alice-laptop', line: 0 });
+    const rv = revoke('alice', 'alice-laptop', [down.id], {
+      cutoff: { 'alice-laptop': { 'sys.assign': 0 } },
+    });
+    const whole = replayAccess(g, [keep, down, rv]);
+    const stepwise = replayAccess(g, [keep, down]).extend(rv) ?? whole;
+    for (const h of [whole, stepwise]) {
+      assert.equal(h.status(rv.id)?.status, 'applied');
+      assert.equal(h.status(down.id)?.status, 'applied');
+      assert.ok(!h.current.founders.has('alice'));
+    }
+  });
+
+  test('stepped down, removed by a co-founder who saw it, then a backdated revoke: still out', () => {
+    const keep = assign('alice', 'alice', 'member', []);
+    const down = stepDown('alice', 'alice', [keep.id], { author: 'alice-laptop', line: 0 });
+    const out = remove('bob', 'alice', [down.id]);
+    const rv = revoke('alice', 'alice-laptop', [keep.id]);
+    const h = replayed(g, [keep, down, out, rv]);
+    assert.equal(status(h, out), 'applied', 'the removal, which saw the stepping down, stands');
+    assert.ok(!h.current.founders.has('alice'));
+    assert.ok(!isMember(h.current, 'alice'));
+  });
+
+  test('a revoke stops the key: a leaving it signs after is struck, with all it would strike', () => {
+    // Alice, from her phone, adds Carol; her laptop key is stolen; she revokes it.
+    const g2: AccessGenesis = { ...g, founders: ['bob'], assigned: { alice: ['admin'] } };
+    const carol = assign('alice', 'carol', 'member', [], { author: 'alice-phone', line: 0 });
+    const rv = revoke('alice', 'alice-laptop', [carol.id], { author: 'alice-phone' });
+    // The thief signs a leaving with the laptop key, naming the constitution's view.
+    const leave = remove('alice', 'alice', [], { author: 'alice-laptop', line: 0 });
+    const record = {
+      id: 'rec',
+      root: 'alice',
+      seen: [carol.id],
+      writer: 'alice-phone',
+      collection: 'notes',
+      line: 0,
+    };
+    const h = replayed(g2, [carol, rv, leave]);
+    assert.equal(status(h, leave), 'dropped');
+    assert.ok(isMember(h.current, 'alice'));
+    assert.ok(isMember(h.current, 'carol'), 'Carol, whom Alice added, stays');
+    assert.equal(h.judge(record, () => true).ok, true, 'Alice’s record stands');
+  });
+
+  test('a revoked key stepping down ends founder status, and does nothing else', () => {
+    const keep = assign('alice', 'alice', 'member', [], { author: 'alice-phone', line: 0 });
+    const carol = assign('alice', 'carol', 'admin', [keep.id], { author: 'alice-phone', line: 1 });
+    const rv = revoke('alice', 'alice-laptop', [carol.id], { author: 'alice-phone' });
+    // After the revoke, the thief steps her down, naming an old view.
+    const down = stepDown('alice', 'alice', [keep.id], { author: 'alice-laptop', line: 0 });
+    const record = {
+      id: 'rec',
+      root: 'alice',
+      seen: [carol.id],
+      writer: 'alice-phone',
+      collection: 'notes',
+      line: 0,
+    };
+    const h = replayed(g, [keep, carol, rv, down]);
+    assert.ok(!h.current.founders.has('alice'), 'founder status ends: it can never be given again');
+    assert.ok(isMember(h.current, 'carol'), 'it strikes nothing she did');
+    assert.deepEqual(rolesOf(h.current, 'alice'), ['member']);
+    assert.equal(h.judge(record, () => true).ok, true, 'and withdraws none of her records');
+  });
+
+  test('leaving undone by a revoke or a fork proof is leaving to do again: the owner leaves again', () => {
+    const leaves = remove('alice', 'alice', [], { author: 'alice-laptop', line: 0 });
+    const rv = revoke('alice', 'alice-laptop', []);
+    assert.ok(isMember(replayed(g, [leaves, rv]).current, 'alice'));
+    const again = remove('alice', 'alice', [rv.id], { author: 'alice-phone', line: 0 });
+    assert.ok(!isMember(replayed(g, [leaves, rv, again]).current, 'alice'));
+  });
+
+  test('a revoke still strikes what the key did that gave power', () => {
+    const made = assign('alice', 'mallory', 'admin', [], { author: 'alice-laptop', line: 0 });
+    const rv = revoke('alice', 'alice-laptop', [made.id]);
+    assert.ok(!isMember(replayed(g, [made, rv]).current, 'mallory'));
   });
 });
 

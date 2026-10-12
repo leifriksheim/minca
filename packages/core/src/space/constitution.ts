@@ -16,6 +16,7 @@ import { canonicalize } from '../schema/version.js';
 import { cidDigest, cidFromBytes, cidOfDigest } from '../utils/hash.js';
 import { utf8Encode } from '../utils/encoding.js';
 import { isRecord } from '../utils/guards.js';
+import { didToPublicKey, P256_MULTICODEC } from '../identity/did.js';
 import { checkFoundingRoles } from './grants.js';
 import { RESOLVERS, type AccessGenesis } from './roles.js';
 
@@ -62,9 +63,34 @@ export function constitutionOf(space: Constitution): Constitution {
     ...(space.succeeds !== undefined ? { succeeds: space.succeeds } : {}),
     createdAt: space.createdAt,
     nonce: space.nonce,
-    ...(space.readKey ? { readKey: space.readKey } : {}),
-    ...(space.encryptionKeyId ? { encryptionKeyId: space.encryptionKeyId } : {}),
+    ...(space.readKey !== undefined ? { readKey: space.readKey } : {}),
+    ...(space.encryptionKeyId !== undefined ? { encryptionKeyId: space.encryptionKeyId } : {}),
   };
+}
+
+/** base64url of 12 bytes */
+const NONCE = /^[A-Za-z0-9_-]{16}$/;
+/** A space key's id: base64url of 16 bytes (spec 03 §8.1) */
+const KEY_ID = /^[A-Za-z0-9_-]{22}$/;
+/** ISO 8601, as `Date.prototype.toISOString` writes it */
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+const isTime = (value: unknown): value is string =>
+  typeof value === 'string' && ISO_TIME.test(value) && new Date(value).toISOString() === value;
+
+/** Whether a string is a P-256 `did:key` */
+function isKeyDid(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 200) return false;
+  try {
+    const { publicKeyBytes, multicodecPrefix } = didToPublicKey(value);
+    return (
+      publicKeyBytes.length === 33 &&
+      multicodecPrefix.length === P256_MULTICODEC.length &&
+      multicodecPrefix.every((byte, i) => byte === P256_MULTICODEC[i])
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** The id a space with this constitution has: the CID of its canonical JSON */
@@ -85,6 +111,16 @@ const isAccount = (value: unknown): value is string =>
 /** The founders a space names: none under `top: "none"` */
 export function foundersOf(space: { readonly top: SpaceTop }): ReadonlyArray<string> {
   return space.top === 'none' ? [] : space.top.founders;
+}
+
+/**
+ * The one account a space is founded by and for, or null: one founder and
+ * nothing assigned. What a space for two, or a carry space, must be when
+ * it arrives: its maker its only member (spec 03 §14, 07).
+ */
+export function soleFounder(space: Pick<Space, 'top' | 'assigned'>): string | null {
+  const founders = foundersOf(space);
+  return founders.length === 1 && space.assigned === undefined ? founders[0]! : null;
 }
 
 /** Why a `top` is malformed, or null */
@@ -136,8 +172,9 @@ export function constitutionProblem(constitution: unknown): string | null {
   if (typeof name !== 'string' || Array.from(name).length > MAX_NAME)
     return `Its name is text of at most ${MAX_NAME} characters`;
   if (visibility !== 'public' && visibility !== 'private') return 'Its visibility is not public or private';
-  if (typeof constitution.createdAt !== 'string' || typeof constitution.nonce !== 'string')
-    return 'It is missing what identifies it';
+  if (!isTime(constitution.createdAt)) return 'Its createdAt is an ISO 8601 time, as toISOString writes it';
+  if (typeof constitution.nonce !== 'string' || !NONCE.test(constitution.nonce))
+    return 'Its nonce is 16 base64url characters';
   const top_ = topProblem(top);
   if (top_) return top_;
   const roles_ = checkFoundingRoles(roles);
@@ -151,8 +188,11 @@ export function constitutionProblem(constitution: unknown): string | null {
   } else if (top === 'none') return 'With no founders, it must assign someone a role';
   if (succeeds !== undefined && !isSpaceId(succeeds)) return 'It succeeds a space, named by its id';
   const { readKey, encryptionKeyId } = constitution;
-  if (visibility === 'private' && (typeof readKey !== 'string' || typeof encryptionKeyId !== 'string'))
-    return 'A private space must name its read key';
+  if (
+    visibility === 'private' &&
+    !(isKeyDid(readKey) && typeof encryptionKeyId === 'string' && KEY_ID.test(encryptionKeyId))
+  )
+    return 'A private space must name its read key, a did:key, and its first key, by id';
   if (visibility === 'public' && (readKey !== undefined || encryptionKeyId !== undefined))
     return 'A public space has no read key';
   return null;
@@ -180,7 +220,7 @@ export function accessGenesisOf(space: Space): AccessGenesis {
     founders: foundersOf(space),
     roles: space.roles,
     ...(space.assigned !== undefined ? { assigned: space.assigned } : {}),
-    ...(space.visibility === 'private' && space.encryptionKeyId && space.readKey
+    ...(space.visibility === 'private' && space.encryptionKeyId !== undefined && space.readKey !== undefined
       ? { key: { keyId: space.encryptionKeyId, readKey: space.readKey } }
       : {}),
   };

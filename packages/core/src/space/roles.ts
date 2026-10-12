@@ -1431,12 +1431,16 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     return scopes.get(reduction.id) === event.root;
   };
   // Revokes and fork proofs are never struck: every allowed one applies.
-  const strikesOn = (reduction: AccessEvent, event: AccessEvent) =>
+  const reachedBy = (reduction: AccessEvent, event: AccessEvent) =>
     reduction.id !== event.id &&
     !keyWide(event) &&
     (keyWide(reduction) || !saw.get(event.id)!.has(reduction.id)) &&
     !covers(reduction, event) &&
     reaches(reduction, event);
+  // A stepping down is never struck (`invalidWithin`): founder status can't be given again. One a
+  // revoke or a fork proof reaches ends founder status and does nothing more (below).
+  const strikesOn = (reduction: AccessEvent, event: AccessEvent) =>
+    !(keyWide(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event);
   const reductionIds: string[] = [];
   const allowedView = viewsAlong(
     byIdMap,
@@ -1475,6 +1479,18 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
         if (allowedIds.has(other) && strikesOn(event, byIdMap.get(other)!))
           (strikes.get(id) ?? strikes.set(id, []).get(id)!).push(other);
       }
+  }
+
+  // A stepping down its key's revoke or fork proof reaches only ends founder status: it strikes
+  // nothing, and withdraws nothing, as a reduction would.
+  const keyWideIds = reductionIds.filter((r) => keyWide(byIdMap.get(r)!));
+  for (const id of order) {
+    const event = byIdMap.get(id)!;
+    if (event.kind !== 'stepdown' || !allowedIds.has(id)) continue;
+    if (keyWideIds.some((r) => reachedBy(byIdMap.get(r)!, event))) {
+      strikes.delete(id);
+      scopes.delete(id);
+    }
   }
 
   const within = validWithin(order, {
@@ -1640,7 +1656,8 @@ function validWithin(
     readonly defViews: ReadonlyMap<string, AccessState>;
   },
 ): { readonly valid: ReadonlySet<string>; readonly defViews: ReadonlyMap<string, AccessState> } {
-  const invalid = invalidWithin(cut, r.allowedIds, r.strikes);
+  // A stepping down is never struck: founder status can't be given back.
+  const invalid = invalidWithin(cut, r.allowedIds, r.strikes, (id) => r.byId.get(id)?.kind === 'stepdown');
   const valid = new Set(cut.filter((id) => !invalid.has(id)));
   if (cut.every((id) => !r.allowedIds.has(id) || valid.has(id))) return { valid, defViews: r.defViews };
   const afterOf = new Map<string, AccessState>();
@@ -1677,6 +1694,7 @@ function invalidWithin(
   cut: Iterable<string>,
   allowedIds: ReadonlySet<string>,
   strikes: ReadonlyMap<string, ReadonlyArray<string>>,
+  immune: (id: string) => boolean,
 ): ReadonlySet<string> {
   const inCut = new Set(cut);
   const out = new Set([...inCut].filter((id) => !allowedIds.has(id)));
@@ -1694,7 +1712,8 @@ function invalidWithin(
     for (const to of targets)
       if (of.get(from) !== of.get(to)) (strikers.get(to) ?? strikers.set(to, []).get(to)!).push(from);
   for (const members of list)
-    for (const id of members) if ((strikers.get(id) ?? []).some((from) => !out.has(from))) out.add(id);
+    for (const id of members)
+      if (!immune(id) && (strikers.get(id) ?? []).some((from) => !out.has(from))) out.add(id);
   return out;
 }
 
@@ -1766,6 +1785,8 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
       .map((revoke) => revoke.event),
     ...(fork && (event.line ?? 0) >= fork.from ? [fork.event] : []),
   ];
+  // A stepping down its key's revoke reaches ends founder status and does nothing else: only a whole replay says.
+  if (strikers.length > 0 && event.kind === 'stepdown') return null;
   if (strikers.length > 0) {
     const strikes = new Map(r.strikes);
     for (const by of strikers) strikes.set(by, [...(strikes.get(by) ?? []), event.id]);

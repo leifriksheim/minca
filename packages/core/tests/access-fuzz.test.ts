@@ -91,50 +91,71 @@ function generate(seed: number) {
     const did = r.chance(0.2) ? root : r.pick(PEOPLE.filter((p) => p !== 'p0'));
     const role = r.pick(ROLES);
     const id = `e${String(i).padStart(3, '0')}${r.int(1000)}`;
-    const base = { id, root, author: root, seen, cutoff: new Map(), line: i };
+    // Each account signs with one of two device keys, so revokes and fork proofs reach some changes and not others.
+    const device = (who: string) => `${who}/d${r.int(2)}`;
+    const base = { id, root, author: device(root), seen, cutoff: new Map(), line: i };
     const inviteKey = `k${r.int(2)}`;
     const successor = `s${r.int(2)}`;
-    const k = r.int(14);
+    const k = r.int(17);
+    const target = device(root);
+    const writer = device(r.pick(PEOPLE));
     const event: AccessEvent =
-      k < 4
-        ? { ...base, key: `assign:${did}|${role}`, kind: 'assign', did, role, assigned: true }
-        : k < 6
-          ? { ...base, key: `assign:${did}|${role}`, kind: 'assign', did, role, assigned: false }
-          : k < 8
-            ? { ...base, key: `remove:${did}`, kind: 'remove', did }
-            : k < 10
-              ? {
-                  ...base,
-                  key: `role:${role}`,
-                  kind: 'role',
-                  name: role,
-                  grants: grants(),
-                  nests: nests(role),
-                }
-              : k === 12
-                ? { ...base, key: `stepdown:${root}`, kind: 'stepdown', did: root }
-                : k === 13
-                  ? { ...base, key: `succeed:${successor}`, kind: 'succeed', space: successor }
-                  : k < 11
-                    ? {
-                        ...base,
-                        key: `invite:${inviteKey}`,
-                        kind: 'invite',
-                        inviteKey,
-                        role,
-                        open: r.chance(0.6),
-                      }
-                    : {
-                        ...base,
-                        root: did,
-                        author: did,
-                        key: `assign:${did}|${role}`,
-                        kind: 'assign',
-                        did,
-                        role,
-                        assigned: true,
-                        viaInvite: inviteKey,
-                      };
+      k === 14 || k === 15
+        ? {
+            ...base,
+            key: `revoke:${target}|${root}`,
+            kind: 'revoke',
+            target,
+            cutoff: r.chance(0.5) ? new Map([[target, new Map([['sys.assign', r.int(i + 1)]])]]) : new Map(),
+          }
+        : k === 16
+          ? {
+              ...base,
+              key: `fork:${writer}`,
+              kind: 'fork',
+              writer,
+              collection: r.pick(['sys.assign', 'sys.remove', 'sys.stepdown', 'sys.role']),
+              from: r.int(i + 1),
+            }
+          : k < 4
+            ? { ...base, key: `assign:${did}|${role}`, kind: 'assign', did, role, assigned: true }
+            : k < 6
+              ? { ...base, key: `assign:${did}|${role}`, kind: 'assign', did, role, assigned: false }
+              : k < 8
+                ? { ...base, key: `remove:${did}`, kind: 'remove', did }
+                : k < 10
+                  ? {
+                      ...base,
+                      key: `role:${role}`,
+                      kind: 'role',
+                      name: role,
+                      grants: grants(),
+                      nests: nests(role),
+                    }
+                  : k === 12
+                    ? { ...base, key: `stepdown:${root}`, kind: 'stepdown', did: root }
+                    : k === 13
+                      ? { ...base, key: `succeed:${successor}`, kind: 'succeed', space: successor }
+                      : k < 11
+                        ? {
+                            ...base,
+                            key: `invite:${inviteKey}`,
+                            kind: 'invite',
+                            inviteKey,
+                            role,
+                            open: r.chance(0.6),
+                          }
+                        : {
+                            ...base,
+                            root: did,
+                            author: device(did),
+                            key: `assign:${did}|${role}`,
+                            kind: 'assign',
+                            did,
+                            role,
+                            assigned: true,
+                            viaInvite: inviteKey,
+                          };
     events.push(event);
   }
   return { genesis, events, r };
@@ -181,7 +202,24 @@ test('every arrival order, and extending one change at a time, gives what replay
   const base = Number(process.env.SEED ?? 12345);
   for (let seed = base; seed < base + RUNS; seed++) {
     const { genesis, events, r } = generate(seed);
-    const whole = shape(replayAccess(genesis, events), events);
+    const replayedWhole = replayAccess(genesis, events);
+    const whole = shape(replayedWhole, events);
+    // Outcomes, beside the history without revokes and fork proofs. Stepping down is for good: no
+    // revoke or fork proof gives founder status back. Leaving holds, unless the leaving itself was
+    // struck: then the account is back, to leave again.
+    const keyWide = (e: AccessEvent) => e.kind === 'revoke' || e.kind === 'fork';
+    const without = replayAccess(
+      genesis,
+      events.filter((e) => !keyWide(e)),
+    );
+    for (const e of events) {
+      if ((e.kind !== 'stepdown' && e.kind !== 'remove') || e.root !== e.did) continue;
+      if (without.status(e.id)?.status !== 'applied') continue;
+      if (e.kind === 'stepdown')
+        assert.ok(!replayedWhole.current.founders.has(e.did), `founder again, seed ${seed}`);
+      else if (replayedWhole.status(e.id)?.status === 'applied')
+        assert.ok(!replayedWhole.current.founders.has(e.did), `left, and a founder, seed ${seed}`);
+    }
     for (let k = 0; k < 3; k++)
       assert.equal(shape(replayAccess(genesis, r.shuffle(events)), events), whole, `order, seed ${seed}`);
     let h: AccessHistory = replayAccess(genesis, []);
