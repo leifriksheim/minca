@@ -60,11 +60,11 @@ reference implementation, or any implementation, honestly.
 - **Does not hold yet.**
   - A leaked view-only invite carries the space key, can't be closed, and
     never causes a key change, so whoever holds it reads everything new
-    ([#172](https://github.com/leifriksheim/weave/issues/172)).
-  - A leaked role invite lets it join, as often as it likes ([#161](https://github.com/leifriksheim/weave/issues/161)).
+    ([#170](https://github.com/leifriksheim/weave/issues/170)).
+  - A leaked role invite lets it join, as often as it likes ([#170](https://github.com/leifriksheim/weave/issues/170)).
   - What it sends must be checked, stored or refused, with few limits
     ([#33](https://github.com/leifriksheim/weave/issues/33)). That includes knocks on doors and contact requests (07),
-    whose mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
+    whose mailbox can be flooded ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
 
 _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
@@ -107,7 +107,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/weave/issues/33)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
-    peer's keys, or the order it runs checks in ([#163](https://github.com/leifriksheim/weave/issues/163)).
+    peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/weave/issues/10)).
   - A removal or demotion signed offline can arrive at any time and withdraw
     what its cutoff doesn't cover: peers converge, but no verdict is final
     until members witness each other's heads
@@ -116,7 +116,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
-    by revoking its key or forking their line in the warrants' collection ([#168](https://github.com/leifriksheim/weave/issues/168)),
+    by revoking its key or forking their line in the warrants' collection ([#166](https://github.com/leifriksheim/weave/issues/166)),
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Fork proofs don't reliably catch a copy of a key that writes where its
     other branch never reaches (§3.4): a fork counts once a member holding
@@ -125,7 +125,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     03 §6.3).
   - It can disown its own history, withdrawing votes and agreements others
     relied on, by revoking its own key with a cutoff of 0, or forking its
-    own line in a collection at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
+    own line in a collection at 0, and nothing flags it ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - A `seq 0` for someone else's key can take over "creator" ([#72](https://github.com/leifriksheim/weave/issues/72)).
   - A collection's checks bind only readers that judge them: peers keep and
     sync a version that fails them, and only the library leaves it out of
@@ -137,7 +137,9 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     costs every peer storage, like any record it may write
     ([#33](https://github.com/leifriksheim/weave/issues/33)).
   - The top rank answers to no one, and no vote can bind a change to who may
-    do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
+    do what. Below the top, a manager can grant its own rank, and nobody of
+    that rank can remove those it granted (03 §4.5,
+    [#160](https://github.com/leifriksheim/weave/issues/160)).
 
 _Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
@@ -153,11 +155,11 @@ _Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Test
 - **Does not hold yet.**
   - A change by a sock it granted, though dropped, still strikes changes made
     concurrently by those the sock outranked
-    ([#191](https://github.com/leifriksheim/weave/issues/191)).
+    ([#170](https://github.com/leifriksheim/weave/issues/170)).
   - A version it backdates is withdrawn, but a colluding member can still cite
     it as evidence in a version under checks, and the library's checks count
     it, since they judge a cited version as of what the citer saw
-    ([#184](https://github.com/leifriksheim/weave/issues/184),
+    ([#170](https://github.com/leifriksheim/weave/issues/170),
     [checks](../packages/core/docs/checks.md#citing-a-version)). Checks are
     not protocol, so this is a gap in what readers count, not in what peers
     store.
@@ -168,15 +170,17 @@ _Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Test
     ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_.
   - Hosts and carriers can't read the member list, so they keep syncing with
     it until the key changes ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_. A peer that never says who it is
-    is never let go ([#173](https://github.com/leifriksheim/weave/issues/173)).
+    is never let go ([#170](https://github.com/leifriksheim/weave/issues/170)).
   - A key change made at the same moment as its removal is boxed to it. The
     change stays due, so the next key leaves it out, but until then it reads
-    ([#173](https://github.com/leifriksheim/weave/issues/173)).
+    ([#170](https://github.com/leifriksheim/weave/issues/170)).
   - It can keep adding to the history every peer must store and replay
-    ([#161](https://github.com/leifriksheim/weave/issues/161)).
+    ([#170](https://github.com/leifriksheim/weave/issues/170)).
   - Its removal withdraws what it wrote before that the removal's cutoff
     doesn't cover: the remover's node covers only the lines it holds unbroken,
-    in the collections it holds, up to 1024 places (03 §6.3) ([#166](https://github.com/leifriksheim/weave/issues/166)).
+    in the collections it holds, up to 1024 places (03 §6.3). Peers don't
+    check how a cutoff was built, so a remover may leave anyone's lines out
+    ([#166](https://github.com/leifriksheim/weave/issues/166)).
 
 _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-access.test.ts` ("a removed member cannot write"), `packages/core/tests/roles.test.ts`, `packages/core/tests/key-change.test.ts`._
 
@@ -205,7 +209,7 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
 - **Does not hold yet.**
   - It can revoke the owner's other keys, with a cutoff of its choosing: a key
     whose note grants `*` is the account while it lasts
-    ([#168](https://github.com/leifriksheim/weave/issues/168)).
+    ([#165](https://github.com/leifriksheim/weave/issues/165)).
   - A fork it makes at the start of a line withdraws everything the owner's
     device wrote in that collection ([#166](https://github.com/leifriksheim/weave/issues/166)).
 - **By design** (the principle above).
@@ -224,7 +228,7 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     writes a revoke of the session key, delivered when that device next
     syncs, but a device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
-    keys ([#26](https://github.com/leifriksheim/weave/issues/26)). A revocation does not reach spaces created after it
+    keys ([#165](https://github.com/leifriksheim/weave/issues/165)). A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
 _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a stolen key is answered by its revoke…")._
@@ -268,17 +272,21 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
 - **Does not hold yet.**
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
-    keys sealed to itself _(traced)_ ([#169](https://github.com/leifriksheim/weave/issues/169)).
+    keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/weave/issues/165)).
   - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
-    its grant expires ([#165](https://github.com/leifriksheim/weave/issues/165), [#169](https://github.com/leifriksheim/weave/issues/169)).
+    its grant expires ([#165](https://github.com/leifriksheim/weave/issues/165)).
   - Any key the account granted can pose as the account's node to a client
-    that pinned the account ([#177](https://github.com/leifriksheim/weave/issues/177)) _(traced)_.
+    that pinned the account ([#165](https://github.com/leifriksheim/weave/issues/165)) _(traced)_.
   - Its records count until its key is revoked, not until `expiresAt`: only
     the home that granted it revokes it, while signed in there (06 §2.9,
-    [#26](https://github.com/leifriksheim/weave/issues/26)).
-  - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
-    [#168](https://github.com/leifriksheim/weave/issues/168)).
+    [#165](https://github.com/leifriksheim/weave/issues/165)).
+  - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165)).
+  - A version it writes in one of the account's own spaces (the registry,
+    contacts, carry spaces) without `account/write` is refused by the
+    account's devices, but a carrier, host or mirror reader that can't tell
+    the space is the account's own lets it stand, so they disagree (03 §5.2,
+    [#10](https://github.com/leifriksheim/weave/issues/10)).
 
 _Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
@@ -304,12 +312,12 @@ _Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
     fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay that
-    answers for one should fail the proof. No test shows it ([#181](https://github.com/leifriksheim/weave/issues/181)).
+    answers for one should fail the proof. No test shows it ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - It learns who meets whom: IP addresses, session DIDs and rooms together
     ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
-  - Its door mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
+  - Its door mailbox can be flooded ([#162](https://github.com/leifriksheim/weave/issues/162)).
   - It can fill the 32 exchanges an app offering a code runs before the right
     program arrives, with peers that say hello, so the program is never
     answered. Denial of service only: none of them holds the code, so none
@@ -328,20 +336,16 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - It cannot alter or forge what it serves (02 §3).
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
-    plaintext ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
+    plaintext ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space
-    key ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
-  - A removed carrier keeps proving read until the key changes ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
+    key ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_.
+  - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/weave/issues/170)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `onePer` keys hash body fields, so it can guess low-entropy
     values such as votes (03 §8.6).
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
-    collections ([#176](https://github.com/leifriksheim/weave/issues/176)) _(traced)_.
-  - Where it can write the account's data folder (a pod in a synced drive,
-    say), it can put back an older sealed registry entry, such as a space key
-    from before a key change, or delete one: sealing at rest binds an entry's
-    name, not its version (05 §15, [#215](https://github.com/leifriksheim/weave/issues/215)).
+    collections ([#166](https://github.com/leifriksheim/weave/issues/166)) _(traced)_.
 
 _Source: 03 §8; 02 §3; 06 §4; 05 §15. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
 
@@ -359,9 +363,10 @@ _Source: 03 §8; 02 §3; 06 §4; 05 §15. Tests: `packages/core/tests/carrier.te
     reordered does not open (01 §15.2).
 - **Does not hold yet.**
   - An unpinned connection to a node accepts whichever node answers, and an
-    account pin accepts any key the account granted ([#177](https://github.com/leifriksheim/weave/issues/177)) _(traced)_.
-  - Group keys give no forward secrecy: whoever later obtains a space key
-    reads everything sealed under it and every earlier key ([#182](https://github.com/leifriksheim/weave/issues/182)).
+    account pin accepts any key the account granted ([#165](https://github.com/leifriksheim/weave/issues/165)) _(traced)_.
+  - Whoever later obtains a space key reads everything sealed under it and
+    every earlier key it carries, and keys change only when a reader leaves,
+    not over time or on demand ([#170](https://github.com/leifriksheim/weave/issues/170)).
 
 _Source: 04 §5, §6.1; 01 §15.2. Tests: `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open")._
 
@@ -382,6 +387,14 @@ raised but has no place above until a test confirms or rules it out.
 - **Anonymity** toward relays and the network.
 - **Availability against every peer colluding.** A node that syncs only with
   peers that withhold from it cannot learn what they hold back.
+- **Per-message forward secrecy.** A space key opens everything sealed under
+  it. Changing keys bounds what a later key opens; ratcheting group keys (MLS,
+  say) are not a goal before v1.
+- **Rollback of a data folder** by whoever can write it (a pod in a synced
+  drive, say). Sealing at rest binds an entry's name, not its version, so an
+  older sealed registry entry, such as a space key from before a key change,
+  still opens, and an entry can be deleted (05 §15,
+  [#215](https://github.com/leifriksheim/weave/issues/215)).
 - **Protecting a device that is already compromised** while it runs. Keeping
   keys from being exported is up to each implementation (see
   `packages/core/docs/node.md`).

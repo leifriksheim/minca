@@ -864,7 +864,7 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > (§6.1), so that peer would enforce none of its rules. Either the publishing
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
-> Tracked in [#163](https://github.com/leifriksheim/weave/issues/163).
+> Tracked in [#10](https://github.com/leifriksheim/weave/issues/10).
 
 ### 6.3 A definition's version number
 
@@ -1085,7 +1085,7 @@ and the `edit` rule decides whether it is allowed.
 > collection names. _Open:_ which space key: a record's key must outlive key
 > changes, so it cannot simply be the key its body was sealed with (as topic
 > tags use, §8.2); and how a reader finds a record written under an earlier
-> key. Issue: [#87](https://github.com/leifriksheim/weave/issues/87).
+> key. Issue: [#72](https://github.com/leifriksheim/weave/issues/72).
 
 > **Planned: uniqueness that cannot be a key.** `onePer` works only when the
 > unique parts can be known before writing ("one per person per poll").
@@ -1289,7 +1289,7 @@ The capability every write in space `S` needs is
 > no proof resolver is wired and a record carries only its leaf token
 > ([01 — Identity](01-identity.md) §7.5). Planned there: "Proof chains that
 > travel".
-> Tracked in [#17](https://github.com/leifriksheim/weave/issues/17).
+> Tracked in [#19](https://github.com/leifriksheim/weave/issues/19).
 
 ### 9.4 Standing (the stateful check)
 

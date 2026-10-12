@@ -96,5 +96,5 @@ under **Planned** in each part. Library work that isn't protocol:
 - **Asking for what a version cites.** A version pending on a cited version
   from a collection this node doesn't hold, asking for it
   ([checks.md](checks.md#planned-asking-for-what-a-version-cites),
-  [#79](https://github.com/leifriksheim/weave/issues/79)).
+  [#138](https://github.com/leifriksheim/weave/issues/138)).
 - **Web components** for the standard schemas.

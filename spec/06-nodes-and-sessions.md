@@ -155,7 +155,7 @@ every tab shares, and read from the storage they share.
 > **Known defect:** so every tab or window of one app is the same DID on the
 > relays, and only the first gets into a space's room; the others report
 > `refused` in its status until it closes. See [04](04-network.md) §1.2 and
-> [#55](https://github.com/leifriksheim/weave/issues/55).
+> [#19](https://github.com/leifriksheim/weave/issues/19).
 
 ### 2.2 The home's address
 
@@ -440,7 +440,7 @@ the old connection record).
 > **Known defect:** connections are kept in the browser that granted them,
 > so only that home revokes an app whose time has passed, and only while it
 > is signed in. Until it does, the app's records still count. Tracked in
-> [#26](https://github.com/leifriksheim/weave/issues/26).
+> [#165](https://github.com/leifriksheim/weave/issues/165).
 
 ### 2.10 Connections and revocation
 

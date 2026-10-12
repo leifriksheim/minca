@@ -522,7 +522,7 @@ registry, with a cutoff at what it wrote, and a device that kept the key
 forgets it (`revokeSelf`); the revokes reach other peers as that device next
 syncs. _Open:_ removing a device from another one, which
 needs the list of the account's session keys
-([#26](https://github.com/leifriksheim/weave/issues/26)).
+([#165](https://github.com/leifriksheim/weave/issues/165)).
 
 ### 7.5 Delegation chains
 
@@ -561,7 +561,7 @@ the intended check for a chain of any length up to 10.
 > and `packages/core/src/network/peer-auth.ts` passes it too. So a chain deeper than one link never
 > validates on a record; only tokens issued directly by the root (`prf: []`)
 > do. A fix will define how parents travel and resolve them.
-> Tracked in [#17](https://github.com/leifriksheim/weave/issues/17), [#19](https://github.com/leifriksheim/weave/issues/19).
+> Tracked in [#19](https://github.com/leifriksheim/weave/issues/19).
 
 #### Planned: proof chains that travel
 

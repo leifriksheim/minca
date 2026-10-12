@@ -263,7 +263,7 @@ cannot count Bob's vote.
 > would go back on itself. The cost: a writer chooses its `seen`, and can
 > leave a removal out of it to count a removed member's earlier versions, and
 > nothing tells those from versions the removed member backdated after its
-> removal ([#184](https://github.com/leifriksheim/weave/issues/184)). It must
+> removal ([#170](https://github.com/leifriksheim/weave/issues/170)). It must
 > itself hold a role as of what it claims to have seen.
 
 ## Outcomes
@@ -339,7 +339,7 @@ version they judge, since none can give `true`.
 
 ## Planned: asking for what a version cites
 
-Issue: [#79](https://github.com/leifriksheim/weave/issues/79). A version
+Issue: [#138](https://github.com/leifriksheim/weave/issues/138). A version
 pending on a version it cites doesn't ask for it: a node that holds the whole
 space gets it in the next round anyway, but a node holding only some
 collections (spec 05, What a node holds) may never fetch a cited version from

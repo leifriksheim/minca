@@ -107,7 +107,7 @@ fixes the socket's DID for the life of the socket.
 > it cannot sync until the first closes. A key per tab, delegated from the
 > app's key, would fix it; that needs peers to accept a two-link chain
 > ([01](01-identity.md) §7.5). Tracked in
-> [#55](https://github.com/leifriksheim/weave/issues/55).
+> [#19](https://github.com/leifriksheim/weave/issues/19).
 
 _Source: `packages/relay/relay.mjs` (`handleMessage`, `isDid`, `CLOSE_DID_TAKEN`). Tests: `packages/core/tests/relay-refusal.test.ts` ("one DID per room")._
 
@@ -335,7 +335,7 @@ a receiver recognises one (§7.3).
 > started (`packages/core/src/network/rtc-transport.ts`, `handleOffer`; `packages/core/src/network/mesh.ts`).
 > Found by reading the code, not reproduced. A fix will drop a duplicate offer.
 > Other implementations SHOULD NOT copy this.
-> Tracked in [#18](https://github.com/leifriksheim/weave/issues/18).
+> Tracked in [#162](https://github.com/leifriksheim/weave/issues/162).
 
 _Source: `packages/core/src/network/multi-signaling.ts`. Tests: `packages/core/tests/introductions.test.ts` ("several relays at once"), `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair…")._
 

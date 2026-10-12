@@ -412,7 +412,7 @@ _Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `start
 > invite will name the `peer` addresses of the hosts the space uses, as it
 > names relays, and the joining device holds a socket to them until the
 > space's records take over. Tracked in
-> [#117](https://github.com/leifriksheim/weave/issues/117).
+> [#220](https://github.com/leifriksheim/weave/issues/220).
 >
 > **Stopping a host a space pays.** A space that stops using a host (§2)
 > can only act on its own side: it removes the host's bots and changes its
@@ -428,7 +428,7 @@ _Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `start
 > so a call would let any pass holder stop it. Open: keepers need `manage`
 > while choosing a host needs only the library's `std.host/manage`; whether a
 > host must be named a keeper before it carries at all; whether a paused fund
-> expires. Tracked in [#128](https://github.com/leifriksheim/weave/issues/128).
+> expires. Tracked in [#220](https://github.com/leifriksheim/weave/issues/220).
 >
 > **Metering beyond storage.** A host that meters requests and bandwidth per
 > subscription says so in `HostStatus` as it says `bytes`. Open: the fields,

@@ -208,7 +208,7 @@ keeps its code working.
 > knock on an existing door. A fix budgets IPv6 at /64, /56 and /48 together,
 > and keeps the reserve for topics that existed before the mailbox filled.
 > Other implementations SHOULD NOT copy these limits. Tracked in
-> [#23](https://github.com/leifriksheim/weave/issues/23).
+> [#162](https://github.com/leifriksheim/weave/issues/162).
 
 A relay need not keep its mailbox across a restart (the reference relay keeps
 it in memory), which is one reason a knock goes to every relay a door names.
@@ -328,7 +328,7 @@ only ([06 §2.8](06-nodes-and-sessions.md)).
   home, whose note lasts up to its grant's days) can still knock, because the
   owner can't see the knocker's revocations. Revoking a session's note when
   it ends is planned in [01 §7.4](01-identity.md)
-  ([#26](https://github.com/leifriksheim/weave/issues/26)).
+  ([#165](https://github.com/leifriksheim/weave/issues/165)).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it. Only the answer, signed with the door's key, makes someone the
   knocker's contact; the invite is closed then

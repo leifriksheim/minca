@@ -816,7 +816,7 @@ goes, and the answer is `{ bots: [], newKey: false }`. A host named and never
 handed the space costs no key change. No call asks the host to drop what it
 has, so it keeps that, unreadable, for as long as the space's subscription is
 paid, and what is in the fund stays there
-([#128](https://github.com/leifriksheim/weave/issues/128)).
+([#220](https://github.com/leifriksheim/weave/issues/220)).
 
 _Source: `packages/core/src/node/node.ts` (`keepSpaceHosts`, `askSpaceHost`, `hosting.space`), `packages/core/src/session/hosting.ts` (`describeHost`, `HostError`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself", "an address that is not a host, or one that is down", "bots a host runs": the two on stopping a space's host)._
 
