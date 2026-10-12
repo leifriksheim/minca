@@ -262,8 +262,9 @@ otherwise ignore it. `receivedAt` is the relay's `at` for the blob.
    and it grants `/account/write` for the account as a whole, with arguments
    `{}` ([01](01-identity.md) §8): a note to write for the whole account. An
    app given some spaces, or a key given records only, may not knock.
-7. `invite` parses; its space's creator is `from`; it is private and carries
-   its key; and the space checks out (its id is the hash of its genesis).
+7. `invite` parses; its space's constitution names `from` among its founders
+   ([03](03-spaces.md) §1.1); it is private and carries its key; and the
+   space checks out (its id is the hash of its constitution).
 
 The knock's **id** is `base64url(SHA-256(UTF-8(blob)))`, the same on every relay.
 A client MUST de-duplicate by it, computing it itself rather than trusting a

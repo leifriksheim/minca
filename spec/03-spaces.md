@@ -38,8 +38,8 @@ Terms used throughout:
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **account**           | An identity's root DID (`did:key:zDn…`, [01](01-identity.md)). What roles are assigned to.                                                                                                                                 |
 | **root** of a version | The account the signing key speaks for: the issuer of the version's note, checked with no time ([01](01-identity.md) §7.5, §7.6), or the author itself when there is no proof ([01](01-identity.md), [02](02-records.md)). |
-| **founder**           | The account that created the space, until it leaves (§2.1). It holds every command.                                                                                                                                        |
-| **member**            | In a given state of the history, a founder or an account assigned at least one role.                                                                                                                                       |
+| **founder**           | An account the constitution's `top` names, until it steps down or leaves (§2.1). It holds every command.                                                                                                                   |
+| **member**            | In a given state of the history, a founder, or an account assigned at least one role, by the constitution or since.                                                                                                        |
 | **reader**            | Same as member, as far as key distribution is concerned (`readers()`).                                                                                                                                                     |
 | **grant**             | A delegation to a role of a command, under a policy on the command's arguments (§2.2).                                                                                                                                     |
 | **hex40(x)**          | The first 20 bytes of SHA-256(UTF-8 `x`), as 40 lower-case hex characters.                                                                                                                                                 |
@@ -49,62 +49,83 @@ Terms used throughout:
 
 ## 1. The space and its id
 
-### 1.1 The space object
+### 1.1 The constitution
 
-A space, as it is handed around (in invites, passes, the space manager), is a
-JSON object:
+A space is founded with a **constitution**: a JSON object that says what the
+space is and how it is run. It never changes. Its hash is the space id, so
+nobody who hands a space on can change or swap any of it.
 
-| Field             | Type                      | Notes                                                                                |
-| ----------------- | ------------------------- | ------------------------------------------------------------------------------------ |
-| `id`              | string                    | `cid(canonical(genesis))`, see 1.2                                                   |
-| `name`            | string                    | Display name. **Not** part of the id; unauthenticated and may differ between copies. |
-| `visibility`      | `"public"` \| `"private"` | Fixed at creation. Private means record bodies are encrypted (§8).                   |
-| `creator`         | string                    | The creator's account DID: the space's founder (§2.1).                               |
-| `roles`           | FoundingRole[]            | The roles it is founded with, and their grants (§2.1). 0–64 roles, names unique.     |
-| `createdAt`       | string                    | ISO 8601 timestamp.                                                                  |
-| `nonce`           | string                    | base64url of 12 random bytes (16 characters). Keeps two spaces made alike apart.     |
-| `readKey`         | string                    | Private only: the `did:key` of the space's first read key (§8.4).                    |
-| `encryptionKeyId` | string                    | Private only: the id of the space's first key (§8.1).                                |
+| Field             | Type                                   | Notes                                                                                                                     |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `weave`           | `"constitution/1"`                     | The format.                                                                                                               |
+| `name`            | string                                 | Display name, at most 100 Unicode code points.                                                                            |
+| `visibility`      | `"public"` \| `"private"`              | Private means record bodies are encrypted (§8).                                                                           |
+| `resolver`        | string                                 | How changes made apart resolve: `strong-remove/1` (§4), the only one there is.                                            |
+| `top`             | `{ "founders": [did, …] }` \| `"none"` | Who no one else can remove (§2.1): 1–16 distinct `did:key` accounts, or no one.                                           |
+| `roles`           | FoundingRole[]                         | The roles it is founded with, and their grants (§2.1). 0–64 roles, names unique.                                          |
+| `assigned`        | object, optional                       | Roles the constitution assigns: `did:key` account → 1–16 distinct names of founding roles. 1–64 accounts; absent if none. |
+| `succeeds`        | string, optional                       | The id of the space this one succeeds (§2.7).                                                                             |
+| `createdAt`       | string                                 | ISO 8601 timestamp.                                                                                                       |
+| `nonce`           | string                                 | base64url of 12 random bytes (16 characters). Keeps two spaces made alike apart.                                          |
+| `readKey`         | string                                 | Private only: the `did:key` of the space's first read key (§8.4).                                                         |
+| `encryptionKeyId` | string                                 | Private only: the id of the space's first key (§8.1).                                                                     |
 
-### 1.2 The genesis and the id
+Under `top: "none"` the constitution **MUST** assign at least one account a
+role: otherwise nobody could ever act in the space.
 
-The **genesis** is the space object without `id` and `name`, with a version
-field:
+A space, as it is handed around (in invites, passes, the space manager), is
+its constitution with one more member, `id`.
+
+### 1.2 The id, and checking a constitution
 
 ```
-genesis = { v: 3, creator, visibility, roles, createdAt, nonce,
-            readKey?,           // private only
-            encryptionKeyId? }  // private only
-id = cid( canonical-JSON(genesis) )
+id = cid( canonical-JSON(constitution) )
 ```
 
 Canonical JSON is defined in [02 — Records](02-records.md) (sorted keys, no
 whitespace). Role objects inside keep their fields as given (`title` and
-`nests` omitted when absent).
+`nests` omitted when absent); optional members of the constitution are
+omitted when absent, never `null`.
 
 A peer handed a space — in an invite, a pass, from a host — **MUST** refuse it
-unless all of these hold (`checkSpace`):
+unless all of these hold (`checkSpace`, `constitutionProblem`):
 
-1. `id`, `nonce` and `creator` are strings;
-2. `visibility` is `public` or `private`;
-3. `roles` is a list of at most 64 well-formed founding roles (§2.1) with
+1. `weave` is `constitution/1`;
+2. `resolver` is a resolver the peer knows: in this version, `strong-remove/1`;
+3. it has no member but those of §1.1 (and `id`);
+4. `name`, `visibility`, `createdAt` and `nonce` are as §1.1 says;
+5. `top` is `"none"`, or an object whose only member is `founders`, a list of
+   1–16 distinct strings starting `did:key:`;
+6. `roles` is a list of at most 64 well-formed founding roles (§2.1) with
    distinct names;
-4. a private space has both `readKey` and `encryptionKeyId`; a public space
+7. `assigned`, if present, is as §1.1 says, naming only founding roles; under
+   `top: "none"` it is present;
+8. `succeeds`, if present, is a space id: `cid` of some bytes, in its one
+   spelling (`b` and 52 lower-case base32 characters);
+9. a private space has both `readKey` and `encryptionKeyId`; a public space
    has neither;
-5. `cid(canonical(genesis))` equals `id`.
+10. `cid(canonical(constitution))` equals `id`.
 
-> Rationale: nobody who passes a space on can change who founded it, with
-> which grants, or with which first key. The name is left out so it can
-> change.
+**A constitution a peer can't read is not judged.** A peer that doesn't know
+a constitution's format (1), its resolver (2) or one of its members (3)
+**MUST NOT** judge the space at all: it doesn't open it, store or serve its
+records, or replay its history, and it says why. A later format or resolver is
+new protocol, and peers that don't have it stay out of the spaces made with
+it.
 
-**Example.** Creator `did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg`
+> Rationale: two peers that judged one space by different rules would
+> disagree about it without either knowing. A peer that doesn't judge it
+> disagrees in the open. And nobody who passes a space on can change its
+> name, who founded it, with which grants, or with which first key.
+
+**Example.** Founder `did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg`
 (the account of seed `01 02 … 10`), founded with one role, `editor` (title
 `Editor`), which may do anything to records, define collections and assign
 `editor`; a fixed time and nonce:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","creator":"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg","nonce":"AAECAwQFBgcICQoL","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"v":3,"visibility":"public"}
-→ id bzwgno6q3imhf6eirh7hbowfzmdva6qcfqd7dfrprl6p77jjrrr7q
+{"createdAt":"2026-01-01T00:00:00.000Z","name":"Chess club","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"top":{"founders":["did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg"]},"visibility":"public","weave":"constitution/1"}
+→ id bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra
 ```
 
 The same space made private with the AES key whose raw bytes are
@@ -112,20 +133,29 @@ The same space made private with the AES key whose raw bytes are
 id and read key as §8.1 and §8.4 derive them:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","creator":"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg","encryptionKeyId":"aLhvw5pkV65_lcQHEcUOug","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf","roles":[…as above…],"v":3,"visibility":"private"}
-→ id bvm5is7n2nm7ex3vy7hn2yllhsoi3dxezkrwvv6thhlfb5dioxdta
+{"createdAt":"2026-01-01T00:00:00.000Z","encryptionKeyId":"aLhvw5pkV65_lcQHEcUOug","name":"Chess club","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf","resolver":"strong-remove/1","roles":[…as above…],"top":{"founders":[…as above…]},"visibility":"private","weave":"constitution/1"}
+→ id bsm42rv73g4colmj3ozemoklaew2hpmoemcuxqhifc7733hyxftvq
+```
+
+A co-op with no one at the top, whose one role may do anything, assigned to
+the same account, succeeding the chess club:
+
+```
+{"assigned":{"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg":["steward"]},"createdAt":"2026-01-01T00:00:00.000Z","name":"Bike co-op","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/","pol":[]}],"name":"steward"}],"succeeds":"bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra","top":"none","visibility":"public","weave":"constitution/1"}
+→ id bfr56qir3ofkfn6rawax6zkp7uqvwigxqoybta7mrey7u45red3ra
 ```
 
 ### 1.3 Creating a space
 
-To create a space a peer picks the founding roles and their grants, takes the
-current time and a fresh 12-byte random nonce, and for a private space
-generates a space key (§8.1) and derives its read key (§8.4). Then it computes
-the id. Nothing is written into the space at creation: the genesis alone
-makes the creator its founder. (The library's constitution templates are in
-[its docs](../packages/core/docs/spaces.md#presets).)
+To create a space a peer picks its name, `top`, the founding roles and their
+grants, and the roles it assigns, takes the current time and a fresh 12-byte
+random nonce, and for a private space generates a space key (§8.1) and
+derives its read key (§8.4). Then it computes the id. Nothing is written into
+the space at creation: the constitution alone makes its founders, and the
+accounts it assigns roles to, members. (The library's constitution templates
+are in [its docs](../packages/core/docs/spaces.md#presets).)
 
-_Source: `packages/core/src/space/space-access.ts` (`spaceGenesis`, `spaceIdOf`, `checkSpace`), `packages/core/src/space/grants.ts` (`checkFoundingRoles`), `packages/core/src/space/space-manager.ts` (`create`), `packages/core/src/types.ts` (`Space`, `SpaceRole`). Tests: `packages/core/tests/constitution.test.ts` ("the genesis examples"), `packages/core/tests/space.test.ts`, `packages/core/tests/space-access.test.ts` ("the space vouches for itself")._
+_Source: `packages/core/src/space/constitution.ts` (`constitutionOf`, `spaceIdOf`, `constitutionProblem`, `checkSpace`, `accessGenesisOf`), `packages/core/src/space/grants.ts` (`checkFoundingRoles`), `packages/core/src/space/space-manager.ts` (`create`, `readSpace`), `packages/core/src/space/roles.ts` (`RESOLVERS`, `replayAccess`), `packages/core/src/types.ts` (`Space`, `SpaceRole`, `SpaceTop`). Tests: `packages/core/tests/constitution.test.ts` ("the constitution examples", "what a constitution may say", "a constitution a peer does not know is not judged"), `packages/core/tests/space.test.ts`, `packages/core/tests/space-access.test.ts` ("the space vouches for itself")._
 
 ---
 
@@ -139,16 +169,29 @@ peer judges every change, and every record, by the grants its author held as
 of what it saw, and resolves changes made apart by one algorithm,
 `strong-remove/1` (§4).
 
-### 2.1 Founders and founding roles
+### 2.1 The top, founders and founding roles
 
-The genesis is, for now, the space's **constitution**. Its `creator` is the
-space's **founder**: it holds every command, and nobody but itself can
-remove it or change its roles. It stops being the founder only by leaving the
-space itself (§2.5), which it may always do; a space whose founder has left
-is run by whoever its roles let, and may end up with nobody who can change
-roles or the key.
+The constitution's `top` says who no one else can remove.
 
-Its `roles` are the **founding roles**:
+- **`{ "founders": [...] }`**, the usual one. Each founder holds every
+  command. Nobody but a founder itself removes it, assigns it a role, takes
+  one from it or makes it step down: no role's grant reaches a founder, and
+  neither does another founder (§4.5). Founders are equals: what each does to
+  anyone else is judged as anyone's change is, so where two founders' changes
+  to others strike each other, both stand (§4.3). A founder stops being one
+  only by its own choice, by stepping down or by leaving the space (§2.5).
+- **`"none"`**: there are no founders. Whoever created the space holds only
+  the roles the constitution assigns it (§1.1), as everyone else does, and
+  anyone may be removed by whoever holds the grant, the creator included.
+
+**Headless.** A space whose founders have all stepped down or left, or one
+with `top: "none"`, can end up with no member who may change roles. Members
+keep what their roles allow; once no member holds a command (changing roles
+or the key, say), nobody can run it, and the constitution can't change. The
+way on is a successor space (§2.7). How the library tells, and what an app
+shows, is in [its docs](../packages/core/docs/spaces.md#the-top-and-founders).
+
+The constitution's `roles` are the **founding roles**:
 
 ```
 FoundingRole = { name: string, title?: string, grants: Grant[], nests?: string[] }
@@ -171,14 +214,15 @@ root of every chain: they are the role's **first definition** (§2.4), and a
 later definition that stands replaces them, so founding roles change in place
 like any other.
 
-> **Planned: the constitution record** (step 5 of
-> [the plan](drafts/constitution-grants-contracts.md) §8). The genesis will
-> become a `constitution/1` record: `top`, the founders (several, or none),
-> each of whom may step down; the name of the conflict resolver, from a fixed
-> list of which `strong-remove/1` is the first; and `/space/succeed`, which
-> names a successor space. What this section says of the creator is what
-> `top: { founders: [creator] }` will say, and the founding roles move into
-> the record as they are.
+The constitution's `assigned` roles are its **first assignments**: they hold
+from the start, as if the space itself had assigned them, and end as any
+assignment does, by an unassignment, a removal or leaving (§2.5). A later
+assignment of the same role to the same account replaces it, as one version
+of a record replaces another.
+
+What can't change in place is the constitution itself: its name, `top`, the
+resolver, and which roles it founded with. Roles, grants, members and
+collections change in place, as the grants allow.
 
 ### 2.2 Grants
 
@@ -249,6 +293,7 @@ policy runs:
 | `/key/change`        | (none)                            | A new key for a private space (§9)                                                                                                      |
 | `/space/relays`      | (none)                            | The relays the space names (§10)                                                                                                        |
 | `/space/keepers`     | (none)                            | The nodes that keep the space whole (§10)                                                                                               |
+| `/space/succeed`     | (none)                            | A space that succeeds this one (§2.7)                                                                                                   |
 
 `/record/read` (`collection`) is a command a grant may hold, for the
 library's use; no peer checks it, since the space key opens every collection
@@ -271,7 +316,7 @@ Examples:
   `{ "cmd": "/member/remove", "pol": [["==", ".self", false], ["not", ["any", ".roles", ["==", ".", "admin"]]]] }`.
 
 A space that grants `/member/remove` or `/role/unassign` without a policy on
-`.roles` lets it reach everyone but the founder. `.roles` protects a target
+`.roles` lets it reach everyone but its founders. `.roles` protects a target
 only from an invoker whose own view includes the target's role. `.roles` is
 read as of the invocation's own view (§4.3), and a writer chooses its view by
 what it names in `seen` (§3.2): one acting concurrently with a promotion, or
@@ -324,14 +369,15 @@ role that doesn't exist is refused.
 **A role that defines itself can lock.** If a role holds `/role/define` for
 itself, two of its members' rival definitions that disagree on that grant
 leave the role without it, and then nobody in it can write the definition
-that ends the rivalry. The founder can; without one it takes a new space. So
-`/role/define` for a role is best held by another role than itself: the
-library's templates have the founder, or a steward role, define `admin`.
+that ends the rivalry. A founder can; without one it takes a successor space
+(§2.7). So `/role/define` for a role is best held by another role than
+itself: the library's templates have the founders define `admin`, and the
+co-op's stewards define `member` while nobody defines `steward`.
 
 ### 2.5 Assignments and removals
 
-An account holds a role when a `sys.assign` record (§3.1) assigns it and
-nothing has taken it since. The account is then a **member**; an account with
+An account holds a role when the constitution or a `sys.assign` record
+(§3.1) assigns it and nothing has taken it since. The account is then a **member**; an account with
 no role, and not a founder, is no member and may invoke nothing.
 
 - **Assigning** a role to an account is `/role/assign` with
@@ -350,9 +396,18 @@ no role, and not a founder, is no member and may invoke nothing.
   assignments that saw the removal count. **Leaving the space** is built in:
   an account may always remove itself, and a founder that does is a founder
   no more.
-- Nobody but the founder itself removes a founder or changes its roles. A
-  founder may assign itself a role, and leave one, as anyone may leave a
-  role.
+- Nobody but a founder itself removes it, changes its roles or makes it
+  step down, another founder included. A founder may assign itself any role,
+  and leave one, as anyone may leave a role.
+- **Stepping down** is built in, and only a founder's own: `sys.stepdown`
+  at `stepdown:<hex40(did)>` with `{ did, cutoff? }`, `did` the founder's
+  account. It stays, with the roles it holds, and is a founder no more; with
+  no role it is then no member, so a founder that wants to stay assigns
+  itself a role first. Like leaving, stepping down strikes everything the
+  account did that hadn't seen it (§4.3): power used by naming a view from
+  before it is struck, and so is a record written as a founder in such a
+  view (§5.1). Once it has stepped down, it can be removed or demoted like
+  anyone, by a change that saw it step down.
 - **Invites** are assignments to whoever holds the invite's secret (§7):
   opening, changing or closing an invite for a role needs `/role/assign` for
   that role, with `{ role, self: false, roles: [] }`.
@@ -373,17 +428,55 @@ A member with two accounts sidesteps `.self`: an admin who may assign `hr`
 can assign it to her second account. That account is a member holding `hr`,
 visible as one and unassignable like any other.
 
-The library's templates of founding roles are in
+The library's constitution templates are in
 [its docs](../packages/core/docs/spaces.md#presets); the protocol reads
-whatever roles a genesis names and never looks at a template's name.
+whatever a constitution names and never looks at a template's name.
 
-_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `roleMay`, `refusal`, `rolesOf`, `isMember`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts`._
+### 2.7 Successor spaces
+
+A space's constitution can't change, and a headless space has nobody to run
+it. The way on is a **successor**: a new space, with its own constitution,
+that the old one names. Members choose whether to follow.
+
+**Naming a successor** is `/space/succeed`, no arguments: `sys.succeed` at
+`succeed:<hex40(successor id)>` with `{ space: <successor id> }`. The new
+space's constitution names the old one: `"succeeds": "<old id>"` (§1.1).
+
+**Who may.** A version is allowed (§4.5) when its author is a member, and
+either may invoke `/space/succeed` (a founder, or a role granted it), or **no
+member may**: in a headless space, or one whose constitution and definitions
+never granted it, any member names a successor.
+
+**It changes nothing in the old space.** No one gains or loses a role there,
+no record stops counting, and the old space carries on for whoever stays.
+It only says where a successor is: the replay keeps, for each space named,
+the accounts that named it (`successors`, §4.1).
+
+**Every one stands.** A later succeed replaces none, and two made apart both
+stand. Nothing orders them: a lowest id can be ground, so no rival is first.
+What an app shows of them is in
+[the library's docs](../packages/core/docs/spaces.md#successors).
+
+**A successor or a copy.** A member treats a space as this one's successor
+only when both hold: the space's constitution says `succeeds: <this id>`, and
+a `sys.succeed` that stands here names its id. Neither alone is enough:
+anyone can make a constitution that says it succeeds a space, and a succeed
+names an id without its constitution. Peers of the old space don't check the
+successor's constitution; a reader that holds it does.
+
+> Rationale: any member is enough where nobody holds the command, because a
+> successor binds no one: each member decides whether to follow. Who may is
+> judged in the writer's own view, as every change is, so a member can name a
+> view from before anyone held it, and the result is the same: a name in a
+> list, and a choice for each member.
+
+_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `roleMay`, `refusal`, `rolesOf`, `isMember`, `startState`), `packages/core/src/space/space-access.ts` (`stepDownKey`, `succeedKey`), `packages/core/src/node/space-runtime.ts` (`stepDown`, `succeed`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed", "the constitution on nodes")._
 
 ---
 
 ## 3. The access history
 
-Everything after the genesis that changes who may do what is a record in the
+Everything after the constitution that changes who may do what is a record in the
 space itself. These records form the **access history**.
 
 ### 3.1 The access collections
@@ -403,6 +496,8 @@ Bodies are JSON objects; `cutoff` is optional everywhere it appears (§6.3).
 | `sys.relays`     | `relays:space`                                 | `{ relays: string[] }` (§10)                                             | `relays`     |
 | `sys.keepers`    | `keepers:space`                                | `{ keepers: [{ did, name }], copies: number \| null }` (§10)             | `keepers`    |
 | `sys.fork`       | `fork:<hex40(writer DID)>`                     | `{ a, b }`: two versions without bodies (§6.5)                           | `fork`       |
+| `sys.stepdown`   | `stepdown:<hex40(account DID)>`                | `{ did, cutoff? }` (§2.5)                                                | `stepdown`   |
+| `sys.succeed`    | `succeed:<hex40(successor id)>`                | `{ space: <successor id> }` (§2.7)                                       | `succeed`    |
 
 A `sys.revoke` key names the key revoked and the account revoking it, so no
 other account's revoke can sit where it belongs. A `sys.assign` key names the
@@ -414,7 +509,10 @@ are versions of one record, and two made apart are rivals (§4.4).
 
 Example keys for the account above: its assignment of `editor`,
 `assign:0ce7d5918bd19e9cbf36c04809fd02ff2b61e3af`; its removal,
-`remove:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; for the invite DID
+`remove:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; its stepping down,
+`stepdown:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; naming the chess club
+of §1.2 as a successor, `succeed:1f15c8f3f09a977a46d6db200f2bd93a33a724f3`;
+for the invite DID
 `did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
 `invite:fd8ebfa892a6c4bae7cd265123b7844e49fa50e8`.
 
@@ -423,7 +521,7 @@ Example keys for the account above: its assignment of `editor`,
 Every version written in a space — access record or not — is judged as of
 its `seen`: the ids of **heads** of the access history as its writer knew
 them (§4.6), at most 64. `seen` is optional ([02](02-records.md) §3.1): a
-version without it is judged as having seen nothing but the genesis. A writer **SHOULD** name its current heads, and MAY name fewer: what it
+version without it is judged as having seen nothing but the constitution. A writer **SHOULD** name its current heads, and MAY name fewer: what it
 leaves out it is judged as not having seen. For its own standing that can
 only take something away: what it didn't see of its own removal or
 unassignment takes it all the same (§5.1). It is not so for arguments read in
@@ -432,7 +530,7 @@ leaves out, so a policy on `.roles` binds only a writer whose view includes
 the role. One with more than 64 names first those its own standing
 rests on (its `remove:` record, its `assign:` and `role:` records, its
 collection's definition), then the most recently applied. The space id
-itself may appear in `seen` and stands for the genesis. Access records
+itself may appear in `seen` and stands for the constitution. Access records
 **MUST** carry `retain: true` ([02](02-records.md)); a version without it is
 not an access event.
 
@@ -444,7 +542,8 @@ version, not only current ones — and use only those whose collection is the
 one the prefix belongs to (`role:`→`sys.role`, `assign:`→`sys.assign`,
 `remove:`→`sys.remove`, `invite:`→`sys.invite`, `revoke:`→`sys.revoke`,
 `collection:`→`sys.collection`, `key:`→`sys.key`, `relays:`→`sys.relays`,
-`keepers:`→`sys.keepers`, `fork:`→`sys.fork`).
+`keepers:`→`sys.keepers`, `fork:`→`sys.fork`, `stepdown:`→`sys.stepdown`,
+`succeed:`→`sys.succeed`).
 
 A version yields no event when any of these hold:
 
@@ -462,7 +561,8 @@ Otherwise the event is `{ id: version.id, key: version.key, root, author: versio
 where `cutoff` is `body.cutoff` read as a map from key DID to a map from
 collection to a non-negative integer (absent: empty; anything else, or more
 than 1024 places in all: no event),
-always empty for `role`, `definition`, `key`, `relays`, `keepers` and `fork`, and:
+always empty for `role`, `definition`, `key`, `relays`, `keepers`, `fork` and
+`succeed`, and:
 
 | Kind         | Checks                                                                                                                                                                                                    | Event fields                                                                           |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -476,6 +576,8 @@ always empty for `role`, `definition`, `key`, `relays`, `keepers` and `fork`, an
 | `keepers`    | record key `keepers:space`, `checkKeepers(keepers, copies ?? null)` passes (§10)                                                                                                                          | `keepers`, `copies`                                                                    |
 | `revoke`     | `key` a `did:key`; record key = `revoke:<hex40(key + "\|" + root)>`                                                                                                                                       | `target` = `key`                                                                       |
 | `fork`       | `a` and `b` prove a fork in this space ([02](02-records.md) §4.10, §6.5); key = `fork:<hex40(their author)>`                                                                                              | `writer` = their `author`, `collection` = the forked line's, `from` = its place (§6.5) |
+| `stepdown`   | `did` a string, key = `stepdown:<hex40(did)>`                                                                                                                                                             | `did`                                                                                  |
+| `succeed`    | no `cutoff`; `space` a space id (§1.2, 8) other than this space's; key = `succeed:<hex40(space)>`                                                                                                         | `space`                                                                                |
 
 A deleted version in any access collection other than `sys.collection` is
 therefore ignored: access is taken away by writing a change, never by deleting.
@@ -489,8 +591,9 @@ access version from outside (a peer, a folder) unless:
 1. its `space` is this space's id and it has `retain`;
 2. it yields an event (§3.3);
 3. everything its `seen` names is present and not waiting (§4.1);
-4. its root is **named** by the history — the founder, or the `did` of any
-   `assign` event with `assigned: true`, whatever became of it — or it is an
+4. its root is **named** by the history — a founder, an account the
+   constitution assigns a role, or the `did` of any `assign` event with
+   `assigned: true`, whatever became of it — or it is an
    `assign` event joining by an invite key that some held `invite` event
    names.
 
@@ -498,7 +601,7 @@ access version from outside (a peer, a folder) unless:
 > free. Only accounts the history has heard of can get anything stored, and
 > "named" only grows, so two peers never disagree for good.
 
-_Source: `packages/core/src/space/roles.ts` (collection constants), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
+_Source: `packages/core/src/space/roles.ts` (collection constants), `packages/core/src/space/space-access.ts` (record keys: `assignKey`, `removalKey`, `inviteKey`, `revokeKey`, `roleKey`, `stepDownKey`, `succeedKey`), `packages/core/src/space/grants.ts` (`readDefinition`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `loadAccess`, `admissible`). Tests: `packages/core/tests/space-access.test.ts` ("a stranger who knows the space cannot write in it…"), `packages/core/tests/access-attacks.test.ts` ("a fresh key outliving its issuer…"), `packages/core/tests/constitution.test.ts` ("access record keys"), `packages/core/tests/attacks.test.ts`._
 
 ---
 
@@ -527,15 +630,20 @@ State = {
   relays:      string[],
   keepers:     [{ did, name }],
   copies:      number | null,
+  successors:  Map<spaceId, accountDid[]>,   // who named each, sorted
 }
 RoleDefinition = { event, by: accountDid | null, title?, grants: Grant[], nests: string[], view: State | null }
 ```
 
-The **start state** comes from the genesis: `founders` = `{ creator }`;
-`roles[name]` = one definition per founding role, `{ event: <space id>, by:
-null, grants, nests: nests ?? [], view: null }`; for a private space `keys` =
-`[{ keyId: encryptionKeyId, readKey, event: <space id> }]`, else `[]`;
-everything else empty, `false` or `null`.
+The **start state** comes from the constitution: `founders` = `top.founders`,
+or empty under `top: "none"`; `roles[name]` = one definition per founding
+role, `{ event: <space id>, by: null, grants, nests: nests ?? [], view: null
+}`; `assigned[did][role]` = the space id for each role `assigned` gives an
+account; for a private space `keys` = `[{ keyId: encryptionKeyId, readKey,
+event: <space id> }]`, else `[]`; everything else empty, `false` or `null`.
+
+A peer replays a space only under the resolver its constitution names, and
+only one it knows (§1.2): this section is `strong-remove/1`.
 
 `rolesOf(S, did)` is the names in `S.assigned[did]`, sorted. `isMember(S,
 did)` is `did ∈ S.founders` or `rolesOf(S, did)` is not empty.
@@ -558,7 +666,7 @@ of its own view. It recurses into ever older views, so it ends.
 
 ### 4.2 Input and waiting
 
-Input: the genesis and a set of events, deduplicated by `id` (first kept).
+Input: the constitution and a set of events, deduplicated by `id` (first kept).
 Call `G` the space id.
 
 An event is **waiting** if its `seen` names itself, or names an id that is
@@ -576,9 +684,9 @@ what `e` **saw**. Two events neither of which saw the other are
    where `V(e)`, its **own view**, is the merge (§4.4) of the allowed events
    in `ancestors(e)`. That depends only on what `e` saw, so it never changes.
 2. **Reductions.** An allowed event is a **reduction** when, in its own view,
-   it takes something from an account: a `remove` of a member, or an
-   `assign` with `assigned: false` of a role the account holds, the
-   account's own leaving included. A `revoke` is a reduction of the keys it
+   it takes something from an account: a `remove` of a member, an `assign`
+   with `assigned: false` of a role the account holds, the account's own
+   leaving included, or a `stepdown` of a founder. A `revoke` is a reduction of the keys it
    names for its own account, a `fork` of the key whose line forked, and
    closing an invite of the joins through it. A definition is never a
    reduction: it binds what saw it.
@@ -586,8 +694,9 @@ what `e` **saw**. Two events neither of which saw the other are
    when `r`'s cutoff does not cover `e` (`r.cutoff[e.author][e's collection] ≥
 e`'s place in that collection's line, `log.n`, §6.3) and, unless `r` is a
    revoke or a fork, neither had seen the other. It reaches:
-   - for a removal of `did`, or an unassignment of any role from `did`:
-     every event whose root is `did`, whatever it needed;
+   - for a removal of `did`, an unassignment of any role from `did`, or
+     `did` stepping down: every event whose root is `did`, whatever it
+     needed;
    - for a revoke: events whose author is the revoked key and whose root is
      the revoke's; for a fork: events whose author is the key, in the forked
      collection, with `log.n` at least the fork's place; for a closed invite:
@@ -640,15 +749,17 @@ allowed but not valid is dropped as struck. Valid events are **applied**.
 The state of a set of events is the start state with, for each record key,
 the events **latest** on it (no other event on that key saw them) merged:
 
-| Kind                              | Of the latest events on a key                                                                                                                                                                                                                      |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `role`                            | All stand: `roles[name]` = each as a definition `{ event, by: root, title?, grants, nests, view }`, sorted by id, `view` its own view (`V`, or `W` among valid events). More than one are rivals (§2.4).                                           |
-| `assign`                          | If any is `assigned: false`, the role is not assigned. Otherwise it is assigned when some latest one saw every latest `remove` of its account in the set; `assigned[did][role]` = the lowest such id.                                              |
-| `remove`                          | Change no entry of their own; they decide assignments (above). If any `remove` of a founder in the set has the founder as its root, `founders` loses it.                                                                                           |
-| `invite`                          | Closed if any is closed, or if they name different roles; otherwise open. `invites[inviteDid]` = `{ role, open, event, by }`, `role` and `event` of the lowest closed one, or of the lowest id, and `by` the roots of all the latest ones, sorted. |
-| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and those who may define it, made: otherwise none (below)                                                                                                  |
-| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                    |
-| `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                    |
+| Kind                              | Of the latest events on a key                                                                                                                                                                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `role`                            | All stand: `roles[name]` = each as a definition `{ event, by: root, title?, grants, nests, view }`, sorted by id, `view` its own view (`V`, or `W` among valid events). More than one are rivals (§2.4).                                              |
+| `assign`                          | If any is `assigned: false`, the role is not assigned. Otherwise it is assigned when some latest one saw every latest `remove` of its account in the set; `assigned[did][role]` = the lowest such id. They decide over the constitution's assignment. |
+| `remove`                          | Change no entry of their own; they decide assignments (above), and end every assignment the constitution made to their account. If any `remove` of a founder in the set has the founder as its root, `founders` loses it.                             |
+| `stepdown`                        | `founders` loses the account.                                                                                                                                                                                                                         |
+| `succeed`                         | `successors[space]` = the roots of every event on the key in the set, sorted: every one stands.                                                                                                                                                       |
+| `invite`                          | Closed if any is closed, or if they name different roles; otherwise open. `invites[inviteDid]` = `{ role, open, event, by }`, `role` and `event` of the lowest closed one, or of the lowest id, and `by` the roots of all the latest ones, sorted.    |
+| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and those who may define it, made: otherwise none (below)                                                                                                     |
+| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                       |
+| `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                       |
 
 Where an id picks the event an entry names, the outcome is the same either
 way: two assignments of one role to one account give the same power, a
@@ -707,14 +818,21 @@ because it is one of the changes anyone may make for themselves:
   invite is stopped by closing it.
 - _Leaving a role_ (`assigned: false`, `A = did`): allowed when `did` holds
   `role` now.
-- _Otherwise_: `did` is not a founder, unless `A = did`; the role exists;
+- _Otherwise_: `did` is not a founder, unless `A = did` (no one else, another
+  founder included, changes a founder's roles); the role exists;
   `args = { role, self: A = did, roles: rolesOf(S, did) }`; assigning needs
   `may(S, A, /role/assign, args)`; unassigning needs `did` to hold `role` now
   and `may(S, A, /role/unassign, args)`.
 
 **`remove`** — `did` must be a member now. Leaving (`A = did`) is allowed,
-a founder's included. Otherwise `did` is not a founder, and
+a founder's included. Otherwise `did` is not a founder (another founder may
+not remove one either), and
 `may(S, A, /member/remove, { self: false, roles: rolesOf(S, did) })`.
+
+**`stepdown`** — `A = did`, and `did` is a founder now.
+
+**`succeed`** — `A` is a member, and `may(S, A, /space/succeed, {})`, or no
+member `m` of `S` has `may(S, m, /space/succeed, {})`.
 
 **`invite`** — for a role `x`, `assigns(x)` is: `x` exists and
 `may(S, A, /role/assign, { role: x, self: false, roles: [] })`. If the invite
@@ -778,7 +896,15 @@ unassignment, so the unassignment strikes it; Bob's removal rests on it,
 and with it gone from his view, is refused. Carol stays. A record Bob
 writes citing the definition is withdrawn (§5.1 step 5).
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `validWithin`, `componentsOf`, `merge`, `may`, `refusal`, `reductionOf`, `definerOf`, `extended`). Tests: `packages/core/tests/roles.test.ts` ("what a struck change carries with it", "unassigning and removing"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment", among them invites judged as their opener's assignment), `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions, removals), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/access-fuzz.test.ts` (the same with nestings, invites and people changing their own roles), `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
+**Example (a founder steps down, then backdates).** Alice and Bob found the
+space. Alice assigns herself `member` and steps down. Later she assigns
+Mallory `admin`, naming a view from before her stepping down, where she was
+still a founder. It is allowed in its own view, but her stepping down is a
+reduction of her that it hadn't seen, so it strikes it. Carol, an admin,
+removes Alice naming the same old view: refused, since Alice was a founder
+there. Removing her naming a view that holds the stepping down is allowed.
+
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `startState`, `invalidWithin`, `validWithin`, `componentsOf`, `merge`, `may`, `refusal`, `reductionOf`, `definerOf`, `extended`). Tests: `packages/core/tests/roles.test.ts` ("what a struck change carries with it", "unassigning and removing"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment", among them invites judged as their opener's assignment), `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions, removals), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/access-fuzz.test.ts` (the same with nestings, invites and people changing their own roles), `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
 
 ---
 
@@ -917,11 +1043,13 @@ definition with no grants instead. Its holders stay members.
 **Leaving a role:** an account writes its own `sys.assign` for that role with
 `assigned: false`. **Leaving the space's history:** an account writes its own
 `sys.remove`. Anyone may do either, whatever their roles; a founder that
-leaves the space is a founder no more.
+leaves the space is a founder no more. **Stepping down:** a founder writes its
+own `sys.stepdown` (§2.5), and stays with the roles it holds.
 
 **Handing over:** a founder assigns another account a role whose grants run
-the space, then leaves. The new holder keeps running it, as far as its role's
-grants go; nobody is the founder any more.
+the space, then steps down or leaves. The new holder keeps running it, as far
+as its role's grants go. Once the last founder has gone, nobody is above the
+roles any more.
 
 **Leaving on a device:** when an account stops holding a space in which it
 holds a place, the device that leaves **SHOULD** first write the account's
@@ -940,13 +1068,14 @@ becomes due (§9.2), and someone granted `/key/change` changes the key (§9.3).
   writes nothing.
 - An account that is the space's only reader writes nothing: nobody else
   holds a key to change.
-- Anyone may leave, so the founder can leave too. The space is then left with
-  no one holding what the founder alone held, and that is accepted.
+- Anyone may leave, so the founders can leave too. The space is then left
+  with no one holding what only the founders held, and that is accepted: the
+  way on is a successor (§2.7).
 
 What the library does, and how long it waits for a peer, is in
 [its docs](../packages/core/docs/node.md#leaving-a-space).
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `reconcileOnce`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`, `assign`, `removeAccount`, `defineRole`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/roles.test.ts` ("a founder steps down by leaving…"), `packages/core/tests/constitution.test.ts` ("stepping down")._
 
 ### 6.3 Cutoffs
 
@@ -1134,45 +1263,59 @@ before it is a member; its `seen` must include the invite event.
 An invite is `base64url( UTF-8( JSON.stringify(SpaceInvite) ) )` — plain
 `JSON.stringify`, not canonical:
 
-| Field       | Type                                  | Present                                                           |
-| ----------- | ------------------------------------- | ----------------------------------------------------------------- |
-| `space`     | space object (§1.1), including `name` | always                                                            |
-| `invitedBy` | string, the inviter's account DID     | always; unauthenticated, for display                              |
-| `key`       | base64url of the raw 32-byte AES key  | private spaces (the inviter's current key)                        |
-| `invite`    | base64url of the 32-byte secret       | role invites only                                                 |
-| `role`      | string                                | role invites only; for display — the invite record is what counts |
-| `relays`    | string[]                              | when known: the space's relays (§10), else the inviter's own      |
+| Field       | Type                                 | Present                                                           |
+| ----------- | ------------------------------------ | ----------------------------------------------------------------- |
+| `space`     | space object (§1.1)                  | always                                                            |
+| `invitedBy` | string, the inviter's account DID    | always; unauthenticated, for display                              |
+| `key`       | base64url of the raw 32-byte AES key | private spaces (the inviter's current key)                        |
+| `invite`    | base64url of the 32-byte secret      | role invites only                                                 |
+| `role`      | string                               | role invites only; for display — the invite record is what counts |
+| `relays`    | string[]                             | when known: the space's relays (§10), else the inviter's own      |
 
-> **Known defect:** `space.name` and `invitedBy` are not authenticated. Neither
-> is in the space's genesis (§1.2), and nothing signs the invite string, so
-> anyone passing the link on can change them. A reader MUST NOT treat them as
-> verified. A fix will authenticate them or drop them from the invite.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> **Known defect:** `invitedBy` and `relays` are not authenticated. Neither
+> is in the space's constitution (§1.2), and nothing signs the invite string,
+> so anyone passing the link on can change them. A reader MUST NOT treat them
+> as verified. A fix will authenticate them or drop them from the invite.
+> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20). The
+> space's name is its constitution's, so changing it changes the id.
 
 Example (private space of §1.2, role invite with the secret of §7.1), decoded:
 
 ```json
 {
   "space": {
-    "id": "bvm5is7n2nm7ex3vy7hn2yllhsoi3dxezkrwvv6thhlfb5dioxdta",
+    "id": "bsm42rv73g4colmj3ozemoklaew2hpmoemcuxqhifc7733hyxftvq",
+    "weave": "constitution/1",
+    "name": "Chess club",
     "visibility": "private",
-    "creator": "did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg",
+    "resolver": "strong-remove/1",
+    "top": {
+      "founders": ["did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg"]
+    },
     "roles": [
       {
         "name": "editor",
         "title": "Editor",
         "grants": [
-          { "cmd": "/record", "pol": [] },
-          { "cmd": "/collection/define", "pol": [] },
-          { "cmd": "/role/assign", "pol": [["==", ".role", "editor"]] }
+          {
+            "cmd": "/record",
+            "pol": []
+          },
+          {
+            "cmd": "/collection/define",
+            "pol": []
+          },
+          {
+            "cmd": "/role/assign",
+            "pol": [["==", ".role", "editor"]]
+          }
         ]
       }
     ],
     "createdAt": "2026-01-01T00:00:00.000Z",
     "nonce": "AAECAwQFBgcICQoL",
     "readKey": "did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf",
-    "encryptionKeyId": "aLhvw5pkV65_lcQHEcUOug",
-    "name": "Plans"
+    "encryptionKeyId": "aLhvw5pkV65_lcQHEcUOug"
   },
   "invitedBy": "did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg",
   "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
@@ -1182,7 +1325,7 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
 }
 ```
 
-encoded: `eyJzcGFjZSI6eyJpZCI6ImJ2bTVpczduMm5tN2V4M3Z5N2huMnlsbGhzb2kzZHhlemtyd3Z2NnRoaGxmYjVkaW94ZHRhIiwi…`
+encoded: `eyJzcGFjZSI6eyJpZCI6ImJzbTQycnY3M2c0Y29sbWozb3plbW9rbGFldzJocG1vZW1jdXhxaGlmYzc3MzNoeXhmdHZxIiwi…`
 (the full string is the base64url of the JSON above).
 
 A private-space invite carries the space key, so the whole string is a
@@ -1235,7 +1378,7 @@ keyId   = base64url(HKDF(K, "weave/space-key-id/v1", 16))    // 22 characters
 readKey = §8.4;  topic key = 02 §8.2
 ```
 
-The first key's id is the genesis's `encryptionKeyId`; later keys are named by
+The first key's id is the constitution's `encryptionKeyId`; later keys are named by
 `sys.key` (§9). A peer that receives a raw key (in an invite, a box, a key
 record's `earlier`) derives its id from it and takes it only as the key that
 id names.
@@ -1253,7 +1396,8 @@ In a private space, the body of every version is encrypted **before signing**,
 except in these collections, which stay in the clear:
 
 `sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.key`,
-`sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers` and `sys.fork` (§6.5): proof every peer must check, holding signed envelopes
+`sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`, `sys.fork` (§6.5),
+`sys.stepdown` and `sys.succeed` (§2.5, §2.7): proof every peer must check, holding signed envelopes
 rather than anyone's words.
 
 Everything else is encrypted — application records, `sys.collection`
@@ -1311,7 +1455,7 @@ readSeed = HKDF-SHA256(ikm = K, salt = empty, info = "weave/space-read/v1", L = 
 readKey  = deriveKeyPairFromSeed(readSeed)      // 01 — Identity; did:key P-256
 ```
 
-The genesis names the first key's read DID (`readKey`); each `sys.key` names
+The constitution names the first key's read DID (`readKey`); each `sys.key` names
 the new one's. How a peer proves it holds the read key when connecting is in
 [04 — Network](04-network.md).
 
@@ -1333,6 +1477,12 @@ how. A key whose `onePer` names `@author` starts with its account's owner part
 ([02](02-records.md) §4.1), which says no more than the version's `author`
 and `proof` do. A former member keeps the first key, and can still test
 guesses against what it is sent later.
+
+**The constitution** is not encrypted: whoever checks the space's id needs
+all of it, its name included, and so does every holder of an invite or a
+pass (§7.4, §14), a carrier among them. So are the ids a `sys.succeed` names
+(§2.7), like every access record (§8.2); the successors' constitutions are
+not in the old space.
 
 _Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `packages/core/src/node/space-runtime.ts` (`onePerKeying`). Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)")._
 
@@ -1432,7 +1582,7 @@ whose id and read key the history names; repeat until nothing new. Only the
 version at `key:space`. So holding the current key opens every earlier one.
 
 A reader **MUST** check that the keys an `earlier` opens to include the
-space's first key K₀, the one the genesis's `encryptionKeyId` names (§8.1):
+space's first key K₀, the one the constitution's `encryptionKeyId` names (§8.1):
 every reader needs it to derive `onePer` keys ([02 §7.3](02-records.md)). A
 key change whose `earlier` does not open, or leaves K₀ out, is
 **malformed**: the reader takes no key from it. The change still counts in
@@ -1546,22 +1696,24 @@ and a label:
 ```
 nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1", 32)[0..12] )
 K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1", 32)      // the space key, §8.1
-space   = { visibility: "private", creator: accountDid, roles: [],
+space   = { weave: "constitution/1", name, visibility: "private",
+            resolver: "strong-remove/1", top: { founders: [accountDid] }, roles: [],
             createdAt: "1970-01-01T00:00:00.000Z", nonce,
             readKey: readDid(K), encryptionKeyId: keyId(K) }
-id      = cid(canonical(genesis))            // §1.2
+id      = cid(canonical(space))              // §1.2
 ```
 
-There are no founding roles: the account is the space's founder, and holds
-every command. Any other bytes give another id.
+There are no founding roles: the account is the space's one founder, and
+holds every command. `name` is the name in the table below. Any other bytes
+give another id.
 
 | Label                    | Space                | Name               |
 | ------------------------ | -------------------- | ------------------ |
 | `weave/account-registry` | the account registry | `Account registry` |
 | `weave/contacts`         | the contacts space   | `Contacts`         |
 
-Example (seed `01 02 … 10`): registry `bvlkecmz3ywm4lzqjcjs4iwy7gjyk6d2xou6di2rk3juquwffqarq`
-(nonce `Jx8Oo78z30WwKl1X`), contacts `b5fmel466vf72tqpijj4l5yj3pfmbjet5y55wp2db66vhswunomyq`.
+Example (seed `01 02 … 10`): registry `bedvg3woledl6e5w4kj3okq2yxdmz77s4adfmegkj2n3kjavydfia`
+(nonce `Jx8Oo78z30WwKl1X`), contacts `b43ypkcbueug6yc6fnoumjtzit53yphcv5l5o42l2mqlce7fgnpfa`.
 
 > Rationale: the DID alone is not enough to find them — it appears on
 > everything the account signs.
@@ -1761,5 +1913,5 @@ Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
   both ([the plan](drafts/constitution-grants-contracts.md) §7).
 - A way to re-establish a space's key for members who lost every key they held
   other than a fresh role invite.
-- `invitedBy` and the space `name` in invites are unauthenticated; no
-  signature over the invite string exists. See the known defect in §7.4.
+- `invitedBy` and `relays` in invites are unauthenticated; no signature over
+  the invite string exists. See the known defect in §7.4.

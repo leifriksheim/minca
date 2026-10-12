@@ -62,6 +62,12 @@ reference implementation, or any implementation, honestly.
     for an account: a token has one form (low-S signatures only, one
     spelling, exact fields), and a note is one token signed by the account's
     root key, so a chain of tokens is refused (01 §7.1, §7.5).
+  - It can't change anything a space's constitution says, its name and
+    founders included, without changing the space's id (03 §1.2). A space it
+    makes whose constitution says it succeeds another is a copy, not a
+    successor, unless a succeed that stands in that space names it (03 §2.7).
+    It can found a space naming anyone as a founder; that space gives them
+    power, and takes nothing from them.
 - **Does not hold yet.**
   - A leaked view-only invite carries the space key, can't be closed, and
     never causes a key change, so whoever holds it reads everything new
@@ -72,7 +78,7 @@ reference implementation, or any implementation, honestly.
     whose mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
   - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
 
-_Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
+_Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 
 ### 3.2 Member
 
@@ -101,6 +107,22 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     on a stub, judged without its body, never stands for the whole version,
     and a reader holds a stub whose grant reads its body as not yet judged
     (03 §5.2; `attacks.test.ts`, "a stub sent ahead of its body").
+  - Under `top: { founders }`, it can't remove a founder, take a role from
+    one, assign one a role or make one step down, whatever its grants, and
+    neither can another founder. A founder is a founder in every view until
+    it steps down or leaves, so naming an older view, or acting
+    concurrently, doesn't help: every peer refuses the change (03 §2.1,
+    §4.5; `constitution.test.ts`, "top: founders", "a removal of a founder,
+    even backdated, is refused by every peer").
+  - A founder that steps down can't go on using founder power by naming a
+    view from before it: stepping down is a reduction of its account, and
+    strikes everything it did that hadn't seen it, records included (03 §2.5,
+    §4.3; `constitution.test.ts`, "stepping down strikes what the founder did
+    that had not seen it…"). Founder status is never given back.
+  - A successor it names changes nothing in the old space: no one loses a
+    role there and no record stops counting. It can't hide or replace another
+    member's successor: every succeed that stands is listed, and none is first
+    (03 §2.7; `constitution.test.ts`, "/space/succeed").
   - It can hand no power to another key or account: only the constitution and
     a role's definition issue grants, and only to roles, so whatever it holds
     goes when its roles do, and a grant to anything but its role is no
@@ -247,14 +269,19 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     costs every peer storage, like any record it may write
     ([#33](https://github.com/leifriksheim/weave/issues/33)).
   - A grant of `/member/remove` or `/role/unassign` without a policy on
-    `.roles` reaches everyone but the founder. The space chose that by
+    `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).
-  - Founders answer to no one but themselves: nobody else can remove one or
-    change its roles, and no vote can bind a change to who may do what
-    ([#160](https://github.com/leifriksheim/weave/issues/160)). A founder can
-    step down by leaving, after which the space may have nobody who can
-    change roles or the key; the way out is a new space (successor spaces
-    are planned, 03 §2.1).
+  - Founders answer to no one but themselves: nobody else, another founder
+    included, can remove one or change its roles, and no vote can bind a
+    change to who may do what
+    ([#160](https://github.com/leifriksheim/weave/issues/160)). A founder
+    who turns against the others can't be stopped there; they can only leave
+    or move to a successor (03 §2.1, §2.7).
+  - A space can end headless: its founders have stepped down or left, or it
+    has `top: "none"`, and no member holds what it takes to change roles or
+    the key. Members keep what their roles allow, and the way on is a
+    successor (03 §2.1, §2.7; `constitution.test.ts`, "the last founder steps
+    down…").
 - **By design.**
   - Whoever may define roles is trusted to. A definer can write power into a
     role it keeps, or nest it in a role it defines, and keep it after losing
@@ -270,12 +297,24 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     definition apart from the others, until a definition that saw them all is
     written. It fails closed, never open. Where a role holds `/role/define`
     for itself, rivals can drop that grant, and then nobody in the role can
-    end the rivalry: the founder repairs it, and without one it takes a new
-    space. The library's templates give `/role/define` for a role to another
+    end the rivalry: a founder repairs it, and without one it takes a
+    successor space. The library's templates give `/role/define` for a role to another
     role (03 §2.4; `roles.test.ts`, "rivals can lock a role that defines
     itself; a founder repairs it").
   - A member with two accounts sidesteps `.self`: the second must be a member
     assigned the role, visible and unassignable like any other (03 §2.6).
+  - Under `top: "none"` there are no founders: anyone may be removed by
+    whoever holds the grant, the creator included, and two holders who remove
+    each other apart both stand removed, so a co-op can lose every steward
+    (03 §2.1, §4.3; `constitution.test.ts`, "top: none"). The constitution
+    chose it.
+  - Who may name a successor is judged in the writer's own view, like every
+    change: where no member holds `/space/succeed`, any member may, and a
+    member can name a view from before anyone held it. A successor binds no
+    one, so this gives nothing but a name in a list; a member tells a
+    successor from a copy by the succeed here and the successor's own
+    `succeeds` together. Rival successors have no order: an app that ranked
+    them would hand the choice to whoever grinds the lowest id (03 §2.7).
   - Whoever may take any role from an account strikes everything it did that
     hadn't seen that, as a removal does: unassigning a minor role strikes the
     target's concurrent actions, not only what needed it (03 §4.3).
@@ -288,7 +327,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     the spec says to write what is allowed (01 §7.4, 03 §2.2; `roles.test.ts`,
     "a missing argument reads as null…").
 
-_Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"; "a backdated rival with a ground-low id does not put its rules in force"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts`, `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
+_Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/constitution.test.ts`, `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"; "a backdated rival with a ground-low id does not put its rules in force"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts`, `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
 ### 3.3 Former member
 
@@ -412,9 +451,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
 
 - **Does not hold.** The seed is the account. Whoever holds it:
   - is the account for good: there is no rotation and no recovery ([#9](https://github.com/leifriksheim/weave/issues/9));
-  - is the founder of every space the account founded: it controls each for
-    good, and nobody else can remove it; the only way out is a new space
-    (successors are planned, 03 §2.1;
+  - is a founder of every space whose constitution names the account: it
+    holds every command there, and nobody else, another founder included,
+    can remove it. The owner can step down or leave, which takes founder
+    power from the account, the thief's copy included, for good, and strikes
+    what the thief did that hadn't seen it; so can the thief, first. The
+    others' way out is a successor space (03 §2.1, §2.5, §2.7;
     [#160](https://github.com/leifriksheim/weave/issues/160));
   - derives the account key, and from it every member key, so it reads every
     private space the account was, is or will be a reader of; and the local
