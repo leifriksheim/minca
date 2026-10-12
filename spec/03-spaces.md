@@ -376,7 +376,7 @@ saw them) applied:
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `member`, `invite`                | the one giving least: closed before open (invites), then one whose role gives no more than any other's — none, or no higher rank and every permission covered by the other's — by the roles as **its own view** had them; where two can't be compared, the lower rank, then the lowest id |
 | `role`                            | the one giving least, by coverage in the same way, by the role it sets                                                                                                                                                                                                                    |
-| `definition`, `relays`, `keepers` | the lowest id; rival first definitions of a collection by two accounts, none (below)                                                                                                                                                                                                      |
+| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and managers, made: otherwise none (below)                                                                                                                                                        |
 | `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                                                           |
 | `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                                                           |
 
@@ -386,11 +386,12 @@ its role is null. A `definition` sets `definitions[name] = { event,
 definedBy }`. Of the definitions of that name in the set that saw every
 removal the winner saw, those that saw no other are its first definitions;
 `definedBy` is their root if they are all one account's, and null if not
-([02](02-records.md) §6.3): no id decides it. When `definedBy` is null and
-more than one definition is latest, the lowest id does not win: none is set
-in `definitions`, and `contested[name]` lists the latest ones instead, for
-readers to judge by what they say (02 §6.3); while it does, only someone
-holding `manage` may change the definition. A change applied on top, having
+([02](02-records.md) §6.3): no id decides it. Where several changes to a
+definition are latest, the lowest id wins only when they are one account's,
+or when none is a delete and their definitions name the same first definer;
+otherwise none is set in `definitions`, and `contested[name]` lists the
+latest ones instead, for readers to judge by what they say (02 §6.3). While
+it does, only someone holding `manage` may change the definition. A change applied on top, having
 seen them, removes `contested[name]`. A deleted one removes the entry.
 
 `keyDue` is true, in a private space, when some event in the set took
@@ -1115,8 +1116,10 @@ was sealed under either stays readable, and the current one is the lowest id
 of the latest (§4.4). A key id or read key used before is refused.
 
 A peer holding any key named by a `key` event opens its `earlier` with that
-key and the event's `keyId`, and takes each raw key it contains (up to 1000);
-repeat until nothing new. So holding the current key opens every earlier one.
+key and the event's `keyId`, and takes each raw key it contains (up to 1000)
+whose id and read key the history names; repeat until nothing new. Only the
+`key` event that counted for that key id is opened: anyone can store a
+version at `key:space`. So holding the current key opens every earlier one.
 
 A reader **MUST** check that the keys an `earlier` opens to include the
 space's first key K₀, the one the genesis's `encryptionKeyId` names (§8.1):
@@ -1161,7 +1164,7 @@ write, and proves it may read with the newest key it holds (see
 [04](04-network.md)). A view-only invite made before a change carries only the
 old key; its holder is not a reader and gets no box.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
+_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", "forces no key change, however malformed", "gives no reader a key the history doesn’t name", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
 
 ---
 

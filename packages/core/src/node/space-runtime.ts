@@ -1202,6 +1202,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!state) return ACCESS_LATER;
     const form = await onePerKeyProblem(version, state);
     if (form) return form;
+    // Rival definitions that differ give no rules, which must not mean anything goes (02 §6.3).
+    if (state.contested.has(version.collection) && !(await inForce(state, version.collection)))
+      return {
+        ok: false,
+        reason: `Rival definitions of ${version.collection} stand: nothing is written in it until a manager settles them`,
+      };
 
     const root = verdict.root;
     const found = await rulesAt(state, version.collection);
@@ -2070,6 +2076,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
             typeof body?.keyId !== 'string'
           )
             continue;
+          // Only the key change that counted for that key: anyone may store a version at `key:space`.
+          const epoch = epochs.find((known) => known.keyId === body.keyId);
+          if (!epoch || epoch.event !== version.id) continue;
           const holder = keyring.get(body.keyId);
           if (!holder) continue;
           opened.add(version.id);
@@ -2089,7 +2098,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
             malformedKeys.add(body.keyId);
             continue;
           }
-          for (const key of found) if (take(key)) more = true;
+          // And only keys the history names, each with the read key it names.
+          for (const key of found) {
+            const named = epochs.find((known) => known.keyId === key.id);
+            if (named && (await deriveReadKey(key, provider)).did === named.readKey && take(key)) more = true;
+          }
         }
       }
     }
@@ -3619,7 +3632,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const role = standing(history.current, deps.rootDid);
     if (!role) return false;
     const found = await rulesAt(history.current, collection);
-    if (!found) return true;
+    if (!found) return !history.current.contested.has(collection);
     if (found.rules.final && action !== 'create') return false;
     const creator = !!first && (await judge(first)).root === deps.rootDid;
     return allows(whoMay(found.rules, action), {

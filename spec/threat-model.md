@@ -97,9 +97,11 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     whichever version reaches it first. So it can't become the creator of
     another's record, for the `creator` rule or `@createdBy`, nor write
     another's `onePer` vote for them (02 §4.1, §4.5, §7.3). Nor can it
-    become a collection's first definer by a rival definition with a lower
-    id, or put its own rules in force by one: while rivals that differ
-    stand, none is in force (02 §6.3).
+    become a collection's first definer by a rival definition or a delete
+    with a lower id, put its own rules in force by one, or write in the
+    collection while rivals that differ stand: no id decides between
+    accounts that may not each change it, and a contested collection takes
+    no writes until a manager settles it (02 §6.3).
 - **Does not hold yet.**
   - A narrowed rule alone binds only what saw it: a version naming an older
     point counts if its author could have written it then, since nobody can
@@ -138,13 +140,21 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     decision per proposal), anyone the `create` rule allows can start a
     chain of their own, and outrank the first; `creator` keeps others from
     editing a chain, not from replacing it. A collection that needs one
-    writer per key restricts `create` (02 §7.1, §7.3). By design.
+    writer per key restricts `create` (02 §7.1, §7.3). By design. Keys are
+    unique in a space, not a collection, so it can also write first at a
+    shared key of collection X from a collection Y that allows it (one with
+    a `onePer` without `@author`), and X's record for those parts can't be
+    written (02 §4.1).
   - Holding `define`, it can write a rival first definition of a collection
-    that names a point before the real one's, so that no one first defined
-    it and, unless the rivals say the same, no definition of it is in force
-    until a manager settles it, and again after, by backdating another
-    (02 §6.3). It can put a collection out of force this way, but can't
-    choose its rules. Those who may define collections are trusted not to.
+    that names a point before the real one's, or a rival and its own delete
+    of it, so that no one first defined it and, unless the rivals are the
+    same definition, no definition of it is in force and nothing can be
+    written in it until a manager settles it, and again after, by backdating
+    another (02 §6.3). It can stop a collection this way, but can't choose
+    its rules or write without them. A rival with the same body leaves the
+    collection in force but with no first definer, taking its definer's
+    control away for good. Those who may define collections are trusted not
+    to.
   - A collection's checks bind only readers that judge them: peers keep and
     sync a version that fails them, and only the library leaves it out of
     what it counts, on every read path, along a record's chain, and without

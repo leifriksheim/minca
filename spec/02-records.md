@@ -314,6 +314,14 @@ Otherwise a record in another collection could take an account's `onePer`
 key, and with it the `onePer` record, for good: keys are unique in a space,
 and a record keeps its collection.
 
+**Shared keys in two collections.** A shared key carries no collection in
+its form, and keys are unique in a space, so a member a collection Y allows
+to create (one with a `onePer` without `@author`) can write first at the
+shared key a collection X derives, from Y. X's record for those parts then
+can't be written: its writer would continue Y's chain (§4.2). Only someone
+who can derive X's keys can aim at one, and in a private space only readers
+can. A known gap; the derived key names its collection only inside the HMAC.
+
 **Chosen names in two collections.** An account's chosen key is the same in
 every collection, so an app of the account's that writes `settings` in
 `app.notes` takes the key another app of the account's would use for
@@ -930,7 +938,8 @@ The definition in force for a collection is the latest change to
 with the highest `version`. Who may make such a change is also the replay's
 question: creating a definition needs the permission `define`; changing or
 deleting one needs `manage`, or being whoever first defined it (while still a
-member). A definition counts only under a note that grants
+member). Deleting a definition that doesn't exist, as of what the delete saw,
+is refused. A definition counts only under a note that grants
 `collection/define` ([01 — Identity](01-identity.md) §8), whatever the
 writer's role.
 
@@ -944,17 +953,26 @@ account first defined it. If they are two accounts', **no one** did, and
 only someone holding `manage` may change or delete it. No id decides, since a
 writer can grind one.
 
-**Rival definitions are not in force.** While first definitions by two
-accounts stand and more than one change to `collection:<name>` is latest (none
-saw the others), the replay picks none of those latest changes: picking by id
-would let whoever ground the lower id choose the rules. A reader opens them
-all. If their bodies are the same (canonical JSON, §1), as when two members
+**Rival changes are not picked by id.** Where more than one change to
+`collection:<name>` is latest (none saw the others), the replay picks the
+lowest id only when they are one account's, or when none is a delete and all
+the definitions among them name the same first definer: changes by accounts
+that may each change it, the definer and managers, each of which could have
+been the latest alone. Otherwise, first definitions by two accounts or a
+delete beside another account's change, the collection is **contested**: the
+replay picks none of them, since picking by id would let whoever ground the
+lower id choose the rules, or delete it. A reader opens them all. If they are
+all definitions with the same body (canonical JSON, §1), as when two members
 add the same app at once, that definition is in force. Otherwise **none** is,
-and the collection's records are judged as if it had none (§6.1). A peer that
-can't read them all treats the collection as having a definition it can't
-read. Rivals are settled by a change that saw them all: only someone holding
+and a peer **MUST** refuse a version in that collection whose state as of
+`seen` is contested with none in force (§9.4): no one writes in a contested
+collection, and no rules does not mean anything goes. A peer that can't read
+them all treats the collection as having a definition it can't read.
+
+Rivals are settled by a change that saw them all: only someone holding
 `manage` may make it, since no one first defined the collection; it is then
-in force, and still names no definer. A manager's delete settles them too.
+in force, and names no definer, or the manager when it saw a delete (a delete
+starts the collection afresh). A manager's delete settles them too.
 
 Example: Alice and Mallory both hold `define`, Bob holds `manage`. Alice
 defines `app.poll` (`d5`) and changes it (`d6`); Mallory writes a definition
@@ -964,8 +982,17 @@ in force, since they differ. Neither Alice nor Mallory may change it, even
 having seen both. Bob
 writes `d8` having seen `d6` and `d0`, and `d8` is in force. If Mallory
 backdates another rival past `d8`, the collection is out of force again until
-Bob settles it again: a member holding `define` can put a collection out of
-force, but can't choose its rules.
+Bob settles it again: a member holding `define` can stop a collection until
+a manager settles it, but can't choose its rules or write without them. Had
+Mallory instead written a delete as of before Alice's definition, it would be
+refused: there was nothing to delete. Had she defined her own rival and
+deleted it, ground low, the delete and `d6` would be latest together, from two
+accounts: contested again, and settled only by Bob.
+
+Two members who define a collection apart with the same body leave it in
+force, but with no first definer, so from then on only a manager may change
+it. A member holding `define` can do this on purpose to take a collection's
+definer's control away.
 
 Peers do not check `version` against the definition it replaces. What the
 library does with it: [collections](../packages/core/docs/collections.md#versions-of-a-definition).
@@ -994,7 +1021,7 @@ Names are **local to a space**. Nothing registers or owns a name across
 spaces, so a name never says what shape a collection has; its definition in
 that space does.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
+_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and a manager changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
 
 ### 6.5 Planned: compatible definitions
 
@@ -1409,8 +1436,10 @@ Given a valid signature and root, whether the version _stands_ in this space:
       write first (§4.1): refused, never withdrawn, since nothing that arrives
       later changes whose a key is.
    2. The access state as of `seen` is known ([03](03-spaces.md)). A first
-      version at a shared key is in a collection whose rules as of then have
-      `onePer`, unless the peer can't read them (§4.1).
+      version at a key of a `onePer` key's form is in a collection whose rules
+      as of then have a `onePer` that gives that form, unless the peer can't
+      read them (§4.1). The collection is not contested with no definition
+      in force as of then (§6.3).
    3. The root holds a role as of `seen`, and the rule for the action allows it (§7.2), and the access history's own judgement of the writer passes (revoked keys, removals — [03](03-spaces.md)).
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`. `check` is not judged (§7.6).

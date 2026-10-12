@@ -533,8 +533,10 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
     case 'definition': {
       const existing = state.definitions.get(event.name);
       const contested = state.contested.has(event.name);
-      if (!existing && !contested)
+      if (!existing && !contested) {
+        if (event.deleted) return 'There is no such definition to remove';
         return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
+      }
       // Changing one: whoever first defined it, while a member, or anyone who manages the space.
       if (roleHolds(author, MANAGE)) return null;
       // Rivals no one settled: no one first defined it, so only a manager may settle them.
@@ -805,7 +807,13 @@ function merge(
     if (!kind || kind === 'role') continue;
     if (kind === 'key') {
       keyEvents.push(...group);
+      // Only managers change the key, and every key stands: an id picks which is current
+      // among keys any of them could have made current alone.
       currentKey = [...tops].sort(byId)[0]!;
+      continue;
+    }
+    if (kind === 'definition') {
+      mergeDefinitions(tops, group, saw, state);
       continue;
     }
     if (kind === 'revoke' || kind === 'fork') continue;
@@ -815,21 +823,11 @@ function merge(
       // Closed beats open; then the one giving least.
       const closed = tops.filter((event) => event.kind === 'invite' && !event.open);
       win = least(closed.length > 0 ? closed : tops, given);
-    } else win = [...tops].sort(byId)[0]!;
-    if (win.kind === 'definition' && !win.deleted) {
-      const definedBy = definerOf(win, group, saw);
-      // Rival first definitions, and no later one that saw them all: no id picks one, since an id
-      // can be ground (02 §6.3). Readers judge them by what they say.
-      if (definedBy === null && tops.length > 1)
-        state.contested.set(
-          win.name,
-          tops
-            .filter((event) => event.kind === 'definition' && !event.deleted)
-            .sort(byId)
-            .map((event) => event.id),
-        );
-      else state.definitions.set(win.name, { event: win.id, definedBy });
-    } else change(win, state);
+    }
+    // `relays` and `keepers`: only managers set them, so an id picks among lists any of them
+    // could have set alone.
+    else win = [...tops].sort(byId)[0]!;
+    change(win, state);
   }
   if (keyEvents.length > 0) {
     // Every key stands; the current one goes last, the rest by id: only which is current matters.
@@ -881,6 +879,45 @@ function givenIn(state: AccessState, event: AccessEvent): Role | null {
     return event.role === null ? null : (state.roles.get(event.role) ?? null);
   return null;
 }
+
+/**
+ * The latest changes to one collection's definition, merged (02 §6.3). One
+ * account's alone, or changes by accounts that may each change it (its first
+ * definer and managers), are picked between by id: each could have made its
+ * own the latest alone. Anything else, rival first definitions by two
+ * accounts or a delete beside another account's change, is contested: no id
+ * decides, since an id can be ground, and readers judge the rivals by what
+ * they say.
+ */
+function mergeDefinitions(
+  tops: ReadonlyArray<AccessEvent>,
+  group: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+  state: MutableState,
+): void {
+  const byId = (a: AccessEvent, b: AccessEvent) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const sorted = [...tops].sort(byId);
+  const win = sorted[0]!;
+  if (win.kind !== 'definition') return;
+  // Who first defined it, as each latest definition sees the whole group: null where rivals stand.
+  const definers = new Set(sorted.filter((top) => !isDelete(top)).map((top) => definerOf(top, group, saw)));
+  const oneAccount = new Set(sorted.map((top) => top.root)).size === 1;
+  const agreed =
+    sorted.length === 1 ||
+    (!definers.has(null) && (oneAccount || (definers.size === 1 && !sorted.some(isDelete))));
+  if (agreed) {
+    if (win.deleted) change(win, state);
+    else state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
+    return;
+  }
+  state.definitions.delete(win.name);
+  state.contested.set(
+    win.name,
+    sorted.map((top) => top.id),
+  );
+}
+
+const isDelete = (event: AccessEvent) => event.kind === 'definition' && event.deleted;
 
 /**
  * Whoever defined a collection this time (02 §6.3): of the definitions in

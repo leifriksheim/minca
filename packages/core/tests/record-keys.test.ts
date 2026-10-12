@@ -551,13 +551,13 @@ describe('who first defined a collection', () => {
     author: 'k',
     cutoff: new Map(),
   });
-  const define = (root: string, id: string, seen: string[]): AccessEvent => ({
+  const define = (root: string, id: string, seen: string[], deleted = false): AccessEvent => ({
     id,
     key: 'collection:app.poll',
     kind: 'definition',
     root,
     name: 'app.poll',
-    deleted: false,
+    deleted,
     seen,
     author: 'k',
     cutoff: new Map(),
@@ -627,6 +627,112 @@ describe('who first defined a collection', () => {
     }
   });
 
+  const remove = (root: string, id: string, seen: string[]) => define(root, id, seen, true);
+
+  test('a backdated delete of nothing, however low its id, is refused', () => {
+    const events = [
+      member('alice', 'm1'),
+      member('mallory', 'm2'),
+      define('alice', 'd5', ['m1', 'm2']),
+      define('alice', 'd6', ['d5']),
+      // As of before Alice's first definition, ground below hers.
+      remove('mallory', 'a0', ['m1', 'm2']),
+    ];
+    const history = replayAccess(genesis, events);
+    assert.equal(history.status('a0')?.status, 'dropped');
+    assert.deepEqual(history.current.definitions.get('app.poll'), { event: 'd6', definedBy: 'alice' });
+    // So her definition after it, having seen both, changes someone else's: refused.
+    const after = replayAccess(genesis, [...events, define('mallory', 'z9', ['d6', 'a0'])]);
+    assert.equal(after.status('z9')?.status, 'dropped');
+    assert.equal(after.current.definitions.get('app.poll')?.definedBy, 'alice');
+  });
+
+  test('a ground-low delete of her own rival does not win by id: it contests, and settles nothing for her', () => {
+    const events = [
+      member('alice', 'm1'),
+      member('mallory', 'm2'),
+      define('alice', 'd5', ['m1', 'm2']),
+      define('alice', 'd6', ['d5']),
+      define('mallory', 'r0', ['m1', 'm2']),
+      remove('mallory', 'a1', ['r0']),
+    ];
+    for (const order of [events, [...events].reverse()]) {
+      const history = replayAccess(genesis, order);
+      assert.equal(history.current.definitions.get('app.poll'), undefined);
+      assert.deepEqual(history.current.contested.get('app.poll'), ['a1', 'd6']);
+      const after = replayAccess(genesis, [...order, define('mallory', 'z9', ['d6', 'a1'])]);
+      assert.equal(after.status('z9')?.status, 'dropped');
+      // A manager settles it; after a delete it saw, that starts the collection afresh, as the manager's.
+      const settled = replayAccess(genesis, [...order, define('root', 'z8', ['d6', 'a1'])]);
+      assert.deepEqual(settled.current.definitions.get('app.poll'), { event: 'z8', definedBy: 'root' });
+    }
+  });
+
+  test('the definer and a manager changing it apart: picked between by id, not contested', () => {
+    const history = replayAccess(genesis, [
+      member('alice', 'm1'),
+      define('alice', 'd1', ['m1']),
+      define('alice', 'd3', ['d1']),
+      define('root', 'd2', ['d1']),
+    ]);
+    assert.deepEqual(history.current.definitions.get('app.poll'), { event: 'd2', definedBy: 'alice' });
+    assert.equal(history.current.contested.size, 0);
+  });
+
+  test('on real nodes, a ground-low backdated delete can’t take a collection from its definer', async () => {
+    const { alice, bob, carol, space } = await club();
+    await alice.node.collections.define(space, {
+      name: 'app.notice',
+      schema: { type: 'object' },
+      rules: { create: 'can:post' },
+      permissions: ['post'],
+    });
+    const listed = async () =>
+      (await carol.node.collections.list(space)).find((c) => c.name === 'app.notice');
+    await until(async () => !!(await listed()), 4000, 'Alice’s definition at Carol’s');
+    const hers = (await (await stored(alice.stores, space)).queryVersions('sys.collection')).find(
+      (v) => v.key === 'collection:app.notice',
+    )!;
+    await letGo(bob.node, space);
+    let removal: Version | undefined;
+    for (let i = 0; i < 200 && !removal; i++) {
+      const tried = await forge(
+        bob,
+        space,
+        {
+          collection: 'sys.collection',
+          body: null,
+          deleted: true,
+          retain: true,
+          seen: hers.seen ?? [],
+          version: { key: 'collection:app.notice', seq: 0 },
+        },
+        { keep: false },
+      );
+      if (tried.id < hers.id) removal = tried;
+    }
+    assert.ok(removal, 'ground a lower id');
+    await (await stored(bob.stores, space)).addVersion(removal);
+    const his = await forge(bob, space, {
+      collection: 'sys.collection',
+      retain: true,
+      body: { ...Object(hers.body), rules: {}, permissions: [] },
+      seen: [hers.id, removal.id],
+      version: { key: 'collection:app.notice', seq: 1, prev: removal.id, genesis: removal.id },
+      log: { n: 0 },
+    });
+    await hold(bob.node, space);
+    await until(
+      async () => (await (await stored(carol.stores, space)).getVersion(his.id)) !== null,
+      4000,
+      'his definition at Carol’s',
+    ).catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const shown = await listed();
+    assert.equal(shown?.definedBy, alice.node.did);
+    assert.deepEqual(shown?.rules, { create: 'can:post' });
+  });
+
   test('on real nodes, rivals that differ put no rules in force; rivals that agree do', async () => {
     for (const agree of [false, true]) {
       const { alice, bob, carol, space } = await club();
@@ -666,6 +772,24 @@ describe('who first defined a collection', () => {
         continue;
       }
       await until(async () => !(await inForce()), 4000, 'the rivals to put it out of force');
+      // Out of force is not anything goes: no one writes in it until it is settled.
+      await assert.rejects(
+        carol.node.records.put(space, 'app.notice', { text: 'free for all' }),
+        /Rival definitions/,
+      );
+      const refusals: string[] = [];
+      alice.node.subscribe((event) => {
+        if (event.type === 'rejected') refusals.push(event.reason);
+      });
+      await letGo(bob.node, space);
+      const slipped = await forge(bob, space, { collection: 'app.notice', body: { text: 'slipped in' } });
+      await hold(bob.node, space);
+      await until(
+        async () => refusals.some((reason) => /Rival definitions/.test(reason)),
+        4000,
+        'Alice to refuse it',
+      );
+      assert.equal(await (await stored(alice.stores, space)).getVersion(slipped.id), null);
       // Alice, who manages the space, settles it with hers.
       await alice.node.collections.define(space, {
         name: 'app.notice',
