@@ -9,13 +9,15 @@ adopted below, and each attack it showed is a scenario test in `scenarios/`
 that shows it refused, or a skipped test naming what it waits for. A second,
 narrower review the same day found that delegations to accounts outlived
 their issuer; the fix (only roles hold grants, §2) and its other findings
-are adopted too. A third review found power parked in a role the definer
-keeps; its fixes (`mine`, rival definitions as an intersection, scoped
-strikes, removal against re-add, closed line keys) are adopted, and
-corrections in a line are deferred from v1 (§3). A fourth review found
-that naming an older view got around `mine`; `mine` now counts an
-assignment or nesting concurrent with the definition, and every role grant
-but the constitution's lives inside a definition.
+are adopted too. A third review's fixes (rival definitions as an
+intersection, scoped strikes, removal against re-add, closed line keys)
+are adopted, and corrections in a line are deferred from v1 (§3); so is
+the fourth's (every role grant but the constitution's lives inside a
+definition). Their attempts to stop a definer parking power in a role she
+keeps (a `mine` argument, then nest-only permissions) each opened a new
+hole, and are **dropped** (Decided, 2026-10-12): under the owner's
+principle of no more security than ordinary apps, whoever may define
+roles is trusted to, as in Discord or Slack (§2).
 
 ## In one paragraph
 
@@ -201,19 +203,19 @@ include the few facts about the invoker and the target a policy needs. A
 policy reads only these; a selector naming anything else finds nothing, and
 the policy fails.
 
-| Command              | Arguments                         | Filled in from                                                                                                                                                                                                                                    |
-| -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/record/read`       | `collection`                      | The collection read                                                                                                                                                                                                                               |
-| `/record/write`      | `collection`, `byCreator`, `body` | `byCreator`: whether the writer's account made the record's first version (true for a new record); `body`: the new body                                                                                                                           |
-| `/record/delete`     | `collection`, `byCreator`         | As for `/record/write`                                                                                                                                                                                                                            |
-| `/collection/define` | `collection`                      | The collection defined                                                                                                                                                                                                                            |
-| `/member/add`        | (none)                            |                                                                                                                                                                                                                                                   |
-| `/member/remove`     | `self`, `roles`                   | `self`: whether the member removed is the invoker (leaving); `roles`: the target's roles as of the invocation's view, sorted names                                                                                                                |
-| `/role/define`       | `role`, `holds`, `mine`           | The role whose grants are written; `holds`: the role it is nested in, or absent (below); `mine`: whether the invoker holds `role` as of the view, directly or through nesting, or through an assignment or nesting concurrent with the definition |
-| `/role/assign`       | `role`, `self`, `roles`           | `self`: whether the assignee is the invoker's account; `roles`: the assignee's roles as of the view. The assignee is always an account                                                                                                            |
-| `/role/unassign`     | `role`, `self`, `roles`           | As for `/role/assign`                                                                                                                                                                                                                             |
-| `/key/change`        | (none)                            |                                                                                                                                                                                                                                                   |
-| `/space/succeed`     | (none)                            | The successor's constitution is the payload, not an argument                                                                                                                                                                                      |
+| Command              | Arguments                         | Filled in from                                                                                                                         |
+| -------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `/record/read`       | `collection`                      | The collection read                                                                                                                    |
+| `/record/write`      | `collection`, `byCreator`, `body` | `byCreator`: whether the writer's account made the record's first version (true for a new record); `body`: the new body                |
+| `/record/delete`     | `collection`, `byCreator`         | As for `/record/write`                                                                                                                 |
+| `/collection/define` | `collection`                      | The collection defined                                                                                                                 |
+| `/member/add`        | (none)                            |                                                                                                                                        |
+| `/member/remove`     | `self`, `roles`                   | `self`: whether the member removed is the invoker (leaving); `roles`: the target's roles as of the invocation's view, sorted names     |
+| `/role/define`       | `role`                            | The role whose definition (its delegations and nestings) is written                                                                    |
+| `/role/assign`       | `role`, `self`, `roles`           | `self`: whether the assignee is the invoker's account; `roles`: the assignee's roles as of the view. The assignee is always an account |
+| `/role/unassign`     | `role`, `self`, `roles`           | As for `/role/assign`                                                                                                                  |
+| `/key/change`        | (none)                            |                                                                                                                                        |
+| `/space/succeed`     | (none)                            | The successor's constitution is the payload, not an argument                                                                           |
 
 So:
 
@@ -272,35 +274,24 @@ one at a time. A role definition is a set of delegations whose issuer is
 the definer, so it
 holds only what the definer held, as of the definition, as UCAN's
 attenuation requires; the constitution's roles are issued by the space
-itself, the root of every chain. A policy on `/role/define` reads `role`,
-`holds` and `mine`, so "eng may nest web inside eng, and nothing else" is
-plain UCAN.
+itself, the root of every chain. A definition stands when its author held
+`/role/define` for that role as of its view, as for any access event.
 
-**`mine`: no parking power in a role you keep.** A definer who rewrites a
-role she holds herself (say `member`) to add `/member/remove`, or nests it
-inside a role she defines, keeps that power through the role after she is
-unassigned from the role that let her define it, and so does everyone in
-it. `mine` is true when the invoker holds the role being defined as of
-the view, directly or through nestings that count (current, and validly
-written), and templates grant `/role/define` with
-`["==", ".mine", false]`.
+**Whoever may define roles is trusted to** (Decided; a stated limit, as in
+Discord or Slack). A definer can write power into a role she holds herself
+(say `member`), or nest it in a role she defines, and that power stays
+with the role, hers and everyone's in it, after she is unassigned from the
+role that let her define: **her unassignment takes only that role
+assignment; what she wrote stays until someone rewrites the role.**
+Earlier drafts tried to stop this (an argument saying whether the definer
+holds the role, then permissions to nest and nothing else); each opened a
+new hole, so a space that doesn't trust someone to define roles doesn't
+grant them `/role/define`.
 
-**`mine` can't be dodged by naming an older view.** A definer made coach at
-3 could write into `coach` at 5 naming a view of 2, where she held no
-coach. So `mine` is also true when an assignment of the definer to the
-role, or a nesting that puts her in it, is **concurrent with the
-definition** (neither saw the other): equivalently, an assignment of A to
-R strikes A's concurrent definitions of R. The honest order, where the
-assigner had seen the definition, still passes: the assigner chose to put
-her in a role knowing what it holds. The guarantee is then: **unassigning takes
-the role; what she wrote into roles she doesn't hold stays until
-rewritten, and `.mine` stops her writing into the ones she does**, where
-the policy says so. A gap stays: two definers who collude can each define
-a role for the other.
-
-_Source:_ `scenarios/host/grants.ts` (`defineArgs`, `holdsRole`,
-`nestingsOf`, `issued`); `scenarios/tests/chess.test.ts` ("parking power in
-a role you keep", "`mine` can't be dodged by naming an older view").
+_Source:_ `scenarios/host/grants.ts` (`stands`, `heads`, `holderMay`);
+`scenarios/tests/chess.test.ts` ("whoever may define roles is trusted to
+(by design)": the power stays, another admin's rewrite undoes it, a grant
+outside any definition counts for nothing).
 
 Assigning an account to a role is the command `/role/assign`, an
 invocation, not a delegation. It gives the assignee nothing the role didn't
@@ -312,7 +303,8 @@ definer; assignments only say who is in the role.
 
 **Nesting a role in another role is granting, not assigning.** A sub-team
 (every member of `web` also holds `eng`) gives a whole role new grants, so
-it is part of `/role/define` for the inner role (`holds: "eng"`), and is
+it is part of the inner role's definition, written by whoever holds
+`/role/define` for `web` (in the company scenario, the CEO), and is
 attenuated like a delegation: through the nesting, a member of `web` may do
 only what the nester could do themselves, as of the nesting. `/role/assign`
 to a role (an assignee of the form `role:<name>`) is refused. Without this,
@@ -323,7 +315,7 @@ referee.
 
 _Source:_ `scenarios/host/grants.ts` (`Nesting`, `holderMay`, `issued`);
 `scenarios/tests/company.test.ts` ("assigning hr to the role admin is
-refused", "nesting hr in admin is granting", "a policy on `.holds`");
+refused", "nesting hr in admin is granting");
 `scenarios/tests/chess.test.ts` ("roles go to accounts, not roles", "grants
 go only to roles, so losing a role loses its power").
 
@@ -351,7 +343,7 @@ demotion doesn't take a whole role's grants from its members at once; to
 take them, someone with `/role/define` rewrites the role. This is not
 UCAN's chain semantics, where a delegation lives only as long as its
 issuer's proof; it is Weave's, and it is safe only because its audience is
-a role, and with `.mine` (above) not the definer's own.
+a role, which someone with `/role/define` can rewrite.
 
 **An account's power, by contrast, is its current assignments as of the
 action's view**: unassigning or removing it takes everything, since no
@@ -387,7 +379,8 @@ JSON of `{cmd, pol}` (ignoring `iss`, `nonce` and `meta`). A delegation
 counts only if it is validly issued in each rival, and a nesting only if
 every rival has it. The rivalry ends when a definition that saw all the
 rivals is written. An empty intersection leaves the role empty, which
-fails closed. A definition its author couldn't write is no rival, or
+fails closed. A rival only needs its author to have held `/role/define`
+for the role as of its view; one whose author didn't is no rival, or
 anyone could empty a role. No lowest id decides anything (an id can be
 ground), and no peer tries to decide whether one policy implies another.
 
@@ -630,6 +623,9 @@ Resolved on 2026-10-12, kept for the record:
   indexed per account per collection (§3).
 - ~~**Rival role definitions**~~: their intersection while they are
   rivals, never a lowest id (§2).
+- ~~**Parking power in a role the definer keeps**~~: by design; whoever may
+  define roles is trusted to (§2). `mine` and nest-only permissions are
+  dropped.
 - ~~**Corrections in a line**~~: deferred from v1; a payee who built on a
   double spend loses that line from there (§3).
 - ~~**Headless spaces**~~, in part: founders may step down, so any space
@@ -647,9 +643,6 @@ Open:
 3. **Corrections, later.** The narrow trigger (a cited version is one of a
    double-spent pair), restating, and a restart record for an honest
    account's forked devices (§3).
-4. **Colluding definers.** Two accounts that may each define roles can
-   define one for each other, which `.mine` doesn't see (§2). Whether a
-   template can close that, or it stays a stated gap.
 
 To settle at implementation, each with a test:
 
@@ -683,13 +676,20 @@ Each step is its own PR with an adversarial review.
 4. **Grants and the resolver.** Prototype `strong-remove/1` over grants, run
    it through the existing convergence and attack suites, then replace ranks
    in 03 and the code. The command arguments (§2) land here, with `roles`,
-   `mine`, nesting under attenuation, rival definitions as an intersection,
+   nesting under attenuation, rival definitions as an intersection,
    `/role/unassign` and leaving built in, scoped strikes, and the
    scenarios move to the real library's grants. The replay's tests include
    a former definer's backdated rival definition (written after losing
-   `/role/define`, naming a view from before) and a definition concurrent
-   with its author's own assignment to the role, each refused. The threat
-   model changes in §9.
+   `/role/define`, naming a view from before), struck by the concurrent
+   reduction. Implementation notes from the reviews:
+   - a delegation or nesting in a definition is judged at its definition
+     (its place and view), not at a place of its own;
+   - there is no "no place" path for anyone but the constitution: a
+     definition, delegation or nesting by a non-founder without a place in
+     the history counts for nothing.
+
+   The threat model changes in §9.
+
 5. **The constitution record**, with `top`, founders stepping down, the
    resolver name and `/space/succeed`.
 6. **Contracts in the spec.** The CEL subset as a spec part with its
@@ -727,10 +727,9 @@ in the same PR:
   included; after a re-add, only assignments that saw the removal count.
   Unassignment takes that role, and strikes only the concurrent actions
   that needed it. Nothing it handed a key survives, because it could hand
-  nothing. What does survive is what it wrote into roles it did not hold,
-  while it held `/role/define` (§2), until someone rewrites the role; under
-  a template with `.mine == false` it can't have written into its own.
-  That replaces "a grant it makes concurrently with its removal is struck"
+  nothing. What does survive is what it wrote into roles while it held
+  `/role/define` (§2), its own roles included, until someone rewrites the
+  role. Unassignment takes only the role assignment. That replaces "a grant it makes concurrently with its removal is struck"
   for roles, which still holds for definitions concurrent with the
   removal. The sock gap (#191) becomes a sock it _assigned_ a role, which
   is visible and unassignable.
@@ -755,15 +754,13 @@ in the same PR:
 - **New gaps.**
   - Roles outlive their definer's demotion (§2): a definer who is removed
     leaves behind what they defined until someone rewrites the role.
-  - **Parking power.** Where a template grants `/role/define` without
-    `["==", ".mine", false]`, a definer can write power into a role she
+  - **Whoever may define roles is trusted to** (a stated limit, by design,
+    as in Discord or Slack). A definer can write power into a role she
     keeps, or nest it in one she defines, and keep it after losing the
-    role that let her define (§2). With it, two colluding definers can
-    still define roles for each other. Closed: backdating a definition to
-    a view before her own assignment to the role, since an assignment or
-    nesting concurrent with the definition makes `mine` true
-    (`scenarios/tests/chess.test.ts`, "`mine` can't be dodged by naming an
-    older view").
+    role that let her define; two definers can define roles for each
+    other. It lasts until someone with `/role/define` rewrites the role
+    (§2; `scenarios/tests/chess.test.ts`, "whoever may define roles is
+    trusted to").
   - **Rival definitions** hold their intersection (§2): a definer can
     weaken a role, even empty it, by writing a rival definition apart from
     the others, until a definition that saw both is written. It fails

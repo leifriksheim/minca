@@ -59,31 +59,4 @@ describe('company: grants', () => {
     assert.ok(!doing(a, WES, '/record/write', 'app.eng'));
     assert.ok(doing(a, WES, '/record/write', 'app.web'));
   });
-
-  test('a policy on `.holds`: eng may nest web in eng, and nothing else', () => {
-    const define: Authority = {
-      founders: [CEO],
-      delegations: [
-        ...grants,
-        {
-          iss: CEO,
-          aud: 'role:eng',
-          cmd: '/role/define',
-          pol: [
-            ['==', '.role', 'web'],
-            ['==', '.holds', 'eng'],
-          ],
-        },
-      ],
-      assignments,
-      definitions: [{ id: 'w1', by: EVE, role: 'web' }],
-      nestings: [{ by: EVE, role: 'web', holds: 'eng', def: 'w1' }],
-    };
-    assert.ok(may(define, EVE, '/role/define', { role: 'web', holds: 'eng' }));
-    assert.ok(!may(define, EVE, '/role/define', { role: 'web', holds: 'hr' }));
-    assert.ok(!may(define, EVE, '/role/define', { role: 'web' }), "web's own grants are not hers to write");
-    assert.ok(doing(define, WES, '/record/write', 'app.eng'), "Eve's nesting stands");
-    const hr: Authority = { ...define, nestings: [{ by: EVE, role: 'web', holds: 'hr', def: 'w1' }] };
-    assert.ok(!doing(hr, WES, '/record/read', 'app.hr'));
-  });
 });

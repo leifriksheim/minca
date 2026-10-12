@@ -2,9 +2,8 @@
  * 3. Company team. Sub-teams: `hr` writes `app.hr`, `eng` writes `app.eng`
  * (and `web`, inside `eng`, writes `app.web`); the company's admins manage
  * them all but can't read `app.hr`, and can't assign themselves a team.
- * `web` is a sub-team: the role `web` holds the role `eng`, which only
- * someone holding eng's grants may set up (the CEO here), since nesting
- * grants rather than assigns.
+ * `web` is a sub-team: the role `web` holds the role `eng`. Nesting is part
+ * of web's definition, so whoever defines roles sets it up (the CEO here).
  */
 import type { Assignment, Delegation, Nesting } from '../host/grants.js';
 
