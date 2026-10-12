@@ -166,16 +166,63 @@ function heads(auth: Authority, role: string, at: number, visiting: ReadonlySet<
       d.role === role &&
       before(d, at) &&
       (auth.founders.includes(d.by) ||
-        mayIn(
-          auth,
-          d.by,
-          '/role/define',
-          defineArgs(auth, d.by, role, undefined, judgedAt(d), visiting),
-          judgedAt(d),
-          visiting,
+        // With no nesting in it, or with one of its own nestings (`holds`).
+        [undefined, ...(auth.nestings ?? []).filter(inDef(d)).map((n) => n.holds)].some((h) =>
+          mayDefine(auth, d.by, role, h, d, visiting),
         )),
   );
   return defs.filter((d) => !defs.some((o) => o.id !== d.id && (o.saw ?? []).includes(d.id)));
+}
+
+/** Whether `by` may write a definition of `role` (with `holds`, for a nesting) at the place `e` */
+function mayDefine(
+  auth: Authority,
+  by: string,
+  role: string,
+  holds: string | undefined,
+  e: Placed,
+  visiting: ReadonlySet<string>,
+): boolean {
+  const as = judgedAt(e);
+  return mayIn(auth, by, '/role/define', defineArgs(auth, by, role, holds, e, visiting), as, visiting);
+}
+
+/** Whether an entry is in the definition `h` */
+const inDef =
+  (h: Definition) =>
+  (e: { readonly def?: string; readonly iss?: string; readonly by?: string }): boolean =>
+    e.def === h.id && (e.iss ?? e.by) === h.by;
+
+/**
+ * The nestings that count for `role` as of `at`, by the role they put it in,
+ * with who nested it. Outside a definition, only the constitution's (a
+ * founder's). Inside, only a nesting every current definition has, each
+ * one validly written.
+ */
+function nestingsOf(
+  auth: Authority,
+  role: string,
+  at: number,
+  visiting: ReadonlySet<string>,
+): Array<{ holds: string; by: Nesting[] }> {
+  const key = `nestings ${role} ${at}`;
+  if (visiting.has(key)) return [];
+  const inner = new Set(visiting).add(key);
+  const all = (auth.nestings ?? []).filter((n) => n.role === role && n.holds !== role && before(n, at));
+  const out = all
+    .filter((n) => n.def === undefined && auth.founders.includes(n.by))
+    .map((n) => ({ holds: n.holds, by: [n] }));
+  const current = heads(auth, role, at, inner);
+  const first = current[0];
+  if (!first) return out;
+  const valid = (n: Nesting) =>
+    auth.founders.includes(n.by) || mayDefine(auth, n.by, role, n.holds, n, inner);
+  for (const n0 of all.filter(inDef(first))) {
+    const by = current.map((h) => all.find((n) => inDef(h)(n) && n.holds === n0.holds && valid(n)));
+    if (by.every((n) => n !== undefined))
+      out.push({ holds: n0.holds, by: by.filter((n) => n !== undefined) });
+  }
+  return out;
 }
 
 /** What a role holds: delegations to it, judged in their own view, and through its nestings */
@@ -188,97 +235,126 @@ function holderMay(
   visiting: ReadonlySet<string>,
 ): boolean {
   const role = roleName(principal);
-  const current = heads(auth, role, at, visiting);
   const delegates = (d: Delegation) =>
     before(d, at) &&
     d.aud === principal &&
     covers(d.cmd, cmd) &&
     allows(d.pol, args) &&
     issued(auth, d, cmd, args, visiting);
-  const nests = (n: Nesting) =>
-    before(n, at) &&
-    n.role === role &&
-    n.holds !== role &&
-    mayIn(
-      auth,
-      n.by,
-      '/role/define',
-      defineArgs(auth, n.by, role, n.holds, judgedAt(n), visiting),
-      judgedAt(n),
-      visiting,
-    ) &&
-    mayIn(auth, n.by, cmd, args, judgedAt(n), visiting) &&
-    holderMay(auth, `role:${n.holds}`, cmd, args, at, visiting);
-  // Outside any definition: additive, each judged on its own.
-  if (auth.delegations.some((d) => d.def === undefined && delegates(d))) return true;
-  if ((auth.nestings ?? []).some((n) => n.def === undefined && nests(n))) return true;
-  if (current.length === 0) return false;
-  // Inside definitions: what every current one holds, compared by `{cmd, pol}` (or `holds`), each validly issued.
-  const inDef = (id: string, by: string) => (e: { def?: string; iss?: string; by?: string }) =>
-    e.def === id && (e.iss ?? e.by) === by;
+  // The constitution's own grants: outside any definition.
+  if (auth.delegations.some((d) => d.def === undefined && auth.founders.includes(d.iss) && delegates(d)))
+    return true;
+  // Every other grant lives in a definition: what every current one holds, compared by `{cmd, pol}`.
+  const current = heads(auth, role, at, visiting);
   const first = current[0];
-  if (!first) return false;
   const shape = (d: Delegation) => JSON.stringify({ cmd: d.cmd, pol: d.pol });
-  const viaDelegation = auth.delegations
-    .filter(inDef(first.id, first.by))
-    .some((d0) =>
-      current.every((h) =>
-        auth.delegations.some((d) => inDef(h.id, h.by)(d) && shape(d) === shape(d0) && delegates(d)),
-      ),
-    );
+  const viaDelegation =
+    first !== undefined &&
+    auth.delegations
+      .filter(inDef(first))
+      .some((d0) =>
+        current.every((h) =>
+          auth.delegations.some((d) => inDef(h)(d) && shape(d) === shape(d0) && delegates(d)),
+        ),
+      );
   if (viaDelegation) return true;
-  return (auth.nestings ?? [])
-    .filter(inDef(first.id, first.by))
-    .some((n0) =>
-      current.every((h) =>
-        (auth.nestings ?? []).some((n) => inDef(h.id, h.by)(n) && n.holds === n0.holds && nests(n)),
-      ),
-    );
+  // Through nestings, each attenuated to what its nester could do, as of the nesting.
+  return nestingsOf(auth, role, at, visiting).some(
+    (n) =>
+      n.by.every((x) => mayIn(auth, x.by, cmd, args, judgedAt(x), visiting)) &&
+      holderMay(auth, `role:${n.holds}`, cmd, args, at, visiting),
+  );
 }
 
 /** A delegation stands when its issuer held what it delegates, as of the delegation */
 function issued(auth: Authority, d: Delegation, cmd: string, args: Json, visiting: ReadonlySet<string>) {
   if (!isRole(d.aud)) return false;
   if (auth.founders.includes(d.iss)) return true;
-  const as = judgedAt(d);
-  const role = roleName(d.aud);
-  if (
-    !mayIn(auth, d.iss, '/role/define', defineArgs(auth, d.iss, role, undefined, as, visiting), as, visiting)
-  )
-    return false;
-  return mayIn(auth, d.iss, cmd, args, as, visiting);
+  if (d.def === undefined) return false;
+  if (!mayDefine(auth, d.iss, roleName(d.aud), undefined, d, visiting)) return false;
+  return mayIn(auth, d.iss, cmd, args, judgedAt(d), visiting);
 }
 
-/** `/role/define`'s arguments: `{ role, holds?, mine }`, where `mine` is whether the definer holds `role` */
+/**
+ * `/role/define`'s arguments: `{ role, holds?, mine }`. `mine` is whether
+ * the definer holds `role` as of the definition's view, or through an
+ * assignment or nesting concurrent with it, so naming an older view can't
+ * hide that she holds it.
+ */
 function defineArgs(
   auth: Authority,
   by: string,
   role: string,
   holds: string | undefined,
-  at: number,
+  e: Placed,
   visiting: ReadonlySet<string>,
 ): Json {
-  const mine = holdsRole(auth, by, role, at, visiting);
+  const mine = holdsRole(auth, by, role, e, visiting);
   return holds === undefined ? { role, mine } : { role, holds, mine };
 }
 
-/** Whether `who` holds `role` as of `at`, directly or through nesting */
-function holdsRole(auth: Authority, who: string, role: string, at: number, visiting: ReadonlySet<string>) {
+/** Neither saw the other */
+const concurrent = (e: Placed, x: Placed) => !saw(e, x) && !saw(x, e);
+
+/**
+ * Whether `who` holds `role` as of the place `e`: its roles then, and roles
+ * from assignments concurrent with `e`, followed through the nestings that
+ * count (and those concurrent with `e` that were validly written).
+ */
+function holdsRole(auth: Authority, who: string, role: string, e: Placed, outer: ReadonlySet<string>) {
+  const at = judgedAt(e);
+  const key = `holds ${who} ${role} ${e.at} ${e.view}`;
+  // Asked again while answering: a nesting can't make its own definer hold its role.
+  if (outer.has(key)) return false;
+  const visiting = new Set(outer).add(key);
   const held = new Set(rolesIn(auth, who, at, visiting));
-  for (let grew = true; grew;) {
-    grew = false;
-    for (const n of auth.nestings ?? [])
-      if (before(n, at) && held.has(n.role) && !held.has(n.holds)) {
-        held.add(n.holds);
-        grew = true;
+  for (const a of auth.assignments)
+    if (
+      a.to === who &&
+      e.at !== undefined &&
+      concurrent(e, a) &&
+      mayIn(
+        auth,
+        a.by,
+        '/role/assign',
+        targetArgs(auth, a.by, who, a.role, judgedAt(a), visiting),
+        judgedAt(a),
+        visiting,
+      )
+    )
+      held.add(a.role);
+  const queue = [...held];
+  while (queue.length > 0) {
+    const r = queue.shift() ?? '';
+    const counted = nestingsOf(auth, r, at, visiting).map((n) => n.holds);
+    const racing = (auth.nestings ?? [])
+      .filter(
+        (n) =>
+          n.role === r &&
+          e.at !== undefined &&
+          concurrent(e, n) &&
+          (auth.founders.includes(n.by) || mayDefine(auth, n.by, r, n.holds, n, visiting)),
+      )
+      .map((n) => n.holds);
+    for (const h of [...counted, ...racing])
+      if (!held.has(h)) {
+        held.add(h);
+        queue.push(h);
       }
   }
   return held.has(role);
 }
 
-/** `/role/define`'s arguments, as the host fills them in */
-export function defineArgsFor(auth: Authority, by: string, role: string, holds?: string, at = NOW): Json {
-  return defineArgs(auth, by, role, holds, at, new Set());
+/** `/role/define`'s arguments as the host fills them in, for a definition at `at` that saw up to `view` */
+export function defineArgsFor(
+  auth: Authority,
+  by: string,
+  role: string,
+  holds?: string,
+  at = NOW,
+  view?: number,
+): Json {
+  return defineArgs(auth, by, role, holds, view === undefined ? { at } : { at, view }, new Set());
 }
 
 /** The roles the account `who` holds as of `at`, by name (not through nestings) */

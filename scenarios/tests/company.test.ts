@@ -76,13 +76,14 @@ describe('company: grants', () => {
         },
       ],
       assignments,
-      nestings: [{ by: EVE, role: 'web', holds: 'eng' }],
+      definitions: [{ id: 'w1', by: EVE, role: 'web' }],
+      nestings: [{ by: EVE, role: 'web', holds: 'eng', def: 'w1' }],
     };
     assert.ok(may(define, EVE, '/role/define', { role: 'web', holds: 'eng' }));
     assert.ok(!may(define, EVE, '/role/define', { role: 'web', holds: 'hr' }));
     assert.ok(!may(define, EVE, '/role/define', { role: 'web' }), "web's own grants are not hers to write");
     assert.ok(doing(define, WES, '/record/write', 'app.eng'), "Eve's nesting stands");
-    const hr: Authority = { ...define, nestings: [{ by: EVE, role: 'web', holds: 'hr' }] };
+    const hr: Authority = { ...define, nestings: [{ by: EVE, role: 'web', holds: 'hr', def: 'w1' }] };
     assert.ok(!doing(hr, WES, '/record/read', 'app.hr'));
   });
 });

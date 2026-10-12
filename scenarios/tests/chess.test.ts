@@ -222,10 +222,15 @@ describe('chess: a role keeps its grants when its definer is demoted (decided)',
           ['==', '.role', 'referee'],
           ['==', '.self', false],
         ],
+        def: 'coach1',
         at: 2,
       },
-      // After her demotion, a definition by Erin counts for nothing.
-      { iss: ERIN, aud: 'role:coach', cmd: '/record/delete', pol: [], at: 5 },
+      // After her demotion, a definition by Erin counts for nothing, and replaces nothing.
+      { iss: ERIN, aud: 'role:coach', cmd: '/record/delete', pol: [], def: 'coach2', at: 5 },
+    ],
+    definitions: [
+      { id: 'coach1', by: ERIN, role: 'coach', at: 2 },
+      { id: 'coach2', by: ERIN, role: 'coach', at: 5, saw: ['coach1'] },
     ],
     assignments: [
       { by: ALICE, to: ERIN, role: 'admin', at: 1 },
@@ -254,8 +259,16 @@ describe('chess: parking power in a role you keep', () => {
     founders: [ALICE],
     delegations: [
       ...template(pol),
-      { iss: ERIN, aud: 'role:member', cmd: '/member/remove', pol: [['==', '.self', false]], at: 2 },
+      {
+        iss: ERIN,
+        aud: 'role:member',
+        cmd: '/member/remove',
+        pol: [['==', '.self', false]],
+        def: 'm1',
+        at: 2,
+      },
     ],
+    definitions: [{ id: 'm1', by: ERIN, role: 'member', at: 2 }],
     assignments: [...assignments, { by: ALICE, to: ERIN, role: 'member' }],
     unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 4 }],
   });
@@ -283,14 +296,113 @@ describe('chess: parking power in a role you keep', () => {
       founders: [ALICE],
       delegations: [
         ...template([['==', '.mine', false]]),
-        { iss: ERIN, aud: 'role:park', cmd: '/member/remove', pol: [['==', '.self', false]], at: 2 },
+        {
+          iss: ERIN,
+          aud: 'role:park',
+          cmd: '/member/remove',
+          pol: [['==', '.self', false]],
+          def: 'p1',
+          at: 2,
+        },
+      ],
+      definitions: [
+        { id: 'p1', by: ERIN, role: 'park', at: 2 },
+        { id: 'm1', by: ERIN, role: 'member', at: 3 },
       ],
       assignments: [...assignments, { by: ALICE, to: ERIN, role: 'member' }],
-      nestings: [{ by: ERIN, role: 'member', holds: 'park', at: 3 }],
+      nestings: [{ by: ERIN, role: 'member', holds: 'park', def: 'm1', at: 3 }],
       unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 4 }],
     };
     assert.ok(!removesBob(a, ERIN));
     assert.ok(!removesBob(a, FRANK));
+  });
+});
+
+describe("chess: `mine` can't be dodged by naming an older view", () => {
+  const template: Delegation[] = [
+    ...grants,
+    { iss: ALICE, aud: 'role:admin', cmd: '/role/define', pol: [['==', '.mine', false]] },
+    { iss: ALICE, aud: 'role:admin', cmd: '/member/remove', pol: [['==', '.self', false]] },
+    // Coach exists, and is harmless.
+    { iss: ALICE, aud: 'role:coach', cmd: '/record/write', pol: [['==', '.collection', 'app.lessons']] },
+  ];
+  const removesBob = (a: Authority, who: string) =>
+    may(a, who, '/member/remove', argsFor(a, who, BOB, undefined, 7), 7);
+  const parking = (def: { at: number; view?: number }): Delegation => ({
+    iss: ERIN,
+    aud: 'role:coach',
+    cmd: '/member/remove',
+    pol: [['==', '.self', false]],
+    def: 'c1',
+    ...def,
+  });
+
+  test('Erin, made coach at 3, writes into coach at 5 naming a view of 2: refused, since the assignment races it', () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...template, parking({ at: 5, view: 2 })],
+      definitions: [{ id: 'c1', by: ERIN, role: 'coach', at: 5, view: 2 }],
+      assignments: [
+        ...assignments,
+        { by: ALICE, to: ERIN, role: 'coach', at: 3 },
+        { by: ALICE, to: DAVE, role: 'coach', at: 4 },
+      ],
+      unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 6 }],
+    };
+    assert.deepEqual(defineArgsFor(a, ERIN, 'coach', undefined, 5, 2), { role: 'coach', mine: true });
+    assert.ok(!removesBob(a, ERIN));
+    assert.ok(!removesBob(a, DAVE), 'nor any other coach');
+  });
+
+  test('a nesting that puts her in the role, concurrent with the definition, counts the same', () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...template, parking({ at: 5, view: 2 })],
+      definitions: [{ id: 'c1', by: ERIN, role: 'coach', at: 5, view: 2 }],
+      assignments: [...assignments, { by: ALICE, to: ERIN, role: 'member' }],
+      // Alice puts every member in coach at 3; Erin's definition hadn't seen it.
+      nestings: [{ by: ALICE, role: 'member', holds: 'coach', at: 3 }],
+      unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 6 }],
+    };
+    assert.deepEqual(defineArgsFor(a, ERIN, 'coach', undefined, 5, 2), { role: 'coach', mine: true });
+    assert.ok(!removesBob(a, ERIN));
+  });
+
+  test('the honest order works: Erin defines coach at 2, and Alice, having seen it, makes her coach at 3', () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...template, parking({ at: 2 })],
+      definitions: [{ id: 'c1', by: ERIN, role: 'coach', at: 2 }],
+      assignments: [...assignments, { by: ALICE, to: ERIN, role: 'coach', at: 3 }],
+      unassignments: [{ by: ALICE, from: ERIN, role: 'admin', at: 6 }],
+    };
+    assert.deepEqual(defineArgsFor(a, ERIN, 'coach', undefined, 2), { role: 'coach', mine: false });
+    assert.ok(removesBob(a, ERIN), 'Alice made her coach knowing what coach holds');
+  });
+
+  test('`mine` follows only nestings that count: a bogus one gives a `.mine == true` template nothing', () => {
+    // Under "define only roles you hold", Bob (no definer) nests member inside coach.
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [
+        ...grants,
+        { iss: ALICE, aud: 'role:admin', cmd: '/role/define', pol: [['==', '.mine', true]] },
+      ],
+      definitions: [{ id: 'b1', by: BOB, role: 'member', at: 1 }],
+      assignments: [...assignments, { by: ALICE, to: ERIN, role: 'member' }],
+      nestings: [{ by: BOB, role: 'member', holds: 'coach', def: 'b1', at: 1 }],
+    };
+    assert.deepEqual(defineArgsFor(a, ERIN, 'coach', undefined, 2), { role: 'coach', mine: false });
+    assert.ok(!may(a, ERIN, '/role/define', defineArgsFor(a, ERIN, 'coach', undefined, 2), 2));
+  });
+
+  test("a grant to a role outside any definition, not the constitution's, counts for nothing", () => {
+    const a: Authority = {
+      founders: [ALICE],
+      delegations: [...template, { iss: ERIN, aud: 'role:coach', cmd: '/member/remove', pol: [], at: 2 }],
+      assignments: [...assignments, { by: ALICE, to: DAVE, role: 'coach', at: 3 }],
+    };
+    assert.ok(!removesBob(a, DAVE));
   });
 });
 
