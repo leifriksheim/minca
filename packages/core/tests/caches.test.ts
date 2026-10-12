@@ -4,6 +4,7 @@
  * until enough keepers have them, and says when a query is complete.
  */
 import { test, describe, afterEach } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
@@ -207,12 +208,13 @@ describe('holding part of a space', () => {
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const { heads: seen } = await alice.node.spaces.access(space);
-    const sign = (text: string, log: Version['log']) =>
+    const sign = async (text: string, log: Version['log']) =>
       createSigner(provider).sign(
         createVersion({
           author: did,
           collection: 'app.chat',
           space,
+          version: { key: await newRecordKey(alice.node.did), seq: 0 },
           body: { text },
           proof: note.encoded,
           seen,

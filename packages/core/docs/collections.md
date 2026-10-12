@@ -129,7 +129,8 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`), `packages/core/src
 Who is one of these, or a list meaning any of them:
 
 - `member`: anyone holding a role in the space.
-- `creator`: whoever wrote the record's first version. Not allowed for `create`.
+- `creator`: whoever wrote the record's first version: the owner of its key
+  (see [keys](records-and-queries.md#keys)). Not allowed for `create`.
 - `can:<permission>`: someone whose role holds a permission the collection
   declares in `permissions`. `can:moderate` in `app.poll` is the permission
   `app.poll/moderate`.
@@ -142,6 +143,15 @@ the first vote's next version, not a new record.
 ```typescript
 rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:about'] }  // one vote per person per poll
 ```
+
+With `@author`, the key is the writer's own, so nobody else can write their
+vote. Without it (one decision per proposal) the key is shared: anyone
+`create` allows may write first, and two who do so apart each start a
+version of their own, the later edits of one outranking the other's. There
+`creator` only keeps others from editing your version. If a collection needs
+one writer per key, restrict `create` (`can:decide`) or name `@author`.
+`node.records.onePerKey(space, collection, body, { links })` gives the key a
+body would have, to read a record without searching for it.
 
 ## Checks
 
@@ -320,6 +330,14 @@ the new ones.
 `node.collections.delete` removes a definition only once its collection has
 no records left, since records left behind would lose their shape and their
 rules.
+
+Whoever first defined a collection may change it as well as anyone who holds
+`manage`. If two accounts each defined it first without seeing the other's,
+`definedBy` is `null` and only a manager may change it. Until one does, the
+collection has a definition only if the rivals say the same thing; if they
+differ, `collections.list` leaves it out and its records are judged by no
+rules
+([spec 02 §6.3](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
 
 _Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts` ("redefining bumps the version, and only the definer or someone who can manage the space may", "a definition can be removed once its collection is empty, by whoever may change it"), `packages/core/tests/rules.test.ts` ("rules: changing them")._
 

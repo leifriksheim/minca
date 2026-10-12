@@ -6,7 +6,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { bodyHashOf } from '../src/schema/version.js';
-import { checkRules, onePerKey } from '../src/records/rules.js';
+import { checkRules } from '../src/records/rules.js';
 import {
   checkChecks,
   checkCostHints,
@@ -391,11 +391,7 @@ describe('checks: between peers', () => {
     const own = await bob.node.records.put(space, 'app.proposal.vote', { choice: 'yes' }, { links: about });
 
     // One "passed" per proposal: the key is derived from what it is about.
-    const key = (await onePerKey('app.proposal.passed', ['link:about'], {
-      root: '',
-      links: about,
-      body: {},
-    }))!;
+    const key = (await bob.node.records.onePerKey(space, 'app.proposal.passed', {}, { links: about }))!;
     await letGo(bob.node, space);
     await forge(bob, space, {
       author: '',
@@ -419,15 +415,14 @@ describe('checks: between peers', () => {
   test('keeping versions under a check whole is the writer’s part: peers take one that isn’t', async () => {
     const { alice, bob, space } = await proposalSpace();
     await letGo(bob.node, space);
-    await forge(bob, space, {
+    const forgotten = await forge(bob, space, {
       author: '',
       collection: 'app.counter',
       body: { n: 0 },
-      version: { key: 'forgotten', seq: 0 },
     });
     await hold(bob.node, space);
     await until(
-      async () => (await alice.node.records.get(space, 'forgotten')) !== null,
+      async () => (await alice.node.records.get(space, forgotten.key)) !== null,
       4000,
       'Alice to take it',
     );
@@ -610,7 +605,7 @@ describe('checks: std.decision and std.goal-reached', () => {
     await until(async () => (await bob.node.records.get(space, put.key)) !== null, 4000, 'the proposal');
     const own = await bob.node.records.put(space, ballot, { choice: 0 }, { links: about });
 
-    const key = (await onePerKey(decision.name, ['link:about'], { root: '', links: about, body: {} }))!;
+    const key = (await bob.node.records.onePerKey(space, decision.name, {}, { links: about }))!;
     await letGo(bob.node, space);
     await forge(bob, space, {
       author: '',

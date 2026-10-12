@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
 import type { P2PNode } from '../src/node/types.js';
+import { newRecordKey } from '../src/records/key.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
@@ -16,18 +17,34 @@ import { deriveMemberKeyBytes } from '../src/identity/contact-key.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { replayAccess, type AccessEvent, type AccessGenesis, type Role } from '../src/space/roles.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
-import { deriveReadKey } from '../src/space/space-access.js';
-import { MEMBERSHIP_LABEL, spaceKeyFromRaw, type SpaceKey } from '../src/privacy/space-encryption.js';
+import {
+  BOX_LABEL,
+  boxBound,
+  boxKey,
+  deriveReadKey,
+  memberKeyRecordKey,
+  SPACE_KEY_RECORD,
+} from '../src/space/space-access.js';
+import {
+  EARLIER_KEYS_LABEL,
+  generateSpaceKey,
+  MEMBERSHIP_LABEL,
+  sealBody,
+  spaceKeyFromRaw,
+  type SpaceKey,
+} from '../src/privacy/space-encryption.js';
 import { sealValue } from '../src/identity/envelope.js';
+import { sealValueTo } from '../src/identity/hpke.js';
 import { createClientAuth, type ReadAccess } from '../src/network/peer-auth.js';
 import { team } from '../src/space/presets.js';
-import { base64UrlDecode } from '../src/utils/encoding.js';
+import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
-import { open, person as somebody } from './helpers/person.js';
+import { forge, open, person as somebody } from './helpers/person.js';
+import { stored } from './helpers/stored.js';
 
 async function person(hub: FakeHub) {
   const who = await somebody(hub, { accountKey: true });
@@ -496,5 +513,119 @@ describe('everything else that holds a space follows its new key', () => {
     );
     const readKey = (await deriveReadKey(key, provider)).did;
     await until(async () => (await passReadKey()) === readKey, 6000, 'the pass to carry the new read key');
+  });
+});
+
+describe('a key change that leaves out the first key', () => {
+  test('is taken as malformed: a manager replaces it, and a newcomer still gets the first key', async () => {
+    const { hub, alice, bob, carol, space } = await team3();
+    // A modified app of Alice's changes the key with no earlier key sealed inside, and boxes it to everyone.
+    await letGo(alice.node, space);
+    const store = await stored(alice.stores, space);
+    const memberKeys = new Map<string, string>();
+    for (const [key, versions] of await store.histories('memberkey:'))
+      for (const { body } of versions)
+        if (body && typeof body === 'object' && 'key' in body && typeof body.key === 'string')
+          memberKeys.set(key, body.key);
+    const next = await generateSpaceKey();
+    await forge(alice, space, {
+      collection: 'sys.key',
+      retain: true,
+      body: {
+        keyId: next.id,
+        readKey: (await deriveReadKey(next, provider)).did,
+        earlier: await sealValue(next.seal, EARLIER_KEYS_LABEL, { space, keyId: next.id }, []),
+      },
+      version: { key: SPACE_KEY_RECORD, seq: 0 },
+    });
+    for (const who of [alice, bob, carol]) {
+      const to = who.node.did;
+      const memberKey = memberKeys.get(await memberKeyRecordKey(to));
+      assert.ok(memberKey, 'every member has published a member key');
+      await forge(alice, space, {
+        collection: 'sys.box',
+        body: {
+          keyId: next.id,
+          to,
+          sealed: await sealValueTo(memberKey, BOX_LABEL, boxBound(space, next.id, to), {
+            key: base64UrlEncode(next.raw),
+          }),
+        },
+        version: { key: await boxKey(next.id, to, alice.node.did), seq: 0 },
+      });
+    }
+    await hold(alice.node, space);
+    // Alice's node, holding the first key, takes nothing from it and changes the key again.
+    await until(
+      async () => (await keyChanges(alice, space))?.changes === 2,
+      6000,
+      'a key change to replace it',
+    );
+
+    const dave = await person(hub);
+    await dave.node.spaces.join(await alice.node.spaces.invite(space));
+    await hold(dave.node, space);
+    await until(() => reads(dave, space, 'before'), 6000, 'Dave to read what the first key sealed');
+  });
+});
+
+describe('a key record that did not count', () => {
+  /** The current key, as Bob, an editor, can read it from an invite he may make */
+  const currentOf = async (who: Person, space: string) =>
+    spaceKeyFromRaw(
+      base64UrlDecode(parseSpaceInvite(await who.node.spaces.invite(space, { write: false })).key!),
+    );
+
+  test('forces no key change, however malformed', async () => {
+    const { alice, bob, space } = await team3();
+    const current = await currentOf(bob, space);
+    for (let round = 0; round < 2; round++) {
+      // Not a manager, so it never counts; its earlier doesn't open.
+      await forge(bob, space, {
+        collection: 'sys.key',
+        retain: true,
+        body: {
+          keyId: current.id,
+          readKey: (await deriveReadKey(current, provider)).did,
+          earlier: 'not sealed',
+        },
+        version: { key: SPACE_KEY_RECORD, seq: 0 },
+      });
+      await bob.node.records.put(space, 'app.note', { text: `nudge ${round}` });
+      await until(() => reads(alice, space, `nudge ${round}`), 6000, 'the nudge');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal((await keyChanges(alice, space))?.changes, 0);
+  });
+
+  test('gives no reader a key the history doesn’t name', async () => {
+    const { alice, bob, space } = await team3();
+    const current = await currentOf(bob, space);
+    const planted = await generateSpaceKey();
+    // Sealed under the current key, so it opens, and carrying a key no key change made.
+    await forge(bob, space, {
+      collection: 'sys.key',
+      retain: true,
+      body: {
+        keyId: current.id,
+        readKey: (await deriveReadKey(current, provider)).did,
+        earlier: await sealValue(current.seal, EARLIER_KEYS_LABEL, { space, keyId: current.id }, [
+          base64UrlEncode(current.raw),
+          base64UrlEncode(planted.raw),
+        ]),
+      },
+      version: { key: SPACE_KEY_RECORD, seq: 0 },
+    });
+    // A note sealed under the planted key.
+    const key = await newRecordKey(bob.node.did);
+    await forge(bob, space, {
+      collection: 'app.note',
+      body: await sealBody({ body: { text: 'planted' } }, planted, { space, collection: 'app.note', key }),
+      version: { key, seq: 0 },
+    });
+    await bob.node.records.put(space, 'app.note', { text: 'after' });
+    await until(() => reads(alice, space, 'after'), 6000, 'the note after');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(await reads(alice, space, 'planted'), false);
   });
 });

@@ -297,8 +297,18 @@ export interface AccessState {
     string,
     { readonly role: string; readonly open: boolean; readonly event: string }
   >;
-  /** Collection name → the id of the definition in force, and who first defined it */
-  readonly definitions: ReadonlyMap<string, { readonly event: string; readonly definedBy: string }>;
+  /**
+   * Collection name → the id of the definition in force, and who first
+   * defined it: null when rival first definitions name different accounts
+   */
+  readonly definitions: ReadonlyMap<string, { readonly event: string; readonly definedBy: string | null }>;
+  /**
+   * Collections whose rival first definitions, by different accounts, no
+   * later one settles → the ids of the latest of them, lowest first. Which is
+   * in force is not the replay's to say (02 §6.3: none, unless they all say
+   * the same), and only someone who manages the space may define it again.
+   */
+  readonly contested: ReadonlyMap<string, ReadonlyArray<string>>;
   /** A private space's keys, oldest first; the last is current. Empty in a public space. */
   readonly keys: ReadonlyArray<SpaceKeyEpoch>;
   /** Whether someone lost their place in the space since the current key — so a new one is due */
@@ -420,7 +430,8 @@ interface MutableState {
   roles: Map<string, Role>;
   members: Map<string, string>;
   invites: Map<string, { role: string; open: boolean; event: string }>;
-  definitions: Map<string, { event: string; definedBy: string }>;
+  definitions: Map<string, { event: string; definedBy: string | null }>;
+  contested: Map<string, ReadonlyArray<string>>;
   keys: SpaceKeyEpoch[];
   keyDue: boolean;
   relays: ReadonlyArray<string>;
@@ -434,6 +445,7 @@ function startState(genesis: AccessGenesis): MutableState {
     members: new Map([[genesis.creator, genesis.creatorRole]]),
     invites: new Map(),
     definitions: new Map(),
+    contested: new Map(),
     keys: genesis.key ? [{ ...genesis.key, event: genesis.id }] : [],
     keyDue: false,
     relays: [],
@@ -520,10 +532,17 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
       return author ? null : 'Only a member may report a fork';
     case 'definition': {
       const existing = state.definitions.get(event.name);
-      if (!existing) return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
+      const contested = state.contested.has(event.name);
+      if (!existing && !contested) {
+        if (event.deleted) return 'There is no such definition to remove';
+        return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
+      }
       // Changing one: whoever first defined it, while a member, or anyone who manages the space.
       if (roleHolds(author, MANAGE)) return null;
-      return author && existing.definedBy === event.root
+      // Rivals no one settled: no one first defined it, so only a manager may settle them.
+      if (contested)
+        return 'Rival definitions of it stand: only someone who manages the space may settle them';
+      return author && existing?.definedBy === event.root
         ? null
         : 'Only whoever defined it, or someone who manages the space, may change it';
     }
@@ -578,12 +597,17 @@ function change(event: AccessEvent, state: MutableState): void {
     case 'fork':
       return;
     case 'definition': {
+      // It saw what it changes, so it settles any rivals it saw.
+      state.contested.delete(event.name);
       if (event.deleted) {
         state.definitions.delete(event.name);
         return;
       }
-      const definedBy = state.definitions.get(event.name)?.definedBy ?? event.root;
-      state.definitions.set(event.name, { event: event.id, definedBy });
+      const existing = state.definitions.get(event.name);
+      state.definitions.set(event.name, {
+        event: event.id,
+        definedBy: existing ? existing.definedBy : event.root,
+      });
       return;
     }
     case 'key':
@@ -783,7 +807,13 @@ function merge(
     if (!kind || kind === 'role') continue;
     if (kind === 'key') {
       keyEvents.push(...group);
+      // Only managers change the key, and every key stands: an id picks which is current
+      // among keys any of them could have made current alone.
       currentKey = [...tops].sort(byId)[0]!;
+      continue;
+    }
+    if (kind === 'definition') {
+      mergeDefinitions(tops, group, saw, state);
       continue;
     }
     if (kind === 'revoke' || kind === 'fork') continue;
@@ -793,10 +823,11 @@ function merge(
       // Closed beats open; then the one giving least.
       const closed = tops.filter((event) => event.kind === 'invite' && !event.open);
       win = least(closed.length > 0 ? closed : tops, given);
-    } else win = [...tops].sort(byId)[0]!;
-    if (win.kind === 'definition' && !win.deleted) {
-      state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
-    } else change(win, state);
+    }
+    // `relays` and `keepers`: only managers set them, so an id picks among lists any of them
+    // could have set alone.
+    else win = [...tops].sort(byId)[0]!;
+    change(win, state);
   }
   if (keyEvents.length > 0) {
     // Every key stands; the current one goes last, the rest by id: only which is current matters.
@@ -825,6 +856,7 @@ function applied(state: AccessState, event: AccessEvent, genesisId: string): Mut
     members: new Map(state.members),
     invites: new Map(state.invites),
     definitions: new Map(state.definitions),
+    contested: new Map(state.contested),
     keys: [...state.keys],
   };
   change(event, next);
@@ -849,25 +881,84 @@ function givenIn(state: AccessState, event: AccessEvent): Role | null {
 }
 
 /**
- * Whoever defined a collection this time: of the definitions the winning one
- * saw, and itself, those that saw every removal it saw; of those, one that
- * saw no other, the lowest id if several.
+ * The latest changes to one collection's definition, merged (02 §6.3). One
+ * account's alone, or changes by accounts that may each change it (its first
+ * definer and managers, or managers alone once no one first defined it), are
+ * picked between by id: each could have made its
+ * own the latest alone. Anything else, rival first definitions by two
+ * accounts or a delete beside another account's change, is contested: no id
+ * decides, since an id can be ground, and readers judge the rivals by what
+ * they say.
+ */
+function mergeDefinitions(
+  tops: ReadonlyArray<AccessEvent>,
+  group: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+  state: MutableState,
+): void {
+  const byId = (a: AccessEvent, b: AccessEvent) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const sorted = [...tops].sort(byId);
+  const win = sorted[0]!;
+  if (win.kind !== 'definition') return;
+  // Who first defined it, as each latest definition sees the whole group: null where rivals stand.
+  const definitions = sorted.filter((top) => !isDelete(top));
+  const definers = new Set(definitions.map((top) => definerOf(top, group, saw)));
+  // No first definer is agreed on only once every latest change saw the rival firsts, which a
+  // manager's settle did; rival firsts that are themselves latest are not agreement.
+  const settled = definitions.every((top) =>
+    firstsOf(top, group, saw).every((first) => first === top || saw.get(top.id)?.has(first.id)),
+  );
+  const oneAccount = new Set(sorted.map((top) => top.root)).size === 1;
+  const agreed =
+    sorted.length === 1 ||
+    oneAccount ||
+    (definers.size === 1 && !sorted.some(isDelete) && (!definers.has(null) || settled));
+  if (agreed) {
+    if (win.deleted) change(win, state);
+    else state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
+    return;
+  }
+  state.definitions.delete(win.name);
+  state.contested.set(
+    win.name,
+    sorted.map((top) => top.id),
+  );
+}
+
+const isDelete = (event: AccessEvent) => event.kind === 'definition' && event.deleted;
+
+/**
+ * Whoever defined a collection this time (02 §6.3): of the definitions in
+ * `group` that saw every removal the winning one saw, those that saw no
+ * other, if they are all one account's. Rival first definitions by two
+ * accounts give no one: no id decides it, since an id can be ground, so only
+ * someone who manages the space may change it.
  */
 function definerOf(
   win: AccessEvent,
   group: ReadonlyArray<AccessEvent>,
   saw: ReadonlyMap<string, Seen>,
-): string {
-  const past = group.filter((event) => event === win || saw.get(win.id)?.has(event.id));
+): string | null {
+  const firsts = firstsOf(win, group, saw);
+  const roots = new Set(firsts.map((event) => event.root));
+  return roots.size === 1 ? [...roots][0]! : roots.size === 0 ? win.root : null;
+}
+
+/** The first definitions of the life `win` is in: those of `group` that saw every removal it saw, and no other */
+function firstsOf(
+  win: AccessEvent,
+  group: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+): ReadonlyArray<AccessEvent> {
   const removed = (event: AccessEvent) => event.kind === 'definition' && event.deleted;
-  const removals = past.filter(removed);
-  const life = past.filter(
-    (event) => !removed(event) && removals.every((removal) => saw.get(event.id)?.has(removal.id)),
+  const removals = group.filter((event) => removed(event) && saw.get(win.id)?.has(event.id));
+  const life = group.filter(
+    (event) =>
+      event.kind === 'definition' &&
+      !removed(event) &&
+      (event === win || removals.every((removal) => saw.get(event.id)?.has(removal.id))),
   );
-  const first = life
-    .filter((event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)))
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
-  return (first ?? win).root;
+  return life.filter((event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)));
 }
 
 /**

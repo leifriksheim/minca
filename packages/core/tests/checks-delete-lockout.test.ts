@@ -20,17 +20,17 @@ test('a forged step and a delete after it hide nothing: the honest record reads 
     schema: { type: 'object' },
     rules: { edit: 'member', check: [{ that: 'body.n <= 10.0', else: 'At most 10' }] },
   });
-  await alice.node.records.put(space, 'app.setting', { n: 5 }, { key: 'shared' });
+  const shared = (await alice.node.records.put(space, 'app.setting', { n: 5 }, { key: 'shared' })).key;
   await joined(bob.node, space);
-  await until(async () => (await bob.node.records.get(space, 'shared')) !== null, 6000, 'v0 at bob');
-  const id0 = (await bob.node.records.history(space, 'shared'))[0]!.version;
+  await until(async () => (await bob.node.records.get(space, shared)) !== null, 6000, 'v0 at bob');
+  const id0 = (await bob.node.records.history(space, shared))[0]!.version;
   await letGo(bob.node, space);
   const bad = await forge(bob, space, {
     author: '',
     collection: 'app.setting',
     body: { n: 100 },
     retain: true,
-    version: { key: 'shared', seq: 1, prev: id0, genesis: id0 },
+    version: { key: shared, seq: 1, prev: id0, genesis: id0 },
   });
   await forge(bob, space, {
     author: '',
@@ -38,17 +38,15 @@ test('a forged step and a delete after it hide nothing: the honest record reads 
     body: null,
     deleted: true,
     retain: false,
-    version: { key: 'shared', seq: 2, prev: bad.id, genesis: id0 },
+    version: { key: shared, seq: 2, prev: bad.id, genesis: id0 },
   });
   await hold(bob.node, space);
-  await until(
-    async () => (await alice.node.records.history(space, 'shared')).length >= 3,
-    6000,
-    'sync',
-  ).catch(() => {});
+  await until(async () => (await alice.node.records.history(space, shared)).length >= 3, 6000, 'sync').catch(
+    () => {},
+  );
   await settle(300);
   // The forged step and the delete after it count for no reader: Alice still reads her own, and can go on.
-  assert.equal((await alice.node.records.get<{ n: number }>(space, 'shared'))?.body?.n, 5);
-  const next = await alice.node.records.update(space, 'shared', { n: 6 });
+  assert.equal((await alice.node.records.get<{ n: number }>(space, shared))?.body?.n, 5);
+  const next = await alice.node.records.update(space, shared, { n: 6 });
   assert.equal(next.body?.n, 6);
 });

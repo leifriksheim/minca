@@ -6,6 +6,7 @@
  * would take most of a minute.
  */
 import { test, describe } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createP256Provider } from '../src/identity/crypto-p256.js';
@@ -55,6 +56,7 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
           author: keyDid,
           collection: `app.junk${i}`,
           space,
+          version: { key: await newRecordKey(who.node.did), seq: 0 },
           body: { i },
           proof: note.encoded,
           seen,

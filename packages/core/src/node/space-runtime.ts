@@ -36,10 +36,18 @@ import {
   noteGrants,
   writesRecords,
 } from '../identity/abilities.js';
-import { bodyProblem, createVersion, getVersionId, isStub, signedPart, stubOf } from '../schema/version.js';
+import {
+  bodyProblem,
+  canonicalize,
+  createVersion,
+  getVersionId,
+  isStub,
+  signedPart,
+  stubOf,
+} from '../schema/version.js';
 import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
-import { chainProblem, MAX_SEEN, newRecordKey, nextVersion } from '../records/version.js';
-import { RECORD_KEY_PATTERN } from '../records/key.js';
+import { chainProblem, MAX_SEEN, nextVersion } from '../records/version.js';
+import { keyKind, newRecordKey, onePerForm, ownedKey, ownsKey, RECORD_KEY_PATTERN } from '../records/key.js';
 import { checkLinks } from '../records/links.js';
 import { checkChecks, runChecks, type Check, type CheckedVersion, type Uncited } from '../records/checks.js';
 import {
@@ -47,6 +55,7 @@ import {
   changedFixedField,
   describeWho,
   onePerKey,
+  onePerSecret,
   permissionName,
   type CollectionRules,
 } from '../records/rules.js';
@@ -99,7 +108,6 @@ import {
   verifyInvite,
   forkKey,
   WARRANT_COLLECTION,
-  newWarrantKey,
 } from '../space/space-access.js';
 import {
   ACCESS_COLLECTIONS,
@@ -401,6 +409,7 @@ type Standing =
       /** Passes every check but one: a later change took its author's access away. Kept, never counted (02 §9.5). */
       readonly withdrawn?: true;
     };
+type Refusal = Extract<Standing, { readonly ok: false }>;
 const STANDS: Standing = { ok: true };
 const ACCESS_LATER: Standing = Object.freeze({
   ok: false,
@@ -651,20 +660,97 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const firstOf = (version: Version, first: Version | null): first is Version =>
     !!first && first.seq === 0 && first.key === version.key && first.collection === version.collection;
 
-  /** A record's first version: the version itself at seq 0, else the one kept apart. */
+  /**
+   * A version's first version: itself at seq 0, else the one its chain names
+   * (02 §4.5). Never the lowest id held at its key, which anyone who may
+   * create there could grind.
+   */
   async function genesisOf(version: Version): Promise<Version | null> {
-    return version.seq === 0 ? version : storage.getGenesis(version.key);
+    if (version.seq === 0) return version;
+    const first = version.genesis ? await storage.getVersion(version.genesis) : null;
+    return firstOf(version, first) ? first : null;
   }
 
   /**
-   * Whether a version is one this node should show. A version whose collection
-   * differs from its record's first version is someone reusing a key: it is
-   * ignored on read, the same way on every node once they hold the same data.
+   * Whether a version is one this node should show: a later version whose
+   * first version is held and is its record's. Every version stored passed
+   * that check on arrival (02 §4.7); this keeps a read from trusting it.
    */
   async function consistent(version: Version): Promise<boolean> {
-    if (version.seq === 0) return true;
-    const genesis = await storage.getGenesis(version.key);
-    return !genesis || genesis.collection === version.collection;
+    return version.seq === 0 || (await genesisOf(version)) !== null;
+  }
+
+  // ─── Record keys ───────────────────────────────────────────────────
+  //
+  // Outside sys.*, a first version is at a key its account owns, or at a
+  // shared onePer key (02 §4.1, `records/key.ts`), so no member can write a
+  // first version at another's key and become its creator.
+
+  let oneSecret: Promise<CryptoKey> | null = null;
+  /**
+   * What this space's onePer keys are keyed with: its first space key in a
+   * private space, its id in a public one (02 §7.3). Null when this node
+   * holds no key of a private space.
+   */
+  function onePerKeying(): Promise<CryptoKey> | null {
+    if (oneSecret) return oneSecret;
+    if (space.visibility !== 'private') return (oneSecret = onePerSecret({ spaceId: space.id }));
+    const first = space.encryptionKeyId ? keyring.get(space.encryptionKeyId) : undefined;
+    return first ? (oneSecret = onePerSecret({ spaceKey: first.raw })) : null;
+  }
+
+  /** The key `put` writes a body at under a collection's `onePer`, for `root`; null when a part it names is missing */
+  async function derivedKey(
+    collection: string,
+    onePer: ReadonlyArray<string>,
+    record: { root: string; links: ReadonlyArray<Link>; body: unknown },
+  ): Promise<string | null> {
+    const keying = onePerKeying();
+    if (!keying) throw new Error('This private space has no key on this node');
+    return onePerKey(await keying, collection, onePer, record);
+  }
+
+  /** Why a first version's key isn't one its account may write first, from the version alone; null when it may */
+  async function keyProblem(version: Version, root: string): Promise<Refusal | null> {
+    if (version.seq !== 0) return null;
+    const kind = keyKind(version.key);
+    // The protocol's own records keep keys of their own, so none can be current at someone's key.
+    if (version.collection.startsWith('sys.'))
+      return kind === null
+        ? null
+        : { ok: false, reason: 'A sys.* record is never at an owned or a one: key' };
+    if (kind === 'shared') return null;
+    if (kind === 'owned' && (await ownsKey(version.key, root))) return null;
+    return {
+      ok: false,
+      reason:
+        kind === 'owned'
+          ? 'Its key belongs to another account'
+          : 'A new record needs a key its account owns, or a shared one: key',
+    };
+  }
+
+  /**
+   * Why a first version at a key of a `onePer` key's form, shared `one:<hex>`
+   * or owned `<owner>.one:<hex>`, can't be there, as of one state of the
+   * history (02 §7.3): only a collection whose rules have `onePer` gives one,
+   * owned when it names `@author` and shared when it doesn't. Judged from the
+   * definition alone, so peers that can't derive the key agree. Null when it
+   * can, or when this node can't read the definition to tell.
+   */
+  async function onePerKeyProblem(version: Version, state: AccessState): Promise<Refusal | null> {
+    const form = onePerForm(version.key);
+    if (version.seq !== 0 || !form || version.collection.startsWith('sys.')) return null;
+    const id = await inForce(state, version.collection);
+    const found = id ? await definitionIn(id) : 'missing';
+    if (found === 'unreadable') return null;
+    const onePer = typeof found === 'string' ? undefined : found.definition.rules?.onePer;
+    if (!onePer) return { ok: false, reason: 'A one: key is only for a collection whose rules have onePer' };
+    if (form === 'shared' && onePer.includes('@author'))
+      return { ok: false, reason: 'A shared one: key is only for a onePer that does not name @author' };
+    if (form === 'owned' && !onePer.includes('@author'))
+      return { ok: false, reason: 'An owned one: key is only for a onePer that names @author' };
+    return null;
   }
 
   // ─── The access history ────────────────────────────────────────────
@@ -970,6 +1056,25 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     return found;
   }
 
+  /**
+   * The id of the definition in force for a collection in one state of the
+   * history (02 §6.3): the replay's, or, while rival first definitions stand,
+   * the lowest of them only when they all say the same, so no ground id picks
+   * the rules. One this node can't read when it can't read them all; null
+   * when none is in force.
+   */
+  async function inForce(state: AccessState, collection: string): Promise<string | null> {
+    const entry = state.definitions.get(collection);
+    if (entry) return entry.event;
+    const rivals = state.contested.get(collection);
+    if (!rivals?.length) return null;
+    const found = await Promise.all(rivals.map((id) => definitionIn(id)));
+    const unreadable = rivals.find((_, i) => found[i] === 'unreadable');
+    if (unreadable) return unreadable;
+    const said = new Set(found.map((one) => (typeof one === 'string' ? one : canonicalize(one.definition))));
+    return said.size === 1 && typeof found[0] !== 'string' ? rivals[0]! : null;
+  }
+
   /** The rules and topics in force for a collection in one state of the history — null when there are none to judge by */
   async function rulesAt(
     state: AccessState,
@@ -980,9 +1085,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     permissions: ReadonlyArray<string>;
   } | null> {
     if (collection.startsWith('sys.')) return null;
-    const entry = state.definitions.get(collection);
-    if (!entry) return null;
-    const found = await definitionIn(entry.event);
+    const id = await inForce(state, collection);
+    if (!id) return null;
+    const found = await definitionIn(id);
     return typeof found === 'string'
       ? null
       : {
@@ -1088,10 +1193,21 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!first) return { ok: false, reason: 'Its first version has not arrived yet', later: true };
     if (!firstOf(version, first))
       return { ok: false, reason: "The first version it names is not this record's" };
+    // Whose key it is depends on nothing that can change: refused, never withdrawn.
+    const owned = await keyProblem(version, verdict.root);
+    if (owned) return owned;
 
     const seen = version.seen ?? [];
     const state = history.at(seen);
     if (!state) return ACCESS_LATER;
+    const form = await onePerKeyProblem(version, state);
+    if (form) return form;
+    // Rival definitions that differ give no rules, which must not mean anything goes (02 §6.3).
+    if (state.contested.has(version.collection) && !(await inForce(state, version.collection)))
+      return {
+        ok: false,
+        reason: `Rival definitions of ${version.collection} stand: nothing is written in it until a manager settles them`,
+      };
 
     const root = verdict.root;
     const found = await rulesAt(state, version.collection);
@@ -1169,6 +1285,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!state) return ACCESS_LATER;
     const role = standing(state, root);
     if (!role) return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
+    const form = await onePerKeyProblem(version, state);
+    if (form) return { ok: false, reason: `${form.reason}, after a change it had not seen`, withdrawn: true };
     const found = await rulesAt(state, version.collection);
     const problem = await underRules(version, first, root, role, found?.rules ?? {});
     if (problem.ok) return null;
@@ -1229,8 +1347,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       };
     if (version.seq === 0 && rules.onePer) {
       const opened = await openBody(version);
-      if (opened.body === null && opened.encrypted) return STANDS;
-      const expected = await onePerKey(version.collection, rules.onePer, {
+      const keying = onePerKeying();
+      // Only a reader can compute a private space's onePer keys; the rest take it on the other checks.
+      if ((opened.body === null && opened.encrypted) || !keying) return STANDS;
+      const expected = await onePerKey(await keying, version.collection, rules.onePer, {
         root,
         links: opened.links,
         body: opened.body,
@@ -1628,7 +1748,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   interface CatalogEntry {
     readonly definition: StoredCollection;
-    readonly definedBy: string;
+    /** Null when rival first definitions name different accounts */
+    readonly definedBy: string | null;
     /** The id of the version that holds this definition */
     readonly version: string;
   }
@@ -1638,11 +1759,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function loadCatalog(): Promise<Map<string, CatalogEntry>> {
     const result = new Map<string, CatalogEntry>();
     const { history } = await access();
-    for (const [name, entry] of history.current.definitions) {
-      const found = await definitionIn(entry.event);
-      if (typeof found === 'string') continue;
+    const { definitions, contested } = history.current;
+    for (const name of new Set([...definitions.keys(), ...contested.keys()])) {
+      const id = await inForce(history.current, name);
+      const found = id ? await definitionIn(id) : 'missing';
+      if (!id || typeof found === 'string') continue;
       if (found.definition.name !== name) continue;
-      result.set(name, { definition: found.definition, definedBy: entry.definedBy, version: entry.event });
+      result.set(name, {
+        definition: found.definition,
+        definedBy: definitions.get(name)?.definedBy ?? null,
+        version: id,
+      });
     }
     return result;
   }
@@ -1892,6 +2019,19 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   /** Box and key record versions already opened, so each is tried once */
   const opened = new Set<string>();
+  /**
+   * Key records already opened, for the keys the history named then. Which
+   * key event counts, and which keys it names, can change as changes arrive,
+   * so they are opened again when that does.
+   */
+  const openedKeyRecords = new Set<string>();
+  let openedFor = '';
+  /**
+   * Keys whose key change is malformed: its earlier keys don't open, or leave
+   * out the space's first key, which every reader needs for onePer keys
+   * (03 §9.3). Nothing is taken from them, and a manager replaces them.
+   */
+  const malformedKeys = new Set<string>();
 
   /** Takes in what this node can open: boxes sealed to its member key, and the earlier keys each key record carries */
   async function learnKeys(): Promise<void> {
@@ -1930,6 +2070,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
     }
 
+    const named = epochs.map((epoch) => `${epoch.keyId}/${epoch.readKey}/${epoch.event}`).join('|');
+    if (named !== openedFor) {
+      openedFor = named;
+      openedKeyRecords.clear();
+      malformedKeys.clear();
+    }
     // Each newer key opens the ones before it — which may open more.
     let more = true;
     while (more) {
@@ -1939,29 +2085,44 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           const body = isRecord(version.body) ? version.body : null;
           if (
             version.collection !== KEY_COLLECTION ||
-            opened.has(version.id) ||
+            openedKeyRecords.has(version.id) ||
             typeof body?.keyId !== 'string'
           )
             continue;
+          // Only the key change that counted for that key: anyone may store a version at `key:space`.
+          const epoch = epochs.find((known) => known.keyId === body.keyId);
+          if (!epoch || epoch.event !== version.id) continue;
           const holder = keyring.get(body.keyId);
           if (!holder) continue;
-          opened.add(version.id);
+          openedKeyRecords.add(version.id);
           const earlier = await openValue(
             holder.seal,
             EARLIER_KEYS_LABEL,
             { space: space.id, keyId: holder.id },
             body.earlier,
           );
-          if (!isStringList(earlier)) continue;
-          for (const raw of earlier.slice(0, 1000)) {
-            const found = await spaceKeyFromRaw(base64UrlDecode(raw)).catch(() => null);
-            if (found && take(found)) more = true;
+          const found: SpaceKey[] = [];
+          for (const raw of isStringList(earlier) ? earlier.slice(0, 1000) : []) {
+            const key = await spaceKeyFromRaw(base64UrlDecode(raw)).catch(() => null);
+            if (key) found.push(key);
+          }
+          // Without the first key, a reader holding only this one couldn't derive onePer keys (02 §7.3).
+          if (!isStringList(earlier) || !found.some((key) => key.id === space.encryptionKeyId)) {
+            malformedKeys.add(body.keyId);
+            continue;
+          }
+          // And only keys the history names, each with the read key it names.
+          for (const key of found) {
+            const named = epochs.find((known) => known.keyId === key.id);
+            if (named && (await deriveReadKey(key, provider)).did === named.readKey && take(key)) more = true;
           }
         }
       }
     }
 
     if (learned.length === 0) return;
+    // A definition this node couldn't read may open now.
+    definitions.clear();
     const writeWith = newestKey((await access()).history.current);
     if (writeWith) await deps.onKeys?.([...keyring.values()], writeWith.id);
     recordsChanged();
@@ -1975,6 +2136,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       throw new Error(`Only someone who manages "${space.name}" can change its key`);
     if (!currentKey(history.current))
       throw new Error(`This device doesn't hold the current key of "${space.name}" yet`);
+    // Every key change carries the first key, so every reader holds it (03 §9.3).
+    if (!space.encryptionKeyId || !keyring.has(space.encryptionKeyId))
+      throw new Error(`This device doesn't hold the first key of "${space.name}"`);
     const next = await generateSpaceKey();
     const earlier = [...keyring.values()].map((held) => base64UrlEncode(held.raw));
     const body = {
@@ -2063,7 +2227,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const state = history.current;
     if (!currentKey(state)) return;
     if (!roleHolds(standing(state, deps.rootDid), MANAGE)) return;
-    if (state.keyDue) await rotateKey();
+    // A current key whose change left out the first key is replaced, as one that is due.
+    const malformed = malformedKeys.has(state.keys.at(-1)?.keyId ?? '');
+    if (state.keyDue || (malformed && space.encryptionKeyId && keyring.has(space.encryptionKeyId)))
+      await rotateKey();
     else await boxForMembers();
   }
 
@@ -3056,9 +3223,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // One per something: the key is derived from it, so writing again is the next version of the same record.
     const onePer = (await catalog()).get(collection)?.definition.rules?.onePer;
     if (onePer && options.key === undefined) {
-      const derived = await onePerKey(collection, onePer, { root: deps.rootDid, links, body });
+      const derived = await derivedKey(collection, onePer, { root: deps.rootDid, links, body });
       if (!derived)
         throw new Error(`${collection} is one per ${onePer.join(' + ')} — give it every one of those`);
+      await keepsCollection(derived, collection);
       return view<T>(
         await write(
           collection,
@@ -3070,7 +3238,46 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ),
       );
     }
-    return view<T>(await writeFirst(collection, body, options.key ?? newRecordKey(), links, options.as));
+    const recordKey = await keyToWrite(collection, options.key, onePer);
+    return view<T>(await writeFirst(collection, body, recordKey, links, options.as));
+  }
+
+  /**
+   * Where a new record goes: a fresh key of this account's, or the key the
+   * caller names. A name is put in this account's namespace (`profile` →
+   * `<owner>.profile`); a key this account already owns is taken as it is.
+   * Not a `one:` key outside a `onePer` collection, which every peer refuses
+   * (02 §7.3), nor a key this node holds a record of another collection at.
+   */
+  async function keyToWrite(
+    collection: string,
+    chosen: string | undefined,
+    onePer: ReadonlyArray<string> | undefined,
+  ): Promise<string> {
+    if (chosen === undefined) return newRecordKey(deps.rootDid);
+    let recordKey: string;
+    if (await ownsKey(chosen, deps.rootDid)) recordKey = chosen;
+    else if (keyKind(chosen) === 'owned') throw new Error(`${chosen} belongs to another account`);
+    else recordKey = keyKind(chosen) === 'shared' ? chosen : await ownedKey(deps.rootDid, chosen);
+    if (onePerForm(recordKey) && !onePer)
+      throw new Error(`${recordKey} is a onePer key, and ${collection} has no onePer`);
+    await keepsCollection(recordKey, collection);
+    return recordKey;
+  }
+
+  /**
+   * Refuses a write at a key this node holds a record of another collection
+   * at. Keys are unique in a space, and a record keeps its collection for
+   * life (02 §4.1, §4.2), so the write could only be refused, or continue the
+   * other record's chain.
+   */
+  async function keepsCollection(recordKey: string, collection: string): Promise<void> {
+    const held = (await currentOf(recordKey)) ?? (await storage.getCurrent(recordKey));
+    if (held && held.collection !== collection)
+      throw new Error(
+        `${recordKey} already holds a ${held.collection} record, and a key keeps its collection for life: ` +
+          `choose a name that includes the collection`,
+      );
   }
 
   // ─── Warrants ──────────────────────────────────────────────────────
@@ -3142,7 +3349,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (version.collection.startsWith('sys.')) return 'false';
     const found = await rulesAt(state, version.collection);
     // Rules this peer can't read: it can't say.
-    if (!found) return state.definitions.has(version.collection) ? 'unjudgeable' : 'false';
+    if (!found) return (await inForce(state, version.collection)) ? 'unjudgeable' : 'false';
     const { rules } = found;
     if (rules.final && version.seq > 0) return 'holds';
     if (version.seq !== 0) return 'false';
@@ -3201,12 +3408,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const judgedWarrants = new Map<string, WarrantVerdict>();
 
   /**
-   * A warrant's body, if the version has a warrant's shape: a first version,
-   * not a delete, at the key naming what it proves and its writer, and not
-   * against its writer. Anything else flags nobody.
+   * A warrant's body, if the version has a warrant's shape: a first version
+   * of `std.warrant`, not a delete, and not against its writer. Anything else
+   * flags nobody.
    */
   async function warrantShape(version: Version): Promise<Warrant | 'unnamed' | null> {
-    if (version.deleted || version.seq !== 0 || !version.key.startsWith('warrant:')) return null;
+    if (version.deleted || version.seq !== 0 || version.collection !== WARRANT_COLLECTION) return null;
     const warrant = readWarrant((await openBody(version)).body);
     const offending = warrant?.evidence[0];
     if (!warrant || !offending || !(await judge(offending)).verified) return null;
@@ -3277,7 +3484,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   async function warrantOnce(violation: { kind: WarrantKind; evidence: Version[] }): Promise<void> {
     // Checked again: the space may have closed while the proof was being worked out.
     if (closed) return;
-    await upsert(WARRANT_COLLECTION, newWarrantKey(), violation);
+    await upsert(WARRANT_COLLECTION, await newRecordKey(deps.rootDid), violation);
   }
 
   /** The accounts proven to have broken the protocol's rules here, by the warrants that stand */
@@ -3286,8 +3493,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     // Each warrant's first version, kept whole, whatever came after it: like any record, anyone
     // may write a later version or a delete, and neither takes the proof back.
     const firsts: Version[] = [];
-    for (const versions of (await storage.histories('warrant:')).values())
-      for (const version of versions)
+    for (const current of await storage.queryVersions(WARRANT_COLLECTION))
+      for (const version of await storage.history(current.key))
         if (version.seq === 0 && version.collection === WARRANT_COLLECTION) firsts.push(version);
     for (const version of firsts) {
       if (version.deleted || isStub(version) || !(await standingOf(version)).ok) continue;
@@ -3440,7 +3647,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const role = standing(history.current, deps.rootDid);
     if (!role) return false;
     const found = await rulesAt(history.current, collection);
-    if (!found) return true;
+    if (!found) return !history.current.contested.has(collection);
     if (found.rules.final && action !== 'create') return false;
     const creator = !!first && (await judge(first)).root === deps.rootDid;
     return allows(whoMay(found.rules, action), {
@@ -3490,6 +3697,28 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       options: { key?: string; links?: ReadonlyArray<Link>; as?: ActiveSession } = {},
     ): Promise<NodeRecord<T>> {
       return underCurrentRules(() => putOnce(collection, body, options));
+    },
+
+    /** The key `name` has in an account's namespace: this account's, unless another is named */
+    keyFor: (name: string, account: string = deps.rootDid): Promise<string> => ownedKey(account, name),
+
+    /**
+     * The key a record with this body and these links has under its
+     * collection's `onePer`, written by `account` (default this one): null
+     * when the collection has none, or the body lacks a part it names.
+     */
+    async onePerKey(
+      collection: string,
+      body: unknown,
+      options: { links?: ReadonlyArray<Link>; account?: string; onePer?: ReadonlyArray<string> } = {},
+    ): Promise<string | null> {
+      const onePer = options.onePer ?? (await catalog()).get(collection)?.definition.rules?.onePer;
+      if (!onePer) return null;
+      return derivedKey(collection, onePer, {
+        root: options.account ?? deps.rootDid,
+        links: options.links ?? [],
+        body,
+      });
     },
 
     async can(action: 'create' | 'edit' | 'delete', target: string): Promise<boolean> {

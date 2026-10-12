@@ -174,7 +174,7 @@ describe('liquid: deciding a proposal', () => {
     const a = await castBy(alice, space, put.key, 'for');
     await until(async () => (await bob.node.records.get(space, a.key)) !== null, 4000, 'Alice’s vote');
 
-    const key = (await decisionKey(alice, put.key)) ?? '';
+    const key = (await decisionKey(alice, space, put.key)) ?? '';
     await forge(alice, space, {
       author: '',
       collection: decision.name,
@@ -567,11 +567,6 @@ describe('liquid: a decision fits in one check', () => {
 });
 
 /** The key a decision about a proposal must have: one per proposal */
-async function decisionKey(who: Person, proposalKey: string): Promise<string | null> {
-  const { onePerKey } = await import('../../../packages/core/src/records/rules.js');
-  return onePerKey(decision.name, decision.rules.onePer, {
-    root: who.node.did,
-    links: [{ rel: 'about', to: proposalKey }],
-    body: {},
-  });
+function decisionKey(who: Person, space: string, proposalKey: string): Promise<string | null> {
+  return who.node.records.onePerKey(space, decision.name, {}, { links: [{ rel: 'about', to: proposalKey }] });
 }

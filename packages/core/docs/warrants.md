@@ -14,13 +14,15 @@ flags.
 ## The record
 
 ```
-std.warrant at warrant:<128 random bits>
+std.warrant at a fresh key of its writer's
 { kind, evidence: [<version>, <version>?] }        retain: true
 ```
 
 `evidence[0]` is the offending version, and its signer's root is the accused
-account. The key is random, so nobody, the accused least of all, can claim it
-before the warrant's writer does: what a warrant proves is in its body. Only
+account. The key is the writer's own
+([spec 02 §4.1](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)),
+so nobody, the accused least of all, can write its first version: what a
+warrant proves is in its body. Only
 the warrant's first version counts as proof, and one offence counts once per
 writer, however many records say it. Any member may write a later
 version or a delete of it, as for any record, and neither takes the proof back.
@@ -44,7 +46,7 @@ warrant whose proof this node checked and found to hold. To count, a warrant
 must:
 
 - be a first version, standing as a record;
-- be at a `warrant:` key, and not against its own writer;
+- be in `std.warrant`, and not against its own writer;
 - have every piece of evidence be what its id names, envelope and body;
 - prove its kind's check.
 
@@ -74,4 +76,4 @@ change whose cutoff doesn't cover it, or revokes the key that signed it ([#166](
 [#168](https://github.com/leifriksheim/weave/issues/168)). More kinds are planned in
 [#148](https://github.com/leifriksheim/weave/issues/148).
 
-_Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-runtime.ts` (`ownView`, `warrantShape`, `warrantVerdict`, `evidenceHolds`, `violationIn`, `warrantIfDue`, `flagged`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`, `newWarrantKey`). Tests: `packages/core/tests/warrants.test.ts`._
+_Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-runtime.ts` (`ownView`, `warrantShape`, `warrantVerdict`, `evidenceHolds`, `violationIn`, `warrantIfDue`, `flagged`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`). Tests: `packages/core/tests/warrants.test.ts`._

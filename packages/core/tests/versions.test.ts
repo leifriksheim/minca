@@ -5,14 +5,9 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  supersedes,
-  nextVersion,
-  checkVersionShape,
-  chainProblem,
-  newRecordKey,
-} from '../src/records/version.js';
-import { RECORD_KEY_PATTERN } from '../src/records/key.js';
+import { supersedes, nextVersion, checkVersionShape, chainProblem } from '../src/records/version.js';
+import { keyKind, newRecordKey as ownedFreshKeyOf, RECORD_KEY_PATTERN } from '../src/records/key.js';
+import { base32Encode } from '../src/utils/hash.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { createSigner } from '../src/schema/signer.js';
@@ -32,6 +27,10 @@ import { hold } from './helpers/hold.js';
 import { joined } from './helpers/joined.js';
 import { until } from './helpers/until.js';
 import { stored } from './helpers/stored.js';
+
+/** A key for a store, which keeps versions whatever their key: whose it is is a peer's check, not a store's */
+const newRecordKey = () => base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)));
+const ownedFreshKey = () => ownedFreshKeyOf('did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ');
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
@@ -120,10 +119,11 @@ describe('the ordering rule', () => {
     assert.equal((await storage.getCurrent(key))?.id, third.id);
   });
 
-  test('keys are 26 characters of lower-case base32 and fit the chosen-key pattern', () => {
-    const key = newRecordKey();
-    assert.equal(key.length, 26);
+  test("a fresh key is the account's owner part and 26 characters of random base32, and fits the key pattern", async () => {
+    const key = await ownedFreshKey();
+    assert.equal(key.length, 53);
     assert.match(key, RECORD_KEY_PATTERN);
+    assert.equal(keyKind(key), 'owned');
   });
 });
 
@@ -271,7 +271,7 @@ describe('a record’s chain', () => {
         body: { text: 'Buy milk', done: false },
         createdAt: '2026-09-26T12:00:00.000Z',
         space: 'bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a',
-        version: { key: 'mfrggzdfmztwq2lknnwg23tpoa', seq: 0 },
+        version: { key: 'iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa', seq: 0 },
         seen: ['b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq'],
         links: [{ rel: 'about', to: 'list.groceries' }],
         log: { n: 0 },
@@ -279,7 +279,7 @@ describe('a record’s chain', () => {
       me.privateKey,
     );
     assert.equal(example.bodyHash, 'b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq');
-    assert.equal(example.id, 'bvp24phiade5evl3x5un7qv77yyp3fpkjwdeakivuxv2mz4uzbqeq');
+    assert.equal(example.id, 'bmzr56gi5ydwuqsqjs7jsprjcn474nxscmjjljbipkkhcp5nvh37a');
   });
 
   test('the body is signed through its hash: a stub checks alone, another body does not', async () => {
@@ -416,8 +416,10 @@ describe('versioned records through the node', () => {
     const me = await person();
     const { id: space } = await me.spaces.create({ name: 'Todos', visibility: 'public' });
     const made = await me.records.put(space, 'app.note', { text: 'first' }, { key: 'pinned' });
-    await me.records.delete(space, 'pinned');
-    assert.equal(await me.records.get(space, 'pinned'), null);
+    // A name is put in the writer's namespace, and the record is known by its whole key.
+    assert.equal(made.key, await me.records.keyFor(space, 'pinned'));
+    await me.records.delete(space, made.key);
+    assert.equal(await me.records.get(space, made.key), null);
     const back = await me.records.put(space, 'app.note', { text: 'again' }, { key: 'pinned' });
     assert.equal(back.seq, 2);
     assert.equal(back.key, made.key);

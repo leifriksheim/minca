@@ -111,7 +111,7 @@ A reader decoding an id back to its digest MUST refuse anything that is not
 The leading `b` is the multibase prefix for base32, but an id is **not** a
 CIDv1: there is no version, codec or multihash prefix before the digest.
 
-Example: `bh7mi3b35uek5zf46drxzvkhqopnu3z2y3dp3r6din5zfbubiro2a` (the id of the
+Example: `bmzr56gi5ydwuqsqjs7jsprjcn474nxscmjjljbipkkhcp5nvh37a` (the id of the
 version in §3.4).
 
 _Source: `packages/core/src/utils/hash.ts` (`cidFromBytes`, `cidDigest`, `cidOfDigest`, `base32Encode`, `base32Decode`), `packages/core/src/schema/version.ts` (`getVersionId`). Tests: `packages/core/tests/validation.test.ts` ("rejects an id that does not match the content"), `packages/core/tests/sync.test.ts`._
@@ -214,7 +214,8 @@ Whether the author was _allowed_ to write is a separate question (§9.3–9.4).
 
 A first version of a to-do, in a public space, signed by the key derived from
 the 16-byte seed `07 07 … 07` ([01 — Identity](01-identity.md)), with no
-delegation, as that key's first version in the space. The body, canonical, is `{"done":false,"text":"Buy milk"}`, so
+delegation, as that key's first version in the space, at a fresh key of its
+own (§4.1). The body, canonical, is `{"done":false,"text":"Buy milk"}`, so
 `bodyHash` is `b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq`. Signed
 part, canonical (one line in reality, wrapped here only between members):
 
@@ -222,7 +223,8 @@ part, canonical (one line in reality, wrapped here only between members):
 {"author":"did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
 "bodyHash":"b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
 "collection":"app.todo.item","createdAt":"2026-09-26T12:00:00.000Z",
-"key":"mfrggzdfmztwq2lknnwg23tpoa","links":[{"rel":"about","to":"list.groceries"}],
+"key":"iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa",
+"links":[{"rel":"about","to":"list.groceries"}],
 "log":{"n":0},"seen":["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],"seq":0,
 "space":"bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a"}
 ```
@@ -231,19 +233,19 @@ The version:
 
 ```json
 {
-  "id": "bvp24phiade5evl3x5un7qv77yyp3fpkjwdeakivuxv2mz4uzbqeq",
+  "id": "bmzr56gi5ydwuqsqjs7jsprjcn474nxscmjjljbipkkhcp5nvh37a",
   "author": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
   "collection": "app.todo.item",
   "createdAt": "2026-09-26T12:00:00.000Z",
   "space": "bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a",
-  "key": "mfrggzdfmztwq2lknnwg23tpoa",
+  "key": "iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa",
   "seq": 0,
   "log": { "n": 0 },
   "seen": ["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],
   "links": [{ "rel": "about", "to": "list.groceries" }],
   "bodyHash": "b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
   "body": { "text": "Buy milk", "done": false },
-  "signature": "2Ymz9K8jUVfwLpLSXgOoNxtDEhZPrNtn0CXENOUKSp9C4gQg_86WCyH2O_sJfZv7P4RQya54TIAv7h1Lzrq4zQ"
+  "signature": "N2adN6lob2aMxJCp5WMu9wx6pWKkSqi6sR7KW32E28qdUvou4MqeYFxxdqiE9kbEWUZxHEwfRCGKEGYEkee0cg"
 }
 ```
 
@@ -263,19 +265,95 @@ A record keeps one `key` for life, and links point at keys (§5), so a comment
 stays on a to-do however often the to-do changes.
 
 - A key MUST match `^[a-z0-9:._-]{1,128}$`.
-- Keys are unique within a **space**, not within a collection. A later version
-  whose `collection` differs from its record's first version is ignored by
-  readers (§4.6).
-- A fresh key is 16 random bytes (128 bits), base32 lower case without padding:
-  26 characters of `[a-z2-7]`, e.g. `mfrggzdfmztwq2lknnwg23tpoa`. Writers SHOULD
-  use fresh random keys unless the key is chosen or derived for a reason.
-- A key MAY be chosen, for a record there is one of by nature (`profile`).
-  The protocol derives some itself: `collection:<name>` for a definition (§6),
-  `one:<hex>` under a `onePer` rule (§7.3), and the access-history keys of
-  [03 — Spaces](03-spaces.md) (`role:…`, `member:…`, `invite:…`, `revoke:…`).
+- Keys are unique within a **space**, not within a collection.
 
-> Rationale: random rather than time-based, so a key says nothing about when
-> the record was made.
+**Whose a key is.** Outside the `sys.*` collections, a record's first version
+(`seq 0`) MUST be at a key of one of two kinds, told apart by their form:
+
+| Kind       | Form                                  | Who may write its first version                                                                                           |
+| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **owned**  | `^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$` | Only the account whose owner part it starts with                                                                          |
+| **shared** | `^one:[0-9a-f]{40}$`                  | Anyone the collection's rules allow, and only in a collection whose rules in force have `onePer` (§7.3) without `@author` |
+
+An owned key is `<owner>.<name>`. Its owner part names the creator's account:
+
+```
+owner(root) = lowercase( base32( SHA-256( UTF-8( "weave/record-owner/v1|" ‖ root ) )[0..16) ) )   // 26 characters
+```
+
+`root` is the account's root DID (§9.3), whichever of its keys signs; base32
+is §2's alphabet without padding.
+
+- A **fresh** key is an owned key whose name is 16 random bytes, base32 lower
+  case without padding: `<owner>.` and 26 characters of `[a-z2-7]`.
+  Writers SHOULD use fresh keys unless the key is chosen or derived for a
+  reason.
+- A **chosen** key is an owned key whose name an app picks, for a record there
+  is one of per account by nature (`settings`). Two accounts choosing one name
+  get two keys.
+- A **`onePer`** key is derived from the record (§7.3): an owned key named
+  `one:<hex>` when the parts include `@author`, a shared key otherwise.
+
+Example: the root `did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ`
+has owner part `iz75dwgy223gqtlqlqv3qzjq4y`. Its fresh keys look like
+`iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa`, and the name
+`settings` chosen by it is `iz75dwgy223gqtlqlqv3qzjq4y.settings`.
+
+**Checking.** A peer MUST refuse a first version outside `sys.*` whose key is
+of neither kind, or is an owned key whose owner part is not `owner(root)` of
+the version's root (§9.3). This needs only the envelope and the root, so every
+peer makes it, one that can't read the body or holds only a stub included. A
+peer that can read the collection's definition in force (as of `seen`) MUST
+also refuse a first version at a key of a `onePer` key's form, unless those
+rules have a `onePer` that gives that form: a shared key only for a `onePer`
+without `@author`, and an owned key whose name matches `^one:[0-9a-f]{40}$`
+only for a `onePer` with `@author`. This is judged from the definition alone,
+so peers that can't derive `onePer` keys (§7.3) agree; one that can't read
+the definition accepts it on the other checks. Both are judged in §9.4 step 4.
+Otherwise a record in another collection could take an account's `onePer`
+key, and with it the `onePer` record, for good: keys are unique in a space,
+and a record keeps its collection.
+
+**Shared keys in two collections.** A shared key carries no collection in
+its form, and keys are unique in a space, so a member a collection Y allows
+to create (one with a `onePer` without `@author`) can write first at the
+shared key a collection X derives, from Y. X's record for those parts then
+can't be written: its writer would continue Y's chain (§4.2). Only someone
+who can derive X's keys can aim at one, and in a private space only readers
+can. A known gap; the derived key names its collection only inside the HMAC.
+
+**Chosen names in two collections.** An account's chosen key is the same in
+every collection, so an app of the account's that writes `settings` in
+`app.notes` takes the key another app of the account's would use for
+`settings` in `app.todo`; the second can't write its record there (§4.2).
+Only the account itself, or an app it lets write, can cause this: no one
+else can write at its keys. Apps SHOULD choose names that include their
+collection (`app.todo.settings`), and a writer SHOULD refuse, with a clear
+error, to write a record at a key whose chain it holds in another collection.
+
+The `sys.*` collections keep the formats their parts give them (03:
+`role:…`, `member:…`, `profile:…` and the rest; `collection:<name>` for a
+definition, §6): the access history is judged by its replay
+([03 — Spaces](03-spaces.md) §4), and readers of the others check the root
+of each version they take, not who wrote first. None of those formats is of
+either kind, and a peer MUST refuse a first version in a `sys.*` collection,
+known or not, at an owned or shared key. Keys are unique in a space, not in a
+collection (§4.3 picks one current version at a key, whatever its
+collection), so otherwise anyone could write a first version at someone's key
+in a collection exempt from the check, grind its id lower, and have it read in
+place of theirs.
+
+> Rationale: whose a record is must follow from something no one else can
+> produce. Before keys named their owner, the first version was the `seq 0`
+> with the lowest id, and a member could write one for someone else's key,
+> retrying `createdAt` until its id sorted lower, and become the record's
+> creator ([#72](https://github.com/leifriksheim/weave/issues/72)). An owner
+> part of 128 bits can't be matched by grinding accounts. Random names rather
+> than time-based, so a key says nothing about when the record was made.
+> The owner part says no more than the version does: its `author` and `proof`
+> name the account in the clear in every space.
+
+_Source: `packages/core/src/records/key.ts` (`keyKind`, `onePerForm`, `ownerTag`, `ownedKey`, `newRecordKey`, `ownsKey`), `packages/core/src/node/space-runtime.ts` (`keyProblem`, `onePerKeyProblem`, `judgeStanding`, `keyToWrite`, `keepsCollection`). Tests: `packages/core/tests/record-keys.test.ts` (all), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
 
 ### 4.2 Version fields
 
@@ -342,23 +420,24 @@ When a version is superseded, a peer keeps it:
 
 Nothing a peer has taken in is dropped. A stub says who wrote a version and
 where it sits in its record (§4.7). A first version kept as a stub still
-decides who created the record (§7.1).
+says who created the record (§7.1).
 
-**The first version.** Usually a record has one `seq 0`. If it has several
-(two devices chose the same key), two rules use them:
+**The first version.** Usually a record has one `seq 0`. It may have several:
+two devices of one account chose the same key, or two accounts wrote first at
+a shared key (§4.1). A version's first version is always the one its own
+chain names: itself at `seq 0`, else the `seq 0` its `genesis` names, which
+must be of the same key and collection (§4.6) and which its chain leads to
+(§4.7). Every rule that asks about a record's first version asks about that
+one:
 
-- **Judging a later version** uses the `seq 0` its `genesis` names, which must
-  be of the same key and collection (§4.6). Its chain leads there (§4.7), and
-  the `creator` rule (§7.1) and the rules checked against a first version
-  (§7.3, §7.4) are judged against it.
-- **Reading a record** uses the `seq 0` with the lowest id held: it gives
-  `@createdBy`, and the collection a later version must share to be shown
-  (§4.6).
+- the `creator` rule (§7.1), and the rules checked against a first version
+  (§7.3, §7.4), when judging a version;
+- `@createdBy`, and when the record was created, when reading its current
+  version.
 
-The two differ only when a key has several `seq 0` versions. Since any
-member can write one for someone else's key, and grind its id lower, either
-rule lets a member take over a key it did not create. Closing that is planned
-in §4.7 ([#72](https://github.com/leifriksheim/weave/issues/72)).
+No rule picks among a key's `seq 0` versions by id. At an owned key they are
+all the owner's (§4.1), so they name one creator; at a shared key each chain
+has its own.
 
 Forgetting holds whoever sends what:
 
@@ -401,7 +480,7 @@ of the next one, and each verifies on its own.
 > Stubs rather than nothing, so that every later version can be checked
 > against the one before it (§4.7) by a peer that never saw the bodies.
 
-_Source: `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/schema/version.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`, `write`, `judgeStanding`, `currentOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/checks.test.ts` ("keeping versions under a check whole is the writer’s part…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
+_Source: `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/schema/version.ts` (`isStub`, `stubOf`), `packages/core/src/node/space-runtime.ts` (`admit`, `write`, `judgeStanding`, `currentOf`, `genesisOf`), `packages/core/src/storage/mirror.ts` (`compactNow`). Tests: `packages/core/tests/versions.test.ts` ("an older version arriving after a later one is kept only as a stub", "a stub on top takes its body…", "a retained version is never cut down to a stub", "1,000 edits keep one body…", "a newcomer after a delete…"), `packages/core/tests/rules.test.ts` ("a first version its rules are checked against must be kept whole…"), `packages/core/tests/checks.test.ts` ("keeping versions under a check whole is the writer’s part…"), `packages/core/tests/mirror.test.ts` ("compaction…")._
 
 ### 4.6 Shape of a version, alone
 
@@ -434,10 +513,9 @@ Checks that depend on what else a peer holds are **not** shape checks:
   counts only if it has `seq 0`, the same `key` and the same `collection`;
   otherwise the version is refused ("the first version it names is not this
   record's"). If it is not held yet, judging waits (§9.5).
-- A current version whose `collection` differs from the record's held first
-  version (the lowest id, §4.5) is ignored when reading, as if absent.
+- A first version's key must be one its root may write first (§4.1).
 
-_Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `checkLogShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/version.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`, `firstOf`, `consistent`, `write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/writer-logs.test.ts` ("a version in a space without its place is malformed", "a version that still carries a line across collections is refused"), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
+_Source: `packages/core/src/records/version.ts` (`newRecordKey`, `supersedes`, `byVersion`, `nextVersion`, `checkVersionShape`, `checkLogShape`, `MAX_SEEN`), `packages/core/src/records/key.ts` (`RECORD_KEY_PATTERN`), `packages/core/src/schema/version.ts` (`bodyProblem`), `packages/core/src/storage/storage-provider.ts` (`addVersion`, `demote`, `keepSuperseded`), `packages/core/src/node/space-runtime.ts` (`admit`, `firstOf`, `genesisOf`, `consistent`, `write`, `after`). Tests: `packages/core/tests/versions.test.ts` (all), `packages/core/tests/writer-logs.test.ts` ("a version in a space without its place is malformed", "a version that still carries a line across collections is refused"), `packages/core/tests/attacks.test.ts` ("a version cannot escape its record's rules by naming another record as its first")._
 
 ### 4.7 Versions whose history can be checked
 
@@ -465,8 +543,11 @@ This closes two attacks open to any member allowed to edit:
 
 - **Freezing a record.** Writing `seq: 2^53 − 1`, which nothing can outrank,
   since `seq + 1` is not a safe integer (§4.6).
-- **Moving a record.** A later version in another `collection`, which hid the
-  record because such a version is ignored on read (§4.6).
+- **Moving a record.** A later version in another `collection`, taking the
+  record out of the collection its rules and readers expect it in.
+
+A first version can't move a record either: at an owned key only its owner
+writes one, and a shared key is derived from its collection (§4.1, §7.3).
 
 The ordering rule (§4.3) does not change, but which versions reach it does.
 Every edit leaves a stub of the version it replaces, a few hundred bytes,
@@ -474,37 +555,14 @@ kept and synced like any version.
 
 _Source: `packages/core/src/records/version.ts` (`chainProblem`), `packages/core/src/node/space-runtime.ts` (`chainStanding`, `admit`), `packages/core/src/sync/sync-engine.ts` (`admit`). Tests: `packages/core/tests/versions.test.ts` ("a later version must follow the version it names…"), `packages/core/tests/attacks.test.ts` ("a member cannot freeze a record by skipping ahead…")._
 
-#### Planned: keys that belong to their creator
-
-Tracked in [#72](https://github.com/leifriksheim/weave/issues/72).
-
-The first version kept is the `seq 0` with the lowest id (§4.5). So a member
-can write their own `seq 0` for someone else's key, retrying `createdAt`
-values until its id sorts lower (a few tries on average). `@createdBy`, the
-`creator` rule (§7.1) and the "first defined by" standing of a definition
-(§6.3) then name the attacker.
-
-- **Keys that belong to their creator.** A fresh key becomes
-  `hash(creator's root DID ‖ nonce)`, the nonce carried in the first version,
-  so a `seq 0` by anyone else fails the check. A key the caller chooses
-  (`collection:<name>`, `put({ key })`) gets the creator's root in its
-  namespace, as profile keys already do ([03 — Spaces](03-spaces.md)), or a
-  rule that the owner's first version beats everyone else's. Derived keys
-  (`one:…`, access-history keys) need a decision each.
-- **Refuse, not hide.** Once keys belong to their creator, a version whose
-  `collection` differs from its first version can be refused on arrival
-  instead of ignored on read.
-
 A long history might later be compacted by a checkpoint, in place of its
 stubs: a proposal for review is in
-[drafts/stub-checkpoints.md](drafts/stub-checkpoints.md).
+[drafts/stub-checkpoints.md](drafts/stub-checkpoints.md). _Open:_ who may
+sign a checkpoint for a record anyone may edit.
 
 **Related.** A writer's log (§4.10) checks a different thing: one key's line
 in a collection, across records, not one record's chain. It leaves §4.3
 unchanged too, and its stubs are the stubs of §4.5.
-
-**Open questions.** Who may sign a checkpoint for a record anyone may edit;
-how derived keys prove their creator.
 
 ### 4.8 Planned: merging inside one record
 
@@ -880,9 +938,61 @@ The definition in force for a collection is the latest change to
 with the highest `version`. Who may make such a change is also the replay's
 question: creating a definition needs the permission `define`; changing or
 deleting one needs `manage`, or being whoever first defined it (while still a
-member). A definition counts only under a note that grants
+member). Deleting a definition that doesn't exist, as of what the delete saw,
+is refused. A definition counts only under a note that grants
 `collection/define` ([01 — Identity](01-identity.md) §8), whatever the
 writer's role.
+
+**Who first defined it.** A definition's key, `collection:<name>`, is the
+space's, not an account's (§4.1), so two members holding `define` can each
+write a first definition without having seen the other's. Of the definitions
+that counted in a state, take those that saw every removal (a delete of the
+definition) the one in force saw; of those, the ones that saw none of the
+others are its first definitions. If they are all one account's, that
+account first defined it. If they are two accounts', **no one** did, and
+only someone holding `manage` may change or delete it. No id decides, since a
+writer can grind one.
+
+**Rival changes are not picked by id.** Where more than one change to
+`collection:<name>` is latest (none saw the others), the replay picks the
+lowest id only when they are one account's, or when none is a delete and all
+the definitions among them name the same first definer: changes by accounts
+that may each change it, the definer and managers, each of which could have
+been the latest alone. Otherwise, first definitions by two accounts or a
+delete beside another account's change, the collection is **contested**: the
+replay picks none of them, since picking by id would let whoever ground the
+lower id choose the rules, or delete it. A reader opens them all. If they are
+all definitions with the same body (canonical JSON, §1), as when two members
+add the same app at once, that definition is in force. Otherwise **none** is,
+and a peer **MUST** refuse a version in that collection whose state as of
+`seen` is contested with none in force (§9.4): no one writes in a contested
+collection, and no rules does not mean anything goes. A peer that can't read
+them all treats the collection as having a definition it can't read.
+
+Rivals are settled by a change that saw them all: only someone holding
+`manage` may make it, since no one first defined the collection; it is then
+in force, and names no definer, or the manager when it saw a delete (a delete
+starts the collection afresh). A manager's delete settles them too.
+
+Example: Alice and Mallory both hold `define`, Bob holds `manage`. Alice
+defines `app.poll` (`d5`) and changes it (`d6`); Mallory writes a definition
+of it naming a point before Alice's, with a lower id (`d0`). Both count, no
+one first defined `app.poll`, and `d6` and `d0` are both latest, so neither is
+in force, since they differ. Neither Alice nor Mallory may change it, even
+having seen both. Bob
+writes `d8` having seen `d6` and `d0`, and `d8` is in force. If Mallory
+backdates another rival past `d8`, the collection is out of force again until
+Bob settles it again: a member holding `define` can stop a collection until
+a manager settles it, but can't choose its rules or write without them. Had
+Mallory instead written a delete as of before Alice's definition, it would be
+refused: there was nothing to delete. Had she defined her own rival and
+deleted it, ground low, the delete and `d6` would be latest together, from two
+accounts: contested again, and settled only by Bob.
+
+Two members who define a collection apart with the same body leave it in
+force, but with no first definer, so from then on only a manager may change
+it. A member holding `define` can do this on purpose to take a collection's
+definer's control away.
 
 Peers do not check `version` against the definition it replaces. What the
 library does with it: [collections](../packages/core/docs/collections.md#versions-of-a-definition).
@@ -911,7 +1021,7 @@ Names are **local to a space**. Nothing registers or owns a name across
 spaces, so a name never says what shape a collection has; its definition in
 that space does.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events). Tests: `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
+_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `mergeDefinitions`, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do", "a backdated delete of nothing, however low its id, is refused", "a ground-low delete of her own rival does not win by id…", "the definer and a manager changing it apart…", "on real nodes, a ground-low backdated delete can’t take a collection from its definer"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
 
 ### 6.5 Planned: compatible definitions
 
@@ -988,11 +1098,22 @@ meet to count, which peers keep but do not enforce (§7.6).
 | Who       | Holds when                                                                                                                                                                                                           |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `member`  | The writer's root holds any role in the space (as of `seen`).                                                                                                                                                        |
-| `creator` | The writer's root is the root of the record's first version (§4.6). A fact about the record; nobody grants it.                                                                                                       |
+| `creator` | The writer's root is the root of the version's first version, the one its own chain names (§4.5). A fact about the record; nobody grants it.                                                                         |
 | `can:<p>` | The writer's role holds the permission `<collection>/<p>`, e.g. `app.poll/moderate` ([03 — Spaces](03-spaces.md)). `<p>` MUST match `^[a-z][a-zA-Z0-9]{0,39}$` and MUST be listed in the definition's `permissions`. |
 
 Defaults: `create` → `member`; `edit` → `member`; `delete` → whatever `edit`
 is. `create` MUST NOT include `creator`.
+
+At an owned key (§4.1), `creator` is the key's owner, whatever versions are
+held and in whatever order they arrived: no one else's first version stands
+there. At a shared key there is no owner. Each first version there starts a
+chain of its own, and `creator` is whoever wrote the first version of the
+chain being edited: anyone the `create` rule allows can start another chain
+at the same key, and its later versions can outrank the first (§4.3). So in a
+collection whose `onePer` does not name `@author`, `edit: "creator"` keeps
+others from editing your version, not from replacing it with theirs; a
+collection that needs one writer per key restricts `create` instead
+(`can:<p>`), or names `@author`.
 
 ### 7.2 Which rule applies
 
@@ -1023,69 +1144,83 @@ Parts:
 - `link:<rel>` — the `to` of the **first** link with that `rel`.
 - anything else — a **top-level** field of the body (no dotted paths).
 
-The key is:
+The key is an HMAC under a key of the space's (below):
 
 ```
 lines  = [ collection ]
 for each part, in order:
   "@author"     → "@author=" ‖ rootDid
-  "link:<rel>"  → "link:<rel>=" ‖ link.to            (no such link → no key)
-  field         → field ‖ "=" ‖ JSON(body[field])    (field absent → no key)
-digest = SHA-256( UTF-8( join(lines, "\n") ) )
-key    = "one:" ‖ lowercase-hex( digest[0..20) )     // 44 characters
+  "link:<rel>"  → "link:<rel>=" ‖ link.to                 (no such link → no key)
+  field         → field ‖ "=" ‖ canonical(body[field])    (field absent → no key)
+mac    = HMAC-SHA-256( oneKey, UTF-8( join(lines, "\n") ) )
+name   = "one:" ‖ lowercase-hex( mac[0..20) )                  // 44 characters
+key    = onePer includes "@author" ? owner(rootDid) ‖ "." ‖ name   // owned, §4.1
+                                   : name                          // shared
 ```
 
-`JSON(v)` is the canonical JSON (§1) of the value. A `null` field is present
-and gives `field=null`.
+`canonical(v)` is the canonical JSON of the value (§1), so a field holding an
+object gives the same key whatever its members' order. A `null` field is
+present and gives `field=null`. `owner` is §4.1's.
 
-> **Known defect:** the reference writes `JSON(v)` with `JSON.stringify`, not
-> canonical JSON (`packages/core/src/records/rules.ts`, `onePerKey`). For a string, number,
-> boolean or `null` the two agree. For an object or array, `JSON.stringify`
-> keeps the member order of the parsed object, so the key depends on member
-> order. A fix will use canonical JSON; until then, use scalar fields.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+`oneKey` is derived as topic tags' key is (§8.2), from a key that never
+changes for the space:
 
-Example — `std.vote` (`onePer: ["@author", "link:about"]`) by
+```
+IKM    = public space:  UTF-8( "weave/public-one-per/v1|" ‖ spaceId )
+         private space: the space's first key K₀, the one the genesis's encryptionKeyId names (03 §8.1)
+oneKey = HKDF-SHA-256( IKM, salt = "" (zero length), info = UTF-8("weave/one-per/v1"), L = 32 ), as an HMAC-SHA-256 key
+```
+
+In a public space anyone can compute a key, as anyone can read the records.
+In a private space only those holding K₀ can: every reader does, since each
+later key's `earlier` carries the ones before it, and a reader takes no key
+from a key change whose `earlier` leaves K₀ out (03 §9.3). It is K₀ and not
+the current key so that a record's key, and with it "one per", survives a key
+change. Someone who holds the ciphertext but not the key (a relay peer, a
+host, a mirror's provider) can't test a guess of who voted on which poll, or
+how; the owner part of a key with `@author` names its account, as the
+version's `author` and `proof` already do.
+
+Example — in the public space
+`bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a`, `std.vote`
+(`onePer: ["@author", "link:about"]`) by
 `did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ` about the record
-`mfrggzdfmztwq2lknnwg23tpoa`:
+`iz75dwgy223gqtlqlqv3qzjq4y.poll`:
 
 ```
 std.vote
 @author=did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ
-link:about=mfrggzdfmztwq2lknnwg23tpoa
+link:about=iz75dwgy223gqtlqlqv3qzjq4y.poll
 ```
 
-SHA-256 = `121a1c3e8daf7aaa6fc4f8d7458ee419eac70ca3e3f8bcfd9025ef331ecd4093`, so
-the key is `one:121a1c3e8daf7aaa6fc4f8d7458ee419eac70ca3`.
+gives `iz75dwgy223gqtlqlqv3qzjq4y.one:04b56dc63076a6a7c759e41275fbeedf0514435e`.
+A `std.decision` (`onePer: ["link:about"]`) about the same record gives the
+shared key `one:7c302bdcb25613e2fb9d49a41bccd0a24e1a2f24`. With the private
+space key `ff fe … e0` of 03 §8.1 as K₀, the vote's key is
+`iz75dwgy223gqtlqlqv3qzjq4y.one:712d97143fd66351845dee63247e1c2ddc298713`.
 
 Checking: a peer MUST refuse a `seq 0` version of a collection with `onePer` in
 force whose `key` is not the derived key (including when a part is missing and
-there is no key). The check is made only on `seq 0`, and only by a peer that
-can read the body; in a private space a peer without the key accepts it on the
-other checks. Later versions keep the key they have. The first version carries
-`retain` (§4.5), so a peer that joins later still has the body to check.
+there is no key). Whether a key of a `onePer` key's form is allowed at all, in
+any collection, is §4.1's check, which needs no `oneKey`. The check is made only on `seq 0`, and only by a peer that
+can read the body and holds `oneKey`; in a private space a peer without the
+key accepts it on the other checks, which include whose key it is (§4.1).
+Later versions keep the key they have. The first version carries `retain`
+(§4.5), so a peer that joins later still has the body to check.
 
 A writer derives the key and writes the next version after whatever it holds
 at that key (§4.2) — so "adding another" is an edit of the existing record,
 and the `edit` rule decides whether it is allowed.
 
-> **Planned: private `onePer` keys.** The key is a plain hash of the
-> collection, the author, the link target and body fields, and it travels in
-> the clear even in a private space. So anyone holding the ciphertext (a relay
-> peer, a host, a mirror's provider) can guess and check who voted on which
-> poll, and, where a field has few possible values, the value too. The plan:
-> in a private space, derive the key with HMAC-SHA-256 under a key derived
-> from the space key (a new label in [01](01-identity.md) §5), so only readers
-> can compute or check it. Every reader derives the same key, so rules still
-> check the same everywhere; a peer without it already accepts `onePer` on the
-> other checks. The change is also the moment to fix the `JSON.stringify`
-> known defect above.
-> `profile` keys leak the same way (anyone can confirm which known accounts
-> are in a space; [03 — Spaces](03-spaces.md)). Pairs with encrypting
-> collection names. _Open:_ which space key: a record's key must outlive key
-> changes, so it cannot simply be the key its body was sealed with (as topic
-> tags use, §8.2); and how a reader finds a record written under an earlier
-> key. Issue: [#87](https://github.com/leifriksheim/weave/issues/87).
+**Without `@author`** (one decision per proposal), the key is shared: any
+account the `create` rule allows may write its first version, and two who do
+so apart both stand, as two first versions at any key do (§7.4). Whose such a
+record is, for `creator`, is per chain (§7.1).
+
+> Rationale: the owner part makes "one per person" a check every peer makes,
+> not only those that can read the body: no one can write a first version at
+> someone else's vote, in any space. The HMAC hides the rest from those who
+> can't read the space.
 
 > **Planned: uniqueness that cannot be a key.** `onePer` works only when the
 > unique parts can be known before writing ("one per person per poll").
@@ -1106,12 +1241,6 @@ canonical JSON (§1), with "absent" equal to "absent" — when the first version
 carries `retain` and the peer can read both bodies. A first version written
 while `fixed` was in force carries `retain` (§4.5); one written before is a
 stub once superseded, and nothing is compared against it, by any peer.
-
-> **Known defect:** the reference compares `JSON.stringify` output, not
-> canonical JSON (`packages/core/src/records/rules.ts`, `changedFixedField`), so an object-
-> or array-valued field whose members are reordered counts as changed. A fix
-> will compare canonical JSON.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
 
 `final` is `true`: a record is written once. A peer MUST refuse every version
 with `seq > 0` of a collection whose rules in force (as of the version's
@@ -1140,7 +1269,7 @@ prevent that; telling the two apart, where it matters, is the app's.
 > (`creator`) or a permission a person decided (`can:…`). "Did a person have to
 > decide it?" is the test for which one to use.
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`, `allows`, `onePerKey`, `changedFixedField`, `permissionName`), `packages/core/src/records/checks.ts` (`PERMISSION_PATTERN`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `allows`, `onePerSecret`, `onePerKey`, `changedFixedField`, `permissionName`), `packages/core/src/records/checks.ts` (`PERMISSION_PATTERN`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
 ### 7.6 `check`
 
@@ -1303,8 +1432,14 @@ Given a valid signature and root, whether the version _stands_ in this space:
    1. The first version (§4.6) is held and is this record's, and a later
       version follows the version its `prev` names (§4.7). The reference
       checks the second for every collection, the access history's included,
-      before the rest of this step.
-   2. The access state as of `seen` is known ([03](03-spaces.md)).
+      before the rest of this step. A first version is at a key its root may
+      write first (§4.1): refused, never withdrawn, since nothing that arrives
+      later changes whose a key is.
+   2. The access state as of `seen` is known ([03](03-spaces.md)). A first
+      version at a key of a `onePer` key's form is in a collection whose rules
+      as of then have a `onePer` that gives that form, unless the peer can't
+      read them (§4.1). The collection is not contested with no definition
+      in force as of then (§6.3).
    3. The root holds a role as of `seen`, and the rule for the action allows it (§7.2), and the access history's own judgement of the writer passes (revoked keys, removals — [03](03-spaces.md)).
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`. `check` is not judged (§7.6).
@@ -1370,14 +1505,15 @@ _Source: `packages/core/src/validation/check-version.ts` (`createVersionCheck`),
 
 ## 10. Limits
 
-| Limit                       | Value                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| Record key                  | 1–128 chars of `[a-z0-9:._-]`                                                        |
-| `seen`                      | ≤ 64 ids, each 1–128 chars                                                           |
-| Links per version           | ≤ 32                                                                                 |
-| Link role                   | `^[a-z][a-zA-Z0-9]{0,63}$`                                                           |
-| Topics per collection       | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                  |
-| Tags per version            | ≤ 64                                                                                 |
-| Permission name             | `^[a-z][a-zA-Z0-9]{0,39}$`                                                           |
-| Size of a body or a version | _Not yet specified_ — no limit is enforced                                           |
-| Collection name on a record | _Not yet specified_ — only definitions constrain names; a record may name any string |
+| Limit                       | Value                                                                                           |
+| --------------------------- | ----------------------------------------------------------------------------------------------- |
+| Record key                  | 1–128 chars of `[a-z0-9:._-]`; a first version outside `sys.*` at an owned or shared key (§4.1) |
+| Name in an owned key        | 1–101 chars of `[a-z0-9:._-]`                                                                   |
+| `seen`                      | ≤ 64 ids, each 1–128 chars                                                                      |
+| Links per version           | ≤ 32                                                                                            |
+| Link role                   | `^[a-z][a-zA-Z0-9]{0,63}$`                                                                      |
+| Topics per collection       | ≤ 8; a field of ≤ 4 path segments, or `link:<role>`                                             |
+| Tags per version            | ≤ 64                                                                                            |
+| Permission name             | `^[a-z][a-zA-Z0-9]{0,39}$`                                                                      |
+| Size of a body or a version | _Not yet specified_ — no limit is enforced                                                      |
+| Collection name on a record | _Not yet specified_ — only definitions constrain names; a record may name any string            |

@@ -5,6 +5,7 @@
  * proof that doesn't hold flags nobody.
  */
 import { test, describe } from 'node:test';
+import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createStorageProvider } from '../src/storage/storage-provider.js';
@@ -13,7 +14,7 @@ import { team } from '../src/space/presets.js';
 import { MEMBER_COLLECTION } from '../src/space/roles.js';
 import { isRecord } from '../src/utils/guards.js';
 import { readWarrant } from '../src/records/warrant.js';
-import { memberKey, newWarrantKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
+import { memberKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
 import type { Version } from '../src/types.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
@@ -50,8 +51,8 @@ async function slip(who: Person, space: string, versions: ReadonlyArray<Version>
 /** A warrant's first version in someone's copy, found by the offence it proves */
 async function warrantAbout(who: Person, space: string, offence: string): Promise<Version | null> {
   const store = createStorageProvider(await who.stores(`spaces/${space}`));
-  for (const versions of (await store.histories('warrant:')).values())
-    for (const version of versions) {
+  for (const current of await store.queryVersions(WARRANT_COLLECTION))
+    for (const version of await store.history(current.key)) {
       const offending = readWarrant(version.body)?.evidence[0];
       if (version.seq === 0 && offending?.id === offence) return version;
     }
@@ -162,7 +163,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [evidence] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -242,7 +242,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -349,7 +348,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'access', evidence: [counterfeit] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -386,7 +384,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [rewritten] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -474,7 +471,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(written)] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -500,7 +496,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'someday', evidence: [evidence] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -546,14 +541,14 @@ describe('warrants', () => {
     });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
     const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
-    // A true proof, at a key that isn't a warrant's.
+    // A true proof, at a key of the accused's: no peer takes a first version at a key its writer doesn't own.
     const misplaced = await forge(
       alice,
       space,
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: 'misplaced', seq: 0 },
+        version: { key: await ownedKey(bob.node.did, 'misplaced'), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -567,7 +562,7 @@ describe('warrants', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 500));
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
-    assert.ok(await bobStore.getVersion(misplaced.id), 'stored like any record');
+    assert.equal(await bobStore.getVersion(misplaced.id), null, 'refused');
     assert.deepEqual(await flaggedFor(bob, space), []);
   });
 

@@ -129,17 +129,17 @@ parts. The tree is at most **64** deep.
 
 A condition reads these, and the variables of the macros that enclose it:
 
-| Name         | Value                                                                                        |
-| ------------ | -------------------------------------------------------------------------------------------- |
-| `body`       | The version's body (opened, in a private space)                                              |
-| `links`      | Its links, as a list of maps `{ "rel", "to" }` (spec 02 §5)                                  |
-| `key`        | Its `key`                                                                                    |
-| `seq`        | Its `seq`, an `int`                                                                          |
-| `collection` | Its `collection`                                                                             |
-| `author`     | Its writer's **root** DID (the account, not the session key)                                 |
-| `creator`    | The root DID of the record's first version (spec 02 §4.6); on a create, the same as `author` |
-| `createdAt`  | Its `createdAt`: what the writer's clock said, which nothing checks                          |
-| `prev`       | The version its `prev` names, as a [cited version](#cited-versions), or `null` on a `seq 0`  |
+| Name         | Value                                                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `body`       | The version's body (opened, in a private space)                                                                        |
+| `links`      | Its links, as a list of maps `{ "rel", "to" }` (spec 02 §5)                                                            |
+| `key`        | Its `key`                                                                                                              |
+| `seq`        | Its `seq`, an `int`                                                                                                    |
+| `collection` | Its `collection`                                                                                                       |
+| `author`     | Its writer's **root** DID (the account, not the session key)                                                           |
+| `creator`    | The root DID of the version's first version, the one its chain names (spec 02 §4.5); on a create, the same as `author` |
+| `createdAt`  | Its `createdAt`: what the writer's clock said, which nothing checks                                                    |
+| `prev`       | The version its `prev` names, as a [cited version](#cited-versions), or `null` on a `seq 0`                            |
 
 ### Functions
 

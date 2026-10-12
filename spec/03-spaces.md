@@ -376,17 +376,23 @@ saw them) applied:
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `member`, `invite`                | the one giving least: closed before open (invites), then one whose role gives no more than any other's — none, or no higher rank and every permission covered by the other's — by the roles as **its own view** had them; where two can't be compared, the lower rank, then the lowest id |
 | `role`                            | the one giving least, by coverage in the same way, by the role it sets                                                                                                                                                                                                                    |
-| `definition`, `relays`, `keepers` | the lowest id                                                                                                                                                                                                                                                                             |
+| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and managers, made: otherwise none (below)                                                                                                                                                        |
 | `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                                                           |
 | `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                                                           |
 
 Applying sets `roles[name]`, `members[did]`, `invites[inviteDid]`,
 `relays`, `keepers` and `copies` as the event says, or removes the entry when
 its role is null. A `definition` sets `definitions[name] = { event,
-definedBy }`, where `definedBy` is the root of the definition, among the
-winner and those it saw, that saw every removal the winner saw and saw no
-other such definition (the lowest id if several); a deleted one removes the
-entry.
+definedBy }`. Of the definitions of that name in the set that saw every
+removal the winner saw, those that saw no other are its first definitions;
+`definedBy` is their root if they are all one account's, and null if not
+([02](02-records.md) §6.3): no id decides it. Where several changes to a
+definition are latest, the lowest id wins only when they are one account's,
+or when none is a delete and their definitions name the same first definer;
+otherwise none is set in `definitions`, and `contested[name]` lists the
+latest ones instead, for readers to judge by what they say (02 §6.3). While
+it does, only someone holding `manage` may change the definition. A change applied on top, having
+seen them, removes `contested[name]`. A deleted one removes the entry.
 
 `keyDue` is true, in a private space, when some event in the set took
 reading from someone (in its own view, a reader before and not after) and the
@@ -443,7 +449,7 @@ stands on its own.
 
 - a new collection: `A` must hold `define`;
 - an existing one (change or delete): `A` holds `manage`, or `A` is non-null
-  and `root` is the collection's `definedBy`.
+  and `root` is the collection's `definedBy` (never when that is null).
 
 **`key`** — the space must have keys (private); `A` must hold `manage`; the
 `keyId` and the `readKey` must both differ from every key already in `keys`.
@@ -483,7 +489,7 @@ own view. Alice's removal is a reduction of Bob that Bob's removal had not
 seen, and its cutoff doesn't cover it, so it strikes it; nothing strikes
 Alice's. Every arrival order gives Bob: none, Carol: member.
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `componentsOf`, `merge`, `least`, `definerOf`, `extended`, `refusal`). Tests: `packages/core/tests/access-attacks.test.ts`, `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/roles.test.ts` (all of "the rank rule", "invites", "offline conflicts"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `componentsOf`, `merge`, `least`, `definerOf`, `extended`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/access-attacks.test.ts`, `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/roles.test.ts` (all of "the rank rule", "invites", "offline conflicts"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
 
 ---
 
@@ -1003,45 +1009,40 @@ Example: the key of §8.1 → `did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVH
 
 _Source: `packages/core/src/privacy/space-encryption.ts` (`spaceKeyFromRaw`, `sealBody`, `openBody`), `packages/core/src/node/space-runtime.ts` (`IN_THE_CLEAR`, `write`, `openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space versions"; "a sealed body moved to another record, collection or space does not open"; "the example body of spec 03 §8.3 opens"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
 
-### 8.6 Planned: what a private space still shows
+### 8.6 What a private space still shows
 
 Encrypting bodies leaves the envelope readable to anyone holding the
 ciphertext: a relay-side peer, a carrier, a host, a mirror's storage
-provider. Two parts of it give away more than they need to. Tracked in
-[#87](https://github.com/leifriksheim/weave/issues/87).
+provider. It names each version's account (`author`, `proof`), its
+collection and its record key.
 
-**Record keys that name people.** `onePer` keys ([02](02-records.md)) are
-plain hashes of the collection, the author, the link target and body fields,
-and `profile:` keys (§11) are `hex40` of the account. So anyone can guess and
-check who voted on which poll, work out a vote's value when a field has few
-possible values, and confirm which known accounts have a profile in a space.
+**`onePer` keys** are an HMAC under a key derived from the space's first key
+([02](02-records.md) §7.3), so only readers can compute or test one: someone
+holding only the ciphertext can't check a guess of who voted on which poll, or
+how. A key whose `onePer` names `@author` starts with its account's owner part
+([02](02-records.md) §4.1), which says no more than the version's `author`
+and `proof` do. A former member keeps the first key, and can still test
+guesses against what it is sent later.
 
-The fix: in a private space, derive these keys with HMAC under a key derived
-from a space key, as topic tags already are ([02](02-records.md) §8.2),
-so only readers can compute or check them. Every reader derives the same key,
-so rules still check the same way on every reader. A peer without the key
-already accepts rule verdicts it cannot check (§5.2 step 9).
+_Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `packages/core/src/node/space-runtime.ts` (`onePerKeying`). Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)")._
 
-**Collection names.** `collection` travels in the clear, so the same peers
-see `app.todo.item`. Encrypting it, or replacing it with a keyed hash, would
-close that. `sys.*` names stay in the clear: a peer without the key must still
-recognise the access collections to replay the history.
-
-Depends on and touches: the envelope and the `onePer` rule
-([02](02-records.md)); the collections named in a sync hello and what a
-partial holder keeps ([05](05-sync-and-storage.md)); carried subscriptions,
-which a carrier matches by collection (§15).
-
-Open questions:
-
-- **Which space key.** A record key must not change when the space key does,
-  or one author could vote again after a key change. The genesis key is
-  stable, and every reader can open it (§9.3), but removed members keep it
-  too, so it hides keys only from peers that never read the space.
-- **Membership is public anyway.** `sys.member` bodies name each account in
-  the clear (§8.2), by design, so a blind peer can judge writes. Hiding
-  `profile:` keys hides nothing about who is a member until that changes.
-- Whether collection names are hashed or encrypted, and under which key.
+> **Planned: what it still gives away.** Tracked in
+> [#223](https://github.com/leifriksheim/weave/issues/223).
+>
+> - **`profile:` keys** (§11) are `hex40` of the account, so anyone can
+>   confirm which known accounts have a profile in a space. Membership is
+>   public anyway: `sys.member` bodies name each account in the clear (§8.2),
+>   by design, so a blind peer can judge writes. Hiding `profile:` keys hides
+>   nothing about who is a member until that changes.
+> - **Collection names.** `collection` travels in the clear, so the same
+>   peers see `app.todo.item`. Encrypting it, or replacing it with a keyed
+>   hash, would close that. `sys.*` names stay in the clear: a peer without
+>   the key must still recognise the access collections to replay the
+>   history. Depends on and touches: the envelope and the rules
+>   ([02](02-records.md)); the collections named in a sync hello and what a
+>   partial holder keeps ([05](05-sync-and-storage.md)); carried
+>   subscriptions, which a carrier matches by collection (§15). _Open:_
+>   whether names are hashed or encrypted, and under which key.
 
 ---
 
@@ -1115,8 +1116,21 @@ was sealed under either stays readable, and the current one is the lowest id
 of the latest (§4.4). A key id or read key used before is refused.
 
 A peer holding any key named by a `key` event opens its `earlier` with that
-key and the event's `keyId`, and takes each raw key it contains (up to 1000);
-repeat until nothing new. So holding the current key opens every earlier one.
+key and the event's `keyId`, and takes each raw key it contains (up to 1000)
+whose id and read key the history names; repeat until nothing new. Only the
+`key` event that counted for that key id is opened: anyone can store a
+version at `key:space`. So holding the current key opens every earlier one.
+
+A reader **MUST** check that the keys an `earlier` opens to include the
+space's first key K₀, the one the genesis's `encryptionKeyId` names (§8.1):
+every reader needs it to derive `onePer` keys ([02 §7.3](02-records.md)). A
+key change whose `earlier` does not open, or leaves K₀ out, is
+**malformed**: the reader takes no key from it. The change still counts in
+the access history, which peers that can't open it judge the same way. A
+member holding `manage`, K₀ and the key a malformed change names **SHOULD**
+change the key, as when one is due; a manager **MUST NOT** change the key
+without holding K₀. Until someone does, a newcomer that holds only that key
+reads nothing sealed before it.
 
 ### 9.4 Boxes (`sys.box`)
 
@@ -1150,7 +1164,7 @@ write, and proves it may read with the newest key it holds (see
 [04](04-network.md)). A view-only invite made before a change carries only the
 old key; its holder is not a reader and gets no box.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
+_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", "forces no key change, however malformed", "gives no reader a key the history doesn’t name", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
 
 ---
 

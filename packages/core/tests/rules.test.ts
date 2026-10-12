@@ -3,12 +3,13 @@
  * fields — enforced on write, and by every peer during sync.
  */
 import { test, describe } from 'node:test';
+import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import * as z from 'zod';
 
 import { runAction } from '../src/node/actions.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
-import { checkRules, onePerKey } from '../src/records/rules.js';
+import { checkRules } from '../src/records/rules.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
 import { team } from '../src/space/presets.js';
@@ -348,7 +349,8 @@ describe('rules: one per something', () => {
       collection: 'app.poll.vote',
       body: { choice: 0 },
       links: [{ rel: 'about', to: poll.key }],
-      version: { key: 'stuffing-the-ballot', seq: 0 },
+      // A key of Bob's own, so only the onePer rule stands in its way.
+      version: { key: await ownedKey(bob.node.did, 'stuffing-the-ballot'), seq: 0 },
       retain: true,
     });
     let rejected = '';
@@ -387,11 +389,12 @@ describe('rules: one per something', () => {
       links: [{ rel: 'about', to: poll.key }],
       version: {
         key:
-          (await onePerKey('app.poll.vote', ['@author', 'link:about'], {
-            root: bob.node.did,
-            links: [{ rel: 'about', to: poll.key }],
-            body: { choice: 0 },
-          })) ?? '',
+          (await bob.node.records.onePerKey(
+            space,
+            'app.poll.vote',
+            { choice: 0 },
+            { links: [{ rel: 'about', to: poll.key }] },
+          )) ?? '',
         seq: 0,
       },
     });

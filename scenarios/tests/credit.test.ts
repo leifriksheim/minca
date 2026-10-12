@@ -2,7 +2,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { judge, lineKey } from '../host/cel-host.js';
+import { judge } from '../host/cel-host.js';
+import { lineKey } from '../../packages/core/src/records/key.js';
 import { version, type Version } from '../host/space.js';
 import { ALICE, BOB, CAROL, a0, a1, a1phone, b0, host, pay, payContract } from '../communities/credit.js';
 
@@ -92,7 +93,7 @@ describe("mutual credit: a line is its account's own", () => {
   test("Carol can't grief Alice's line with a first version at its key", async () => {
     const fake = version({
       id: 'x',
-      key: lineKey('app.pay', ALICE),
+      key: await lineKey(ALICE, 'app.pay'),
       collection: 'app.pay',
       author: CAROL,
       body: {},
@@ -106,7 +107,7 @@ describe("mutual credit: a line is its account's own", () => {
   test("Carol can't grief Alice's line with a next version after a0", async () => {
     const fake = version({
       id: 'y',
-      key: lineKey('app.pay', ALICE),
+      key: await lineKey(ALICE, 'app.pay'),
       collection: 'app.pay',
       author: CAROL,
       seq: 1,

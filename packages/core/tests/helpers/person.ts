@@ -15,6 +15,7 @@ import { deriveAccountKey } from '../../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../../src/identity/contact-key.js';
 import { createSigner } from '../../src/schema/signer.js';
 import { createVersion, type CreateVersionParams } from '../../src/schema/version.js';
+import { newRecordKey } from '../../src/records/key.js';
 import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import type { StoreFactory } from '../../src/node/stores.js';
 import type { Version } from '../../src/types.js';
@@ -97,6 +98,8 @@ export async function forge(
       seen: fields.seen ?? (await seenBy(who.node, space)),
       // A fresh key: its first place in its log here.
       log: fields.log ?? { n: 0 },
+      // A new record at a key of the person's own, unless the test names one.
+      version: fields.version ?? { key: await newRecordKey(who.node.did), seq: 0 },
       ...fields,
       author: keyDid,
       space,

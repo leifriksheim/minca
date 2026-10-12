@@ -6,6 +6,7 @@
  * arriving as blueprints someone who may define them applies.
  */
 import { test, describe } from 'node:test';
+import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import * as z from 'zod';
 
@@ -1110,7 +1111,7 @@ describe('an agent running a node of its own', () => {
         createVersion({
           seen: await seenBy(ada.node, registry),
           collection: 'app.note',
-          version: { key: `note-${can === '*' ? 'all' : 'records'}`, seq: 0 },
+          version: { key: await ownedKey(ada.node.did, `note-${can === '*' ? 'all' : 'records'}`), seq: 0 },
           body: { text: 'Joined somewhere' },
           author: did,
           space: registry,

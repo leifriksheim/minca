@@ -12,7 +12,8 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { SYNC_PROTOCOL_VERSION } from '../src/sync/sync-messages.js';
-import { newRecordKey, nextVersion } from '../src/records/version.js';
+import { nextVersion } from '../src/records/version.js';
+import { newRecordKey } from '../src/records/key.js';
 import { isSealedBody } from '../src/privacy/space-encryption.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -71,7 +72,7 @@ describe('attacks on a shared space', () => {
     const relabelled = await forge(alice, space, {
       collection: 'app.other',
       body: sealed,
-      version: { key: newRecordKey(), seq: 0 },
+      version: { key: await newRecordKey(alice.node.did), seq: 0 },
     });
     assert.deepEqual((await alice.node.records.get(space, note.key))?.body, { text: 'secret' });
     for (const copy of [moved, relabelled]) {

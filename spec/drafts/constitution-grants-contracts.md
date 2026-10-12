@@ -233,10 +233,11 @@ So:
 
 `byCreator` compares accounts, not devices: any device of the creator's
 account counts. When the record's first version isn't held, the invocation
-waits, as anything missing does. `byCreator` **depends on #72** (keys that
-belong to their creator): today two first versions can share a key, and
-which account "made the first version" is whichever a peer holds first, so
-#72 lands before or with the command arguments (§8).
+waits, as anything missing does. It is 02 §7.1's `creator`, which keys that
+belong to their creator (#72, 02 §4.1) made order-independent: at an owned
+key it is the key's owner, and at a shared `one:` key (a `onePer` without
+`@author`) it is whoever wrote the first version the invocation's chain
+starts from, so anyone allowed to create there can start a rival chain.
 
 `self` doesn't close a second account of the invoker's own: an admin who may
 assign `hr` can assign it to another account she controls. Since only roles
@@ -454,8 +455,9 @@ Three kinds of result, and what each needs:
    resolver it doesn't know.
 
    - **One line per account per collection, at a key derived from the
-     author.** This needs #72 (keys that belong to their creator): only
-     that account's own signed versions can be in its line, or be twins.
+     author**: `lineKey(account, collection)`, an owned key (02 §4.1,
+     `packages/core/src/records/key.ts`), so only that account's own signed
+     versions can be in its line, or be twins.
      Without it, anyone could write a first version at someone else's line
      key, or a next version after their payment, and kill the line; and an
      account could open a second line and claim each payment once in each.
@@ -499,7 +501,7 @@ Three kinds of result, and what each needs:
    _Source:_ `scenarios/host/cel-host.ts` (`lineKey`, `judgeOne`,
    `onceAlong`); `scenarios/tests/credit.test.ts` ("a line is its account's
    own", "a payee who built on a double spend", "line declarations have
-   closed keys"). The host derives the key as a stand-in for #72.
+   closed keys"). The host derives the key with the library's `lineKey`.
 
    **`sum` of an empty list** (Decided). Today `sum([])` is the int `0`,
    and an int plus a double is an error, so a payment that claims nothing
@@ -693,7 +695,7 @@ Each step is its own PR with an adversarial review.
    scenario suite (`scenarios/`), run with `npm run scenarios`; the
    evaluators there are stand-ins until they point at the library.
 2. **Keys that belong to their creator** (#72), first: `byCreator` and the
-   line rule both depend on it. It may land with step 4 but not after it.
+   line rule both depend on it. Done: 02 §4.1, §7.3.
 3. **The UCAN-shaped profile** for notes (#19).
 4. **Grants and the resolver.** Prototype `strong-remove/1` over grants, run
    it through the existing convergence and attack suites, then replace ranks

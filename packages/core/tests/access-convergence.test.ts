@@ -257,6 +257,7 @@ function stateShape(state: AccessState | null): string {
     members: byKey(state.members),
     invites: byKey(state.invites),
     definitions: byKey(state.definitions),
+    contested: byKey(state.contested),
     keys: state.keys,
     keyDue: state.keyDue,
     relays: state.relays,

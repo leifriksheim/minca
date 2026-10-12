@@ -363,14 +363,15 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
 
   /**
    * Places a version that is not current: kept whole if retained, as a stub
-   * otherwise, and named as the record's first version if it is the lowest-id
-   * one seen.
+   * otherwise, and kept apart as a first version if it is the lowest-id one
+   * seen.
    */
   async function demote(entries: Entries, version: Version, current: Version): Promise<void> {
     await keepSuperseded(entries, version);
-    // The first version decides who created the record — the one with the
-    // lowest id, if several devices each created the same chosen key. Not
-    // while the record is still at seq 0: then the current version is it.
+    // A first version is kept apart, so a record's history lists it: the
+    // lowest id if there are several. Nothing reads who created a record from
+    // it; that is the first version a version's own chain names (02 §4.5).
+    // Not while the record is still at seq 0: then the current version is it.
     if (version.seq === 0 && current.seq > 0) {
       const heldId = await entries.get(genesisKey(version.key));
       if (heldId === null || version.id < heldId) entries.set(genesisKey(version.key), version.id);
