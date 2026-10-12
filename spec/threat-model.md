@@ -98,8 +98,8 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     another's record, for the `creator` rule or `@createdBy`, nor write
     another's `onePer` vote for them (02 §4.1, §4.5, §7.3). Nor can it
     become a collection's first definer by a rival definition or a delete
-    with a lower id, put its own rules in force by one, or write in the
-    collection while rivals that differ stand: no id decides between
+    with a lower id, put its own rules in force by one, or write without rules while
+    rivals that differ stand: no id decides between
     accounts that may not each change it, and a contested collection takes
     no writes until a manager settles it (02 §6.3).
 - **Does not hold yet.**

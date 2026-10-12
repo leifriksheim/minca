@@ -2020,6 +2020,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** Box and key record versions already opened, so each is tried once */
   const opened = new Set<string>();
   /**
+   * Key records already opened, for the keys the history named then. Which
+   * key event counts, and which keys it names, can change as changes arrive,
+   * so they are opened again when that does.
+   */
+  const openedKeyRecords = new Set<string>();
+  let openedFor = '';
+  /**
    * Keys whose key change is malformed: its earlier keys don't open, or leave
    * out the space's first key, which every reader needs for onePer keys
    * (03 §9.3). Nothing is taken from them, and a manager replaces them.
@@ -2063,6 +2070,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
     }
 
+    const named = epochs.map((epoch) => `${epoch.keyId}/${epoch.readKey}/${epoch.event}`).join('|');
+    if (named !== openedFor) {
+      openedFor = named;
+      openedKeyRecords.clear();
+      malformedKeys.clear();
+    }
     // Each newer key opens the ones before it — which may open more.
     let more = true;
     while (more) {
@@ -2072,7 +2085,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           const body = isRecord(version.body) ? version.body : null;
           if (
             version.collection !== KEY_COLLECTION ||
-            opened.has(version.id) ||
+            openedKeyRecords.has(version.id) ||
             typeof body?.keyId !== 'string'
           )
             continue;
@@ -2081,7 +2094,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           if (!epoch || epoch.event !== version.id) continue;
           const holder = keyring.get(body.keyId);
           if (!holder) continue;
-          opened.add(version.id);
+          openedKeyRecords.add(version.id);
           const earlier = await openValue(
             holder.seal,
             EARLIER_KEYS_LABEL,
@@ -2108,6 +2121,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     }
 
     if (learned.length === 0) return;
+    // A definition this node couldn't read may open now.
+    definitions.clear();
     const writeWith = newestKey((await access()).history.current);
     if (writeWith) await deps.onKeys?.([...keyring.values()], writeWith.id);
     recordsChanged();

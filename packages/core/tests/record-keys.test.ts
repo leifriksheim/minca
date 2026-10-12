@@ -668,6 +668,28 @@ describe('who first defined a collection', () => {
     }
   });
 
+  test('once settled with no definer, changes made apart by managers are picked between by id', () => {
+    const settle = [
+      member('alice', 'm1'),
+      member('bob', 'm2'),
+      define('alice', 'd5', ['m1', 'm2']),
+      define('bob', 'd4', ['m1', 'm2']),
+      define('root', 'd8', ['d5', 'd4']),
+    ];
+    assert.deepEqual(replayAccess(genesis, settle).current.definitions.get('app.poll'), {
+      event: 'd8',
+      definedBy: null,
+    });
+    // One manager on two devices.
+    const history = replayAccess(genesis, [
+      ...settle,
+      define('root', 'e2', ['d8']),
+      define('root', 'e1', ['d8']),
+    ]);
+    assert.deepEqual(history.current.definitions.get('app.poll'), { event: 'e1', definedBy: null });
+    assert.equal(history.current.contested.size, 0);
+  });
+
   test('the definer and a manager changing it apart: picked between by id, not contested', () => {
     const history = replayAccess(genesis, [
       member('alice', 'm1'),

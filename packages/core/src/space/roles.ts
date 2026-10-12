@@ -883,7 +883,8 @@ function givenIn(state: AccessState, event: AccessEvent): Role | null {
 /**
  * The latest changes to one collection's definition, merged (02 §6.3). One
  * account's alone, or changes by accounts that may each change it (its first
- * definer and managers), are picked between by id: each could have made its
+ * definer and managers, or managers alone once no one first defined it), are
+ * picked between by id: each could have made its
  * own the latest alone. Anything else, rival first definitions by two
  * accounts or a delete beside another account's change, is contested: no id
  * decides, since an id can be ground, and readers judge the rivals by what
@@ -900,11 +901,18 @@ function mergeDefinitions(
   const win = sorted[0]!;
   if (win.kind !== 'definition') return;
   // Who first defined it, as each latest definition sees the whole group: null where rivals stand.
-  const definers = new Set(sorted.filter((top) => !isDelete(top)).map((top) => definerOf(top, group, saw)));
+  const definitions = sorted.filter((top) => !isDelete(top));
+  const definers = new Set(definitions.map((top) => definerOf(top, group, saw)));
+  // No first definer is agreed on only once every latest change saw the rival firsts, which a
+  // manager's settle did; rival firsts that are themselves latest are not agreement.
+  const settled = definitions.every((top) =>
+    firstsOf(top, group, saw).every((first) => first === top || saw.get(top.id)?.has(first.id)),
+  );
   const oneAccount = new Set(sorted.map((top) => top.root)).size === 1;
   const agreed =
     sorted.length === 1 ||
-    (!definers.has(null) && (oneAccount || (definers.size === 1 && !sorted.some(isDelete))));
+    oneAccount ||
+    (definers.size === 1 && !sorted.some(isDelete) && (!definers.has(null) || settled));
   if (agreed) {
     if (win.deleted) change(win, state);
     else state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
@@ -931,6 +939,17 @@ function definerOf(
   group: ReadonlyArray<AccessEvent>,
   saw: ReadonlyMap<string, Seen>,
 ): string | null {
+  const firsts = firstsOf(win, group, saw);
+  const roots = new Set(firsts.map((event) => event.root));
+  return roots.size === 1 ? [...roots][0]! : roots.size === 0 ? win.root : null;
+}
+
+/** The first definitions of the life `win` is in: those of `group` that saw every removal it saw, and no other */
+function firstsOf(
+  win: AccessEvent,
+  group: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+): ReadonlyArray<AccessEvent> {
   const removed = (event: AccessEvent) => event.kind === 'definition' && event.deleted;
   const removals = group.filter((event) => removed(event) && saw.get(win.id)?.has(event.id));
   const life = group.filter(
@@ -939,11 +958,7 @@ function definerOf(
       !removed(event) &&
       (event === win || removals.every((removal) => saw.get(event.id)?.has(removal.id))),
   );
-  const firsts = life.filter(
-    (event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)),
-  );
-  const roots = new Set(firsts.map((event) => event.root));
-  return roots.size === 1 ? [...roots][0]! : roots.size === 0 ? win.root : null;
+  return life.filter((event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)));
 }
 
 /**
