@@ -92,6 +92,13 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     open there (01 §9, 03 §8.3, §9.4). Holding the key, it can still seal
     whatever it likes; what it can't do is pass off someone else's
     ciphertext as being about something else (01 §9).
+  - It can't write a first version at another account's key, however low
+    an id it grinds: every peer refuses one whose root doesn't own the key,
+    whichever version reaches it first. So it can't become the creator of
+    another's record, for the `creator` rule or `@createdBy`, nor write
+    another's `onePer` vote for them (02 §4.1, §4.5, §7.3). Nor can it
+    become a collection's first definer by a rival definition with a lower
+    id (02 §6.3).
 - **Does not hold yet.**
   - A narrowed rule alone binds only what saw it: a version naming an older
     point counts if its author could have written it then, since nobody can
@@ -126,7 +133,15 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - It can disown its own history, withdrawing votes and agreements others
     relied on, by revoking its own key with a cutoff of 0, or forking its
     own line in a collection at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
-  - A `seq 0` for someone else's key can take over "creator" ([#72](https://github.com/leifriksheim/weave/issues/72)).
+  - At a shared key (a `onePer` that doesn't name `@author`, such as one
+    decision per proposal), anyone the `create` rule allows can start a
+    chain of their own, and outrank the first; `creator` keeps others from
+    editing a chain, not from replacing it. A collection that needs one
+    writer per key restricts `create` (02 §7.1, §7.3). By design.
+  - Holding `define`, it can write a rival first definition of a collection
+    that names a point before the real one's, so that no one first defined
+    it, and only a manager may change it (02 §6.3). Those who may define
+    collections are trusted not to.
   - A collection's checks bind only readers that judge them: peers keep and
     sync a version that fails them, and only the library leaves it out of
     what it counts, on every read path, along a record's chain, and without
@@ -139,7 +154,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - The top rank answers to no one, and no vote can bind a change to who may
     do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
 
-_Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
+_Source: 03 §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
 ### 3.3 Former member
 
@@ -177,6 +192,9 @@ _Source: 03 §4, §5, §8.3, §9; 01 §9; `packages/core/docs/warrants.md`. Test
   - Its removal withdraws what it wrote before that the removal's cutoff
     doesn't cover: the remover's node covers only the lines it holds unbroken,
     in the collections it holds, up to 1024 places (03 §6.3) ([#166](https://github.com/leifriksheim/weave/issues/166)).
+  - It keeps a private space's first key, from which `onePer` keys are
+    derived, so it can test guesses of who voted on what in envelopes that
+    reach it later (02 §7.3, 03 §8.6).
 
 _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-access.test.ts` ("a removed member cannot write"), `packages/core/tests/roles.test.ts`, `packages/core/tests/key-change.test.ts`._
 
@@ -326,6 +344,9 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - It cannot read the bodies of a private space's records outside the
     collections 03 §8.2 keeps in the clear, without the space key.
   - It cannot alter or forge what it serves (02 §3).
+  - Without the space key, it can't compute or test a private space's
+    `onePer` keys, so it can't check a guess of who voted on which poll, or
+    how (02 §7.3, 03 §8.6).
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
@@ -333,8 +354,8 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     key ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
   - A removed carrier keeps proving read until the key changes ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
-    member list. `onePer` keys hash body fields, so it can guess low-entropy
-    values such as votes (03 §8.6).
+    member list. `profile:` keys and collection names say whose and what
+    (03 §8.6, [#87](https://github.com/leifriksheim/weave/issues/87)).
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#176](https://github.com/leifriksheim/weave/issues/176)) _(traced)_.
@@ -343,7 +364,7 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     from before a key change, or delete one: sealing at rest binds an entry's
     name, not its version (05 §15, [#215](https://github.com/leifriksheim/weave/issues/215)).
 
-_Source: 03 §8; 02 §3; 06 §4; 05 §15. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
+_Source: 03 §8; 02 §3, §7.3; 06 §4; 05 §15. Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)"), `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
 
 ### 3.9 Network attacker
 

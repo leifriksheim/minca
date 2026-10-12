@@ -13,9 +13,10 @@ await node.records.update(space.id, todo.key, { text: 'milk', done: true }); // 
 await node.records.delete(space.id, todo.key);
 ```
 
-- `put` makes a new record with a random key, unless you give one
-  (`{ key }`). A chosen key suits a record there is one of by nature, like a
-  settings record.
+- `put` makes a new record at a fresh key of your account's, unless you name
+  one (`{ key: 'settings' }`), which suits a record there is one of per
+  account by nature. Under `onePer` the key is derived for you. See
+  [keys](#keys).
 - `update` takes the whole next body. Links carry over unless you pass new
   ones.
 - `delete` writes a version marked deleted, which syncs like any other.
@@ -28,6 +29,40 @@ Which version wins is decided by `seq` (one higher each edit), then by version
 id, never by a clock. Two devices that edited apart agree on the same winner.
 Merging edits inside one record is not built yet, so design records so that
 people edit different ones: one record per vote, per card, per reaction.
+
+## Keys
+
+A record's key says whose it is. Every key an account creates starts with its
+owner part, a hash of the account, so no one else can create a record there:
+every peer refuses a first version at a key the writer doesn't own, however
+it got there ([spec 02 §4.1](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+
+```typescript
+const fresh = await node.records.put(space.id, todos, { text: 'milk' });
+fresh.key; // 'iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa'
+
+await node.records.put(space.id, 'app.settings', { theme: 'dark' }, { key: 'settings' });
+const mine = await node.records.keyFor(space.id, 'settings'); // 'iz75dwgy223gqtlqlqv3qzjq4y.settings'
+const hers = await node.records.keyFor(space.id, 'settings', aliceDid); // Alice's, if she wrote one
+await node.records.get(space.id, hers);
+```
+
+- A name you choose goes in your account's namespace, so two accounts
+  choosing `settings` get two records. Names are 1–101 characters of a–z,
+  0–9 and `: . _ -`. Give a whole key only when it is already yours, to write
+  it again after a delete.
+- Read and link records by their whole `key`, as `put` returns it; a name is
+  only a name in someone's namespace.
+- Under `onePer`, the node derives the key from the parts the rules name
+  (`node.records.onePerKey`). With `@author` it is the writer's; without, it
+  is a shared `one:…` key ([collections](collections.md#rules)). In a private
+  space it is keyed with the space's key, so it says nothing to someone who
+  can't read the space.
+- An account's line in a collection, for contracts, has the key
+  `lineKey(account, collection)` (exported by `@weaveprotocol/core`), an
+  owned key of the account's.
+
+_Source: `packages/core/src/records/key.ts`, `packages/core/src/node/space-runtime.ts` (`keyToWrite`, `put`, `keyFor`, `onePerKey`). Tests: `packages/core/tests/record-keys.test.ts`, `packages/core/tests/versions.test.ts` ("a deleted key can be written again…")._
 
 ## Links
 
