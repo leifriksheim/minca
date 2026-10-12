@@ -709,6 +709,10 @@ Each step is its own PR with an adversarial review.
    - there is no "no place" path for anyone but the constitution: a
      definition, delegation or nesting by a non-founder without a place in
      the history counts for nothing.
+   - a struck definition or nesting is dropped before anything that rests on
+     it is judged: a definition concurrent with its author's unassignment
+     gives neither her nor anyone else its grants (the final review's Q1,
+     kept as a scenario checked after replay).
 
    The threat model changes in §9.
 
