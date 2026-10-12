@@ -4,13 +4,13 @@ An account is 16 random bytes. Every key the account uses is derived from them,
 so the same 16 bytes give the same identity on any device and any origin. This
 part specifies the seed and its written form, every key derived from it, how
 keys become DIDs, how the root key delegates to the keys that actually sign
-(UCANs), the two ways anything is sealed (envelopes), how the seed is stored
-locked on a device, and how a second device receives an account (pairing).
+(notes, in a JSON profile of UCAN 1.0), the two ways anything is sealed
+(envelopes), how the seed is stored locked on a device, and how a second device receives an account (pairing).
 
 ```
 seed (16 bytes)
  ├─ HKDF "weave/p256-identity-key/v1" ─▶ root key (P-256, ECDSA) ─▶ account DID (did:key:zDn…)
- │                                         └─ signs UCANs ─▶ session / app keys ─▶ sign records
+ │                                         └─ signs notes ─▶ session / app keys ─▶ sign records
  ├─ HKDF "weave/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
  │                                         ├─ HKDF "weave/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
  │                                         └─ HKDF "weave/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
@@ -213,11 +213,12 @@ Encoders MUST use the compressed point. Decoders:
 Decoders SHOULD reject a multicodec other than `0x80 0x24`.
 
 > **Known defect:** the reference decoder does not check the multicodec
-> (`packages/core/src/identity/did.ts`, `didToPublicKey`), and neither does `verifyUCAN` for
-> a token's `iss` (`packages/core/src/identity/ucan.ts`). A non-P-256 key fails later, only
-> because it does not import as a P-256 point. A fix will reject any other
-> multicodec when decoding.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20), [#19](https://github.com/leifriksheim/weave/issues/19).
+> (`packages/core/src/identity/did.ts`, `didToPublicKey`). A non-P-256 key
+> fails later, only because it does not import as a P-256 point. A
+> delegation's `iss` and `aud` are checked already: a P-256 `did:key` in its
+> one spelling (§7.1, `isP256Did` in `packages/core/src/identity/ucan.ts`). A
+> fix will reject any other multicodec when decoding.
+> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
 
 > **Planned: one spelling per key.** Decoders will require the `0x80 0x24`
 > prefix **and** exactly 33 compressed bytes, refusing the uncompressed form.
@@ -271,7 +272,7 @@ this one own the use; this table is the registry.
 | `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
 | `weave/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `weave/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:164,167`         | 02     |
 | `weave/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:42`                | 02     |
-| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:260`        | 04     |
+| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:269`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -288,7 +289,7 @@ CLI's own node reads:
 | `weave/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
 | `weave/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
 | `weave/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
-| `weave/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:243`                 | 07     |
+| `weave/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:235`                 | 07     |
 | `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1542`                  | docs   |
 | `weave/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
 | `weave/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
@@ -300,11 +301,11 @@ new labels do not collide with them:
 | String                                                 | Kind                                                   | Defined in                                                    | Part |
 | ------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | ---- |
 | `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:211`                                   | 03   |
-| `{"audience":…,"proof":"weave/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:254` (`keyStatement`)                     | 06   |
+| `{"audience":…,"proof":"weave/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:281` (`keyStatement`)                     | 06   |
 | `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
 | `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
-| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:190,192`                                | 04   |
-| `weave-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:302`                                    | 04   |
+| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:191,193`                                | 04   |
+| `weave-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:303`                                    | 04   |
 | `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                   | 08   |
 
 Notes:
@@ -325,7 +326,7 @@ Notes:
 
 | Key                  | How made                                                        | Lifetime                                     | Signs                                   |
 | -------------------- | --------------------------------------------------------------- | -------------------------------------------- | --------------------------------------- |
-| **Root key**         | `P256KeyFrom(seed)`                                             | The account's                                | UCANs only (§7)                         |
+| **Root key**         | `P256KeyFrom(seed)`                                             | The account's                                | Notes only (§7)                         |
 | **Session key**      | A lasting P-256 key claimed under a lock, else fresh (02 §4.10) | While the device keeps it, else one node run | Records, peer-auth messages             |
 | **App key**          | Fresh random P-256 key pair kept by an app or other program     | Until the program forgets it                 | Records, under a grant                  |
 | **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§10)                |
@@ -333,7 +334,7 @@ Notes:
 | **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`                  | Until the door is closed                     | Nothing; ECDH only (§10)                |
 | **Door signing key** | `ScalarFrom(HKDF(contactKey, door sign label, 48))`             | Until the door is closed                     | Purge challenges and knock answers (07) |
 
-The root key signs exactly one kind of thing: a UCAN delegating to another key.
+The root key signs exactly one kind of thing: a note (§7) delegating to another key.
 It MUST NOT be used to sign records directly in normal operation. (A record
 with no `proof` is judged as written by its `author` key itself — see
 [02 — Records](02-records.md).)
@@ -347,12 +348,12 @@ notes through, are the library's: see
 ### 6.2 The session delegation
 
 A node signs records with a session key (§6) under a note from the root
-(§7) made out to it: `aud` is the session DID, `prf` is `[]`, and `fct` is
-absent. Every record the
-session key signs carries that leaf token, encoded, as its `proof`
-([02 — Records](02-records.md)). Peers check only that the note verifies and
-covers what each record needs (§7.4–§7.6, §8); which capabilities it grants, how
-long it lasts and when it is renewed are the node's choice
+(§7) made out to it: `aud` is the session DID, `sub` the account's DID, and
+the node's proof is that token. Every record the session key signs
+carries the proof as its `proof` ([02 — Records](02-records.md)). Peers
+check only that the note verifies and grants what each record needs
+(§7.5, §8); which command it names, how long it lasts and when it is
+renewed are the node's choice
 ([Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes),
 [06](06-nodes-and-sessions.md)).
 
@@ -361,161 +362,218 @@ _Tests:_ `packages/core/tests/node.test.ts` ("records outlive the session that w
 
 ---
 
-## 7. UCAN delegations
+## 7. Delegations (UCAN 1.0, JSON profile)
 
-A **UCAN** (also called a _note_ in the code and UI) is a JWT-shaped token by
-which an issuer key grants capabilities to an audience key for a time window.
-Weave uses a subset of UCAN 0.10.
+A **delegation** is a signed token by which an issuer key passes some of
+what it may do to an audience key. A **note** is the one kind peers accept:
+a delegation from the account's root key to another key (§7.5).
+Weave writes them in its own **JSON profile of UCAN 1.0**: UCAN 1.0's fields
+(`iss`, `aud`, `sub`, `cmd`, `pol`, `nonce`, `meta`, `exp`, `nbf`), its
+command paths and its policy language, in Weave's canonical
+JSON ([02](02-records.md) §1) and signed as Weave signs everything else,
+instead of DAG-CBOR with a varsig header. UCAN's chains are not used: a
+note is always one link.
 
-> **Planned: UCAN 1.0** ([#19](https://github.com/leifriksheim/weave/issues/19)).
-> Tokens move to the 1.0 format: a DAG-CBOR envelope signed with a varsig
-> header, delegations with `sub`, `cmd` and a policy (`pol`) in place of
-> `att`, invocations that carry their chain in `prf`, and specified
-> revocation. `space:<id>` becomes a policy on `.space`, which also gives
-> grants narrower than a space (§7.1) and proof chains that travel (§7.5)
-> without new syntax. Issuers and verifiers switch outright, with a sync
-> version bump ([05](05-sync-and-storage.md) §4): before v1 a clean break is
-> preferred to a transition path. Not normative until built.
+It is **not byte-compatible** with other UCAN tools: a Weave token can't be
+handed to a UCAN library, nor a UCAN token to a Weave peer. That is
+deliberate. Every other signed thing in Weave is canonical JSON with a plain
+ES256 signature, and DAG-CBOR and varsig would be a second encoding, a
+second hash and a dependency for one kind of token. The semantics carry over
+whole, so moving to the CBOR form later is a change of encoding, not of
+meaning.
 
-### 7.1 Format
+Weave uses delegations, not UCAN invocations: a version, a knock or a peer
+proof is what the key does, and the peer that checks it fills in the
+arguments a policy reads (§8). Weave's revocation is its own, a record that
+names a key ([03](03-spaces.md) §6.4); UCAN's revocation spec is not used.
+
+### 7.1 The token
+
+A token is a JSON object with exactly three members:
 
 ```
-token = b64u(canonicalJSON(header)) "." b64u(canonicalJSON(payload)) "." b64u(signature)
+token        = { "payload": <payload>, "sig": <signature>, "type": "weave/ucan/dlg@1" }
+signed bytes = UTF-8( canonicalJSON( { "payload": <payload>, "type": "weave/ucan/dlg@1" } ) )
 ```
 
-- `b64u` is base64url without padding.
-- `canonicalJSON` is Weave's canonical JSON ([02 — Records](02-records.md)):
-  object keys sorted, no whitespace, `undefined` members dropped.
-- `signature` is ECDSA P-256 / SHA-256, 64-byte IEEE P1363 (`r ‖ s`), by the
-  issuer's key over the UTF-8 bytes of `b64u(header) "." b64u(payload)`
-  exactly as transmitted.
+- `type` names the profile and the kind of token, as UCAN's envelope tag
+  does. A peer MUST refuse any other value.
+- `sig` is ECDSA P-256 / SHA-256 by the issuer's key over the signed bytes:
+  64 bytes `r ‖ s` (IEEE P1363), base64url without padding, so exactly 86
+  characters. `s` MUST be in the **low-S** form, `s ≤ n/2`: an issuer
+  produces only that form, and a verifier MUST refuse a signature with
+  `s > n/2`. Its base64url MUST be the one spelling of its bytes (no
+  padding, nothing outside the alphabet, zero trailing bits).
 
-**Header** (fixed):
+**Payload.** Exactly these members; a verifier MUST refuse any other.
 
-```json
-{ "alg": "ES256", "typ": "JWT", "ucv": "0.10.0" }
-```
+| Field   | Type                  | Required | Meaning                                                                                                    |
+| ------- | --------------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `iss`   | string                | yes      | Issuer: a P-256 `did:key` (§4) in its one spelling (multicodec `p256-pub`, 33-byte key). Its key signs it. |
+| `aud`   | string                | yes      | Audience: who it is made out to. For a note, a P-256 `did:key` (§7.5)                                      |
+| `sub`   | string                | yes      | Subject: what it is about. The account (its DID, the issuer's), or one space, `space:<id>` (§7.2)          |
+| `cmd`   | string                | yes      | The command it covers, and every command under it (§7.3)                                                   |
+| `pol`   | array                 | yes      | Policy: conditions on the arguments of what it is used for (§7.4). `[]` for none                           |
+| `nonce` | string                | yes      | 1–64 base64url characters. Issuers use 12 random bytes. Makes each token unique; not otherwise checked     |
+| `meta`  | object                | no       | Signed, and read by no peer: a peer MUST NOT judge anything differently for what `meta` holds              |
+| `exp`   | integer, Unix seconds | no       | Not valid at or after this time (§7.6). A note has one                                                     |
+| `nbf`   | integer, Unix seconds | no       | Not valid before this time (§7.6). A note has one                                                          |
 
-**Payload:**
+`exp` and `nbf` are integers from 0 to 2⁵³ − 1. `exp` is never `null`: a
+token time doesn't end leaves it out. `sub` is never `null`: UCAN's
+_powerline_ is not used (§7.2). A token whose canonical form is longer than
+16 KiB is refused.
 
-| Field | Type                  | Required              | Meaning                                                                          |
-| ----- | --------------------- | --------------------- | -------------------------------------------------------------------------------- |
-| `iss` | string (did:key)      | yes                   | Issuer; its key signs the token                                                  |
-| `aud` | string (did:key)      | yes                   | Audience: the key receiving the capabilities                                     |
-| `exp` | integer, Unix seconds | yes                   | Not valid at or after this time                                                  |
-| `nbf` | integer, Unix seconds | yes                   | Not valid before this time                                                       |
-| `nnc` | string                | issuers always set it | Nonce: 8 random bytes as 16 lowercase hex characters. Not checked by verifiers   |
-| `att` | array of Capability   | yes                   | Capabilities granted (may be empty)                                              |
-| `prf` | array of string       | yes                   | CIDs of parent tokens (§7.5); `[]` for a token issued directly by the root       |
-| `fct` | array of object       | no                    | Facts. Omitted when there are none. Weave defines none, and peers read none (§8) |
+**The token's id** is `CID(UTF-8(canonicalJSON(token)))` (the conventions above, [02](02-records.md)
+§2): signature included. Since the token is read as JSON and re-canonicalized,
+and its signature has one form, a token has exactly one id.
 
-`nbf` is optional in UCAN 0.10 but **required** here: a verifier MUST reject a
-token without a finite numeric `exp` and `nbf`.
+> Rationale: a malleable signature gives a second token that verifies under
+> a different id, and anything that names or counts tokens by id (a cache)
+> would see two where there is one. Refusing high-S closes it at the source.
 
-> Rationale: records are judged at the time they claim to have been signed
-> (§7.4). A token with no start would let a leaked session key back-date
-> records to any time before the token existed.
+### 7.2 Subjects
 
-**Capability:**
+| `sub`          | Meaning                                                                        |
+| -------------- | ------------------------------------------------------------------------------ |
+| the root's DID | **The account**: everything it may do, in every space and as a whole (a knock) |
+| `space:<id>`   | **One space** of the account's. `<id>` is 1–128 of `[A-Za-z0-9._~-]`           |
 
-```json
-{ "with": "<resource>", "can": "<ability>" }
-```
+A DID subject MUST be the note's issuer, the account (§7.5): UCAN 1.0's own
+rule that the subject is whoever began the chain, for a chain of one. A note
+for **every space** is a note about the account. UCAN's `null` subject (a
+powerline) adds nothing when every note is from the account it is about, so
+it is refused, keeping one spelling for each meaning.
 
-Resources and abilities in use:
+### 7.3 Commands
 
-| `with`            | Meaning     |
-| ----------------- | ----------- |
-| `*`               | Every space |
-| `space:<spaceId>` | One space   |
+A command is `/`, or one or more segments each written `/` and then one or
+more of `a`–`z`, `0`–`9`, `.`, `_` and `-` (ASCII only), with no trailing
+`/`, at most 256 characters: UCAN 1.0's form, narrowed to ASCII so that no
+two spellings fold to the same command. As a pattern:
+`^/$|^(/[a-z0-9._-]+)+$`. A command covers
+itself and every command under it, by whole segments: `/record` covers
+`/record/write` but not `/recordings`, and `/` covers everything.
 
-| `can`               | Meaning                                                                                                     |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `record/write`      | Write records (what a record in a space requires: `{with: "space:<id>", can: "record/write"}`)              |
-| `record/read`       | Read-only access (app grants with read access)                                                              |
-| `record/*`          | Every `record/…` ability: records, and nothing more                                                         |
-| `collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                   |
-| `access/change`     | Every other change to a space's access history: roles, members, invites, revocations, keys, relays, keepers |
-| `account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                             |
-| `*`                 | Every ability                                                                                               |
+| Command              | What it permits                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `/`                  | Everything below                                                                                                   |
+| `/record`            | Every `/record/…` command: records, and nothing more                                                               |
+| `/record/write`      | Write records (every version in a space needs it)                                                                  |
+| `/record/read`       | Nothing a peer checks: a note for an app given read access, which writes nothing                                   |
+| `/collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                          |
+| `/access/change`     | Every other change to a space's access history: roles, members, invites, revocations, keys, relays, keepers, forks |
+| `/account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                                    |
 
-What each ability permits in a space is specified in
+What each command permits in a space is specified in
 [02 — Records](02-records.md), [03 — Spaces](03-spaces.md) and
-[06](06-nodes-and-sessions.md). Which abilities a version needs, and how a
-peer checks them, is §8.
+[06](06-nodes-and-sessions.md). Which commands a version needs, with which
+arguments, is §8.
 
-> **Planned: grants narrower than a space.** The smallest resource is a whole
-> space, so an app granted a private space can write in every
-> collection and read all of it for as long as its note lasts. A
-> per-collection resource would narrow writes. Narrowing reads also needs
-> keys per collection, which is [03 — Spaces](03-spaces.md)' question. Not
-> designed yet: how coverage (§7.6) treats it, and the resource syntax, which
-> UCAN 1.0 would make unnecessary: a policy on `.collection` narrows a
-> delegation with no new syntax ([#19](https://github.com/leifriksheim/weave/issues/19)).
+### 7.4 Policies
 
-### 7.2 The token's CID
+A policy is UCAN 1.0's policy language (UCAN Delegation, "Policy"),
+evaluated over canonical JSON values: a list of statements that MUST all
+hold for the arguments of what the token is used for (§8).
 
-A token is referred to (in `prf`) by
-`CID(UTF-8(token))` — the hash of the whole encoded string, signature
-included.
+| Statement                                             | Holds when                                                                                                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `["==", sel, value]`, `["!=", sel, value]`            | The selected value is (is not) deeply equal to `value`, any JSON value                                                                           |
+| `["<", sel, n]`, `["<=", …]`, `[">", …]`, `[">=", …]` | Both are numbers, and compare so; `n` MUST be a number                                                                                           |
+| `["like", sel, pattern]`                              | The selected value is a string matching the glob `pattern`                                                                                       |
+| `["not", stmt]`                                       | `stmt` does not hold                                                                                                                             |
+| `["and", [stmt, …]]`, `["or", [stmt, …]]`             | Every (some) `stmt` holds. `and` of none holds; so does `or` of none                                                                             |
+| `["all", sel, stmt]`, `["any", sel, stmt]`            | The selected value is an array, or an object (its values), and `stmt` holds for every (some) element. `all` of none holds; `any` of none doesn't |
 
-> **Planned: one valid form per token.** ECDSA signatures are malleable: from
-> a valid `(r, s)` anyone can make `(r, n − s)`, which WebCrypto also accepts,
-> and a lenient base64url decoder accepts more than one spelling of the same
-> bytes. Either gives a token that still verifies under a different CID.
-> Revocation names a key, not a token ([03](03-spaces.md) §6.4), so a second
-> form does not slip past one; but whatever names or counts a token by its
-> CID, a `prf` link or a cache, sees two tokens where there is one. The plan: verifiers
-> refuse a signature with `s > n/2` (high-S), issuers produce low-S only, and
-> every base64url field is decoded strictly (no padding, no characters outside
-> the alphabet, no non-zero trailing bits).
+**Selectors** are UCAN 1.0's: `.` (the arguments), `.name` (a name of
+`[A-Za-z_][A-Za-z0-9_]*`), `.["any name"]` (a JSON string), `[i]` and
+`[-i]` (an array element, from the end when negative), `[a:b]`, `[a:]`,
+`[:b]` (an array slice, negative bounds from the end), `[]` (an array's
+elements, or an object's values; what follows applies to each, and fails if
+it fails for any), and `?` after a segment (null where it would fail;
+repeated `?` is one). A selector starts with `.`; `..`, a trailing `.` and
+anything else make it malformed. A missing member of an object is `null`;
+selecting further into that `null` fails.
 
-### 7.3 Issuing
+**Globs:** `*` matches any run of characters, including none; `\*` is a
+literal `*`; every other character, a backslash before anything but `*`
+included, is itself.
 
-An issuer produces a token of the form in §7.1; what a verifier checks is
-§7.4–§7.6. The reference issuer's defaults, and what it refuses to issue, are
-the library's: see
-[Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes).
+**When a selector fails** (it finds nothing and has no `?`), the statement
+it is in has **no data**. No data never holds: `not` keeps it no data (so a
+missing field can't turn `not` into a pass), `and` is false if any part is
+false and otherwise no data if any part is, `or` is true if any part is true
+and otherwise no data if any part is, and a policy holds only if every
+statement holds. `!=` is `not ==`. A comparison of the wrong types is false,
+not no data.
 
-### 7.4 Verifying one token
+A policy that is not well formed (an unknown operator, the wrong number of
+arguments, a malformed selector, a non-number in an inequality, a
+non-string pattern, nested more than 32 deep or holding more than 256
+statements) makes its token malformed: refused (§7.1).
 
-Given a token and a time `at` (Unix seconds), a verifier:
+Peers MUST evaluate a note's policy wherever they check the note (§8). The
+reference passes UCAN's published policy fixtures.
 
-1. MUST split on `.` into exactly three parts, and base64url/JSON-decode the
-   first two.
-2. MUST check that `exp` and `nbf` are finite numbers, and that
-   `nbf ≤ at < exp`.
-3. MUST decode `iss` as a did:key (§4), import its public key, and verify the
-   signature over the first two parts as received.
+> The UCAN fixtures leave some corners open; this section fixes them: `any`
+> over an empty collection is false, `not` keeps no data, and slices apply to
+> arrays only. The fixture file's one malformed case is corrected in the
+> copy the tests use (`packages/core/tests/vectors/ucan-policy.json`).
 
-The verifier does not re-canonicalize and does not check `nnc` or `fct`. A
-verifier SHOULD reject a header other than the one in §7.1, and SHOULD reject
-an `iss` whose multicodec is not `p256-pub` (§4).
+### 7.5 Notes
 
-> **Known defect:** the reference `verifyUCAN` checks neither the header
-> (`alg`, `typ`, `ucv`) nor the issuer's multicodec (`packages/core/src/identity/ucan.ts`,
-> `packages/core/src/identity/did.ts`). A fix will reject both. Other implementations MUST
-> NOT rely on a token with a different header being accepted.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20), [#19](https://github.com/leifriksheim/weave/issues/19).
+What a key does carries its **proof**: one note, a token issued by the
+account's root key to that key. A record carries it in `proof`
+([02](02-records.md) §3.1); a knock ([07](07-doors.md)) and a peer's proof
+([04](04-network.md)) carry it the same way. It is a single JSON object,
+never a list.
 
-> **Planned: strict token shape.** Besides the header and the multicodec
-> (the known defect above), verifiers will check the payload's shape: `att`
-> is an array of `{with, can}` string pairs, `prf` an array of CID strings,
-> `iss` and `aud` DIDs, `fct` (when present) an array of objects. A malformed
-> token is refused rather than failing somewhere later.
+Given a proof, and a time `at` or none (§7.6), a verifier MUST check:
 
-Which time step 2 uses depends on what the token is relied on for:
+1. It is one token, a JSON object in the exact form of §7.1, signed by its
+   `iss` (low S), within its time bounds at `at` (§7.6). Anything else,
+   a list of tokens (a chain) included, is refused.
+2. It is a **note**: `aud` is a P-256 `did:key`, and `exp` and `nbf` are
+   present.
+3. Its `sub`, when it is a DID, equals its `iss`.
 
-- **A record's `proof`: no time at all.** Step 2 is skipped. Whether a
-  record stands is something every peer must agree on whenever it looks, so
-  no one's clock, and no time the writer claims, may decide it
+The note is then **for** its `aud`, and **from** its `iss`: the **root**,
+the account it acts for.
+
+A note **grants** a requirement (a command, a space or the account as a
+whole, and arguments; §8) iff its `cmd` covers the required command; its
+`sub` is the account, or `space:<S>` where the requirement is in space `S`;
+and its policy holds for the arguments.
+
+No key below the root can extend a note. A token a session or app key
+signs is a note from that key, about that key's own DID: it names no
+account but the key itself, and acts for no one else.
+
+> Rationale: one link means a key can't mint keys. A stolen session or app
+> key is like a stolen session token: usable, within its note, until it is
+> revoked, but it can't pass its power on to keys the account never saw, so
+> revoking it ([03](03-spaces.md) §6.4) takes everything it can do, with the
+> one cutoff the revoke names. With chains, a revoke would also have to
+> reach every key below the revoked one, and peers would have to agree on
+> what of theirs counted. A key that needs a narrower key of its own (an
+> app's helper, a key per tab) asks the account for a second note.
+
+### 7.6 Time
+
+Which time step 1 uses depends on what the proof is relied on for:
+
+- **A record's `proof`: no time at all.** Time bounds are not checked.
+  Whether a record stands is something every peer must agree on whenever it
+  looks, so no one's clock, and no time the writer claims, may decide it
   ([02 — Records](02-records.md) §9.3). A record stays valid after its note
   runs out. What ends a key's writes is a revoke of the key, with a cutoff
   at what it signed ([03 — Spaces](03-spaces.md) §6.4).
 - **Anything live** (a knock, a live message, a peer's proof when it
-  connects, an app checking its grant): the checking node's own clock. These
-  are one node's decisions in the moment, not verdicts peers share, so a
-  note that has run out stops working there on time, with no revoke needed.
+  connects, an app checking its grant): the checking node's own clock, or,
+  for a knock, the time it was signed and dropped (07). The note MUST have
+  `nbf ≤ at < exp` at that `at`. These are one node's decisions in the moment, not
+  verdicts peers share, so a note that has run out stops working there on
+  time, with no revoke needed.
 
 So a leaked key's live use ends when its note runs out, and its records end
 when its key is revoked. Signing out writes a revoke of the session key in every space
@@ -524,169 +582,106 @@ registry, with a cutoff at what it wrote, and a device that kept the key
 forgets it (`revokeSelf`); the revokes reach other peers as that device next
 syncs. _Open:_ removing a device from another one, which
 needs the list of the account's session keys
-([#26](https://github.com/leifriksheim/weave/issues/26)).
+([#165](https://github.com/leifriksheim/weave/issues/165)).
 
-### 7.5 Delegation chains
+### 7.7 Issuing
 
-A token with non-empty `prf` claims authority from its parents. The chain is
-resolved from the leaf toward the root:
+An issuer produces tokens of the form in §7.1, low S only; what a verifier
+checks is §7.5–§7.6. The reference issuer's defaults (an hour, `nbf` set
+back by five minutes for clocks that disagree, the terms a home gives an
+app) are the library's: see
+[Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes).
 
-1. Verify the leaf (§7.4) at `at`.
-2. Let `current` be the leaf. Up to **10** times:
-   - If `current.prf` is empty, `current.iss` is the **root DID**. Stop: the
-     chain is valid; it grants the **leaf's** `att` to the **leaf's** `aud`.
-   - Resolve the token whose CID is `current.prf[0]`. If none is found, the
-     chain is invalid.
-   - Check the link: every CID in `current.prf` must be among the provided
-     proofs (only one is provided, so in effect `prf` MUST have at most one
-     entry); the parent must verify (§7.4) at the same `at`; the parent's `aud`
-     MUST equal `current.iss`; every capability in `current.att` MUST be
-     covered by some capability in the parent's `att` (§7.6).
-   - Move to the parent.
-3. A chain longer than 10 links is invalid.
+### 7.8 Example
 
-Because every parent is verified at the same `at`, a child is never usable
-outside its parents' windows, even though the chain check does not compare
-`exp` values directly.
-
-A record-validating peer additionally requires that the leaf's `aud` equals
-the record's `author`, that some leaf capability covers the capability the
-record needs, and that the root DID is allowed in the space
-([02 — Records](02-records.md), [03 — Spaces](03-spaces.md)).
-
-**How parent tokens travel is not yet specified** (§16). The rules above are
-the intended check for a chain of any length up to 10.
-
-> **Known defect:** a record carries only its leaf token in `proof`, and the
-> reference wires no proof resolver for records — the capability gate
-> defaults to `() => null` (`packages/core/src/validation/capability-gate.ts`),
-> and `packages/core/src/network/peer-auth.ts` passes it too. So a chain deeper than one link never
-> validates on a record; only tokens issued directly by the root (`prf: []`)
-> do. A fix will define how parents travel and resolve them.
-> Tracked in [#17](https://github.com/leifriksheim/weave/issues/17), [#19](https://github.com/leifriksheim/weave/issues/19).
-
-#### Planned: proof chains that travel
-
-Fixes the known defect above; replaces the first line of §16.
-
-A record will carry, besides its leaf token, the intermediate tokens its chain
-needs, so any peer can resolve the chain from the record alone, with no lookup
-and no service. With that, delegations deeper than root → key work on records:
-a session key delegating on to a short-lived key, an app handing a narrower
-note to a helper.
-
-What it unblocks:
-
-- A note for a program connected by code is signed **root → its key**
-  directly today, only because peers resolve one link
-  ([06](06-nodes-and-sessions.md) §3). With chains, the app it connected
-  through could delegate to it itself, a narrower note than its own.
-- The older idea of **roles as delegations** ("anyone the owner made a
-  moderator" as a UCAN from the owner, carried in the record's proof) needed
-  this. Roles now live in the space's access history
-  ([03 — Spaces](03-spaces.md)) and `can:<p>` rules are built on them
-  ([02 — Records](02-records.md) §7.1), so this no longer depends on chains.
-
-Open questions:
-
-- Where parents go: a new optional version member (for example
-  `proofs: [token, …]`, parents in order), or tokens stored once per space and
-  referred to by CID. The first is self-contained; the second is smaller when
-  one note signs many records.
-- Whether the chain depth limit of 10 (§7.5) stays, given the bytes each link
-  adds to every record.
-- How revocation, which names a key ([03](03-spaces.md) §6.4), treats a key
-  in the middle of a chain: whether revoking it withdraws what keys it
-  delegated to signed.
-
-### 7.6 Capability coverage
-
-A parent capability `P` covers a child capability `C` iff both hold:
-
-- `P.with == "*"` or `P.with == C.with` (exact string match — no other
-  wildcards; `space:*` is _not_ a pattern);
-- `P.can == "*"`, or `P.can == C.can`, or `P.can` ends in `/*` and `C.can`
-  starts with `P.can` minus its final `*` (so `record/*` covers
-  `record/write` and `record/read`, but not `*`).
-
-### 7.7 Example
-
-Issued by the root key of §3.3 to the did:key spec's example key, records
-only, with fixed times and nonce:
-
-Header JSON: `{"alg":"ES256","typ":"JWT","ucv":"0.10.0"}`
-
-Payload JSON:
-
-```json
-{
-  "att": [{ "can": "record/*", "with": "*" }],
-  "aud": "did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169",
-  "exp": 1790000000,
-  "iss": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
-  "nbf": 1789996100,
-  "nnc": "0123456789abcdef",
-  "prf": []
-}
-```
-
-Encoded (ECDSA signatures are randomized, so the third part differs every
-time):
+Issued by the root key of §3.3 to the did:key spec's example key: records
+only, in collection `app.note`, with fixed times and nonce. The signed
+bytes:
 
 ```
-eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsInVjdiI6IjAuMTAuMCJ9.eyJhdHQiOlt7ImNhbiI6InJlY29yZC8qIiwid2l0aCI6IioifV0sImF1ZCI6ImRpZDprZXk6ekRuYWVyRGFURjVCWEVhdkNyZlJaRWszMTZkcGJMc2ZQRFozV0o1aFJUUEZVMjE2OSIsImV4cCI6MTc5MDAwMDAwMCwiaXNzIjoiZGlkOmtleTp6RG5hZWFBN0JjVnhBaUxkTlAxNXdMdlM2U0MxdmFRYzl6cGVWeHJVcEVDNDh5eGtyIiwibmJmIjoxNzg5OTk2MTAwLCJubmMiOiIwMTIzNDU2Nzg5YWJjZGVmIiwicHJmIjpbXX0.cuXLLqFQFJUaMxfpS0wLkvD-b8yvDhpKZP02e0jL4PYi6r6PShA9YgYeiyo1nDqX-rALrpAmrZ67Y6pP4OMC4w
+{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr"},"type":"weave/ucan/dlg@1"}
 ```
 
-Its CID (for this exact string): `bn3we3malzqeluqvvwpwefm5vsldddbz2f33ktrnji2ztcq6wu2rq`.
+One token over them (ECDSA signatures are randomized, so `sig` differs every
+time it is issued; this one is low-S):
 
-_Source:_ `packages/core/src/identity/ucan.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/node/space-runtime.ts` (`writeCapability`, `noteCid`).
-_Tests:_ `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`, `packages/core/tests/attacks.test.ts`.
+```
+{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr"},"sig":"5nEZcQqVKr77iRLSYCRVC-W7AYbE-4MTEZSPC4FMjuQBk9UVvQLN-34gst5lghf3y0YRWT9m5Vaqkt6XcBu7Qw","type":"weave/ucan/dlg@1"}
+```
+
+Its id: `b6zstk7cjkyvhhcdfdoihjemyyq5s4frwwvk3aijuf5ykcqa4fbya`. The same
+token with `s` replaced by `n − s` verifies under Web Crypto, and is
+refused (§7.1).
+
+_Source:_ `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyDelegation`, `isCommand`, `verifyNote`, `noteCovers`), `packages/core/src/identity/policy.ts` (`evaluatePolicy`, `policyProblem`), `packages/core/src/validation/capability-gate.ts`.
+_Tests:_ `packages/core/tests/ucan.test.ts` ("the example of 01 §7.8", "one token, one id: the high-S form of a signature is refused", "refuses anything but its exact shape", "commands cover what is under them", "a chain is refused, however sound its links", "a subject naming an account is only ever its issuer", "what a note grants"), `packages/core/tests/policy.test.ts` (the UCAN fixtures), `packages/core/tests/validation.test.ts` ("a note is one link", "a note's policy is checked against the version"), `packages/core/tests/space-access.test.ts` ("a key cannot pass its note on"), `packages/core/tests/attacks.test.ts`.
 
 ---
 
 ## 8. What a note lets a key do
 
-A key may do in a space what its note grants there, judged by capability
-coverage (§7.6) against what each version needs. The protocol never asks what
-kind of thing holds a key: a person's session, an app, any other program and a
-borrowed device are told apart only by what their notes grant.
+A key may do what its note grants (§7.5), judged against what each thing
+it does requires: a command, where (a space `S`, or the account as a whole),
+and the **arguments** the note's policy reads. The protocol never asks
+what kind of thing holds a key: a person's session, an app, any other
+program and a borrowed device are told apart only by what their notes grant.
 
-| A version in space `S`…                                                                                                     | needs `{ "with": "space:S", "can": … }` |
-| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| any record                                                                                                                  | `record/write`                          |
-| and in `sys.collection`                                                                                                     | also `collection/define`                |
-| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | also `access/change`                    |
-| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | also `account/write`                    |
+| A version in space `S`…                                                                                                     | requires (in `S`)    | with arguments                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------ |
+| any record                                                                                                                  | `/record/write`      | `{ "space": S, "collection": <its collection> }`                                           |
+| and in `sys.collection`                                                                                                     | `/collection/define` | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:` |
+| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | `/access/change`     | `{ "space": S, "collection": <its collection> }`                                           |
+| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | `/account/write`     | `{ "space": S, "collection": <its collection> }`                                           |
 
-A knock ([07 — Doors](07-doors.md)) needs `{ "with": "*", "can": "account/write" }`.
+A knock ([07 — Doors](07-doors.md)) requires `/account/write` for the
+account as a whole, with arguments `{}`: only a note about the account
+grants it, and a policy that limits it to some spaces does not hold there.
 
-- A version with no `proof` was signed by its author key itself, which may do
-  anything (§6).
-- A peer MUST ignore a change to the access history whose note does not grant
-  the ability it needs: it is not an event in the history, whatever the
+`space` is the space's id, without `space:`. `S` is the space the version is
+judged in, never one it claims. The arguments are exactly these: a policy
+that reads anything else finds `null` (a missing member) or nothing.
+
+- A version with no `proof` was signed by its author key itself, which may
+  do anything (§6).
+- A peer MUST ignore a change to the access history whose proof does not
+  grant what it requires: it is not an event in the history, whatever the
   writer's role ([03 — Spaces](03-spaces.md)). A version in one of the
-  account's own spaces whose note lacks `account/write` MUST NOT count there.
-- The check reads the leaf note's `att`. A chain that verifies (§7.5) never
-  grants more than its parents, so the leaf says enough.
+  account's own spaces whose proof lacks `/account/write` MUST NOT count
+  there.
 
-A person's own sessions, and apps granted write, get `*`. A key the account
-trusts less gets `record/*` (a request for records only,
-[06](06-nodes-and-sessions.md) §2.4): it writes records, and proposes anything
-more for someone who may to apply
+A person's own sessions, and apps granted write, get `/` about the account.
+A key the account trusts less gets `/record` (a request for records only,
+[06](06-nodes-and-sessions.md) §2.4): it writes records, and proposes
+anything more for someone who may to apply
 ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
+A note for one space is about that space (`sub: "space:<id>"`); a note for
+several is about the account, with a policy naming them:
+`[["or", [["==", ".space", "<id>"], …]]]`. Policies on `.collection` narrow
+a note to some collections; reading stays a matter of keys
+([03 — Spaces](03-spaces.md)), which a note doesn't narrow. An action about
+the account as a whole (a knock, the account's own spaces) carries no
+`space` argument, so `.space` reads as null there: a policy that only
+excludes spaces (`["not", ["==", ".space", "<id>"]]`) holds for it. To keep
+a note to some spaces, name them, as above.
 
 A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
-message or a knock differently for any `fct` its note carries: what the key
-may do is what the note grants.
+message or a knock differently for anything in `meta`: what the key may do is
+what the proof grants.
 
 > Rationale: earlier, the protocol marked one kind of program with a fact,
 > first refusing changes from a note that carried it and later only showing
-> it as a label. Either way it tied the protocol to one kind of key. Abilities
-> say what matters in what UCAN already has, and serve any key the account
-> trusts less, a person's too.
+> it as a label. Either way it tied the protocol to one kind of key. Commands
+> and policies say what matters in what UCAN already has, and serve any key
+> the account trusts less, a person's too.
 
-_Source:_ `packages/core/src/identity/abilities.ts` (`noteGrants`, `DEFINE_ABILITY`, `ACCESS_ABILITY`, `ACCOUNT_ABILITY`), `packages/core/src/node/space-runtime.ts` (`accessCapability`, `buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantCapabilities`).
-_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants account/write: …").
+> Rationale for one command and a policy, not a set of delegations: every
+> note a home gives names one command, across one space, several or all of
+> them. One subject covers one space or all; a policy on `.space` covers
+> several. So one token per version, and one requirement checked against it,
+> keep everything notes granted before.
+
+_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `accountSpaceRequirement`, `ACCOUNT_REQUIREMENT`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
+_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").
 
 ---
 
@@ -1290,8 +1285,6 @@ _Tests:_ `packages/core/tests/pairing.test.ts` ("a message sent back to the side
 
 ## 16. Not yet specified
 
-- Transport of parent tokens for multi-link delegation chains: planned in
-  §7.5 ("Proof chains that travel").
 - A checksum or version marker for recovery codes: planned in §2.3.
 - Rotation of a compromised seed. Today an account _is_ its seed; a new seed
   is a new identity. A proposal (KERI-style pre-rotation: the identifier is

@@ -11,6 +11,7 @@ import { isRecord } from '../src/utils/guards.js';
 
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { issueDelegation, type Delegation } from '../src/identity/ucan.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
@@ -482,7 +483,8 @@ describe('space access: taking it back', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: '*' }],
+      command: '/',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const sign = async (text: string, log: Version['log']) =>
@@ -493,7 +495,7 @@ describe('space access: taking it back', () => {
           space,
           version: { key: await newRecordKey(bob.node.did), seq: 0 },
           body: { text },
-          proof: note.encoded,
+          proof: note,
           seen: seenThen,
           ...(log ? { log } : {}),
         }),
@@ -530,7 +532,8 @@ describe('space access: taking it back', () => {
     const appDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
       audience: appDid,
-      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      command: '/record/write',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const store = createStorageProvider(await bob.stores(`spaces/${space}`));
@@ -547,7 +550,7 @@ describe('space access: taking it back', () => {
           space,
           version: { key: await newRecordKey(bob.node.did), seq: 0 },
           body: { text },
-          proof: note.encoded,
+          proof: note,
           seen: heads,
           log: last ? { n: (last.log?.n ?? 0) + 1, prev: last.id } : { n: 0 },
         }),
@@ -563,7 +566,7 @@ describe('space access: taking it back', () => {
       'the app’s note',
     );
 
-    await bob.node.spaces.revoke(space, note.encoded);
+    await bob.node.spaces.revoke(space, note.payload.aud);
     const late = await sign('late');
     const refused: string[] = [];
     alice.node.subscribe((event) => {
@@ -586,5 +589,64 @@ describe('space access: taking it back', () => {
       'Alice to stop counting it',
     );
     assert.equal((await alice.node.records.get(space, early.key))?.verified, true);
+  });
+
+  test('a key cannot pass its note on: a two-link proof counts for no peer', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    // An app of Bob's, and a helper it tries to pass its note on to.
+    const app = await provider.generateKeyPair();
+    const appDid = publicKeyToDid(await provider.exportPublicKey(app.publicKey), P256_MULTICODEC);
+    const helper = await provider.generateKeyPair();
+    const helperDid = publicKeyToDid(await provider.exportPublicKey(helper.publicKey), P256_MULTICODEC);
+    const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
+      audience: appDid,
+      command: '/',
+      subject: `space:${space}`,
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const passedOn = await issueDelegation(
+      {
+        issuer: { did: appDid, privateKey: app.privateKey },
+        audience: helperDid,
+        command: '/record/write',
+        subject: `space:${space}`,
+      },
+      provider,
+    );
+    const store = createStorageProvider(await bob.stores(`spaces/${space}`));
+    const heads =
+      (await store.getVersion((await bob.node.records.put(space, 'app.note', { text: 'Bob' })).version))!
+        .seen ?? [];
+    const sign = async (text: string, by: CryptoKeyPair, author: string, proof: unknown) => {
+      const unsigned = createVersion({
+        author,
+        collection: 'app.note',
+        space,
+        version: { key: await newRecordKey(bob.node.did), seq: 0 },
+        body: { text },
+        seen: heads,
+        log: { n: 0 },
+      });
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a chain, as a peer may send one
+      return createSigner(provider).sign({ ...unsigned, proof: proof as Delegation }, by.privateKey);
+    };
+    const chained = await sign('from the helper, two links', helper, helperDid, [note, passedOn]);
+    const leaf = await sign('from the helper, its leaf alone', helper, helperDid, passedOn);
+    const own = await sign('from the app itself', app, appDid, note);
+    const refused: string[] = [];
+    alice.node.subscribe((event) => {
+      if (event.type === 'rejected') refused.push(event.reason);
+    });
+    await letGo(bob.node, space);
+    for (const version of [chained, leaf, own]) await store.addVersion(version);
+    await hold(bob.node, space);
+    await until(
+      async () => (await alice.node.records.get(space, own.key))?.verified === true,
+      4000,
+      'the app’s own record, under its one-link note',
+    );
+    await until(async () => refused.some((reason) => /one note/.test(reason)), 4000, 'the chain refused');
+    assert.equal(await alice.node.records.get(space, chained.key), null, 'two links');
+    assert.equal(await alice.node.records.get(space, leaf.key), null, 'the leaf alone names no member');
   });
 });

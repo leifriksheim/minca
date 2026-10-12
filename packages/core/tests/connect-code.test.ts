@@ -15,7 +15,6 @@ import {
   deriveChannel,
   type Channel,
 } from '../src/identity/channel.js';
-import { parseUCAN } from '../src/identity/ucan.js';
 import { checkGrant, type AppKey, type Grant } from '../src/session/connect.js';
 import { bytesField, meetOnChannel } from '../src/session/channel-room.js';
 import {
@@ -73,18 +72,18 @@ function room(hub: FakeHub, wire: Wire = (message, send) => send(message)) {
   return { network: { relays: [], transport }, seen };
 }
 
-/** A note from this person's account to `audience`: records only, unless `can` says otherwise */
-async function grantFor(who: Person, audience: string, can = 'record/*'): Promise<Grant> {
+/** A note from this person's account to `audience`: records only, unless `command` says otherwise */
+async function grantFor(who: Person, audience: string, command = '/record'): Promise<Grant> {
   const note = await createLocalRootSigner(who.me, who.manager.getProvider()).delegate({
     audience,
-    capabilities: [{ with: '*', can }],
+    command,
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   return {
-    v: 1,
+    v: 2,
     did: who.me.did,
     name: 'Ada',
-    token: note.encoded,
+    note,
     access: 'write',
     scope: 'account',
     spaces: [],
@@ -246,7 +245,7 @@ describe('connecting a program by code', () => {
     });
     assert.equal(found, ORIGIN, 'the program learns where the app lives');
     assert.equal(grant.did, who.me.did);
-    assert.equal(parseUCAN(grant.token).payload.aud, key.did);
+    assert.equal(grant.note.payload.aud, key.did);
     await until(async () => offer.kinds().includes('connected'), 2000, 'the app hearing it worked');
     assert.deepEqual(offer.kinds(), ['waiting', 'asking', 'connected']);
   });
@@ -299,7 +298,7 @@ describe('connecting a program by code', () => {
       recordsOnly: true,
       network,
     });
-    assert.equal(parseUCAN(grant.token).payload.aud, key.did);
+    assert.equal(grant.note.payload.aud, key.did);
     await until(async () => offer.kinds().includes('connected'), 2000, 'the app hearing it worked');
     assert.deepEqual(offer.kinds(), ['waiting', 'asking', 'connected']);
   });
@@ -351,7 +350,7 @@ describe('connecting a program by code', () => {
       void (async () => {
         for (const grant of [
           await grantFor(who, 'did:key:zOther'),
-          await grantFor(who, stage.asking.did, '*'),
+          await grantFor(who, stage.asking.did, '/'),
           await grantFor(eve, stage.asking.did),
         ])
           await stage.allow(grant).catch((error: unknown) => refusals.push(error));
@@ -366,7 +365,7 @@ describe('connecting a program by code', () => {
     assert.equal(refusals.length, 3);
     // And should an app send one anyway, the program refuses it too.
     await assert.rejects(
-      checkGrant(await grantFor(who, key.did, '*'), key.did, { recordsOnly: true }),
+      checkGrant(await grantFor(who, key.did, '/'), key.did, { recordsOnly: true }),
       /more than records/,
     );
     assert.throws(() => readConnectCode('wv_short'), /not a connect code/);

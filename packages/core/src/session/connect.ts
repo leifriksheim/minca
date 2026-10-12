@@ -2,7 +2,7 @@
  * @module session/connect
  * An app using an account without ever seeing its seed. The app opens the
  * account home in a popup with its own non-exportable key; the person approves
- * there, and the home signs a note (a UCAN) letting that key write in the
+ * there, and the home signs a note (a delegation) letting that key write in the
  * spaces given, which every peer checks. The two sides talk by `postMessage`,
  * each checking the other's origin as the browser reports it.
  */
@@ -10,10 +10,16 @@ import { createP256Provider } from '../identity/crypto-p256.js';
 import { didOf, didToPublicKey } from '../identity/did.js';
 import { canonicalize } from '../schema/version.js';
 import { idbOnce } from '../identity/idb.js';
-import { cidFromBytes } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
-import { verifyUCAN, parseUCAN, type Capability, type UCANToken } from '../identity/ucan.js';
-import { grantsRecordsOnly } from '../identity/abilities.js';
+import { verifyNote, type Delegation } from '../identity/ucan.js';
+import {
+  ALL_COMMAND,
+  grantsRecordsOnly,
+  noteTerms,
+  READ_COMMAND,
+  RECORDS_COMMAND,
+  type NoteTerms,
+} from '../identity/abilities.js';
 import type { RootSigner } from '../identity/root-signer.js';
 import { startPageNode, type WorkerLike } from '../node/worker.js';
 import type { StoreFactory } from '../node/stores.js';
@@ -69,7 +75,7 @@ export interface ConnectRequest {
   /** Whether to offer the person's existing spaces to pick from. Default true. */
   readonly chooseSpaces?: boolean;
   /**
-   * A note that grants writing records and nothing more (`record/*`), so
+   * A note that grants writing records and nothing more (`/record`), so
    * every peer refuses its key changing a space's collections or who may do
    * what, or writing in the account's own spaces. No contact key, no spaces
    * made for it, and no carrying.
@@ -136,15 +142,18 @@ export interface GrantedSpace {
   readonly memberKey?: string;
 }
 
+/** A grant's format: 2 since its note is a delegation in the UCAN 1.0 profile (spec 01 §7) */
+export const GRANT_VERSION = 2;
+
 /** What the home hands back when the person approves */
 export interface Grant {
-  readonly v: 1;
+  readonly v: typeof GRANT_VERSION;
   /** The account's identity — what the app acts for */
   readonly did: string;
   /** The account's name, for showing who is connected */
   readonly name: string;
   /** The signed note: the account → the app's key, for these spaces, until `expiresAt` */
-  readonly token: string;
+  readonly note: Delegation;
   readonly access: 'read' | 'write';
   readonly scope: 'spaces' | 'account';
   readonly spaces: ReadonlyArray<GrantedSpace>;
@@ -235,17 +244,17 @@ export function homeAddress(input: string): string {
 }
 
 /**
- * The capabilities a grant carries, for these spaces. Writing is everything
- * the account may do there; `records` is writing records only, for a key the
- * account trusts less: it can't define collections, change who may do what,
- * or write for the account (`identity/abilities.ts`).
+ * The terms of the note a grant carries, for these spaces. Writing is every
+ * command; `records` is records only, for a key the account trusts less: it
+ * can't define collections, change who may do what, or write for the
+ * account (`identity/abilities.ts`).
  */
-export function grantCapabilities(
+export function grantTerms(
   access: 'read' | 'write' | 'records',
   spaceIds: ReadonlyArray<string> | 'all',
-): Capability[] {
-  const can = access === 'write' ? '*' : access === 'records' ? 'record/*' : 'record/read';
-  return spaceIds === 'all' ? [{ with: '*', can }] : spaceIds.map((id) => ({ with: `space:${id}`, can }));
+): NoteTerms {
+  const command = access === 'write' ? ALL_COMMAND : access === 'records' ? RECORDS_COMMAND : READ_COMMAND;
+  return noteTerms(command, spaceIds);
 }
 
 // ─── The app's side ──────────────────────────────────────────────────
@@ -533,21 +542,19 @@ export async function checkGrant(
   audience: string,
   asked: { readonly recordsOnly?: boolean } = {},
 ): Promise<void> {
-  if (!isObject(grant) || grant.v !== 1 || typeof grant.token !== 'string' || typeof grant.did !== 'string') {
+  if (!isObject(grant) || grant.v !== GRANT_VERSION || typeof grant.did !== 'string') {
     throw new Error('That is not a grant.');
   }
-  const verified = await verifyUCAN(grant.token, createP256Provider());
-  if (!verified.valid) throw new Error(`The grant does not check out: ${verified.reason ?? 'invalid'}`);
-  const { payload } = parseUCAN(grant.token);
-  if (payload.aud !== audience) throw new Error('The grant was made out to a different key.');
-  if (payload.iss !== grant.did) throw new Error('The grant was not signed by the account it names.');
-  if (asked.recordsOnly && !grantsRecordsOnly(grant.token))
+  const verified = await verifyNote(grant.note, createP256Provider());
+  if (!verified.valid) throw new Error(`The grant does not check out: ${verified.reason}`);
+  if (verified.audience !== audience) throw new Error('The grant was made out to a different key.');
+  if (verified.root !== grant.did) throw new Error('The grant was not signed by the account it names.');
+  if (asked.recordsOnly && !grantsRecordsOnly(grant.note))
     throw new Error('The grant gives more than records, which is all that was asked for.');
 }
 
 /** A signer that answers with the note the home gave — the app holds nothing else. */
 export function grantSigner(grant: Grant): RootSigner {
-  let token: Promise<UCANToken> | null = null;
   return {
     did: grant.did,
     custody: 'remote',
@@ -555,12 +562,7 @@ export function grantSigner(grant: Grant): RootSigner {
       if (grant.expiresAt <= Math.floor(Date.now() / 1000)) {
         throw new Error('Access has run out. Connect to your account home again.');
       }
-      token ??= cidFromBytes(utf8Encode(grant.token)).then((cid) => ({
-        ...parseUCAN(grant.token),
-        encoded: grant.token,
-        cid,
-      }));
-      return token;
+      return grant.note;
     },
   };
 }
@@ -618,7 +620,10 @@ export function grantStore(storage: KeyValueStore | null = defaultStorage(), key
   return {
     load(): Grant | null {
       const grant = kept.read<Grant>(key);
-      return grant && grant.expiresAt > Math.floor(Date.now() / 1000) ? grant : null;
+      // One kept in an older format holds a note no peer reads now: connecting again replaces it.
+      return grant && grant.v === GRANT_VERSION && grant.expiresAt > Math.floor(Date.now() / 1000)
+        ? grant
+        : null;
     },
     save: (grant: Grant): void => kept.write(key, grant),
     forget: (): void => kept.write(key, null),

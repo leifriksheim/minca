@@ -182,8 +182,8 @@ Three things would not survive the trip anyway:
   nothing), so `exp` and `nbf` **must be absent**; a grant with either is
   refused. A grant ends by revocation or removal, judged by the replay.
 
-The account's own notes (account to device, app, program) move to the same
-profile, so there is one delegation format (#19).
+The account's own notes (account to device, app, program) use the same
+profile, so there is one delegation format (01 §7, #19).
 
 ### Abilities, scope, roles
 
@@ -696,7 +696,13 @@ Each step is its own PR with an adversarial review.
    evaluators there are stand-ins until they point at the library.
 2. **Keys that belong to their creator** (#72), first: `byCreator` and the
    line rule both depend on it. Done: 02 §4.1, §7.3.
-3. **The UCAN-shaped profile** for notes (#19).
+3. **The UCAN-shaped profile** for notes (#19). Done: 01 §7–§8. Notes are
+   one delegation each (a command, a subject, a policy on `.space` for
+   several spaces), a proof is one note from the account, never a chain
+   (a key can't pass its note on), and the
+   scenarios' policy evaluator is the library's
+   (`packages/core/src/identity/policy.ts`). Grants reuse the token as it
+   is: `aud` a role, no `exp` or `nbf`, checked by a grant's own rules.
 4. **Grants and the resolver.** Prototype `strong-remove/1` over grants, run
    it through the existing convergence and attack suites, then replace ranks
    in 03 and the code. The command arguments (§2) land here, with `roles`,

@@ -42,7 +42,8 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
   const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
   const note = await createLocalRootSigner(who.me, who.manager.getProvider()).delegate({
     audience: keyDid,
-    capabilities: [{ with: `space:${space}`, can: '*' }],
+    command: '/',
+    subject: `space:${space}`,
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const seen = [...(await who.node.spaces.access(space)).heads];
@@ -58,7 +59,7 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
           space,
           version: { key: await newRecordKey(who.node.did), seq: 0 },
           body: { i },
-          proof: note.encoded,
+          proof: note,
           seen,
           log: { n: 0 },
         }),

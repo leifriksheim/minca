@@ -6,7 +6,6 @@
  * hands it to a new device. The seed stays inside this object, and signs only
  * the note that lets a session key write.
  */
-import { parseUCAN } from '../identity/ucan.js';
 import { isObject, unref } from '../utils/guards.js';
 import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
@@ -69,7 +68,8 @@ import {
   type StaySignedIn,
 } from './stay-signed-in.js';
 import {
-  grantCapabilities,
+  grantTerms,
+  GRANT_VERSION,
   MAX_GRANT_DAYS,
   type CarryGrant,
   type ConnectRequest,
@@ -226,8 +226,6 @@ export interface Connection {
   readonly grantedAt: string;
   /** Unix seconds */
   readonly expiresAt: number;
-  /** The note the app writes under — what disconnecting revokes */
-  readonly token?: string;
   /** `code` for a program connected by code through the app at `origin`: its own key, kept apart from the app's own connection */
   readonly via?: 'code';
   /** Present, and true, when its note grants records only */
@@ -245,7 +243,6 @@ const CONNECTION_FIELDS = new Set([
   'spaces',
   'grantedAt',
   'expiresAt',
-  'token',
   'via',
   'recordsOnly',
 ]);
@@ -253,8 +250,7 @@ const CONNECTION_FIELDS = new Set([
 /** Whether a kept connection has this shape, and nothing else */
 function isConnection(value: unknown): value is Connection {
   if (!isObject(value) || !Object.keys(value).every((field) => CONNECTION_FIELDS.has(field))) return false;
-  const { origin, name, audience, access, scope, carrySpace, spaces, grantedAt, expiresAt, token, via } =
-    value;
+  const { origin, name, audience, access, scope, carrySpace, spaces, grantedAt, expiresAt, via } = value;
   return (
     typeof origin === 'string' &&
     (name === null || typeof name === 'string') &&
@@ -268,7 +264,6 @@ function isConnection(value: unknown): value is Connection {
     ) &&
     typeof grantedAt === 'string' &&
     typeof expiresAt === 'number' &&
-    (token === undefined || typeof token === 'string') &&
     (via === undefined || via === 'code') &&
     (value.recordsOnly === undefined || value.recordsOnly === true)
   );
@@ -634,8 +629,8 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
   /** Revokes the key a connection was given, where it could write; never this node's own */
   async function revokeConnection(node: P2PNode, connection: Connection): Promise<void> {
-    if (!connection.token || connection.access !== 'write') return;
-    if (parseUCAN(connection.token).payload.aud === node.sessionDid) return;
+    if (connection.access !== 'write') return;
+    if (connection.audience === node.sessionDid) return;
     const contactsSpace = await node.contacts.space();
     const covered =
       connection.scope === 'account'
@@ -646,10 +641,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         : connection.spaces.map((space) => space.id);
     // Every space at once: each is its own store. A space that is gone, or
     // that this account no longer writes in, has nothing to revoke.
-    const token = connection.token;
-    await Promise.all(covered.map((spaceId) => node.spaces.revoke(spaceId, token).catch(() => {})));
+    const key = connection.audience;
+    await Promise.all(covered.map((spaceId) => node.spaces.revoke(spaceId, key).catch(() => {})));
     // A whole-account app could also add spaces to the account's list, and rename it.
-    if (connection.scope === 'account') await node.account.revoke(token).catch(() => {});
+    if (connection.scope === 'account') await node.account.revoke(key).catch(() => {});
   }
 
   /** Disconnects every app connected here whose chosen time has passed */
@@ -1355,12 +1350,9 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const days = Math.min(Math.max(choice.days ?? request.days ?? 7, 1 / 24), MAX_GRANT_DAYS);
       const expiresAt = Math.floor(Date.now() / 1000) + Math.round(days * 24 * 3600);
       const { signer } = await rootFromSeed(seed);
-      const token = await signer.delegate({
+      const note = await signer.delegate({
         audience: request.audience,
-        capabilities: grantCapabilities(
-          recordsOnly && access === 'write' ? 'records' : access,
-          whole ? 'all' : ids,
-        ),
+        ...grantTerms(recordsOnly && access === 'write' ? 'records' : access, whole ? 'all' : ids),
         expiration: expiresAt,
       });
 
@@ -1373,7 +1365,6 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         spaces: spaces.map(({ id, name }) => ({ id, name })),
         grantedAt: new Date().toISOString(),
         expiresAt,
-        token: token.encoded,
         ...(byCode ? { via: 'code' as const } : {}),
         ...(recordsOnly ? { recordsOnly: true as const } : {}),
       };
@@ -1386,10 +1377,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       writeConnections([connection, ...auth.connections().filter((known) => !replaced(known))]);
 
       return {
-        v: 1,
+        v: GRANT_VERSION,
         did: session.did,
         name: session.account.name,
-        token: token.encoded,
+        note,
         access,
         scope: whole ? 'account' : 'spaces',
         spaces,

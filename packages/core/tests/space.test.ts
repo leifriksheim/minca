@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { issueUCAN, type Capability } from '../src/identity/ucan.js';
+import { issueDelegation } from '../src/identity/ucan.js';
+import { writeRequirement } from '../src/identity/abilities.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
 import { createCapabilityGate } from '../src/validation/capability-gate.js';
@@ -142,11 +143,9 @@ describe('private space versions', () => {
     });
     const spaceId = record.space.id;
 
-    const required: Capability = { with: `space:${spaceId}`, can: 'record/write' };
-
     const session = await makeKey();
-    const ucan = await issueUCAN(
-      { issuer: owner, audience: session.did, capabilities: [{ with: '*', can: 'record/*' }] },
+    const ucan = await issueDelegation(
+      { issuer: owner, audience: session.did, command: '/record' },
       provider,
     );
 
@@ -159,12 +158,15 @@ describe('private space versions', () => {
       space: spaceId,
       log: { n: 0 },
       body: sealed,
-      proof: ucan.encoded,
+      proof: ucan,
       version: { key: place.key, seq: 0 },
     });
     const version = await signer.sign(unsigned, session.privateKey);
 
-    const check = createVersionCheck({ provider, requiredCapability: () => required });
+    const check = createVersionCheck({
+      provider,
+      required: (version) => writeRequirement(spaceId, version.collection),
+    });
 
     // A peer with no key still verifies and relays it: the signature and capability hold.
     const verdict = await check(version);
@@ -214,13 +216,13 @@ describe('private space versions', () => {
 
     const gate = createCapabilityGate({
       provider,
-      requiredCapability: () => ({ with: `space:${spaceId}`, can: 'record/write' }),
+      required: (version) => writeRequirement(spaceId, version.collection),
       isTrustedRoot: (rootDid) => rootDid === owner.did,
     });
 
-    // Perfectly valid UCAN — from the wrong root.
-    const ucan = await issueUCAN(
-      { issuer: stranger, audience: strangerSession.did, capabilities: [{ with: '*', can: 'record/*' }] },
+    // A perfectly valid delegation — from the wrong root.
+    const ucan = await issueDelegation(
+      { issuer: stranger, audience: strangerSession.did, command: '/record' },
       provider,
     );
     const unsigned = createVersion({
@@ -229,7 +231,7 @@ describe('private space versions', () => {
       space: spaceId,
       log: { n: 0 },
       body: { text: 'let me in' },
-      proof: ucan.encoded,
+      proof: ucan,
     });
     const version = await signer.sign(unsigned, strangerSession.privateKey);
 

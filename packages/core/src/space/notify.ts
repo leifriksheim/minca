@@ -32,7 +32,7 @@
  */
 import type { Version, Link } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
-import { parseUCAN } from '../identity/ucan.js';
+import { parseDelegation } from '../identity/ucan.js';
 import { checkTopics, topicKey, topicTag, topicValues } from '../records/topics.js';
 import { checkFilter, matches } from '../query/filter.js';
 import type { Filter } from '../query/types.js';
@@ -352,14 +352,10 @@ function isCarried(body: unknown): body is CarriedSubscription {
   );
 }
 
-/** Who a version was written for: the account at the root of its note, else its own key */
+/** Who a version was written for: the account that issued its note, else its own key */
 function rootOf(version: Version): string {
   if (!version.proof) return version.author;
-  try {
-    return parseUCAN(version.proof).payload.iss;
-  } catch {
-    return version.author;
-  }
+  return parseDelegation(version.proof)?.payload.iss ?? version.author;
 }
 
 /** How long after it was written a record may still notify: a carrier catching up on last week stays quiet */

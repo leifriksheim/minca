@@ -67,7 +67,7 @@ describe('a node across a port', () => {
     const { node, remote } = await served();
     assert.equal(remote.did, node.did);
     assert.equal(remote.sessionDid, node.sessionDid);
-    assert.equal(remote.delegation().encoded, node.delegation().encoded);
+    assert.deepEqual(remote.delegation(), node.delegation());
     assert.deepEqual(remote.network.status(), node.network.status());
 
     const { id: space } = await remote.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
@@ -181,11 +181,12 @@ describe('a node across a port', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(me, provider).delegate({
       audience: did,
-      capabilities: [{ with: `space:${space}`, can: 'record/*' }],
+      command: '/record',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
 
-    const agent: P2PNode = await remote.asAgent({ keys, note: note.encoded });
+    const agent: P2PNode = await remote.asAgent({ keys, note });
     assert.equal(agent.did, node.did);
     assert.equal(agent.sessionDid, did);
     const written = await agent.records.put(space, 'app.note', { text: 'Bring chalk' });
@@ -253,7 +254,7 @@ describe("the page's signer, from a worker", () => {
     );
     const signer = await remoteSigner(pair.port2);
     await assert.rejects(
-      () => signer.delegate({ audience: 'did:key:zSession', capabilities: [], expiration: 0 }),
+      () => signer.delegate({ audience: 'did:key:zSession', command: '/', expiration: 0 }),
       /said no/,
     );
   });

@@ -6,8 +6,22 @@
  */
 
 import type { CryptoProvider } from '../types.js';
-import type { Capability, Fact, UCANToken } from './ucan.js';
-import { issueUCAN } from './ucan.js';
+import { issueDelegation, type Delegation } from './ucan.js';
+import type { Policy } from './policy.js';
+
+/** What a root signer is asked to sign: a note from the account to a key (spec 01 §7) */
+export interface NoteRequest {
+  /** The key's DID */
+  readonly audience: string;
+  /** What it may do, and everything under it: `/` for everything, `/record` for records only */
+  readonly command: string;
+  /** Default: the account itself. `space:<id>` for one space. */
+  readonly subject?: string;
+  /** Conditions on what it is used for. Default: none. */
+  readonly policy?: Policy;
+  /** Unix seconds after which live checks refuse it */
+  readonly expiration: number;
+}
 
 /** What a session needs from an identity, wherever that identity is kept */
 export interface RootSigner {
@@ -18,21 +32,8 @@ export interface RootSigner {
    * "your key is in this tab" are different promises to make to someone.
    */
   readonly custody: 'local' | 'remote';
-  /**
-   * Signs a delegation from the identity to a session key.
-   *
-   * @param params.audience The session key's DID
-   * @param params.capabilities What it may do
-   * @param params.expiration Unix seconds after which the note is worthless
-   * @param params.facts Facts the note carries — that its key is an agent's, say
-   * @returns The signed token
-   */
-  delegate(params: {
-    audience: string;
-    capabilities: ReadonlyArray<Capability>;
-    expiration: number;
-    facts?: ReadonlyArray<Fact>;
-  }): Promise<UCANToken>;
+  /** Signs a note from the identity to a key: the session's, an app's, a program's */
+  delegate(params: NoteRequest): Promise<Delegation>;
 }
 
 /**
@@ -49,19 +50,15 @@ export function createLocalRootSigner(
     did: identity.did,
     custody: 'local' as const,
 
-    async delegate(params: {
-      audience: string;
-      capabilities: ReadonlyArray<Capability>;
-      expiration: number;
-      facts?: ReadonlyArray<Fact>;
-    }): Promise<UCANToken> {
-      return issueUCAN(
+    async delegate(params: NoteRequest): Promise<Delegation> {
+      return issueDelegation(
         {
           issuer: { did: identity.did, privateKey: identity.privateKey },
           audience: params.audience,
-          capabilities: params.capabilities,
+          command: params.command,
+          ...(params.subject !== undefined ? { subject: params.subject } : {}),
+          ...(params.policy ? { policy: params.policy } : {}),
           expiration: params.expiration,
-          ...(params.facts?.length ? { facts: params.facts } : {}),
         },
         provider,
       );

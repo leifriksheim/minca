@@ -268,9 +268,12 @@ lifetime, clamped to [1/24, 365].
 **Connections.** The home remembers each connection per account in
 `localStorage` under `<prefix>.connections:<accountId>` (`Connection`:
 `origin`, `name`, `audience`, `access`, `scope`, `carrySpace?`, `spaces`,
-`grantedAt`, `expiresAt`, `token?`, `via?`, `recordsOnly?`). A kept
-connection with any other field, or one of these in another shape, is
-dropped when read, not read in part: its app or program connects again.
+`grantedAt`, `expiresAt`, `via?`, `recordsOnly?`). It keeps no note:
+disconnecting revokes the `audience` key, which is all a revoke names. A kept
+connection with any other field (a `token` from before notes were
+delegations in the UCAN 1.0 profile, say), or one of these in another
+shape, is dropped when read, not read in part: its app or program connects
+again.
 Connecting the same origin again replaces its connection; a connection with `via: 'code'` (a
 program connected by code through the app) is keyed by its audience instead,
 so each such program is its own. `auth.connections()` lists them.
@@ -278,7 +281,7 @@ so each such program is its own. `auth.connections()` lists them.
 **Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
 the app's connections (by default the app and every program connected through
 it by code; `byCode: true` only those programs; `audience` only that key),
-revokes the notes of those with `access: write`, and, unless only programs
+revokes the keys of those with `access: write`, and, unless only programs
 connected by code go, removes the subscriptions the app proposed.
 
 **Proposals.** `auth.propose({ origin, request, notify? })` adds the

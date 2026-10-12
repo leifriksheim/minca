@@ -14,7 +14,7 @@
  * Schema and name they stand for, because functions can't be cloned.
  */
 import type { MeshStatus } from '../network/mesh.js';
-import type { Capability, Fact, UCANToken } from '../identity/ucan.js';
+import { parseDelegation, type Delegation } from '../identity/ucan.js';
 import type { RootSigner } from '../identity/root-signer.js';
 import type { Query, ResultOf } from '../query/types.js';
 import { plainQuery } from '../query/types.js';
@@ -29,15 +29,19 @@ import { API, buildNamespaces, callMethod, givenFor, type Namespace } from './ap
 interface NodeState {
   readonly did: string;
   readonly sessionDid: string;
-  readonly delegation: UCANToken;
+  readonly delegation: Delegation;
   readonly status: MeshStatus;
 }
+
+/** Whether a value is a list of lists: a policy's shape, before its statements are read */
+const isStatements = (value: unknown): value is ReadonlyArray<ReadonlyArray<unknown>> =>
+  Array.isArray(value) && value.every((statement: unknown) => Array.isArray(statement));
 
 /** Tags every message, so a port shared with other traffic can tell ours apart */
 const TAG = 'weave-node';
 
 /** The node's own methods that cross; every namespace's do (`node/api.ts`) */
-const OWN_METHODS = Object.freeze({ iceServers: true, delegate: true, revokeSelf: true });
+const OWN_METHODS = Object.freeze({ iceServers: true, revokeSelf: true });
 
 /** How often the served side checks for a renewed delegation between calls */
 const DELEGATION_CHECK_MS = 60_000;
@@ -109,20 +113,20 @@ export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
   };
   const sendState = (handle: number, entry: Served) => {
     const state = stateOf(entry.node);
-    entry.sent = state.delegation.encoded;
+    entry.sent = state.delegation.sig;
     post({ kind: 'state', node: handle, state });
   };
   /** Sends the delegation again when the node has renewed it */
   const checkDelegation = (handle: number) => {
     const entry = served.get(handle);
-    if (entry && entry.node.delegation().encoded !== entry.sent) sendState(handle, entry);
+    if (entry && entry.node.delegation().sig !== entry.sent) sendState(handle, entry);
   };
 
   const add = (added: P2PNode): number => {
     const handle = nextHandle++;
     const entry: Served = {
       node: added,
-      sent: added.delegation().encoded,
+      sent: added.delegation().sig,
       unsubscribe: added.subscribe((event) => {
         post({ kind: 'event', node: handle, event });
         if (event.type === 'network') sendState(handle, entry);
@@ -157,12 +161,12 @@ export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
     if (path === 'hello') return stateOf(target);
     if (path === 'asAgent') {
       const agent = args[0];
-      if (!isRecord(agent) || !isRecord(agent.keys) || typeof agent.note !== 'string')
-        throw new Error('asAgent takes { keys, note }');
+      const note = isRecord(agent) ? parseDelegation(agent.note) : null;
+      if (!isRecord(agent) || !isRecord(agent.keys) || !note) throw new Error('asAgent takes { keys, note }');
       const { privateKey, publicKey } = agent.keys;
       if (!(privateKey instanceof CryptoKey) || !(publicKey instanceof CryptoKey))
         throw new Error('asAgent takes a key pair');
-      const started = await target.asAgent({ keys: { privateKey, publicKey }, note: agent.note });
+      const started = await target.asAgent({ keys: { privateKey, publicKey }, note });
       return { handle: add(started), state: stateOf(started) };
     }
     if (path === 'hold') {
@@ -390,7 +394,6 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
       ),
       delegation: () => state().delegation,
       iceServers: () => ask<ReadonlyArray<RTCIceServer>>(handle, 'iceServers', []),
-      delegate: (params) => ask(handle, 'delegate', [params]),
       revokeSelf: () => ask(handle, 'revokeSelf', []),
       async asAgent(agent) {
         const started = await ask<{ handle: number; state: NodeState }>(handle, 'asAgent', [agent]);
@@ -444,17 +447,19 @@ export function serveSigner(signer: RootSigner, port: MessagePortLike): () => vo
         message.kind !== 'delegate' ||
         !isRecord(params) ||
         typeof params.audience !== 'string' ||
-        !Array.isArray(params.capabilities) ||
-        typeof params.expiration !== 'number'
+        typeof params.command !== 'string' ||
+        typeof params.expiration !== 'number' ||
+        (params.subject !== undefined && typeof params.subject !== 'string') ||
+        (params.policy !== undefined && !isStatements(params.policy))
       )
         throw new Error('A signer only signs delegations');
+      // What each statement says is checked as the token is made (`issueDelegation`).
       return signer.delegate({
         audience: params.audience,
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the signer checks what it signs
-        capabilities: params.capabilities as ReadonlyArray<Capability>,
+        command: params.command,
+        ...(typeof params.subject === 'string' ? { subject: params.subject } : {}),
+        ...(isStatements(params.policy) ? { policy: params.policy } : {}),
         expiration: params.expiration,
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the signer checks what it signs
-        ...(Array.isArray(params.facts) ? { facts: params.facts as ReadonlyArray<Fact> } : {}),
       });
     };
     void run().then(
@@ -494,6 +499,10 @@ export async function remoteSigner(port: MessagePortLike): Promise<RootSigner> {
   return Object.freeze({
     did,
     custody,
-    delegate: (params) => ask<UCANToken>({ kind: 'delegate', params }),
+    delegate: async (params) => {
+      const token = parseDelegation(await ask<unknown>({ kind: 'delegate', params }));
+      if (!token) throw new Error('The signer answered with something that is not a delegation');
+      return token;
+    },
   } satisfies RootSigner);
 }

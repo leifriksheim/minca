@@ -3,6 +3,8 @@
  * @module types
  */
 
+import type { Delegation } from './identity/ucan.js';
+
 /** Crypto provider interface — abstraction over key algorithms for easy swapping */
 export interface CryptoProvider {
   readonly algorithm: string;
@@ -96,8 +98,8 @@ export interface UnsignedVersion<T = unknown> {
    * on a delete.
    */
   readonly body: T;
-  /** Encoded UCAN proving the author may write this, if delegated — signed along with the rest */
-  readonly proof?: string;
+  /** The note that lets the author write this, one token from its account, if delegated — signed along with the rest */
+  readonly proof?: Delegation;
   /** The record's identity, stable across versions. Links point here. */
   readonly key: string;
   /** 0 for a record's first version; each later version is one more than the one it replaces */

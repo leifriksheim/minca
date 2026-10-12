@@ -57,6 +57,10 @@ reference implementation, or any implementation, honestly.
     needs a role as of its `seen` (03 §5.2), and its access changes are never
     applied (03 §4.4, §4.5).
   - It cannot forge a version, a note or an invite (02 §3, 01 §7, 03 §7).
+  - It cannot give someone's note a second id, nor make one of its own count
+    for an account: a token has one form (low-S signatures only, one
+    spelling, exact fields), and a note is one token signed by the account's
+    root key, so a chain of tokens is refused (01 §7.1, §7.5).
 - **Does not hold yet.**
   - A leaked view-only invite carries the space key, can't be closed, and
     never causes a key change, so whoever holds it reads everything new
@@ -126,7 +130,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/weave/issues/148)).
   - A warrant is withdrawn like any record: an accused who outranks every
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
-    by revoking its key or forking their line in the warrants' collection ([#168](https://github.com/leifriksheim/weave/issues/168)),
+    by revoking its key or forking their line in the warrants' collection,
     so their warrants stop counting ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - Fork proofs don't reliably catch a copy of a key that writes where its
     other branch never reaches (§3.4): a fork counts once a member holding
@@ -135,7 +139,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     03 §6.3).
   - It can disown its own history, withdrawing votes and agreements others
     relied on, by revoking its own key with a cutoff of 0, or forking its
-    own line in a collection at 0, and nothing flags it ([#168](https://github.com/leifriksheim/weave/issues/168)).
+    own line in a collection at 0, and nothing flags it ([#166](https://github.com/leifriksheim/weave/issues/166)).
   - At a shared key (a `onePer` that doesn't name `@author`, such as one
     decision per proposal), anyone the `create` rule allows can start a
     chain of their own, and outrank the first; `creator` keeps others from
@@ -217,7 +221,7 @@ _Source: 03 §5.1, §6.3, §9; 04 §6.3. Tests: `packages/core/tests/space-acces
 else. A stolen device key is treated like a stolen session token in
 an ordinary app: what it signed before it was revoked stands, and that is on
 whoever held it. The defence is revocation, and expiry where peers can judge
-it (live use, 01 §7.4). Weave does not try to detect a copied key: a fork
+it (live use, 01 §7.6). Weave does not try to detect a copied key: a fork
 proof (02 §4.10) withdraws a copy's writes only where it happens to be
 proven, and nothing relies on catching a copy. Reviews measure this section
 against that, not against catching the copy. It does not extend to removal
@@ -230,13 +234,18 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     seen of it stops counting, records and changes to who may do what alike, under every note to that key. A
     revoke the thief writes first, covering what it signed in advance, doesn't
     shield it: every revoke applies (03 §6.4).
+  - It can't pass its power on: a note is one link from the account's root
+    key, and a token it signs for another key is a note from itself, which
+    acts for no account but its own (01 §7.5). So the revoke of the key is
+    the whole of the answer: from then on, with the revoke's cutoff, nothing
+    the key signs counts, and no other key holds anything through it.
   - Once a fork of the key's line in a collection is proven, what it signed
     in that collection from the proven place on stops counting, records and
     changes to who may do what alike (02 §4.10, 03 §4.3, §6.5).
 - **Does not hold yet.**
   - It can revoke the owner's other keys, with a cutoff of its choosing: a key
-    whose note grants `*` is the account while it lasts
-    ([#168](https://github.com/leifriksheim/weave/issues/168)).
+    whose note grants `/` is the account while it lasts
+    ([#165](https://github.com/leifriksheim/weave/issues/165)).
   - A fork it makes at the start of a line withdraws everything the owner's
     device wrote in that collection ([#166](https://github.com/leifriksheim/weave/issues/166)).
 - **By design** (the principle above).
@@ -251,14 +260,14 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     the others standing.
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
-    live messages, connecting) ends with the note (01 §7.4). Signing out
+    live messages, connecting) ends with the note (01 §7.6). Signing out
     writes a revoke of the session key, delivered when that device next
     syncs, but a device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
-    keys ([#26](https://github.com/leifriksheim/weave/issues/26)). A revocation does not reach spaces created after it
+    keys ([#165](https://github.com/leifriksheim/weave/issues/165)). A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
-_Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a stolen key is answered by its revoke…")._
+_Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…", "a key cannot pass its note on: a two-link proof counts for no peer"), `packages/core/tests/validation.test.ts` ("a note is one link…"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a stolen key is answered by its revoke…")._
 
 ### 3.5 Root thief
 
@@ -295,7 +304,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
     more than records. A request with `recordsOnly` never gets the contact
     key (06 §2.8).
   - The note carries no label a peer reads: what a version, a live message or
-    a knock may do is what its note grants, whatever its `fct` says (01 §8).
+    a knock may do is what its note grants, whatever its `meta` says (01 §8).
+  - A policy on its note (a limit to some collections, say) binds it at
+    every peer, and it can't escape its note by signing one for another key
+    of its own: that note acts for no account, so a records-only key can't
+    shed the label others show it with, nor knock or pin as the account
+    (01 §7.4, §7.5).
   - It can't take the account's `onePer` key in one collection with a record
     of another: every peer that reads the definition refuses a first version
     at a key of a `onePer` key's form outside a `onePer` that gives it
@@ -307,20 +321,22 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
   - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
     its grant expires ([#165](https://github.com/leifriksheim/weave/issues/165), [#169](https://github.com/leifriksheim/weave/issues/169)).
-  - Any key the account granted can pose as the account's node to a client
-    that pinned the account ([#177](https://github.com/leifriksheim/weave/issues/177)) _(traced)_.
+  - A key whose note grants everything about the account (`/`, no policy),
+    an app granted write to every space included, can pose as the account's
+    node to a client that pinned the account, and a pin checks no revoke. A
+    narrower note can't (04 §5.2)
+    ([#165](https://github.com/leifriksheim/weave/issues/165)) _(traced)_.
   - Its records count until its key is revoked, not until `expiresAt`: only
     the home that granted it revokes it, while signed in there (06 §2.9,
-    [#26](https://github.com/leifriksheim/weave/issues/26)).
-  - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
-    [#168](https://github.com/leifriksheim/weave/issues/168)).
+    [#165](https://github.com/leifriksheim/weave/issues/165)).
+  - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165)).
   - An account's chosen key is the same in every collection, so with a
     records grant it can write a record at a chosen name another app of the
     account's uses in another collection, and that app can't write its record
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
 
-_Source: 01 §8, §11; 06 §2, §3; 05 §15; 02 §4.1. Tests: `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
+_Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/doors.test.ts` ("opens only with its door…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 
@@ -402,11 +418,12 @@ _Source: 03 §8; 02 §3, §7.3; 06 §4; 05 §15. Tests: `packages/core/tests/rec
     reordered does not open (01 §15.2).
 - **Does not hold yet.**
   - An unpinned connection to a node accepts whichever node answers, and an
-    account pin accepts any key the account granted ([#177](https://github.com/leifriksheim/weave/issues/177)) _(traced)_.
+    account pin accepts any key whose note grants everything about the
+    account, and checks no revoke ([#165](https://github.com/leifriksheim/weave/issues/165)) _(traced)_.
   - Group keys give no forward secrecy: whoever later obtains a space key
     reads everything sealed under it and every earlier key ([#182](https://github.com/leifriksheim/weave/issues/182)).
 
-_Source: 04 §5, §6.1; 01 §15.2. Tests: `packages/core/tests/ws-transport.test.ts`, `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open")._
+_Source: 04 §5, §6.1; 01 §15.2. Tests: `packages/core/tests/ws-transport.test.ts` ("only a note for everything about the account pins…"), `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open")._
 
 ### 3.10 Raised, not yet confirmed
 

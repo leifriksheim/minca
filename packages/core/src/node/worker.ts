@@ -18,7 +18,7 @@
  * that goes without saying so is noticed by a Web Lock it holds while open.
  */
 import type { RootSigner } from '../identity/root-signer.js';
-import type { UCANToken } from '../identity/ucan.js';
+import type { Delegation } from '../identity/ucan.js';
 import { createTransportSwitch, remoteTransport, serveTransport } from '../network/remote-transport.js';
 import { isRecord } from '../utils/guards.js';
 import { createNode } from './node.js';
@@ -154,7 +154,7 @@ function createSignerSwitch(did: string, custody: RootSigner['custody']) {
   const signer: RootSigner = Object.freeze({
     did,
     custody,
-    async delegate(params: Parameters<RootSigner['delegate']>[0]): Promise<UCANToken> {
+    async delegate(params: Parameters<RootSigner['delegate']>[0]): Promise<Delegation> {
       let refused: unknown = new Error('No tab is open to sign with');
       for (const each of [...signers.values()].reverse()) {
         try {

@@ -10,7 +10,7 @@ import { WebSocketServer, type RawData, type WebSocket as ServerSocket } from 'w
 import { portOf, textOf } from './helpers/net.js';
 
 import { createWebSocketTransport, nodeAddress } from '../src/network/ws-transport.js';
-import { issueUCAN } from '../src/identity/ucan.js';
+import { issueDelegation } from '../src/identity/ucan.js';
 import { createClientAuth, createServerAuth, peerNonce, type ServerAuth } from '../src/network/peer-auth.js';
 import { generateSpaceKey } from '../src/privacy/space-encryption.js';
 import { deriveReadKey } from '../src/space/space-access.js';
@@ -205,13 +205,10 @@ describe('WebSocket transport', () => {
     async function sessionNode() {
       const account = await nodeIdentity();
       const session = await nodeIdentity();
-      const note = await issueUCAN(
-        { issuer: account, audience: session.did, capabilities: [{ with: '*', can: '*' }] },
-        provider,
-      );
+      const note = await issueDelegation({ issuer: account, audience: session.did, command: '/' }, provider);
       const node = startNode(0, {
         did: session.did,
-        authenticator: createServerAuth('space-1', null, session.privateKey, provider, () => note.encoded),
+        authenticator: createServerAuth('space-1', null, session.privateKey, provider, () => note),
       });
       return { account, session, node };
     }
@@ -257,6 +254,40 @@ describe('WebSocket transport', () => {
       const { transport } = await dialler(`ws://127.0.0.1:${await node.ready}/peer#${account.did}`);
       await assert.rejects(transport.connect!(), /pins/);
       await node.stop();
+    });
+
+    test('only a note for everything about the account pins: a narrower one, or a chain, cannot pose as the node', async () => {
+      const account = await nodeIdentity();
+      const app = await nodeIdentity();
+      const impostor = await nodeIdentity();
+      const me = await nodeIdentity();
+      const client = createClientAuth('space-1', { did: me.did, key: me.privateKey }, null, provider);
+      const to = (audience: string, terms: Partial<Parameters<typeof issueDelegation>[0]> = {}) =>
+        issueDelegation({ issuer: account, audience, command: '/', ...terms }, provider);
+      assert.equal(
+        await client.checkPin(account.did, impostor.did, await to(impostor.did)),
+        true,
+        'the node',
+      );
+      for (const [what, terms] of [
+        ['read only, one space', { command: '/record/read', subject: 'space:other' }],
+        ['records only', { command: '/record' }],
+        ['one space', { subject: 'space:other' }],
+        ['a policy', { policy: [['==', '.space', 'other']] }],
+      ] as const)
+        assert.equal(
+          await client.checkPin(account.did, impostor.did, await to(impostor.did, terms)),
+          false,
+          what,
+        );
+      // An app's narrow note, passed on to another key: a chain is no note.
+      const note = await to(app.did, { command: '/record/read', subject: 'space:other' });
+      const passedOn = await issueDelegation(
+        { issuer: app, audience: impostor.did, command: '/', subject: account.did },
+        provider,
+      );
+      assert.equal(await client.checkPin(account.did, impostor.did, [note, passedOn]), false, 'a chain');
+      assert.equal(await client.checkPin(account.did, impostor.did, passedOn), false, 'its last link');
     });
 
     test('plain ws:// is refused off this machine, before anything is dialled', async () => {

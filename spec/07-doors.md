@@ -221,17 +221,17 @@ _Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBO
 
 A knock is a JSON object, signed by the knocker's **session key**:
 
-| Field     | Type                   |                                                                                                              |
-| --------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `v`       | `1`                    |                                                                                                              |
-| `door`    | string                 | The door key knocked on. Binds the knock to this door.                                                       |
-| `from`    | DID                    | The knocker's account                                                                                        |
-| `name`    | string ≤64             | The name they give (defaults to "Someone"); nothing vouches for it                                           |
-| `invite`  | string ≤6000           | An invite ([03 — Spaces](03-spaces.md)) to a private space `from` created, with its key and an editor secret |
-| `note`    | string ≤2000, optional |                                                                                                              |
-| `at`      | integer                | When it was signed, Unix seconds                                                                             |
-| `session` | DID                    | The session key that signed                                                                                  |
-| `proof`   | string ≤4096           | The knocker's note: a UCAN from `from` to `session` ([01 — Identity](01-identity.md))                        |
+| Field     | Type                   |                                                                                                                                |
+| --------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `v`       | `2`                    | 2 since `proof` is a note in the UCAN 1.0 profile ([01](01-identity.md) §7)                                                    |
+| `door`    | string                 | The door key knocked on. Binds the knock to this door.                                                                         |
+| `from`    | DID                    | The knocker's account                                                                                                          |
+| `name`    | string ≤64             | The name they give (defaults to "Someone"); nothing vouches for it                                                             |
+| `invite`  | string ≤6000           | An invite ([03 — Spaces](03-spaces.md)) to a private space `from` created, with its key and an editor secret                   |
+| `note`    | string ≤2000, optional |                                                                                                                                |
+| `at`      | integer                | When it was signed, Unix seconds                                                                                               |
+| `session` | DID                    | The session key that signed                                                                                                    |
+| `proof`   | object, ≤4096          | The knocker's proof: the note from `from` to `session` ([01](01-identity.md) §7.5); its canonical JSON at most 4096 characters |
 
 ```
 sig    = ECDSA-P256-SHA256(session private key, UTF-8(canonicalJSON(body)))   — 64 bytes r‖s, base64url
@@ -250,18 +250,18 @@ A door's owner MUST treat a blob as a knock only if all of these hold, and
 otherwise ignore it. `receivedAt` is the relay's `at` for the blob.
 
 1. It opens with the door key, label `weave/knock/v1` and bound `{ "door": <door public key> }`.
-2. `body.v` is 1 and `body.door` is this door's public key.
+2. `body.v` is 2 and `body.door` is this door's public key.
 3. Every field has the type and size above.
 4. **Time.** `at` is no more than 5 minutes after now and no more than 14 days
    before it; and no more than 5 minutes after `receivedAt` and no more than
    10 minutes before it.
 5. `sig` verifies over `canonicalJSON(body)` with the public key of the
    `session` DID.
-6. **Authority.** `proof`'s delegation chain resolves **with no proofs beyond
-   itself** (one link), valid at `at`, with audience `session` and root
-   `from`; and it grants `{ with: "*", can: "account/write" }`
-   ([01](01-identity.md) §8): a note to write for the whole account. An app
-   given some spaces, or a key given records only, may not knock.
+6. **Authority.** `proof` is a valid note ([01](01-identity.md) §7.5),
+   valid at `at` (§7.6), with audience `session` and issuer `from`;
+   and it grants `/account/write` for the account as a whole, with arguments
+   `{}` ([01](01-identity.md) §8): a note to write for the whole account. An
+   app given some spaces, or a key given records only, may not knock.
 7. `invite` parses; its space's creator is `from`; it is private and carries
    its key; and the space checks out (its id is the hash of its genesis).
 
@@ -280,8 +280,8 @@ Which of the knocks that pass these checks a client offers the person
 >   `from` before anyone joins anything, as a record's does. Binding `door`
 >   stops an owner re-sealing someone's knock to another door as if sent there.
 > - **Authority (6):** knocking makes a space and hands out its invite, so it
->   needs what `contacts.ask` needs: a note that grants `account/write` for
->   every space. Every connected app holds a root-signed note; one given a
+>   needs what `contacts.ask` needs: a note that grants `/account/write` for
+>   the whole account. Every connected app holds a root-signed note; one given a
 >   single space, only records, or only read access, must not be able to knock
 >   as the account.
 > - **Time (4):** notes are judged when a knock was signed, since knocks are
@@ -321,14 +321,14 @@ only ([06 §2.8](06-nodes-and-sessions.md)).
   address can hold; the reserve keeps every door able to take a knock or two
   when the relay is full; the TTL can't be raised by clients. Both budgets are
   weaker than that today (see the known defect in §5).
-- **Authority.** Only a note that grants `{ with: "*", can: "account/write" }`
-  can knock (§6).
+- **Authority.** Only a proof that grants `/account/write` for the whole
+  account can knock (§6).
   A note that ran out can't be used by backdating (§6). _Known limitation:_ a
   note that was **revoked** but hasn't run out yet (an app disconnected at the
   home, whose note lasts up to its grant's days) can still knock, because the
   owner can't see the knocker's revocations. Revoking a session's note when
-  it ends is planned in [01 §7.4](01-identity.md)
-  ([#26](https://github.com/leifriksheim/weave/issues/26)).
+  it ends is planned in [01 §7.6](01-identity.md)
+  ([#165](https://github.com/leifriksheim/weave/issues/165)).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it. Only the answer, signed with the door's key, makes someone the
   knocker's contact; the invite is closed then

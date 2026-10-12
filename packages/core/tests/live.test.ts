@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import type { LiveMessage, P2PNode } from '../src/node/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { issueDelegation } from '../src/identity/ucan.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
@@ -109,7 +110,7 @@ describe('live messages', () => {
     // Mallory holds a session key of her own, and a note she copied off one of Alice's records.
     const manager = createIdentityManager();
     const mallory = await manager.fromSeed(generateSeed());
-    const copied = alice.node.delegation().encoded;
+    const copied = [alice.node.delegation()];
     const wire = hub.transport(mallory.did, space);
     await wire.connect?.();
     await until(
@@ -137,15 +138,15 @@ describe('live messages', () => {
     const provider = alice.manager.getProvider();
 
     for (const [can, recordsOnly] of [
-      ['record/read', false],
-      ['record/*', true],
-      ['*', false],
+      ['/record/read', false],
+      ['/record', true],
+      ['/', false],
     ] as const) {
       const pair = await provider.generateKeyPair();
       const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
       const note = await createLocalRootSigner(alice.me, provider).delegate({
         audience: did,
-        capabilities: [{ with: '*', can }],
+        command: can,
         expiration: Math.floor(Date.now() / 1000) + 3600,
       });
       const wire = hub.transport(did, space);
@@ -157,7 +158,7 @@ describe('live messages', () => {
       );
       const say = (type: string, payload: unknown) =>
         wire.send(alice.node.sessionDid, utf8Encode(JSON.stringify({ type, from: did, payload })));
-      say('who', { note: note.encoded });
+      say('who', { note });
       say('live', { type: 'hello', can });
       await until(() => heard.some((m) => m.peer === did), 4000, `the ${can} message`);
       const message = heard.find((m) => m.peer === did)!;
@@ -165,6 +166,66 @@ describe('live messages', () => {
       // A read-only app may take part in calls; a key given records to write here may not (docs/calls.md).
       assert.equal(message.recordsOnly, recordsOnly, can);
       wire.closeAll();
+    }
+  });
+
+  test('a records-only key cannot shed its label by passing its note on', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Open', ...team, visibility: 'public' });
+    await alice.node.spaces.hold(space);
+    const heard = inbox(alice.node);
+    const provider = alice.manager.getProvider();
+    const key = async () => {
+      const pair = await provider.generateKeyPair();
+      return { pair, did: publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC) };
+    };
+    const app = await key();
+    const note = await createLocalRootSigner(alice.me, provider).delegate({
+      audience: app.did,
+      command: '/record',
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    });
+    // The app signs a read-only note for the account to a second key it holds: no label, if it counted.
+    const helper = await key();
+    const passedOn = await issueDelegation(
+      {
+        issuer: { did: app.did, privateKey: app.pair.privateKey },
+        audience: helper.did,
+        command: '/record/read',
+        subject: alice.node.did,
+      },
+      provider,
+    );
+    for (const [what, proof] of [
+      ['the chain', [note, passedOn]],
+      ['its last link', passedOn],
+    ] as const) {
+      const wire = hub.transport(helper.did, space);
+      await wire.connect?.();
+      await until(
+        async () => (await alice.node.spaces.status(space)).peers.includes(helper.did),
+        4000,
+        `the helper to connect with ${what}`,
+      );
+      const say = (type: string, payload: unknown) =>
+        wire.send(alice.node.sessionDid, utf8Encode(JSON.stringify({ type, from: helper.did, payload })));
+      say('who', { note: proof });
+      say('live', { type: 'hello', what });
+      await until(
+        () => heard.some((m) => m.peer === helper.did && JSON.stringify(m.message).includes(what)),
+        4000,
+        `the message with ${what}`,
+      );
+      const message = heard.find((m) => m.peer === helper.did && JSON.stringify(m.message).includes(what))!;
+      // Not Alice's: a note is one link from the account, and no key below it can sign one.
+      assert.notEqual(message.from, alice.node.did, what);
+      wire.closeAll();
+      await until(
+        async () => !(await alice.node.spaces.status(space)).peers.includes(helper.did),
+        4000,
+        `the helper to leave after ${what}`,
+      );
     }
   });
 

@@ -71,7 +71,8 @@ Example: in space `bspace`, `did:key:zA` asking `did:key:zB` seals with bound
 
 The receiver must open a request only when the record verifies and stands, its
 current version was signed by the account itself or under a note that grants
-`account/write` for every space (`with: "*"`), as a knock needs (spec 01 §8;
+`/account/write` for the whole account (a note about the account, no policy
+on `.space`), as a knock needs (spec 01 §8;
 not one for some spaces, nor an agent's), is in `std.contact-request`, `to` is the
 receiver's account, and `from` (the record's root) equals the root of the
 record's first version and is not the receiver. It must use the bound built
@@ -107,8 +108,8 @@ into another space, or re-posted by someone else, does not open.
 - `others(did)` lists accounts other than the two seen in the space for two
   (members, profiles, connected peers).
 
-`ask` and `accept` need a session note that grants `account/write` for every
-space (`with: "*"`), as a knock does. An app granted
+`ask` and `accept` need a session note that grants `/account/write` for the
+whole account, as a knock does. An app granted
 `contacts` sees the list and requests, but may not ask or accept
 ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 

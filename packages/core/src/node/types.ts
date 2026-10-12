@@ -17,7 +17,7 @@ import type {
 } from '../types.js';
 import type { LinkDeclaration } from '../records/links.js';
 import type { RootSigner } from '../identity/root-signer.js';
-import type { Capability, UCANToken } from '../identity/ucan.js';
+import type { Delegation } from '../identity/ucan.js';
 import type { PeerTransport, SignalledTransport } from '../network/transport.js';
 import type { MeshStatus } from '../network/mesh.js';
 import type { ServerAuth } from '../network/peer-auth.js';
@@ -402,8 +402,8 @@ export interface NodeSpaces {
   setRelays(spaceId: string, relays: ReadonlyArray<string>): Promise<void>;
   /** Names the nodes that keep the space whole (at most 16), and how many a write should reach. Needs `manage` */
   setKeepers(spaceId: string, keepers: ReadonlyArray<Keeper>, copies?: number | null): Promise<void>;
-  /** Revokes a note this account signed: nothing written under it counts from then on, except what was seen */
-  revoke(spaceId: string, token: string): Promise<void>;
+  /** Revokes one of this account's keys (a session's, an app's, by DID): nothing it writes counts from then on, except what was seen */
+  revoke(spaceId: string, key: string): Promise<void>;
   /** Keeps a space syncing until the function it returns is called; it stops once nothing holds it */
   hold(spaceId: string): Promise<() => Promise<void>>;
   /** A live message to the peers connected now, kept nowhere, at most 64 KB; `to` an account or a session DID. Arrives as a `message` event */
@@ -491,21 +491,6 @@ export interface NodeRecords {
     onResult: (result: ResultOf<Q>) => void,
     onError?: (error: Error) => void,
   ): () => void;
-}
-
-export interface DelegateParams {
-  /** The key being given permission — an agent's, a guest's */
-  readonly audience: string;
-  /** Must be no broader than the node's own */
-  readonly capabilities: ReadonlyArray<Capability>;
-  /** Unix seconds; capped at the node's own delegation. Default: the same. */
-  readonly expiration?: number;
-}
-
-export interface Delegated {
-  readonly token: UCANToken;
-  /** The chain above it, root first, for anyone verifying it */
-  readonly proofs: ReadonlyArray<string>;
 }
 
 export interface AccountProfileView {
@@ -655,8 +640,8 @@ export interface NodeAccount {
   profile(): Promise<AccountProfileView | null>;
   /** Renames the account on every device and app that opens it. Needs an account key. */
   setName(name: string): Promise<AccountProfileView>;
-  /** Revokes a note this account signed in the account registry. Needs an account key */
-  revoke(token: string): Promise<void>;
+  /** Revokes one of this account's keys, by DID, in the account registry. Needs an account key */
+  revoke(key: string): Promise<void>;
 }
 
 /** Someone in the account's contact list */
@@ -838,19 +823,17 @@ export interface P2PNode {
   /** Doors: how people you share no space with can ask to become your contact */
   readonly doors: NodeDoors;
   /** The delegation the session key currently writes under (root → session) */
-  delegation(): UCANToken;
+  delegation(): Delegation;
   /** ICE servers for the app's own WebRTC, like a call's: the configured ones, and a relay's TURN servers */
   iceServers(): Promise<ReadonlyArray<RTCIceServer>>;
   /** Relays and connections, for showing why a peer is or is not there */
   readonly network: NodeNetwork;
-  /** Passes a narrower delegation from the session key on to another key */
-  delegate(params: DelegateParams): Promise<Delegated>;
   /**
    * The same node acting as an agent: signed "via agent", only in the spaces
    * its note names, refusing what needs a person (`node/api.ts`).
    * @throws When the note is not an agent's, has run out, or is not made out to `keys`
    */
-  asAgent(agent: { readonly keys: CryptoKeyPair; readonly note: string }): Promise<P2PNode>;
+  asAgent(agent: { readonly keys: CryptoKeyPair; readonly note: Delegation }): Promise<P2PNode>;
   subscribe(listener: (event: NodeEvent) => void): () => void;
   /**
    * Revokes this node's own session key in every space it writes in, its

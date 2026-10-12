@@ -179,7 +179,8 @@ describe('topic tags on records', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const ucan = await createLocalRootSigner(alice.me, provider).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      command: '/record/write',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     // Says #random, tagged #design: a push to the wrong people, or hiding from the right ones.
@@ -189,7 +190,7 @@ describe('topic tags on records', () => {
         author: keyDid,
         space,
         log: { n: 0 },
-        proof: ucan.encoded,
+        proof: ucan,
         collection: 'app.chat',
         version: { key: await newRecordKey(alice.node.did), seq: 0 },
         body: { text: 'psst', channel: 'random' },
@@ -279,7 +280,8 @@ describe('topic tags on links', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const ucan = await createLocalRootSigner(alice.me, provider).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      command: '/record/write',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const lying = await createSigner(provider).sign(
@@ -288,7 +290,7 @@ describe('topic tags on links', () => {
         author: keyDid,
         space,
         log: { n: 0 },
-        proof: ucan.encoded,
+        proof: ucan,
         collection: rooms.name,
         version: { key: await newRecordKey(alice.node.did), seq: 0 },
         body: { text: 'psst' },

@@ -3,7 +3,7 @@
 An agent reads and writes as the person, with a note from their account that
 every peer checks. The protocol doesn't know it is an agent: it is a program
 that asked for a note that grants writing records and nothing more
-(`record/*`), so every peer refuses it defining collections, changing who
+(`/record`), so every peer refuses it defining collections, changing who
 may do what, or writing for the account ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
 What it writes counts as the person's, and carries `recordsOnly: true`
 everywhere, which apps may show (the example app says "via agent"). It never

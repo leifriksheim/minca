@@ -1,4 +1,5 @@
 import type { Envelope, Version, Link, UnsignedVersion, WriterLog } from '../types.js';
+import type { Delegation } from '../identity/ucan.js';
 import { utf8Encode } from '../utils/encoding.js';
 import { base32Encode, cidFromBytes } from '../utils/hash.js';
 import { isRecord } from '../utils/guards.js';
@@ -11,8 +12,8 @@ export interface CreateVersionParams<T> {
   readonly createdAt?: string;
   /** Space this version belongs to */
   readonly space?: string;
-  /** Encoded UCAN authorizing this author, when signing with a delegated key */
-  readonly proof?: string;
+  /** The note authorizing this author, when signing with a delegated key */
+  readonly proof?: Delegation;
   /**
    * The record this is a version of. Default: a first version at 128 random
    * bits, which a peer takes only in a `sys.*` collection or outside a space:

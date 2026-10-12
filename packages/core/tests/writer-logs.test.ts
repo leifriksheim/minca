@@ -54,7 +54,8 @@ async function handKey(bob: Person, space: string) {
   const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
   const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
     audience: did,
-    capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+    command: '/record/write',
+    subject: `space:${space}`,
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const { heads: seen } = await bob.node.spaces.access(space);
@@ -70,7 +71,7 @@ async function handKey(bob: Person, space: string) {
             space,
             version: { key: await newRecordKey(bob.node.did), seq: 0 },
             body: { text },
-            proof: note.encoded,
+            proof: note,
             seen,
           }),
           log,
