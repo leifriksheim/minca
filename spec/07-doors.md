@@ -328,7 +328,7 @@ only ([06 §2.8](06-nodes-and-sessions.md)).
   home, whose note lasts up to its grant's days) can still knock, because the
   owner can't see the knocker's revocations. Revoking a session's note when
   it ends is planned in [01 §7.6](01-identity.md)
-  ([#26](https://github.com/leifriksheim/weave/issues/26)).
+  ([#165](https://github.com/leifriksheim/weave/issues/165)).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it. Only the answer, signed with the door's key, makes someone the
   knocker's contact; the invite is closed then

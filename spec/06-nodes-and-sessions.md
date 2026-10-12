@@ -95,8 +95,7 @@ renewed in place (§2.9).
 > in a page, an account home, anything — can stay out of reach of the code that
 > writes.
 
-When and how the reference node renews, and how it passes a narrower note on,
-are in [the node](../packages/core/docs/node.md#renewing-the-session-note).
+When and how the reference node renews is in [the node](../packages/core/docs/node.md#renewing-the-session-note).
 
 _Source: `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `scheduleRenewal`). Tests: `packages/core/tests/node.test.ts` ("the delegation is renewed before it expires", "records outlive the session that wrote them")._
 
@@ -447,7 +446,7 @@ the old connection record).
 > **Known defect:** connections are kept in the browser that granted them,
 > so only that home revokes an app whose time has passed, and only while it
 > is signed in. Until it does, the app's records still count. Tracked in
-> [#26](https://github.com/leifriksheim/weave/issues/26).
+> [#165](https://github.com/leifriksheim/weave/issues/165).
 
 ### 2.10 Connections and revocation
 
@@ -470,8 +469,7 @@ whose `app.origin` is its origin (§2.11, §4.4).
 
 Revoking writes a `sys.revoke` record naming the key ([03](03-spaces.md) §6.4).
 From then on nothing that key signed counts, except what the revoker had
-already seen of it, and nothing signed under a note it passed on counts at
-all. What the app could already read, it keeps. How the reference
+already seen of it. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
 key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 

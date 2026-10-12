@@ -264,7 +264,7 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     writes a revoke of the session key, delivered when that device next
     syncs, but a device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
-    keys ([#26](https://github.com/leifriksheim/weave/issues/26)). A revocation does not reach spaces created after it
+    keys ([#165](https://github.com/leifriksheim/weave/issues/165)). A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/weave/issues/165)).
 
 _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…", "a key cannot pass its note on: a two-link proof counts for no peer"), `packages/core/tests/validation.test.ts` ("a note is one link…"), `packages/core/tests/roles.test.ts` ("a revoked key…", "a stolen key is answered by its revoke…")._
@@ -328,7 +328,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     ([#165](https://github.com/leifriksheim/weave/issues/165)) _(traced)_.
   - Its records count until its key is revoked, not until `expiresAt`: only
     the home that granted it revokes it, while signed in there (06 §2.9,
-    [#26](https://github.com/leifriksheim/weave/issues/26)).
+    [#165](https://github.com/leifriksheim/weave/issues/165)).
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165)).
   - An account's chosen key is the same in every collection, so with a
     records grant it can write a record at a chosen name another app of the

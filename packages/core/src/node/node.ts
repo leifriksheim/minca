@@ -2437,7 +2437,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       }),
       delegation: () => note,
       iceServers: () => node.iceServers(),
-      delegate: person('pass its access on'),
       asAgent: person('start another agent'),
       revokeSelf: person('sign the account out'),
       subscribe: (listener: (event: NodeEvent) => void) =>

@@ -41,7 +41,7 @@ const isStatements = (value: unknown): value is ReadonlyArray<ReadonlyArray<unkn
 const TAG = 'weave-node';
 
 /** The node's own methods that cross; every namespace's do (`node/api.ts`) */
-const OWN_METHODS = Object.freeze({ iceServers: true, delegate: true, revokeSelf: true });
+const OWN_METHODS = Object.freeze({ iceServers: true, revokeSelf: true });
 
 /** How often the served side checks for a renewed delegation between calls */
 const DELEGATION_CHECK_MS = 60_000;

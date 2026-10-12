@@ -582,7 +582,7 @@ registry, with a cutoff at what it wrote, and a device that kept the key
 forgets it (`revokeSelf`); the revokes reach other peers as that device next
 syncs. _Open:_ removing a device from another one, which
 needs the list of the account's session keys
-([#26](https://github.com/leifriksheim/weave/issues/26)).
+([#165](https://github.com/leifriksheim/weave/issues/165)).
 
 ### 7.7 Issuing
 
@@ -658,7 +658,11 @@ A note for one space is about that space (`sub: "space:<id>"`); a note for
 several is about the account, with a policy naming them:
 `[["or", [["==", ".space", "<id>"], …]]]`. Policies on `.collection` narrow
 a note to some collections; reading stays a matter of keys
-([03 — Spaces](03-spaces.md)), which a note doesn't narrow.
+([03 — Spaces](03-spaces.md)), which a note doesn't narrow. An action about
+the account as a whole (a knock, the account's own spaces) carries no
+`space` argument, so `.space` reads as null there: a policy that only
+excludes spaces (`["not", ["==", ".space", "<id>"]]`) holds for it. To keep
+a note to some spaces, name them, as above.
 
 A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
 message or a knock differently for anything in `meta`: what the key may do is
