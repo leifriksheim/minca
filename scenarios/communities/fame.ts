@@ -1,54 +1,62 @@
 /**
  * 4. Hall of fame. A comment enters it when 5 different members react 🙂.
  * The claim cites the reactions; a reaction withdrawn later, or before
- * the claim, doesn't un-fame it (the plan, §3).
+ * the claim, doesn't un-fame it (spec 09 §4). Judged by the library: a
+ * founder's node holds the space, and every member signs their own records.
  */
-import type { Check } from '../../packages/core/src/records/checks.js';
-import type { Host } from '../host/cel-host.js';
-import { next, version } from '../host/space.js';
+import type { Contract } from '../../packages/core/src/records/contracts.js';
+import type { DefineCollection } from '../../packages/core/src/node/types.js';
+import type { Version } from '../../packages/core/src/types.js';
+import { communityNode } from '../../packages/core/tests/helpers/community.js';
+import type { Person } from '../../packages/core/tests/helpers/person.js';
 
 // -- The community: a CEL contract, on a claim that cites the reactions -------------
 
-const claimContract: Check[] = [
+const claimContract: Contract[] = [
   {
     that: "versions(body.reactions).filter(r, r.collection == 'app.reaction' && !r.deleted && r.link('on') == link('on') && r.body.emoji == '🙂').map(r, r.author).distinct().size() >= 5",
     else: "A comment enters the hall of fame with 5 different people's 🙂",
   },
 ];
 
+const on = { on: { to: ['app.comment'], cardinality: 'one' as const } };
+const collections: DefineCollection[] = [
+  { name: 'app.comment', schema: { type: 'object' } },
+  { name: 'app.reaction', schema: { type: 'object' }, links: on },
+  { name: 'app.fame', schema: { type: 'object' }, links: on, rules: { check: claimContract } },
+];
+
 // -- The story ---------------------------------------------------------------------
 
-const ALICE = 'did:key:alice';
-export const M = [1, 2, 3, 4, 5, 6].map((n) => `did:key:m${n}`);
-const m = (i: number) => M[i - 1] ?? '';
-
-export const comment = version({ id: 'c', collection: 'app.comment', author: ALICE, body: { text: 'gg' } });
-export const react = (i: number, emoji = '🙂') =>
-  version({
-    id: `r${i}`,
-    collection: 'app.reaction',
-    author: m(i),
-    body: { emoji },
-    links: [{ rel: 'on', to: 'c' }],
-    seen: ['c'],
-  });
-export const reactions = [1, 2, 3, 4, 5].map((i) => react(i));
-export const meh = react(6, '😐');
-export const claim = (id: string, seen: string[], cites = ['r1', 'r2', 'r3', 'r4', 'r5']) =>
-  version({
-    id,
-    collection: 'app.fame',
-    author: ALICE,
-    body: { reactions: cites },
-    links: [{ rel: 'on', to: 'c' }],
-    seen,
-  });
-export const f1 = claim('f1', ['r1', 'r2', 'r3', 'r4', 'r5']);
-export const base = [comment, ...reactions, meh, f1];
-
-/** r3 withdrawn: a delete, after the claim (`seen`) or before it */
-export const withdraw = (seen: string[]) => next(react(3), { id: 'd3', body: null, seen });
-export const removeM3 = (seen: string[]) =>
-  version({ id: 'x3', collection: 'std.member', author: ALICE, body: { op: 'remove', did: m(3) }, seen });
-
-export const host: Host = { founders: [ALICE], members: M, contracts: { 'app.fame': claimContract } };
+/** Alice founds it; m1–m6 are members. m1–m5 react 🙂, m6 😐, and Alice claims fame. */
+export async function story() {
+  const c = await communityNode(6, collections);
+  const alice = c.founder;
+  const m = (i: number): Person => c.members[i - 1]!;
+  const comment = await c.sign(alice, { collection: 'app.comment', body: { text: 'gg' } });
+  const links = [{ rel: 'on', to: comment.key }];
+  const react = (i: number, emoji = '🙂') =>
+    c.sign(m(i), { collection: 'app.reaction', body: { emoji }, links });
+  const reactions = await Promise.all([1, 2, 3, 4, 5].map((i) => react(i)));
+  const meh = await react(6, '😐');
+  const claim = (cites: ReadonlyArray<Version>, seen?: ReadonlyArray<string>) =>
+    c.sign(alice, {
+      collection: 'app.fame',
+      body: { reactions: cites.map((r) => r.id) },
+      links,
+      ...(seen ? { seen } : {}),
+    });
+  const f1 = await claim(reactions);
+  /** A reaction withdrawn: its author's delete */
+  const withdraw = (r: Version, i: number) =>
+    c.sign(m(i), {
+      collection: 'app.reaction',
+      body: null,
+      deleted: true,
+      retain: false,
+      version: { key: r.key, seq: 1, prev: r.id, genesis: r.id },
+    });
+  /** Alice removes a member, having seen everything so far */
+  const remove = (i: number) => alice.node.spaces.removeMember(c.space, m(i).node.did);
+  return { c, comment, reactions, meh, f1, claim, withdraw, remove };
+}

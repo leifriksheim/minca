@@ -2,7 +2,7 @@
  * 2. Co-op. No fixed top. Members add members; removing a member needs
  * ballots from more than half of the members, counted as of the proposal.
  */
-import type { Check } from '../../packages/core/src/records/checks.js';
+import type { Contract } from '../../packages/core/src/records/contracts.js';
 import type { Delegation } from '../host/library.js';
 import type { Host } from '../host/cel-host.js';
 import { version } from '../host/space.js';
@@ -32,7 +32,7 @@ export const grants: Delegation[] = [
  * list with a count from the history as of the proposal (`memberCountAt`);
  * this stays until the scenarios run on the library.
  */
-const proposalContract: Check[] = [
+const proposalContract: Contract[] = [
   {
     that: 'body.members.size() == memberCount && body.members.all(m, member(m)) && body.members.distinct().size() == body.members.size() && body.member in body.members',
     else: 'A proposal lists every member as of itself',
@@ -40,7 +40,7 @@ const proposalContract: Check[] = [
 ];
 
 /** On `std.member`: an add needs nothing more; a removal cites its proposal and the ballots */
-const memberContract: Check[] = [
+const memberContract: Contract[] = [
   {
     that: "body.op == 'add' || versions([body.proposal]).all(p, p.collection == 'coop.proposal' && p.body.member == body.did)",
     else: 'A removal cites a proposal to remove that member',

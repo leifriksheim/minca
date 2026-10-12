@@ -1,173 +1,149 @@
-/** 5. Mutual credit. */
+/** 5. Mutual credit, judged by the library. */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { judge } from '../host/cel-host.js';
 import { lineKey } from '../../packages/core/src/records/key.js';
-import { version, type Version } from '../host/space.js';
-import { ALICE, BOB, CAROL, a0, a1, a1phone, b0, host, pay, payContract } from '../communities/credit.js';
-
-const cel = (held: Version[]) => judge(held, host);
-/** The balance by CEL: the newest version of the line that counts. The library's job, not the language's. */
-async function celBalance(held: Version[], who: string): Promise<number | null> {
-  const j = cel(held);
-  const line = held.filter((v) => v.author === who && v.collection === 'app.pay');
-  const counting: Version[] = [];
-  for (const v of line) if ((await j.verdict(v.id)) === 'pass') counting.push(v);
-  const newest = counting.find((v) => !counting.some((w) => w.prev === v.id));
-  const b = newest?.body;
-  return b && typeof b === 'object' && !Array.isArray(b) && 'balance' in b && typeof b.balance === 'number'
-    ? b.balance
-    : null;
-}
+import { story } from '../communities/credit.js';
 
 describe('mutual credit: payments and the limit', () => {
-  const over = pay('a2', ALICE, a1, { to: BOB, amount: 30, balance: -110 });
-
   test('a payment past the limit fails; balances follow the newest that counts', async () => {
-    const j = cel([a0, a1, b0, over]);
-    assert.deepEqual(await Promise.all(['a0', 'a1', 'b0', 'a2'].map((id) => j.verdict(id))), [
-      'pass',
-      'pass',
-      'pass',
-      'fail',
-    ]);
-    assert.equal(await celBalance([a0, a1, b0, over], ALICE), -80);
-    assert.equal(await celBalance([a0, a1, b0, over], BOB), 10);
+    const { c, alice, bob, pay, balance, a0, a1, b0 } = await story();
+    const over = await pay(alice, a1, { to: bob, amount: 30, balance: -110 });
+    await c.add(a0, a1, b0, over);
+    assert.deepEqual(await c.verdicts(a0, a1, b0, over), ['pass', 'pass', 'pass', 'fail']);
+    assert.equal(await balance(alice), -80);
+    assert.equal(await balance(bob), 10);
   });
 
   test('a lying balance fails', async () => {
-    const liar = pay('a2', ALICE, a1, { to: BOB, amount: 30, balance: -50 });
-    assert.equal(await cel([a0, a1, liar]).verdict('a2'), 'fail');
+    const { c, alice, bob, pay, a0, a1 } = await story();
+    const liar = await pay(alice, a1, { to: bob, amount: 30, balance: -50 });
+    await c.add(a0, a1, liar);
+    assert.equal(await c.verdict(liar), 'fail');
   });
 
   test('a payment claimed twice along the line fails (`once`)', async () => {
-    const again = pay('b1', BOB, b0, {
-      to: CAROL,
-      amount: 0,
-      balance: 40,
-      received: ['a0'],
-    });
-    assert.equal(await cel([a0, b0, again]).verdict('b1'), 'fail');
+    const { c, bob, carol, pay, a0, b0 } = await story();
+    const again = await pay(bob, b0, { to: carol, amount: 0, balance: 40, received: [a0] });
+    await c.add(a0, b0, again);
+    assert.equal(await c.verdict(again), 'fail');
   });
 
   test('a payment claimed twice in one version fails (`once`)', async () => {
-    const twice = pay('b0', BOB, null, { to: CAROL, amount: 0, balance: 60, received: ['a0', 'a0'] });
-    assert.equal(await cel([a0, twice]).verdict('b0'), 'fail');
+    const { c, bob, carol, pay, a0 } = await story();
+    const twice = await pay(bob, null, { to: carol, amount: 0, balance: 60, received: [a0, a0] });
+    await c.add(a0, twice);
+    assert.equal(await c.verdict(twice), 'fail');
   });
 
-  test("CEL's trap: sum([]) is the int 0 today, and an int plus a double is an error", async () => {
-    // Decided: sum([]) returns 0.0 (plan §3), in step 6; until then the contract pads with [0.0].
-    const naive = payContract.map((c) => ({ ...c, that: c.that.replace(' + [0.0])', ')') }));
-    const j = judge([a0], { ...host, contracts: { 'app.pay': naive } });
-    assert.equal(await j.verdict('a0'), 'fail', 'a payment that claims nothing fails without "+ [0.0]"');
+  test('sum([]) is 0.0: a payment that claims nothing adds up', async () => {
+    const { c, a0 } = await story();
+    await c.add(a0);
+    assert.equal(await c.verdict(a0), 'pass');
   });
 });
 
 describe('mutual credit: a double spend from two devices of one account', () => {
-  const held = [a0, a1, a1phone];
-  test('with the host rule, neither counts; the one before still does', async () => {
-    const j = cel(held);
-    assert.deepEqual(await Promise.all(['a0', 'a1', 'a1p'].map((id) => j.verdict(id))), [
-      'pass',
-      'fail',
-      'fail',
-    ]);
-    assert.equal(await celBalance(held, ALICE), -30);
+  test('neither counts; the one before still does', async () => {
+    const { c, alice, a0, a1, a1phone, balance } = await story();
+    await c.add(a0, a1, a1phone);
+    assert.deepEqual(await c.verdicts(a0, a1, a1phone), ['pass', 'fail', 'fail']);
+    assert.equal(await balance(alice), -30);
   });
   test('until the second arrives, the first counts, and so does what a payee built on it', async () => {
-    const carol = pay('c0', CAROL, null, { to: BOB, amount: 0, balance: 50, received: ['a1'] });
-    assert.equal(await cel([a0, a1, carol]).verdict('c0'), 'pass');
-    assert.equal(await cel([a0, a1, carol, a1phone]).verdict('c0'), 'fail', 'not fixed by what it cited');
+    const { c, bob, carol, pay, a0, a1, a1phone } = await story();
+    const c0 = await pay(carol, null, { to: bob, amount: 0, balance: 50, received: [a1] });
+    await c.add(a0, a1, c0);
+    assert.equal(await c.verdict(c0), 'pass');
+    await c.add(a1phone);
+    assert.equal(await c.verdict(c0), 'fail', 'not fixed by what it cited');
   });
 });
 
 describe('mutual credit: a payment arriving before its previous one', () => {
   test('it waits', async () => {
-    assert.equal(await cel([a1]).verdict('a1'), 'pending');
-    assert.equal(await cel([a1, a0]).verdict('a1'), 'pass');
+    const { c, a0, a1 } = await story();
+    await c.add(a1);
+    assert.equal(await c.verdict(a1), 'pending');
+    await c.add(a0);
+    assert.equal(await c.verdict(a1), 'pass');
   });
 });
 
 describe("mutual credit: a line is its account's own", () => {
   test("Carol can't grief Alice's line with a first version at its key", async () => {
-    const fake = version({
-      id: 'x',
-      key: await lineKey(ALICE, 'app.pay'),
+    const { c, alice, carol, a0, a1 } = await story();
+    const fake = await c.sign(carol, {
       collection: 'app.pay',
-      author: CAROL,
       body: {},
+      version: { key: await lineKey(alice.node.did, 'app.pay'), seq: 0 },
     });
-    const j = cel([a0, a1, fake]);
-    assert.equal(await j.verdict('x'), 'fail');
-    assert.equal(await j.verdict('a0'), 'pass');
-    assert.equal(await j.verdict('a1'), 'pass');
+    await c.add(a0, a1, fake);
+    assert.deepEqual(await c.verdicts(fake, a0, a1), ['fail', 'pass', 'pass']);
   });
 
   test("Carol can't grief Alice's line with a next version after a0", async () => {
-    const fake = version({
-      id: 'y',
-      key: await lineKey(ALICE, 'app.pay'),
+    const { c, carol, a0, a1 } = await story();
+    const fake = await c.sign(carol, {
       collection: 'app.pay',
-      author: CAROL,
-      seq: 1,
-      prev: 'a0',
       body: {},
+      version: { key: a0.key, seq: 1, prev: a0.id, genesis: a0.id },
     });
-    const j = cel([a0, a1, fake]);
-    assert.equal(await j.verdict('y'), 'fail');
-    assert.equal(await j.verdict('a1'), 'pass');
+    await c.add(a0, a1, fake);
+    assert.deepEqual(await c.verdicts(fake, a1), ['fail', 'pass']);
   });
 
   test("Bob can't claim one payment twice through a second line: there is one per account", async () => {
-    const b0 = pay('b0', BOB, null, { to: CAROL, amount: 0, balance: 30, received: ['a0'] });
-    const b0x = {
-      ...pay('b0x', BOB, null, { to: CAROL, amount: 0, balance: 30, received: ['a0'] }),
-      key: 'line2:' + BOB,
-    };
-    const j = cel([a0, b0, b0x]);
-    assert.equal(await j.verdict('b0'), 'pass');
-    assert.equal(await j.verdict('b0x'), 'fail');
+    const { c, bob, carol, pay, a0 } = await story();
+    const b0 = await pay(bob, null, { to: carol, amount: 0, balance: 30, received: [a0] });
+    const b0x = await c.sign(bob, {
+      collection: 'app.pay',
+      body: { to: carol.node.did, amount: 0, balance: 30, received: [a0.id] },
+    });
+    await c.add(a0, b0, b0x);
+    assert.deepEqual(await c.verdicts(b0, b0x), ['pass', 'fail']);
   });
 });
 
 describe('mutual credit: a payee who built on a double spend (a v1 limit)', () => {
   // Carol pays Bob 10, claims Alice's a1 (+50), pays Bob 30. Then Alice's phone double-spends.
-  const c0 = pay('c0', CAROL, null, { to: BOB, amount: 10, balance: -10 });
-  const c1 = pay('c1', CAROL, c0, { to: BOB, amount: 0, balance: 40, received: ['a1'] });
-  const c2 = pay('c2', CAROL, c1, { to: BOB, amount: 30, balance: 10 });
+  const carols = async (s: Awaited<ReturnType<typeof story>>) => {
+    const c0 = await s.pay(s.carol, null, { to: s.bob, amount: 10, balance: -10 });
+    const c1 = await s.pay(s.carol, c0, { to: s.bob, amount: 0, balance: 40, received: [s.a1] });
+    const c2 = await s.pay(s.carol, c1, { to: s.bob, amount: 30, balance: 10 });
+    return { c0, c1, c2 };
+  };
 
   test('what she built on a1 falls with it', async () => {
-    assert.equal(await cel([a0, a1, c0, c1, c2]).verdict('c2'), 'pass');
-    const j = cel([a0, a1, a1phone, c0, c1, c2]);
-    assert.equal(await j.verdict('c1'), 'fail');
-    assert.equal(await j.verdict('c2'), 'fail');
-    assert.equal(await celBalance([a0, a1, a1phone, c0, c1, c2], CAROL), -10);
+    const s = await story();
+    const { c0, c1, c2 } = await carols(s);
+    await s.c.add(s.a0, s.a1, c0, c1, c2);
+    assert.equal(await s.c.verdict(c2), 'pass');
+    await s.c.add(s.a1phone);
+    assert.deepEqual(await s.c.verdicts(c1, c2), ['fail', 'fail']);
+    assert.equal(await s.balance(s.carol), -10);
   });
 
   test('there are no corrections in v1: a new payment after c0 is a double spend, and the line ends there', async () => {
-    const after = pay('c1x', CAROL, c0, { to: BOB, amount: 0, balance: -10 }, ['c1', 'c2', 'a1p']);
-    const j = cel([a0, a1, a1phone, c0, c1, c2, after]);
-    assert.equal(await j.verdict('c1x'), 'fail');
-    assert.equal(await j.verdict('c0'), 'pass', 'what came before stands');
+    const s = await story();
+    const { c0, c1, c2 } = await carols(s);
+    const after = await s.pay(s.carol, c0, { to: s.bob, amount: 0, balance: -10 });
+    await s.c.add(s.a0, s.a1, s.a1phone, c0, c1, c2, after);
+    assert.deepEqual(await s.c.verdicts(after, c0), ['fail', 'pass']);
   });
 
   test("a double spend of one's own after a payment that counts: neither counts", async () => {
-    const fine = pay('c1', CAROL, c0, { to: BOB, amount: 5, balance: -15 });
-    const again = pay('c1y', CAROL, c0, { to: BOB, amount: 30, balance: -40 }, ['c1']);
-    const j = cel([c0, fine, again]);
-    assert.equal(await j.verdict('c1'), 'fail');
-    assert.equal(await j.verdict('c1y'), 'fail');
+    const s = await story();
+    const c0 = await s.pay(s.carol, null, { to: s.bob, amount: 10, balance: -10 });
+    const fine = await s.pay(s.carol, c0, { to: s.bob, amount: 5, balance: -15 });
+    const again = await s.pay(s.carol, c0, { to: s.bob, amount: 30, balance: -40 });
+    await s.c.add(c0, fine, again);
+    assert.deepEqual(await s.c.verdicts(fine, again), ['fail', 'fail']);
   });
 });
 
 describe('mutual credit: line declarations have closed keys', () => {
-  test('a declaration with a key this peer does not know leaves the collection unjudged', async () => {
-    const later = judge([a0, a1], {
-      ...host,
-      lines: { 'app.pay': { once: ['received'], restate: ['to', 'amount'] } },
-    });
-    assert.equal(await later.verdict('a0'), 'unjudged');
-    assert.equal(await later.verdict('a1'), 'unjudged');
+  test('the library refuses to declare a line with a key it does not know', async () => {
+    await assert.rejects(story({ once: ['received'], restate: ['to', 'amount'] }), /line takes only "once"/);
   });
 });

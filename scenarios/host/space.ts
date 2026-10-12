@@ -31,16 +31,3 @@ export interface Version {
 /** A version, with defaults: a first version, seen nothing, key = id */
 export const version = (v: Partial<Version> & Pick<Version, 'id' | 'collection' | 'author'>): Version =>
   Object.freeze({ key: v.id, seq: 0, deleted: false, body: {}, links: [], prev: null, seen: [], ...v });
-
-/** The next version of `before`: a delete when `body` is null */
-export const next = (before: Version, v: Partial<Version> & Pick<Version, 'id'>): Version =>
-  version({
-    ...before,
-    seq: before.seq + 1,
-    prev: before.id,
-    seen: [before.id],
-    deleted: v.body === null,
-    body: v.body === null ? null : before.body,
-    links: v.body === null ? [] : before.links,
-    ...v,
-  });

@@ -36,12 +36,16 @@ CI whenever `spec/`, `packages/core/` or `scenarios/` change.
 - `host/`: grants are the real library's. `host/library.ts` turns a story
   (entries placed in one linear history, each with what it had seen) into a
   space's constitution and access history and asks the library's replay
-  (`packages/core/src/space/roles.ts`) every question. A small stand-in
-  remains for what a peer does around the contracts (`host/cel-host.ts`:
-  chains, pending, membership as of a version), until contracts land in the
-  library (the plan's step 6); its CEL and UCAN policies
+  (`packages/core/src/space/roles.ts`) every question. The hall of fame and
+  mutual credit run on a real node (`packages/core/tests/helpers/community.ts`):
+  every member signs their own versions, handed to a founder's node in the
+  order a test says, and the verdicts are the library's contracts
+  ([spec 09](../spec/09-contracts.md)). The chess club's and co-op's
+  contracts still run on a small stand-in for what a peer does around them
+  (`host/cel-host.ts`: chains, pending, membership as of a version), since
+  the co-op reads a count the subset doesn't have; its CEL and UCAN policies
   (`host/ucan-policy.ts`) are the real evaluators from `packages/core`.
-- `parked-datalog/`: the same communities in Datalog, from
+- `parked-datalog/`: the chess club, co-op and company team in Datalog, from
   [the comparison](../spec/drafts/contracts-comparison.md). Datalog is parked
   as a possible library query layer, not protocol. It runs with `npm test`
   but is not part of `npm run scenarios`; if a scenario change breaks it, fix

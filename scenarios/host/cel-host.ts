@@ -1,6 +1,7 @@
 /**
- * The CEL side's host: what a peer does around Weave's CEL checks
- * (`packages/core/src/records/checks.ts`, `runChecks`), simplified from
+ * A stand-in host for the chess club's and the co-op's contracts: what a
+ * peer does around Weave's CEL contracts
+ * (`packages/core/src/records/contracts.ts`, `runContracts`), simplified from
  * `packages/core/src/node/space-runtime.ts` and spec 03:
  *
  * - a version counts only when the version before it does (the chain);
@@ -12,46 +13,23 @@
  *   past: an add counts when it passes, a removal too, and a removal holds
  *   until an add that had seen it.
  *
- * Optional host rules the examples need, which CEL can't express:
- * `lines` (the plan's line rule, §3) and `values` (more names for a check,
- * like `memberCount`).
- *
  * A first version at an owned key (`<owner>.<name>`, spec 02 §4.1) fails
  * unless its author owns the key, as every peer refuses one; and `creator`
  * is the author of the first version a version's own chain starts from, not
  * whichever first version at its key the host found. The scenarios' other
  * keys are labels (`m0`), which a peer would refuse, kept short for reading.
  *
- * A line is one account's sequence in a collection, at the account's line
- * key (`lineKey`, the library's derivation). Only that account's own
- * versions can be in it, or be twins:
- *
- * - a version in a line collection at any other key fails;
- * - two versions of a line after the same one (or two first versions) are
- *   a double spend, and neither counts, nor anything after either. There
- *   are no corrections in v1 (the plan, §3);
- * - each `once` field's citations appear at most once along the line, which
- *   is the counted chain;
- * - a declaration with a key the host doesn't know is not judged
- *   (`unjudged`), like a space with an unknown resolver.
+ * `values` gives a contract more names, like the co-op's `memberCount`,
+ * which the subset doesn't have. The hall of fame and mutual credit run on
+ * the library itself (`packages/core/tests/helpers/community.ts`).
  */
-import { runChecks, type Check, type CheckedVersion } from '../../packages/core/src/records/checks.js';
-import { keyKind, lineKey, ownsKey } from '../../packages/core/src/records/key.js';
+import { runContracts, type Contract, type CitedVersion } from '../../packages/core/src/records/contracts.js';
+import { keyKind, ownsKey } from '../../packages/core/src/records/key.js';
 import type { Version } from './space.js';
 import { isRecord } from './ucan-policy.js';
 
-/** `unjudged`: its collection declares something this peer doesn't know */
-export type Verdict = 'pass' | 'fail' | 'pending' | 'unjudged';
-
-/** The keys a line declaration may have; any other leaves the collection unjudged */
-const LINE_KEYS: ReadonlyArray<string> = ['once'];
-
-/** A line collection's declaration, as written: its keys are closed */
-export interface Line {
-  /** Fields whose citations appear once along the line */
-  readonly once?: ReadonlyArray<string>;
-  readonly [key: string]: unknown;
-}
+/** How a version fares */
+export type Verdict = 'pass' | 'fail' | 'pending';
 
 export interface Host {
   /** Who can never be removed */
@@ -59,9 +37,7 @@ export interface Host {
   /** Members from the start, who can be removed */
   readonly members?: ReadonlyArray<string>;
   /** Contracts by collection */
-  readonly contracts: Readonly<Record<string, ReadonlyArray<Check>>>;
-  /** Line collections, and the fields whose citations appear once along a line */
-  readonly lines?: Readonly<Record<string, Line>>;
+  readonly contracts: Readonly<Record<string, ReadonlyArray<Contract>>>;
   /** More names a check reads, given the members as of the version */
   readonly values?: (v: Version, members: ReadonlySet<string>) => Record<string, unknown>;
 }
@@ -137,20 +113,6 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
     }
     // Whose key it is: nobody else may write its first version.
     if (v.seq === 0 && keyKind(v.key) === 'owned' && !(await ownsKey(v.key, v.author))) return 'fail';
-    const line = host.lines?.[v.collection];
-    if (line) {
-      // A declaration with a key this peer doesn't know is not judged, like an unknown resolver.
-      if (Object.keys(line).some((k) => !LINE_KEYS.includes(k))) return 'unjudged';
-      if (v.key !== (await lineKey(v.author, v.collection))) return 'fail';
-      const prev = v.prev ? byId.get(v.prev) : undefined;
-      if (prev && (prev.author !== v.author || prev.key !== v.key)) return 'fail';
-      // Two versions of the line after the same one: a double spend, and neither counts.
-      const twin = [...byId.values()].some(
-        (w) => w.id !== v.id && w.key === v.key && w.author === v.author && w.prev === v.prev,
-      );
-      if (twin) return 'fail';
-      if (!onceAlong(v, line.once ?? [])) return 'fail';
-    }
     const members = await membersAsOf(id);
     if (!members) return 'pending';
     if (!members.has(v.author)) return 'fail';
@@ -160,7 +122,7 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
     // The first version this one's own chain starts from.
     let first: Version | undefined = v;
     while (first?.prev) first = byId.get(first.prev);
-    const outcome = await runChecks(checks, {
+    const outcome = await runContracts(checks, {
       values: {
         body: v.body,
         links: v.links,
@@ -185,30 +147,14 @@ export function judge(held: Iterable<Version>, host: Host): Judged {
       member: (did) => members.has(did),
     });
     if ('later' in outcome) return 'pending';
-    if ('unreadable' in outcome) return 'fail';
+    if ('unreadable' in outcome || 'unjudged' in outcome) return 'fail';
     return outcome.passed ? 'pass' : 'fail';
-  }
-
-  /** Whether each citation in `fields` appears once along `v`'s line, `v` included */
-  function onceAlong(v: Version, fields: ReadonlyArray<string>): boolean {
-    const seen = new Set<string>();
-    for (let w: Version | undefined = v; w; w = w.prev ? byId.get(w.prev) : undefined) {
-      for (const f of fields) {
-        const cites = isRecord(w.body) ? w.body[f] : undefined;
-        for (const c of Array.isArray(cites) ? cites : []) {
-          const key = `${f} ${JSON.stringify(c)}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-        }
-      }
-    }
-    return true;
   }
 
   return { verdict, membersAsOf };
 }
 
-function checked(v: Version): CheckedVersion {
+function checked(v: Version): CitedVersion {
   return {
     id: v.id,
     key: v.key,

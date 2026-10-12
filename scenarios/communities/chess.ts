@@ -4,7 +4,7 @@
  * themselves, and take it away. Admins appoint Moderators, who may remove
  * members but not admins (a policy on `.roles`, the target's roles).
  */
-import type { Check } from '../../packages/core/src/records/checks.js';
+import type { Contract } from '../../packages/core/src/records/contracts.js';
 import type { Assignment, Delegation } from '../host/library.js';
 import { version } from '../host/space.js';
 
@@ -61,7 +61,7 @@ export const grants: Delegation[] = [
 ];
 
 /** On each move: the player whose turn it is made it */
-export const moveContract: Check[] = [
+export const moveContract: Contract[] = [
   {
     that: "versions([body.game]).all(g, g.collection == 'app.chess.game' && author == (int(body.ply) % 2 == 0 ? g.body.white : g.body.black))",
     else: 'Players move in turn',

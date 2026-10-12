@@ -1,56 +1,70 @@
-/** 4. Hall of fame, with the hard cases. */
+/** 4. Hall of fame, with the hard cases, judged by the library. */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { judge } from '../host/cel-host.js';
-import type { Version } from '../host/space.js';
-import { base, claim, comment, f1, host, react, reactions, removeM3, withdraw } from '../communities/fame.js';
-
-const cel = async (held: Version[], id: string) => judge(held, host).verdict(id);
+import { story } from '../communities/fame.js';
 
 describe('hall of fame: five 🙂', () => {
   test('the claim passes', async () => {
-    assert.equal(await cel(base, 'f1'), 'pass');
+    const { c, comment, reactions, meh, f1 } = await story();
+    await c.add(comment, ...reactions, meh, f1);
+    assert.equal(await c.verdict(f1), 'pass');
   });
   test('a claim citing the 😐 instead fails', async () => {
-    assert.equal(
-      await cel([...base, claim('f0', ['r1', 'r2', 'r3', 'r4', 'r6'], ['r1', 'r2', 'r3', 'r4', 'r6'])], 'f0'),
-      'fail',
-    );
+    const { c, comment, reactions, meh, claim } = await story();
+    const f0 = await claim([...reactions.slice(0, 4), meh]);
+    await c.add(comment, ...reactions, meh, f0);
+    assert.equal(await c.verdict(f0), 'fail');
   });
 });
 
 describe('hall of fame: a reaction withdrawn', () => {
   test('after the claim: still famous, fixed by what was cited', async () => {
-    assert.equal(await cel([...base, withdraw(['r3', 'f1'])], 'f1'), 'pass');
+    const { c, comment, reactions, meh, f1, withdraw } = await story();
+    await c.add(comment, ...reactions, meh, f1, await withdraw(reactions[2]!, 3));
+    assert.equal(await c.verdict(f1), 'pass');
   });
-  test('before the claim: passes, citing the version before the withdrawal, whatever the claim had seen', async () => {
-    // Accepted (plan §3): a version's `seen` is whatever its writer says, so
-    // "a cited version must be current" could be dodged by leaving the
-    // withdrawal out of it. Withdrawals don't un-fame a claim; the contract
-    // judges the versions cited, and a reaction once given counts.
-    const named = claim('f2', ['r1', 'r2', 'r3', 'r4', 'r5', 'd3']);
-    const unnamed = claim('f9', ['r1', 'r2', 'r3', 'r4', 'r5']);
-    const held = [comment, ...reactions, withdraw(['r3']), named, unnamed];
-    assert.equal(await cel(held, 'f2'), 'pass');
-    assert.equal(await cel(held, 'f9'), 'pass');
+  test('before the claim: passes, citing the version before the withdrawal', async () => {
+    // A contract judges the versions cited, not whether they are current: records have no
+    // causal past a peer can check, so "current as of the claim" would be a promise it can't keep.
+    const { c, comment, reactions, meh, claim, withdraw } = await story();
+    await c.add(comment, ...reactions, meh, await withdraw(reactions[2]!, 3));
+    const late = await claim(reactions);
+    await c.add(late);
+    assert.equal(await c.verdict(late), 'pass');
   });
 });
 
 describe('hall of fame: a reaction from a removed member', () => {
-  test('removed after the claim: still famous', async () => {
-    assert.equal(await cel([...base, removeM3(['f1'])], 'f1'), 'pass');
+  test('removed after the claim: still famous, even where the removal keeps nothing of theirs', async () => {
+    // The claim had not seen the removal, so the removal can't take back what it cites.
+    const { c, comment, reactions, meh, f1, remove } = await story();
+    const [r1, r2, r3, r4, r5] = reactions;
+    await c.add(comment, r1!, r2!, r4!, r5!, meh);
+    await remove(3);
+    await c.add(r3!, f1);
+    assert.equal(await c.verdict(f1), 'pass');
   });
   test('removed, and a claim that had seen it cites the reaction: fails', async () => {
-    const f3 = claim('f3', ['r1', 'r2', 'r3', 'r4', 'r5', 'x3']);
-    assert.equal(await cel([...base, removeM3(['r3']), f3], 'f3'), 'fail');
+    // Alice removes m3 before m3's reaction reaches her, so her removal keeps nothing of m3's (03 §6.3).
+    const { c, comment, reactions, meh, claim, remove } = await story();
+    const [r1, r2, r3, r4, r5] = reactions;
+    await c.add(comment, r1!, r2!, r4!, r5!, meh);
+    await remove(3);
+    await c.add(r3!);
+    const f3 = await claim(reactions);
+    await c.add(f3);
+    assert.equal(await c.verdict(f3), 'fail');
   });
 });
 
 describe('hall of fame: a device holding only some reactions', () => {
   test('the claim waits; it is never judged false', async () => {
-    const partial = [comment, react(1), react(2), react(4), f1];
-    assert.equal(await cel(partial, 'f1'), 'pending');
-    assert.equal(await cel(base, 'f1'), 'pass');
+    const { c, comment, reactions, meh, f1 } = await story();
+    const [r1, r2, r3, r4, r5] = reactions;
+    await c.add(comment, r1!, r2!, r4!, f1);
+    assert.equal(await c.verdict(f1), 'pending');
+    await c.add(r3!, r5!, meh);
+    assert.equal(await c.verdict(f1), 'pass');
   });
 });
