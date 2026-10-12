@@ -87,10 +87,11 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     definition…").
   - An unassignment, like a removal, strikes everything its account did that
     hadn't seen it, past its cutoff, whatever that needed. So a demoted
-    member can't backdate past it by assigning itself another role, by
-    defining one it keeps, or because another role it lost at the same time
-    would also have allowed it (03 §4.3; `access-attacks.test.ts`,
-    "backdating past an unassignment").
+    member's backdated actions don't count: not by assigning itself another
+    role, defining one it keeps, or because another role it lost at the same
+    time would also have allowed it (03 §4.3; `access-attacks.test.ts`,
+    "backdating past an unassignment"). What it can still do, by a backdated
+    reduction of whoever demoted it, is below.
   - A join through an invite is judged as the assignment its opener makes, to
     whoever joins: an opener whose grant says `.self == false` can't join its
     own invite, and its `.roles` policy reads the joiner's roles (03 §4.5;
@@ -178,15 +179,19 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     what its cutoff doesn't cover: peers converge, but no verdict is final
     until members witness each other's heads
     ([#166](https://github.com/leifriksheim/weave/issues/166)).
-  - The unassigner chooses what was unseen. A member holding any
-    `/role/unassign` can name an old view in which it held the grant and the
-    target held the role, leave out the cutoff, and strike everything the
-    target did since. A `.roles` policy doesn't stop it, since it is read in
-    that old view. Two unassignments of each other made this way both stand,
-    as an honest pair made apart would (03 §4.3; `access-attacks.test.ts`,
-    "unassignments of each other both stand…";
-    [#166](https://github.com/leifriksheim/weave/issues/166)). Only a removal
-    of the unassigner, which its unassignment can't strike back, settles it.
+  - Whoever was allowed to reduce another as of an old view can do so at any
+    time later. It names a view in which it held the grant and the target
+    held the role, leaves out the cutoff, and strikes everything the target
+    did since. A `.roles` policy doesn't stop it, since it is read in that
+    old view, and having been demoted or removed since doesn't either: its
+    reduction and the one that took its power strike each other, and both
+    stand, whatever their kinds. So a demoted admin can remove whoever
+    demoted it, and stays demoted; a removed member can take a role from its
+    remover, and stays removed. Without consensus a backdate can't be told
+    from a delay, so no rule settles it; a founder or someone who may assign
+    does, after it, by re-adding or assigning again (03 §4.3;
+    `access-attacks.test.ts`, "reductions of each other";
+    [#166](https://github.com/leifriksheim/weave/issues/166)).
   - An invite outlives its opener's demotion or removal for a joiner who names
     a view from before it: the join is judged there, where the opener still
     held the grant. To stop an invite, close it: a close strikes joins that
@@ -300,11 +305,11 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
   - What it writes claiming to have seen its removal does not count, a
     revoke included, since a revoke needs a place. Ordinary records it writes claiming not
     to have seen it are withdrawn, unless the removal's cutoff covers them (03 §5.1, §6.3).
-  - It can't undo its removal by reducing its remover: an unassignment never
-    strikes a removal of its own author, so a backdated unassignment of the
-    remover's role is struck by the removal, and strikes nothing (03 §4.3;
-    `access-attacks.test.ts`, "a removed member’s backdated unassignment of
-    its remover…").
+  - It can't make its own actions count again: its removal stands. But a
+    reduction of its remover it was allowed in a view it names, backdated,
+    stands too, and strikes the remover's work since that view (§3.2; 03
+    §4.3; `access-attacks.test.ts`, "a removed member’s backdated
+    unassignment of its remover…"; [#166](https://github.com/leifriksheim/weave/issues/166)).
   - An assignment or definition it makes concurrently with its removal, or
     with the loss of any role, or backdates, is struck, and gives no power to
     anything resting on it, a record citing it included, whether or not that

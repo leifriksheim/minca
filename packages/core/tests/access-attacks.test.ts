@@ -535,9 +535,10 @@ describe('backdating past an unassignment', () => {
   });
 });
 
-// Found by the second review of grants: with whole-account strikes, a removed member's backdated
-// reduction of its remover struck the removal back, and the two stood together.
-describe('fighting your own removal', () => {
+// Found by the second and third reviews of grants. Without consensus a backdate looks like a delay:
+// whoever was allowed to reduce the other as of an old view can do so later, and reductions that
+// strike each other both stand, whatever their kinds, as in strong removal (03 §4.3).
+describe('reductions of each other', () => {
   const g: AccessGenesis = {
     id: 'space',
     creator: 'alice',
@@ -556,8 +557,9 @@ describe('fighting your own removal', () => {
       { name: 'member', grants: [{ cmd: RECORD_WRITE, pol: [] }] },
     ],
   };
+  const orders = (events: AccessEvent[]) => [events, [...events].reverse()].map((o) => replayAccess(g, o));
 
-  test('a removed member’s backdated unassignment of its remover strikes nothing, and is struck', () => {
+  test('a removed member’s backdated unassignment of its remover stands with the removal, and strikes the remover’s work since', () => {
     const adam = assign('alice', 'adam', 'admin', []);
     const greet = assign('alice', 'adam', 'greeter', [adam.id]);
     const tom = assign('alice', 'tom', 'tidy', [greet.id]);
@@ -566,16 +568,30 @@ describe('fighting your own removal', () => {
     const out = remove('adam', 'tom', [quinn.id]);
     // Removed, Tom names a view from before Adam's work and takes greeter from him.
     const spite = unassign('tom', 'adam', 'greeter', [tom.id]);
-    for (const h of [
-      [adam, greet, tom, pat, quinn, out, spite],
-      [spite, out, quinn, pat, tom, greet, adam],
-    ].map((order) => replayAccess(g, order))) {
-      assert.equal(status(h, spite), 'dropped');
+    for (const h of orders([adam, greet, tom, pat, quinn, out, spite])) {
       assert.equal(status(h, out), 'applied');
-      assert.ok(!isMember(h.current, 'tom'));
-      assert.ok(isMember(h.current, 'pat') && isMember(h.current, 'quinn'), 'Adam’s work stands');
-      assert.deepEqual(rolesOf(h.current, 'adam'), ['admin', 'greeter']);
-      assert.ok(h.judge({ id: 'note', root: 'adam', seen: [quinn.id] }, (s) => isMember(s, 'adam')).ok);
+      assert.equal(status(h, spite), 'applied');
+      assert.ok(!isMember(h.current, 'tom'), 'Tom is removed');
+      assert.deepEqual(rolesOf(h.current, 'adam'), ['admin'], 'Adam loses greeter');
+      assert.equal(status(h, pat), 'dropped', 'and what he did since the view Tom named');
+      assert.ok(!isMember(h.current, 'pat') && !isMember(h.current, 'quinn'));
+    }
+  });
+
+  test('a demoted admin’s backdated removal of its demoter: both stand', () => {
+    const adam = assign('alice', 'adam', 'admin', []);
+    const dana = assign('alice', 'dana', 'admin', [adam.id]);
+    const demote = unassign('dana', 'adam', 'admin', [dana.id]);
+    const pat = assign('dana', 'pat', 'member', [demote.id]);
+    const later = assign('alice', 'zed', 'member', [pat.id]);
+    // Long after, Adam names the view from before his demotion and removes Dana.
+    const spite = remove('adam', 'dana', [dana.id]);
+    for (const h of orders([adam, dana, demote, pat, later, spite])) {
+      assert.equal(status(h, demote), 'applied');
+      assert.equal(status(h, spite), 'applied');
+      assert.deepEqual(rolesOf(h.current, 'adam'), [], 'Adam stays demoted');
+      assert.ok(!isMember(h.current, 'dana'), 'and Dana is removed');
+      assert.equal(status(h, pat), 'dropped');
     }
   });
 
@@ -592,7 +608,7 @@ describe('fighting your own removal', () => {
     assert.equal(status(h, pat), 'dropped', 'what Adam did that it named as unseen');
   });
 
-  test('two who remove each other both stand, as before', () => {
+  test('two who remove each other both stand', () => {
     const bob = assign('alice', 'bob', 'admin', []);
     const carol = assign('alice', 'carol', 'admin', [bob.id]);
     const a = remove('bob', 'carol', [carol.id]);

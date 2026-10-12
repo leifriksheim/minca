@@ -1331,15 +1331,9 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     return scopes.get(reduction.id) === event.root;
   };
   // Revokes and fork proofs are never struck: every allowed one applies.
-  // An unassignment never strikes a removal of its own author: whoever is removed can't undo it by
-  // taking a role from the remover, backdated. Removals of each other still strike each other and
-  // both stand, and so do unassignments of each other: neither could be told from an honest pair.
-  const answersOwn = (reduction: AccessEvent, event: AccessEvent) =>
-    reduction.kind === 'assign' && event.kind === 'remove' && scopes.get(event.id) === reduction.root;
   const strikesOn = (reduction: AccessEvent, event: AccessEvent) =>
     reduction.id !== event.id &&
     !keyWide(event) &&
-    !answersOwn(reduction, event) &&
     (keyWide(reduction) || !saw.get(event.id)!.has(reduction.id)) &&
     !covers(reduction, event) &&
     reaches(reduction, event);

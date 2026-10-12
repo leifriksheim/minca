@@ -597,11 +597,13 @@ e`'s place in that collection's line, `log.n`, §6.3) and, unless `r` is a
    owner reacting to a thief has seen what the thief did. Revokes and forks
    are never struck.
 
-   An unassignment never strikes a removal of its own author: a removed
-   member can't undo its removal by taking a role from its remover, backdated
-   to a view where it still could. Removals of each other strike each other
-   and both stand, and so do unassignments of each other, since neither pair
-   can be told from one made honestly apart.
+   Reductions that strike each other all stand, whatever their kinds: a
+   removal and an unassignment of each other's authors both stand, as two
+   removals do (step 4). Without consensus a backdate can't be told from a
+   delay, so no rule about which kind wins would hold: whichever side
+   backdates could use it. Whoever was allowed to reduce another as of a
+   view can do so later by naming that view; a founder or someone who may
+   assign settles it afterwards, by re-adding or assigning again.
 
    > Rationale: an unassignment strikes what its account did concurrently,
    > not only what needed the role. What an event needed could only be judged
