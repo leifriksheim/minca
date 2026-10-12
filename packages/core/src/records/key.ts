@@ -28,6 +28,18 @@ const OWNED_KEY_PATTERN = /^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$/;
 /** A shared `onePer` key: `one:` and 20 bytes of HMAC, in hex */
 const SHARED_KEY_PATTERN = /^one:[0-9a-f]{40}$/;
 
+/** An owned key whose name has a `onePer` key's form: `<owner>.one:` and 20 bytes in hex */
+const OWNED_ONE_PER_PATTERN = /^[a-z2-7]{26}\.one:[0-9a-f]{40}$/;
+
+/**
+ * Whether a key has the form of a `onePer` key (spec 02 §7.3), and which:
+ * `owned` for `<owner>.one:<hex>`, `shared` for `one:<hex>`. Such a key is
+ * only for a first version in a collection whose `onePer` gives it.
+ */
+export function onePerForm(key: string): 'owned' | 'shared' | null {
+  return SHARED_KEY_PATTERN.test(key) ? 'shared' : OWNED_ONE_PER_PATTERN.test(key) ? 'owned' : null;
+}
+
 /** Which kind a key is, or null when it is neither (and so no first version outside `sys.*` may use it) */
 export function keyKind(key: string): 'owned' | 'shared' | null {
   return OWNED_KEY_PATTERN.test(key) ? 'owned' : SHARED_KEY_PATTERN.test(key) ? 'shared' : null;

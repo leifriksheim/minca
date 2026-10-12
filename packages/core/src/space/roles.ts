@@ -302,6 +302,13 @@ export interface AccessState {
    * defined it: null when rival first definitions name different accounts
    */
   readonly definitions: ReadonlyMap<string, { readonly event: string; readonly definedBy: string | null }>;
+  /**
+   * Collections whose rival first definitions, by different accounts, no
+   * later one settles → the ids of the latest of them, lowest first. Which is
+   * in force is not the replay's to say (02 §6.3: none, unless they all say
+   * the same), and only someone who manages the space may define it again.
+   */
+  readonly contested: ReadonlyMap<string, ReadonlyArray<string>>;
   /** A private space's keys, oldest first; the last is current. Empty in a public space. */
   readonly keys: ReadonlyArray<SpaceKeyEpoch>;
   /** Whether someone lost their place in the space since the current key — so a new one is due */
@@ -424,6 +431,7 @@ interface MutableState {
   members: Map<string, string>;
   invites: Map<string, { role: string; open: boolean; event: string }>;
   definitions: Map<string, { event: string; definedBy: string | null }>;
+  contested: Map<string, ReadonlyArray<string>>;
   keys: SpaceKeyEpoch[];
   keyDue: boolean;
   relays: ReadonlyArray<string>;
@@ -437,6 +445,7 @@ function startState(genesis: AccessGenesis): MutableState {
     members: new Map([[genesis.creator, genesis.creatorRole]]),
     invites: new Map(),
     definitions: new Map(),
+    contested: new Map(),
     keys: genesis.key ? [{ ...genesis.key, event: genesis.id }] : [],
     keyDue: false,
     relays: [],
@@ -523,10 +532,15 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
       return author ? null : 'Only a member may report a fork';
     case 'definition': {
       const existing = state.definitions.get(event.name);
-      if (!existing) return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
+      const contested = state.contested.has(event.name);
+      if (!existing && !contested)
+        return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
       // Changing one: whoever first defined it, while a member, or anyone who manages the space.
       if (roleHolds(author, MANAGE)) return null;
-      return author && existing.definedBy === event.root
+      // Rivals no one settled: no one first defined it, so only a manager may settle them.
+      if (contested)
+        return 'Rival definitions of it stand: only someone who manages the space may settle them';
+      return author && existing?.definedBy === event.root
         ? null
         : 'Only whoever defined it, or someone who manages the space, may change it';
     }
@@ -581,6 +595,8 @@ function change(event: AccessEvent, state: MutableState): void {
     case 'fork':
       return;
     case 'definition': {
+      // It saw what it changes, so it settles any rivals it saw.
+      state.contested.delete(event.name);
       if (event.deleted) {
         state.definitions.delete(event.name);
         return;
@@ -801,7 +817,18 @@ function merge(
       win = least(closed.length > 0 ? closed : tops, given);
     } else win = [...tops].sort(byId)[0]!;
     if (win.kind === 'definition' && !win.deleted) {
-      state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
+      const definedBy = definerOf(win, group, saw);
+      // Rival first definitions, and no later one that saw them all: no id picks one, since an id
+      // can be ground (02 §6.3). Readers judge them by what they say.
+      if (definedBy === null && tops.length > 1)
+        state.contested.set(
+          win.name,
+          tops
+            .filter((event) => event.kind === 'definition' && !event.deleted)
+            .sort(byId)
+            .map((event) => event.id),
+        );
+      else state.definitions.set(win.name, { event: win.id, definedBy });
     } else change(win, state);
   }
   if (keyEvents.length > 0) {
@@ -831,6 +858,7 @@ function applied(state: AccessState, event: AccessEvent, genesisId: string): Mut
     members: new Map(state.members),
     invites: new Map(state.invites),
     definitions: new Map(state.definitions),
+    contested: new Map(state.contested),
     keys: [...state.keys],
   };
   change(event, next);

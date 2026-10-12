@@ -270,10 +270,10 @@ stays on a to-do however often the to-do changes.
 **Whose a key is.** Outside the `sys.*` collections, a record's first version
 (`seq 0`) MUST be at a key of one of two kinds, told apart by their form:
 
-| Kind       | Form                                  | Who may write its first version                                                                         |
-| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **owned**  | `^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$` | Only the account whose owner part it starts with                                                        |
-| **shared** | `^one:[0-9a-f]{40}$`                  | Anyone the collection's rules allow, and only in a collection whose rules in force have `onePer` (§7.3) |
+| Kind       | Form                                  | Who may write its first version                                                                                           |
+| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **owned**  | `^[a-z2-7]{26}\.[a-z0-9:._-]{1,101}$` | Only the account whose owner part it starts with                                                                          |
+| **shared** | `^one:[0-9a-f]{40}$`                  | Anyone the collection's rules allow, and only in a collection whose rules in force have `onePer` (§7.3) without `@author` |
 
 An owned key is `<owner>.<name>`. Its owner part names the creator's account:
 
@@ -304,9 +304,24 @@ of neither kind, or is an owned key whose owner part is not `owner(root)` of
 the version's root (§9.3). This needs only the envelope and the root, so every
 peer makes it, one that can't read the body or holds only a stub included. A
 peer that can read the collection's definition in force (as of `seen`) MUST
-also refuse a first version at a shared key when those rules have no
-`onePer`; one that can't read it accepts it on the other checks. Both are
-judged in §9.4 step 4.
+also refuse a first version at a key of a `onePer` key's form, unless those
+rules have a `onePer` that gives that form: a shared key only for a `onePer`
+without `@author`, and an owned key whose name matches `^one:[0-9a-f]{40}$`
+only for a `onePer` with `@author`. This is judged from the definition alone,
+so peers that can't derive `onePer` keys (§7.3) agree; one that can't read
+the definition accepts it on the other checks. Both are judged in §9.4 step 4.
+Otherwise a record in another collection could take an account's `onePer`
+key, and with it the `onePer` record, for good: keys are unique in a space,
+and a record keeps its collection.
+
+**Chosen names in two collections.** An account's chosen key is the same in
+every collection, so an app of the account's that writes `settings` in
+`app.notes` takes the key another app of the account's would use for
+`settings` in `app.todo`; the second can't write its record there (§4.2).
+Only the account itself, or an app it lets write, can cause this: no one
+else can write at its keys. Apps SHOULD choose names that include their
+collection (`app.todo.settings`), and a writer SHOULD refuse, with a clear
+error, to write a record at a key whose chain it holds in another collection.
 
 The `sys.*` collections keep the formats their parts give them (03:
 `role:…`, `member:…`, `profile:…` and the rest; `collection:<name>` for a
@@ -330,7 +345,7 @@ place of theirs.
 > The owner part says no more than the version does: its `author` and `proof`
 > name the account in the clear in every space.
 
-_Source: `packages/core/src/records/key.ts` (`keyKind`, `ownerTag`, `ownedKey`, `newRecordKey`, `ownsKey`), `packages/core/src/node/space-runtime.ts` (`keyProblem`, `sharedKeyProblem`, `judgeStanding`, `keyToWrite`). Tests: `packages/core/tests/record-keys.test.ts` (all), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
+_Source: `packages/core/src/records/key.ts` (`keyKind`, `onePerForm`, `ownerTag`, `ownedKey`, `newRecordKey`, `ownsKey`), `packages/core/src/node/space-runtime.ts` (`keyProblem`, `onePerKeyProblem`, `judgeStanding`, `keyToWrite`, `keepsCollection`). Tests: `packages/core/tests/record-keys.test.ts` (all), `packages/core/tests/versions.test.ts` ("a fresh key is the account's owner part…")._
 
 ### 4.2 Version fields
 
@@ -929,10 +944,28 @@ account first defined it. If they are two accounts', **no one** did, and
 only someone holding `manage` may change or delete it. No id decides, since a
 writer can grind one.
 
-Example: Alice and Mallory both hold `define`. Alice defines `app.poll`;
-Mallory writes a definition of it naming a point before Alice's, with a lower
-id. Both count, and no one first defined `app.poll`: neither may change it,
-and a manager may.
+**Rival definitions are not in force.** While first definitions by two
+accounts stand and more than one change to `collection:<name>` is latest (none
+saw the others), the replay picks none of those latest changes: picking by id
+would let whoever ground the lower id choose the rules. A reader opens them
+all. If their bodies are the same (canonical JSON, §1), as when two members
+add the same app at once, that definition is in force. Otherwise **none** is,
+and the collection's records are judged as if it had none (§6.1). A peer that
+can't read them all treats the collection as having a definition it can't
+read. Rivals are settled by a change that saw them all: only someone holding
+`manage` may make it, since no one first defined the collection; it is then
+in force, and still names no definer. A manager's delete settles them too.
+
+Example: Alice and Mallory both hold `define`, Bob holds `manage`. Alice
+defines `app.poll` (`d5`) and changes it (`d6`); Mallory writes a definition
+of it naming a point before Alice's, with a lower id (`d0`). Both count, no
+one first defined `app.poll`, and `d6` and `d0` are both latest, so neither is
+in force, since they differ. Neither Alice nor Mallory may change it, even
+having seen both. Bob
+writes `d8` having seen `d6` and `d0`, and `d8` is in force. If Mallory
+backdates another rival past `d8`, the collection is out of force again until
+Bob settles it again: a member holding `define` can put a collection out of
+force, but can't choose its rules.
 
 Peers do not check `version` against the definition it replaces. What the
 library does with it: [collections](../packages/core/docs/collections.md#versions-of-a-definition).
@@ -961,7 +994,7 @@ Names are **local to a space**. Nothing registers or owns a name across
 spaces, so a name never says what shape a collection has; its definition in
 that space does.
 
-_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `definerOf`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
+_Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATALOG_COLLECTION`, `checkStoredCollection`, `checkPublishableSchema`), `packages/core/src/node/space-runtime.ts` (`definitionIn`, `inForce`, `loadCatalog`), `packages/core/src/space/roles.ts` (`definition` events, `definerOf`, `contested`, `refusal`). Tests: `packages/core/tests/record-keys.test.ts` ("rival first definitions by two accounts name no one…", "a backdated rival with a ground-low id does not put its rules in force", "on real nodes, rivals that differ put no rules in force; rivals that agree do"), `packages/core/tests/space-catalog.test.ts` ("but refused when publishing, where the author can fix it", "names are reverse-DNS, and sys.\* is reserved", "redefining bumps the version, and only the definer or someone who can manage the space may"), `packages/core/tests/attacks.test.ts` ("a member cannot take down a collection's definition they did not write")._
 
 ### 6.5 Planned: compatible definitions
 
@@ -1113,7 +1146,8 @@ oneKey = HKDF-SHA-256( IKM, salt = "" (zero length), info = UTF-8("weave/one-per
 
 In a public space anyone can compute a key, as anyone can read the records.
 In a private space only those holding K₀ can: every reader does, since each
-later key's `earlier` carries the ones before it (03 §9.3). It is K₀ and not
+later key's `earlier` carries the ones before it, and a reader takes no key
+from a key change whose `earlier` leaves K₀ out (03 §9.3). It is K₀ and not
 the current key so that a record's key, and with it "one per", survives a key
 change. Someone who holds the ciphertext but not the key (a relay peer, a
 host, a mirror's provider) can't test a guess of who voted on which poll, or
@@ -1140,7 +1174,8 @@ space key `ff fe … e0` of 03 §8.1 as K₀, the vote's key is
 
 Checking: a peer MUST refuse a `seq 0` version of a collection with `onePer` in
 force whose `key` is not the derived key (including when a part is missing and
-there is no key). The check is made only on `seq 0`, and only by a peer that
+there is no key). Whether a key of a `onePer` key's form is allowed at all, in
+any collection, is §4.1's check, which needs no `oneKey`. The check is made only on `seq 0`, and only by a peer that
 can read the body and holds `oneKey`; in a private space a peer without the
 key accepts it on the other checks, which include whose key it is (§4.1).
 Later versions keep the key they have. The first version carries `retain`
@@ -1207,7 +1242,7 @@ prevent that; telling the two apart, where it matters, is the app's.
 > (`creator`) or a permission a person decided (`can:…`). "Did a person have to
 > decide it?" is the test for which one to use.
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`, `allows`, `onePerSecret`, `onePerKey`, `changedFixedField`, `permissionName`), `packages/core/src/records/checks.ts` (`PERMISSION_PATTERN`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `allows`, `onePerSecret`, `onePerKey`, `changedFixedField`, `permissionName`), `packages/core/src/records/checks.ts` (`PERMISSION_PATTERN`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
 ### 7.6 `check`
 

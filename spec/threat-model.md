@@ -98,7 +98,8 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     another's record, for the `creator` rule or `@createdBy`, nor write
     another's `onePer` vote for them (02 §4.1, §4.5, §7.3). Nor can it
     become a collection's first definer by a rival definition with a lower
-    id (02 §6.3).
+    id, or put its own rules in force by one: while rivals that differ
+    stand, none is in force (02 §6.3).
 - **Does not hold yet.**
   - A narrowed rule alone binds only what saw it: a version naming an older
     point counts if its author could have written it then, since nobody can
@@ -140,8 +141,10 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     writer per key restricts `create` (02 §7.1, §7.3). By design.
   - Holding `define`, it can write a rival first definition of a collection
     that names a point before the real one's, so that no one first defined
-    it, and only a manager may change it (02 §6.3). Those who may define
-    collections are trusted not to.
+    it and, unless the rivals say the same, no definition of it is in force
+    until a manager settles it, and again after, by backdating another
+    (02 §6.3). It can put a collection out of force this way, but can't
+    choose its rules. Those who may define collections are trusted not to.
   - A collection's checks bind only readers that judge them: peers keep and
     sync a version that fails them, and only the library leaves it out of
     what it counts, on every read path, along a record's chain, and without
@@ -154,7 +157,7 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
   - The top rank answers to no one, and no vote can bind a change to who may
     do what ([#160](https://github.com/leifriksheim/weave/issues/160)).
 
-_Source: 03 §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
+_Source: 03 §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"; "a backdated rival with a ground-low id does not put its rules in force"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts` (a demoted moderator), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
 ### 3.3 Former member
 
@@ -283,6 +286,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
     key (06 §2.8).
   - The note carries no label a peer reads: what a version, a live message or
     a knock may do is what its note grants, whatever its `fct` says (01 §8).
+  - It can't take the account's `onePer` key in one collection with a record
+    of another: every peer that reads the definition refuses a first version
+    at a key of a `onePer` key's form outside a `onePer` that gives it
+    (02 §4.1).
 - **Does not hold yet.**
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
@@ -297,8 +304,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5. Tests: `packages/core/tests/writer-logs.tes
     [#26](https://github.com/leifriksheim/weave/issues/26)).
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/weave/issues/165),
     [#168](https://github.com/leifriksheim/weave/issues/168)).
+  - An account's chosen key is the same in every collection, so with a
+    records grant it can write a record at a chosen name another app of the
+    account's uses in another collection, and that app can't write its record
+    there. Only the account's own keys and apps can; apps should choose names
+    that include their collection (02 §4.1). By design.
 
-_Source: 01 §8, §11; 06 §2, §3; 05 §15. Tests: `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
+_Source: 01 §8, §11; 06 §2, §3; 05 §15; 02 §4.1. Tests: `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 
@@ -355,7 +367,7 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - A removed carrier keeps proving read until the key changes ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
-    (03 §8.6, [#87](https://github.com/leifriksheim/weave/issues/87)).
+    (03 §8.6, [#223](https://github.com/leifriksheim/weave/issues/223)).
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#176](https://github.com/leifriksheim/weave/issues/176)) _(traced)_.

@@ -333,7 +333,10 @@ rules.
 
 Whoever first defined a collection may change it as well as anyone who holds
 `manage`. If two accounts each defined it first without seeing the other's,
-`definedBy` is `null` and only a manager may change it
+`definedBy` is `null` and only a manager may change it. Until one does, the
+collection has a definition only if the rivals say the same thing; if they
+differ, `collections.list` leaves it out and its records are judged by no
+rules
 ([spec 02 §6.3](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
 
 _Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts` ("redefining bumps the version, and only the definer or someone who can manage the space may", "a definition can be removed once its collection is empty, by whoever may change it"), `packages/core/tests/rules.test.ts` ("rules: changing them")._

@@ -53,6 +53,12 @@ await node.records.get(space.id, hers);
   it again after a delete.
 - Read and link records by their whole `key`, as `put` returns it; a name is
   only a name in someone's namespace.
+- Your name is the same key in every collection, and a record keeps its
+  collection for life, so `put` refuses a name you already hold in another
+  collection, deleted or not. Choose names that include the collection
+  (`app.todo.settings`), so two apps of yours never pick the same one. A
+  name of the form `one:<hex>` is refused outside a `onePer` collection, as
+  every peer would refuse it.
 - Under `onePer`, the node derives the key from the parts the rules name
   (`node.records.onePerKey`). With `@author` it is the writer's; without, it
   is a shared `one:…` key ([collections](collections.md#rules)). In a private
@@ -62,7 +68,7 @@ await node.records.get(space.id, hers);
   `lineKey(account, collection)` (exported by `@weaveprotocol/core`), an
   owned key of the account's.
 
-_Source: `packages/core/src/records/key.ts`, `packages/core/src/node/space-runtime.ts` (`keyToWrite`, `put`, `keyFor`, `onePerKey`). Tests: `packages/core/tests/record-keys.test.ts`, `packages/core/tests/versions.test.ts` ("a deleted key can be written again…")._
+_Source: `packages/core/src/records/key.ts`, `packages/core/src/node/space-runtime.ts` (`keyToWrite`, `keepsCollection`, `put`, `keyFor`, `onePerKey`). Tests: `packages/core/tests/record-keys.test.ts`, `packages/core/tests/versions.test.ts` ("a deleted key can be written again…")._
 
 ## Links
 

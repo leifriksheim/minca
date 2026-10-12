@@ -18,7 +18,7 @@ import {
   ownsKey,
   RECORD_KEY_PATTERN,
 } from '../src/records/key.js';
-import { onePerKey, onePerSecret } from '../src/records/rules.js';
+import { changedFixedField, onePerKey, onePerSecret } from '../src/records/rules.js';
 import { replayAccess, type AccessEvent, type AccessGenesis, type Role } from '../src/space/roles.js';
 import { SYNC_PROTOCOL_VERSION } from '../src/sync/sync-messages.js';
 import { team } from '../src/space/presets.js';
@@ -87,6 +87,19 @@ describe('onePer keys', () => {
       body: {},
     });
     assert.equal(decision, 'one:7c302bdcb25613e2fb9d49a41bccd0a24e1a2f24');
+    // In a private space whose first key K₀ is 03 §8.1's `ff fe … e0`.
+    const k0 = new Uint8Array(32).map((_, i) => 0xff - i);
+    const hidden = await onePerKey(
+      await onePerSecret({ spaceKey: k0 }),
+      'std.vote',
+      ['@author', 'link:about'],
+      {
+        root: SEED_7_DID,
+        links: about,
+        body: { choice: 0 },
+      },
+    );
+    assert.equal(hidden, 'iz75dwgy223gqtlqlqv3qzjq4y.one:712d97143fd66351845dee63247e1c2ddc298713');
   });
 
   test('with @author it is an owned key of the author; without, a shared one', async () => {
@@ -112,6 +125,11 @@ describe('onePer keys', () => {
     const b = await key(JSON.parse('{"when":{"hour":9,"day":"mon"}}'));
     assert.ok(a);
     assert.equal(a, b);
+    // And a fixed field compares the same way.
+    const first = { when: { day: 'mon', hour: 9 } };
+    assert.equal(changedFixedField(['when'], first, JSON.parse('{"when":{"hour":9,"day":"mon"}}')), null);
+    assert.equal(changedFixedField(['when'], first, { when: { day: 'tue', hour: 9 } }), 'when');
+    assert.equal(changedFixedField(['when'], first, {}), 'when');
   });
 
   test('in a private space, nobody without its key can compute or test one (#87)', async () => {
@@ -410,6 +428,109 @@ describe('a first version at someone else’s key, ground to a lower id', () => 
   });
 });
 
+describe('a key in another collection', () => {
+  /** Rejections a node reports, as they come */
+  const refusalsAt = (who: Person) => {
+    const refusals: string[] = [];
+    who.node.subscribe((event) => {
+      if (event.type === 'rejected') refusals.push(event.reason);
+    });
+    return refusals;
+  };
+
+  test('an owned one: key is refused outside a onePer that names @author, so no record can squat a vote', async () => {
+    const { alice, bob, space } = await club();
+    await alice.node.collections.define(space, {
+      name: 'app.decision',
+      schema: { type: 'object' },
+      links: { about: { to: '*', cardinality: 'one' } },
+      rules: { onePer: ['link:about'] },
+    });
+    await until(
+      async () => (await bob.node.collections.list(space)).some((c) => c.name === 'app.decision'),
+      4000,
+      'the definition',
+    );
+    const poll = await alice.node.records.put(space, 'app.poll', { question: 'Where?' });
+    const links = [{ rel: 'about', to: poll.key }];
+    const voteKey = (await bob.node.records.onePerKey(space, 'app.vote', {}, { links }))!;
+    assert.ok(await ownsKey(voteKey, bob.node.did));
+    // put won't write a record of another collection there.
+    await assert.rejects(
+      bob.node.records.put(space, 'app.poll', { question: 'Squat' }, { key: voteKey }),
+      /onePer key, and app\.poll has no onePer/,
+    );
+    // Signed by hand, every peer that reads the definition refuses it, in either collection.
+    const refusals = refusalsAt(alice);
+    await letGo(bob.node, space);
+    const squats = [
+      await forge(bob, space, {
+        collection: 'app.poll',
+        body: { question: 'Squat' },
+        retain: true,
+        version: { key: voteKey, seq: 0 },
+      }),
+      await forge(bob, space, {
+        collection: 'app.decision',
+        body: {},
+        retain: true,
+        links,
+        version: { key: await ownedKey(bob.node.did, `one:${'ef'.repeat(20)}`), seq: 0 },
+      }),
+    ];
+    await hold(bob.node, space);
+    await until(async () => refusals.length >= 2, 4000, 'Alice to refuse them');
+    assert.match(refusals.join('; '), /only for a collection whose rules have onePer/);
+    assert.match(refusals.join('; '), /owned one: key is only for a onePer that names @author/);
+    for (const squat of squats)
+      assert.equal(await (await stored(alice.stores, space)).getVersion(squat.id), null);
+    // Alice's own vote is untouched by any of it.
+    const vote = await alice.node.records.put(space, 'app.vote', { choice: 1 }, { links });
+    await until(async () => (await bob.node.records.get(space, vote.key)) !== null, 4000, 'the vote');
+  });
+
+  test('a shared one: key is refused in a collection whose onePer names @author', async () => {
+    const { alice, bob, space } = await club();
+    const poll = await alice.node.records.put(space, 'app.poll', { question: 'Where?' });
+    const refusals = refusalsAt(alice);
+    await letGo(bob.node, space);
+    const shared = await forge(bob, space, {
+      collection: 'app.vote',
+      body: { choice: 0 },
+      retain: true,
+      links: [{ rel: 'about', to: poll.key }],
+      version: { key: `one:${'cd'.repeat(20)}`, seq: 0 },
+    });
+    await hold(bob.node, space);
+    await until(async () => refusals.length > 0, 4000, 'Alice to refuse it');
+    assert.match(refusals.join('; '), /shared one: key is only for a onePer that does not name @author/);
+    assert.equal(await (await stored(alice.stores, space)).getVersion(shared.id), null);
+  });
+
+  test('put refuses a chosen name its account already holds in another collection, deleted or not', async () => {
+    const { alice, space } = await club();
+    const settings = await alice.node.records.put(
+      space,
+      'app.settings',
+      { theme: 'dark' },
+      { key: 'settings' },
+    );
+    const clash = /already holds a app\.settings record/;
+    await assert.rejects(
+      alice.node.records.put(space, 'app.poll', { question: '?' }, { key: 'settings' }),
+      clash,
+    );
+    await alice.node.records.delete(space, settings.key);
+    await assert.rejects(
+      alice.node.records.put(space, 'app.poll', { question: '?' }, { key: 'settings' }),
+      clash,
+    );
+    // Its own collection may bring it back.
+    const back = await alice.node.records.put(space, 'app.settings', { theme: 'light' }, { key: 'settings' });
+    assert.equal(back.key, settings.key);
+  });
+});
+
 describe('who first defined a collection', () => {
   const steward: Role = { name: 'steward', rank: 10, permissions: ['define'] };
   const admin: Role = { name: 'admin', rank: 100, permissions: ['*'] };
@@ -457,7 +578,9 @@ describe('who first defined a collection', () => {
         [alice, mallory, rival, first],
       ]) {
         const history = replayAccess(genesis, order);
-        assert.equal(history.current.definitions.get('app.poll')?.definedBy, null);
+        // Neither is in force: which would be is an id, and Mallory could grind hers lower.
+        assert.equal(history.current.definitions.get('app.poll'), undefined);
+        assert.ok(history.current.contested.has('app.poll'));
         // Neither may change it now; only someone who manages the space.
         const change = (root: string, id: string) => define(root, id, [hers, theirs]);
         const after = replayAccess(genesis, [
@@ -469,7 +592,92 @@ describe('who first defined a collection', () => {
         assert.equal(after.status('x1')?.status, 'dropped');
         assert.equal(after.status('x2')?.status, 'dropped');
         assert.equal(after.status('x3')?.status, 'applied');
+        // The manager's, which saw them both, settles it; it names no definer.
+        assert.deepEqual(after.current.definitions.get('app.poll'), { event: 'x3', definedBy: null });
+        assert.ok(!after.current.contested.has('app.poll'));
       }
+    }
+  });
+
+  test('a backdated rival with a ground-low id does not put its rules in force', () => {
+    const events = [
+      member('alice', 'm1'),
+      member('mallory', 'm2'),
+      define('alice', 'd5', ['m1', 'm2']),
+      define('alice', 'd6', ['d5']),
+      // Mallory's rival "first" definition, as of before Alice's, with the lowest id.
+      define('mallory', 'd0', ['m1', 'm2']),
+    ];
+    for (const order of [events, [events[0]!, events[1]!, events[4]!, events[2]!, events[3]!]]) {
+      const history = replayAccess(genesis, order);
+      assert.equal(history.current.definitions.get('app.poll'), undefined, 'no definition in force');
+      assert.ok(history.current.contested.has('app.poll'));
+      // Mallory, having seen both, can't settle it in her favour.
+      const again = replayAccess(genesis, [...order, define('mallory', 'd7', ['d6', 'd0'])]);
+      assert.equal(again.status('d7')?.status, 'dropped');
+      assert.equal(again.current.definitions.get('app.poll'), undefined);
+      // A rival raced against a manager's settling puts it out of force again, and still chooses nothing.
+      const settled = replayAccess(genesis, [
+        ...order,
+        define('root', 'd8', ['d6', 'd0']),
+        define('mallory', 'c0', ['m1', 'm2']),
+      ]);
+      assert.equal(settled.current.definitions.get('app.poll'), undefined);
+      assert.ok(settled.current.contested.has('app.poll'));
+    }
+  });
+
+  test('on real nodes, rivals that differ put no rules in force; rivals that agree do', async () => {
+    for (const agree of [false, true]) {
+      const { alice, bob, carol, space } = await club();
+      await alice.node.collections.define(space, {
+        name: 'app.notice',
+        title: 'Notice',
+        schema: { type: 'object' },
+        rules: { create: 'can:post' },
+        permissions: ['post'],
+      });
+      const inForce = async () =>
+        (await carol.node.collections.list(space)).some((c) => c.name === 'app.notice');
+      await until(inForce, 4000, 'Alice’s definition at Carol’s');
+      const store = await stored(alice.stores, space);
+      const hers = (await store.queryVersions('sys.collection')).find(
+        (v) => v.key === 'collection:app.notice',
+      )!;
+      const body: unknown = agree ? hers.body : { ...Object(hers.body), rules: {}, permissions: [] };
+      // Bob's rival, as of the same point as hers, so neither saw the other.
+      await letGo(bob.node, space);
+      const rival = await forge(bob, space, {
+        collection: 'sys.collection',
+        body,
+        retain: true,
+        seen: hers.seen ?? [],
+        version: { key: 'collection:app.notice', seq: 0 },
+      });
+      await hold(bob.node, space);
+      for (const who of [alice, carol])
+        await until(
+          async () => (await (await stored(who.stores, space)).getVersion(rival.id)) !== null,
+          4000,
+          'the rival',
+        );
+      if (agree) {
+        assert.ok(await inForce(), 'the same definition, whoever wrote it');
+        continue;
+      }
+      await until(async () => !(await inForce()), 4000, 'the rivals to put it out of force');
+      // Alice, who manages the space, settles it with hers.
+      await alice.node.collections.define(space, {
+        name: 'app.notice',
+        title: 'Notice',
+        schema: { type: 'object' },
+        rules: { create: 'can:post' },
+        permissions: ['post'],
+      });
+      await until(inForce, 4000, 'the settled definition');
+      const settled = (await carol.node.collections.list(space)).find((c) => c.name === 'app.notice')!;
+      assert.deepEqual(settled.rules, { create: 'can:post' });
+      assert.equal(settled.definedBy, null);
     }
   });
 

@@ -376,7 +376,7 @@ saw them) applied:
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `member`, `invite`                | the one giving least: closed before open (invites), then one whose role gives no more than any other's — none, or no higher rank and every permission covered by the other's — by the roles as **its own view** had them; where two can't be compared, the lower rank, then the lowest id |
 | `role`                            | the one giving least, by coverage in the same way, by the role it sets                                                                                                                                                                                                                    |
-| `definition`, `relays`, `keepers` | the lowest id                                                                                                                                                                                                                                                                             |
+| `definition`, `relays`, `keepers` | the lowest id; rival first definitions of a collection by two accounts, none (below)                                                                                                                                                                                                      |
 | `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                                                           |
 | `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                                                           |
 
@@ -386,8 +386,12 @@ its role is null. A `definition` sets `definitions[name] = { event,
 definedBy }`. Of the definitions of that name in the set that saw every
 removal the winner saw, those that saw no other are its first definitions;
 `definedBy` is their root if they are all one account's, and null if not
-([02](02-records.md) §6.3): no id decides it. A deleted one removes the
-entry.
+([02](02-records.md) §6.3): no id decides it. When `definedBy` is null and
+more than one definition is latest, the lowest id does not win: none is set
+in `definitions`, and `contested[name]` lists the latest ones instead, for
+readers to judge by what they say (02 §6.3); while it does, only someone
+holding `manage` may change the definition. A change applied on top, having
+seen them, removes `contested[name]`. A deleted one removes the entry.
 
 `keyDue` is true, in a private space, when some event in the set took
 reading from someone (in its own view, a reader before and not after) and the
@@ -1022,7 +1026,7 @@ guesses against what it is sent later.
 _Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `packages/core/src/node/space-runtime.ts` (`onePerKeying`). Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)")._
 
 > **Planned: what it still gives away.** Tracked in
-> [#87](https://github.com/leifriksheim/weave/issues/87).
+> [#223](https://github.com/leifriksheim/weave/issues/223).
 >
 > - **`profile:` keys** (§11) are `hex40` of the account, so anyone can
 >   confirm which known accounts have a profile in a space. Membership is
@@ -1114,6 +1118,17 @@ A peer holding any key named by a `key` event opens its `earlier` with that
 key and the event's `keyId`, and takes each raw key it contains (up to 1000);
 repeat until nothing new. So holding the current key opens every earlier one.
 
+A reader **MUST** check that the keys an `earlier` opens to include the
+space's first key K₀, the one the genesis's `encryptionKeyId` names (§8.1):
+every reader needs it to derive `onePer` keys ([02 §7.3](02-records.md)). A
+key change whose `earlier` does not open, or leaves K₀ out, is
+**malformed**: the reader takes no key from it. The change still counts in
+the access history, which peers that can't open it judge the same way. A
+member holding `manage`, K₀ and the key a malformed change names **SHOULD**
+change the key, as when one is due; a manager **MUST NOT** change the key
+without holding K₀. Until someone does, a newcomer that holds only that key
+reads nothing sealed before it.
+
 ### 9.4 Boxes (`sys.box`)
 
 The current key is sealed to each reader's member key, in the clear:
@@ -1146,7 +1161,7 @@ write, and proves it may read with the newest key it holds (see
 [04](04-network.md)). A view-only invite made before a change carries only the
 old key; its holder is not a reader and gets no box.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts`, `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
+_Source: `packages/core/src/node/space-runtime.ts` (`learnKeys`, `malformedKeys`, `rotateKey`, `changeKeyNow`, `formerMembers`, `boxForMembers`, `upkeep`, `loadMemberKeys`), `packages/core/src/space/space-access.ts` (`MEMBER_KEY_COLLECTION`, `BOX_COLLECTION`, `boxKey`, `BOX_LABEL`, `boxBound`, `SPACE_KEY_RECORD`), `packages/core/src/identity/contact-key.ts` (`deriveMemberKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealTo`). Tests: `packages/core/tests/key-change.test.ts` ("is taken as malformed: a manager replaces it, and a newcomer still gets the first key", and the rest), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing")._
 
 ---
 
