@@ -156,11 +156,13 @@ Only these:
 | `hash(x)`                                                                                                            | Weave      | The content id (spec 02 §2) of the canonical JSON of `x`; of a body, its `bodyHash`. An error for a non-finite `double`, an integer past ±2⁵³, or a map key that is not a `string` |
 | `link(rel)`, `v.link(rel)`                                                                                           | Weave      | The `to` of the first link with that `rel` in this version's links, or in `v`'s `links`; `null` when there is none. `rel` is a literal link role (spec 02 §5.1)                    |
 | `versions(ids)`                                                                                                      | Weave      | The cited version for each id in a list of strings, in order ([below](#citing-a-version))                                                                                          |
-| `can(p)`, `can(p, did)`                                                                                              | Weave      | Whether the account (default: `author`) holds `<collection>/<p>` as of this version's `seen` (spec 03). `p` is a literal permission the definition declares (spec 02 §7.1)         |
-| `member(did)`                                                                                                        | Weave      | Whether the account holds any role as of this version's `seen`                                                                                                                     |
+| `member(did)`                                                                                                        | Weave      | Whether the account is a member (a founder, or holds any role) as of this version's `seen`                                                                                         |
 
-`can` and `member` give an error for a value that is not a string starting
-`did:`.
+`member` gives an error for a value that is not a string starting `did:`.
+There is no `can()`: collections declare no permissions any more, and who may
+write is the space's grants
+([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
+which every peer judges before a check runs.
 
 ### What CEL leaves open
 
@@ -317,8 +319,7 @@ above, and:
   macro binds it;
 - every call is to a function in the table, with a number of arguments it
   takes;
-- `link` takes a literal link role, and `can` a literal permission the
-  definition declares in `permissions`;
+- `link` takes a literal link role;
 - no condition is more than **64** parts deep, and a collection's checks
   have at most **2,000** parts in all.
 

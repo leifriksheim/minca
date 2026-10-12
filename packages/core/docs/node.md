@@ -276,8 +276,9 @@ _Source: `packages/core/src/node/node.ts` (`runtime`, `hold`, `closeRuntime`). T
 
 `spaces.leave(id)` first gives up the account's place in the space
 ([spec 03 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)):
-it writes the account's own `sys.member` with `role: null`, so the others
-stop counting it a reader and a private space's key changes. Then it deletes
+it writes the account's own removal, `sys.remove` naming itself, so the
+others stop counting it a reader and a private space's key changes. Leaving
+needs no grant. A founder who leaves steps down for good. Then it deletes
 the space's `sys.joined` record in the account registry, closes the space and
 forgets it with its keys. The account registry and the contacts space cannot
 be left.
@@ -286,7 +287,7 @@ be left.
   5 s for a peer of another account to say it has it. With nobody reachable,
   it leaves anyway.
 - Another device of the account that follows the deleted `sys.joined`, and
-  still sees the account holding a role, writes the removal itself, and waits
+  still sees the account holding a place, writes the removal itself, and waits
   the same way.
 - Shared to view, or the only reader left, there is nothing to write and
   `leave` returns at once.
@@ -373,8 +374,8 @@ account key must keep current for carriers, is protocol
 ([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). How the reference node does it:
 
 The node's `registry` store ([stores](#stores)) lists every space it holds,
-with its key(s), its invite secret while one is waiting to be used, its role
-as last seen, the relays the space names and, for an app without the account
+with its key(s), its invite secret while one is waiting to be used, its place
+(`founder`, or a role it holds) as last seen, the relays the space names and, for an app without the account
 key, its member key. Its format is the node's own
 (`packages/core/src/space/space-manager.ts`).
 
@@ -410,7 +411,7 @@ records change in the account registry, one run at a time. It:
 
 Creating or joining a space writes its `sys.joined` record; leaving deletes it.
 
-**Profiles.** When a space opens, when the node's role in it becomes non-null,
+**Profiles.** When a space opens, when the node's account takes a place in it,
 and when the account's name changes on any device, the node publishes the
 account's profile in that space: `{ name, contactKey? }`, with the name taken
 from the account registry's `sys.profile` record and `contactKey` only when
@@ -530,11 +531,32 @@ exposes them. Every value a node method returns is JSON-serialisable, so the
 same calls can be exposed over a command line, MCP and WebMCP
 ([actions](actions.md)).
 
-- `node.spaces` — create, invite, preview, join, leave, access, `setMember`,
-  `putRole`, `removeRole`, `closeInvite`, `changeKey`, `setRelays`,
-  `setKeepers`, `revoke`, `profiles`, `authenticator` ([03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md),
-  [04](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)). Default invite role: the lowest role ranked below the
-  inviter's own; with none below, a view-only invite.
+- `node.spaces` — create, invite, preview, join, leave, access, `may`,
+  `defineRole`, `assign`, `unassign`, `removeMember`, `closeInvite`,
+  `changeKey`, `setRelays`, `setKeepers`, `revoke`, `profiles`,
+  `authenticator` ([03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md),
+  [04](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)). Default invite role: `member` when
+  the inviter may assign it, else the first role by name it may assign; with
+  none, a view-only invite ([spaces](spaces.md#invites)).
+  - `access(id)` answers `{ roles, members, invites, founder, mine, heads,
+key, relays, keepers, copies, forks, flagged }`. Each role has its
+    current `definitions` (one, or rivals that hold only the grants they
+    share), each with `event`, `by` (null for the constitution's), `grants`
+    and `nests`. Each member is `{ did, founder, roles }`. `founder` and
+    `mine` say what this account is here.
+  - `may(id, cmd, args?, account?)` asks whether this account, or another,
+    may invoke a command with these arguments now, as the replay judges it
+    ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+    Apps use it to show what someone can do; peers judge each version on
+    its own.
+  - `defineRole(id, { name, title?, grants, nests? })` writes the role's
+    definition, each grant a delegation from this account to the role. It
+    holds only what this account could invoke itself.
+  - `assign(id, did, role)` and `unassign(id, did, role)` give and take a
+    role; taking your own needs no grant. `removeMember(id, did)` removes an
+    account with every role it holds; removing yourself is leaving. Taking
+    power away writes a cutoff of what this node holds of theirs
+    ([spec 03 §6.3](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
 - `node.records`, `node.collections` — [02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md). `records.watch`
   re-runs a query after every `records` event for its space, one run at a time,
   with at most one more queued.
@@ -558,7 +580,7 @@ same calls can be exposed over a command line, MCP and WebMCP
   Local only: nothing here goes over the wire.
 - `node.asAgent({ keys, note })` — [acting as an agent](#a-node-acting-as-an-agent).
 
-_Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts`. Tests: `packages/core/tests/node.test.ts`, `packages/core/tests/contacts.test.ts`, `packages/core/tests/direct.test.ts`, `packages/core/tests/profiles.test.ts`._
+_Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts` (`spaces`), `packages/core/src/node/space-runtime.ts` (`access`, `may`, `defineRole`, `assign`, `removeAccount`). Tests: `packages/core/tests/node.test.ts`, `packages/core/tests/space-access.test.ts`, `packages/core/tests/contacts.test.ts`, `packages/core/tests/direct.test.ts`, `packages/core/tests/profiles.test.ts`._
 
 ## The network
 
@@ -583,8 +605,8 @@ when a peer's set of relays in a room becomes non-empty, and `peer-left` when
 it empties. `requestIce` asks every connected relay for TURN.
 
 **A space's relays** (spec 04 §4). A relay socket opened only for spaces'
-own relays is closed once no room needs it. A node that holds `manage` in a
-space that names no relays names its own configured relays (the valid ones,
+own relays is closed once no room needs it. A node whose account may invoke
+`/space/relays` in a space that names no relays names its own configured relays (the valid ones,
 at most 8) by itself.
 
 **Always-on nodes** (spec 04 §5.2). `network.nodes` lists the node URLs to
@@ -742,18 +764,18 @@ extension included.
 
 **Hosting.** `node.hosting`:
 
-| Call                                                                                   | Does                                                                                                                                                                                                                                                                         |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `use(url)`                                                                             | Reads the host's description, makes the subscription key and writes the `sys.hosting` record.                                                                                                                                                                                |
-| `list()`                                                                               | Asks each host for its status and hands over the carry space when paid and not carrying, making the carrier first if needed (named after the host's address). At most once a minute per host; a second look waits for a handover in flight.                                  |
-| `pay(url, plan)`                                                                       | Asks the host to start one of its plans (`HostingView.plans`): a pay answer, `checkout` (a page to open in a new tab with no opener) or `request` (a payment for a wallet, shown by the app). Call `list()` until the status moves.                                          |
-| `manage(url)`                                                                          | The payment provider's page to change a card or cancel it, as a `checkout` answer.                                                                                                                                                                                           |
-| `remind(url, email)`                                                                   | Asks the host to email a reminder before paid time runs out; it mails a link to confirm first.                                                                                                                                                                               |
-| `stop(url)`                                                                            | Sends `DELETE …/carry` (ignoring failure), removes the carrier and deletes the `sys.hosting` record.                                                                                                                                                                         |
-| `space(id)`                                                                            | The hosts a space names in `std.host`, each asked how the space's own subscription stands, with its plans for spaces (below).                                                                                                                                                |
-| `payForSpace(id, url, { amount, method, monthly? })`, `remindForSpace(id, url, email)` | Adds to a space's fund at a host it names (dollars, by `checkout` or `request`, monthly by card), and asks for reminders before it runs out. Anyone in it may. `space(id)` gives each host's `fund` offer, and in its status the `balance`, `daily` spend and `bots`.        |
-| `startBot(id, url, { name, role? })`                                                   | Asks a host the space names to run a bot there ([spec 08 §3](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)): makes an invite for `role` (default the lowest below your own) and hands it over. The host holds the bot's keys, so an app says so first. |
-| `stopForSpace(id, url)`                                                                | Stops a space using a host it names: deletes its `std.host` record, removes the host's bots and changes the key (below).                                                                                                                                                     |
+| Call                                                                                   | Does                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `use(url)`                                                                             | Reads the host's description, makes the subscription key and writes the `sys.hosting` record.                                                                                                                                                                                      |
+| `list()`                                                                               | Asks each host for its status and hands over the carry space when paid and not carrying, making the carrier first if needed (named after the host's address). At most once a minute per host; a second look waits for a handover in flight.                                        |
+| `pay(url, plan)`                                                                       | Asks the host to start one of its plans (`HostingView.plans`): a pay answer, `checkout` (a page to open in a new tab with no opener) or `request` (a payment for a wallet, shown by the app). Call `list()` until the status moves.                                                |
+| `manage(url)`                                                                          | The payment provider's page to change a card or cancel it, as a `checkout` answer.                                                                                                                                                                                                 |
+| `remind(url, email)`                                                                   | Asks the host to email a reminder before paid time runs out; it mails a link to confirm first.                                                                                                                                                                                     |
+| `stop(url)`                                                                            | Sends `DELETE …/carry` (ignoring failure), removes the carrier and deletes the `sys.hosting` record.                                                                                                                                                                               |
+| `space(id)`                                                                            | The hosts a space names in `std.host`, each asked how the space's own subscription stands, with its plans for spaces (below).                                                                                                                                                      |
+| `payForSpace(id, url, { amount, method, monthly? })`, `remindForSpace(id, url, email)` | Adds to a space's fund at a host it names (dollars, by `checkout` or `request`, monthly by card), and asks for reminders before it runs out. Anyone in it may. `space(id)` gives each host's `fund` offer, and in its status the `balance`, `daily` spend and `bots`.              |
+| `startBot(id, url, { name, role? })`                                                   | Asks a host the space names to run a bot there ([spec 08 §3](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)): makes an invite for `role` (by default as `spaces.invite` picks one) and hands it over. The host holds the bot's keys, so an app says so first. |
+| `stopForSpace(id, url)`                                                                | Stops a space using a host it names: deletes its `std.host` record, removes the host's bots and changes the key (below).                                                                                                                                                           |
 
 Every device runs `list()` after each reconciliation ([following the account](#following-the-account)).
 A device reaches a host at the socket its description names (`peer`,
@@ -786,7 +808,8 @@ _Source: `packages/core/src/node/node.ts` (`carriers`, `notifications`, `hosting
 ### A space paying for itself
 
 A space names the hosts it pays in `std.host` records ([standard library](standard-library.md)),
-which only members holding `std.host/manage` may write. The host keeps the
+which only members granted it may write: the `community` template leaves
+`std.host` to admins and moderators (`STAFF_COLLECTIONS`). The host keeps the
 space for the space itself: its own subscription, `space:<id>`, with a fund
 anyone adds to, which pays for keeping it online and for its bots
 ([spec 08 §2](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)).
@@ -814,8 +837,9 @@ then deletes the `std.host` record first, so no device hands the host what
 follows, removes those bots from the space, and gives a private space a new
 key when the host was handed it (or can't be asked). Removing a bot changes
 the key by itself; with none removed, `changeKey` is called. It answers
-`{ bots, newKey }`. Bots and the key need `manage`: without it only the record
-goes, and the answer is `{ bots: [], newKey: false }`. A host named and never
+`{ bots, newKey }`. A bot is removed only where the account may invoke
+`/member/remove` on it, and the key changed only with `/key/change`: without
+either, only the record goes, and the answer is `{ bots: [], newKey: false }`. A host named and never
 handed the space costs no key change. No call asks the host to drop what it
 has, so it keeps that, unreadable, for as long as the space's subscription is
 paid, and what is in the fund stays there

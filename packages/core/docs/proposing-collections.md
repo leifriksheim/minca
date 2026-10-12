@@ -20,7 +20,7 @@ const proposal = await proposeCollections(node, space.id, {
         properties: { week: { type: 'string' }, who: { type: 'string' } },
         required: ['week', 'who'],
       },
-      rules: { delete: 'creator' },
+      rules: { fixed: ['week'] },
     },
   ],
 });
@@ -36,7 +36,8 @@ await applyBlueprint(node, space.id, proposal.key);
   same, with a summary in sentences worked out from its rules. Show that to
   the person before they apply it.
 - `applyBlueprint` defines each collection, signed by whoever applies it.
-  They need `define` in the space, and a note that grants `collection/define`.
+  They need a grant of `/collection/define` in the space, and a note that
+  grants it.
 - To change it, propose a new one with `updates: <its key>`.
 
 Through `collections_propose`, a standard collection may be given by name

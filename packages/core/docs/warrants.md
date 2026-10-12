@@ -4,7 +4,7 @@ A **warrant** is proof that an account's key signed something every peer
 refuses and no honest app would sign. Members write it down, and every member's
 node checks the proof itself before it shows the account as flagged. Nothing
 is done to the account automatically: what to do about it is up to whoever
-manages the space.
+may remove members there.
 
 Warrants are a standard collection, not protocol. A `std.warrant` record stands
 like any record its author may write, and syncs like one. A peer that has never
@@ -29,11 +29,11 @@ version or a delete of it, as for any record, and neither takes the proof back.
 The writer sets `retain`, so the first version is kept whole whatever comes
 after it.
 
-| `kind`     | `evidence`                                        | Proves                                                                                                     |
-| ---------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `chain`    | `[v, p]`, both without bodies                     | `p.id = v.prev`, and `v` does not follow `p` (spec 02 §4.7)                                                |
-| `standing` | `[v]`, without its body; not an access collection | in `v`'s own view, `v`'s root held no role, or the rules said `final`, or the rule for `create` refused it |
-| `access`   | `[v]`, whole; an access collection                | in its own view, `v`'s event is refused by its author's power (spec 03 §4.5)                               |
+| `kind`     | `evidence`                                        | Proves                                                                                                                                                              |
+| ---------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chain`    | `[v, p]`, both without bodies                     | `p.id = v.prev`, and `v` does not follow `p` (spec 02 §4.7)                                                                                                         |
+| `standing` | `[v]`, without its body; not an access collection | in `v`'s own view, `v`'s root was no member, or the rules said `final`, or, for a first version, its root held no grant to write it (policies on its body left out) |
+| `access`   | `[v]`, whole; an access collection                | in its own view, `v`'s event is refused by its author's power (spec 03 §4.5)                                                                                        |
 
 A version's **own view** is the access changes its `seen` names and everything
 they saw, replayed alone. That is what its writer's node had when it signed.
@@ -65,8 +65,8 @@ for what that finds broken: a flag can be missed, but is never false. A race,
 such as a write that crossed a removal it hadn't seen, is withdrawn, never
 refused, so it earns no warrant.
 
-An app shows the flag to whoever manages the space, who may remove the person
-(`spaces.setMember(id, did, null)`). It also shows it to the account itself: a
+An app shows the flag to the space's members; one granted `/member/remove`
+may remove the person (`spaces.removeMember(id, did)`). It also shows it to the account itself: a
 flag against your own account usually means one of your keys is being used
 somewhere it shouldn't be, and revoking that key (`spaces.revoke`) takes
 back what it signed.
