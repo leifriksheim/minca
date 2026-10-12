@@ -18,7 +18,7 @@
  * trusts less gets `/record`, and proposes what it can't do.
  */
 import { DEFINITION_COLLECTION } from '../space/roles.js';
-import { commandCovers, parseProof, proofGrants, type Delegation, type Requirement } from './ucan.js';
+import { commandCovers, noteCovers, parseDelegation, type Delegation, type Requirement } from './ucan.js';
 import type { Policy } from './policy.js';
 
 /** Every command */
@@ -70,33 +70,27 @@ export const ACCOUNT_REQUIREMENT: Requirement = Object.freeze({
 });
 
 /**
- * Whether a proof grants a requirement, by what its tokens say. A version
+ * Whether a proof grants a requirement, by what its note says. A version
  * with no proof was signed by the account itself, which may do anything; a
- * proof that can't be read grants nothing. Whether the chain is sound is the
- * capability gate's question.
+ * proof that can't be read as one note grants nothing. Whether the note is
+ * sound is the capability gate's question.
  */
 export function noteGrants(proof: unknown, required: Requirement): boolean {
   if (proof === undefined || proof === null) return true;
-  const parsed = parseProof(proof);
-  return parsed !== null && proofGrants(parsed, required);
+  const note = parseDelegation(proof);
+  return note !== null && noteCovers(note, required);
 }
 
-/** The command a proof comes down to: its last link's, which a sound chain never widens */
-function leafCommand(proof: unknown): string | null {
-  const parsed = parseProof(Array.isArray(proof) ? proof : [proof]);
-  return parsed?.[parsed.length - 1]?.payload.cmd ?? null;
-}
-
-/** Whether a note, or a proof, lets its key write records somewhere. False for anything unreadable. */
+/** Whether a note lets its key write records somewhere. False for anything unreadable. */
 export function writesRecords(note: unknown): boolean {
-  const cmd = leafCommand(note);
-  return cmd !== null && commandCovers(cmd, WRITE_COMMAND);
+  const cmd = parseDelegation(note)?.payload.cmd;
+  return cmd !== undefined && commandCovers(cmd, WRITE_COMMAND);
 }
 
-/** Whether a note, or a proof, grants records and nothing more: its command is under `/record`. False for anything unreadable. */
+/** Whether a note grants records and nothing more: its command is under `/record`. False for anything unreadable. */
 export function grantsRecordsOnly(note: unknown): boolean {
-  const cmd = leafCommand(note);
-  return cmd !== null && commandCovers(RECORDS_COMMAND, cmd);
+  const cmd = parseDelegation(note)?.payload.cmd;
+  return cmd !== undefined && commandCovers(RECORDS_COMMAND, cmd);
 }
 
 /** What a note from the account says, for what a home grants: a command, about the account or one space, under a policy */
@@ -141,9 +135,10 @@ function spacesNamed(statement: ReadonlyArray<unknown>): string[] | null {
 
 /**
  * The spaces a note reaches, for what a program shows and offers: every
- * space, or a list. Reads its subject and the statements of its policy that
- * name spaces; a statement about anything else limits no space here. Peers
- * judge each use against the note itself.
+ * space, or a list. Reads its subject and its policy's statements, each of
+ * which must name spaces as `noteTerms` writes them: a statement it can't
+ * read that way reaches no space, so a program offers less, never more.
+ * Peers judge each use against the note itself.
  */
 export function noteSpaces(note: Delegation): ReadonlyArray<string> | 'all' {
   const { sub, pol, iss } = note.payload;
@@ -154,7 +149,8 @@ export function noteSpaces(note: Delegation): ReadonlyArray<string> | 'all' {
     // The policy nothing satisfies, as noteTerms writes it.
     if (statement[0] === 'not' && JSON.stringify(statement[1]) === '["and",[]]') return [];
     const named = spacesNamed(statement);
-    if (named) limits.push(named);
+    if (!named) return [];
+    limits.push(named);
   }
   const [first, ...rest] = limits;
   if (!first) return 'all';

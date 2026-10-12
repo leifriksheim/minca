@@ -59,7 +59,7 @@ async function pad(who: Person, into: Person, space: string, count: number): Pro
           space,
           version: { key: await newRecordKey(who.node.did), seq: 0 },
           body: { i },
-          proof: [note],
+          proof: note,
           seen,
           log: { n: 0 },
         }),

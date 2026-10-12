@@ -34,14 +34,14 @@ How peers connect and prove they may read is in [04 — Network](04-network.md).
 
 Terms used throughout:
 
-| Term                  | Meaning                                                                                                                                                                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **account**           | An identity's root DID (`did:key:zDn…`, [01](01-identity.md)). What a role is held by.                                                                                                                                                  |
-| **root** of a version | The account the signing key speaks for: the issuer at the root of the version's proof, checked with no time ([01](01-identity.md) §7.5, §7.6), or the author itself when there is no proof ([01](01-identity.md), [02](02-records.md)). |
-| **member**            | An account that holds a role that still exists, in a given state of the history.                                                                                                                                                        |
-| **reader**            | Same as member, as far as key distribution is concerned (`readers()`).                                                                                                                                                                  |
-| **hex40(x)**          | The first 20 bytes of SHA-256(UTF-8 `x`), as 40 lower-case hex characters.                                                                                                                                                              |
-| **cid(x)**            | `"b"` + lower-case RFC 4648 base32 (no padding) of SHA-256(`x`). The id format of [02](02-records.md).                                                                                                                                  |
+| Term                  | Meaning                                                                                                                                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **account**           | An identity's root DID (`did:key:zDn…`, [01](01-identity.md)). What a role is held by.                                                                                                                                     |
+| **root** of a version | The account the signing key speaks for: the issuer of the version's note, checked with no time ([01](01-identity.md) §7.5, §7.6), or the author itself when there is no proof ([01](01-identity.md), [02](02-records.md)). |
+| **member**            | An account that holds a role that still exists, in a given state of the history.                                                                                                                                           |
+| **reader**            | Same as member, as far as key distribution is concerned (`readers()`).                                                                                                                                                     |
+| **hex40(x)**          | The first 20 bytes of SHA-256(UTF-8 `x`), as 40 lower-case hex characters.                                                                                                                                                 |
+| **cid(x)**            | `"b"` + lower-case RFC 4648 base32 (no padding) of SHA-256(`x`). The id format of [02](02-records.md).                                                                                                                     |
 
 ---
 
@@ -235,7 +235,7 @@ A version yields no event when any of these hold:
   `sys.collection` version, `/access/change` for any other, with the
   arguments of [01](01-identity.md) §8. A key whose note grants records
   only never changes access, whatever its writer's role;
-- its signature, or the note chain behind it, does not verify ([02](02-records.md));
+- its signature, or the note behind it, does not verify ([02](02-records.md));
 - it is not a `sys.collection` version and it is deleted, or its body is
   encrypted, or its body is not an object;
 - the fields below do not check out.
@@ -340,14 +340,12 @@ what `e` **saw**. Two events neither of which saw the other are
    reduction of the keys it names for its own account, a `fork` of the key
    whose line forked, and closing an invite of the joins through it.
 3. **Strikes.** A reduction `r` **strikes** an allowed event `e` it reaches
-   (`e`'s root is the lowered account; for a revoke, `e`'s root is the
-   revoke's and `e`'s author is the key, or the key issued a link of `e`'s
-   proof after the first (§6.4); for a fork, `e`'s author is the key, `e` is in
+   (`e`'s root is the lowered account; for a revoke, `e`'s author is the key
+   and its root the revoke's; for a fork, `e`'s author is the key, `e` is in
    the forked collection and its `log.n` is at least the fork's place; for a
    closed invite, `e` joins through it) when `r`'s cutoff does not cover `e`
    (`r.cutoff[e.author][e's collection] ≥ e`'s place in that collection's
-   line, `log.n`, §6.3; it never covers `e` by a key `e` came through, which
-   signed none of `e`) and, unless `r` is a revoke or a fork, neither had
+   line, `log.n`, §6.3) and, unless `r` is a revoke or a fork, neither had
    seen the other. A revoke or a fork proof reaches its key's events whatever
    either saw: an owner reacting to a thief has seen what the thief did.
    Revokes and forks are never struck.
@@ -513,8 +511,8 @@ A change that took power from someone **covers** a version when the change's
 above the version's place in that key's line for that collection (`log.n`). What a covering change's author had seen of that key stands,
 whatever the change took away.
 
-Given a record's `id`, its root, its `seen`, its `author`, the keys its
-proof passed through (§6.4), its collection and `log.n`, a predicate `needs(role, state)`, and optionally `within`, the `seen` of a
+Given a record's `id`, its root, its `seen`, its `author`, collection and
+`log.n`, a predicate `needs(role, state)`, and optionally `within`, the `seen` of a
 version that cites this one. Peers never pass `within` when judging a
 version's standing; the library's checks do, to judge a version they cite as
 of what the citer saw ([checks](../packages/core/docs/checks.md#citing-a-version)):
@@ -524,10 +522,7 @@ of what the citer saw ([checks](../packages/core/docs/checks.md#citing-a-version
 2. If an applied `revoke` by the record's own root names its `author`
    (§6.4), and does not cover it, and (with `within`) is in
    `within ∪ ancestors(within)` → withdrawn. Every such revoke applies, each
-   with its own cutoff. And if an applied `revoke` by the record's root
-   names a key that issued any link of the record's proof but the first,
-   and (with `within`) is in `within ∪ ancestors(within)` → withdrawn, with
-   no cutoff (§6.4).
+   with its own cutoff.
    The same for a fork: if a fork of `author`'s line in the record's
    collection is recorded (§6.5) whose `from` is at most `log.n`, and (with
    `within`) its event is in `within ∪ ancestors(within)` → withdrawn.
@@ -561,7 +556,7 @@ _Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `cutOf`), 
 A version outside the access collections **stands** when, in this order:
 
 1. its `space` equals the space id;
-2. its signature and note chain verify ([02](02-records.md)) — giving `root`;
+2. its signature and note verify ([02](02-records.md)) — giving `root`;
 3. in the account's own spaces (registry, contacts, carry spaces) its proof
    grants `/account/write` there ([01](01-identity.md) §8);
 4. its first version is present, is `seq` 0, has the same key and collection;
@@ -705,15 +700,10 @@ applied revoke applies, each with its own cutoff (§4.3), so no revoke can shiel
 in advance, is still undone by the owner's own revoke. A revoke names a key,
 not a note, so every note to that key goes with it.
 
-A revoke also reaches every version, and every change, whose proof passes
-through the revoked key: whose chain ([01](01-identity.md) §7.5) has it as
-the issuer of any link but the first. Those stand only if no applied revoke
-of any such key, by the same account, counts for them, **with no cutoff**:
-the revoked key signed none of them, so no cutoff of its line covers them.
-So a key passed on by a key the account later revokes (a stolen session key
-handing `/` to a fresh key of the thief's, say) loses everything with it.
+A key can't pass its note on ([01](01-identity.md) §7.5), so no other key
+acts through a revoked one: the revoke of a key is all there is to undo.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `removeRole`, `revoke`, `cutoffFor`, `viaOf`), `packages/core/src/space/roles.ts` (`judge`, `reaches`, `via`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("handing over…", "a revoked key…", "a revoked key takes what keys it passed its note on to signed"), `packages/core/tests/space-access.test.ts` ("taking it back", "revoking a key withdraws what keys it passed its note on to signed")._
+_Source: `packages/core/src/node/space-runtime.ts` (`setMember`, `putRole`, `removeRole`, `revoke`, `cutoffFor`), `packages/core/src/node/node.ts` (`spaces.leave`). Tests: `packages/core/tests/roles.test.ts` ("handing over…", "a revoked key…"), `packages/core/tests/space-access.test.ts` ("taking it back", "a key cannot pass its note on: a two-link proof counts for no peer")._
 
 ### 6.5 Proving a fork
 

@@ -41,7 +41,7 @@ import {
 } from '../identity/contact-key.js';
 import { openValueFrom, sealValueTo } from '../identity/hpke.js';
 import { didToPublicKey } from '../identity/did.js';
-import { proofGrants, verifyProof, UCAN_CLOCK_SKEW_SECONDS, type Proof } from '../identity/ucan.js';
+import { noteCovers, verifyNote, UCAN_CLOCK_SKEW_SECONDS, type Delegation } from '../identity/ucan.js';
 import { ACCOUNT_REQUIREMENT } from '../identity/abilities.js';
 import { canonicalize } from '../schema/version.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
@@ -96,8 +96,8 @@ export interface KnockBody {
   readonly at: number;
   /** The session key that signed it */
   readonly session: string;
-  /** The chain of delegations from `from` to `session`, root first */
-  readonly proof: Proof;
+  /** The note from `from` to `session`: one token */
+  readonly proof: Delegation;
 }
 
 /** A knock that opened and checked out */
@@ -241,7 +241,7 @@ const KNOCK_LABEL = 'weave/knock/v1';
 export async function sealKnock(
   door: string,
   knock: { readonly from: string; readonly name: string; readonly invite: string; readonly note?: string },
-  session: { readonly did: string; readonly key: CryptoKey; readonly proof: Proof },
+  session: { readonly did: string; readonly key: CryptoKey; readonly proof: Delegation },
   provider: CryptoProvider,
 ): Promise<string> {
   const note = knock.note ? clip(knock.note.trim(), MAX_NOTE) : undefined;
@@ -285,7 +285,7 @@ export async function openKnock(
     return null;
   if (Array.from(body.name).length > MAX_NAME) return null;
   if (typeof body.invite !== 'string' || body.invite.length > MAX_INVITE) return null;
-  if (!Array.isArray(body.proof) || canonicalize(body.proof).length > MAX_PROOF) return null;
+  if (!isObject(body.proof) || canonicalize(body.proof).length > MAX_PROOF) return null;
   if (body.note !== undefined && (typeof body.note !== 'string' || Array.from(body.note).length > MAX_NOTE))
     return null;
   if (typeof body.at !== 'number' || !Number.isSafeInteger(body.at) || !Number.isFinite(receivedAt))
@@ -307,12 +307,12 @@ export async function openKnock(
   }
   if (!signed) return null;
   // …which the account it claims had delegated to when it signed.
-  const chain = await verifyProof(body.proof, provider, { at: body.at }).catch(() => null);
-  if (!chain?.valid || chain.audience !== body.session || chain.root !== body.from) return null;
+  const checked = await verifyNote(body.proof, provider, { at: body.at }).catch(() => null);
+  if (!checked?.valid || checked.audience !== body.session || checked.root !== body.from) return null;
   // Knocking makes a space and hands out its invite: only a note that may write
   // for the whole account may. An app given one space, or a key the account
   // trusts less, may not.
-  if (!proofGrants(chain.proof, ACCOUNT_REQUIREMENT)) return null;
+  if (!noteCovers(checked.note, ACCOUNT_REQUIREMENT)) return null;
 
   // A private space the knocker made, with its key: anything else isn't a space for two from them.
   let invited;

@@ -104,7 +104,7 @@ export async function forge(
       ...fields,
       author: keyDid,
       space,
-      proof: [ucan],
+      proof: ucan,
     }),
     pair.privateKey,
   );

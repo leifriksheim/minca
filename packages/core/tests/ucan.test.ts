@@ -1,6 +1,6 @@
 /**
  * Delegations in Weave's JSON profile of UCAN 1.0 (spec 01 §7): the token,
- * its one form, and chains of them — each link no wider than the last.
+ * its one form, and notes — one link from the account, never passed on.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,15 +10,13 @@ import { createIdentityManager } from '../src/identity/identity-manager.js';
 import {
   commandCovers,
   delegationId,
-  extendProof,
   isCommand,
   issueDelegation,
   parseDelegation,
-  proofGrants,
+  noteCovers,
   verifyDelegation,
-  verifyProof,
+  verifyNote,
   type Delegation,
-  type Proof,
 } from '../src/identity/ucan.js';
 import { canonicalize } from '../src/schema/version.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
@@ -202,13 +200,17 @@ describe('the token (01 §7.1)', () => {
     assert.equal(commandCovers('/record/write', '/record'), false);
     assert.equal(commandCovers('/record/read', '/record/write'), false);
     assert.equal(isCommand('/'), true);
-    assert.equal(isCommand('/ほげ/ふが'), true);
+    assert.equal(isCommand('/record.v2/write_all-x'), true);
+    // ASCII lower case only: nothing case folding could spell two ways.
+    assert.equal(isCommand('/ほげ/ふが'), false);
+    assert.equal(isCommand('/İ'), false);
+    assert.equal(isCommand('/a b'), false);
     assert.equal(isCommand('//'), false);
     assert.equal(isCommand(''), false);
   });
 });
 
-describe('a chain (01 §7.5)', () => {
+describe('a note (01 §7.5)', () => {
   async function three() {
     const root = await makeKey();
     const session = await makeKey();
@@ -216,137 +218,73 @@ describe('a chain (01 §7.5)', () => {
     return { root, session, guest };
   }
 
-  test('root → session → guest verifies, its root the account and its audience the guest', async () => {
+  test('root → session verifies, its root the account and its audience the session', async () => {
+    const { root, session } = await three();
+    const checked = await verifyNote(await note(root, session.did), provider);
+    assert.equal(checked.valid, true, checked.valid ? '' : checked.reason);
+    assert.equal(checked.valid && checked.root, root.did);
+    assert.equal(checked.valid && checked.audience, session.did);
+  });
+
+  test('a chain is refused, however sound its links: a key cannot pass its note on', async () => {
     const { root, session, guest } = await three();
     const parent = await note(root, session.did);
-    const proof = await extendProof(
-      [parent],
-      { issuer: session, audience: guest.did, command: '/record/write', subject: 'space:bgarden' },
-      provider,
-    );
-    const chain = await verifyProof(proof, provider);
-    assert.equal(chain.valid, true, chain.valid ? '' : chain.reason);
-    assert.equal(chain.valid && chain.root, root.did);
-    assert.equal(chain.valid && chain.audience, guest.did);
-    // The child never outlives the parent.
-    assert.equal(proof[1]!.payload.exp, parent.payload.exp);
-  });
-
-  test('a link signed by anyone but the key above it is refused', async () => {
-    const { root, session, guest } = await three();
-    const stranger = await makeKey();
-    const parent = await note(root, session.did);
-    const forged = await note(stranger, guest.did, { subject: root.did });
-    const chain = await verifyProof([parent, forged], provider);
-    assert.equal(chain.valid, false);
-    assert.match(chain.valid ? '' : chain.reason, /not signed by the key/);
-  });
-
-  test('a link that widens its command is refused', async () => {
-    const { root, session, guest } = await three();
-    const parent = await note(root, session.did, { command: '/record' });
-    for (const command of ['/', '/access/change', '/recordings']) {
-      const child = await note(session, guest.did, { command, subject: root.did });
-      const chain = await verifyProof([parent, child], provider);
-      assert.equal(chain.valid, false, command);
-      assert.match(chain.valid ? '' : chain.reason, /widens its command/);
+    const child = await note(session, guest.did, { command: '/record', subject: root.did });
+    for (const proof of [[parent, child], [parent], []]) {
+      const checked = await verifyNote(proof, provider);
+      assert.equal(checked.valid, false, String(proof.length));
+      assert.match(checked.valid ? '' : checked.reason, /one note/);
     }
-    await assert.rejects(
-      extendProof([parent], { issuer: session, audience: guest.did, command: '/' }, provider),
-      /wider/,
-    );
+    // Alone, the passed-on token is not a note from the account it names.
+    const alone = await verifyNote(child, provider);
+    assert.equal(alone.valid, false);
+    assert.match(alone.valid ? '' : alone.reason, /other than its issuer/);
+    // Made about the session's own key, it is a note from that key, not from the account.
+    const own = await verifyNote(await note(session, guest.did), provider);
+    assert.equal(own.valid && own.root, session.did);
   });
 
-  test('a link that widens its subject is refused: one space to the account, or to another space', async () => {
-    const { root, session, guest } = await three();
-    const parent = await note(root, session.did, { subject: 'space:bgarden' });
-    for (const subject of [root.did, 'space:bother']) {
-      const child = await note(session, guest.did, { subject });
-      const chain = await verifyProof([parent, child], provider);
-      assert.equal(chain.valid, false, subject);
-      assert.match(chain.valid ? '' : chain.reason, /widens its subject/);
-    }
-    await assert.rejects(
-      extendProof(
-        [parent],
-        { issuer: session, audience: guest.did, command: '/', subject: root.did },
-        provider,
-      ),
-      /wider/,
-    );
-    // From the whole account down to one space is narrower: fine.
-    const whole = await note(root, session.did);
-    const narrowed = await note(session, guest.did, { subject: 'space:bgarden' });
-    assert.equal((await verifyProof([whole, narrowed], provider)).valid, true);
-  });
-
-  test('a subject naming an account is only ever the root', async () => {
-    const { root, session, guest } = await three();
+  test('a subject naming an account is only ever its issuer', async () => {
+    const { root, session } = await three();
     const other = await makeKey();
-    // A root that claims another account's authority.
     const claimed = await note(root, session.did, { subject: other.did });
-    assert.equal((await verifyProof([claimed], provider)).valid, false);
-    // A middle link that names its own key as the subject.
-    const parent = await note(root, session.did);
-    const child = await note(session, guest.did, { subject: session.did });
-    assert.equal((await verifyProof([parent, child], provider)).valid, false);
+    assert.equal((await verifyNote(claimed, provider)).valid, false);
   });
 
-  test('every link is a note: made out to a key, with a start and an end', async () => {
+  test('a note is made out to a key, with a start and an end', async () => {
     const { root, session } = await three();
     const toRole = await note(root, 'role:admin');
-    assert.equal((await verifyProof([toRole], provider, { untimed: true })).valid, false);
+    assert.equal((await verifyNote(toRole, provider, { untimed: true })).valid, false);
     const endless = await note(root, session.did, { expiration: null, notBefore: null });
-    const chain = await verifyProof([endless], provider, { untimed: true });
-    assert.equal(chain.valid, false);
-    assert.match(chain.valid ? '' : chain.reason, /no exp or nbf/);
+    const checked = await verifyNote(endless, provider, { untimed: true });
+    assert.equal(checked.valid, false);
+    assert.match(checked.valid ? '' : checked.reason, /no exp or nbf/);
   });
 
-  test('a live check judges every link at the same time', async () => {
-    const { root, session, guest } = await three();
+  test('a live check judges its time; a record’s does not', async () => {
+    const { root, session } = await three();
     const now = Math.floor(Date.now() / 1000);
-    const parent = await note(root, session.did, { notBefore: now - 7200, expiration: now - 3600 });
-    const child = await note(session, guest.did, { subject: root.did, expiration: now + 3600 });
-    assert.equal((await verifyProof([parent, child], provider)).valid, false);
-    assert.equal((await verifyProof([parent, child], provider, { untimed: true })).valid, true);
+    const old = await note(root, session.did, { notBefore: now - 7200, expiration: now - 3600 });
+    assert.equal((await verifyNote(old, provider)).valid, false);
+    assert.equal((await verifyNote(old, provider, { untimed: true })).valid, true);
   });
 
-  test('a chain is one to ten links', async () => {
-    const keys = [await makeKey()];
-    const proof: Delegation[] = [];
-    for (let i = 0; i < 11; i++) {
-      keys.push(await makeKey());
-      proof.push(await note(keys[i]!, keys[i + 1]!.did, { subject: keys[0]!.did }));
-    }
-    assert.equal((await verifyProof(proof.slice(0, 10), provider)).valid, true);
-    assert.equal((await verifyProof(proof, provider)).valid, false);
-    assert.equal((await verifyProof([], provider)).valid, false);
-  });
-
-  test('what a chain grants: every link’s command, subject and policy, together', async () => {
-    const { root, session, guest } = await three();
-    const parent = await note(root, session.did, { policy: [['==', '.collection', 'app.note']] });
-    const proof: Proof = await extendProof(
-      [parent],
-      {
-        issuer: session,
-        audience: guest.did,
-        command: '/record',
-        subject: 'space:bgarden',
-        policy: [['like', '.collection', 'app.*']],
-      },
-      provider,
-    );
+  test('what a note grants: its command, subject and policy', async () => {
+    const { root, session } = await three();
+    const token = await note(root, session.did, {
+      command: '/record',
+      subject: 'space:bgarden',
+      policy: [['like', '.collection', 'app.n*']],
+    });
     const write = (space: string, collection: string) => ({
       space,
       cmd: '/record/write',
       args: { collection, space },
     });
-    assert.equal(proofGrants(proof, write('bgarden', 'app.note')), true);
-    // The parent's policy still holds below it, whatever the child says.
-    assert.equal(proofGrants(proof, write('bgarden', 'app.todo')), false);
-    assert.equal(proofGrants(proof, write('bother', 'app.note')), false, 'another space');
-    assert.equal(proofGrants(proof, { ...write('bgarden', 'app.note'), cmd: '/collection/define' }), false);
-    assert.equal(proofGrants(proof, { space: null, cmd: '/record/write', args: {} }), false, 'the account');
+    assert.equal(noteCovers(token, write('bgarden', 'app.note')), true);
+    assert.equal(noteCovers(token, write('bgarden', 'app.todo')), false, 'the policy');
+    assert.equal(noteCovers(token, write('bother', 'app.note')), false, 'another space');
+    assert.equal(noteCovers(token, { ...write('bgarden', 'app.note'), cmd: '/collection/define' }), false);
+    assert.equal(noteCovers(token, { space: null, cmd: '/record/write', args: {} }), false, 'the account');
   });
 });

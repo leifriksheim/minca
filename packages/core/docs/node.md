@@ -101,7 +101,7 @@ exp = now + sessionTtlSeconds (default 3600)
 nbf = now − 300               (issueDelegation's default)
 ```
 
-Its proof is that one token. Peers check only that the proof grants what each
+Its proof is that token. Peers check only that the note grants what each
 record needs, so the command is this node's choice, not a rule. The note is renewed before it runs out
 ([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
@@ -109,25 +109,22 @@ record needs, so the command is this node's choice, not a rule. The note is rene
 (`UCAN_CLOCK_SKEW_SECONDS`, so a peer whose clock is a little behind still
 accepts it), `nonce` to 12 random bytes in base64url, `subject` to the
 issuer's own DID and `policy` to `[]`; it signs in the low-S form only.
-`extendProof` adds a link to an existing proof and refuses when:
-
-- the issuer is not the last link's `aud`;
-- the command is not under the last link's, or the subject is wider
-  ([spec 01 §7.5](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md));
-- the requested `exp` is later than the last link's (default: the last link's `exp`).
-
-These refusals only save issuing a note that would not verify: a verifier
-checks the chain itself.
+Only the account's root signer issues notes peers accept: a note is one
+token from the account, never passed on
+([spec 01 §7.5](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+A key that needs another key (a helper, a key per tab) asks the account,
+through its home or root signer, for a note of its own.
 
 **What a home grants.** `grantTerms(access, spaces)` (and `noteTerms` under it)
 turns a grant into a note's terms: `/`, `/record` or `/record/read`; the
 whole account, or one space as the subject, or several named by a policy on
 `.space`; none, as a policy nothing satisfies. `noteSpaces(note)` reads that
-back, for showing which spaces a note reaches; peers judge each use against
-the note itself
+back, for showing which spaces a note reaches, and reaches no space for a
+policy statement it can't read that way, so it never offers more than the
+note grants; peers judge each use against the note itself
 ([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/identity/ucan.ts` (`issueDelegation`, `extendProof`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
+_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyNote`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
 
 ## Renewing the session note
 
@@ -148,14 +145,6 @@ A signer need not be able to sign. `grantSigner(grant)` answers every
 refuses once `grant.expiresAt` has passed. A node started from a grant
 therefore never gets a fresh note: its "renewal" returns the same note, and when
 it runs out the app must connect again ([spec 06 §2.9](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
-
-`node.delegate({ audience, command, subject?, policy?, expiration? })` passes a
-narrower note from the session key on to another key. The command and subject
-must be no wider than the session note's, and `expiration` no later. It
-returns `{ token, proof }`: the new token, and the whole chain, root first,
-that the other key signs with. Revoking the session key withdraws what the
-other key signs too
-([spec 03 §6.4](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
 
 `node.delegation()` returns the note the session key writes under now.
 

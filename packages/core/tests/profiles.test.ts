@@ -108,7 +108,7 @@ describe('profiles', () => {
         collection: PROFILE_COLLECTION,
         space,
         body: { name: 'Evil Alice' },
-        proof: [ucan],
+        proof: ucan,
         version: nextVersion(aliceCurrent!),
         log: { n: 0 },
         retain: true,

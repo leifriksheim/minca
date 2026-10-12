@@ -158,7 +158,7 @@ describe('private space versions', () => {
       space: spaceId,
       log: { n: 0 },
       body: sealed,
-      proof: [ucan],
+      proof: ucan,
       version: { key: place.key, seq: 0 },
     });
     const version = await signer.sign(unsigned, session.privateKey);
@@ -231,7 +231,7 @@ describe('private space versions', () => {
       space: spaceId,
       log: { n: 0 },
       body: { text: 'let me in' },
-      proof: [ucan],
+      proof: ucan,
     });
     const version = await signer.sign(unsigned, strangerSession.privateKey);
 

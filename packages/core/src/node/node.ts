@@ -19,7 +19,7 @@ import {
 import { createP256Provider } from '../identity/crypto-p256.js';
 import type { Link, SpaceRole } from '../types.js';
 import { didOf } from '../identity/did.js';
-import { extendProof, verifyProof, type Delegation } from '../identity/ucan.js';
+import { verifyNote, type Delegation } from '../identity/ucan.js';
 import {
   ACCOUNT_COMMAND,
   ACCOUNT_REQUIREMENT,
@@ -141,7 +141,6 @@ import type {
   KnockView,
   NodeDoors,
   DefineCollection,
-  DelegateParams,
   ListOptions,
   NodeConfig,
   NodeEvent,
@@ -255,7 +254,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const session: ActiveSession = {
     did: sessionDid,
     key: sessionKeys.privateKey,
-    proof: () => [current],
+    proof: () => current,
   };
   // A key made here dies with the node, and its places in each log with it. A
   // claimed key keeps them in its slot; one handed in (an agent's, an app's) in the
@@ -271,7 +270,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * writes for it: no list of spaces, no passes, no name. Every peer would
    * ignore those.
    */
-  const narrowNote = !noteGrants([current], ACCOUNT_REQUIREMENT);
+  const narrowNote = !noteGrants(current, ACCOUNT_REQUIREMENT);
 
   // ─── Events ────────────────────────────────────────────────────────
 
@@ -970,7 +969,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // checked against the read key the space's history names now. The
       // welcome is signed by the key this node introduces itself with.
       const read = record.space.visibility === 'private' ? (await runtime(spaceId)).readAccess() : null;
-      return createServerAuth(spaceId, read, sessionKeys.privateKey, provider, () => [current]);
+      return createServerAuth(spaceId, read, sessionKeys.privateKey, provider, () => current);
     },
   });
 
@@ -1552,7 +1551,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   /** Making and joining spaces for two needs a note good for every space — whole-account access. */
   function requireEverywhere(what: string): void {
     // As a knock needs: `/account/write` for the whole account (spec 01 §8, 07).
-    if (!noteGrants([current], ACCOUNT_REQUIREMENT)) {
+    if (!noteGrants(current, ACCOUNT_REQUIREMENT)) {
       throw new Error(
         `${what} makes or joins a space, which needs access to your whole account. Connect to your account home again, and ask for it.`,
       );
@@ -1836,7 +1835,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   /** Doors live in the contacts space: a note must grant `/account/write` there, as every peer checks */
   const doorsAllowed = () =>
     contactsSpaceId !== null &&
-    noteGrants([current], { space: contactsSpaceId, cmd: ACCOUNT_COMMAND, args: { space: contactsSpaceId } });
+    noteGrants(current, { space: contactsSpaceId, cmd: ACCOUNT_COMMAND, args: { space: contactsSpaceId } });
 
   function requireContactKey(what: string): Uint8Array {
     // Doors are the account's: a key whose note doesn't grant `/account/write` never opens one or knocks.
@@ -2156,7 +2155,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         const blob = await sealKnock(
           door.key,
           { from: config.signer.did, name: mine, invite, ...(options.note ? { note: options.note } : {}) },
-          { did: session.did, key: session.key, proof: [current] },
+          { did: session.did, key: session.key, proof: current },
           provider,
         );
         const topic = await doorTopic(door.sign);
@@ -2359,9 +2358,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     readonly note: Delegation;
   }): Promise<P2PNode> {
     const agentDid = await didOf(agent.keys.publicKey, provider);
-    const checked = await verifyProof([agent.note], provider);
+    const checked = await verifyNote(agent.note, provider);
     if (!checked.valid) throw new Error(`The agent's note does not check out: ${checked.reason}`);
-    const note = checked.proof[0]!;
+    const { note } = checked;
     if (!grantsRecordsOnly(note))
       throw new Error(
         'That note grants more than records — ask the account home for one with `recordsOnly: true`.',
@@ -2377,7 +2376,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       reach === 'all' || (typeof spaceId === 'string' && named.has(spaceId));
     const contactsGiven = () => contactsSpaceId !== null && allowed(contactsSpaceId);
     // Written with the agent's key, under its note.
-    const writes = makeRecords({ did: agentDid, key: agent.keys.privateKey, proof: () => [note] });
+    const writes = makeRecords({ did: agentDid, key: agent.keys.privateKey, proof: () => note });
 
     // What the table in `node/api.ts` marks `own`; the rest it decides there.
     const own: { readonly [N in Namespace as keyof OwnMethods<N> extends never ? never : N]: OwnMethods<N> } =
@@ -2473,22 +2472,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       status: () => mesh?.status() ?? { relays: [], links: [], connecting: [], turn: false },
       reconnect: () => mesh?.reconnect(),
     }),
-
-    async delegate(params: DelegateParams) {
-      const proof = await extendProof(
-        [current],
-        {
-          issuer: { did: sessionDid, privateKey: sessionKeys.privateKey },
-          audience: params.audience,
-          command: params.command,
-          ...(params.subject !== undefined ? { subject: params.subject } : {}),
-          ...(params.policy ? { policy: params.policy } : {}),
-          ...(params.expiration !== undefined ? { expiration: params.expiration } : {}),
-        },
-        provider,
-      );
-      return { token: proof[proof.length - 1]!, proof };
-    },
 
     subscribe: events.subscribe,
 

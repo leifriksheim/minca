@@ -27,7 +27,7 @@ import type { Version, CryptoProvider, StorageAdapter } from '../types.js';
 import type { Signer } from '../schema/signer.js';
 import type { SchemaEngine } from '../schema/schema-engine.js';
 import type { SpaceRecord } from '../space/space-manager.js';
-import { parseProof, verifyProof, type Proof } from '../identity/ucan.js';
+import { verifyNote, type Delegation } from '../identity/ucan.js';
 import {
   ACCESS_COMMAND,
   accessRequirement,
@@ -292,10 +292,6 @@ export const usableRelays = (network: NodeNetworkConfig | undefined) =>
 const grantsBeyondRecords = (proof: unknown, spaceId: string, cmd: string) =>
   noteGrants(proof, { space: spaceId, cmd, args: { space: spaceId } });
 
-/** The keys a proof passed authority through: every issuer but the root's (spec 01 §7.5) */
-const viaOf = (proof: unknown): ReadonlyArray<string> =>
-  (parseProof(proof) ?? []).slice(1).map((token) => token.payload.iss);
-
 /** Said when a key's note doesn't let it define collections — it can propose them instead */
 export const CANNOT_DEFINE =
   "This key's note doesn't let it add or change collections. Propose them instead (collections_propose), and someone who may adds them.";
@@ -307,8 +303,8 @@ const NOT_ACCOUNT = "This key's note doesn't let it change the account itself. A
 export interface ActiveSession {
   readonly did: string;
   readonly key: CryptoKey;
-  /** The current chain of delegations, root first — it is renewed, so always read it fresh. None for a key that signs for itself. */
-  readonly proof: () => Proof | undefined;
+  /** The current note from the account — it is renewed, so always read it fresh. None for a key that signs for itself. */
+  readonly proof: () => Delegation | undefined;
 }
 
 export interface SpaceRuntimeDeps {
@@ -365,7 +361,7 @@ export type SpaceRuntime = Awaited<ReturnType<typeof openSpaceRuntime>>;
 /** Which account a connected peer showed it acts for */
 interface PeerAccount {
   readonly account: string | null;
-  /** Its note grants writing records here and nothing more (`record/*`): it can't define collections in this space */
+  /** Its note grants writing records here and nothing more (`/record`): it can't define collections in this space */
   readonly recordsOnly: boolean;
 }
 const NO_ACCOUNT: PeerAccount = Object.freeze({ account: null, recordsOnly: false });
@@ -596,9 +592,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!result.passed) {
       verdict = { verified: false, root: null, ...(result.reason ? { reason: result.reason } : {}) };
     } else {
-      const chain =
-        version.proof !== undefined ? await verifyProof(version.proof, provider, { untimed: true }) : null;
-      verdict = { verified: true, root: chain?.valid ? chain.root : version.author };
+      const checked =
+        version.proof !== undefined ? await verifyNote(version.proof, provider, { untimed: true }) : null;
+      verdict = { verified: true, root: checked?.valid ? checked.root : version.author };
       verdicts.set(verdictKey(version), verdict);
     }
     return verdict;
@@ -786,13 +782,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const verdict = await judge(version);
     if (!verdict.verified || !verdict.root) return null;
     const seen = version.seen ?? [];
-    const via = viaOf(version.proof);
     const base = {
       id: version.id,
       key: version.key,
       root: verdict.root,
       author: version.author,
-      ...(via.length ? { via } : {}),
       seen,
       cutoff: NO_CUTOFF,
       ...(version.log ? { line: version.log.n } : {}),
@@ -1246,7 +1240,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         root,
         seen,
         writer: version.author,
-        via: viaOf(version.proof),
         collection: version.collection,
         ...(version.log ? { line: version.log.n } : {}),
       },
@@ -2473,15 +2466,17 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   const liveAllowance = new Map<string, { tokens: number; at: number }>();
 
   async function accountOf(peer: string, note: unknown): Promise<PeerAccount> {
-    if (!Array.isArray(note) || canonicalize(note).length > MAX_NOTE_LENGTH) return NO_ACCOUNT;
-    const chain = await verifyProof(note, provider).catch(() => null);
-    if (!chain?.valid || chain.audience !== peer) return NO_ACCOUNT;
+    if (!isRecord(note) || canonicalize(note).length > MAX_NOTE_LENGTH) return NO_ACCOUNT;
+    const checked = await verifyNote(note, provider).catch(() => null);
+    if (!checked?.valid || checked.audience !== peer) return NO_ACCOUNT;
     return {
-      account: chain.root,
+      account: checked.root,
       // A key that writes records somewhere but can't define here. Judged on the
-      // whole chain, so a key for another space doesn't pass as the account here.
-      // A note that only reads is not one: it writes nothing.
-      recordsOnly: writesRecords(chain.proof) && !grantsBeyondRecords(chain.proof, space.id, DEFINE_COMMAND),
+      // whole note, so a key for another space doesn't pass as the account here.
+      // A note that only reads is not one: it writes nothing. The note is the
+      // account's own, one link, so its key can't sign itself a wider one.
+      recordsOnly:
+        writesRecords(checked.note) && !grantsBeyondRecords(checked.note, space.id, DEFINE_COMMAND),
     };
   }
 
@@ -3142,7 +3137,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const { log } = version;
     // Which account each key writes for: what a cutoff is worked out from.
     const root = (await judge(version)).root;
-    // Only an account a valid chain names: a key whose note failed falls back to itself, and isn't anyone's.
+    // Only an account a valid note names: a key whose note failed falls back to itself, and isn't anyone's.
     if (
       root &&
       (root !== version.author || !version.proof) &&
@@ -3689,7 +3684,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     checks: checksFor,
 
     /** The note a record's current version was signed under; null when its account signed it itself */
-    noteOf: async (recordKey: string): Promise<Proof | null> => (await currentOf(recordKey))?.proof ?? null,
+    noteOf: async (recordKey: string): Promise<Delegation | null> =>
+      (await currentOf(recordKey))?.proof ?? null,
 
     async put<T>(
       collection: string,

@@ -38,7 +38,7 @@ test('a records-only note for another space is not recordsOnly here', async () =
   await until(async () => (await alice.node.spaces.status(space)).peers.includes(did), 4000, 'connect');
   const say = (type: string, payload: unknown) =>
     wire.send(alice.node.sessionDid, utf8Encode(JSON.stringify({ type, from: did, payload })));
-  say('who', { note: [note] });
+  say('who', { note });
   say('live', { type: 'hello' });
   await until(() => heard.some((m) => m.peer === did), 4000, 'message');
   const message = heard.find((m) => m.peer === did)!;

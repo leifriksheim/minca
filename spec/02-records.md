@@ -135,7 +135,7 @@ list unless a list is meant (an absent member and a present one hash differently
 | `createdAt`  | string   | yes        | ISO 8601 time the writer's clock gave, e.g. `2026-09-26T12:00:00.000Z`. Decides no ordering (§4.3) and no standing (§9.3); for display, and as a sync hint ([05](05-sync-and-storage.md)).                                                        |
 | `body`       | any JSON | whole      | The content. Not itself signed: signed through `bodyHash`. Absent on a **stub** (§4.5). `null` or absent on a delete. In a private space, a sealed body `{ "sealed", "keyId" }` ([03 — Spaces](03-spaces.md) §8.3).                               |
 | `bodyHash`   | string   | not delete | Content id (§2) of the canonical body. Absent on a delete.                                                                                                                                                                                        |
-| `proof`      | array    | no         | The delegations that let `author` write here, root first: 1–10 tokens ([01 — Identity](01-identity.md) §7.5). Absent when the author signs for itself; never empty.                                                                               |
+| `proof`      | object   | no         | The note that lets `author` write here: one token from its account ([01 — Identity](01-identity.md) §7.5), never a list. Absent when the author signs for itself.                                                                                 |
 | `key`        | string   | yes        | The record's identity within the space, stable across versions (§4.1).                                                                                                                                                                            |
 | `seq`        | integer  | yes        | `0` for the first version; each later version one more than the one it replaces.                                                                                                                                                                  |
 | `prev`       | string   | seq > 0    | Id of the version this one replaces.                                                                                                                                                                                                              |
@@ -1407,15 +1407,15 @@ refuses a claim of another).
 - With `proof`:
   1. `createdAt` MUST parse as a time, which sync orders by (05); else
      refuse. It decides nothing else here.
-  2. The chain MUST be valid ([01 — Identity](01-identity.md) §7.5), judged
-     with no time at all (§7.6): not any link's `exp` or `nbf`, not
+  2. The note MUST be valid ([01 — Identity](01-identity.md) §7.5), judged
+     with no time at all (§7.6): not its `exp` or `nbf`, not
      `createdAt`, by no one's clock. So records outlive the session that
      signed them, and every peer judges a version the same whenever it
      arrives. What ends a key's writes is a revoke ([03](03-spaces.md) §6.4).
-  3. The chain's audience (its last link's `aud`) MUST equal `author`.
-  4. The chain MUST grant the requirement: every link's command, subject and
-     policy (01 §7.5).
-  5. The root is the chain's root: its first link's issuer.
+  3. The note's audience, its `aud`, MUST equal `author`.
+  4. The note MUST grant the requirement: its command, subject and policy
+     (01 §7.5).
+  5. The root is the note's issuer.
 
 ### 9.4 Standing (the stateful check)
 

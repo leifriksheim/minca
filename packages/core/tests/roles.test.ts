@@ -462,37 +462,6 @@ describe('records against the history', () => {
     assert.ok(judge(5, 'wz').ok, 'other keys are untouched');
   });
 
-  test('a revoked key takes what keys it passed its note on to signed, with no cutoff', () => {
-    // wa passed Alice's note on to wb; wb grants Eve admin, and writes a record.
-    const passedOn: AccessEvent = {
-      ...setRole('alice', 'eve', 'admin', []),
-      author: 'wb',
-      via: ['wa'],
-      line: 0,
-    };
-    const revoke: AccessEvent = {
-      id: id('v'),
-      key: 'revoke:wa|alice',
-      kind: 'revoke',
-      root: 'alice',
-      author: 'k',
-      target: 'wa',
-      seen: [passedOn.id],
-      // Whatever its cutoff keeps of wa's own line, wb's is not in it.
-      cutoff: new Map([['wa', new Map([['sys.member', 99]])]]),
-    };
-    assert.equal(roleOf(replayAccess(genesis, [passedOn]), 'eve'), 'admin', 'before the revoke');
-    assert.equal(roleOf(replayAccess(genesis, [passedOn, revoke]), 'eve'), null, 'struck by it');
-    const history = replayAccess(genesis, [passedOn, revoke]);
-    const judge = (via: ReadonlyArray<string>) =>
-      history.judge(
-        { id: 'r', root: 'alice', seen: [], writer: 'wb', via, collection: 'app.note', line: 0 },
-        isMember,
-      );
-    assert.ok(!judge(['wa']).ok, 'a record under a chain through wa');
-    assert.ok(judge(['wc']).ok, 'through another key: untouched');
-  });
-
   test('a stolen key is answered by its revoke, not by catching the copy: what the revoke kept stands', () => {
     // A copy of Alice's key wa grants Eve admin; Alice's node syncs it, then revokes wa.
     const theft: AccessEvent = { ...setRole('alice', 'eve', 'admin', []), author: 'wa', line: 0 };

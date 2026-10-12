@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { didToPublicKey } from '../src/identity/did.js';
-import { extendProof, issueDelegation, type Proof } from '../src/identity/ucan.js';
+import { issueDelegation, type Delegation } from '../src/identity/ucan.js';
 import { writeRequirement } from '../src/identity/abilities.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
@@ -32,15 +32,13 @@ const resolvePublicKey = async (did: string) => provider.importPublicKey(didToPu
 async function signNote(
   key: { did: string; privateKey: CryptoKey },
   text: string,
-  proof?: Proof,
+  proof?: Delegation | ReadonlyArray<Delegation>,
 ): Promise<Version<{ text: string }>> {
-  const unsigned = createVersion({
-    author: key.did,
-    collection: COLLECTION,
-    body: { text },
-    ...(proof ? { proof } : {}),
-  });
-  return signer.sign(unsigned, key.privateKey);
+  const unsigned = createVersion({ author: key.did, collection: COLLECTION, body: { text } });
+  // A list of tokens is what a peer may send, though the type rules it out: signed as sent.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a chain, as a peer may send one
+  const proved = proof ? { ...unsigned, proof: proof as Delegation } : unsigned;
+  return signer.sign(proved, key.privateKey);
 }
 
 describe('crypto gate', () => {
@@ -128,7 +126,7 @@ describe('capability gate', () => {
     const session = await makeKey();
     const ucan = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
 
-    const version = await signNote(session, 'delegated note', [ucan]);
+    const version = await signNote(session, 'delegated note', ucan);
     const result = await gate.validate(version);
     assert.equal(result.passed, true, result.reason ?? 'no reason given');
   });
@@ -141,7 +139,7 @@ describe('capability gate', () => {
     // A perfectly valid UCAN — for somebody else.
     const ucan = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
 
-    const version = await signNote(thief, 'stolen proof', [ucan]);
+    const version = await signNote(thief, 'stolen proof', ucan);
     const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /different key/i);
@@ -152,7 +150,7 @@ describe('capability gate', () => {
     const session = await makeKey();
     const ucan = await issueDelegation({ issuer: root, audience: session.did, ...OTHER }, provider);
 
-    const version = await signNote(session, 'wrong space', [ucan]);
+    const version = await signNote(session, 'wrong space', ucan);
     const result = await gate.validate(version);
     assert.equal(result.passed, false);
     assert.match(result.reason ?? '', /does not grant/i);
@@ -173,14 +171,14 @@ describe('capability gate', () => {
       },
       provider,
     );
-    const allowed = await signNote(session, 'in its collection', [ucan]);
+    const allowed = await signNote(session, 'in its collection', ucan);
     assert.equal((await gate.validate(allowed)).passed, true);
     const elsewhere = await signer.sign(
       createVersion({
         author: session.did,
         collection: 'app.test.other',
         body: { text: 'x' },
-        proof: [ucan],
+        proof: ucan,
       }),
       session.privateKey,
     );
@@ -189,29 +187,23 @@ describe('capability gate', () => {
     assert.match(result.reason ?? '', /does not grant/i);
   });
 
-  test('a chain travels on the version: root → session → guest, and no wider', async () => {
+  test('a note is one link: a chain, root → session → guest, is refused, and so is its leaf alone', async () => {
     const root = await makeKey();
     const session = await makeKey();
     const guest = await makeKey();
     const parent = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
-    const proof = await extendProof(
-      [parent],
-      { issuer: session, audience: guest.did, command: '/record/write' },
+    const child = await issueDelegation(
+      { issuer: session, audience: guest.did, command: '/record/write', subject: `space:${COLLECTION}` },
       provider,
     );
-    assert.equal((await gate.validate(await signNote(guest, 'two links', proof))).passed, true);
-    // Its leaf alone roots at the session, not the account; and without the leaf it is the session's.
-    const leafOnly = await gate.validate(await signNote(guest, 'one link', [proof[1]!]));
-    assert.equal(leafOnly.passed, true, 'a valid chain of one, rooted at the session key');
-    assert.equal((await gate.validate(await signNote(guest, 'parent only', [parent]))).passed, false);
-    // A guest link wider than its parent: refused.
-    const wider = await issueDelegation(
-      { issuer: session, audience: guest.did, command: '/', subject: `space:${COLLECTION}` },
-      provider,
-    );
-    const widened = await gate.validate(await signNote(guest, 'wider', [parent, wider]));
-    assert.equal(widened.passed, false);
-    assert.match(widened.reason ?? '', /widens its command/);
+    const chained = await gate.validate(await signNote(guest, 'two links', [parent, child]));
+    assert.equal(chained.passed, false);
+    assert.match(chained.reason ?? '', /one note/);
+    assert.equal((await gate.validate(await signNote(guest, 'one in a list', [parent]))).passed, false);
+    // The leaf alone is a note from the session key, about a space: it names no account.
+    const leafOnly = await gate.validate(await signNote(guest, 'leaf', child));
+    assert.equal(leafOnly.passed, true, 'a note from the session key, which is its own account');
+    assert.equal((await gate.validate(await signNote(guest, 'parent only', parent))).passed, false);
   });
 
   test('a record’s standing judges no time: an expired note, and any date it claims, all stand', async () => {
@@ -234,7 +226,7 @@ describe('capability gate', () => {
         author: session.did,
         collection: COLLECTION,
         body: { text: `dated ${when}` },
-        proof: [ucan],
+        proof: ucan,
         createdAt: new Date(when * 1000).toISOString(),
       });
       const result = await gate.validate(await signer.sign(unsigned, session.privateKey));
@@ -255,7 +247,7 @@ describe('capability gate', () => {
     });
 
     const ucan = await issueDelegation({ issuer: root, audience: session.did, ...ALL }, provider);
-    const version = await signNote(session, 'stranger', [ucan]);
+    const version = await signNote(session, 'stranger', ucan);
 
     const result = await strictGate.validate(version);
     assert.equal(result.passed, false);

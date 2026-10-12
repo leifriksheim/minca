@@ -27,6 +27,7 @@ import {
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import type { NoteTerms } from '../src/identity/abilities.js';
+import { issueDelegation, type Delegation } from '../src/identity/ucan.js';
 import {
   clip,
   doorTopic,
@@ -344,7 +345,7 @@ describe('a knock', () => {
       provider,
       invite,
       pair,
-      session: { did: sessionDid, key: keys.privateKey, proof: [token] },
+      session: { did: sessionDid, key: keys.privateKey, proof: token },
     };
   }
 
@@ -386,34 +387,35 @@ describe('a knock', () => {
       provider,
     );
     assert.equal(await openKnock(door.key, stolen, Date.now(), provider), null);
-    // A note passed on again (root → session → another key) counts with its whole chain, root first…
+    // A note the session passes on is no note: alone, it is not from the account…
     const deeper = await provider.generateKeyPair();
     const deeperDid = publicKeyToDid(await provider.exportPublicKey(deeper.publicKey), P256_MULTICODEC);
-    const { token: passedOn, proof: chain } = await leif.delegate({ audience: deeperDid, command: '/' });
-    const relayed = await sealKnock(
-      door.publicKey,
-      { from: leif.did, name: 'Leif', invite },
-      { did: deeperDid, key: deeper.privateKey, proof: chain },
+    const passedOn = await issueDelegation(
+      {
+        issuer: { did: session.did, privateKey: session.key },
+        audience: deeperDid,
+        command: '/',
+        subject: leif.did,
+      },
       provider,
     );
-    assert.equal((await openKnock(door.key, relayed, Date.now(), provider))?.from, leif.did);
-    // …and alone, its last link is the session's, not the account's.
     const leafOnly = await sealKnock(
       door.publicKey,
       { from: leif.did, name: 'Leif', invite },
-      { did: deeperDid, key: deeper.privateKey, proof: [passedOn] },
+      { did: deeperDid, key: deeper.privateKey, proof: passedOn },
       provider,
     );
     assert.equal(await openKnock(door.key, leafOnly, Date.now(), provider), null);
-    // Passed on for records only, the chain can't knock.
-    const { proof: narrowed } = await leif.delegate({ audience: deeperDid, command: '/record' });
-    const narrow = await sealKnock(
+    // …and behind the session's own note, as a chain, it is refused too: a proof is one link.
+    const chain = [session.proof, passedOn];
+    const relayed = await sealKnock(
       door.publicKey,
       { from: leif.did, name: 'Leif', invite },
-      { did: deeperDid, key: deeper.privateKey, proof: narrowed },
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a chain, which the type rules out, as a peer may send one
+      { did: deeperDid, key: deeper.privateKey, proof: chain as unknown as Delegation },
       provider,
     );
-    assert.equal(await openKnock(door.key, narrow, Date.now(), provider), null);
+    assert.equal(await openKnock(door.key, relayed, Date.now(), provider), null);
   });
 
   test('needs a note that grants /account/write: an app given one space or several, a key given records only, or one only to read, cannot knock', async () => {
@@ -472,7 +474,7 @@ describe('a knock', () => {
       blob = await sealKnock(
         door.publicKey,
         { from: leif.did, name: 'Leif', invite },
-        { did: sessionDid, key: keys.privateKey, proof: [token] },
+        { did: sessionDid, key: keys.privateKey, proof: token },
         provider,
       );
     } finally {

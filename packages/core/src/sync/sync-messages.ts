@@ -11,7 +11,7 @@
 import type { Version } from '../types.js';
 import { isObject } from '../utils/guards.js';
 
-/** 5 since a version's proof is a chain of delegations in the UCAN 1.0 profile (spec 01 §7) */
+/** 5 since a version's proof is a note in the UCAN 1.0 profile (spec 01 §7) */
 export const SYNC_PROTOCOL_VERSION = 5;
 
 type V = { readonly v: typeof SYNC_PROTOCOL_VERSION };

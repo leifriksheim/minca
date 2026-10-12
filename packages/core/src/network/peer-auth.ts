@@ -8,9 +8,9 @@
 import type { CryptoProvider } from '../types.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { didToPublicKey } from '../identity/did.js';
-import { verifyProof, type Proof } from '../identity/ucan.js';
+import { verifyNote, type Delegation } from '../identity/ucan.js';
 import { canonicalize } from '../schema/version.js';
-import { isObject } from '../utils/guards.js';
+import { isObject, isRecord } from '../utils/guards.js';
 
 /** What a client sends to prove itself: its own signature, and in a private space the read key's */
 export interface HelloProof {
@@ -154,7 +154,7 @@ async function checkProof(
 export interface ClientAuth {
   hello(clientDid: string, nodeDid: string, nodeNonce: string): Promise<HelloProof>;
   checkWelcome(nodeDid: string, clientNonce: string, sig: unknown): Promise<boolean>;
-  /** Whether the node is the one pinned: its own key, or a session whose note the pinned key signed */
+  /** Whether the node is the one pinned: its own key, or a session the pinned key gave a note for everything (`pinned`) */
   checkPin(pin: string, nodeDid: string, note: unknown): Promise<boolean>;
 }
 
@@ -162,14 +162,19 @@ export interface ClientAuth {
 export interface ServerAuth {
   checkHello(clientDid: string, nodeDid: string, nodeNonce: string, proof: unknown): Promise<boolean>;
   welcome(nodeDid: string, clientNonce: string): Promise<string>;
-  /** The node's proof, sent with its welcome so a client can pin the account rather than a session key that changes */
-  note(): Proof | null;
+  /** The node's note, sent with its welcome so a client can pin the account rather than a session key that changes */
+  note(): Delegation | null;
 }
 
 /** Longest note a welcome may carry */
 const MAX_NOTE_LENGTH = 16 * 1024;
 
-/** Whether a node DID is the pinned one, or a session the pinned key delegated to */
+/**
+ * Whether a node DID is the pinned one, or a node session of it: made out a
+ * note by the pinned key for every command, `/`, about the whole account,
+ * with no policy. A narrower note (an app's, one space's, read only) is
+ * not the account's node, so it can't pose as one.
+ */
 async function pinned(
   provider: CryptoProvider,
   pin: string,
@@ -177,9 +182,11 @@ async function pinned(
   note: unknown,
 ): Promise<boolean> {
   if (nodeDid === pin) return true;
-  if (!Array.isArray(note) || canonicalize(note).length > MAX_NOTE_LENGTH) return false;
-  const chain = await verifyProof(note, provider).catch(() => null);
-  return !!chain?.valid && chain.audience === nodeDid && chain.root === pin;
+  if (!isRecord(note) || canonicalize(note).length > MAX_NOTE_LENGTH) return false;
+  const checked = await verifyNote(note, provider).catch(() => null);
+  if (!checked?.valid || checked.audience !== nodeDid || checked.root !== pin) return false;
+  const { cmd, sub, pol } = checked.note.payload;
+  return cmd === '/' && sub === pin && pol.length === 0;
 }
 
 /** A fresh random nonce */
@@ -242,7 +249,7 @@ export function createServerAuth(
   read: ReadAccess | string | null,
   nodeKey: CryptoKey,
   provider: CryptoProvider,
-  note: () => Proof | null = () => null,
+  note: () => Delegation | null = () => null,
 ): ServerAuth {
   const access = readAccessOf(read);
   return Object.freeze({

@@ -349,9 +349,9 @@ notes through, are the library's: see
 
 A node signs records with a session key (§6) under a note from the root
 (§7) made out to it: `aud` is the session DID, `sub` the account's DID, and
-the node's proof is that one token. Every record the session key signs
+the node's proof is that token. Every record the session key signs
 carries the proof as its `proof` ([02 — Records](02-records.md)). Peers
-check only that the proof verifies and grants what each record needs
+check only that the note verifies and grants what each record needs
 (§7.5, §8); which command it names, how long it lasts and when it is
 renewed are the node's choice
 ([Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes),
@@ -364,13 +364,15 @@ _Tests:_ `packages/core/tests/node.test.ts` ("records outlive the session that w
 
 ## 7. Delegations (UCAN 1.0, JSON profile)
 
-A **delegation** (also called a _note_ in the code and UI) is a signed token
-by which an issuer key passes some of what it may do to an audience key.
+A **delegation** is a signed token by which an issuer key passes some of
+what it may do to an audience key. A **note** is the one kind peers accept:
+a delegation from the account's root key to another key (§7.5).
 Weave writes them in its own **JSON profile of UCAN 1.0**: UCAN 1.0's fields
 (`iss`, `aud`, `sub`, `cmd`, `pol`, `nonce`, `meta`, `exp`, `nbf`), its
-command paths, its policy language and its chain rules, in Weave's canonical
+command paths and its policy language, in Weave's canonical
 JSON ([02](02-records.md) §1) and signed as Weave signs everything else,
-instead of DAG-CBOR with a varsig header.
+instead of DAG-CBOR with a varsig header. UCAN's chains are not used: a
+note is always one link.
 
 It is **not byte-compatible** with other UCAN tools: a Weave token can't be
 handed to a UCAN library, nor a UCAN token to a Weave peer. That is
@@ -409,7 +411,7 @@ signed bytes = UTF-8( canonicalJSON( { "payload": <payload>, "type": "weave/ucan
 | ------- | --------------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
 | `iss`   | string                | yes      | Issuer: a P-256 `did:key` (§4) in its one spelling (multicodec `p256-pub`, 33-byte key). Its key signs it. |
 | `aud`   | string                | yes      | Audience: who it is made out to. For a note, a P-256 `did:key` (§7.5)                                      |
-| `sub`   | string                | yes      | Subject: what it is about. The account (its DID, the chain's root), or one space, `space:<id>` (§7.2)      |
+| `sub`   | string                | yes      | Subject: what it is about. The account (its DID, the issuer's), or one space, `space:<id>` (§7.2)          |
 | `cmd`   | string                | yes      | The command it covers, and every command under it (§7.3)                                                   |
 | `pol`   | array                 | yes      | Policy: conditions on the arguments of what it is used for (§7.4). `[]` for none                           |
 | `nonce` | string                | yes      | 1–64 base64url characters. Issuers use 12 random bytes. Makes each token unique; not otherwise checked     |
@@ -427,9 +429,8 @@ _powerline_ is not used (§7.2). A token whose canonical form is longer than
 and its signature has one form, a token has exactly one id.
 
 > Rationale: a malleable signature gives a second token that verifies under
-> a different id, and anything that names or counts tokens by id (a cache, a
-> chain assembled by id) would see two where there is one. Refusing high-S
-> closes it at the source.
+> a different id, and anything that names or counts tokens by id (a cache)
+> would see two where there is one. Refusing high-S closes it at the source.
 
 ### 7.2 Subjects
 
@@ -438,16 +439,19 @@ and its signature has one form, a token has exactly one id.
 | the root's DID | **The account**: everything it may do, in every space and as a whole (a knock) |
 | `space:<id>`   | **One space** of the account's. `<id>` is 1–128 of `[A-Za-z0-9._~-]`           |
 
-A DID subject MUST be the DID at the chain's root (§7.5): UCAN 1.0's own rule
-that the subject is whoever began the chain. A note for **every space** is a
-note about the account. UCAN's `null` subject (a powerline) adds nothing
-when every chain starts at the account it is about, so it is refused,
-keeping one spelling for each meaning.
+A DID subject MUST be the note's issuer, the account (§7.5): UCAN 1.0's own
+rule that the subject is whoever began the chain, for a chain of one. A note
+for **every space** is a note about the account. UCAN's `null` subject (a
+powerline) adds nothing when every note is from the account it is about, so
+it is refused, keeping one spelling for each meaning.
 
 ### 7.3 Commands
 
-A command is `/`, or `/`-separated non-empty segments, lower case, with no
-trailing `/`, at most 256 characters (UCAN 1.0's form). A command covers
+A command is `/`, or one or more segments each written `/` and then one or
+more of `a`–`z`, `0`–`9`, `.`, `_` and `-` (ASCII only), with no trailing
+`/`, at most 256 characters: UCAN 1.0's form, narrowed to ASCII so that no
+two spellings fold to the same command. As a pattern:
+`^/$|^(/[a-z0-9._-]+)+$`. A command covers
 itself and every command under it, by whole segments: `/record` covers
 `/record/write` but not `/recordings`, and `/` covers everything.
 
@@ -516,43 +520,43 @@ reference passes UCAN's published policy fixtures.
 > arrays only. The fixture file's one malformed case is corrected in the
 > copy the tests use (`packages/core/tests/vectors/ucan-policy.json`).
 
-### 7.5 Chains
+### 7.5 Notes
 
-What a key does carries its **proof**: the chain of tokens that ends at it,
-**root first**, 1 to 10 tokens — as a UCAN 1.0 invocation's `prf` orders
-them. A record carries it in `proof` ([02](02-records.md) §3.1); a knock
-([07](07-doors.md)) and a peer's proof ([04](04-network.md)) carry it the
-same way. Tokens carry no parents of their own: the one using them
-assembles the chain.
+What a key does carries its **proof**: one note, a token issued by the
+account's root key to that key. A record carries it in `proof`
+([02](02-records.md) §3.1); a knock ([07](07-doors.md)) and a peer's proof
+([04](04-network.md)) carry it the same way. It is a single JSON object,
+never a list.
 
 Given a proof, and a time `at` or none (§7.6), a verifier MUST check:
 
-1. It is an array of 1 to 10 tokens, each in the exact form of §7.1, each
-   signed by its `iss` (low S), each within its time bounds at `at` (§7.6).
-2. Every link is a **note**: `aud` is a P-256 `did:key`, and `exp` and `nbf`
-   are present.
-3. Link `i`'s `aud` equals link `i+1`'s `iss`.
-4. A link's `sub`, when it is a DID, equals the **root**: the first link's
-   `iss`.
-5. Every link attenuates its parent:
-   - its `cmd` is covered by the parent's `cmd` (§7.3);
-   - its `sub` equals the parent's, or the parent's is the account and its
-     own is one space (`space:<id>`);
-   - its policy adds to the parent's: what is checked is every link's
-     policy, together (below), so a child can only narrow.
+1. It is one token, a JSON object in the exact form of §7.1, signed by its
+   `iss` (low S), within its time bounds at `at` (§7.6). Anything else,
+   a list of tokens (a chain) included, is refused.
+2. It is a **note**: `aud` is a P-256 `did:key`, and `exp` and `nbf` are
+   present.
+3. Its `sub`, when it is a DID, equals its `iss`.
 
-The chain is then **for** the last link's `aud`, and **from** the root.
+The note is then **for** its `aud`, and **from** its `iss`: the **root**,
+the account it acts for.
 
-A chain **grants** a requirement (a command, a space or the account as a
-whole, and arguments; §8) iff, for **every** link: its `cmd` covers the
-required command; its `sub` is the account, or `space:<S>` where the
-requirement is in space `S`; and its policy holds for the arguments.
+A note **grants** a requirement (a command, a space or the account as a
+whole, and arguments; §8) iff its `cmd` covers the required command; its
+`sub` is the account, or `space:<S>` where the requirement is in space `S`;
+and its policy holds for the arguments.
 
-> Rationale: chains are what lets a key pass on less than it holds, a
-> session to a short-lived key or an app to a helper, with every peer
-> able to check it from the version alone. Checking every link's policy,
-> not only the last, is UCAN 1.0's rule, and means no link has to restate
-> its parent's conditions.
+No key below the root can extend a note. A token a session or app key
+signs is a note from that key, about that key's own DID: it names no
+account but the key itself, and acts for no one else.
+
+> Rationale: one link means a key can't mint keys. A stolen session or app
+> key is like a stolen session token: usable, within its note, until it is
+> revoked, but it can't pass its power on to keys the account never saw, so
+> revoking it ([03](03-spaces.md) §6.4) takes everything it can do, with the
+> one cutoff the revoke names. With chains, a revoke would also have to
+> reach every key below the revoked one, and peers would have to agree on
+> what of theirs counted. A key that needs a narrower key of its own (an
+> app's helper, a key per tab) asks the account for a second note.
 
 ### 7.6 Time
 
@@ -566,9 +570,8 @@ Which time step 1 uses depends on what the proof is relied on for:
   at what it signed ([03 — Spaces](03-spaces.md) §6.4).
 - **Anything live** (a knock, a live message, a peer's proof when it
   connects, an app checking its grant): the checking node's own clock, or,
-  for a knock, the time it was signed and dropped (07). Every link MUST have
-  `nbf ≤ at < exp` at that one `at`, so a child is never usable outside its
-  parents' windows. These are one node's decisions in the moment, not
+  for a knock, the time it was signed and dropped (07). The note MUST have
+  `nbf ≤ at < exp` at that `at`. These are one node's decisions in the moment, not
   verdicts peers share, so a note that has run out stops working there on
   time, with no revoke needed.
 
@@ -610,16 +613,16 @@ Its id: `b6zstk7cjkyvhhcdfdoihjemyyq5s4frwwvk3aijuf5ykcqa4fbya`. The same
 token with `s` replaced by `n − s` verifies under Web Crypto, and is
 refused (§7.1).
 
-_Source:_ `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyDelegation`, `verifyProof`, `proofGrants`, `extendProof`), `packages/core/src/identity/policy.ts` (`evaluatePolicy`, `policyProblem`), `packages/core/src/validation/capability-gate.ts`.
-_Tests:_ `packages/core/tests/ucan.test.ts` ("the example of 01 §7.8", "one token, one id: the high-S form of a signature is refused", "refuses anything but its exact shape", "a link that widens its command is refused", "a link that widens its subject is refused", "what a chain grants"), `packages/core/tests/policy.test.ts` (the UCAN fixtures), `packages/core/tests/validation.test.ts` ("a chain travels on the version", "a note's policy is checked against the version"), `packages/core/tests/attacks.test.ts`.
+_Source:_ `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyDelegation`, `isCommand`, `verifyNote`, `noteCovers`), `packages/core/src/identity/policy.ts` (`evaluatePolicy`, `policyProblem`), `packages/core/src/validation/capability-gate.ts`.
+_Tests:_ `packages/core/tests/ucan.test.ts` ("the example of 01 §7.8", "one token, one id: the high-S form of a signature is refused", "refuses anything but its exact shape", "commands cover what is under them", "a chain is refused, however sound its links", "a subject naming an account is only ever its issuer", "what a note grants"), `packages/core/tests/policy.test.ts` (the UCAN fixtures), `packages/core/tests/validation.test.ts` ("a note is one link", "a note's policy is checked against the version"), `packages/core/tests/space-access.test.ts` ("a key cannot pass its note on"), `packages/core/tests/attacks.test.ts`.
 
 ---
 
 ## 8. What a note lets a key do
 
-A key may do what its proof grants (§7.5), judged against what each thing
+A key may do what its note grants (§7.5), judged against what each thing
 it does requires: a command, where (a space `S`, or the account as a whole),
-and the **arguments** every link's policy reads. The protocol never asks
+and the **arguments** the note's policy reads. The protocol never asks
 what kind of thing holds a key: a person's session, an app, any other
 program and a borrowed device are told apart only by what their notes grant.
 
@@ -645,8 +648,6 @@ that reads anything else finds `null` (a missing member) or nothing.
   writer's role ([03 — Spaces](03-spaces.md)). A version in one of the
   account's own spaces whose proof lacks `/account/write` MUST NOT count
   there.
-- Every link of the proof is read (§7.5), so a link's policy binds
-  everything below it.
 
 A person's own sessions, and apps granted write, get `/` about the account.
 A key the account trusts less gets `/record` (a request for records only,
@@ -672,8 +673,8 @@ what the proof grants.
 > Rationale for one command and a policy, not a set of delegations: every
 > note a home gives names one command, across one space, several or all of
 > them. One subject covers one space or all; a policy on `.space` covers
-> several. So one token, one chain per version, and one requirement checked
-> against it keep everything notes granted before.
+> several. So one token per version, and one requirement checked against it,
+> keep everything notes granted before.
 
 _Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `accountSpaceRequirement`, `ACCOUNT_REQUIREMENT`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
 _Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").

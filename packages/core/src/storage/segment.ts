@@ -13,7 +13,7 @@ import { isObject, isStoredVersion } from '../utils/guards.js';
 
 export const SEGMENT_SUFFIX = '.seg';
 /**
- * The segment format. 5 since a version's proof is a chain of delegations
+ * The segment format. 5 since a version's proof is a note in the UCAN 1.0 profile
  * (spec 01 §7): an older segment's versions carry notes no peer reads now,
  * so a reader holds nothing for it instead.
  */

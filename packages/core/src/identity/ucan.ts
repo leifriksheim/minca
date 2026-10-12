@@ -2,14 +2,14 @@
  * @module identity/ucan
  * Delegations in Weave's JSON profile of UCAN 1.0 (spec 01 §7).
  *
- * UCAN 1.0's fields, command paths, policy language and chain rules, written
+ * UCAN 1.0's fields, command paths, policy language and attenuation, written
  * as canonical JSON and signed with ES256 over those bytes, in place of
  * DAG-CBOR and a varsig header. Not byte-compatible with other UCAN tools.
  *
- * A token is a plain JSON object, `{ payload, sig, type }`. A proof is the
- * chain of tokens behind a key, root first, as a version carries it: each
- * link's audience is the next link's issuer, and the last link's audience is
- * the key that uses it.
+ * A token is a plain JSON object, `{ payload, sig, type }`. A note is one
+ * token from the account's root key to a key, and what a version, a knock
+ * or a peer carries as its proof. A note is never passed on: no key below the
+ * root can sign a note that peers accept, so a stolen key can't mint keys.
  */
 import type { CryptoProvider } from '../types.js';
 import { base64UrlEncode, base64UrlDecode, utf8Encode } from '../utils/encoding.js';
@@ -28,7 +28,7 @@ export interface DelegationPayload {
   readonly iss: string;
   /** Who it is made out to: a did:key, for a note */
   readonly aud: string;
-  /** What it is about: the account (its DID, the chain's root), or one space, `space:<id>` */
+  /** What it is about: the account (its DID, the issuer's own), or one space, `space:<id>` */
   readonly sub: string;
   /** The command it covers, and everything under it: `/` is every command */
   readonly cmd: string;
@@ -52,14 +52,9 @@ export interface Delegation {
   readonly sig: string;
 }
 
-/** The tokens behind a key, root first */
-export type Proof = ReadonlyArray<Delegation>;
-
 /** How far a token's start is set back for clocks that disagree */
 export const UCAN_CLOCK_SKEW_SECONDS = 300;
 
-/** The longest chain a peer follows */
-const MAX_CHAIN_LENGTH = 10;
 /** The most bytes one token's canonical form may take */
 const MAX_TOKEN_BYTES = 16 * 1024;
 
@@ -88,14 +83,13 @@ function lowS(signature: Uint8Array): Uint8Array {
   return out;
 }
 
-/** Whether a command is well formed: lower case, starting with `/`, no empty segment, no trailing `/` */
+/**
+ * Whether a command is well formed: `/`, or segments of ASCII lower case,
+ * digits, `.`, `_` and `-`, each after a `/`, with no trailing `/`. ASCII
+ * only, so no two spellings compare differently after case folding.
+ */
 export function isCommand(cmd: unknown): cmd is string {
-  return (
-    typeof cmd === 'string' &&
-    cmd.length <= 256 &&
-    cmd === cmd.toLowerCase() &&
-    (cmd === '/' || /^(\/[^/]+)+$/.test(cmd))
-  );
+  return typeof cmd === 'string' && cmd.length <= 256 && (cmd === '/' || /^(\/[a-z0-9._-]+)+$/.test(cmd));
 }
 
 /** Whether a command covers another: itself, and every command under it */
@@ -189,18 +183,6 @@ function deepFreeze<T>(value: T): T {
     Object.freeze(value);
   }
   return value;
-}
-
-/** A proof from the wire: one to {@link MAX_CHAIN_LENGTH} tokens, each in its exact shape; else null */
-export function parseProof(value: unknown): Proof | null {
-  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CHAIN_LENGTH) return null;
-  const tokens: Delegation[] = [];
-  for (const item of value) {
-    const token = parseDelegation(item);
-    if (!token) return null;
-    tokens.push(token);
-  }
-  return Object.freeze(tokens);
 }
 
 /** What to sign */
@@ -303,73 +285,53 @@ export async function verifyDelegation(
   return { valid: true, token };
 }
 
-/** The outcome of checking a proof */
-export type ChainCheck =
+/** The outcome of checking a note */
+export type NoteCheck =
   | {
       readonly valid: true;
-      readonly proof: Proof;
-      /** The account at the root: the first link's issuer */
+      readonly note: Delegation;
+      /** The account: the note's issuer */
       readonly root: string;
-      /** The key the proof is for: the last link's audience */
+      /** The key it is made out to */
       readonly audience: string;
     }
   | { readonly valid: false; readonly reason: string };
 
-/** Whether a link's subject is the account, the chain's root */
-const isAccount = (sub: string, root: string) => sub === root;
-
 /**
- * What is wrong with a chain whose tokens each checked out, or null: a note's
- * shape on every link (a did:key audience, both time bounds), each link's
- * audience the next one's issuer, and each link no wider than its parent — a
- * command under the parent's, the same subject or one space of the account's.
- * Policies need no comparing: every link's policy is checked where the proof is used.
+ * What is wrong with a token, signed and checked, as a note, or null: made
+ * out to a key, with both time bounds, about its issuer's account or one space.
  */
-function chainProblem(proof: Proof): string | null {
-  const root = proof[0]!.payload.iss;
-  for (let i = 0; i < proof.length; i++) {
-    const link = proof[i]!.payload;
-    if (!isP256Did(link.aud)) return `Link ${i} is not made out to a key`;
-    if (link.exp === undefined || link.nbf === undefined) return `Link ${i} has no exp or nbf`;
-    if (link.sub.startsWith('did:') && !isAccount(link.sub, root))
-      return `Link ${i} is about an account other than its root`;
-    if (i === 0) continue;
-    const parent = proof[i - 1]!.payload;
-    if (parent.aud !== link.iss) return `Link ${i} is not signed by the key link ${i - 1} names`;
-    if (!commandCovers(parent.cmd, link.cmd)) return `Link ${i} widens its command`;
-    // The same subject, or one space where the parent had the whole account.
-    if (link.sub !== parent.sub && !isAccount(parent.sub, root)) return `Link ${i} widens its subject`;
-  }
+function noteProblem({ payload }: Delegation): string | null {
+  if (!isP256Did(payload.aud)) return 'It is not made out to a key';
+  if (payload.exp === undefined || payload.nbf === undefined) return 'It has no exp or nbf';
+  if (payload.sub.startsWith('did:') && payload.sub !== payload.iss)
+    return 'It is about an account other than its issuer';
   return null;
 }
 
 /**
- * Checks a proof: every token (shape, signature, and time unless untimed)
- * and every link (`chainProblem`). The root is the first link's issuer.
+ * Checks a note: one token (shape, signature, and time unless untimed) that
+ * `noteProblem` passes. A list of tokens, a chain, is refused: a note is
+ * one link from the account (spec 01 §7.5).
  */
-export async function verifyProof(
+export async function verifyNote(
   value: unknown,
   provider: CryptoProvider,
   options: VerifyOptions = {},
-): Promise<ChainCheck> {
-  if (!Array.isArray(value) || value.length === 0) return { valid: false, reason: 'No delegation chain' };
-  if (value.length > MAX_CHAIN_LENGTH)
-    return { valid: false, reason: `Delegation chain longer than ${MAX_CHAIN_LENGTH} links` };
-  const tokens: Delegation[] = [];
-  for (const item of value) {
-    const checked = await verifyDelegation(item, provider, options);
-    if (!checked.valid) return { valid: false, reason: `Invalid token in chain: ${checked.reason}` };
-    tokens.push(checked.token);
-  }
-  const proof = Object.freeze(tokens);
-  const problem = chainProblem(proof);
-  if (problem) return { valid: false, reason: `Delegation chain broken: ${problem}` };
-  return { valid: true, proof, root: proof[0]!.payload.iss, audience: proof[proof.length - 1]!.payload.aud };
+): Promise<NoteCheck> {
+  if (Array.isArray(value))
+    return { valid: false, reason: 'A proof is one note from the account, not a chain' };
+  const checked = await verifyDelegation(value, provider, options);
+  if (!checked.valid) return { valid: false, reason: `Invalid note: ${checked.reason}` };
+  const problem = noteProblem(checked.token);
+  if (problem) return { valid: false, reason: `Not a note: ${problem}` };
+  const { payload } = checked.token;
+  return { valid: true, note: checked.token, root: payload.iss, audience: payload.aud };
 }
 
 /**
  * What a key needs for one thing it does: a command, where (a space, or
- * `null` for the account as a whole), and the arguments every link's policy
+ * `null` for the account as a whole), and the arguments the note's policy
  * is checked against (spec 01 §8).
  */
 export interface Requirement {
@@ -379,45 +341,15 @@ export interface Requirement {
 }
 
 /**
- * Whether a proof grants a requirement: on every link, the command covers
- * it, the subject is the account or the space, and the policy holds for its
- * arguments. Reads the tokens only; whether the chain is sound is
- * {@link verifyProof}'s question.
+ * Whether a note grants a requirement: its command covers it, its subject
+ * is the account or the space, and its policy holds for the arguments.
+ * Reads the token only; whether it is a sound note is {@link verifyNote}'s question.
  */
-export function proofGrants(proof: Proof, required: Requirement): boolean {
-  const root = proof[0]?.payload.iss;
-  if (root === undefined) return false;
-  return proof.every(
-    ({ payload }) =>
-      commandCovers(payload.cmd, required.cmd) &&
-      (isAccount(payload.sub, root) ||
-        (required.space !== null && payload.sub === `space:${required.space}`)) &&
-      evaluatePolicy(payload.pol, required.args),
+export function noteCovers(note: Delegation, required: Requirement): boolean {
+  const { payload } = note;
+  return (
+    commandCovers(payload.cmd, required.cmd) &&
+    (payload.sub === payload.iss || (required.space !== null && payload.sub === `space:${required.space}`)) &&
+    evaluatePolicy(payload.pol, required.args)
   );
-}
-
-/**
- * Passes on part of what a proof grants: a token from the proof's audience
- * to another key, no wider than the last link, and no longer-lived.
- * @returns The longer proof, root first
- */
-export async function extendProof(
-  proof: Proof,
-  options: Omit<IssueOptions, 'subject'> & { readonly subject?: string },
-  provider: CryptoProvider,
-): Promise<Proof> {
-  const last = proof[proof.length - 1]?.payload;
-  if (!last) throw new Error('There is no proof to extend');
-  if (last.aud !== options.issuer.did) throw new Error('Only the key a proof is made out to can extend it');
-  if (!commandCovers(last.cmd, options.command))
-    throw new Error('That command is wider than the proof grants');
-  const subject = options.subject ?? last.sub;
-  const root = proof[0]!.payload.iss;
-  if (subject !== last.sub && !isAccount(last.sub, root))
-    throw new Error('That subject is wider than the proof grants');
-  const exp = options.expiration === undefined || options.expiration === null ? last.exp : options.expiration;
-  if (exp === undefined || (last.exp !== undefined && exp > last.exp))
-    throw new Error('A delegation cannot outlive the one it passes on');
-  const token = await issueDelegation({ ...options, subject, expiration: exp }, provider);
-  return Object.freeze([...proof, token]);
 }

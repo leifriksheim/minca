@@ -8,7 +8,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
-import type { Proof } from '../src/identity/ucan.js';
+import type { Delegation } from '../src/identity/ucan.js';
 import type { P2PNode } from '../src/node/types.js';
 import { newRecordKey } from '../src/records/key.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -378,11 +378,11 @@ describe('proving you may read, after the key changed', () => {
       subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
-    return { did, key: pair.privateKey, note: [note] };
+    return { did, key: pair.privateKey, note };
   }
 
   /** A reader holding `key`, sending its note sealed with it when `sendNote` */
-  function reader(space: string, key: SpaceKey, note: Proof | null): ReadAccess {
+  function reader(space: string, key: SpaceKey, note: Delegation | null): ReadAccess {
     return {
       key: () => deriveReadKey(key, provider),
       current: () => 'did:key:not-this-one',
@@ -456,7 +456,7 @@ describe('proving you may read, while a new key is due', () => {
       const read: ReadAccess = {
         key: () => deriveReadKey(key, provider),
         current: () => 'did:key:not-this-one',
-        membership: async () => sealValue(key.seal, MEMBERSHIP_LABEL, { space }, [note]),
+        membership: async () => sealValue(key.seal, MEMBERSHIP_LABEL, { space }, note),
       };
       const hello = await createClientAuth(space, { did, key: pair.privateKey }, read, provider).hello(
         did,

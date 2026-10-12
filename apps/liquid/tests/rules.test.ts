@@ -73,7 +73,7 @@ async function forge(who: Person, space: string, fields: Parameters<typeof creat
       ...fields,
       author: keyDid,
       space,
-      proof: [ucan],
+      proof: ucan,
     }),
     pair.privateKey,
   );

@@ -112,11 +112,9 @@ export {
   DELEGATION_TYPE,
   issueDelegation,
   parseDelegation,
-  parseProof,
   verifyDelegation,
-  verifyProof,
-  proofGrants,
-  extendProof,
+  verifyNote,
+  noteCovers,
   delegationId,
   commandCovers,
   isCommand,
@@ -124,12 +122,11 @@ export {
 export type {
   Delegation,
   DelegationPayload,
-  Proof,
   Requirement,
   IssueOptions,
   VerifyOptions,
   Verified,
-  ChainCheck,
+  NoteCheck,
 } from './identity/ucan.js';
 export { evaluatePolicy, policyProblem } from './identity/policy.js';
 export type { Policy, Statement } from './identity/policy.js';
@@ -400,8 +397,6 @@ export type {
   ListOptions,
   InviteOptions,
   ConnectionState,
-  DelegateParams,
-  Delegated,
   NodeCollection,
   NodeCollections,
   DefineCollection,

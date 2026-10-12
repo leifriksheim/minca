@@ -281,8 +281,7 @@ so each such program is its own. `auth.connections()` lists them.
 **Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
 the app's connections (by default the app and every program connected through
 it by code; `byCode: true` only those programs; `audience` only that key),
-revokes the keys of those with `access: write` (and with them anything
-signed under a note those keys passed on), and, unless only programs
+revokes the keys of those with `access: write`, and, unless only programs
 connected by code go, removes the subscriptions the app proposed.
 
 **Proposals.** `auth.propose({ origin, request, notify? })` adds the

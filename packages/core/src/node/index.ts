@@ -57,8 +57,6 @@ export type {
   ListOptions,
   InviteOptions,
   ConnectionState,
-  DelegateParams,
-  Delegated,
   NodeCollection,
   NodeCollections,
   DefineCollection,

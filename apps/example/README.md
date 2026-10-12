@@ -159,7 +159,7 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 | Protocol piece         | Where it shows up                                                                                                      |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Account home           | Connecting: the home signs a note from the account to this app's own key, and the app never sees the seed              |
-| Delegation (UCAN 1.0)  | Every record is signed by this app's key, under that note; peers check the chain back to the account                   |
+| Delegation (UCAN 1.0)  | Every record is signed by this app's key, under that note; peers check that the account signed it                      |
 | Spaces                 | Four kinds of space, each with its own database, sync and gossip room                                                  |
 | E2EE                   | Private spaces encrypt bodies before signing; a record says _encrypted_ when it had to be opened                       |
 | Validation             | Shape, signature and capability checks run on everything, including what peers send                                    |

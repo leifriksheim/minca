@@ -1039,8 +1039,8 @@ A segment is UTF-8 JSON:
 The versions are exactly as on the wire — private bodies still sealed. A
 segment carries its own version, apart from the sync messages' (§4): a mirror
 outlives the peers that wrote it, so a reader meets old segments long after
-it last met an old peer. `v` is `5` since a version's `proof` is a chain of
-delegations in the UCAN 1.0 profile ([01](01-identity.md) §7); a reader MUST treat bytes that
+it last met an old peer. `v` is `5` since a version's `proof` is a note in
+the UCAN 1.0 profile ([01](01-identity.md) §7); a reader MUST treat bytes that
 are not JSON, or `v` other than `5`, or a missing `versions` array, as holding nothing, so a
 segment of the old format is never misread; entries that are not objects
 with a string `id` are skipped.

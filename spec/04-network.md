@@ -33,8 +33,8 @@ Terms used below:
   ([01 — Identity](01-identity.md)). It is a peer's identity on the wire:
   in rooms, in handshakes and in every message's `from`.
 - **account DID** — the root DID behind a session, proven by the session's
-  **note**: its proof, the chain of delegations from the account to the
-  session key, root first ([01](01-identity.md) §7.5).
+  **note**: its proof, one token from the account's root key to the
+  session key ([01](01-identity.md) §7.5).
 - **room** — a name on a relay under which peers are introduced.
 - **space id**, **read key**, **space key** — see [03 — Spaces](03-spaces.md).
 
@@ -105,10 +105,10 @@ fixes the socket's DID for the life of the socket.
 > SharedWorker: each signs with the app's key ([06](06-nodes-and-sessions.md)
 > §2.1). (The processes of a program connected by code can't collide any
 > more: only one may hold its key.) The refused tab says so (§2, and `refused` in `spaces.status`), but
-> it cannot sync until the first closes. A key per tab, delegated from the
-> app's key, would fix it; peers now accept chains of more than one link
-> ([01](01-identity.md) §7.5), and the library doesn't make the per-tab key
-> yet. Tracked in
+> it cannot sync until the first closes. The fix is a key per tab, each with
+> its own one-link note signed by the account (through the home, or the
+> root signer), since a key can't pass its note on ([01](01-identity.md)
+> §7.5); the library doesn't ask for one yet. Tracked in
 > [#55](https://github.com/leifriksheim/weave/issues/55).
 
 _Source: `packages/relay/relay.mjs` (`handleMessage`, `isDid`, `CLOSE_DID_TAKEN`). Tests: `packages/core/tests/relay-refusal.test.ts` ("one DID per room")._
@@ -444,9 +444,18 @@ refuse (close `4002`) a welcome unless:
 
 - the node DID is the pinned DID (a node that signs with its own key, as a
   host does); or
-- the welcome's `note` is a valid proof (01 §7.5, checked at the client's
-  time, §7.6) whose audience is the node DID and whose root is the pinned DID. This is how a node whose session
-  key changes on restart, such as `weave run`, is pinned by its account.
+- the welcome's `note` is a valid note (01 §7.5, checked at the client's
+  time, §7.6) whose audience is the node DID, whose issuer is the pinned
+  DID, and which grants a node's whole power: `cmd` is `/`, `sub` is the
+  pinned DID, and `pol` is `[]`. This is how a node whose session key
+  changes on restart, such as `weave run`, is pinned by its account. A
+  narrower note, an app's for one space or for reading only, is not the
+  account's node and MUST NOT satisfy the pin.
+
+> **Known defect:** any key whose note grants everything about the account,
+> an app given write to every space included, satisfies an account pin, and
+> the client checks no revoke of it. Tracked in
+> [#165](https://github.com/leifriksheim/weave/issues/165).
 
 A client SHOULD pin a host by the key its `sys.hosting` record names, or, for
 a host it only knows by address, by the `did` its description gives
@@ -473,7 +482,7 @@ The proof fields and what is signed are in §6.1. The client:
 
 How the reference client redials is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`), `packages/core/src/node/node.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
+_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`, `pinned`), `packages/core/src/node/node.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node", "only a note for everything about the account pins…"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
 
 ### 5.3 The `/peer` endpoint (node side)
 
@@ -541,7 +550,7 @@ W  = "weave-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
   also check the read proof (§6.3) over the same `H`.
 - The welcome carries `sig` = node session key signs `W`. The client MUST
   verify it against the node DID from the challenge.
-- A node whose key acts for an account SHOULD also send its proof as
+- A node whose key acts for an account SHOULD also send its note as
   `note`, so a client can pin the account (§5.2). It is not covered by `sig`
   and need not be: it is checked on its own, and binds to the node DID that
   `sig` verified.
@@ -702,10 +711,11 @@ _Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MA
 
 A handshake proves a session DID, not whose it is. So the first message each
 side sends on a space's connection, as soon as the peer is admitted, is
-`who` (§9.1), carrying its note: its proof. The receiver checks the chain
-([01 — Identity](01-identity.md) §7.5, at its own time, §7.6) and takes the
-root DID as the peer's account **only if** the chain is valid and its
-audience is the peer's proven session DID. A proof whose canonical JSON is
+`who` (§9.1), carrying its note: its proof. The receiver checks the note
+([01 — Identity](01-identity.md) §7.5, at its own time, §7.6) and takes its
+issuer as the peer's account **only if** the note is valid and its
+audience is the peer's proven session DID. A list of tokens is not a note.
+A proof whose canonical JSON is
 longer than 16 384 characters, invalid, or made out to another key gives
 the peer **no account** (`null`). Nothing else
 in the note is read here; what the library tells apps about the sender is in
@@ -919,7 +929,7 @@ ignored.
 
 Sent by each side to each newly admitted peer of a space, **before any
 `live` message**: `{"type":"who","from":<session DID>,"payload":{"note":<the
-session's proof, an array of tokens>}}`. Handling is in §6.4. A peer that sends none has no
+session's note, one token>}}`. Handling is in §6.4. A peer that sends none has no
 account.
 
 ### 9.2 Live messages

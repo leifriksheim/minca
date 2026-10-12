@@ -221,17 +221,17 @@ _Source: `packages/relay/relay.mjs` (`handleMail`, `purge`, `sweepMail`, `MAILBO
 
 A knock is a JSON object, signed by the knocker's **session key**:
 
-| Field     | Type                   |                                                                                                                                                   |
-| --------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v`       | `2`                    | 2 since `proof` is a chain of delegations ([01](01-identity.md) §7)                                                                               |
-| `door`    | string                 | The door key knocked on. Binds the knock to this door.                                                                                            |
-| `from`    | DID                    | The knocker's account                                                                                                                             |
-| `name`    | string ≤64             | The name they give (defaults to "Someone"); nothing vouches for it                                                                                |
-| `invite`  | string ≤6000           | An invite ([03 — Spaces](03-spaces.md)) to a private space `from` created, with its key and an editor secret                                      |
-| `note`    | string ≤2000, optional |                                                                                                                                                   |
-| `at`      | integer                | When it was signed, Unix seconds                                                                                                                  |
-| `session` | DID                    | The session key that signed                                                                                                                       |
-| `proof`   | array, ≤4096           | The knocker's proof: the delegations from `from` to `session`, root first ([01](01-identity.md) §7.5); its canonical JSON at most 4096 characters |
+| Field     | Type                   |                                                                                                                                |
+| --------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `v`       | `2`                    | 2 since `proof` is a note in the UCAN 1.0 profile ([01](01-identity.md) §7)                                                    |
+| `door`    | string                 | The door key knocked on. Binds the knock to this door.                                                                         |
+| `from`    | DID                    | The knocker's account                                                                                                          |
+| `name`    | string ≤64             | The name they give (defaults to "Someone"); nothing vouches for it                                                             |
+| `invite`  | string ≤6000           | An invite ([03 — Spaces](03-spaces.md)) to a private space `from` created, with its key and an editor secret                   |
+| `note`    | string ≤2000, optional |                                                                                                                                |
+| `at`      | integer                | When it was signed, Unix seconds                                                                                               |
+| `session` | DID                    | The session key that signed                                                                                                    |
+| `proof`   | object, ≤4096          | The knocker's proof: the note from `from` to `session` ([01](01-identity.md) §7.5); its canonical JSON at most 4096 characters |
 
 ```
 sig    = ECDSA-P256-SHA256(session private key, UTF-8(canonicalJSON(body)))   — 64 bytes r‖s, base64url
@@ -257,8 +257,8 @@ otherwise ignore it. `receivedAt` is the relay's `at` for the blob.
    10 minutes before it.
 5. `sig` verifies over `canonicalJSON(body)` with the public key of the
    `session` DID.
-6. **Authority.** `proof` is a valid chain ([01](01-identity.md) §7.5),
-   every link valid at `at` (§7.6), with audience `session` and root `from`;
+6. **Authority.** `proof` is a valid note ([01](01-identity.md) §7.5),
+   valid at `at` (§7.6), with audience `session` and issuer `from`;
    and it grants `/account/write` for the account as a whole, with arguments
    `{}` ([01](01-identity.md) §8): a note to write for the whole account. An
    app given some spaces, or a key given records only, may not knock.

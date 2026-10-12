@@ -11,7 +11,7 @@ import { didOf, didToPublicKey } from '../identity/did.js';
 import { canonicalize } from '../schema/version.js';
 import { idbOnce } from '../identity/idb.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
-import { verifyProof, type Delegation } from '../identity/ucan.js';
+import { verifyNote, type Delegation } from '../identity/ucan.js';
 import {
   ALL_COMMAND,
   grantsRecordsOnly,
@@ -545,7 +545,7 @@ export async function checkGrant(
   if (!isObject(grant) || grant.v !== GRANT_VERSION || typeof grant.did !== 'string') {
     throw new Error('That is not a grant.');
   }
-  const verified = await verifyProof([grant.note], createP256Provider());
+  const verified = await verifyNote(grant.note, createP256Provider());
   if (!verified.valid) throw new Error(`The grant does not check out: ${verified.reason}`);
   if (verified.audience !== audience) throw new Error('The grant was made out to a different key.');
   if (verified.root !== grant.did) throw new Error('The grant was not signed by the account it names.');

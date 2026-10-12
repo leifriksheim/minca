@@ -76,8 +76,8 @@ lets the session key do everything the account can, everywhere:
 ```
 
 (The token and how peers verify it are in [01](01-identity.md) §7.)
-Every record this node signs carries the current note as its `proof`, a
-chain of one, and every live connection opens with it (the `who` message,
+Every record this node signs carries the current note as its `proof`, one
+token, and every live connection opens with it (the `who` message,
 [04](04-network.md)).
 
 The node asks for a new note before the one it holds runs out. A note's time
@@ -155,7 +155,10 @@ every tab shares, and read from the storage they share.
 
 > **Known defect:** so every tab or window of one app is the same DID on the
 > relays, and only the first gets into a space's room; the others report
-> `refused` in its status until it closes. See [04](04-network.md) §1.2 and
+> `refused` in its status until it closes. The fix is a key per tab, each
+> with its own one-link note signed by the account through the home: the
+> app's key can't pass its note on ([01](01-identity.md) §7.5). See
+> [04](04-network.md) §1.2 and
 > [#55](https://github.com/leifriksheim/weave/issues/55).
 
 ### 2.2 The home's address
@@ -373,7 +376,7 @@ _Source: `packages/core/src/session/auth.ts` (`grant`, `audienceProblem`), `pack
 ### 2.6 What the app checks
 
 Before using a grant the app MUST check that `v` is `2`, that the note
-verifies as a chain of one ([01](01-identity.md) §7.5), that its `aud` is the
+verifies as a note ([01](01-identity.md) §7.5), that its `aud` is the
 app's own key, and that its `iss` is `grant.did`. An app that asked for
 `recordsOnly: true` MUST refuse a note whose command is not under `/record`,
 as a program connected by code MUST (§3).

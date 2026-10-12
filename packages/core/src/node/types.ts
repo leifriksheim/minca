@@ -17,8 +17,7 @@ import type {
 } from '../types.js';
 import type { LinkDeclaration } from '../records/links.js';
 import type { RootSigner } from '../identity/root-signer.js';
-import type { Delegation, Proof } from '../identity/ucan.js';
-import type { Policy } from '../identity/policy.js';
+import type { Delegation } from '../identity/ucan.js';
 import type { PeerTransport, SignalledTransport } from '../network/transport.js';
 import type { MeshStatus } from '../network/mesh.js';
 import type { ServerAuth } from '../network/peer-auth.js';
@@ -494,25 +493,6 @@ export interface NodeRecords {
   ): () => void;
 }
 
-export interface DelegateParams {
-  /** The key being given permission — an agent's, a guest's */
-  readonly audience: string;
-  /** The command it may use, and everything under it: no wider than the node's own */
-  readonly command: string;
-  /** Default: the node's own subject. `space:<id>` narrows a note for the whole account to one space. */
-  readonly subject?: string;
-  /** Conditions, on top of every policy above it */
-  readonly policy?: Policy;
-  /** Unix seconds; no later than the node's own delegation. Default: the same. */
-  readonly expiration?: number;
-}
-
-export interface Delegated {
-  readonly token: Delegation;
-  /** The whole chain, root first, ending with `token`: what the key it is made out to signs with */
-  readonly proof: Proof;
-}
-
 export interface AccountProfileView {
   readonly name: string;
   /** When it was set, on whichever device set it */
@@ -848,8 +828,6 @@ export interface P2PNode {
   iceServers(): Promise<ReadonlyArray<RTCIceServer>>;
   /** Relays and connections, for showing why a peer is or is not there */
   readonly network: NodeNetwork;
-  /** Passes a narrower delegation from the session key on to another key */
-  delegate(params: DelegateParams): Promise<Delegated>;
   /**
    * The same node acting as an agent: signed "via agent", only in the spaces
    * its note names, refusing what needs a person (`node/api.ts`).

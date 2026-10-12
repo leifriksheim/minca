@@ -90,7 +90,7 @@ async function delegatedNote(root: { did: string; privateKey: CryptoKey }, text:
     author: session.did,
     collection: COLLECTION,
     body: { text },
-    proof: [ucan],
+    proof: ucan,
   });
   return await signer.sign(unsigned, session.privateKey);
 }
@@ -166,7 +166,7 @@ describe('sync engine', () => {
       author: stranger.did,
       collection: COLLECTION,
       body: { text: 'not mine to write' },
-      proof: [ucan],
+      proof: ucan,
     });
     const note = await signer.sign(unsigned, stranger.privateKey);
 
@@ -193,7 +193,7 @@ describe('sync engine', () => {
       author: session.did,
       collection: COLLECTION,
       body: { text: 'fine' },
-      proof: [ucan],
+      proof: ucan,
     });
     const note = await signer.sign({ ...unsigned, key: 'Has Spaces' }, session.privateKey);
 

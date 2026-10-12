@@ -698,7 +698,8 @@ Each step is its own PR with an adversarial review.
    line rule both depend on it. Done: 02 §4.1, §7.3.
 3. **The UCAN-shaped profile** for notes (#19). Done: 01 §7–§8. Notes are
    one delegation each (a command, a subject, a policy on `.space` for
-   several spaces), proofs are chains root first on the version, and the
+   several spaces), a proof is one note from the account, never a chain
+   (a key can't pass its note on), and the
    scenarios' policy evaluator is the library's
    (`packages/core/src/identity/policy.ts`). Grants reuse the token as it
    is: `aud` a role, no `exp` or `nbf`, checked by a grant's own rules.
