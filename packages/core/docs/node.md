@@ -532,7 +532,7 @@ same calls can be exposed over a command line, MCP and WebMCP
 ([actions](actions.md)).
 
 - `node.spaces` — create, invite, preview, join, leave, access, `may`,
-  `defineRole`, `assign`, `unassign`, `removeMember`, `closeInvite`,
+  `holdsRole`, `defineRole`, `assign`, `unassign`, `removeMember`, `closeInvite`,
   `changeKey`, `setRelays`, `setKeepers`, `revoke`, `profiles`,
   `authenticator` ([03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md),
   [04](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)). Default invite role: `member` when
@@ -549,6 +549,12 @@ key, relays, keepers, copies, forks, flagged }`. Each role has its
     ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
     Apps use it to show what someone can do; peers judge each version on
     its own.
+  - `holdsRole(id, role, account?)` asks whether this account, or another,
+    holds every grant a role gives, each as wide or wider: its own grant's
+    command covers it, and every statement of its policy is among the
+    role's. Only the words are compared, so it can say no where the
+    policies would allow, never yes where they wouldn't. Apps use it before
+    giving a bot a role, and `weave agent` before taking instructions.
   - `defineRole(id, { name, title?, grants, nests? })` writes the role's
     definition, each grant a delegation from this account to the role. It
     holds only what this account could invoke itself.
@@ -580,7 +586,7 @@ key, relays, keepers, copies, forks, flagged }`. Each role has its
   Local only: nothing here goes over the wire.
 - `node.asAgent({ keys, note })` — [acting as an agent](#a-node-acting-as-an-agent).
 
-_Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts` (`spaces`), `packages/core/src/node/space-runtime.ts` (`access`, `may`, `defineRole`, `assign`, `removeAccount`). Tests: `packages/core/tests/node.test.ts`, `packages/core/tests/space-access.test.ts`, `packages/core/tests/contacts.test.ts`, `packages/core/tests/direct.test.ts`, `packages/core/tests/profiles.test.ts`._
+_Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts` (`spaces`), `packages/core/src/node/space-runtime.ts` (`access`, `may`, `holdsRole`, `defineRole`, `assign`, `removeAccount`), `packages/core/src/space/roles.ts` (`holdsRole`). Tests: `packages/core/tests/roles.test.ts` ("holding what a role gives"), `packages/core/tests/node.test.ts`, `packages/core/tests/space-access.test.ts`, `packages/core/tests/contacts.test.ts`, `packages/core/tests/direct.test.ts`, `packages/core/tests/profiles.test.ts`._
 
 ## The network
 

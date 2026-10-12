@@ -204,8 +204,19 @@ judges. A definition holding a payload with any other member, or one whose
 
 A grant **fits** an invocation of a command with some arguments when its
 `cmd` covers the command and its `pol` holds for the arguments. A policy reads
-only the arguments its command defines (§2.3): a selector naming anything
-else finds no data, and no data never holds.
+only the arguments its command defines (§2.3). As in UCAN, a member the
+arguments lack reads as `null` ([01](01-identity.md) §7.4): a selector naming
+an argument its command doesn't have finds `null`, so `==` against anything
+but `null` fails there, and a negated statement (`!=`, `not`) holds. Only
+selecting further into it (`.body.text` with no `body`) finds no data, which
+never holds.
+
+> **Write what is allowed.** A grant of `/` with
+> `["!=", ".role", "admin"]`, meant as "anything but the admin role", also
+> holds for `/member/remove`, which has no `role`, and so for removing an
+> admin. Name the commands, and say what is allowed with `==`, or an `or` of
+> `==` statements: `["or", [["==", ".role", "member"], ["==", ".role", "mod"]]]`
+> holds only where a `role` is given.
 
 > Rationale: a grant to a key or an account, rather than a role, would let a
 > member hand power to a fresh key that nobody could take back, since nobody
@@ -214,8 +225,10 @@ else finds no data, and no data never holds.
 
 **Arguments a peer cannot read.** A policy on `body` is judged only by a peer
 that can open the version's body. One that can't (a private space without
-the key, a stub) takes a statement that reads `body` and finds no data as
-holding, and judges the rest; readers judge it whole. This is the rule
+the key) takes a statement that reads `body` and finds no data as holding,
+and judges the rest; readers judge it whole. A stub carries no body for
+anyone: a peer that can read the space waits for the whole version rather
+than take its grant on trust (§5.2 step 8). This is the rule
 [02](02-records.md) §7.3 and §7.4 follow for `onePer` and `fixed`. JSON has one
 kind of number, so `1` and `1.0` are one value in a policy's `==`.
 
@@ -258,10 +271,15 @@ Examples:
   `{ "cmd": "/member/remove", "pol": [["==", ".self", false], ["not", ["any", ".roles", ["==", ".", "admin"]]]] }`.
 
 A space that grants `/member/remove` or `/role/unassign` without a policy on
-`.roles` lets it reach everyone but the founder. `.roles` is read as of the
-invocation's own view, so it protects a target only from an invoker whose
-view included the target's role: one acting concurrently with a promotion,
-or naming a view from before it, isn't stopped by it (§4.3).
+`.roles` lets it reach everyone but the founder. `.roles` protects a target
+only from an invoker whose own view includes the target's role. `.roles` is
+read as of the invocation's own view (§4.3), and a writer chooses its view by
+what it names in `seen` (§3.2): one acting concurrently with a promotion, or
+naming a view from before it, isn't stopped by it. So two holders of a role
+whose grant says "not those holding this role", such as two `community`
+admins, can still remove or demote each other, by naming a view from before
+the other's promotion. The removal stands, and strikes what the removed
+admin did that hadn't seen it, as any removal does.
 
 ### 2.4 Roles and their definitions
 
@@ -322,14 +340,19 @@ no role, and not a founder, is no member and may invoke nothing.
   an account: assigning to a role (`role:<name>`) is refused, since putting a
   role inside another is nesting, which only a definition does.
 - **Unassigning** is `/role/unassign`, with the same arguments. **Leaving a
-  role** is built in: an account may always unassign itself.
+  role** is built in: an account may always unassign itself. Like a
+  removal, either strikes everything the account did that hadn't seen it,
+  whatever that needed (§4.3), its other devices' concurrent writes
+  included.
 - **Removing** an account is `/member/remove` with `{ self, roles }`. It
   ends every role assigned to the account that the removal had not seen
   undone, including one assigned concurrently with it: after a re-add, only
   assignments that saw the removal count. **Leaving the space** is built in:
   an account may always remove itself, and a founder that does is a founder
   no more.
-- Nobody but a founder removes a founder or changes its roles.
+- Nobody but the founder itself removes a founder or changes its roles. A
+  founder may assign itself a role, and leave one, as anyone may leave a
+  role.
 - **Invites** are assignments to whoever holds the invite's secret (§7):
   opening, changing or closing an invite for a role needs `/role/assign` for
   that role, with `{ role, self: false, roles: [] }`.
@@ -401,8 +424,12 @@ Every version written in a space — access record or not — is judged as of
 its `seen`: the ids of **heads** of the access history as its writer knew
 them (§4.6), at most 64. `seen` is optional ([02](02-records.md) §3.1): a
 version without it is judged as having seen nothing but the genesis. A writer **SHOULD** name its current heads, and MAY name fewer: what it
-leaves out it is judged as not having seen, which can only take something
-away from it (§5.1). One with more than 64 names first those its own standing
+leaves out it is judged as not having seen. For its own standing that can
+only take something away: what it didn't see of its own removal or
+unassignment takes it all the same (§5.1). It is not so for arguments read in
+its own view: a target's `roles` (§2.3) are read without the promotions it
+leaves out, so a policy on `.roles` binds only a writer whose view includes
+the role. One with more than 64 names first those its own standing
 rests on (its `remove:` record, its `assign:` and `role:` records, its
 collection's definition), then the most recently applied. The space id
 itself may appear in `seen` and stands for the genesis. Access records
@@ -492,7 +519,7 @@ State = {
   founders:    Set<accountDid>,
   roles:       Map<name, RoleDefinition[]>,   // one, or rivals
   assigned:    Map<accountDid, Map<roleName, assignmentId>>,
-  invites:     Map<inviteDid, { role, open, event }>,
+  invites:     Map<inviteDid, { role, open, event, by: accountDid[] }>,
   definitions: Map<collectionName, { event, definedBy }>,
   contested:   Map<collectionName, eventId[]>,
   keys:        [{ keyId, readKey, event }],   // oldest first; last is current
@@ -549,9 +576,9 @@ what `e` **saw**. Two events neither of which saw the other are
    where `V(e)`, its **own view**, is the merge (§4.4) of the allowed events
    in `ancestors(e)`. That depends only on what `e` saw, so it never changes.
 2. **Reductions.** An allowed event is a **reduction** when, in its own view,
-   it takes something from an account: a `remove` of a member takes
-   everything from it; an `assign` with `assigned: false` of a role the
-   account holds takes that role. A `revoke` is a reduction of the keys it
+   it takes something from an account: a `remove` of a member, or an
+   `assign` with `assigned: false` of a role the account holds, the
+   account's own leaving included. A `revoke` is a reduction of the keys it
    names for its own account, a `fork` of the key whose line forked, and
    closing an invite of the joins through it. A definition is never a
    reduction: it binds what saw it.
@@ -559,12 +586,8 @@ what `e` **saw**. Two events neither of which saw the other are
    when `r`'s cutoff does not cover `e` (`r.cutoff[e.author][e's collection] ≥
 e`'s place in that collection's line, `log.n`, §6.3) and, unless `r` is a
    revoke or a fork, neither had seen the other. It reaches:
-   - for a removal of `did`: every event whose root is `did`;
-   - for an unassignment of role `x` from `did`: every event whose root is
-     `did` that **needed** `x`: `refusal(e, V(e))` is null but
-     `refusal(e, V(e) with x taken from rolesOf(did) alone)` is not. Only the
-     author's own assignments change in that question; every definition is
-     judged as before, in its own view;
+   - for a removal of `did`, or an unassignment of any role from `did`:
+     every event whose root is `did`, whatever it needed;
    - for a revoke: events whose author is the revoked key and whose root is
      the revoke's; for a fork: events whose author is the key, in the forked
      collection, with `log.n` at least the fork's place; for a closed invite:
@@ -573,6 +596,18 @@ e`'s place in that collection's line, `log.n`, §6.3) and, unless `r` is a
    A revoke or a fork proof reaches its key's events whatever either saw: an
    owner reacting to a thief has seen what the thief did. Revokes and forks
    are never struck.
+
+   > Rationale: an unassignment strikes what its account did concurrently,
+   > not only what needed the role. What an event needed could only be judged
+   > in `V(e)`, a view its author chooses by naming an older point, while
+   > whether it stands is judged in `W(e)`. A demoted admin could then
+   > backdate a self-assignment of another role that is struck, and cite it
+   > so that nothing she does seems to need the role she lost; and two
+   > unassignments, each of a role the other also gave, would each strike
+   > nothing. The cost: whoever may take a minor role from an account
+   > strikes what it did unseen, as a removal would. "Unseen" is what a
+   > partition or a backdate gives; honest nodes sync, and a cutoff covers
+   > what the writer holds (§6.3).
 
 4. **Valid among a set** `S` (closed under `ancestors`), in two passes:
    1. Take the strongly connected components of the strikes between allowed
@@ -597,20 +632,25 @@ allowed but not valid is dropped as struck. Valid events are **applied**.
 The state of a set of events is the start state with, for each record key,
 the events **latest** on it (no other event on that key saw them) merged:
 
-| Kind                              | Of the latest events on a key                                                                                                                                                                            |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `role`                            | All stand: `roles[name]` = each as a definition `{ event, by: root, title?, grants, nests, view }`, sorted by id, `view` its own view (`V`, or `W` among valid events). More than one are rivals (§2.4). |
-| `assign`                          | If any is `assigned: false`, the role is not assigned. Otherwise it is assigned when some latest one saw every latest `remove` of its account in the set; `assigned[did][role]` = the lowest such id.    |
-| `remove`                          | Change no entry of their own; they decide assignments (above). If any `remove` of a founder in the set has the founder as its root, `founders` loses it.                                                 |
-| `invite`                          | Closed if any is closed, or if they name different roles; otherwise open. `invites[inviteDid]` = `{ role, open, event }` of the lowest closed one, or of the lowest id.                                  |
-| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and those who may define it, made: otherwise none (below)                                                        |
-| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                          |
-| `revoke`, `fork`                  | change no state                                                                                                                                                                                          |
+| Kind                              | Of the latest events on a key                                                                                                                                                                                                                      |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `role`                            | All stand: `roles[name]` = each as a definition `{ event, by: root, title?, grants, nests, view }`, sorted by id, `view` its own view (`V`, or `W` among valid events). More than one are rivals (§2.4).                                           |
+| `assign`                          | If any is `assigned: false`, the role is not assigned. Otherwise it is assigned when some latest one saw every latest `remove` of its account in the set; `assigned[did][role]` = the lowest such id.                                              |
+| `remove`                          | Change no entry of their own; they decide assignments (above). If any `remove` of a founder in the set has the founder as its root, `founders` loses it.                                                                                           |
+| `invite`                          | Closed if any is closed, or if they name different roles; otherwise open. `invites[inviteDid]` = `{ role, open, event, by }`, `role` and `event` of the lowest closed one, or of the lowest id, and `by` the roots of all the latest ones, sorted. |
+| `definition`, `relays`, `keepers` | the lowest id; for `definition`, only between changes one account, or the first definer and those who may define it, made: otherwise none (below)                                                                                                  |
+| `key`                             | every key stands: `keys` holds the start key, then every other key by id, then the current one — the lowest id among the latest                                                                                                                    |
+| `revoke`, `fork`                  | change no state                                                                                                                                                                                                                                    |
 
 Where an id picks the event an entry names, the outcome is the same either
-way: two assignments of one role to one account give the same power, and a
-closed invite is closed. No id decides between definitions, or between
-accounts.
+way: two assignments of one role to one account give the same power, a
+closed invite is closed, and rival openers of an invite all stand in `by`.
+No id decides between role definitions, which account holds a role, or who
+first defined a collection. Relays, keepers and the current key are the
+exception: among the latest changes, which may be different accounts', the
+lowest id picks. Each of their authors could have made its own the latest
+alone, by writing again after the other, so the pick gives nobody more than
+its grant does.
 
 A `definition` sets `definitions[name] = { event, definedBy }`. Of the
 definitions of that name in the set that saw every removal the winner saw,
@@ -650,10 +690,15 @@ because it is one of the changes anyone may make for themselves:
 - `did` starting `role:`: refused (roles go to accounts).
 - _Joining by invite_ (`viaInvite` set): `assigned` is true; `A = did`; the
   invite exists and is open; its role equals `role`; `did` does not hold
-  `role` now; the role exists.
+  `role` now; the role exists; and a join is the assignment its opener
+  makes: for every account `o` in the invite's `by`,
+  `may(S, o, /role/assign, { role, self: o = did, roles: rolesOf(S, did) })`.
+  So an opener's `.self` and `.roles` policies hold for whoever joins, the
+  opener included, and an opener who lost the grant since opening it lets
+  nobody in.
 - _Leaving a role_ (`assigned: false`, `A = did`): allowed when `did` holds
   `role` now.
-- _Otherwise_: `did` is not a founder; the role exists;
+- _Otherwise_: `did` is not a founder, unless `A = did`; the role exists;
   `args = { role, self: A = did, roles: rolesOf(S, did) }`; assigning needs
   `may(S, A, /role/assign, args)`; unassigning needs `did` to hold `role` now
   and `may(S, A, /role/unassign, args)`.
@@ -696,9 +741,15 @@ the `keyId` and the `readKey` must both differ from every key already in `keys`.
   what a writer puts in `seen`. A dropped event, a revoke and a fork proof are
   never heads: none changes the state, so a writer need not name them, and
   however many of them anyone makes, they can't fill `seen`.
-- `at(seen)` — the merge of the events valid among what `seen` names and
-  everything they saw, or null when anything in `seen` (other than `G`) is
-  missing or waiting.
+- `at(seen, within?)` — the state a record is judged by: the merge of the
+  events among what `seen` names and everything they saw that are valid in
+  the whole history (§4.3), or, given `within`, valid among what `seen` and
+  `within` name and everything they saw. A change struck since gives
+  nothing, even to a record that cites it. Null when anything named (other
+  than `G`) is missing or waiting.
+- `seenAs(seen)` — the state as a record's writer saw it: the merge of the
+  events valid among what `seen` names and everything they saw, judged
+  among themselves alone. Null as for `at`.
 - `revoked(key, account)` — every applied revoke of that key by that account.
 - `named(did)`, `knownInvite(inviteDid)` — as used in §3.4.
 
@@ -713,11 +764,12 @@ nothing strikes Alice's. Every arrival order gives Bob: no member, Carol:
 **Example (a definition concurrent with its author's unassignment).** Erin
 holds `admin`, which may define `member`. Alice unassigns her from `admin`;
 apart, Erin redefines `member` to hold `/member/remove`, and Bob, a member
-who saw her definition, removes Carol. Erin's definition needed `admin`, so
-the unassignment strikes it; Bob's removal rests on it, and with it gone
-from his view, is refused. Carol stays.
+who saw her definition, removes Carol. Erin's definition hadn't seen the
+unassignment, so the unassignment strikes it; Bob's removal rests on it,
+and with it gone from his view, is refused. Carol stays. A record Bob
+writes citing the definition is withdrawn (§5.1 step 5).
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `validWithin`, `componentsOf`, `merge`, `may`, `refusal`, `reductionOf`, `definerOf`, `extended`). Tests: `packages/core/tests/roles.test.ts` ("what a struck change carries with it"), `packages/core/tests/access-attacks.test.ts`, `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions, removals), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `validWithin`, `componentsOf`, `merge`, `may`, `refusal`, `reductionOf`, `definerOf`, `extended`). Tests: `packages/core/tests/roles.test.ts` ("what a struck change carries with it", "unassigning and removing"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment", among them invites judged as their opener's assignment), `packages/core/tests/access-properties.test.ts` (random histories: order, safety, liveness, ids, reductions, removals), `packages/core/tests/access-convergence.test.ts` (every arrival order, and extending one change at a time, against replaying whole), `packages/core/tests/access-fuzz.test.ts` (the same with nestings, invites and people changing their own roles), `packages/core/tests/record-keys.test.ts` ("who first defined a collection"), `packages/core/tests/key-change.test.ts` ("when a new key is due")._
 
 ---
 
@@ -726,8 +778,9 @@ _Source: `packages/core/src/space/roles.ts` (`replayAccess`, `invalidWithin`, `v
 ### 5.1 `judge`
 
 A record is judged in its **own view**, the access changes its `seen` names
-and everything they saw, and then against the changes to its author's
-standing it had not seen. Those are the only two inputs.
+and everything they saw, then against the changes to its author's standing
+it had not seen, and then counting only the changes of its own view that
+stand. Those are the only inputs.
 
 `judge` answers only for the access history. A peer combines it with the
 rest of standing as [02](02-records.md) §9.4 says: a version `judge` calls
@@ -740,8 +793,8 @@ above the version's place in that key's line for that collection (`log.n`). What
 whatever the change took away.
 
 Given a record's `id`, its root, its `seen`, its `author`, collection and
-`log.n`, a predicate `needs(S, without?)` (whether the root may do what the
-record does in `S`, with the role `without` taken from it), and optionally
+`log.n`, a predicate `needs(S)` (whether the root may do what the record
+does in `S`), and optionally
 `within`, the `seen` of a version that cites this one. Peers never pass
 `within` when judging a version's standing; the library's checks do, to judge
 a version they cite as of what the citer saw
@@ -756,18 +809,21 @@ a version they cite as of what the citer saw
    The same for a fork: if a fork of `author`'s line in the record's
    collection is recorded (§6.5) whose `from` is at most `log.n`, and (with
    `within`) its event is in `within ∪ ancestors(within)` → withdrawn.
-3. `S_seen = at(seen)`. If `needs(S_seen)` is false → refused.
-4. For each applied reduction `u` of `root` (§4.3) whose event is **not** in
-   `seen ∪ ancestors(seen)`, that does not cover it, and (with `within`) **is**
-   in `within ∪ ancestors(within)`: if `u` is a removal → withdrawn ("its
-   author's access was taken away"); if `u` takes role `x` and
-   `needs(S_seen, x)` is false → withdrawn.
-5. Otherwise it stands.
+3. If `needs(seenAs(seen))` is false → refused.
+4. If an applied reduction `u` of `root` (§4.3), a removal or an
+   unassignment of any role, is **not** in `seen ∪ ancestors(seen)`, does not
+   cover it, and (with `within`) **is** in `within ∪ ancestors(within)` →
+   withdrawn ("its author's access was taken away").
+5. If `needs(at(seen, within))` is false → withdrawn ("it rests on a change
+   that was struck"): a change it saw, and perhaps cites, was struck since.
+6. Otherwise it stands.
 
-So a record stands if its author was allowed as of what it saw, and still is
-once every removal and unassignment it had not seen is taken into account,
-unless the change covers it. A writer can't escape a removal, or the loss of a
-role it needed, by naming an older point. A narrowed rule or a role written
+So a record stands if its author was allowed as of what it saw; no removal
+or unassignment of its account it had not seen takes it away, unless the
+change covers it; and it is still allowed counting only the changes that
+stand. A writer can't escape a removal, or the loss of a role, by naming an
+older point, nor gain anything from a change that was struck, by citing it.
+A narrowed rule or a role written
 again binds only what saw it: without trusted time, a version naming an
 older point can't be told from one written offline then, and it counts if
 its author could have written it then. For a version that another cites,
@@ -778,7 +834,7 @@ Withdrawn is a refusal for every purpose but two: the version is still
 stored, and the library's checks can count it as evidence cited by a version
 that had not seen what withdrew it ([02](02-records.md) §9.5).
 
-_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `cutOf`). Tests: `packages/core/tests/roles.test.ts` ("records against the history"), `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
+_Source: `packages/core/src/space/roles.ts` (`replayAccess`, `judge`, `at`, `seenAs`, `cutOf`). Tests: `packages/core/tests/roles.test.ts` ("records against the history", "a definition concurrent with its author’s unassignment… (Q1)"), `packages/core/tests/access-attacks.test.ts` ("backdating past an unassignment"), `packages/core/tests/checks.test.ts` ("a proof stays a proof…")._
 
 ### 5.2 Standing of an ordinary record
 
@@ -789,22 +845,30 @@ A version outside the access collections **stands** when, in this order:
 3. in the account's own spaces (registry, contacts, carry spaces) its proof
    grants `/account/write` there ([01](01-identity.md) §8);
 4. its first version is present, is `seq` 0, has the same key and collection;
-5. `at(seen)` is available (else: not yet);
+5. `at(seen)` and `seenAs(seen)` are available (else: not yet);
 6. its **invocation** is `/record/delete` with `{ collection, byCreator }` for
    a deleted version, else `/record/write` with
    `{ collection, byCreator, body }`, where `byCreator` is true for `seq` 0 and
    otherwise whether the root of the first version is `root`, and `body` is
    the version's body as this peer opens it (§2.2 for one it can't);
-   `needs(S, x) = isMember(S, root)` in a `sys.*` collection, and
-   `may(S, root, cmd, args)` with `x` taken from `root` otherwise;
-7. `root` is a member in `at(seen)` and `needs(at(seen))` holds;
-8. with `rules` = the rules of the definition in force for its collection in
+   `needs(S) = isMember(S, root)` in a `sys.*` collection, and
+   `may(S, root, cmd, args)` otherwise;
+7. `root` is a member in `seenAs(seen)` and `needs(seenAs(seen))` holds;
+8. for a stub (02 §4.5), at a peer that reads the space (a public space, or a
+   private one whose key it holds): `needs` holds without taking a policy on
+   `body` as holding (§2.2). Else not yet: the peer stores the stub, as its
+   record's history, and judges the whole version when it arrives;
+9. with `rules` = the rules of the definition in force for its collection in
    `at(seen)` (none for `sys.*` collections, or when the definition is missing
    or unreadable), a `final` rule refuses every `seq > 0` version
    ([02](02-records.md) §7.4);
-9. `judge(...)` (§5.1) passes;
-10. the [02](02-records.md) checks on topic tags, `onePer` keys and `fixed`
+10. `judge(...)` (§5.1) passes;
+11. the [02](02-records.md) checks on topic tags, `onePer` keys and `fixed`
     fields pass (skipped where the body cannot be opened).
+
+A stub and its whole version share an id and a signature, but not a
+verdict: a peer **MUST** judge the whole version on its own, never by what it
+found for the stub, which was judged without its body.
 
 > **Known defect:** a peer applies step 3 only where it knows the space is
 > one of the account's own (`accountOnly` in

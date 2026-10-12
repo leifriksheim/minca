@@ -79,8 +79,27 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
 - **Holds.**
   - An ordinary record it writes counts only if a role it held granted it, as
     of what the version says it saw. Claiming to have seen less does not
-    escape a removal of it it had not seen, nor the loss of a role the record
-    needed: past the change's cutoff, it is judged with them (03 §5.1, §6.3).
+    escape a removal of it it had not seen, nor the loss of any of its roles:
+    past the change's cutoff, it is judged with them (03 §5.1, §6.3). Nor
+    does citing a change struck since give it anything: a record is judged
+    counting only the changes that stand (03 §5.1 step 5; `roles.test.ts`,
+    "… (Q1)"; `access-attacks.test.ts`, "a record citing a struck
+    definition…").
+  - An unassignment, like a removal, strikes everything its account did that
+    hadn't seen it, past its cutoff, whatever that needed. So a demoted
+    member can't backdate past it by assigning itself another role, by
+    defining one it keeps, or because another role it lost at the same time
+    would also have allowed it (03 §4.3; `access-attacks.test.ts`,
+    "backdating past an unassignment").
+  - A join through an invite is judged as the assignment its opener makes, to
+    whoever joins: an opener whose grant says `.self == false` can't join its
+    own invite, its `.roles` policy reads the joiner's roles, and one who lost
+    the grant since lets nobody in (03 §4.5; `access-attacks.test.ts`, "an
+    invite is the assignment its opener makes…").
+  - Sending a stub ahead of its version gets nothing past a reader: a verdict
+    on a stub, judged without its body, never stands for the whole version,
+    and a reader holds a stub whose grant reads its body as not yet judged
+    (03 §5.2; `attacks.test.ts`, "a stub sent ahead of its body").
   - It can hand no power to another key or account: only the constitution and
     a role's definition issue grants, and only to roles, so whatever it holds
     goes when its roles do, and a grant to anything but its role is no
@@ -97,12 +116,12 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     (03 §2.4, §4.4; `access-attacks.test.ts`, "a rival definition can only
     narrow…", "no id decides between accounts…"; `roles.test.ts`, "rival
     definitions hold only the grants they share…").
-  - A definition, or anything else, it writes concurrently with losing the
-    role that allowed it is struck, and what rests on it falls with it,
-    whether or not that cites the loss (03 §4.3; `roles.test.ts`, "a
-    definition concurrent with its author’s unassignment gives neither her nor
-    anyone its grants (Q1)", "a former definer's backdated rival definition is
-    struck…").
+  - A definition, or anything else, it writes concurrently with losing any
+    of its roles is struck, and what rests on it falls with it, changes and
+    records alike, whether or not they cite the loss (03 §4.3, §5.1;
+    `roles.test.ts`, "a definition concurrent with its author’s unassignment
+    gives neither her nor anyone its grants (Q1)", "a former definer's
+    backdated rival definition is struck…").
   - Peers that hold the same access changes replay them to the same state:
     no order decides anything: whether a change counts follows from what
     saw what, and the same changes give the same result in any arrival order
@@ -136,16 +155,14 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     Taking the role from its holder, or removing them, binds it (03 §4.3,
     §5.1). That includes a definition by a holder whose power to define the
     narrowing took: only unassigning or removing the holder strikes it.
-  - Two unassignments made concurrently with an action, each of a role that
-    alone would have allowed it, don't strike it: each is judged on its own,
-    and the action didn't need either one (03 §4.3). Removing the member
-    strikes it.
-  - `.roles` is read as of the invoker's own view (03 §2.3). It protects a
-    target only from an invoker whose view includes the target's role: one
-    that names a view before the target's promotion, or acts concurrently
-    with it, isn't stopped (`roles.test.ts`, "`.roles` protects admins from
-    moderators; it reads the view of the one acting"). The same limit as the
-    ranks before it.
+  - `.roles` protects only against a remover whose view includes the
+    target's role. It is read as of the invoker's own view, which the
+    invoker chooses by what it names as seen (03 §2.3, §3.2): one that names
+    a view before the target's promotion, or acts concurrently with it,
+    isn't stopped. So `community` admins can remove or demote each other
+    (`roles.test.ts`, "`.roles` protects admins from moderators; it reads the
+    view of the one acting", "`community` admins can remove each other…").
+    The same limit as the ranks before it.
   - It can make every peer store revokes of keys that never wrote here, and
     other changes it may make, without limit. Revokes are never heads; changes
     it has the power for can outnumber what `seen` holds, and a writer then
@@ -176,9 +193,8 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     relied on, by revoking its own key with a cutoff of 0, or forking its
     own line in a collection at 0, and nothing flags it ([#166](https://github.com/leifriksheim/weave/issues/166)).
     Leaving a role, or the space, is a reduction of its own account too: it
-    strikes what its other devices did concurrently that needed what it gave
-    up (all of it, for leaving the space or a founder stepping down), so an
-    account can disown what its devices did while apart
+    strikes everything its other devices did concurrently that its cutoff
+    doesn't cover, so an account can disown what its devices did while apart
     ([#168](https://github.com/leifriksheim/weave/issues/168); `roles.test.ts`,
     "it strikes what needed the role, and so does leaving the role on one’s
     own (#168)").
@@ -240,6 +256,17 @@ _Source: 03 §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/spa
     itself; a founder repairs it").
   - A member with two accounts sidesteps `.self`: the second must be a member
     assigned the role, visible and unassignable like any other (03 §2.6).
+  - Whoever may take any role from an account strikes everything it did that
+    hadn't seen that, as a removal does: unassigning a minor role strikes the
+    target's concurrent actions, not only what needed it (03 §4.3).
+    "Concurrent" means unseen: honest nodes sync, and the unassigner's cutoff
+    covers what it holds (03 §6.3).
+  - A member the arguments lack reads as `null`, as in UCAN, so a negated
+    statement (`!=`, `not`) holds where an argument is missing: a grant of
+    `/` with `["!=", ".role", "admin"]` also lets its holder remove an admin,
+    since `/member/remove` has no `role`. A space gets what its policies say;
+    the spec says to write what is allowed (01 §7.4, 03 §2.2; `roles.test.ts`,
+    "a missing argument reads as null…").
 
 _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"; "a backdated rival with a ground-low id does not put its rules in force"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts`, `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
@@ -250,22 +277,26 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
     it, and ends every role assigned to it that hadn't seen the removal, one
     assigned concurrently with it included; after a re-add, only assignments
     that saw the removal count (03 §2.5, §4.4; `access-attacks.test.ts`,
-    "removal against re-add…"). Unassigning takes that role, and strikes only
-    its concurrent actions that needed it (03 §4.3; `access-attacks.test.ts`,
-    "a scoped strike…"). Nothing it handed a key survives, because it could
-    hand nothing.
+    "removal against re-add…"). Unassigning takes that role and, like
+    removal, strikes everything it did that hadn't seen it (03 §4.3;
+    `access-attacks.test.ts`, "taking one role strikes every concurrent
+    action…", "backdating past an unassignment"). Nothing it handed a key
+    survives, because it could hand nothing.
   - What it writes claiming to have seen its removal does not count, a
     revoke included, since a revoke needs a place. Ordinary records it writes claiming not
     to have seen it are withdrawn, unless the removal's cutoff covers them (03 §5.1, §6.3).
   - An assignment or definition it makes concurrently with its removal, or
-    with the loss of the role that allowed it, or backdates, is struck, and
-    gives no power to anything resting on it, whether or not that cites the
-    removal (03 §4.3; `packages/core/tests/access-attacks.test.ts`).
+    with the loss of any role, or backdates, is struck, and gives no power to
+    anything resting on it, a record citing it included, whether or not that
+    cites the removal (03 §4.3, §5.1; `packages/core/tests/access-attacks.test.ts`).
 - **Does not hold yet.**
-  - A change by a sock it assigned a role, though dropped, still strikes
-    changes made concurrently by those the sock could reach
-    ([#191](https://github.com/leifriksheim/weave/issues/191)). The sock is a
-    member assigned a role, visible and unassignable.
+  - A reduction that rests on a change struck since is dropped, but still
+    strikes what its target did concurrently: strikes are settled before
+    validity cascades (03 §4.3). It needs no sock: a definition it backdated
+    is struck, a member who saw that definition removes someone, and the
+    removal is dropped while the target's concurrent changes stay struck.
+    Disruption, not power: nothing is granted
+    ([#170](https://github.com/leifriksheim/weave/issues/170), item #191).
   - What it wrote into roles while it held `/role/define`, its own roles
     included, survives it until someone writes the role again (§3.2, by
     design).
@@ -475,6 +506,18 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     plaintext ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space
     key ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
+  - A bot acts with its own role's grants on what members ask, so someone
+    who may instruct it can reach past their own grants through it. The
+    library narrows this: the dialog that adds a bot offers only roles whose
+    every grant the adder holds (`AddBotDialog` in
+    `apps/shared/src/CommunitySetup.tsx`), and `weave agent` follows what a
+    record asks only when its writer holds every grant of the bot's roles
+    (`writerInstructs` in `packages/cli/src/agent-rules.ts`;
+    `packages/cli/tests/agent-rules.test.ts`, "takes instructions only from
+    someone holding every grant of its roles"). Neither is protocol: a bot run
+    by other code, or a role redefined after the bot was added, can still act
+    for someone with more than they hold, and a rule's own words are its
+    maker's ([#171](https://github.com/leifriksheim/weave/issues/171)).
   - A removed carrier keeps proving read until the key changes ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what

@@ -11,7 +11,7 @@ narrower review the same day found that delegations to accounts outlived
 their issuer; the fix (only roles hold grants, §2) and its other findings
 are adopted too. A third review's fixes (rival definitions as an
 intersection, scoped strikes, removal against re-add, closed line keys)
-are adopted, and corrections in a line are deferred from v1 (§3); so is
+are adopted (scoped strikes later replaced, §4), and corrections in a line are deferred from v1 (§3); so is
 the fourth's (every role grant but the constitution's lives inside a
 definition). Their attempts to stop a definer parking power in a role she
 keeps (a `mine` argument, then nest-only permissions) each opened a new
@@ -272,8 +272,13 @@ Three kinds of result, and what each needs:
 
 **Built** (step 4): now the specification, in
 [03 §4](../03-spaces.md#4-replaying-the-access-history-strong-remove1) and
-§5. The convergent replay stays; ranks go; a removal strikes everything its
-account did concurrently, and an unassignment only what needed the role.
+§5. The convergent replay stays; ranks go; a removal or an unassignment
+strikes everything its account did concurrently. (An unassignment first
+struck only what needed the role; a review showed a demoted member could
+hide the need by backdating, since the need was judged in a view she
+chose, so it strikes all of it now.) A record counts only the changes of
+its own view that stand, and a join is judged as its invite's opener's
+assignment.
 
 ## 5. Democracy, later
 

@@ -272,7 +272,7 @@ this one own the use; this table is the registry.
 | `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
 | `weave/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `weave/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:164,167`         | 02     |
 | `weave/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                | 02     |
-| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:274`        | 04     |
+| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:275`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -506,6 +506,13 @@ false and otherwise no data if any part is, `or` is true if any part is true
 and otherwise no data if any part is, and a policy holds only if every
 statement holds. `!=` is `not ==`. A comparison of the wrong types is false,
 not no data.
+
+**A missing member is not a failure.** It reads as `null`, as in UCAN, so a
+negated statement about it holds: `["!=", ".role", "admin"]` and
+`["not", ["==", ".role", "admin"]]` both hold for arguments with no `role`.
+Only selecting further into it fails. Where an argument may be absent, a
+policy that means "only these" says what is allowed, with `==` or an `or` of
+`==` statements, rather than what isn't.
 
 A policy that is not well formed (an unknown operator, the wrong number of
 arguments, a malformed selector, a non-number in an inequality, a

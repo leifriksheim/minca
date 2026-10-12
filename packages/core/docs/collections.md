@@ -330,8 +330,8 @@ as of the access changes it saw
 A change to the rules is not retroactive: it binds what saw it. A record that
 names an older point counts if its writer could have written it then, since
 nobody can tell it from one written offline. To stop someone at once, take
-their role or remove them: what they wrote that you had not seen, and that
-needed it, stops counting. A
+their role or remove them: what they wrote that you had not seen stops
+counting. A
 write that races a change to its collection's rules is retried once, under
 the new ones.
 

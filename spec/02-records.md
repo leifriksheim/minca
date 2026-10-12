@@ -206,7 +206,9 @@ has already verified: the pair is only a name. A copy with a rewritten
 envelope (another `seen`, `key` or `retain`, say) or another body can carry the
 real one's id and signature, and fails step 1 or step 4. A peer MAY cache the
 verdict of steps 2–3, and anything decided from a version that passed them,
-as §3.2 allows.
+as §3.2 allows. A stub (§4.5) shares its version's id and signature but not
+its body: what was decided from the stub's content, or its lack of one,
+never applies to the whole version ([03](03-spaces.md) §5.2).
 
 Whether the author was _allowed_ to write is a separate question (§9.3–9.4).
 
@@ -1435,7 +1437,7 @@ Given a valid signature and root, whether the version _stands_ in this space:
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
    5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`. `check` is not judged (§7.6).
 
-   When step 3 fails only on the access history's judgement of a change that came after the version (a removal of its author, or a role taken that it needed, that it had not seen, its key revoked, or its key's line in its collection proven forked at or before it: [03](03-spaces.md) §5.1 steps 2 and 4, §4.10), the peer still judges steps 4 and 5, and the version is **withdrawn** if they pass, **refused** if they don't. So every peer that can read the body stores the same withdrawn versions, whatever order it checks in; a peer without the key skips what it can't read (§7.3, §8.4).
+   When step 3 fails only on the access history's judgement of a change that came after the version (a removal of its author, or a role taken from it, that it had not seen, a change it saw struck since, its key revoked, or its key's line in its collection proven forked at or before it: [03](03-spaces.md) §5.1 steps 2, 4 and 5, §4.10), the peer still judges steps 4 and 5, and the version is **withdrawn** if they pass, **refused** if they don't. So every peer that can read the body stores the same withdrawn versions, whatever order it checks in; a peer without the key skips what it can't read (§7.3, §8.4).
 
 ### 9.5 What a peer does with a refused version
 

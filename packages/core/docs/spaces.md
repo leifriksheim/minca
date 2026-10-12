@@ -29,6 +29,15 @@ records: a grant of `/record/write` without a policy on `.byCreator` lets
 them. In `community`, members change only what they made, and moderators
 anything.
 
+What `.roles` protects, and what it doesn't. "Of anyone not an admin" is a
+policy on the target's roles, read as of the remover's own view, which the
+remover chooses by what it names as seen (spec 03 §2.3, §3.2). It stops an
+admin who has seen another's promotion. It doesn't stop one who names a view
+from before it, or acts concurrently with it: `community` admins can still
+remove or demote each other that way. `.roles` protects only against a
+remover whose view includes the target's role. A space where that matters
+gives removal to fewer people, or to the founder alone.
+
 A role that may define itself can be locked by rival definitions (spec 03
 §2): two of its holders who rewrite it apart and disagree leave it holding
 only what they share, and if that drops `/role/define`, nobody in it can
@@ -46,7 +55,7 @@ byte: their ids depend on it
 ([spec 03 §13.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
 Changing `solo` would change those ids, so it must not change.
 
-_Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts` ("definitions")._
+_Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts` ("definitions", "`community` admins can remove each other by naming a view before the promotion")._
 
 ## Invites
 
@@ -56,7 +65,10 @@ _Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `STA
   assign it (`/role/assign` with `{ role, self: false, roles: [] }`), else for
   the first role by name it may assign. With none (as in `solo`), it makes a
   view-only invite. Opening an invite for a role needs the same grant as
-  assigning it to someone holding nothing.
+  assigning it to someone holding nothing. Peers judge each join as the
+  assignment the invite's opener makes, to whoever joins (spec 03 §4.5): an
+  opener whose grant says `.self == false` can't join its own invite, and one
+  who has lost the grant since lets nobody in.
 - `write: false` always makes a view-only invite.
 - Each role invite gets its own fresh secret and its own `sys.invite` record,
   so one can be closed without the others.
