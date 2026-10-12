@@ -136,11 +136,15 @@ describe('screens', () => {
 
   test("the bridge answers for its app's collections only, as the person looking, under the rules", async () => {
     const { alice, bob, space } = await setup();
-    await alice.node.collections.define(space, {
-      name: 'app.chess.game',
-      schema: { type: 'object' },
-      rules: { edit: 'creator' },
+    // Editors here change only what they added: who may write is the space's grants.
+    await alice.node.spaces.defineRole(space, {
+      name: 'editor',
+      grants: [
+        { cmd: '/record/write', pol: [['==', '.byCreator', true]] },
+        { cmd: '/collection/define', pol: [] },
+      ],
     });
+    await alice.node.collections.define(space, { name: 'app.chess.game', schema: { type: 'object' } });
     await alice.node.records.put(space, 'app.secret', { pin: 1234 });
     await waitFor(
       async () =>
@@ -191,7 +195,7 @@ describe('screens', () => {
       await waitFor(async () => (await bob.node.records.get(space, hers.key)) !== null, "Alice's game");
       const refused = await call('update', hers.key, { white: 'bob' });
       assert.equal(refused.ok, false);
-      assert.match(refused.error!, /whoever created it/);
+      assert.match(refused.error!, /no grant/);
 
       // Written by guessing: one object per call, a where, id and data. It works, and a wrong call says how to call it.
       const guessed = await call('put', { collection: 'app.chess.game', body: { status: 'open' } });

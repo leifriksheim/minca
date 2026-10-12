@@ -3,7 +3,7 @@
  * off. Which rules it runs, what sets them off and what never does is
  * `startRules` in `@weaveprotocol/core/schemas`; this is only the words.
  */
-import { roleHolds, runAction, type P2PNode } from '@weaveprotocol/core';
+import { runAction, type P2PNode } from '@weaveprotocol/core';
 import { INSTRUCT, type RuleTrigger } from '@weaveprotocol/core/schemas';
 
 /**
@@ -175,7 +175,7 @@ export async function ruleContext(node: P2PNode, trigger: RuleTrigger): Promise<
 
 /**
  * Whether whoever wrote the record that set a rule off may instruct the one
- * running it. A bot: the rule's maker, or anyone holding `std.rule/instruct`
+ * running it. A bot: the rule's maker, or any member granted `/std.rule/instruct`
  * in the space, as for making rules for it. A person's own agent: only the
  * person.
  */
@@ -188,7 +188,5 @@ export async function writerInstructs(
   if (!writer) return false;
   if (!runner.bot) return writer === runner.account;
   if (writer === trigger.rule.maker) return true;
-  const access = await node.spaces.access(trigger.rule.space).catch(() => null);
-  const name = access?.members.find((member) => member.did === writer)?.role;
-  return roleHolds(access?.roles.find((role) => role.name === name) ?? null, INSTRUCT);
+  return node.spaces.may(trigger.rule.space, INSTRUCT, {}, writer).catch(() => false);
 }

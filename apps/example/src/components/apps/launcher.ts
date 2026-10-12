@@ -20,8 +20,8 @@
  */
 import {
   checkAppNotify,
-  DEFINE,
-  roleHolds,
+  COLLECTION_DEFINE,
+  grantFits,
   type DefineCollection,
   type NodeCollection,
   type NodeRecord,
@@ -92,7 +92,6 @@ export const launcherApp = fragments.typed<LauncherApp>()({
       description: 'The blueprint proposing the collections it needs',
     },
   },
-  rules: { edit: 'member', delete: 'member' },
 });
 
 /** Why this can't be a launcher record, or null */
@@ -121,16 +120,23 @@ export function checkLauncherApp(body: LauncherApp): string | null {
   return null;
 }
 
-/** Whether this account's role in the space holds `define` */
+/**
+ * Whether an account may define collections here, as its roles' grants say
+ * now: a founder, or a role every current definition of which grants
+ * `/collection/define`. For showing, not judging: each definition's grants
+ * also count only as far as its author could give them, which the node checks.
+ */
 function mayDefine(access: SpaceAccess | null | undefined, did: string | null): boolean {
   const member = access?.members.find((m) => m.did === did);
-  return (
-    !!member &&
-    roleHolds(
-      access?.roles.find((r) => r.name === member.role),
-      DEFINE,
-    )
-  );
+  if (!member) return false;
+  if (member.founder) return true;
+  return member.roles.some((name) => {
+    const definitions = access?.roles.find((r) => r.name === name)?.definitions ?? [];
+    return (
+      definitions.length > 0 &&
+      definitions.every((d) => d.grants.some((g) => grantFits(g, COLLECTION_DEFINE, { collection: '' })))
+    );
+  });
 }
 
 /**
@@ -405,7 +411,6 @@ const toDraft = (held: NodeCollection): DraftCollection | null =>
         ...(held.description !== undefined ? { description: held.description } : {}),
         history: held.history,
         links: held.links,
-        permissions: held.permissions,
         rules: held.rules,
         topics: held.topics,
       };

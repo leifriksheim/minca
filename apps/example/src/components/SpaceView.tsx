@@ -1,5 +1,5 @@
 import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
-import { DEFINE, roleHolds } from '@weaveprotocol/core';
+import { useMayDefine } from '@weave/app-shared/may';
 import type { NodeRecord, SpaceSummary } from '@weaveprotocol/core';
 import {
   useAccess,
@@ -132,11 +132,13 @@ export function SpaceView({
   const people = peopleFrom(useProfiles(space.id), useBots(space.id));
   const status = useSpaceStatus(space.id);
   const access = useAccess(space.id);
-  const mayDefine = space.writable && roleHolds(access?.role, DEFINE);
+  const mayDefine = useMayDefine(space.id) && space.writable;
   const roleOf = new Map(
     (access?.members ?? []).map((m) => [
       m.did,
-      access?.roles.find((r) => r.name === m.role)?.title ?? m.role,
+      m.founder
+        ? 'Founder'
+        : m.roles.map((name) => access?.roles.find((r) => r.name === name)?.title ?? name).join(', '),
     ]),
   );
 

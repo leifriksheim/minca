@@ -4,8 +4,8 @@
  * working or waiting and not gone stale, by the record it is about.
  */
 import { useEffect, useState } from 'react';
-import { DEFINE, roleHolds } from '@weaveprotocol/core';
-import { useAccess, useCollections, useLive, useNode } from '@weaveprotocol/core/react';
+import { useCollections, useLive, useNode } from '@weaveprotocol/core/react';
+import { useMayDefine } from '@weave/app-shared/may';
 import {
   activeNow,
   activity,
@@ -49,7 +49,6 @@ export function useActivityOff(
   writable: boolean,
 ): { readonly off: boolean; readonly turnOn: (() => Promise<void>) | null } {
   const node = useNode();
-  const access = useAccess(spaceId);
   const collections = useCollections(spaceId);
   const kept = collections.some((c) => c.name === activity.name && c.version !== null);
   const asks = useLive(
@@ -60,7 +59,7 @@ export function useActivityOff(
       ),
     [],
   );
-  const mayDefine = writable && roleHolds(access?.role, DEFINE);
+  const mayDefine = useMayDefine(spaceId, activity.name) && writable;
   return {
     off: !!asks && !kept,
     turnOn: mayDefine

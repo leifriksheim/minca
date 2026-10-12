@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useAction } from '@weave/app-shared/action';
 import { useAccess, useAccount, useCan, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { DEFINE, roleHolds } from '@weaveprotocol/core';
+import { useMayDefine } from '@weave/app-shared/may';
 import type { DirectMessage, NodeRecord, ResultOf } from '@weaveprotocol/core';
 import { channel, message, poll, positionBetween, reaction, vote } from '@weaveprotocol/core/schemas';
 import type { Channel } from '@weaveprotocol/core/schemas';
@@ -57,9 +57,8 @@ export function Chat(props: AppProps) {
   const node = useNode();
   const { did: me } = useAccount();
   const people = peopleFrom(useProfiles(space.id), useBots(space.id));
-  const access = useAccess(space.id);
   const hasChannels = collections.some((c) => c.name === channel.name && c.version !== null);
-  const mayDefine = space.writable && roleHolds(access?.role, DEFINE);
+  const mayDefine = useMayDefine(space.id, channel.name) && space.writable;
   const mayCreateChannel = useCan(space.id, 'create', channel.name);
   const mayAddChannel = hasChannels ? mayCreateChannel : mayDefine;
   // Direct messages are sealed to member keys, which members publish only in private spaces.
@@ -185,10 +184,11 @@ function Room({
   // Messages defined before mentions were topics still carry them, but only an open app can tell
   // people; someone who may define collections can bring the space up to date so any device can.
   const access = useAccess(space.id);
+  const mayDefineMessages = useMayDefine(space.id, message.name);
   const update = useAction();
   const outdated =
     space.writable &&
-    roleHolds(access?.role, DEFINE) &&
+    mayDefineMessages &&
     !!defined(message.name) &&
     !(defined(message.name)?.topics.includes('mentions') && defined(message.name)?.links?.channel);
   const [draft, setDraft] = useState('');

@@ -5,6 +5,7 @@
  * nobody to ask (`ask.ts`), each missing value fails naming its flag and where
  * to look, so an agent is never left waiting.
  */
+import { ROLE_ASSIGN } from '@weaveprotocol/core';
 import type { NodeAction, P2PNode } from '@weaveprotocol/core';
 import * as ask from './ask.js';
 import { isRecord } from './json.js';
@@ -75,7 +76,11 @@ async function pickPerson(node: P2PNode, space: string): Promise<string> {
     flag: 'did',
     message: 'Who?',
     hint: `Members are in \`weave spaces access --space ${space}\`.`,
-    options: access.members.map((m) => ({ value: m.did, label: name(m.did), hint: m.role })),
+    options: access.members.map((m) => ({
+      value: m.did,
+      label: name(m.did),
+      hint: m.founder ? 'founder' : m.roles.join(', ') || 'no role',
+    })),
   });
 }
 
@@ -130,14 +135,16 @@ async function askFor(
 }
 
 /**
- * An invite's role, picked from the roles below yours and "view only":
+ * An invite's role, picked from the roles you may give and "view only":
  * asked at a terminal when neither `--role` nor `--view-only` was given.
  */
 async function inviteRole(node: P2PNode, space: string): Promise<Record<string, unknown>> {
   if (!ask.interactive()) return {};
   const access = await node.spaces.access(space);
-  const mine = access.role?.rank ?? 0;
-  const below = access.roles.filter((role) => role.rank < mine);
+  const below: Array<(typeof access.roles)[number]> = [];
+  for (const role of access.roles)
+    if (await node.spaces.may(space, ROLE_ASSIGN, { role: role.name, self: false, roles: [] }))
+      below.push(role);
   const view = '\u0000view';
   const picked = await ask.select({
     flag: 'role',

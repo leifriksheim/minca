@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { DEFINE, MANAGE, roleHolds } from '@weaveprotocol/core';
-import { useAccess, useCollections, useNode } from '@weaveprotocol/core/react';
+import { COLLECTION_DEFINE, SPACE_KEEPERS } from '@weaveprotocol/core';
+import { useCollections, useNode } from '@weaveprotocol/core/react';
+import { useAssignable, useMay } from './may';
 import { activity, profile } from '@weaveprotocol/core/schemas';
 import { Modal } from './Modal';
 import { Benefit, FeatureIcon, Glyph, StatusPill } from './Feature';
@@ -44,13 +45,12 @@ export function CommunitySetup({
   cli?: string;
   onAutomations?: () => void;
 }) {
-  const access = useAccess(spaceId);
   const { hosts, bots, look, lookBots } = useSpaceBots(spaceId, writable);
   const { offer } = useOffer();
   const [dialog, setDialog] = useState<'online' | 'bot' | null>(null);
   // Put away with "Not now" until a date, asked once when it first shows.
   const [hidden, setHidden] = useState(() => (readHidden()[spaceId] ?? 0) > Date.now());
-  const mayManage = writable && roleHolds(access?.role, MANAGE);
+  const mayManage = useMay(spaceId, SPACE_KEEPERS) && writable;
 
   useEffect(() => {
     if (!mayManage) return;
@@ -257,15 +257,13 @@ export function AddBotDialog({
   onClose: () => void;
 }) {
   const node = useNode();
-  const access = useAccess(spaceId);
   const collections = useCollections(spaceId);
   const { hosts, look } = useSpaceHosts(spaceId, writable);
   const host = onlineHost(hosts);
   const profiles = collections.some((c) => c.name === profile.name && c.version !== null);
-  const mayDefine = roleHolds(access?.role, DEFINE);
-  // Roles below one's own, lowest first: what an invite may give. A bot needs no more than it must.
-  const mine = access?.roles.findIndex((role) => role.name === access.role?.name) ?? -1;
-  const roles = (access?.roles ?? []).slice(mine + 1).reverse();
+  const mayDefine = useMay(spaceId, COLLECTION_DEFINE, { collection: profile.name });
+  // The roles one may give, `member` first: a bot needs no more than it must.
+  const roles = useAssignable(spaceId);
   const [role, setRole] = useState<string | null>(null);
   const [name, setName] = useState('');
   const { run, busy, error: problem, setError: setProblem } = useAction();
@@ -553,10 +551,9 @@ export function SpaceBots({
   cli?: string;
   onAutomations?: () => void;
 }) {
-  const access = useAccess(spaceId);
   const { bots: listed, look, lookBots } = useSpaceBots(spaceId, writable);
   const [adding, setAdding] = useState(false);
-  const mayManage = writable && roleHolds(access?.role, MANAGE);
+  const mayManage = useMay(spaceId, SPACE_KEEPERS) && writable;
   if (!listed.length && !mayManage) return null;
   return (
     <section aria-label="AI helpers" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -1,7 +1,7 @@
 /**
  * What an assembly keeps: ordinary collections, defined in the space when
- * the assembly is made. Rules say who may write what, and every device
- * enforces them. What the records mean (how a vote travels along
+ * the assembly is made. The assembly's grants (`assemblyRoles`) say who
+ * may write what, and every device enforces them. What the records mean (how a vote travels along
  * delegations) is this app's, in `tally.ts`.
  *
  * A result only ever moves forward. Every proposal fixes who votes on it,
@@ -15,10 +15,11 @@
  * library's: `std.proposal` has fixed options and no topic, and nothing in
  * the library says "I trust this person with my vote on housing".
  */
-import type { Check } from '@weaveprotocol/core';
+import { rolePresets, ROLE_ASSIGN, RECORD_DELETE, RECORD_WRITE } from '@weaveprotocol/core';
+import type { Check, SpaceRole } from '@weaveprotocol/core';
 import { fragments } from '@weaveprotocol/core/schemas';
 
-const { typed, words, text, markdown, count, choice, people, one, own } = fragments;
+const { typed, words, text, markdown, count, choice, people, one } = fragments;
 
 /** The most voters one proposal can have */
 export const MAX_VOTERS = 500;
@@ -70,8 +71,6 @@ export const topic = typed<Topic>()({
     },
     required: ['name'],
   },
-  permissions: ['moderate'],
-  rules: { create: 'can:moderate', edit: 'can:moderate', delete: 'can:moderate' },
 });
 interface Topic {
   readonly name: string;
@@ -103,10 +102,7 @@ export const proposal = typed<Proposal>()({
     required: ['title', 'voters', 'toPass'],
   },
   links: { topic: one(['liquid.topic'], 'The topic it belongs to') },
-  permissions: ['moderate'],
   rules: {
-    edit: ['creator', 'can:moderate'],
-    delete: 'can:moderate',
     fixed: ['voters', 'toPass'],
     check: [
       {
@@ -134,7 +130,7 @@ export const support = typed<Record<string, never>>()({
   description: 'Someone wants a proposal to be seen.',
   schema: { type: 'object', properties: {} },
   links: { about: one(['liquid.proposal'], 'The proposal') },
-  rules: { ...own, onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
 });
 
 /**
@@ -190,7 +186,7 @@ export const delegation = typed<Delegation>()({
     required: ['kind', 'to', 'topic'],
   },
   history: 'all',
-  rules: { ...own, onePer: ['@author', 'topic'] },
+  rules: { onePer: ['@author', 'topic'] },
 });
 interface Delegation {
   readonly kind: 'person' | 'party';
@@ -348,9 +344,7 @@ export const party = typed<Party>()({
     },
     required: ['name', 'members', 'stewards', 'decides'],
   },
-  permissions: ['moderate'],
   rules: {
-    delete: ['creator', 'can:moderate'],
     check: [
       {
         that: 'size(body.stewards) >= 1 && body.stewards.all(it, it in body.members) && (prev == null ? author in body.stewards : author in prev.body.stewards)',
@@ -380,7 +374,7 @@ export const membership = typed<Record<string, never>>()({
   description: 'Someone wants to be in a party.',
   schema: { type: 'object', properties: {} },
   links: { about: one(['liquid.party'], 'The party') },
-  rules: { ...own, onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
 });
 
 /**
@@ -499,6 +493,40 @@ interface PartyBallot {
 }
 
 /** Everything an assembly needs, defined when one is made */
+/**
+ * An assembly's founding roles: a community's admins and moderators, and
+ * members who write their own records but topics, may change any party (its
+ * check lets only its stewards), and delete only their own, never a proposal
+ * or a topic. Moderators change and remove anything. With `membersInvite`,
+ * members invite members too.
+ */
+export function assemblyRoles(membersInvite = false): ReadonlyArray<SpaceRole> {
+  const notIn = (...collections: string[]) =>
+    collections.map((collection) => ['!=', '.collection', collection] as const);
+  const member: SpaceRole = {
+    name: 'member',
+    title: 'Member',
+    grants: [
+      {
+        cmd: RECORD_WRITE,
+        pol: [
+          ...notIn(topic.name),
+          [
+            'or',
+            [
+              ['==', '.byCreator', true],
+              ['==', '.collection', party.name],
+            ],
+          ],
+        ],
+      },
+      { cmd: RECORD_DELETE, pol: [...notIn(topic.name, proposal.name), ['==', '.byCreator', true]] },
+      ...(membersInvite ? [{ cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] }] : []),
+    ],
+  };
+  return rolePresets.community.roles.map((role) => (role.name === 'member' ? member : role));
+}
+
 export const ASSEMBLY = [
   topic,
   proposal,

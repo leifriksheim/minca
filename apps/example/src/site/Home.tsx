@@ -156,8 +156,8 @@ export function Home() {
             icon="M8 1.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6ZM2.5 14.5c.6-2.8 2.8-4.5 5.5-4.5s4.9 1.7 5.5 4.5"
             title="Roles you design"
           >
-            Start with admins, moderators and members, or make your own. Each role has a rank and a list of
-            what it may do, and it lives in your space, not in anyone’s code.
+            Start with admins, moderators and members, or make your own. Each role is a list of what it may
+            do, and it lives in your space, not in anyone’s code.
           </Feature>
           <Feature icon="M3 8.5l3 3 7-7" title="New tools are a decision">
             A proposal changes nothing until someone whose role allows it says yes. What each tool may do is
