@@ -28,7 +28,7 @@ import type { CacheConfig, NewSpace, NodeNetworkConfig, P2PNode } from '../node/
 import { checkFoundingRoles } from '../space/grants.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
 import { soleFounder } from '../space/constitution.js';
-import { checkProposal, MAX_PROPOSALS, type NotifyProposal } from '../space/notify.js';
+import { checkProposal, MAX_PROPOSALS, type AutomationProposal } from '../space/own-automations.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 import { isObject } from '../utils/guards.js';
 
@@ -94,7 +94,7 @@ export interface ConnectRequest {
 
 /**
  * What an app already connected to a home asks for when the person wants to
- * be notified: subscriptions, and nothing else. Never part of connecting — a
+ * be notified: automations of the account's own, and nothing else. Never part of connecting — a
  * person signing in has asked for nothing yet. The home knows the app by the
  * origin the browser reports, and refuses one it has no connection for, a
  * carrier's and a program's connected by code.
@@ -104,18 +104,18 @@ export interface ProposeRequest {
   readonly kind: 'propose';
   /** What it calls itself. Shown, never trusted. */
   readonly name?: string;
-  /** 1 to 8 subscriptions to offer the person */
-  readonly notify: ReadonlyArray<NotifyProposal>;
+  /** 1 to 8 automations to offer the person */
+  readonly automations: ReadonlyArray<AutomationProposal>;
 }
 
 /** What the home answers a {@link ProposeRequest} with, once the person decided */
 export interface Proposed {
   readonly v: 1;
   readonly kind: 'proposed';
-  /** The subscriptions added or found, by the person's yes: none when they kept none */
-  readonly notify: ReadonlyArray<{ readonly id: string; readonly label: string }>;
+  /** The automations added or found, by the person's yes: none when they kept none */
+  readonly automations: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   /**
-   * For an app given the whole account: every version of those subscriptions,
+   * For an app given the whole account: every version of those automations,
    * signed, so its node holds them at once rather than once it meets another
    * of the account's devices, which may be long after the home's window closed.
    */
@@ -434,7 +434,7 @@ export async function connectCarrier(options: {
 }
 
 /**
- * Offers the person subscriptions, from an app already connected to their
+ * Offers the person automations that notify them, from an app already connected to their
  * home. Call it from a click on something that asked for it — "Notify me" —
  * in a page that stays open: the home opens in a popup, and the person keeps
  * the ones they want. The app shows the notifications itself
@@ -446,22 +446,22 @@ export async function connectCarrier(options: {
  */
 export async function proposeToHome(options: {
   readonly home: string;
-  readonly notify: ReadonlyArray<NotifyProposal>;
+  readonly automations: ReadonlyArray<AutomationProposal>;
   readonly name?: string;
   readonly timeoutMs?: number;
 }): Promise<Proposed> {
-  if (options.notify.length === 0 || options.notify.length > MAX_PROPOSALS)
-    throw new Error(`Propose 1 to ${MAX_PROPOSALS} subscriptions.`);
+  if (options.automations.length === 0 || options.automations.length > MAX_PROPOSALS)
+    throw new Error(`Propose 1 to ${MAX_PROPOSALS} automations.`);
   const homeUrl = new URL(options.home, globalThis.location.href);
   const popup = openHome(homeUrl);
   const request: ProposeRequest = {
     v: 1,
     kind: 'propose',
     ...(options.name ? { name: options.name } : {}),
-    notify: options.notify,
+    automations: options.automations,
   };
   const answer = await askHome<Proposed | null>(popup, homeUrl.origin, request, options.timeoutMs);
-  if (answer?.kind !== 'proposed' || !Array.isArray(answer.notify))
+  if (answer?.kind !== 'proposed' || !Array.isArray(answer.automations))
     throw new Error('Your account home did not answer the proposal.');
   return answer;
 }
@@ -716,7 +716,7 @@ const REQUEST_FIELDS = new Set([
   'via',
   'days',
 ]);
-const PROPOSE_FIELDS = new Set(['v', 'kind', 'name', 'notify']);
+const PROPOSE_FIELDS = new Set(['v', 'kind', 'name', 'automations']);
 
 const onlyFields = (value: Record<string, unknown>, fields: ReadonlySet<string>): boolean =>
   Object.keys(value).every((field) => fields.has(field));
@@ -730,9 +730,9 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
       proposal.v === 1 &&
       proposal.kind === 'propose' &&
       (proposal.name === undefined || (typeof proposal.name === 'string' && proposal.name.length <= 80)) &&
-      Array.isArray(proposal.notify) &&
-      proposal.notify.length > 0 &&
-      isProposals(proposal.notify, origin)
+      Array.isArray(proposal.automations) &&
+      proposal.automations.length > 0 &&
+      isProposals(proposal.automations, origin)
     );
   }
   const request = value;
@@ -765,7 +765,7 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
   );
 }
 
-/** Subscriptions an app proposes: few, each one it could offer, each click leading back to it */
+/** Automations an app proposes: few, each one it could offer, each click leading back to it */
 function isProposals(value: unknown, origin: string): boolean {
   return (
     Array.isArray(value) &&

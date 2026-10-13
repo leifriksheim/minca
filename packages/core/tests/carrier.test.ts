@@ -17,7 +17,7 @@ import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createMeshAuth } from '../src/network/peer-auth.js';
 import { makePass, openPass, carriedRecord } from '../src/space/pass.js';
-import { carriedFor, matchesSubscription } from '../src/space/notify.js';
+import { wakeFor, wakes } from '../src/space/own-automations.js';
 import type { CarrierEvent } from '../src/node/carrier.js';
 import { generateSpaceKey } from '../src/privacy/space-encryption.js';
 import { hold } from './helpers/hold.js';
@@ -378,24 +378,31 @@ describe('a carrier', () => {
 describe('notifications through a carrier', () => {
   test('a carrier gets tags, never the values it matches', async () => {
     const key = await generateSpaceKey();
-    const when = {
-      label: 'Mentioned',
-      collection: 'app.chat',
+    const own = {
+      name: 'Mentioned',
+      when: { query: { collection: 'app.chat', where: { mentions: { $contains: '$me' } } }, others: true },
+      then: { kind: 'notify' as const, text: 'Mentioned' },
       spaces: 'all' as const,
-      topic: { field: 'mentions', value: 'did:key:zMe' },
       since: new Date().toISOString(),
     };
-    const carried = await carriedFor(when, [
-      { id: 'club', key, visibility: 'private' },
-      { id: 'blog', key: null, visibility: 'public' },
-      { id: 'locked', key: null, visibility: 'private' },
-    ]);
-    assert.equal(JSON.stringify(carried).includes('zMe'), false);
+    const declares = () => ['mentions'];
+    const wake = await wakeFor(
+      own,
+      [
+        { id: 'club', key, visibility: 'private', topics: declares },
+        { id: 'blog', key: null, visibility: 'public', topics: declares },
+        { id: 'locked', key: null, visibility: 'private', topics: declares },
+        { id: 'plain', key: null, visibility: 'public', topics: () => [] },
+      ],
+      'did:key:zMe',
+    );
+    assert.equal(JSON.stringify(wake).includes('zMe'), false);
     assert.deepEqual(
-      Object.keys(carried.tags ?? {}).sort(),
-      ['blog', 'club'],
+      wake.tags?.['locked'],
+      [],
       'a private space with no key here gets no tag, so never matches',
     );
+    assert.equal(wake.tags?.['plain'], undefined, 'where mentions is no topic, any new record wakes');
     const version = {
       id: 'x',
       author: 'did:key:zAnna',
@@ -405,30 +412,24 @@ describe('notifications through a carrier', () => {
       key: 'k',
       seq: 0,
       signature: 's',
-      tags: carried.tags!['club']!,
+      tags: wake.tags?.['club'] ?? [],
     };
-    assert.equal(matchesSubscription(carried, 'club', version, 'did:key:zMe'), true);
-    assert.equal(matchesSubscription(carried, 'blog', version, 'did:key:zMe'), false, 'another space’s tag');
+    assert.equal(wakes(wake, 'club', version, 'did:key:zMe'), true);
+    assert.equal(wakes(wake, 'blog', version, 'did:key:zMe'), false, 'another space’s tag');
+    assert.equal(wakes(wake, 'locked', version, 'did:key:zMe'), false, 'no key, no match');
+    assert.equal(wakes(wake, 'plain', { ...version, tags: [] }, 'did:key:zMe'), true, 'no topic to match');
+    assert.equal(wakes(wake, 'club', { ...version, author: 'did:key:zMe' }, 'did:key:zMe'), false, 'my own');
     assert.equal(
-      matchesSubscription(carried, 'club', { ...version, author: 'did:key:zMe' }, 'did:key:zMe'),
-      false,
-      'my own',
-    );
-    assert.equal(
-      matchesSubscription(carried, 'club', { ...version, seq: 1 }, 'did:key:zMe'),
+      wakes(wake, 'club', { ...version, seq: 1 }, 'did:key:zMe'),
       false,
       'an edit, not a new record',
     );
     assert.equal(
-      matchesSubscription(carried, 'club', { ...version, createdAt: '2020-01-01T00:00:00Z' }, 'did:key:zMe'),
+      wakes(wake, 'club', { ...version, createdAt: '2020-01-01T00:00:00Z' }, 'did:key:zMe'),
       false,
       'from before it was made',
     );
-    assert.equal(
-      matchesSubscription({ ...carried, paused: true }, 'club', version, 'did:key:zMe'),
-      false,
-      'paused',
-    );
+    assert.equal(wakes({ ...wake, paused: true }, 'club', version, 'did:key:zMe'), false, 'paused');
   });
 
   test('what a carrier can offer to notify about: the kinds of record, by name; a title and topics only where it can read the definition', async () => {
@@ -495,37 +496,36 @@ describe('notifications through a carrier', () => {
 
     const added = await laptop.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
     const node = await carrier(me, added.invite, hub);
-    const heard: Array<Extract<CarrierEvent, { type: 'notify' }>> = [];
+    const heard: Array<Extract<CarrierEvent, { type: 'wake' }>> = [];
     node.subscribe((event) => {
-      if (event.type === 'notify') heard.push(event);
+      if (event.type === 'wake') heard.push(event);
     });
     await until(carries(node, club.id), 5000, 'the space to be carried');
 
-    const mentioned = await laptop.notifications.add({
-      label: 'Mentioned in Club',
-      collection: 'app.chat',
+    const notify = (name: string) => ({ kind: 'notify' as const, text: name });
+    const mentioned = await laptop.automations.add({
+      name: 'Mentioned in Club',
+      when: { query: { collection: 'app.chat', where: { mentions: { $contains: '$me' } } }, others: true },
+      then: notify('Mentioned in Club'),
       spaces: 'all',
-      topic: { field: 'mentions', value: me.did },
     });
-    await laptop.notifications.add({
-      label: 'Anything in #design',
-      collection: 'app.chat',
+    const design = await laptop.automations.add({
+      name: 'Anything in #design',
+      when: { query: { collection: 'app.chat', where: { channel: 'design' } }, others: true },
+      then: notify('Anything in #design'),
       spaces: [club.id],
-      topic: { field: 'channel', value: 'design' },
     });
-    await until(
-      async () => (await node.subscriptions()).length === 2,
-      5000,
-      'the carrier to hold the subscriptions',
-    );
-    assert.deepEqual((await node.subscriptions()).map((s) => s.label).sort(), [
-      'Anything in #design',
-      'Mentioned in Club',
-    ]);
+    await until(async () => (await node.wakes()).length === 2, 5000, 'the carrier to hold the wakes');
     assert.deepEqual(
-      (await laptop.notifications.list()).map((s) => s.label),
+      (await node.wakes()).map((w) => w.id).sort(),
+      [`wake:${mentioned.id}`, `wake:${design.id}`].sort(),
+    );
+    assert.deepEqual(
+      (await laptop.automations.list()).map((s) => s.name),
       ['Mentioned in Club', 'Anything in #design'],
     );
+    const named = (id: string) =>
+      id === `wake:${mentioned.id}` ? 'Mentioned in Club' : 'Anything in #design';
 
     await annaNode.records.put(club.id, 'app.chat', {
       text: 'look, @you',
@@ -533,25 +533,25 @@ describe('notifications through a carrier', () => {
       channel: 'random',
     });
     await until(async () => heard.length === 1, 5000, 'the mention to be noticed');
-    assert.equal(heard[0]!.subscription.label, 'Mentioned in Club');
+    assert.equal(named(heard[0]!.wake.id), 'Mentioned in Club');
     assert.equal(heard[0]!.space.name, 'Club');
     assert.equal(JSON.stringify(heard[0]).includes('look'), false, 'the carrier never saw the text');
 
-    // Your own writes, and what matches no subscription, stay quiet.
+    // Your own writes, and what matches no automation, stay quiet.
     await laptop.records.put(club.id, 'app.chat', { text: 'note to self', mentions: [me.did] });
     await annaNode.records.put(club.id, 'app.chat', { text: 'unrelated', channel: 'random' });
     await annaNode.records.put(club.id, 'app.chat', { text: 'new logo', channel: 'design' });
     await until(async () => heard.length === 2, 5000, 'the #design message to be noticed');
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.deepEqual(
-      heard.map((h) => h.subscription.label),
+      heard.map((h) => named(h.wake.id)),
       ['Mentioned in Club', 'Anything in #design'],
     );
 
     // Paused: quiet.
-    await laptop.notifications.update(mentioned.id, { paused: true });
+    await laptop.automations.update(mentioned.id, { paused: true });
     await until(
-      async () => (await node.subscriptions()).some((s) => s.paused),
+      async () => (await node.wakes()).some((s) => s.paused),
       5000,
       'the pause to reach the carrier',
     );
@@ -559,11 +559,7 @@ describe('notifications through a carrier', () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(heard.length, 2);
 
-    await laptop.notifications.remove(mentioned.id);
-    await until(
-      async () => (await node.subscriptions()).length === 1,
-      5000,
-      'the removal to reach the carrier',
-    );
+    await laptop.automations.remove(mentioned.id);
+    await until(async () => (await node.wakes()).length === 1, 5000, 'the removal to reach the carrier');
   });
 });

@@ -34,7 +34,7 @@ import { Events } from './Events';
 import { Kanban } from './Kanban';
 import { Marketplace } from './Marketplace';
 import { Polls } from './Polls';
-import type { AppNotify } from '@weaveprotocol/core/schemas';
+import { notifyOn, type AppAutomation } from '@weaveprotocol/core/schemas';
 import type { Glyph } from '../Icon';
 import type { MiniApp } from '@weave/app-shared/mini-app';
 import { liquid } from '@weave/liquid/app';
@@ -56,7 +56,7 @@ export interface WeaveApp {
   readonly icon: Glyph;
   readonly hue: number;
   /** What in it is worth hearing about: offered as notifications, and counted as new */
-  readonly notify: ReadonlyArray<AppNotify>;
+  readonly notify: ReadonlyArray<AppAutomation>;
   /** Takes the whole window when open, the way a conversation does */
   readonly fill?: boolean;
   /** Without these it cannot work: adding the app defines the missing ones */
@@ -97,15 +97,11 @@ export const APPS: ReadonlyArray<WeaveApp> = [
     icon: 'chat',
     hue: 212,
     notify: [
-      { label: 'Mentions me', collection: message.name, topic: { field: 'mentions', me: true } },
-      { label: 'Replies to me', collection: message.name, topic: { field: 'replyingTo', me: true } },
-      { label: 'Direct message to me', collection: direct.name, topic: { field: 'to', me: true } },
-      { label: 'New message', collection: message.name },
-      {
-        label: 'Reactions to what I wrote',
-        collection: reaction.name,
-        topic: { field: 'respondingTo', me: true },
-      },
+      notifyOn('Mentions me', message.name, { mentions: { $contains: '$me' } }),
+      notifyOn('Replies to me', message.name, { replyingTo: { $contains: '$me' } }),
+      notifyOn('Direct message to me', direct.name, { to: { $contains: '$me' } }),
+      notifyOn('New message', message.name),
+      notifyOn('Reactions to what I wrote', reaction.name, { respondingTo: { $contains: '$me' } }),
     ],
     fill: true,
     title: 'Chat',
@@ -120,8 +116,8 @@ export const APPS: ReadonlyArray<WeaveApp> = [
     icon: 'board',
     hue: 28,
     notify: [
-      { label: 'New task', collection: task.name },
-      { label: 'Assigned to me', collection: task.name, topic: { field: 'assignees', me: true } },
+      notifyOn('New task', task.name),
+      notifyOn('Assigned to me', task.name, { assignees: { $contains: '$me' } }),
     ],
     title: 'Kanban',
     description: 'Tasks on a board: drag them between columns, and into order.',
@@ -141,8 +137,8 @@ export const APPS: ReadonlyArray<WeaveApp> = [
     icon: 'poll',
     hue: 268,
     notify: [
-      { label: 'New poll', collection: poll.name },
-      { label: 'Votes on my polls', collection: vote.name, topic: { field: 'respondingTo', me: true } },
+      notifyOn('New poll', poll.name),
+      notifyOn('Votes on my polls', vote.name, { respondingTo: { $contains: '$me' } }),
     ],
     title: 'Polls',
     description: 'Ask the space a question. Everyone picks one option, and can change their mind.',
@@ -154,13 +150,9 @@ export const APPS: ReadonlyArray<WeaveApp> = [
     icon: 'decide',
     hue: 118,
     notify: [
-      { label: 'New proposal', collection: proposal.name },
-      { label: 'Decided', collection: decision.name },
-      {
-        label: 'Ballots on my proposals',
-        collection: ballot.name,
-        topic: { field: 'respondingTo', me: true },
-      },
+      notifyOn('New proposal', proposal.name),
+      notifyOn('Decided', decision.name),
+      notifyOn('Ballots on my proposals', ballot.name, { respondingTo: { $contains: '$me' } }),
     ],
     title: 'Decisions',
     description:
@@ -173,13 +165,9 @@ export const APPS: ReadonlyArray<WeaveApp> = [
     icon: 'calendar',
     hue: 352,
     notify: [
-      { label: 'New event', collection: event.name },
-      { label: 'Answers to my events', collection: rsvp.name, topic: { field: 'respondingTo', me: true } },
-      {
-        label: 'Comments on my events',
-        collection: comment.name,
-        topic: { field: 'respondingTo', me: true },
-      },
+      notifyOn('New event', event.name),
+      notifyOn('Answers to my events', rsvp.name, { respondingTo: { $contains: '$me' } }),
+      notifyOn('Comments on my events', comment.name, { respondingTo: { $contains: '$me' } }),
     ],
     title: 'Events',
     description: "Concerts, meetups, parties: what's on, who's going, and a place to talk about each one.",
@@ -191,13 +179,9 @@ export const APPS: ReadonlyArray<WeaveApp> = [
     icon: 'tag',
     hue: 196,
     notify: [
-      { label: 'New listing', collection: listing.name },
-      { label: 'Requests for my things', collection: order.name, topic: { field: 'respondingTo', me: true } },
-      {
-        label: 'Answers to my requests',
-        collection: orderUpdate.name,
-        topic: { field: 'respondingTo', me: true },
-      },
+      notifyOn('New listing', listing.name),
+      notifyOn('Requests for my things', order.name, { respondingTo: { $contains: '$me' } }),
+      notifyOn('Answers to my requests', orderUpdate.name, { respondingTo: { $contains: '$me' } }),
     ],
     title: 'Marketplace',
     description: 'Sell, give away and find things among the people in the space.',

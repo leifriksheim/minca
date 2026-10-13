@@ -27,7 +27,7 @@ import type { WriterKeySource } from './writer-keys.js';
 import type { StoreFactory } from './stores.js';
 import type { JsonSchema, SchemaIssue } from '../schema/collection-def.js';
 import type { Keeper } from '../space/roles.js';
-import type { NotifyWhen } from '../space/notify.js';
+import type { Automation } from '../schemas/automations.js';
 
 export interface NodeNetworkConfig {
   /** Relays for WebRTC, browsers only. Each space meets in the room named after its id. */
@@ -598,22 +598,30 @@ export interface NodeCarriers {
   remove(space: string): Promise<void>;
 }
 
-/** A subscription, as the person made it (`space/notify.ts`) */
-export interface NotifyView extends NotifyWhen {
+/** One of the account's own automations, kept in its registry (`space/own-automations.ts`) */
+export interface OwnAutomationView extends Automation {
+  /** Its record key in the registry */
   readonly id: string;
 }
 
-/** "Let me know when…": noticed by the account's carriers, which get each value as a topic tag. Needs the account key */
-export interface NodeNotifications {
-  list(): Promise<ReadonlyArray<NotifyView>>;
-  /** Starts one; `topic` matches exact values of a topic field: `{ field: 'mentions', value: myDid }` */
-  add(when: Omit<NotifyWhen, 'since'> & { readonly since?: string }): Promise<NotifyView>;
-  /** Changes its label, pauses or resumes it */
-  update(id: string, changes: { readonly label?: string; readonly paused?: boolean }): Promise<NotifyView>;
+/**
+ * "Let me know when…": the account's own automations, across its spaces,
+ * noticed by its carriers, which get each value as a topic tag. Needs the
+ * account key.
+ */
+export interface NodeAutomations {
+  list(): Promise<ReadonlyArray<OwnAutomationView>>;
+  /** Starts one: `when.query` is a collection and a `where` over each new record, `$me` the account */
+  add(own: Omit<Automation, 'since'> & { readonly since?: string }): Promise<OwnAutomationView>;
+  /** Renames it, pauses or resumes it */
+  update(
+    id: string,
+    changes: { readonly name?: string; readonly paused?: boolean },
+  ): Promise<OwnAutomationView>;
   remove(id: string): Promise<void>;
-  /** Every version of these subscriptions, signed, for another device of the account to `take` */
+  /** Every version of these, signed, for another device of the account to `take` */
   versions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version>>;
-  /** Takes in subscriptions handed over outside sync, checked as a peer's. How many were new */
+  /** Takes in automations handed over outside sync, checked as a peer's. How many were new */
   take(versions: ReadonlyArray<Version>): Promise<number>;
 }
 
@@ -891,8 +899,8 @@ export interface P2PNode {
   readonly carriers: NodeCarriers;
   /** Hosts the account pays to keep its spaces online */
   readonly hosting: NodeHosting;
-  /** "Let me know when…" — noticed by the account's carriers, which can't read what they notice */
-  readonly notifications: NodeNotifications;
+  /** The account's own automations, kept in its registry */
+  readonly automations: NodeAutomations;
   /** People: the account's contact list, and asking to be added */
   readonly contacts: NodeContacts;
   /** Direct messages: text only some members of a space can read */

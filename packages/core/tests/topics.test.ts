@@ -21,7 +21,23 @@ import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import { team } from '../src/space/presets.js';
 import { until } from './helpers/until.js';
-import { carriedFor, checkNotify, checkProposal, matchesRecord, whereHolds } from '../src/space/notify.js';
+import {
+  checkOwnAutomation,
+  checkProposal,
+  matchesRecord,
+  notifyOn,
+  wakeFor,
+} from '../src/space/own-automations.js';
+import type { Automation } from '../src/schemas/automations.js';
+
+/** One of the account's own automations: new records of a collection that `where` matches */
+const own = (collection: string, where: Record<string, unknown> | undefined, since: string): Automation => ({
+  name: 'x',
+  when: { query: { collection, ...(where ? { where } : {}) } },
+  then: { kind: 'notify', text: 'x' },
+  spaces: 'all',
+  since,
+});
 import { channel, message, post } from '../src/schemas/library/publishing.js';
 import { comment } from '../src/schemas/library/annotations.js';
 import { task } from '../src/schemas/library/planning.js';
@@ -335,17 +351,7 @@ describe('topic tags on links', () => {
     ]);
     const since = new Date(Date.now() - 1000).toISOString();
     const inChannel = [inDesign, inRoom].filter((record) =>
-      matchesRecord(
-        {
-          label: '#design',
-          collection: message.name,
-          spaces: 'all',
-          topic: { field: 'link:channel', value: design.key },
-          since,
-        },
-        record,
-        'did:key:zDnaeBob',
-      ),
+      matchesRecord(own(message.name, { 'link:channel': design.key }, since), record, 'did:key:zDnaeBob'),
     );
     assert.deepEqual(
       inChannel.map((r) => r.key),
@@ -370,13 +376,7 @@ describe('a standard message’s topics', () => {
     const stored = await createStorageProvider(await alice.stores(`spaces/${space}`)).getCurrent(mention.key);
     assert.deepEqual(stored?.tags, [await alice.node.collections.tag(space, message.name, 'mentions', bob)]);
 
-    const when = (field: string) => ({
-      label: field,
-      collection: message.name,
-      spaces: 'all' as const,
-      topic: { field, value: bob },
-      since,
-    });
+    const when = (field: string) => own(message.name, { [field]: { $contains: bob } }, since);
     const matches = (field: string) =>
       [mention, reply, plain].filter((record) => matchesRecord(when(field), record, bob)).map((r) => r.key);
     assert.deepEqual(matches('mentions'), [mention.key]);
@@ -409,17 +409,7 @@ describe('a standard message’s topics', () => {
       const matches = (field: string) =>
         [mention, reply, plain]
           .filter((record) =>
-            matchesRecord(
-              {
-                label: field,
-                collection: definition.name,
-                spaces: 'all',
-                topic: { field, value: bob },
-                since,
-              },
-              record,
-              bob,
-            ),
+            matchesRecord(own(definition.name, { [field]: { $contains: bob } }, since), record, bob),
           )
           .map((record) => record.key);
       assert.deepEqual(matches('mentions'), [mention.key]);
@@ -449,17 +439,7 @@ describe('a standard message’s topics', () => {
     const assigned = (did: string) =>
       [both, carols, nobodys]
         .filter((record) =>
-          matchesRecord(
-            {
-              label: 'Assigned to me',
-              collection: task.name,
-              spaces: 'all',
-              topic: { field: 'assignees', value: did },
-              since,
-            },
-            record,
-            did,
-          ),
+          matchesRecord(own(task.name, { assignees: { $contains: '$me' } }, since), record, did),
         )
         .map((record) => record.key);
     assert.deepEqual(assigned(bob), [both.key]);
@@ -592,21 +572,15 @@ describe('a standard message’s topics', () => {
       assert.ok(stored?.tags?.includes(await alice.node.collections.tag(space, name, field, bob)));
 
       const matches = [written, other]
-        .filter((record) =>
-          matchesRecord(
-            { label: field, collection: name, spaces: 'all', topic: { field, value: bob }, since },
-            record,
-            bob,
-          ),
-        )
+        .filter((record) => matchesRecord(own(name, { [field]: { $contains: '$me' } }, since), record, bob))
         .map((record) => record.key);
       assert.deepEqual(matches, [written.key]);
     });
   }
 });
 
-describe('a subscription’s where', () => {
-  test('narrows what an app is told about to records the condition holds for, and is never carried', async () => {
+describe('an automation of the account’s own: its where', () => {
+  test('narrows what an app is told about to records the condition holds for, and only a topic’s tag is carried', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const { id: space } = await alice.node.spaces.create({ name: 'Board', ...team, visibility: 'private' });
@@ -618,61 +592,70 @@ describe('a subscription’s where', () => {
     const later = await alice.node.records.put(space, task.name, { title: 'Paint', priority: 1 });
     const unset = await alice.node.records.put(space, task.name, { title: 'Sweep' });
 
-    const when = {
-      label: 'Urgent task',
-      collection: task.name,
-      spaces: 'all' as const,
-      where: { priority: { $gte: 3 } },
-      since,
-    };
-    assert.equal(checkNotify(when), null);
+    const when = own(task.name, { priority: { $gte: 3 } }, since);
+    assert.equal(checkOwnAutomation(when), null);
     const told: string[] = [];
-    for (const record of [urgent, later, unset])
-      if (matchesRecord(when, record, bob) && whereHolds(when, record)) told.push(record.key);
+    for (const record of [urgent, later, unset]) if (matchesRecord(when, record, bob)) told.push(record.key);
     // A missing priority is not compared: it is simply not a match.
     assert.deepEqual(told, [urgent.key]);
 
-    const carried = await carriedFor(when, [{ id: space, key: null, visibility: 'private' }]);
-    assert.equal('where' in carried, false);
+    const space1 = { id: space, key: null, visibility: 'public' as const, topics: () => task.topics ?? [] };
+    const wake = await wakeFor(when, [space1], bob);
+    assert.equal(JSON.stringify(wake).includes('priority'), false, 'priority is no topic: never carried');
+    assert.equal(wake.tags, undefined);
+    const mine = await wakeFor(own(task.name, { assignees: { $contains: '$me' } }, since), [space1], bob);
+    assert.equal(mine.tags?.[space]?.length, 1, 'a topic’s value, as its tag');
+    assert.equal(JSON.stringify(mine).includes(bob), false);
   });
 
   test('is refused when it is not a filter, or reads what a record doesn’t have', () => {
-    const base = {
-      label: 'x',
-      collection: 'std.task',
-      spaces: 'all' as const,
-      since: new Date().toISOString(),
-    };
-    assert.match(checkNotify({ ...base, where: 'priority >= 3' })!, /must be an object/);
-    assert.match(checkNotify({ ...base, where: { '@prev': 1 } })!, /unknown record field/);
-    assert.match(checkNotify({ ...base, where: { priority: { $near: 1 } } })!, /unknown operator/);
-    assert.match(checkNotify({ ...base, where: { 'include:messages': 1 } })!, /what a rule's query included/);
-    // A subscription sees a record's outside: who signed this version, and the rest, are not its to read.
+    const since = new Date().toISOString();
+    const where = (filter: unknown) =>
+      checkOwnAutomation({
+        ...own('std.task', undefined, since),
+        when: { query: { collection: 'std.task', where: filter } },
+      });
+    assert.match(where('priority >= 3')!, /must be an object/);
+    assert.match(where({ '@prev': 1 })!, /unknown record field/);
+    assert.match(where({ priority: { $near: 1 } })!, /unknown operator/);
+    assert.match(where({ 'include:messages': 1 })!, /included/);
+    // It sees a record's outside: who signed this version, and the rest, are not its to read.
     for (const field of ['@author', '@root', '@updatedAt', '@seq'])
-      assert.match(checkNotify({ ...base, where: { [field]: 'x' } })!, /unknown record field/, field);
+      assert.match(where({ [field]: 'x' })!, /unknown record field/, field);
     let deep: Record<string, unknown> = { priority: 1 };
     for (let i = 0; i < 16; i++) deep = { $not: deep };
-    assert.match(checkNotify({ ...base, where: deep })!, /nest at most 16 deep/);
-    assert.match(
-      checkProposal({ label: 'x', collection: 'std.task', where: { $where: 'x' } })!,
-      /not a field/,
-    );
+    assert.match(where(deep)!, /nest at most 16 deep/);
+    assert.match(checkProposal(notifyOn('x', 'std.task', { $where: 'x' }))!, /not a field/);
     assert.equal(
-      checkProposal({
-        label: 'Assigned to me, urgent',
-        collection: 'std.task',
-        topic: { field: 'assignees', me: true },
-        where: { priority: { $gte: 3 }, status: { $ne: 'done' } },
-      }),
+      checkProposal(
+        notifyOn('Assigned to me, urgent', 'std.task', {
+          assignees: { $contains: '$me' },
+          priority: { $gte: 3 },
+          status: { $ne: 'done' },
+        }),
+      ),
       null,
     );
   });
 
+  test('only notifies, by the account, on one collection read record by record', () => {
+    const since = new Date().toISOString();
+    const base = own('std.task', undefined, since);
+    assert.match(checkOwnAutomation({ ...base, then: { kind: 'ask', text: 'x' } })!, /only notifies/);
+    assert.match(checkOwnAutomation({ ...base, by: 'did:key:zBot' })!, /by the account/);
+    const { spaces: _spaces, ...nowhere } = base;
+    assert.match(checkOwnAutomation(nowhere)!, /spaces/);
+    assert.match(
+      checkOwnAutomation({ ...base, when: { query: { collection: 'std.task', include: {} } } })!,
+      /only collection and where/,
+    );
+  });
+
   test('names a collection the way a definition must: every segment starts with a letter', () => {
-    const base = { label: 'x', spaces: 'all' as const, since: new Date().toISOString() };
-    assert.equal(checkNotify({ ...base, collection: 'app.chat-2.message' }), null);
-    // A definition could never be called this, so neither can a subscription ask for it.
-    assert.match(checkNotify({ ...base, collection: 'app.2chat' })!, /collection/);
-    assert.match(checkNotify({ ...base, collection: 'sys.notify' })!, /collection/);
+    const since = new Date().toISOString();
+    assert.equal(checkOwnAutomation(own('app.chat-2.message', undefined, since)), null);
+    // A definition could never be called this, so neither can an automation ask for it.
+    assert.match(checkOwnAutomation(own('app.2chat', undefined, since))!, /collection/);
+    assert.match(checkOwnAutomation(own('sys.wake', undefined, since))!, /collection/);
   });
 });

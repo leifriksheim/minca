@@ -111,8 +111,8 @@ means deep equality: same JSON type; objects with the same member names
 | `$eq`                     | `value` equals `x`                                                                                                                                           |
 | `$ne`                     | `value` does not equal `x` — **true for a missing field**                                                                                                    |
 | `$gt` `$gte` `$lt` `$lte` | both are numbers, or both strings (compared by UTF-16 code units), and the comparison holds. Any other pairing, including missing, is false.                 |
-| `$in`                     | `x` is a list containing an element equal to `value`                                                                                                         |
-| `$nin`                    | `x` is a list containing no element equal to `value` (false if `x` is not a list)                                                                            |
+| `$in`                     | `x` is a list containing an element equal to `value`, or, when `value` is a list, equal to any of its elements                                               |
+| `$nin`                    | `x` is a list for which `$in` does not hold (false if `x` is not a list)                                                                                     |
 | `$exists`                 | `(value is not missing) == x`. `null` exists.                                                                                                                |
 | `$contains`               | `value` and `x` are strings and `lower(x)` is a substring of `lower(value)`; or `value` is a list with an element equal to `x`. Otherwise false. Not search. |
 

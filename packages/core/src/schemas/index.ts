@@ -141,6 +141,7 @@ export {
   setActivity,
   IT,
   ME,
+  asRunner,
   INSTRUCT,
   checkAutomation,
   automationOf,
@@ -159,6 +160,8 @@ export type {
   AutomationLink,
   AutomationMatch,
   AutomationRun,
+  AutomationApp,
+  AutomationSpaces,
   Activity,
   ActivityState,
   AutomationTrigger,
@@ -169,4 +172,5 @@ export type {
 } from './automations.js';
 export { checkCron, cronMatches, SCHEDULES } from './cron.js';
 export type { BlueprintReview, CollectionReview, ReviewContext } from './blueprints.js';
-export type { AppNotify } from '../space/notify.js';
+export { notifyOn, namesTheRunner } from '../space/own-automations.js';
+export type { AppAutomation } from '../space/own-automations.js';

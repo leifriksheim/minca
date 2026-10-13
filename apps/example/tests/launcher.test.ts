@@ -7,7 +7,14 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { NodeRecord, P2PNode } from '@weaveprotocol/core';
-import { guide, message, proposeCollections, reaction, type Guide } from '@weaveprotocol/core/schemas';
+import {
+  guide,
+  message,
+  notifyOn,
+  proposeCollections,
+  reaction,
+  type Guide,
+} from '@weaveprotocol/core/schemas';
 import {
   addBuiltIn,
   addMade,
@@ -60,7 +67,7 @@ describe('the launcher', () => {
         title: 'Carpool',
         collections: ['carpool.trip'],
         screen: '<p>Who drives</p>',
-        notify: [{ label: 'New trip', collection: 'carpool.trip' }],
+        notify: [notifyOn('New trip', 'carpool.trip')],
       },
       { links: [{ rel: 'blueprint', to: plan.key }] },
     );
@@ -296,7 +303,7 @@ describe('the launcher', () => {
     assert.equal(checkLauncherApp({ builtIn: 'chat' }), null);
     assert.match(checkLauncherApp({ title: 'x' }) ?? '', /collections/);
     assert.match(
-      checkLauncherApp({ ...app, notify: [{ label: 'Any message', collection: message.name }] }) ?? '',
+      checkLauncherApp({ ...app, notify: [notifyOn('Any message', message.name)] }) ?? '',
       /not one of its collections/,
     );
     assert.match(checkLauncherApp({ ...app, network: ['https://api.example.com'] }) ?? '', /no screen/);

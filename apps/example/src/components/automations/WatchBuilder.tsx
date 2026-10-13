@@ -7,8 +7,9 @@ import {
   type SpaceSummary,
 } from '@weaveprotocol/core';
 import { useAccount, useNode } from '@weaveprotocol/core/react';
+import { ME } from '@weaveprotocol/core/schemas';
 import { Modal } from '@weave/app-shared/Modal';
-import { clauseFields, clausesWords, subscriptionOf, whereOf, type Clause } from '../../derive/conditions';
+import { clauseFields, clausesWords, whereOf, type Clause } from '../../derive/conditions';
 import { collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { nameOf } from '../../derive/people';
 import { ago } from '../../derive/time';
@@ -111,25 +112,17 @@ export function WatchBuilder({
 
   const submit = () => {
     if (!chosen) return;
-    // A place a carrier can match (`link:channel` is a message's topic) goes first, so it wakes the app
-    // only for that channel; then the fields' conditions, and any other place, are judged by the app.
-    const carried = within.find((w) => chosen.topics.includes(`link:${w.rel}`));
-    const fromFields = subscriptionOf(clauses, fields, did);
-    const topic = carried ? { field: `link:${carried.rel}`, value: carried.to } : fromFields.topic;
-    const condition = allOf(
-      [
-        carried ? whereOf(clauses, did) : fromFields.where,
-        ...within.filter((w) => w !== carried).map(linkedTo),
-      ].filter((c) => c !== undefined),
-    );
+    // Whoever runs it is `$me`. A carrier wakes the app for what a topic in this narrows to,
+    // like a channel (`link:channel`) or a person; the app judges the rest.
+    const condition = allOf([whereOf(clauses, ME), ...within.map(linkedTo)].filter((c) => c !== undefined));
     void ask([
       {
-        label: shown.trim() || autoLabel,
-        collection,
-        others: who === 'others',
+        name: shown.trim() || autoLabel,
+        when: {
+          query: { collection, ...(condition !== undefined ? { where: condition } : {}) },
+          others: who === 'others',
+        },
         ...(where === 'space' ? { spaces: [space.id] } : {}),
-        ...(topic ? { topic } : {}),
-        ...(condition !== undefined ? { where: condition } : {}),
       },
     ]).then((kept) => kept && setDone(true));
   };

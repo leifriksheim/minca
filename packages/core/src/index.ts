@@ -392,10 +392,10 @@ export {
   NotAllowedError,
   watchNotifications,
 } from './node/index.js';
-/** How many subscriptions one proposal to the home may offer */
-export { MAX_PROPOSALS } from './space/notify.js';
+/** How many automations one proposal to the home may offer */
+export { MAX_PROPOSALS } from './space/own-automations.js';
 /** Why an app's "worth hearing about" entry can't be offered, or null */
-export { checkAppNotify } from './space/notify.js';
+export { checkAppAutomation, checkOwnAutomation, ownQuery } from './space/own-automations.js';
 export type {
   StoreFactory,
   WriterKeySource,
@@ -454,12 +454,12 @@ export type {
   SubscriptionState,
   Keeper,
   CacheConfig,
-  NodeNotifications,
-  NotifyView,
-  NotifyWhen,
-  NotifyApp,
-  NotifyProposal,
-  CarriedSubscriptionView,
+  NodeAutomations,
+  OwnAutomationView,
+  AutomationProposal,
+  AppAutomation,
+  Wake,
+  WakeView,
   NotifyMatch,
   WatchNotificationsOptions,
 } from './node/index.js';
@@ -517,7 +517,7 @@ export type {
   VersionExpr,
   DynExpr,
 } from './records/contract-builder.js';
-/** Conditions over one record, in a check's language: a subscription's `where`, and an app's own filters */
+/** Conditions over one record: an automation's `where`, and an app's own filters */
 
 // Hosting: a subscription key, signed requests to a host, and a client for one
 export {

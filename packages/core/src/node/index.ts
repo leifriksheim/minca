@@ -20,9 +20,9 @@ export type {
   CarriedSpace,
   CarriedCollection,
   CarrierEvent,
-  CarriedSubscriptionView,
+  WakeView,
 } from './carrier.js';
-export type { NotifyWhen, NotifyApp, NotifyProposal, CarriedSubscription } from '../space/notify.js';
+export type { AutomationProposal, AppAutomation, Wake } from '../space/own-automations.js';
 export { createHostNode, NotAllowedError, spaceSubscription } from './host.js';
 export type { HostConfig, HostNode, Invoice, Subscription, SubscriptionState } from './host.js';
 export type { CopyAccountParams, CopyResult } from './copy.js';
@@ -62,8 +62,8 @@ export type {
   DefineCollection,
   NodeAccount,
   NodeCarriers,
-  NodeNotifications,
-  NotifyView,
+  NodeAutomations,
+  OwnAutomationView,
   NodeHosting,
   HostingView,
   SpaceHostingView,

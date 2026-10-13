@@ -29,14 +29,14 @@ export function NotifyButton({
     root,
     useCallback(() => setOpen(false), []),
   );
-  const own = [...new Set(app.notify.map((n) => n.collection))];
+  const own = [...new Set(app.notify.map((n) => n.when.query.collection))];
   if (everything.length === 0 && forMe.length === 0 && own.length === 0) return null;
 
   const any = on.everything || on.forMe;
   // Asked in a step of its own: a browser prompt opened with the home's window easily goes unseen behind it.
   const blocked = permission === 'denied';
   const unasked = permission === 'default';
-  const labels = (list: typeof everything) => list.map((n) => n.label).join(', ');
+  const labels = (list: typeof everything) => list.map((n) => n.name).join(', ');
   const choose = (list: typeof everything) => {
     setOpen(false);
     turnOn(list);

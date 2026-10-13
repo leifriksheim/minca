@@ -70,6 +70,18 @@ export interface AutomationWhen {
   readonly holds?: Filter;
   /** Only records by someone holding one of these roles: a role name, or `member` for any */
   readonly from?: ReadonlyArray<string>;
+  /** Only records someone other than its runner wrote */
+  readonly others?: boolean;
+}
+
+/** The spaces an account's own automation looks at: every space of the account, or these */
+export type AutomationSpaces = 'all' | ReadonlyArray<string>;
+
+/** The app that proposed an account's own automation, by the origin the browser reported */
+export interface AutomationApp {
+  readonly origin: string;
+  /** What the app called itself. Shown, never trusted. */
+  readonly name?: string;
 }
 
 export interface Automation {
@@ -86,6 +98,15 @@ export interface Automation {
   readonly paused?: boolean;
   /** Nothing that came to hold before this sets it off */
   readonly since: string;
+  /**
+   * The spaces it looks at, for one kept in the account's registry rather
+   * than in a space (`space/own-automations.ts`)
+   */
+  readonly spaces?: AutomationSpaces;
+  /** Where clicking its notification goes: an app's address. Default: the account home. */
+  readonly open?: string;
+  /** The app that proposed it. Absent: the person made it themselves. */
+  readonly app?: AutomationApp;
 }
 
 export type AutomationRun = BodyOf<typeof automationRun>;
@@ -105,6 +126,13 @@ export const automation = typed<Automation>()({
       picked: { type: 'object' },
       paused: { type: 'boolean' },
       since: moment('Nothing that came to hold before this sets it off'),
+      spaces: { description: 'Every space of the account ("all"), or a list of their ids' },
+      open: words(2000),
+      app: {
+        type: 'object',
+        properties: { origin: words(200), name: words(80) },
+        required: ['origin'],
+      },
     },
     required: ['name', 'then', 'since'],
   },
@@ -238,7 +266,13 @@ const AUTOMATION: JsonSchema = {
   ...automation.schema,
   properties: {
     ...automation.schema.properties,
-    when: { type: 'object', properties: { from: { type: 'array', items: named } } },
+    when: {
+      type: 'object',
+      properties: { from: { type: 'array', items: named }, others: { type: 'boolean' } },
+    },
+    spaces: {
+      anyOf: [{ const: 'all' }, { type: 'array', minItems: 1, maxItems: 256, items: { type: 'string' } }],
+    },
   },
 };
 
@@ -267,7 +301,38 @@ export function checkAutomation(value: unknown): string | null {
   if (then.kind === 'set' && value.when === undefined) return 'A rule that changes a record needs a when';
   if (typeof value.since !== 'string' || !Number.isFinite(Date.parse(value.since)))
     return 'since must be a date';
+  if (value.open !== undefined && (typeof value.open !== 'string' || !isWebAddress(value.open)))
+    return 'open must be an https:// address';
+  if (isObject(value.app) && (typeof value.app.origin !== 'string' || !isOrigin(value.app.origin)))
+    return 'app.origin must be a web origin';
   return null;
+}
+
+/** An https:// address, or http:// on this machine */
+function isWebAddress(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' ||
+      (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `https://chat.example`, nothing after it: what a browser reports as a
+ * message's origin. A browser extension's origin (`chrome-extension://<id>`)
+ * is one too, though `URL` gives it none.
+ */
+function isOrigin(value: string): boolean {
+  if (/^(chrome|moz|safari-web)-extension:\/\/[a-z0-9-]{1,64}$/i.test(value)) return true;
+  try {
+    return new URL(value).origin === value;
+  } catch {
+    return false;
+  }
 }
 
 const isAutomation = (value: unknown): value is Automation => checkAutomation(value) === null;
@@ -276,8 +341,8 @@ const isAutomation = (value: unknown): value is Automation => checkAutomation(va
 export const automationOf = (record: { readonly body: unknown }): Automation | null =>
   isAutomation(record.body) ? record.body : null;
 
-/** `$me` wherever it is a value, as the account running the rule */
-function asRunner<T>(value: T, me: string): T {
+/** `$me` wherever it is a value, as the account running the automation */
+export function asRunner<T>(value: T, me: string): T {
   // eslint-disable-next-line typescript/consistent-type-assertions -- the same shape, with one string swapped for another
   return JSON.parse(JSON.stringify(value), (_key, found: unknown) => (found === ME ? me : found)) as T;
 }
@@ -581,6 +646,7 @@ export async function runAutomations(
       // What the runner's agent, or the bot, wrote itself never sets a rule off: an agent asked to act can't set itself off.
       if (record.createdBy === account && (record.recordsOnly || options.bot)) continue;
       if (when.from && !holdsOneOf(access, record.createdBy ?? '', when.from)) continue;
+      if (when.others && record.createdBy === account) continue;
       busy.add(claim);
       try {
         const links = [
