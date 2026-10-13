@@ -151,8 +151,10 @@ export interface ListExpr<E> extends CelExpr<ReadonlyArray<E>> {
   /** `item in list` */
   includes(item: Literal | CelExpr): BoolExpr;
   at(index: number | IntExpr): Expr<E>;
-  /** `sum(list)`: of numbers only. `0.0` for an empty list */
-  sum(..._numbersOnly: [E] extends [number] ? [] : unknown extends E ? [] : [never]): Expr<E>;
+  /** `sum(list)`: of numbers only. `0.0` for an empty list, so a sum of ints is untyped */
+  sum(
+    ..._numbersOnly: [E] extends [number] ? [] : unknown extends E ? [] : [never]
+  ): [E] extends [CelInt] ? DynExpr : Expr<E>;
   /**
    * Cited versions, typed as versions of `collection`. A promise, not a
    * check: test `collection` in the contract too.
@@ -348,14 +350,15 @@ function expr(b: Built): unknown {
   const t = b.type;
   if (t.t === 'object' && t.version) return version(b, t.fields);
   if (t.t === 'object') {
-    const { fields, strict } = t;
+    const { fields, strict, others } = t;
     return new Proxy(Object.freeze({ '~cel': b }), {
       get(target, prop) {
         if (prop === '~cel') return target['~cel'];
-        if (typeof prop !== 'string' || prop === 'then') return undefined;
+        if (typeof prop !== 'string') return undefined;
         const field = Object.hasOwn(fields, prop) ? fields[prop] : undefined;
         if (field) return select(b, prop, field);
-        return strict ? undefined : select(b, prop, DYN);
+        // Not a declared field: `then` stays undefined, so the proxy is never taken for a promise.
+        return strict || prop === 'then' ? undefined : select(b, prop, others ?? DYN);
       },
     });
   }
@@ -460,7 +463,8 @@ function valueMethods(b: Built): Record<string, unknown> {
     exists: (test: unknown) => macro(b, 'exists', test, () => BOOL),
     existsOne: (test: unknown) => macro(b, 'exists_one', test, () => BOOL),
     distinct: () => method(b, 'distinct', [], list),
-    sum: () => call('sum', [b], item),
+    // `sum([])` is `0.0`, so a sum of ints is an int or a double.
+    sum: () => call('sum', [b], item.t === 'double' ? DOUBLE : DYN),
     includes: (x: unknown) => binary(operand(x, item), 'in', b, REL, BOOL),
     at: (index: unknown) => expr(built(`${wrap(b, MEMBER)}[${operand(index, INT).text}]`, MEMBER, item)),
     of: (collection: unknown) =>

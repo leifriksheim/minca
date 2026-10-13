@@ -171,6 +171,11 @@ describe('contract(): what it builds', () => {
     assert.equal(built[22]!.that, 'body.reactions.all(x0, body.reactions.exists(x1, x1 == x0))');
   });
 
+  test('a schema field named like a promise’s `then` is a field like any other', () => {
+    const Step = z.object({ then: z.string() });
+    assert.equal(contract(Step, ({ body }) => body.then.eq('go'), 'x').that, 'body.then == "go"');
+  });
+
   test('literals take the kind CEL needs: a double next to a body number, an int next to a size', () => {
     const c = contract(Payment, ({ body }) => body.amount.add(1).gt(body.received.size().add(1)), 'x');
     assert.equal(c.that, 'body.amount + 1.0 > body.received.size() + 1');
@@ -340,7 +345,7 @@ describe('collections.define: contracts checked against the schema', () => {
     assert.match(typed('body.to == 1') ?? '', /compares body\.to, a string, with 1, an int: never equal/);
     assert.match(typed('body.amount > "1"') ?? '', /by order/);
     assert.match(typed('body.amount + 1 > 2.0') ?? '', /mixes a double and an int.*write 1\.0/);
-    assert.match(typed('body.flag && body.to') ?? '', /&& takes a bool/);
+    assert.match(typed('body.to && body.game') ?? '', /&& takes a bool/);
     assert.match(typed('versions(body.game).size() > 0') ?? '', /write versions\(\[body\.game\]\)/);
     assert.match(
       typed('sum(body.received) > 0.0') ?? '',
@@ -370,6 +375,27 @@ describe('collections.define: contracts checked against the schema', () => {
       checkContractTypes([{ that: 'body.zz == 1.0', else: 'x' }], { ...PAYMENT, additionalProperties: true }),
       null,
     );
+  });
+
+  test('refuses only an object’s undeclared fields when it is closed: absent or false, not {} or a schema', () => {
+    const at = (additionalProperties: unknown, that: string) =>
+      checkContractTypes([{ that, else: 'x' }], { ...PAYMENT, additionalProperties });
+    assert.match(at(undefined, 'has(body.b) ? body.b == "y" : true') ?? '', /no field "b"/);
+    assert.match(at(false, 'has(body.b)') ?? '', /no field "b"/);
+    assert.equal(at({}, 'has(body.b) ? body.b == "y" : true'), null, 'z.looseObject');
+    assert.equal(at({ type: 'number' }, 'body.b + 1.0 > 0.0'), null, '.catchall(z.number())');
+    assert.match(at({ type: 'number' }, 'body.b == "y"') ?? '', /never equal/);
+  });
+
+  test('&& and || let a deciding side pass an error, so a non-bool side is refused only when none is a bool', () => {
+    assert.equal(typed('body.flag || body.to'), null);
+    assert.match(typed('body.to || body.game') ?? '', /\|\| takes a bool/);
+  });
+
+  test('a sum of ints is untyped: sum([]) is 0.0', () => {
+    assert.equal(typed('sum(body.received.map(r, r.size())) + 0 >= 0'), null);
+    assert.equal(typed('sum(body.received.map(r, r.size())) + 0.0 >= 0.0'), null);
+    assert.match(typed('sum(body.received.map(r, r.size() > 0)) > 0') ?? '', /not numbers/);
   });
 
   test('the node refuses to define a contract that misreads its schema, hand-written or built', async () => {

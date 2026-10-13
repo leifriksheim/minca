@@ -5,9 +5,12 @@
  * it. Not protocol: peers never run this, and a definition it would refuse
  * still stands when another writer stores it (spec 09 §8).
  *
- * It refuses only what is wrong for every body the schema allows. Anything
- * read from a cited version's body, a schema it can't follow, or `dyn(x)` is
- * `dyn`, and passes. What it can't catch: a missing optional field (that is
+ * It refuses what is wrong for every body the schema allows, with one rule
+ * stricter than JSON Schema: a field an object doesn't declare is taken for
+ * a typo unless the object says other fields may be there
+ * (`additionalProperties` other than `false`; absent counts as closed, as a
+ * Zod object writes it). Anything read from a cited version's body, a schema
+ * it can't follow, or `dyn(x)` is `dyn`, and passes. What it can't catch: a missing optional field (that is
  * `has()`'s job), a cited version of the wrong collection, values out of
  * range, and anything a `dyn` hides.
  */
@@ -24,6 +27,8 @@ export type CelType =
       readonly t: 'object';
       readonly fields: Readonly<Record<string, CelType>>;
       readonly strict: boolean;
+      /** The type of a field it doesn't name, when its schema says */
+      readonly others?: CelType;
       readonly version?: true;
     };
 
@@ -95,10 +100,13 @@ export function typeOfSchema(schema: unknown): CelType {
       if (!isObject(schema.properties)) return DYN;
       const fields: Record<string, CelType> = {};
       for (const [name, field] of Object.entries(schema.properties)) fields[name] = typeOfSchema(field);
+      const others = schema.additionalProperties;
       return Object.freeze({
         t: 'object',
         fields: Object.freeze(fields),
-        strict: schema.additionalProperties !== true,
+        strict: others === undefined || others === false,
+        // Fields it doesn't name: of the type `additionalProperties` gives, when it is a schema.
+        ...(isObject(others) ? { others: typeOfSchema(others) } : {}),
       });
     }
     default:
@@ -204,7 +212,7 @@ function typeOf(n: CelNode, names: ReadonlyMap<string, CelType>): CelType {
             (has.length ? ` (it has ${has.join(', ')})` : ''),
         );
       }
-      return n.test ? BOOL : (field ?? DYN);
+      return n.test ? BOOL : (field ?? on.others ?? DYN);
     }
     case 'index': {
       const on = of(n.on);
@@ -240,9 +248,13 @@ function typeOf(n: CelNode, names: ReadonlyMap<string, CelType>): CelType {
       return a.t === b.t && a.t !== 'list' && a.t !== 'object' ? a : DYN;
     }
     case 'and':
-    case 'or':
-      for (const item of n.items) bool(item, of(item), n.k === 'and' ? '&&' : '||');
+    case 'or': {
+      // A side that decides lets an error on another pass, so only all sides known and none a bool is wrong.
+      const types = n.items.map(of);
+      if (types.every((t) => known(t) && t.t !== 'bool'))
+        bool(n.items[0]!, types[0]!, n.k === 'and' ? '&&' : '||');
       return BOOL;
+    }
     case 'comp': {
       const range = of(n.range);
       let item: CelType = DYN;
@@ -363,7 +375,8 @@ function callType(n: Extract<CelNode, { k: 'call' }>, of: (n: CelNode) => CelTyp
         fail(
           `sum(${shown(an)}) adds up ${a.item.t === 'list' ? 'list' : a.item.t === 'object' ? 'map' : a.item.t}s, not numbers`,
         );
-      return a.t === 'list' ? a.item : DYN;
+      // `sum([])` is `0.0`, so a sum of ints is an int or a double.
+      return a.t === 'list' && a.item.t === 'double' ? DOUBLE : DYN;
     case 'versions':
       if (known(a) && a.t !== 'list')
         fail(

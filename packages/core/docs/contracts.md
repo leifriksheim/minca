@@ -118,18 +118,21 @@ invalid. The functions and types are `Contract`, `contract`,
 ## Checked against the schema when defined
 
 `collections.define` reads every condition, built or hand-written, against
-the collection's JSON Schema, and refuses one that is wrong for every body
-the schema allows, saying where:
+the collection's JSON Schema, and refuses one it can show is a mistake,
+saying where:
 
-- a field the schema doesn't have (`body.amont`, `prev.body.balanse`), unless
-  that object says `additionalProperties: true`;
+- a field an object doesn't declare (`body.amont`, `prev.body.balanse`).
+  This is stricter than JSON Schema: an object without
+  `additionalProperties` counts as closed, as a Zod object writes it. Say
+  other fields may be there (`additionalProperties: {}` or a schema, as
+  `z.looseObject` and `.catchall()` write it) to read one;
 - a comparison that is never equal or always an error: a string with a
   number, `body.n > "1"`;
 - arithmetic that is always an error: `body.n + 1` (a body's numbers are
   doubles: write `1.0`);
 - a value used where it can't be: `versions(body.game)` on a string,
-  `sum()` of strings, `size()` of a number, `&&` on a string, a field of a
-  string, a condition that gives anything but a bool.
+  `sum()` of strings, `size()` of a number, `&&` or `||` where no side is a
+  bool, a field of a string, a condition that gives anything but a bool.
 
 This is the library's care, not protocol: another writer's definition that
 it would refuse still stands, and peers judge it by spec 09. It can't catch:
@@ -137,7 +140,8 @@ a missing optional field (ask `has()`); anything read from a cited version
 not narrowed by the schema (a cited body is untyped to it); a cited version
 of the wrong collection; values out of range; and whatever `dyn()` or a
 schema it can't follow (no `type`, a mix of types) hides. A number's
-`integer` type reads as a double, as CEL reads JSON.
+`integer` type reads as a double, as CEL reads JSON, and a sum of ints is
+untyped, since `sum([])` is `0.0`.
 
 ## How the library reads them
 
