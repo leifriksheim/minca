@@ -77,6 +77,11 @@ reference implementation, or any implementation, honestly.
     ([#33](https://github.com/leifriksheim/weave/issues/33)). That includes knocks on doors and contact requests (07),
     whose mailbox can be flooded ([#23](https://github.com/leifriksheim/weave/issues/23)).
   - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/weave/issues/162)).
+  - A page that takes over an app's tab while the account home waits for the
+    app's request (up to 10 minutes in the reference home) can send its own
+    request, in the window the person opened from the app. The home shows
+    that page's origin and grants nothing under the app's; the person
+    reading the origin is the only defence (06 §2.3). By design.
 
 _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 
@@ -564,12 +569,6 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     account's uses in another collection, and that app can't write its record
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
-  - While the home waits for a request (up to 10 minutes in the reference
-    home), a page that takes over the app's tab can send its own request
-    instead, in the window the person opened from the app. The home shows
-    that page's origin, and grants nothing under the app's; it says hello
-    only once, so a page that arrives later is not told where the home is
-    (06 §2.3). By design.
 
 _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/doors.test.ts` ("opens only with its door…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 

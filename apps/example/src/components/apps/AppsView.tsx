@@ -200,8 +200,9 @@ export function AppsView({
         </section>
       )}
 
-      {/* On a phone the button in the heading gives way to one under the thumb. */}
-      {space.writable && (
+      {/* On a phone the button in the heading gives way to one under the thumb, once
+          there are apps; before that the tile in the grid is the way. */}
+      {space.writable && apps.ready.length > 0 && (
         <button onClick={onCreate} data-variant="primary" className="fab">
           <Icon name="sparkle" size={16} /> Create an app
         </button>

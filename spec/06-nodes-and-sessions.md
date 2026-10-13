@@ -191,10 +191,9 @@ The home:
 
 1. Does nothing unless `window.opener` is set.
 2. Posts `{ type: "weave:hello" }` to the opener once, with `targetOrigin`
-   `*`. The hello carries nothing secret, but says where the home is; it is
-   not repeated, so a page that later takes over the app's tab is not told.
-   Whatever page is in the opener's tab while the home waits can still send
-   a request, and the home shows that page's origin (step 3).
+   `*`. The hello carries nothing secret. Whatever page is in the opener's
+   tab while the home waits can send a request without one; the defence is
+   step 3, the home showing that page's origin.
 3. Takes the first `message` whose `source` is the opener and whose `type` is
    `weave:request`. The **origin of that event**, as the browser reports it, is
    the app's identity; the home MUST NOT trust any name the request gives

@@ -4,7 +4,7 @@ import type { NewSpace } from '@weaveprotocol/core';
 import { rolePresets } from '@weaveprotocol/core';
 import { Modal, Choice } from '@weave/app-shared/Modal';
 import { Info } from '@weave/app-shared/Info';
-import { Shape, shapeFor, type ShapeKind } from '@weave/app-shared/shapes';
+import { Shape, markFor } from '@weave/app-shared/shapes';
 import type { ShapeColour } from '@weave/app-shared/tokens';
 import { useMyName } from '@weaveprotocol/core/react';
 import { NameField } from './NameField';
@@ -16,8 +16,6 @@ function spaceBadges(space: Pick<SpaceSummary, 'visibility' | 'role' | 'joining'
   return `${space.visibility === 'private' ? 'Private' : 'Public'} · ${space.joining ? 'joining…' : (space.role ?? 'following')}`;
 }
 
-/** Shapes thin enough at the middle that a letter on them sits mostly on the page */
-const THIN: ReadonlySet<ShapeKind> = new Set(['daisy', 'star', 'sparkle']);
 /** Shape colours light enough to carry navy rather than paper */
 const LIGHT: ReadonlySet<ShapeColour> = new Set(['peach', 'lilac']);
 
@@ -26,9 +24,9 @@ const LIGHT: ReadonlySet<ShapeColour> = new Set(['peach', 'lilac']);
  * the rail and every alert, with the first letter of its name in the middle.
  */
 export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id' | 'name'>; size?: number }) {
-  const shape = shapeFor(space.id);
+  const shape = markFor(space.id);
   const letter = [...space.name.trim()][0]?.toUpperCase() ?? '·';
-  const navy = THIN.has(shape.kind) || LIGHT.has(shape.colour);
+  const navy = LIGHT.has(shape.colour);
   return (
     <span
       aria-hidden

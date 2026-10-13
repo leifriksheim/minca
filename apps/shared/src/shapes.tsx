@@ -235,13 +235,23 @@ const CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lila
  * thing always gets the same shape.
  */
 export function shapeFor(id: string): { kind: ShapeKind; colour: ShapeColour } {
-  const known = APP_SHAPES[id];
-  if (known) return known;
+  return APP_SHAPES[id] ?? pick(id, ROUND_KINDS);
+}
+
+/** Round shapes solid at the middle, where a letter can sit */
+const SOLID_KINDS: readonly RoundKind[] = ['scallop', 'flower', 'clover', 'burst', 'squircle'];
+
+/** The shape for something marked with a letter on top, like a space: picked by its id from the solid ones */
+export function markFor(id: string): { kind: RoundKind; colour: ShapeColour } {
+  return pick(id, SOLID_KINDS);
+}
+
+function pick(id: string, kinds: readonly RoundKind[]): { kind: RoundKind; colour: ShapeColour } {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
   const n = Math.abs(hash);
   return {
-    kind: ROUND_KINDS[n % ROUND_KINDS.length] ?? 'scallop',
-    colour: CYCLE[Math.floor(n / ROUND_KINDS.length) % CYCLE.length] ?? 'cobalt',
+    kind: kinds[n % kinds.length] ?? 'scallop',
+    colour: CYCLE[Math.floor(n / kinds.length) % CYCLE.length] ?? 'cobalt',
   };
 }

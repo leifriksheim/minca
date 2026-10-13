@@ -35,7 +35,7 @@ export function ConnectScreen() {
               {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect with Minca'}
             </button>
             <p style={{ ...styles.errorHint, marginTop: 16 }}>
-              Opens <strong style={{ color: palette.ink.strong }}>{home}</strong> in a small window. This app
+              Opens <strong style={{ color: palette.ink.strong }}>{home}</strong>, where you sign in. This app
               gets a note signed by your account for its own key — never your password.
             </p>
             <div style={styles.linkRow}>
