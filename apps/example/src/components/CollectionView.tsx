@@ -275,7 +275,13 @@ export function CollectionView({
       {mayCreate &&
         !onOthers &&
         (adding ? (
-          <div style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, padding: 16 }}>
+          <div
+            style={{
+              border: `1px solid ${palette.surface.line}`,
+              borderRadius: palette.radius.lg,
+              padding: 16,
+            }}
+          >
             <SchemaForm
               schema={schema}
               initial={adding}
@@ -447,7 +453,11 @@ function ListLayout({
   return (
     <div
       role="list"
-      style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, overflow: 'hidden' }}
+      style={{
+        border: `1px solid ${palette.surface.line}`,
+        borderRadius: palette.radius.lg,
+        overflow: 'hidden',
+      }}
     >
       {rows.map(({ record, linked }, i) => {
         const body = bodyOf(record);
@@ -524,7 +534,7 @@ function Check({
         setShown(next);
         void onChange(next).catch(() => setShown(!next));
       }}
-      style={{ width: 16, height: 16, accentColor: '#000', flexShrink: 0 }}
+      style={{ width: 16, height: 16, accentColor: palette.accent.base, flexShrink: 0 }}
     />
   );
 }
@@ -540,7 +550,13 @@ function TableLayout({
 }) {
   const columns = columnsOf(schema);
   return (
-    <div style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, overflowX: 'auto' }}>
+    <div
+      style={{
+        border: `1px solid ${palette.surface.line}`,
+        borderRadius: palette.radius.lg,
+        overflowX: 'auto',
+      }}
+    >
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
         <thead>
           <tr>

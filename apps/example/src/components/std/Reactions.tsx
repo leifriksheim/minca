@@ -107,9 +107,9 @@ export function Reactions({
             gap: 2,
             padding: 4,
             background: palette.surface.card,
-            border: `1px solid ${palette.surface.line}`,
-            borderRadius: 8,
-            boxShadow: '0 8px 24px -12px rgba(0,0,0,.2)',
+            border: `1px solid ${palette.surface.rule}`,
+            borderRadius: palette.radius.lg,
+            boxShadow: palette.shadow.small,
           }}
         >
           {QUICK.map((emoji) => (
@@ -123,7 +123,7 @@ export function Reactions({
                 background: 'none',
                 fontSize: 18,
                 padding: '4px 6px',
-                borderRadius: 6,
+                borderRadius: palette.radius.sm,
               }}
             >
               {emoji}
@@ -141,7 +141,7 @@ const pill = {
   gap: 6,
   height: 28,
   padding: '0 10px',
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   borderWidth: 1,
   borderStyle: 'solid',
   borderColor: palette.surface.line,

@@ -13,7 +13,7 @@ import { styles, palette, variants } from '../styles';
 import { programRequest } from '../program-terms';
 
 /** What people run, before the code */
-const COMMAND = import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli connect';
+const COMMAND = import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @minca/cli connect';
 /** The relay the CLI meets on unless told otherwise (`packages/cli/src/agent.ts`) */
 const CLI_RELAY = 'wss://p2p-web-relay.fly.dev';
 
@@ -233,7 +233,13 @@ function Pulse() {
   return (
     <span
       ref={dot}
-      style={{ width: 7, height: 7, borderRadius: 999, background: palette.ink.muted, flexShrink: 0 }}
+      style={{
+        width: 7,
+        height: 7,
+        borderRadius: palette.radius.pill,
+        background: palette.ink.muted,
+        flexShrink: 0,
+      }}
     />
   );
 }
@@ -241,7 +247,7 @@ function Pulse() {
 const note = {
   padding: '12px 14px',
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 8,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
 } as const;
 
@@ -251,7 +257,7 @@ const commandBox = {
   gap: 10,
   padding: '10px 10px 10px 12px',
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 8,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
   fontFamily: palette.mono,
 } as const;

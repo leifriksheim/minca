@@ -323,7 +323,7 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
         gap: 6,
         padding: '10px 12px',
         background: palette.surface.sunken,
-        borderRadius: 8,
+        borderRadius: palette.radius.lg,
       }}
     >
       <p style={{ fontSize: 13, color: palette.ink.body, lineHeight: 1.5 }}>
@@ -363,7 +363,7 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
             lineHeight: 1.45,
             background: palette.surface.card,
             border: `1px solid ${palette.surface.line}`,
-            borderRadius: 6,
+            borderRadius: palette.radius.lg,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
           }}
@@ -383,7 +383,7 @@ function AgentBadge() {
       style={{
         marginLeft: 6,
         padding: '1px 6px',
-        borderRadius: 999,
+        borderRadius: palette.radius.pill,
         border: `1px solid ${palette.surface.line}`,
         fontSize: 11,
         color: palette.ink.muted,
@@ -495,7 +495,7 @@ const tile = {
   gap: 8,
   padding: 14,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
   font: 'inherit',
   color: 'inherit',

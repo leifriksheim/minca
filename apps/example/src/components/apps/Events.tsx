@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { Shape, shapeFor } from '@weave/app-shared/shapes';
 import { useAccount, useCan, useLive, useNode } from '@weaveprotocol/core/react';
 import type { IncludedOf, P2PNode, QueryRecord } from '@weaveprotocol/core';
 import { comment, event, rsvp, type CalendarEvent, type Rsvp } from '@weaveprotocol/core/schemas';
@@ -25,7 +26,7 @@ import {
 import { styles, palette, ui } from '../../styles';
 import { Person } from '../Person';
 import { Comments } from '../std/Comments';
-import { Cover, kindOf, type Kind } from './Cover';
+import { Cover, kindColour, kindOf, type Kind } from './Cover';
 import {
   NearButton,
   NearContext,
@@ -316,15 +317,16 @@ function Hero({
         </Cover>
       </button>
       <div style={{ ...ui.stack, gap: 10, padding: 24, justifyContent: 'center', minWidth: 0 }}>
-        <span style={{ ...eyebrow, color: live ? palette.accent.good : palette.accent.danger }}>
+        <span style={{ ...eyebrow, color: live ? palette.accent.good : palette.accent.base }}>
           {live ? 'Happening now' : `Next up · ${horizon(dateOf(body.start), now)}`}
         </span>
         <button onClick={onOpen} style={{ ...bare, textAlign: 'left' }}>
           <h2
             style={{
               fontSize: 26,
-              fontWeight: 650,
-              letterSpacing: '-0.03em',
+              fontFamily: palette.display,
+              fontWeight: 700,
+              letterSpacing: '-0.04em',
               color: palette.ink.strong,
               lineHeight: 1.15,
               wordBreak: 'break-word',
@@ -383,7 +385,7 @@ function EventCard({
           )}
         </Cover>
         <div style={{ ...ui.stack, gap: 4, padding: '12px 14px 4px', minWidth: 0 }}>
-          <span style={{ ...eyebrow, color: palette.accent.danger }}>{shortWhen(body)}</span>
+          <span style={{ ...eyebrow, color: palette.accent.base }}>{shortWhen(body)}</span>
           <strong
             style={{
               fontSize: 15,
@@ -454,17 +456,24 @@ function EventPage({
         ‹ All events
       </button>
 
-      <Cover kind={k} seed={record.key} size={120} className="ev-banner" style={{ borderRadius: 14 }}>
+      <Cover
+        kind={k}
+        seed={record.key}
+        size={120}
+        className="ev-banner"
+        style={{ borderRadius: palette.radius.lg }}
+      >
         <DateTile when={body.start} large />
       </Cover>
 
       <header style={{ ...ui.stack, gap: 8 }}>
-        <span style={{ ...eyebrow, color: palette.accent.danger, fontSize: 13 }}>{longWhen(body)}</span>
+        <span style={{ ...eyebrow, color: palette.accent.base, fontSize: 13 }}>{longWhen(body)}</span>
         <h1
           style={{
             fontSize: 30,
-            fontWeight: 650,
-            letterSpacing: '-0.035em',
+            fontFamily: palette.display,
+            fontWeight: 700,
+            letterSpacing: '-0.04em',
             lineHeight: 1.15,
             color: palette.ink.strong,
             wordBreak: 'break-word',
@@ -605,13 +614,13 @@ function Guests({ record }: { record: EventRecord }) {
             style={{
               flex: 1,
               padding: '10px 12px',
-              borderRadius: 10,
+              borderRadius: palette.radius.lg,
               background: palette.surface.sunken,
               ...ui.stack,
               gap: 2,
             }}
           >
-            <strong style={{ fontSize: 22, fontWeight: 650, color: palette.ink.strong }}>
+            <strong style={{ fontSize: 22, fontWeight: 600, color: palette.ink.strong }}>
               {g.status === 'going'
                 ? countOf(record, 'going')
                 : answers.filter((a) => a.body.status === g.status).length}
@@ -727,7 +736,7 @@ function MonthView({
   return (
     <div style={{ ...ui.stack, gap: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 650, letterSpacing: '-0.03em', color: palette.ink.strong }}>
+        <h2 style={{ ...styles.appTitle, fontSize: 20 }}>
           {month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
         </h2>
         <span style={{ flex: 1 }} />
@@ -783,8 +792,9 @@ function MonthView({
                     }}
                     title={e.body.title}
                     style={{
-                      background: `hsl(${k.hue} 80% 94%)`,
-                      color: `hsl(${k.hue} 55% 28%)`,
+                      background: palette.surface.sunken,
+                      color: palette.ink.strong,
+                      boxShadow: `inset 3px 0 0 ${palette.shapes[kindColour(k)]}`,
                       textDecoration: e.body.status === 'cancelled' ? 'line-through' : undefined,
                     }}
                   >
@@ -799,7 +809,7 @@ function MonthView({
                   {these.slice(0, 3).map((e) => (
                     <i
                       key={e.key}
-                      style={{ background: `hsl(${kindOf(KINDS, e.body.category).hue} 65% 55%)` }}
+                      style={{ background: palette.shapes[kindColour(kindOf(KINDS, e.body.category))] }}
                     />
                   ))}
                 </span>
@@ -837,7 +847,7 @@ function EventRow({ record, onOpen }: { record: EventRecord; onOpen: () => void 
         alignItems: 'center',
         gap: 12,
         padding: 10,
-        borderRadius: 10,
+        borderRadius: palette.radius.lg,
         textAlign: 'left',
         border: `1px solid ${palette.surface.line}`,
       }}
@@ -846,7 +856,7 @@ function EventRow({ record, onOpen }: { record: EventRecord; onOpen: () => void 
         kind={k}
         seed={record.key}
         size={26}
-        style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0 }}
+        style={{ width: 48, height: 48, borderRadius: palette.radius.lg, flexShrink: 0 }}
       />
       <span style={{ ...ui.stack, gap: 2, minWidth: 0 }}>
         <strong style={{ ...ui.ellipsis, fontSize: 14, color: palette.ink.strong }}>{body.title}</strong>
@@ -1078,9 +1088,7 @@ function Empty({
   };
   return (
     <div style={{ ...styles.emptyState, ...ui.stack, gap: 12, alignItems: 'center', padding: '48px 16px' }}>
-      <span aria-hidden style={{ fontSize: 36 }}>
-        🗓️
-      </span>
+      <Shape {...shapeFor('events')} size={40} />
       <span>{filtered ? 'Nothing of this kind here.' : said[view]}</span>
       {mayCreate && (view === 'upcoming' || view === 'hosting') && !filtered && (
         <button
@@ -1108,9 +1116,10 @@ function DateTile({ when, large }: { when: string; large?: boolean }) {
         alignItems: 'center',
         width: large ? 60 : 46,
         padding: large ? '6px 0 8px' : '4px 0 6px',
-        borderRadius: 10,
-        background: '#fff',
-        boxShadow: '0 4px 14px -6px rgba(0, 0, 0, .35)',
+        borderRadius: palette.radius.lg,
+        background: palette.surface.card,
+        border: `1px solid ${palette.surface.rule}`,
+        boxShadow: palette.shadow.small,
       }}
     >
       <span
@@ -1119,7 +1128,7 @@ function DateTile({ when, large }: { when: string; large?: boolean }) {
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '.06em',
-          color: palette.accent.danger,
+          color: palette.accent.base,
         }}
       >
         {date.toLocaleDateString(undefined, { month: 'short' }).replace('.', '')}
@@ -1186,7 +1195,7 @@ function Faces({ dids }: { dids: ReadonlyArray<string> }) {
           key={did}
           style={{
             marginLeft: i ? -8 : 0,
-            borderRadius: 999,
+            borderRadius: palette.radius.pill,
             boxShadow: `0 0 0 2px ${palette.surface.card}`,
           }}
         >
@@ -1280,7 +1289,7 @@ const bare: CSSProperties = {
 };
 const eyebrow: CSSProperties = {
   fontSize: 12,
-  fontWeight: 650,
+  fontWeight: 600,
   textTransform: 'uppercase',
   letterSpacing: '.04em',
 };

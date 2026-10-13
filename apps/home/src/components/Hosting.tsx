@@ -71,7 +71,7 @@ export function Hosting({ node }: { node: P2PNode }) {
         <p style={{ fontSize: 13, color: palette.ink.muted }}>Asking your host…</p>
       ) : hosts?.length ? (
         <>
-          <h2 style={{ ...styles.sectionTitle, fontSize: 16 }}>Always online</h2>
+          <h2 style={styles.sectionHeading}>Always online</h2>
           {hosts.map((host) => (
             <HostRow
               key={host.url}
@@ -122,9 +122,9 @@ function Offer({ offer, onTurnOn }: { offer: HostDescription | null; onTurnOn: (
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-        <FeatureIcon kind="online" glyph="cloud" size={44} />
+        <FeatureIcon kind="online" size={44} />
         <div style={{ flex: 1 }}>
-          <h2 style={{ ...styles.sectionTitle, fontSize: 16 }}>Keep your spaces online</h2>
+          <h2 style={styles.sectionHeading}>Keep your spaces online</h2>
           <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
             {offer
               ? `${offer.name} · ${offer.free ? 'free' : (offer.price ?? '')}`
@@ -211,12 +211,19 @@ function HostRow({
       </div>
       {room !== null && status?.bytes !== undefined && status.quota !== undefined && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ height: 4, borderRadius: 2, background: palette.surface.sunken, overflow: 'hidden' }}>
+          <div
+            style={{
+              height: 4,
+              borderRadius: palette.radius.pill,
+              background: palette.surface.sunken,
+              overflow: 'hidden',
+            }}
+          >
             <div
               style={{
                 width: `${Math.max(room * 100, 1)}%`,
                 height: '100%',
-                background: room >= 1 ? palette.accent.danger : palette.ink.strong,
+                background: room >= 1 ? palette.accent.danger : palette.accent.base,
               }}
             />
           </div>
@@ -267,11 +274,9 @@ function HostingDialog({
     <Modal title="Keep your spaces online" onClose={onClose} width={460}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <FeatureIcon kind="online" glyph="cloud" size={44} />
+          <FeatureIcon kind="online" size={44} />
           <div>
-            <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
-              {host ? host.name : 'Always online'}
-            </p>
+            <p style={styles.sectionHeading}>{host ? host.name : 'Always online'}</p>
             <p style={{ fontSize: 13, color: palette.ink.muted }}>
               {host ? 'Choose how to pay' : 'Your spaces, reachable around the clock'}
             </p>
@@ -389,8 +394,9 @@ export function HostingDue() {
           gap: 12,
           marginBottom: 16,
           padding: '10px 12px 10px 14px',
-          borderRadius: 10,
+          borderRadius: palette.radius.none,
           border: `1px solid ${palette.surface.line}`,
+          background: palette.surface.card,
         }}
       >
         <StatusPill tone={state.tone}>{state.pill}</StatusPill>

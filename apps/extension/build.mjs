@@ -16,10 +16,14 @@
  *
  * The home's own relays arrive with the grant and are used as well, so an
  * extension built for one home still meets peers on another.
+ *
+ * The design system's tokens (`@weave/app-shared/tokens`) are written to
+ * `dist/tokens.css`, linked before `styles.css`, so the pages have their
+ * colours before any script runs.
  */
 import { build, context } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, rm } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -74,6 +78,21 @@ console.log(`Home: ${options.define.__WEAVE_HOME__}  Relays: ${options.define.__
 await rm(here('dist'), { recursive: true, force: true });
 await mkdir(here('dist'), { recursive: true });
 await cp(here('static'), here('dist'), { recursive: true });
+await writeFile(here('dist/tokens.css'), await tokenCss());
+
+/** The shared `tokenCss`, bundled from its TypeScript source and evaluated here. */
+async function tokenCss() {
+  const result = await build({
+    stdin: { contents: "export { tokenCss } from '@weave/app-shared/tokens';", resolveDir: here('.') },
+    bundle: true,
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  });
+  const source = result.outputFiles[0].text;
+  const tokens = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+  return tokens.tokenCss;
+}
 
 if (watch) {
   const ctx = await context(options);

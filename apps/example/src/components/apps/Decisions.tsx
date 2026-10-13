@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Shape, shapeFor } from '@weave/app-shared/shapes';
 import { useAccount, useCan, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
 import type { IncludedOf, P2PNode, QueryRecord } from '@weaveprotocol/core';
 import { ballot, decision, proposal, type Proposal } from '@weaveprotocol/core/schemas';
@@ -44,7 +45,16 @@ export function Decisions({ space, onOpen }: AppProps) {
           </button>
         ))}
       {proposals?.length === 0 && !proposing && (
-        <div style={styles.emptyState}>
+        <div
+          style={{
+            ...styles.emptyState,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <Shape {...shapeFor('decisions')} size={40} />
           Nothing to decide yet.{mayPropose ? ' Put something to the space.' : ''}
         </div>
       )}

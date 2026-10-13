@@ -10,6 +10,7 @@ import {
 import { WeaveAuth, useAuth, useSession, useWeave } from '@weaveprotocol/core/react';
 import { Wordmark } from '@weave/app-shared/Wordmark';
 import { Avatar } from '@weave/app-shared/Avatar';
+import { Shape, shapeFor } from '@weave/app-shared/shapes';
 import { useAction } from '@weave/app-shared/action';
 import { styles, palette } from '../styles';
 
@@ -39,7 +40,7 @@ export function ConnectPage() {
       <Frame>
         <h1 style={styles.title}>Your account home</h1>
         <p style={styles.hint}>
-          Apps open this page to ask for access to your Weave account. Nothing has asked right now.
+          Apps open this page to ask for access to your Minca account. Nothing has asked right now.
         </p>
         <a href="/" style={{ ...styles.linkButton, paddingLeft: 0 }}>
           Your account
@@ -50,7 +51,7 @@ export function ConnectPage() {
 
   if (state?.stage !== 'ready') {
     return (
-      <Frame mark={false}>
+      <Frame>
         <Asking incoming={incoming} />
         <WeaveAuth />
       </Frame>
@@ -84,13 +85,13 @@ function Asking({ incoming }: { incoming: IncomingRequest }) {
         marginBottom: 24,
         padding: '10px 12px',
         background: palette.surface.sunken,
-        borderRadius: 8,
+        borderRadius: palette.radius.none,
       }}
     >
       <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>{' '}
       {isProposeRequest(incoming.request)
         ? 'suggests what to notify you about.'
-        : 'wants to use your Weave account.'}{' '}
+        : 'wants to use your Minca account.'}{' '}
       Sign in to decide
       {isProposeRequest(incoming.request) ? '.' : ' what it gets.'}
     </p>
@@ -133,6 +134,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
     <Frame>
       {byCode ? (
         <>
+          <AppShape id={request.audience ?? origin} />
           <h1 style={styles.title}>Connect “{request.name ?? 'a program'}”</h1>
           <p style={styles.subtitle}>
             A program you started with a code from {host} — on your computer or a server — wants to{' '}
@@ -143,6 +145,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         </>
       ) : (
         <>
+          <AppShape id={origin} />
           <h1 style={styles.title}>Connect to {host}</h1>
           <p style={styles.subtitle}>
             {request.name ? <>It calls itself “{request.name}”. </> : null}It wants to{' '}
@@ -197,13 +200,14 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           {offered.length === 0 && <p style={styles.errorHint}>You have no spaces it could use.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {offered.map((space) => (
-              <label key={space.id} style={choice}>
+              <label key={space.id} data-choice style={styles.choice}>
                 <input
                   type="checkbox"
                   checked={chosen.has(space.id)}
                   onChange={() => setChosen((was) => toggled(was, space.id))}
                   style={{ ...styles.checkbox, marginTop: 0 }}
                 />
+                <Shape {...shapeFor(space.id)} size={18} />
                 <span style={{ flex: 1 }}>{space.name}</span>
                 <span style={{ color: palette.ink.faint, fontSize: 12 }}>
                   {space.visibility} · {space.role ?? 'following'}
@@ -219,7 +223,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           <p style={styles.fieldLabel}>New spaces for it</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {creating.map((space, index) => (
-              <div key={index} style={{ ...choice, flexWrap: 'wrap' }}>
+              <div key={index} style={{ ...styles.choice, flexWrap: 'wrap', cursor: 'default' }}>
                 <span style={{ flex: 1 }}>{space.name}</span>
                 <span style={{ color: palette.ink.faint, fontSize: 12 }}>
                   {space.visibility} · {constitution(space, session.did)}
@@ -279,6 +283,7 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
 
   return (
     <Frame>
+      <AppShape id={origin} />
       <h1 style={styles.title}>Keep your spaces online</h1>
       <p style={styles.subtitle}>
         {request.name ? <>“{request.name}”</> : asker(origin)} wants to keep your spaces online while your
@@ -391,6 +396,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
 
   return (
     <Frame>
+      <AppShape id={origin} />
       <h1 style={styles.title}>Notify you when…</h1>
       <p style={styles.subtitle}>
         “{who}” suggests these for your account,{' '}
@@ -400,7 +406,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
       <section style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {request.notify.map((proposal, index) => (
-            <label key={index} style={choice}>
+            <label key={index} data-choice style={styles.choice}>
               <input
                 type="checkbox"
                 checked={kept.has(index)}
@@ -484,7 +490,11 @@ function Note({
 }) {
   return (
     <div
-      style={{ ...styles.errorBox, marginTop: 0, marginBottom: below, background: palette.surface.sunken }}
+      style={{
+        ...styles.note,
+        marginBottom: below,
+        ...(warn ? { borderColor: palette.accent.danger, background: palette.accent.dangerSoft } : {}),
+      }}
     >
       <p style={{ ...styles.todoText, ...(warn ? { color: palette.accent.danger } : {}) }}>{title}</p>
       <p style={styles.errorHint}>{children}</p>
@@ -569,29 +579,25 @@ function lasts(days: number): string {
   return days === 1 ? '1 day' : `${days} days`;
 }
 
-/** The page around it; `mark` off when the sign-in element draws its own */
-function Frame({ children, mark = true }: { children: ReactNode; mark?: boolean }) {
+/** The page around it, under Minca's mark; the sign-in element's own is hidden in the home's styles */
+function Frame({ children }: { children: ReactNode }) {
   return (
     <div style={{ ...styles.container, paddingTop: 32 }}>
       <div style={{ ...styles.card, paddingTop: 0 }}>
-        {mark && (
-          <div style={{ marginBottom: 32 }}>
-            <Wordmark compact />
-          </div>
-        )}
+        <div style={{ marginBottom: 32 }}>
+          <Wordmark compact />
+        </div>
         {children}
       </div>
     </div>
   );
 }
 
-const choice = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '10px 12px',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: 8,
-  fontSize: 14,
-  cursor: 'pointer',
-} as const;
+/** Who is asking, as its shape: the same one every time, picked by its address */
+function AppShape({ id }: { id: string }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <Shape {...shapeFor(id)} size={48} />
+    </div>
+  );
+}

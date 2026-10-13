@@ -4,7 +4,8 @@ import type { NewSpace } from '@weaveprotocol/core';
 import { rolePresets } from '@weaveprotocol/core';
 import { Modal, Choice } from '@weave/app-shared/Modal';
 import { Info } from '@weave/app-shared/Info';
-import { hash } from '@weave/app-shared/hash';
+import { Shape, shapeFor, type ShapeKind } from '@weave/app-shared/shapes';
+import type { ShapeColour } from '@weave/app-shared/tokens';
 import { useMyName } from '@weaveprotocol/core/react';
 import { NameField } from './NameField';
 import { styles, palette } from '../styles';
@@ -15,32 +16,46 @@ function spaceBadges(space: Pick<SpaceSummary, 'visibility' | 'role' | 'joining'
   return `${space.visibility === 'private' ? 'Private' : 'Public'} · ${space.joining ? 'joining…' : (space.role ?? 'following')}`;
 }
 
-/** A space keeps its colour everywhere it appears. */
-const hue = (text: string) => hash(text) % 360;
+/** Shapes thin enough at the middle that a letter on them sits mostly on the page */
+const THIN: ReadonlySet<ShapeKind> = new Set(['daisy', 'star', 'sparkle']);
+/** Shape colours light enough to carry navy rather than paper */
+const LIGHT: ReadonlySet<ShapeColour> = new Set(['peach', 'lilac']);
 
-/** A space's icon: its first letter on a tint from its id, the same in the grid and the rail */
+/**
+ * A space's icon: its shape, picked by its id so it is the same in the grid,
+ * the rail and every alert, with the first letter of its name in the middle.
+ */
 export function SpaceMark({ space, size = 40 }: { space: Pick<SpaceSummary, 'id' | 'name'>; size?: number }) {
-  const h = hue(space.id);
+  const shape = shapeFor(space.id);
   const letter = [...space.name.trim()][0]?.toUpperCase() ?? '·';
+  const navy = THIN.has(shape.kind) || LIGHT.has(shape.colour);
   return (
     <span
       aria-hidden
       style={{
+        position: 'relative',
         width: size,
         height: size,
         flexShrink: 0,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: Math.round(size / 4),
-        background: `hsl(${h} 46% 92%)`,
-        color: `hsl(${h} 55% 32%)`,
-        fontSize: Math.round(size * 0.42),
-        fontWeight: 600,
-        letterSpacing: '-0.02em',
       }}
     >
-      {letter}
+      <Shape {...shape} size={size} style={{ position: 'absolute', inset: 0 }} />
+      <span
+        style={{
+          position: 'relative',
+          fontFamily: palette.display,
+          fontSize: Math.round(size * 0.42),
+          fontWeight: 700,
+          letterSpacing: '-0.04em',
+          lineHeight: 1,
+          color: navy ? palette.ink.strong : palette.surface.card,
+        }}
+      >
+        {letter}
+      </span>
     </span>
   );
 }

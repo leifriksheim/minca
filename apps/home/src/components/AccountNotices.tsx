@@ -1,7 +1,7 @@
 import { useWeave } from '@weaveprotocol/core/react';
 import { relayOnlyLocal, relayProblem } from '@weave/app-shared/relay';
 import { PodChoice } from './PodChoice';
-import { styles } from '../styles';
+import { palette, styles } from '../styles';
 
 /**
  * What the account has to say, above whatever page is showing: a relay that
@@ -53,14 +53,14 @@ export function AccountNotices() {
       {moved && (
         <div style={{ ...styles.panel, marginTop: 0, marginBottom: 16 }}>
           <div style={{ ...styles.panelBody, paddingTop: 14 }}>
-            <p style={{ ...styles.ok, color: '#000' }}>
+            <p style={{ ...styles.ok, color: palette.ink.strong }}>
               {moved.merged
                 ? `Combined with the copy in the pod — ${moved.recordsAdded} new records, ${moved.spacesAdded} new spaces.`
                 : `Moved into the pod — ${moved.spacesAdded} spaces, ${moved.recordsAdded} records.`}
             </p>
             <p style={styles.errorHint}>
               {moved.from
-                ? `“${moved.from}” still has its own copy. Weave won't use it any more — delete the folder yourself once you're sure you don't need it.`
+                ? `“${moved.from}” still has its own copy. Minca won't use it any more — delete the folder yourself once you're sure you don't need it.`
                 : "This browser still has its own copy. Nothing uses it now; remove it once you're happy the pod has everything."}
             </p>
             <div style={{ ...styles.linkRow, gap: 8 }}>

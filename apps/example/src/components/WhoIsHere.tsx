@@ -5,7 +5,7 @@ import { healthOf, type Health } from '../derive/network';
 import { Dot, HEALTH_COLOR } from './NetworkView';
 import { nameOf, type People } from '../derive/people';
 import { Avatar } from '@weave/app-shared/Avatar';
-import { styles } from '../styles';
+import { styles, palette } from '../styles';
 
 const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
 
@@ -111,8 +111,8 @@ export function WhoIsHere({
               key={did}
               style={{
                 marginLeft: i === 0 ? 0 : -5,
-                borderRadius: 4,
-                boxShadow: '0 0 0 1.5px #fff',
+                borderRadius: palette.radius.sm,
+                boxShadow: `0 0 0 1.5px ${palette.surface.card}`,
                 display: 'inline-flex',
               }}
             >

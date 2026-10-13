@@ -226,7 +226,7 @@ const navItem = {
   height: 34,
   padding: '0 10px',
   border: 'none',
-  borderRadius: 6,
+  borderRadius: palette.radius.pill,
   background: 'none',
   color: palette.ink.body,
   fontSize: 14,

@@ -1,20 +1,99 @@
-import { Band, Feature, Page, Points } from './Site';
+import { useState } from 'react';
+import { Band, Page, Points } from './Site';
 import { HeroSpace } from './HeroSpace';
+import { Morph, Shape, shapeFor, type ShapeKind } from '@weave/app-shared/shapes';
 
 /**
- * The front page, for communities: a member asks an agent for a tool, the agent
- * proposes it into the space, and someone whose role allows it adds it. The
- * hero (`HeroSpace`) acts that story out; the mock-up below is drawn in HTML.
+ * The front page, for community builders: it sells the Minca app. A minca
+ * (minka) is the Andean custom of everyone turning out to build what serves
+ * them all. The page's argument: making software is nearly free now, so a
+ * group can have whatever it imagines, and pass it on to the next group.
+ *
+ * The brand draws a space as a ruled grid and every tool as a shape in it
+ * (`shapes.tsx`); the hero's last cell keeps melting into a new one.
  */
 
-/** A proposal decided by its ballots, drawn after the Decisions app (`apps/example/src/components/apps/Decisions.tsx`) */
+/** The palette, one class per colour; shapes take turns with them */
+const COLOURS = ['cobalt', 'coral', 'peach', 'sage', 'lilac'] as const;
+const colour = (i: number) => `c-${COLOURS[i % COLOURS.length]}`;
+
+/** What a space has from the moment a group starts, each with the shape it has in the app */
+const BUILT_IN: ReadonlyArray<{ name: string; id: string }> = [
+  { name: 'Chat', id: 'chat' },
+  { name: 'Polls', id: 'polls' },
+  { name: 'Decisions', id: 'decisions' },
+  { name: 'Events', id: 'events' },
+  { name: 'Board', id: 'kanban' },
+  { name: 'Market', id: 'marketplace' },
+  { name: 'Calls', id: 'calls' },
+];
+
+/** What the hero's last cell becomes, one after another */
+const MADE = [
+  { name: 'Carpool', kind: 'clover', colour: 'coral' },
+  { name: 'Seed swap', kind: 'flower', colour: 'sage' },
+  { name: 'Repair tracker', kind: 'burst', colour: 'peach' },
+  { name: 'Chore wheel', kind: 'scallop', colour: 'lilac' },
+  { name: 'Book club', kind: 'star', colour: 'cobalt' },
+  { name: 'Choir parts', kind: 'sparkle', colour: 'coral' },
+  { name: 'Tool library', kind: 'squircle', colour: 'sage' },
+  { name: 'Volunteer rota', kind: 'daisy', colour: 'peach' },
+] as const;
+
+/** The big shape in the "make it whatever you want" panel, on cobalt */
+const ANYTHING = [
+  { kind: 'flower', colour: 'peach' },
+  { kind: 'squircle', colour: 'coral' },
+  { kind: 'burst', colour: 'lilac' },
+  { kind: 'clover', colour: 'paper' },
+  { kind: 'star', colour: 'peach' },
+  { kind: 'scallop', colour: 'coral' },
+  { kind: 'sparkle', colour: 'lilac' },
+] as const;
+
+/** Shapes for the small things, in turn */
+const SMALL: readonly ShapeKind[] = [
+  'scallop',
+  'flower',
+  'sparkle',
+  'clover',
+  'burst',
+  'half',
+  'daisy',
+  'star',
+];
+
+/** A space, drawn as a sheet of shapes: what it starts with, and a cell that keeps becoming something new */
+function SpaceGrid() {
+  const [made, setMade] = useState(0);
+  return (
+    <div className="space-grid" id="inside" aria-hidden>
+      {BUILT_IN.map((item, i) => (
+        <div key={item.name} className="cell">
+          <span className="cell-num">{String(i + 1).padStart(2, '0')}</span>
+          <Shape {...shapeFor(item.id)} />
+          <span className="cell-name">{item.name}</span>
+        </div>
+      ))}
+      <div className="cell cell-new">
+        <span className="cell-num">08</span>
+        <Morph steps={MADE} onTurn={setMade} />
+        <span className="cell-name" key={made}>
+          {MADE[made]?.name}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** A question decided by its votes, drawn after the Decisions app (`apps/example/src/components/apps/Decisions.tsx`) */
 const DECIDED = (
   <div className="proposal">
     <div className="proposal-head">
       <b>Paint the clubhouse green?</b>
       <span className="tag">Decided</span>
     </div>
-    <div className="by">Sam · 5 votes for one answer decide it</div>
+    <div className="by">Sam · 5 yeses decide it</div>
     <div className="tally">
       {[
         { option: 'Yes', votes: 5, won: true },
@@ -30,25 +109,118 @@ const DECIDED = (
         </div>
       ))}
     </div>
-    <div className="sealed">Checked by every member’s phone and laptop. Nobody counted by hand.</div>
   </div>
 );
 
-/** Tools too small for any company to make, and exactly right for one group */
-const IDEAS = [
-  'Carpool',
-  'Volunteer rota',
-  'Tool library',
-  'Potluck sign-up',
-  'Decision log',
-  'Lost and found',
-  'Match availability',
-  'Book club picks',
-  'Chore wheel',
-  'Event RSVPs',
-  'Shared budget',
-  'Garden plot map',
+/** The three things a minca builds, each drawn as one of the shapes */
+const TRADITION: ReadonlyArray<{ shape: ShapeKind; colour: string; title: string; body: string }> = [
+  {
+    shape: 'arch',
+    colour: 'c-cobalt',
+    title: 'A bridge',
+    body: 'Every June, Quechua villages in Peru rebuild a grass-rope bridge over the Apurímac river, by hand. They’ve done it for five hundred years.',
+  },
+  {
+    shape: 'squircle',
+    colour: 'c-coral',
+    title: 'A school',
+    body: 'Families bring bricks, roof beams and a pot of soup for whoever’s lifting. Nobody’s hired. Everybody comes.',
+  },
+  {
+    shape: 'daisy',
+    colour: 'c-sage',
+    title: 'The harvest',
+    body: 'This week everyone helps bring in one family’s potatoes. Next week, the next family’s.',
+  },
 ];
+
+/** Tools too small for any company to make, and exactly right for one group: two rows that drift past */
+const IDEAS: readonly [readonly string[], readonly string[]] = [
+  [
+    'Carpool',
+    'Volunteer rota',
+    'Tool library',
+    'Potluck sign-up',
+    'Seed swap',
+    'Lost and found',
+    'Match availability',
+    'Repair tracker',
+    'Kit rota',
+    'Babysitting circle',
+    'Rent strike tracker',
+    'Choir parts',
+  ],
+  [
+    'Book club picks',
+    'Chore wheel',
+    'Shared budget',
+    'Garden plot map',
+    'Skill share',
+    'Mutual aid',
+    'Bike repair queue',
+    'Recipe book',
+    'Climbing partners',
+    'Street party',
+    'Grant tracker',
+    'Lending shelf',
+  ],
+];
+
+/** One tool travelling between groups; each one adds a piece, and the shape grows with it */
+const TRAVELS: ReadonlyArray<{ group: string; change: string }> = [
+  { group: 'Riverside FC', change: 'Makes a carpool for away games' },
+  { group: 'Northside Hockey', change: 'Adds a waitlist' },
+  { group: 'Oak Primary parents', change: 'Adds a school-run rota' },
+];
+
+/** The carpool's shape after `pieces` groups have had it */
+function Grown({ pieces }: { pieces: number }) {
+  return (
+    <svg className="grown" viewBox="0 0 100 100" aria-hidden>
+      <path className="fill c-cobalt" d="M8 92A42 42 0 0 1 92 92Z" />
+      {pieces > 1 ? <circle className="fill c-coral" cx="50" cy="34" r="16" /> : null}
+      {pieces > 2 ? (
+        <path
+          className="fill c-peach"
+          d="M84 4C85.5 15 89 18.5 100 20 89 21.5 85.5 25 84 36 82.5 25 79 21.5 68 20 79 18.5 82.5 15 84 4Z"
+        />
+      ) : null}
+    </svg>
+  );
+}
+
+/** A row of chips that drifts sideways forever; drawn twice so the loop has no seam */
+function Drift({ items, offset, reverse }: { items: readonly string[]; offset: number; reverse?: boolean }) {
+  const chip = (idea: string, i: number, copy: string) => (
+    <span key={`${copy}-${idea}`} className="chip-idea" aria-hidden={copy === 'b'}>
+      <Shape kind={SMALL[(i + offset) % SMALL.length] ?? 'scallop'} className={colour(i + offset)} />
+      {idea}
+    </span>
+  );
+  return (
+    <div className={reverse ? 'drift reverse' : 'drift'}>
+      <div className="drift-track">
+        {items.map((idea, i) => chip(idea, i, 'a'))}
+        {items.map((idea, i) => chip(idea, i, 'b'))}
+      </div>
+    </div>
+  );
+}
+
+/** Short points side by side, each marked with a small shape */
+function Marked({ items }: { items: ReadonlyArray<{ title: string; body: string }> }) {
+  return (
+    <div className="ruled marked">
+      {items.map((item, i) => (
+        <div key={item.title}>
+          <Shape kind={SMALL[i * 2] ?? 'scallop'} className={colour(i)} />
+          <h3>{item.title}</h3>
+          <p>{item.body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function Home() {
   return (
@@ -56,147 +228,136 @@ export function Home() {
       <section className="hero">
         <div className="wrap">
           <h1>
-            The internet was ours.
+            Many hands
             <br />
-            Let’s take it back.
+            make it happen.
           </h1>
           <p>
-            Big tech needs your community. Your community doesn’t need big tech. On Weave, your group owns the
-            space, builds its own tools and makes its own rules.
+            One place for your club, your street or your crew to talk, plan and get things done. Need
+            something that doesn’t exist yet? Make it.
           </p>
           <div className="actions">
-            <a href="/app" className="btn btn-primary">
-              Build without them
+            <a href="/app" className="btn btn-primary btn-lg">
+              Start a minca
             </a>
-            <a href="#how" className="btn btn-secondary">
-              See how it works
+            <a href="#how" className="btn btn-secondary btn-lg">
+              See how
             </a>
           </div>
-          <HeroSpace />
+          <SpaceGrid />
         </div>
       </section>
 
-      <Band
-        id="how"
-        kicker="How a new tool arrives"
-        title="From “we need a carpool” to everyone using one, in minutes."
-        intro={
-          <p>
-            Nobody writes a line of code, and nothing is deployed. The tool lives in your community’s space,
-            next to everything else.
+      <section className="band story" id="minca">
+        <div className="wrap">
+          <div className="section-head">
+            <h2>In the Andes, nobody waits for someone else to build the bridge.</h2>
+            <p>
+              They call it a minca. When something would help everyone, everyone shows up and builds it
+              together.
+            </p>
+          </div>
+          <div className="ruled tradition">
+            {TRADITION.map((item) => (
+              <div key={item.title}>
+                <Shape kind={item.shape} className={item.colour} />
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </div>
+            ))}
+          </div>
+          <p className="story-turn">
+            Your club, your street and your crew work the same way. <b>Minca gives them a place to build.</b>
           </p>
-        }
-      >
-        <Points
-          points={[
-            {
-              title: '1. Someone asks their AI',
-              body: 'Any member with Claude, Cursor or another assistant connected describes what the group needs. The assistant can’t add anything by itself. It proposes.',
-            },
-            {
-              title: '2. Everyone sees the proposal',
-              body: 'What it allows is worked out from its rules, not from what the assistant says about it. If it brings its own screen, the code is there to read.',
-            },
-            {
-              title: '3. The group says yes',
-              body: 'Whoever your roles allow adds it: the admins, to begin with. It sits beside the chat and the polls, for everyone in the space.',
-            },
-            {
-              title: '4. Everyone uses it',
-              body: 'On laptops and phones, live, and offline too. Every seat taken is checked against the rules on every device, so one seat each means one seat each.',
-            },
-          ]}
-        />
-      </Band>
+        </div>
+      </section>
 
-      <Band
-        kicker="What changed"
-        title="Making software is almost free now. Running it isn’t."
-        intro={
-          <p>
-            A group can have exactly the tool it needs in an afternoon. What stops it is everything around the
-            tool, and that’s why communities end up renting space on someone else’s platform.
-          </p>
-        }
-      >
-        <Points
-          points={[
-            {
-              title: 'Your community lives on their platform',
-              body: 'The members, the history and the rules sit with a company that can change its terms, its prices or its mind. Leaving means starting over.',
-            },
-            {
-              title: 'The tools you need are too small to exist',
-              body: 'Nobody builds a carpool for one football club or a rota for one food bank. So it ends up in a spreadsheet, and someone chases everyone by message.',
-            },
-            {
-              title: 'Bots see everything',
-              body: 'Adding an integration usually means handing a stranger’s server access to every message. Most groups either don’t, or stop asking.',
-            },
-            {
-              title: 'Weave takes the running away',
-              body: 'Accounts, storage, sharing and permissions are built in, and nobody has to host anything. So a tool can be just the part that’s about your group.',
-            },
-          ]}
-        />
-      </Band>
+      <section className="band abundance">
+        <div className="wrap">
+          <div className="abundance-panel">
+            <Morph steps={ANYTHING} className="panel-morph" />
+            <div className="section-head">
+              <h2>If you can say it, you can have it.</h2>
+              <p>
+                Building an app used to take money and experts. Now you tell an AI what your group needs, and
+                it’s there by tonight. No code, no servers, no bills.
+              </p>
+            </div>
+            <div className="abundance-line">
+              A carpool. A seed swap. A rota for the choir. <b>Whatever’s next.</b>
+            </div>
+            <div className="drifts" aria-label="Things groups make">
+              <Drift items={IDEAS[0]} offset={0} />
+              <Drift items={IDEAS[1]} offset={3} reverse />
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <Band
-        kicker="Your rules"
-        title="Run by your group. Enforced by everyone’s device."
-        intro={
-          <p>
-            On a platform, the rules are whatever its servers do. In Weave there’s no server to decide, so
-            every device checks every change against the rules your group set.
-          </p>
-        }
-      >
-        <div className="grid">
-          <Feature
-            icon="M8 1.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6ZM2.5 14.5c.6-2.8 2.8-4.5 5.5-4.5s4.9 1.7 5.5 4.5"
-            title="Roles you design"
-          >
-            Start with admins, moderators and members, or make your own. Each role is a list of what it may
-            do, and it lives in your space, not in anyone’s code.
-          </Feature>
-          <Feature icon="M3 8.5l3 3 7-7" title="New tools are a decision">
-            A proposal changes nothing until someone whose role allows it says yes. What each tool may do is
-            written in its rules, where everyone can see it.
-          </Feature>
-          <Feature icon="M8 2l5 2v4c0 3-2.2 5.2-5 6-2.8-.8-5-3-5-6V4z" title="Moderation that holds">
-            Moderators keep order in every tool at once, including ones added later. Whatever they remove is
-            gone for everyone, whichever app it’s opened in.
-          </Feature>
-          <Feature icon="M4 4l8 8M12 4l-8 8" title="Removal that sticks">
-            Remove someone, and from then on their changes stop counting on every device. Backdating a change
-            doesn’t get around it.
-          </Feature>
-          <Feature icon="M2 4h12M2 8h12M2 12h8" title="No terms to change overnight">
-            No ads, no one reading along, no feed deciding what members see. Your space’s constitution says
-            who founded it, or that nobody sits above the roles, and no one can rewrite it.
-          </Feature>
-          <Feature icon="M1.5 4h5v8h-5zM9.5 4h5v8h-5zM6.5 8h3" title="Share what works">
-            Made a great rota? Propose it in another community you’re part of. The people there decide for
-            themselves.
-          </Feature>
+      <Band id="how" title="“We need a carpool.” Done by teatime.">
+        <ol className="ruled steps-row">
+          {[
+            { title: 'Ask', body: 'Tell Claude, ChatGPT or any AI what your group needs.' },
+            { title: 'Agree', body: 'Everyone can see what it does. Your group says yes.' },
+            { title: 'Use', body: 'It’s there for everyone, on every phone.' },
+          ].map((step, i) => (
+            <li key={step.title}>
+              <span className="step-num">
+                <Shape kind="scallop" className={colour(i)} />
+                <b>{i + 1}</b>
+              </span>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </li>
+          ))}
+        </ol>
+        <div className="how-demo">
+          <HeroSpace />
         </div>
       </Band>
+
+      <section className="band shared">
+        <div className="wrap">
+          <div className="section-head">
+            <h2>Good ideas spread.</h2>
+            <p>Made something great? Pass it to another group. They make it theirs, and pass it on.</p>
+          </div>
+          <div className="travels">
+            {TRAVELS.map((stop, i) => (
+              <div key={stop.group} className="travel">
+                <span className="cell-num">v{i + 1}</span>
+                <Grown pieces={i + 1} />
+                <div className="travel-tool">Carpool</div>
+                <b className="travel-group">{stop.group}</b>
+                <p>{stop.change}</p>
+              </div>
+            ))}
+          </div>
+          <Marked
+            items={[
+              {
+                title: 'Nothing to sell',
+                body: 'No ads, no subscriptions. Things get made because someone needed them.',
+              },
+              { title: 'Remix anything', body: 'Take any tool and ask your AI to change it.' },
+              { title: 'Smarter together', body: 'What one group figures out, every group gets.' },
+              { title: 'Safe to try', body: 'A new tool only sees its own stuff. Your chats stay yours.' },
+            ]}
+          />
+        </div>
+      </section>
 
       <section className="band">
         <div className="wrap">
           <div className="split">
             <div>
-              <div className="kicker-inline">Decide together</div>
-              <h3>When enough of you agree, it’s decided. Nobody has to count.</h3>
+              <h3>When enough of you agree, it’s decided.</h3>
               <p>
-                Put a question to your group and say how many votes it takes. Once enough members agree, it’s
-                settled, and every member’s device checks the votes for itself. There’s no admin doing the
-                counting, and no way to fake the result.
+                Ask a question and pick how many votes it takes. Nobody has to count, and nobody can fake it.
               </p>
               <ul>
-                <li>Votes that decide: five yeses, and it’s a go</li>
-                <li>Group fundraisers that count as done when the pledges reach the goal</li>
-                <li>Roles and rewards that are given once the conditions are met</li>
+                <li>Five yeses and the clubhouse gets painted</li>
+                <li>A fundraiser that closes when it hits the goal</li>
               </ul>
             </div>
             <div className="mock-card" aria-hidden>
@@ -206,130 +367,50 @@ export function Home() {
         </div>
       </section>
 
-      <section className="band">
-        <div className="wrap">
-          <div className="split">
-            <div>
-              <div className="kicker-inline">Safe to say yes to</div>
-              <h3>A tool can only touch its own part of your space.</h3>
-              <p>
-                A tool your group adds runs sealed off. It can read and write its own records, as the person
-                using it, and every write is checked against its rules. That’s all it can do.
-              </p>
-              <ul>
-                <li>No internet: it can’t send your data anywhere</li>
-                <li>No storage of its own: everything it keeps is a record in the space</li>
-                <li>No way around the rules: other devices refuse what breaks them</li>
-                <li>Private spaces are encrypted on your device before anything leaves it</li>
-              </ul>
-            </div>
-            <div className="compare compare-one">
-              <div className="col">
-                <h3>A typical bot</h3>
-                <ul>
-                  <li>Runs on a stranger’s server</li>
-                  <li>Reads every message it’s allowed near</li>
-                  <li>Does whatever its code does</li>
-                  <li>Gone when its maker stops paying</li>
-                </ul>
-              </div>
-              <div className="col us">
-                <h3>A Weave tool</h3>
-                <ul>
-                  <li>Runs sealed, on members’ own devices</li>
-                  <li>Reads only its own records</li>
-                  <li>Can only do what its rules allow</li>
-                  <li>Lives in your space for as long as you keep it</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <Band
-        kicker="What groups make"
-        title="Tools too small for any company, and just right for you."
-        intro={
-          <p>
-            Chat, polls, decisions, events, a marketplace, a kanban board and calls come built in. Everything
-            else is one conversation with an assistant away.
-          </p>
-        }
-      >
-        <div className="ideas">
-          {IDEAS.map((idea) => (
-            <span key={idea}>{idea}</span>
-          ))}
-        </div>
+      <Band title="Your space. Not a platform’s.">
+        <Marked
+          items={[
+            { title: 'No ads, no feed', body: 'Nobody’s watching, and nothing decides what you see.' },
+            { title: 'Your rules', body: 'Your group decides who can do what.' },
+            { title: 'Private', body: 'Private spaces are locked on your phone before anything leaves it.' },
+            { title: 'Works offline', body: 'On the bus, in the field, in the basement.' },
+          ]}
+        />
       </Band>
 
-      <Band kicker="Three ways in" title="Start wherever you are.">
-        <div className="doors">
-          <a href="/app" className="door">
-            <h3>I run a community</h3>
-            <p>
-              Make a space, invite people with a link, and start with chat and polls. Nobody in your group
-              needs an AI to take part.
-            </p>
-            <span>Start a community →</span>
-          </a>
-          <a href="/app" className="door">
-            <h3>I make things with AI</h3>
-            <p>
-              Connect Claude Code, Claude Desktop or Cursor from the app with one command, and propose tools
-              into any space you’re in.
-            </p>
-            <span>Connect an assistant →</span>
-          </a>
-          <a href="/developers" className="door">
-            <h3>I’m a developer</h3>
-            <p>
-              Identity, storage, sync, encryption and permissions in one library, with no backend. There’s an
-              open spec as well.
-            </p>
-            <span>Build on Weave →</span>
-          </a>
-        </div>
-      </Band>
-
-      <Band kicker="Fair questions" title="Before you move your group.">
+      <Band title="Fair questions.">
         <Points
           points={[
+            { title: 'Do I need to code?', body: 'No. If you can describe it, you can make it.' },
+            {
+              title: 'Does everyone need an AI?',
+              body: 'No. Only whoever makes something new. Everyone else just opens the link.',
+            },
             {
               title: 'Is it ready?',
-              body: 'It’s early. The app works and the protocol is written down, but it’s version 0.2 and will still change. Try it with a group that’s up for it, not with the one thing you can’t lose.',
+              body: 'It’s early days. It works, and it’s still changing. Start with a group that’s up for an adventure.',
             },
-            {
-              title: 'Does everyone need an AI assistant?',
-              body: 'No. Only whoever makes a new tool does. Everyone else opens the invite link and uses what the group has added.',
-            },
-            {
-              title: 'Who runs the servers?',
-              body: 'Nobody has to. Data goes straight between members’ devices. Relays help them find each other and can’t read what passes through. An always-on node keeps things reachable while everyone’s laptop is shut.',
-            },
-            {
-              title: 'What if I lose my password?',
-              body: 'Your account is yours, which cuts both ways. Keep the password Weave makes for you in a password manager, and you can restore it on any device. Without it, or a device that’s still signed in, nobody can get it back for you, including us.',
-            },
+            { title: 'Who owns it?', body: 'Your group. There’s no company in the middle.' },
           ]}
         />
       </Band>
 
       <section className="cta">
         <div className="wrap">
-          <h2>Take it back, one group at a time.</h2>
-          <p>Make a space, invite your people with a link, and build what you need.</p>
+          <div className="cta-mark" aria-hidden>
+            {(['scallop', 'flower', 'half', 'star', 'clover'] as const).map((kind, i) => (
+              <Shape key={kind} kind={kind} className={colour(i)} />
+            ))}
+          </div>
+          <h2>Call your people.</h2>
+          <p>Start a minca and make it yours.</p>
           <div className="actions">
-            <a href="/app" className="btn btn-primary">
-              Build without them
-            </a>
-            <a href="/developers" className="btn btn-secondary">
-              For developers
+            <a href="/app" className="btn btn-primary btn-lg">
+              Start a minca
             </a>
           </div>
-          <a href="/protocol" className="aside-link">
-            How it works, for the curious →
+          <a href="/developers" className="aside-link">
+            Building apps? Minca is an open protocol too →
           </a>
         </div>
       </section>

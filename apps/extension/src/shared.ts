@@ -30,7 +30,7 @@ export const BUILT_IN_RELAYS: ReadonlyArray<string> = __WEAVE_RELAYS__
   .filter(Boolean);
 
 /** What the extension calls itself to the home */
-export const EXTENSION_NAME = 'Weave for Chrome';
+export const EXTENSION_NAME = 'Minca for Chrome';
 
 /** The name its key is kept under (`appKey`) */
 export const KEY_NAME = 'carrier';

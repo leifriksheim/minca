@@ -7,5 +7,5 @@
     "packages/core/tests/bench/**/*.ts"
   ],
   "usedClassMembers": ["connectedCallback", "disconnectedCallback", "attributeChangedCallback"],
-  "ignoreUnresolvedImports": ["./offscreen.js", "./popup.js", "./welcome.js"]
+  "ignoreUnresolvedImports": ["./offscreen.js", "./popup.js", "./welcome.js", "./tokens.css"]
 }

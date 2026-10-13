@@ -109,7 +109,7 @@ export function QueryBuilder({
             lineHeight: 1.6,
             overflowX: 'auto',
             border: `1px solid ${palette.surface.line}`,
-            borderRadius: 8,
+            borderRadius: palette.radius.lg,
             background: palette.surface.sunken,
           }}
         >

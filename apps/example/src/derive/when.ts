@@ -125,7 +125,7 @@ export const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
  * An event as an iCalendar file (RFC 5545), for adding it to a calendar
- * outside Weave. Times go in UTC, so no time zone table is needed.
+ * outside Minca. Times go in UTC, so no time zone table is needed.
  */
 export function icsOf(
   uid: string,
@@ -147,7 +147,7 @@ export function icsOf(
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Weave//Events//EN',
+    'PRODID:-//Minca//Events//EN',
     'BEGIN:VEVENT',
     `UID:${uid}@weave`,
     `DTSTAMP:${utc(new Date())}`,

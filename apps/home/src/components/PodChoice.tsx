@@ -47,7 +47,7 @@ export function PodChoice({
     return (
       <Modal title={`Move to “${podName}”?`} onClose={onCancel}>
         <p style={text}>
-          Your account and all its spaces will be copied into this pod, and Weave will keep your data there
+          Your account and all its spaces will be copied into this pod, and Minca will keep your data there
           from now on.
           {others}
         </p>
@@ -124,8 +124,8 @@ function Choice({
         alignItems: 'flex-start',
         textAlign: 'left',
         padding: 14,
-        borderRadius: 8,
-        border: `1px solid ${checked ? palette.ink.strong : palette.surface.line}`,
+        borderRadius: palette.radius.none,
+        border: `1px solid ${checked ? palette.surface.rule : palette.surface.line}`,
         background: palette.surface.card,
         width: '100%',
       }}
@@ -137,10 +137,10 @@ function Choice({
           height: 16,
           marginTop: 2,
           flexShrink: 0,
-          borderRadius: 999,
-          border: `1px solid ${checked ? palette.ink.strong : palette.surface.lineStrong}`,
+          borderRadius: palette.radius.pill,
+          border: `1px solid ${checked ? palette.accent.base : palette.surface.lineStrong}`,
           boxShadow: checked ? `inset 0 0 0 4px ${palette.surface.card}` : 'none',
-          background: checked ? palette.ink.strong : palette.surface.card,
+          background: checked ? palette.accent.base : palette.surface.card,
         }}
       />
       <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

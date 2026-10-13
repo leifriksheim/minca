@@ -72,7 +72,11 @@ export function Comments({
           choice={mention.choice}
           people={people}
           onPick={mention.pick}
-          style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 8, overflow: 'hidden' }}
+          style={{
+            border: `1px solid ${palette.surface.line}`,
+            borderRadius: palette.radius.lg,
+            overflow: 'hidden',
+          }}
         />
       )}
       {space.writable && (

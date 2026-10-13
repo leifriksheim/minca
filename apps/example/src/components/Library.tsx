@@ -52,7 +52,7 @@ export function Library({
               gap: 8,
               padding: 14,
               border: `1px solid ${palette.surface.line}`,
-              borderRadius: 10,
+              borderRadius: palette.radius.lg,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>

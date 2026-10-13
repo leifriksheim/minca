@@ -343,7 +343,7 @@ export function KeepOnline({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {hero && !stopping && (
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <FeatureIcon kind="online" glyph="cloud" size={44} />
+          <FeatureIcon kind="online" size={44} />
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
               {host ? host.name : 'Around the clock'}
@@ -502,7 +502,7 @@ export function FundPaysFor({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#eef8f0',
+          background: palette.accent.goodSoft,
           color: palette.accent.good,
         }}
       >

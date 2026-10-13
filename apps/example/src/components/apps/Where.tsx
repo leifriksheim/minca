@@ -226,7 +226,7 @@ export function PlaceField({
           minHeight: 40,
           padding: '6px 6px 6px 12px',
           border: `1px solid ${palette.surface.lineStrong}`,
-          borderRadius: 6,
+          borderRadius: palette.radius.md,
         }}
       >
         <span aria-hidden>📍</span>
@@ -458,7 +458,12 @@ export function PlaceMap({ place, height = 200 }: { place: Place | undefined; he
         title={`Map of ${placeLabel(place)}`}
         src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${place.lat},${place.lon}`}
         loading="lazy"
-        style={{ width: '100%', height, border: `1px solid ${palette.surface.line}`, borderRadius: 10 }}
+        style={{
+          width: '100%',
+          height,
+          border: `1px solid ${palette.surface.line}`,
+          borderRadius: palette.radius.lg,
+        }}
       />
       <figcaption style={{ fontSize: 11, color: palette.ink.faint }}>
         <a
@@ -489,8 +494,8 @@ const list: CSSProperties = {
   padding: '4px 0 0',
   listStyle: 'none',
   background: palette.surface.card,
-  border: `1px solid ${palette.surface.lineStrong}`,
-  borderRadius: 8,
-  boxShadow: '0 12px 28px -12px rgba(0, 0, 0, .25)',
+  border: `1px solid ${palette.surface.rule}`,
+  borderRadius: palette.radius.lg,
+  boxShadow: palette.shadow.float,
   overflow: 'hidden',
 };

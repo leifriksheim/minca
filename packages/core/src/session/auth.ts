@@ -97,7 +97,7 @@ import {
 } from './pairing.js';
 
 export interface WeaveAuthConfig {
-  /** What passkey prompts call this app. Default "Weave". */
+  /** What passkey prompts call this app. Default "Minca". */
   readonly appName?: string;
   /** Relays and always-on nodes the signed-in node connects to. Omit to stay offline. */
   readonly network?: NodeNetworkConfig;
@@ -493,7 +493,7 @@ const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
 /** Creates the sign-in flow for this page. */
 export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   const rpId = config.rpId ?? globalThis.location?.hostname ?? 'localhost';
-  const appName = config.appName ?? 'Weave';
+  const appName = config.appName ?? 'Minca';
   const prefix = config.storageKey ?? 'weave';
   const storage = defaultStorage(config.storage);
   const stay = createStaySignedIn(storage, rpId, prefix);

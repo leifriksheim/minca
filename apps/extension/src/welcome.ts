@@ -83,7 +83,7 @@ function connectView(): Array<Node | null> {
     h(
       'p',
       { class: 'lead' },
-      'While Chrome is open, this keeps your Weave spaces in sync with your other devices and the people you share with — even with no app open. It can’t read them.',
+      'While Chrome is open, this keeps your Minca spaces in sync with your other devices and the people you share with — even with no app open. It can’t read them.',
     ),
     h(
       'section',

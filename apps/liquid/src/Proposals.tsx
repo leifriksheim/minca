@@ -208,12 +208,11 @@ function ProposalCard({
           <Verdict result={p.result} />
         </div>
         <h3
+          className="lq-display"
           style={{
-            fontSize: 16,
-            fontWeight: 600,
-            letterSpacing: '-0.02em',
-            color: palette.ink.strong,
-            lineHeight: 1.35,
+            fontSize: 19,
+            letterSpacing: '-0.03em',
+            lineHeight: 1.2,
             wordBreak: 'break-word',
           }}
         >
@@ -251,9 +250,14 @@ function Numbers({ tally }: { tally: Tally }) {
 const VERDICT: Readonly<
   Record<Exclude<Result, 'open'>, { label: string; color: string; bg: string; line: string }>
 > = {
-  passed: { label: 'Passed', color: tone.for, bg: '#effaf2', line: '#cfe9d6' },
-  rejected: { label: 'Rejected', color: tone.against, bg: palette.accent.dangerSoft, line: '#f5d9d7' },
-  disputed: { label: 'Disputed', color: '#9a6700', bg: '#fff8e6', line: '#f1dfa6' },
+  passed: { label: 'Passed', color: tone.for, bg: palette.accent.goodSoft, line: tone.for },
+  rejected: { label: 'Rejected', color: tone.against, bg: palette.accent.dangerSoft, line: tone.against },
+  disputed: {
+    label: 'Disputed',
+    color: palette.accent.warn,
+    bg: palette.surface.sunken,
+    line: palette.accent.warn,
+  },
 };
 
 function Verdict({ result }: { result: Result }) {
@@ -348,12 +352,10 @@ function ProposalPage({
                 <Verdict result={p.result} />
               </div>
               <h1
+                className="lq-display"
                 style={{
-                  fontSize: 26,
-                  fontWeight: 600,
-                  letterSpacing: '-0.04em',
-                  lineHeight: 1.2,
-                  color: palette.ink.strong,
+                  fontSize: 32,
+                  lineHeight: 1.08,
                   wordBreak: 'break-word',
                 }}
               >
@@ -446,7 +448,7 @@ function VotePanel({
 
   return (
     <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <p className="lq-section-title" style={{ fontSize: 15 }}>
+      <p className="lq-display" style={{ fontSize: 19, letterSpacing: '-0.03em' }}>
         Your vote
       </p>
       <div className="lq-votes" role="group" aria-label="Cast your vote">
@@ -462,7 +464,10 @@ function VotePanel({
               onClick={() => onPick(choice)}
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span className="lq-dot" style={{ background: pressed ? '#fff' : tone[choice] }} />
+                <span
+                  className="lq-dot"
+                  style={{ background: pressed ? palette.surface.card : tone[choice] }}
+                />
                 {CHOICE_LABEL[choice]}
               </span>
               <small>{pressed ? (mine?.via ? 'Followed' : 'Your vote') : ' '}</small>
@@ -609,7 +614,9 @@ function Results({ a, p }: { a: Assembly; p: ProposalView }) {
   return (
     <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <p className="lq-section-title">{p.result === 'open' ? 'Standing now' : 'Result'}</p>
+        <p className="lq-display" style={{ fontSize: 17, letterSpacing: '-0.03em' }}>
+          {p.result === 'open' ? 'Standing now' : 'Result'}
+        </p>
         <span className="lq-faint lq-num" style={{ fontSize: 12 }}>
           {voters} {voters === 1 ? 'voter' : 'voters'}, as of {ago(p.createdAt)}
         </span>
@@ -626,10 +633,9 @@ function Results({ a, p }: { a: Assembly; p: ProposalView }) {
         {CHOICES.map((c) => (
           <div key={c}>
             <p
-              className="lq-num"
+              className="lq-num lq-display"
               style={{
-                fontSize: 22,
-                fontWeight: 600,
+                fontSize: 26,
                 letterSpacing: '-0.03em',
                 color: c === 'abstain' ? palette.ink.body : tone[c],
               }}

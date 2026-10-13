@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { SpaceSummary } from '@weaveprotocol/core';
 import type { NewSpace } from '@weaveprotocol/core';
 import { SpaceDialog, SpaceMark } from './SpaceList';
+import { Mark } from '@weave/app-shared/Wordmark';
 import { palette } from '../styles';
 import { useCallSpaces } from './calls/Calls';
 import { Count } from './apps/AppIcon';
@@ -35,13 +36,8 @@ export function SpaceRail({
         title="All spaces"
         aria-label="All spaces"
       >
-        <span style={{ ...plain, background: palette.ink.strong, color: '#fff' }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-            <rect x="1" y="1" width="6" height="6" rx="1.5" />
-            <rect x="9" y="1" width="6" height="6" rx="1.5" />
-            <rect x="1" y="9" width="6" height="6" rx="1.5" />
-            <rect x="9" y="9" width="6" height="6" rx="1.5" />
-          </svg>
+        <span style={plain}>
+          <Mark size={32} />
         </span>
       </button>
 
@@ -64,9 +60,10 @@ export function SpaceRail({
               <span data-rail-pill style={{ ...pill, height: on ? 24 : 0, opacity: on ? 1 : 0 }} />
               <span
                 style={{
-                  borderRadius: 12,
+                  display: 'inline-flex',
+                  borderRadius: palette.radius.pill,
                   boxShadow: on
-                    ? `0 0 0 2px ${palette.surface.page}, 0 0 0 4px ${palette.ink.strong}`
+                    ? `0 0 0 3px ${palette.surface.sunken}, 0 0 0 4px ${palette.surface.rule}`
                     : undefined,
                 }}
               >
@@ -123,7 +120,7 @@ const plain = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  borderRadius: 10,
+  borderRadius: palette.radius.pill,
 };
 /** A spot on a space's corner while a call goes on in it: filled when it's yours */
 const callDot = {
@@ -132,7 +129,7 @@ const callDot = {
   bottom: 0,
   width: 12,
   height: 12,
-  borderRadius: 6,
+  borderRadius: palette.radius.pill,
   border: '2px solid',
   boxShadow: `0 0 0 2px ${palette.surface.sunken}`,
 };
@@ -142,8 +139,8 @@ const pill = {
   top: '50%',
   transform: 'translateY(-50%)',
   width: 4,
-  borderRadius: '0 4px 4px 0',
-  background: palette.ink.strong,
+  borderRadius: `0 ${palette.radius.pill}px ${palette.radius.pill}px 0`,
+  background: palette.accent.base,
   transition: 'height .15s ease, opacity .15s ease',
 };
 

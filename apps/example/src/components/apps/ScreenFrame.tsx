@@ -195,7 +195,7 @@ export function ScreenFrame({
           flex: 1,
           minHeight: 420,
           border: `1px solid ${palette.surface.line}`,
-          borderRadius: 12,
+          borderRadius: palette.radius.lg,
           background: palette.surface.card,
         }}
       />

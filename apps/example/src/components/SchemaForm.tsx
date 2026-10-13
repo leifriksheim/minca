@@ -12,7 +12,7 @@ import {
 import { fieldTypeOf } from '../derive/field-types';
 import { nameOf } from '../derive/people';
 import { usePeopleHere } from './Person';
-import { styles } from '../styles';
+import { styles, palette } from '../styles';
 import { useAction } from '@weave/app-shared/action';
 
 /**
@@ -274,7 +274,14 @@ export function FieldInput({
       );
     case 'object':
       return (
-        <fieldset style={{ ...labelStyle, border: '1px solid #e6e8ec', borderRadius: 8, padding: 10 }}>
+        <fieldset
+          style={{
+            ...labelStyle,
+            border: `1px solid ${palette.surface.line}`,
+            borderRadius: palette.radius.lg,
+            padding: 10,
+          }}
+        >
           <legend>{label}</legend>
           {fieldsOf(field.schema).map((sub) => (
             <FieldInput

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 /**
  * Under the front page's headline: a group's space, and one tool arriving in
- * it the way tools do in Weave. A member asks their AI, the proposal shows
+ * it the way tools do in Minca. A member asks their AI, the proposal shows
  * what it would allow, someone whose role allows it adds it, and then people
  * use it. Four groups take turns, each with a tool drawn as a tiny working app.
  */

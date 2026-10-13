@@ -1,5 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { hash } from '@weave/app-shared/hash';
+import { Shape, shapeFor } from '@weave/app-shared/shapes';
+import { palette } from '../../styles';
+import type { ShapeColour } from '@weave/app-shared/tokens';
 
 /** A kind of thing, as a cover shows it: a label, a glyph and a colour */
 export interface Kind {
@@ -13,11 +16,38 @@ export interface Kind {
 export const kindOf = (kinds: ReadonlyArray<Kind>, id: string | undefined): Kind =>
   kinds.find((k) => k.id === id) ?? kinds[kinds.length - 1]!;
 
+/** Where each of the shapes' colours sits on the colour wheel */
+const WHEEL: ReadonlyArray<readonly [ShapeColour, number]> = [
+  ['coral', 10],
+  ['peach', 40],
+  ['sage', 150],
+  ['cobalt', 230],
+  ['lilac', 300],
+];
+
+/** A kind's colour, as the nearest of the shapes' colours to its hue */
+export function kindColour(kind: Kind): ShapeColour {
+  const away = (hue: number) => {
+    const d = Math.abs((((kind.hue - hue) % 360) + 360) % 360);
+    return Math.min(d, 360 - d);
+  };
+  let best: ShapeColour = 'cobalt';
+  let nearest = Infinity;
+  for (const [colour, hue] of WHEEL) {
+    if (away(hue) < nearest) {
+      nearest = away(hue);
+      best = colour;
+    }
+  }
+  return best;
+}
+
 /**
- * A picture for something that has none: a wash of its kind's colour and its
- * glyph. Records can carry images, but bytes are not stored yet (spec 05
+ * A picture for something that has none: a flat shape in its kind's colour,
+ * on paper. Records can carry images, but bytes are not stored yet (spec 05
  * §16.6), so every event and listing gets one of these instead. The record's
- * key shifts the hue a little, so two of a kind side by side still differ.
+ * key picks the shape and turns it a little, so two of a kind side by side
+ * still differ.
  */
 export function Cover({
   kind,
@@ -29,13 +59,12 @@ export function Cover({
 }: {
   kind: Kind;
   seed: string;
-  /** How big the glyph is drawn */
+  /** How big the shape is: twice this many pixels across */
   size?: number;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
 }) {
-  const hue = kind.hue + (hash(seed) % 36) - 18;
   const tilt = (hash(`${seed}:tilt`) % 24) - 12;
   return (
     <div
@@ -43,27 +72,21 @@ export function Cover({
       style={{
         position: 'relative',
         overflow: 'hidden',
-        background:
-          `radial-gradient(circle at 18% 22%, hsl(${hue} 95% 88% / .9), transparent 55%),` +
-          `radial-gradient(circle at 85% 90%, hsl(${hue + 40} 80% 60% / .55), transparent 60%),` +
-          `linear-gradient(135deg, hsl(${hue} 70% 74%), hsl(${hue + 28} 65% 58%))`,
+        background: palette.surface.sunken,
         ...style,
       }}
     >
-      <span
-        aria-hidden
+      <Shape
+        kind={shapeFor(seed).kind}
+        colour={kindColour(kind)}
+        size={size * 2}
         style={{
           position: 'absolute',
-          right: '8%',
-          bottom: '6%',
-          fontSize: size,
-          lineHeight: 1,
-          transform: `rotate(${tilt}deg)`,
-          filter: 'drop-shadow(0 6px 12px rgba(0, 0, 0, .18))',
+          left: '50%',
+          top: '50%',
+          transform: `translate(-50%, -50%) rotate(${tilt}deg)`,
         }}
-      >
-        {kind.emoji}
-      </span>
+      />
       {children}
     </div>
   );

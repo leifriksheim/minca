@@ -50,8 +50,8 @@ export function Notifications({ node }: { node: P2PNode }) {
   return (
     <section id="notifications" style={styles.settingsSection}>
       <div>
-        <h2 style={{ ...styles.sectionTitle, fontSize: 16, marginBottom: 4 }}>Notify me when…</h2>
-        <p style={{ color: palette.ink.muted, fontSize: 14, lineHeight: 1.5 }}>
+        <h2 style={styles.sectionHeading}>Notify me when…</h2>
+        <p style={styles.sectionText}>
           Apps you use can ask to notify you. What you allow shows here, under the app that asked, and that
           app lets you know.
         </p>

@@ -16,6 +16,7 @@
  * nothing.
  */
 import type { Link, NodeRecord, P2PNode } from '@weaveprotocol/core';
+import { accent, radius } from '@weave/app-shared/tokens';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -147,7 +148,7 @@ export const SCREEN_CLIENT = `(() => {
       bar = document.createElement('div');
       bar.id = '__weave-error';
       bar.setAttribute('role', 'alert');
-      bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;padding:8px 10px;border-radius:8px;background:#fff0f0;color:#b00020;border:1px solid #f3c2c2;font:12px/1.4 system-ui,sans-serif;white-space:pre-wrap';
+      bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;padding:8px 10px;border-radius:${radius.sm}px;background:${accent.dangerSoft};color:${accent.danger};border:1px solid ${accent.danger};font:12px/1.4 system-ui,sans-serif;white-space:pre-wrap';
       (document.body || document.documentElement).appendChild(bar);
     }
     bar.textContent = 'This screen hit an error: ' + message;

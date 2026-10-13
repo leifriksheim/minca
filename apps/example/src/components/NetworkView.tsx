@@ -33,14 +33,14 @@ export function useNow(): number {
 export const HEALTH_COLOR: Record<Health, string> = {
   syncing: palette.accent.good,
   alone: palette.ink.faint,
-  connecting: '#d08700',
-  elsewhere: '#d08700',
+  connecting: palette.accent.warn,
+  elsewhere: palette.accent.warn,
   offline: palette.accent.danger,
 };
 
 const RELAY_COLOR: Record<RelayStatus['state'], string> = {
   open: palette.accent.good,
-  connecting: '#d08700',
+  connecting: palette.accent.warn,
   waiting: palette.accent.danger,
   stopped: palette.ink.faint,
 };

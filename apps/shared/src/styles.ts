@@ -1,53 +1,24 @@
 import type { CSSProperties } from 'react';
 
+import { accent, display, font, ink, mono, radius, shadow, shapeColours, surface, tokenCss } from './tokens';
+
 /**
- * One visual vocabulary for the example app and the account home.
+ * One visual vocabulary for the example app, the account home and Liquid,
+ * built from Minca's tokens (`tokens.ts`; DESIGN.md says how to use them).
  *
- * Black and white, after Vercel's: white page, near-black text, one grey for
- * everything secondary, hairline borders instead of shadows, and black as the
- * only accent. Built from a small set of tokens rather than ad-hoc values, so
- * nothing on screen competes with the data itself.
+ * Warm paper, navy ink, cobalt for the thing to do. Surfaces have square
+ * corners and hairlines; controls are pills; anything floating casts a flat
+ * navy shadow. Colour beyond that comes from the shapes (`shapes.tsx`), never
+ * from the chrome, so nothing competes with what people put in their spaces.
  *
  * Inline styles cannot express hover, focus or placeholders, so those live in
  * {@link baseCss} and {@link hoverCss}, which each app puts in its own
  * stylesheet next to its layout rules.
  */
 
-const ink = {
-  /** Headings and anything that must be read first */
-  strong: '#000000',
-  /** Body text */
-  body: '#171717',
-  /** Supporting text: metadata, hints, the things you skim */
-  muted: '#666666',
-  /** Barely there: timestamps, ids */
-  faint: '#8f8f8f',
-} as const;
-
-const surface = {
-  page: '#ffffff',
-  card: '#ffffff',
-  sunken: '#fafafa',
-  line: '#eaeaea',
-  lineStrong: '#d4d4d4',
-} as const;
-
-const accent = {
-  /** The one accent is black */
-  base: '#000000',
-  soft: '#f2f2f2',
-  danger: '#e5484d',
-  dangerSoft: '#fff0f0',
-  good: '#1a7f37',
-} as const;
-
-const radius = { sm: 6, md: 6, lg: 8, pill: 999 } as const;
-
-const font = '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-const mono = '"Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace';
-
-/** Resets and the states every control shares. */
+/** Resets and the states every control shares, with the tokens as CSS custom properties. */
 export const baseCss = `
+    ${tokenCss}
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body {
@@ -60,6 +31,7 @@ export const baseCss = `
       -moz-osx-font-smoothing: grayscale;
     }
     h1, h2, h3, p, ul, figure { margin: 0; }
+    h1, h2 { font-family: ${display}; font-weight: 700; letter-spacing: -0.035em; color: ${ink.strong}; }
     ul { padding: 0; }
 
     button { font-family: inherit; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
@@ -68,12 +40,12 @@ export const baseCss = `
 
     input, textarea, select { font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease; }
     input::placeholder, textarea::placeholder { color: ${ink.faint}; }
-    input:focus, textarea:focus, select:focus { border-color: ${ink.muted} !important; box-shadow: 0 0 0 3px rgba(0, 0, 0, .06); outline: none; }
+    input:focus, textarea:focus, select:focus { border-color: ${accent.base} !important; box-shadow: 0 0 0 3px ${accent.soft}; outline: none; }
     [data-variant="quiet"], [data-variant="secondary"] { border: 1px solid ${surface.line} !important; }
     tbody tr { transition: background-color .12s ease; }
 
     /* Visible only for keyboard users, so a mouse click stays quiet. */
-    :focus-visible { outline: 2px solid ${ink.strong}; outline-offset: 2px; }
+    :focus-visible { outline: 2px solid ${accent.base}; outline-offset: 2px; }
     button:focus:not(:focus-visible) { outline: none; }
 
     summary { cursor: pointer; list-style: none; }
@@ -105,7 +77,7 @@ export const baseCss = `
  */
 export const hoverCss = `
     /* Primary actions lift slightly; quiet ones just warm up. */
-    [data-variant="primary"]:not(:disabled):hover { background-color: #383838 !important; }
+    [data-variant="primary"]:not(:disabled):hover { background-color: ${accent.hover} !important; border-color: ${accent.hover} !important; }
     [data-variant="quiet"]:not(:disabled):hover { background-color: ${surface.sunken} !important; color: ${ink.strong} !important; }
     [data-variant="ghost"]:not(:disabled):hover { color: ${ink.strong} !important; }
     [data-variant="danger"]:not(:disabled):hover { background-color: ${accent.dangerSoft} !important; color: ${accent.danger} !important; }
@@ -119,7 +91,7 @@ export const hoverCss = `
     [data-editable]:hover { border-color: ${surface.line} !important; background: ${surface.sunken} !important; }
     .inline-field select:hover, .inline-field input:hover { border-color: ${surface.line} !important; background: ${surface.sunken} !important; }
     [data-nav]:not([aria-current]):hover { background: ${surface.sunken} !important; }
-    [data-tile]:hover { border-color: ${surface.lineStrong} !important; box-shadow: 0 6px 16px -10px rgba(15, 17, 21, .18); }
+    [data-tile]:hover { border-color: ${surface.rule} !important; box-shadow: ${shadow.small}; }
     [data-tile]:hover [data-row-action] { opacity: 1; }
     [data-tile-new]:hover { border-color: ${ink.muted} !important; color: ${ink.strong} !important; background: ${surface.sunken} !important; }
     [data-rail-item]:not([aria-current]):hover [data-rail-pill] { height: 10px !important; opacity: 1 !important; }
@@ -129,10 +101,10 @@ export const hoverCss = `
 const button: CSSProperties = {
   height: 40,
   padding: '0 16px',
-  borderRadius: radius.md,
-  border: '1px solid transparent',
+  borderRadius: radius.pill,
+  border: `1px solid ${accent.base}`,
   backgroundColor: accent.base,
-  color: '#fff',
+  color: ink.inverse,
   fontSize: 14,
   fontWeight: 500,
   width: '100%',
@@ -140,16 +112,18 @@ const button: CSSProperties = {
 
 /** Shared inline styles — kept in one place so the app has a single visual vocabulary. */
 export const styles = {
-  /** Onboarding is a column on a white page, not a box — Vercel's sign-in, not a dialog. */
+  /** Onboarding is a column on the page, not a box: a sign-in, not a dialog. */
   card: {
     padding: '64px 0 0',
     maxWidth: 380,
     width: '100%',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 600,
+    fontFamily: display,
+    fontSize: 32,
+    fontWeight: 700,
     letterSpacing: '-0.04em',
+    lineHeight: 1.05,
     color: ink.strong,
     marginBottom: 8,
   },
@@ -176,7 +150,15 @@ export const styles = {
     padding: '14px 16px',
     borderRadius: radius.md,
     backgroundColor: accent.dangerSoft,
-    border: `1px solid #f5d9d7`,
+    border: `1px solid ${accent.danger}`,
+  },
+  /** A neutral aside: a square box set back from the page. For errors, use errorBox. */
+  note: {
+    padding: '14px 16px',
+    backgroundColor: surface.sunken,
+    fontSize: 13,
+    color: ink.body,
+    lineHeight: 1.6,
   },
   errorHint: { color: ink.muted, fontSize: 13, marginTop: 8, lineHeight: 1.6 },
 
@@ -195,7 +177,13 @@ export const styles = {
     justifyContent: 'space-between',
     gap: 12,
   },
-  appTitle: { fontSize: 24, fontWeight: 600, letterSpacing: '-0.04em', color: ink.strong },
+  appTitle: {
+    fontFamily: display,
+    fontSize: 26,
+    fontWeight: 700,
+    letterSpacing: '-0.04em',
+    color: ink.strong,
+  },
   identityBar: { display: 'flex', gap: 6, flexWrap: 'wrap' },
   badge: {
     fontSize: 12,
@@ -222,9 +210,9 @@ export const styles = {
   /** Secondary actions: white, hairline border, a little shorter */
   smallButton: {
     height: 32,
-    padding: '0 12px',
-    borderRadius: radius.md,
-    border: `1px solid ${surface.line}`,
+    padding: '0 14px',
+    borderRadius: radius.pill,
+    border: `1px solid ${surface.lineStrong}`,
     backgroundColor: surface.card,
     color: ink.body,
     fontSize: 13,
@@ -234,11 +222,11 @@ export const styles = {
   /** A small button in the one accent, for the one thing to do next */
   darkSmall: {
     height: 32,
-    padding: '0 12px',
-    borderRadius: radius.md,
-    border: `1px solid ${ink.strong}`,
-    backgroundColor: ink.strong,
-    color: '#fff',
+    padding: '0 14px',
+    borderRadius: radius.pill,
+    border: `1px solid ${accent.base}`,
+    backgroundColor: accent.base,
+    color: ink.inverse,
     fontSize: 13,
     fontWeight: 500,
     whiteSpace: 'nowrap',
@@ -299,7 +287,13 @@ export const styles = {
     flexDirection: 'column',
     gap: 8,
   },
-  sectionTitle: { fontSize: 14, fontWeight: 600, color: ink.strong, letterSpacing: '-0.01em' },
+  sectionTitle: {
+    fontFamily: display,
+    fontSize: 15,
+    fontWeight: 700,
+    color: ink.strong,
+    letterSpacing: '-0.03em',
+  },
 
   chain: {
     backgroundColor: surface.sunken,
@@ -411,7 +405,7 @@ export const styles = {
     borderRadius: radius.pill,
     border: `1px solid ${surface.lineStrong}`,
     background: 'none',
-    color: ink.faint,
+    color: ink.muted,
     fontSize: 10,
     fontWeight: 700,
     lineHeight: 1,
@@ -427,8 +421,8 @@ export const styles = {
     padding: '12px 14px',
     borderRadius: radius.md,
     backgroundColor: surface.card,
-    border: `1px solid ${surface.line}`,
-    boxShadow: '0 12px 28px -12px rgba(15, 17, 21, .22)',
+    border: `1px solid ${surface.rule}`,
+    boxShadow: shadow.small,
     fontSize: 12.5,
     lineHeight: 1.6,
     color: ink.muted,
@@ -446,7 +440,7 @@ export const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, .4)',
+    backgroundColor: surface.scrim,
     animation: 'weave-fade .12s ease',
   },
   modal: {
@@ -454,14 +448,21 @@ export const styles = {
     maxWidth: 380,
     backgroundColor: surface.card,
     borderRadius: radius.lg,
+    border: `1px solid ${surface.rule}`,
     padding: '24px 22px',
-    boxShadow: '0 24px 48px -20px rgba(15, 17, 21, .3)',
+    boxShadow: shadow.float,
     animation: 'weave-rise .16s ease',
     display: 'flex',
     flexDirection: 'column',
     gap: 14,
   },
-  modalTitle: { fontSize: 18, fontWeight: 600, letterSpacing: '-0.03em', color: ink.strong },
+  modalTitle: {
+    fontFamily: display,
+    fontSize: 20,
+    fontWeight: 700,
+    letterSpacing: '-0.03em',
+    color: ink.strong,
+  },
 
   /** Two choices side by side, for a question with exactly two answers. */
   segmented: {
@@ -469,12 +470,12 @@ export const styles = {
     padding: 3,
     gap: 3,
     backgroundColor: surface.sunken,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
   },
   segment: {
     flex: 1,
     padding: '7px 10px',
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     border: 'none',
     background: 'none',
     color: ink.muted,
@@ -484,13 +485,12 @@ export const styles = {
   segmentActive: {
     flex: 1,
     padding: '7px 10px',
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     border: 'none',
-    backgroundColor: surface.card,
-    color: ink.strong,
+    backgroundColor: accent.base,
+    color: ink.inverse,
     fontSize: 13,
     fontWeight: 600,
-    boxShadow: '0 1px 2px rgba(15, 17, 21, .08)',
   },
   fieldLabel: { fontSize: 12, fontWeight: 600, color: ink.muted, marginBottom: 6 },
 
@@ -525,14 +525,14 @@ export const styles = {
     zIndex: 20,
     minWidth: 300,
     marginTop: 0,
-    border: `1px solid ${surface.line}`,
-    borderRadius: radius.md,
+    border: `1px solid ${surface.rule}`,
+    borderRadius: radius.lg,
     backgroundColor: surface.card,
-    boxShadow: '0 12px 28px -12px rgba(15, 17, 21, .22), 0 2px 6px -2px rgba(15, 17, 21, .1)',
+    boxShadow: shadow.float,
   },
 
   ok: { color: accent.good, fontSize: 13, fontWeight: 500 },
   bad: { color: accent.danger, fontSize: 13, fontWeight: 500 },
 } satisfies Record<string, CSSProperties>;
 
-export const palette = { ink, surface, accent, radius, font, mono };
+export const palette = { ink, surface, accent, radius, font, display, mono, shadow, shapes: shapeColours };

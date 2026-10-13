@@ -149,7 +149,7 @@ Registration (`navigator.credentials.create`):
 
 | Option                          | Value                                                                                                                                                             |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rp`                            | `{ id: rpId, name: appName }` (default name `Weave`)                                                                                                              |
+| `rp`                            | `{ id: rpId, name: appName }` (default name `Minca`)                                                                                                              |
 | `user.id`                       | 32 random bytes (kept, base64url, as the wrap's `userHandle`)                                                                                                     |
 | `user.name`, `user.displayName` | The account's name                                                                                                                                                |
 | `challenge`                     | 32 random bytes                                                                                                                                                   |

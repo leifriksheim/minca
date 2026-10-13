@@ -45,9 +45,9 @@ function wordmark(): HTMLElement {
     'div',
     { class: 'wa-wordmark' },
     svg(
-      '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 5 L7 15 L10 8 L13 15 L18 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>',
+      '<svg width="24" height="13" viewBox="0 0 24 13" aria-hidden="true"><path fill="#2340d6" d="M0.5 12.5A11.5 11.5 0 0 1 23.5 12.5H20.75A8.75 8.75 0 0 0 3.25 12.5Z"/><path fill="#ff6b4a" d="M3.25 12.5A8.75 8.75 0 0 1 20.75 12.5H18A6 6 0 0 0 6 12.5Z"/><path fill="#ffc46b" d="M6 12.5A6 6 0 0 1 18 12.5H15.25A3.25 3.25 0 0 0 8.75 12.5Z"/><path fill="#4e8f6c" d="M8.75 12.5A3.25 3.25 0 0 1 15.25 12.5Z"/></svg>',
     ),
-    'Weave',
+    'minca',
   );
 }
 
@@ -386,8 +386,8 @@ export class WeaveAuthElement extends Base {
   #welcome(state: AuthState): HTMLElement {
     const auth = this.auth;
     return card(
-      'Welcome to Weave',
-      subtitle('One account for every Weave app. Your data stays with you, not on a server.'),
+      'Welcome to Minca',
+      subtitle('One account for every Minca app. Your data stays with you, not on a server.'),
       h(
         'div',
         { class: 'wa-options' },
@@ -425,7 +425,7 @@ export class WeaveAuthElement extends Base {
         state.folderAvailable
           ? option(
               'Open your pod',
-              'The folder your Weave data lives in. Its accounts are listed next, ready to unlock with your passkey or password.',
+              'The folder your Minca data lives in. Its accounts are listed next, ready to unlock with your passkey or password.',
               () => void auth.choosePod(),
               state.busy,
             )
@@ -913,7 +913,7 @@ export class WeaveAuthElement extends Base {
       h(
         'p',
         { class: 'wa-hint' },
-        'A pod is a folder on your computer that holds your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Weave app you point at it opens the same account.',
+        'A pod is a folder on your computer that holds your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Minca app you point at it opens the same account.',
       ),
       h(
         'div',

@@ -235,7 +235,12 @@ function Marker() {
   return (
     <div
       aria-hidden
-      style={{ height: 2, margin: '2px 0 4px', borderRadius: 1, background: palette.ink.strong }}
+      style={{
+        height: 2,
+        margin: '2px 0 4px',
+        borderRadius: palette.radius.pill,
+        background: palette.ink.strong,
+      }}
     />
   );
 }
@@ -277,7 +282,7 @@ const addButton = {
   height: 32,
   padding: '0 8px',
   border: 'none',
-  borderRadius: 6,
+  borderRadius: palette.radius.pill,
   background: 'none',
   color: palette.ink.muted,
   fontSize: 13,

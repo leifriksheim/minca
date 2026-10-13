@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { SpaceSummary } from '@weaveprotocol/core';
 import { inviteLink, useHoldSpace, useNode } from '@weaveprotocol/core/react';
 import { Avatar } from '@weave/app-shared/Avatar';
+import { Shape, shapeFor } from '@weave/app-shared/shapes';
 import { Modal } from '@weave/app-shared/Modal';
 import { useAssembly, type Assembly } from './model';
 import { Proposals } from './Proposals';
@@ -44,14 +45,14 @@ export function AssemblyView({ space, onBack }: { space: SpaceSummary; onBack: (
           >
             ←
           </button>
+          <Shape {...shapeFor(space.id)} size={22} />
           <p
+            className="lq-display"
             style={{
               minWidth: 0,
               flex: 1,
-              fontSize: 16,
-              fontWeight: 600,
-              letterSpacing: '-0.025em',
-              color: palette.ink.strong,
+              fontSize: 19,
+              letterSpacing: '-0.035em',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -190,7 +191,10 @@ function TabButton({
 function Waiting() {
   return (
     <div className="lq-empty lq-fade">
-      <p style={{ fontSize: 15, fontWeight: 600 }}>Joining…</p>
+      <Shape kind="sparkle" colour="peach" size={40} />
+      <p className="lq-display" style={{ fontSize: 18 }}>
+        Joining…
+      </p>
       <p style={{ fontSize: 13.5, maxWidth: 380, lineHeight: 1.55 }}>
         Your invite is on its way to the assembly. It opens as soon as someone who is already in it comes
         online.
@@ -387,7 +391,7 @@ function HowItWorks({ onClose }: { onClose: () => void }) {
           invite decides who votes, so invite with care.
         </Li>
         <Li>
-          <strong>Liquid on its own asks for your whole Weave account.</strong> Making or joining an assembly
+          <strong>Liquid on its own asks for your whole Minca account.</strong> Making or joining an assembly
           after connecting needs it. It only shows the spaces that are assemblies.
         </Li>
         <Li>
@@ -405,7 +409,9 @@ function HowItWorks({ onClose }: { onClose: () => void }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p className="lq-section-title">{title}</p>
+      <p className="lq-display" style={{ fontSize: 17, letterSpacing: '-0.03em' }}>
+        {title}
+      </p>
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</ul>
     </section>
   );

@@ -11,6 +11,7 @@ import {
   useSpaces,
 } from '@weaveprotocol/core/react';
 import { Avatar } from '@weave/app-shared/Avatar';
+import { Shape, shapeFor } from '@weave/app-shared/shapes';
 import { useDismiss } from '@weave/app-shared/useDismiss';
 import { delegation, proposal } from './schema';
 import { AssemblyView } from './Assembly';
@@ -116,7 +117,7 @@ function Home({
       <main className="lq-main" style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
         <InviteCard onJoin={join} />
         <div className="lq-rise">
-          <h1 style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.045em', color: palette.ink.strong }}>
+          <h1 className="lq-display" style={{ fontSize: 34, lineHeight: 1.05 }}>
             Your assemblies
           </h1>
           <p className="lq-muted" style={{ fontSize: 14.5, marginTop: 4 }}>
@@ -185,24 +186,8 @@ function Tile({ space, onOpen }: { space: SpaceSummary; onOpen: () => void }) {
   const members = access?.members.length;
   return (
     <button className="lq-card lq-tile" data-interactive onClick={onOpen}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span
-          aria-hidden
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            background: palette.ink.strong,
-            color: '#fff',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 600,
-            fontSize: 16,
-          }}
-        >
-          {space.name.trim().charAt(0).toUpperCase()}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <Shape {...shapeFor(space.id)} size={44} />
         <span style={{ flex: 1 }} />
         {space.visibility === 'private' && (
           <span className="lq-chip" title="Only members can read it">
@@ -211,7 +196,7 @@ function Tile({ space, onOpen }: { space: SpaceSummary; onOpen: () => void }) {
         )}
       </div>
       <div style={{ marginTop: 'auto' }}>
-        <p style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em', color: palette.ink.strong }}>
+        <p className="lq-display" style={{ fontSize: 19, letterSpacing: '-0.03em' }}>
           {space.name}
         </p>
         <p className="lq-muted lq-num" style={{ fontSize: 13, marginTop: 3 }}>
@@ -239,26 +224,12 @@ function InviteCard({ onJoin }: { onJoin: (invite: string) => Promise<SpaceSumma
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
-        borderColor: palette.ink.strong,
+        borderColor: palette.surface.rule,
       }}
     >
       <div>
-        <p
-          className="lq-faint"
-          style={{ fontSize: 12, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase' }}
-        >
-          You’re invited
-        </p>
-        <p
-          style={{
-            fontSize: 20,
-            fontWeight: 600,
-            letterSpacing: '-0.03em',
-            marginTop: 4,
-            color: palette.ink.strong,
-          }}
-        >
-          {preview ? preview.space.name : 'An assembly'}
+        <p className="lq-display" style={{ fontSize: 22, letterSpacing: '-0.035em' }}>
+          {preview ? `You’re invited to ${preview.space.name}` : 'You’re invited'}
         </p>
         <p className="lq-muted" style={{ fontSize: 13.5, marginTop: 4 }}>
           {preview
@@ -330,7 +301,7 @@ function AccountButton() {
       </button>
       {open && (
         <div
-          className="lq-card lq-fade"
+          className="lq-float lq-fade"
           style={{
             position: 'absolute',
             right: 0,
@@ -338,7 +309,6 @@ function AccountButton() {
             width: 260,
             padding: 14,
             zIndex: 30,
-            boxShadow: '0 16px 32px -16px rgba(15,17,21,.25)',
             display: 'flex',
             flexDirection: 'column',
             gap: 10,
@@ -351,7 +321,7 @@ function AccountButton() {
             </p>
           </div>
           <p className="lq-muted" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-            Your account lives in your Weave home. Disconnecting forgets it here; your assemblies stay in your
+            Your account lives in your Minca home. Disconnecting forgets it here; your assemblies stay in your
             account.
           </p>
           <button

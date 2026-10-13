@@ -7,6 +7,7 @@ import { Modal, Choice } from '@weave/app-shared/Modal';
 import { ASSEMBLY, assemblyRoles, topic } from './schema';
 import { Problem, TopicPicker } from './ui';
 import { useAction } from '@weave/app-shared/action';
+import { palette } from './styles';
 
 /** Topics most groups start with; the person picks some, adds their own, or none */
 const SUGGESTED: ReadonlyArray<{ name: string; hue: number }> = [
@@ -152,7 +153,7 @@ export function NewAssembly({
             type="checkbox"
             checked={membersInvite}
             onChange={(event) => setMembersInvite(event.target.checked)}
-            style={{ marginTop: 3, accentColor: '#000' }}
+            style={{ marginTop: 3, accentColor: palette.accent.base }}
           />
           <span>
             Members can invite others

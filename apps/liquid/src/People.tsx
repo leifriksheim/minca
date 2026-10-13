@@ -15,9 +15,12 @@ import {
 } from './schema';
 import { PARTY_RULE_LABEL, PartyChip, PartyMark, Problem, Who, decidesText } from './ui';
 import { useAction } from '@weave/app-shared/action';
-import { hue, palette } from './styles';
+import { Shape } from '@weave/app-shared/shapes';
+import { SHAPE_CYCLE } from '@weave/app-shared/tokens';
+import { SHADE_HUES, colourOf, palette, partyMarkOf } from './styles';
 
-const HUES = [4, 28, 48, 110, 160, 200, 230, 265, 300, 335];
+/** A party picks one of the shapes' colours; its record keeps it as a hue */
+const shadeAt = (i: number) => SHADE_HUES[SHAPE_CYCLE[i % SHAPE_CYCLE.length] ?? 'cobalt'];
 
 export function People({ a, writable }: { a: Assembly; writable: boolean }) {
   const [founding, setFounding] = useState(false);
@@ -28,9 +31,7 @@ export function People({ a, writable }: { a: Assembly; writable: boolean }) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <div>
-            <h2
-              style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.04em', color: palette.ink.strong }}
-            >
+            <h2 className="lq-display" style={{ fontSize: 26 }}>
               Parties
             </h2>
             <p className="lq-muted" style={{ fontSize: 14, marginTop: 2 }}>
@@ -59,7 +60,7 @@ export function People({ a, writable }: { a: Assembly; writable: boolean }) {
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.04em', color: palette.ink.strong }}>
+          <h2 className="lq-display" style={{ fontSize: 26 }}>
             Members
           </h2>
           <p className="lq-muted" style={{ fontSize: 14, marginTop: 2 }}>
@@ -159,7 +160,6 @@ function PartyCard({
   const node = useNode();
   const action = useAction();
   const [requests, setRequests] = useState(false);
-  const c = hue(p.hue);
   const steward = p.stewards.has(a.me);
   const myAsk = p.asked.get(a.me) ?? null;
   const inIt = p.members.has(a.me);
@@ -188,13 +188,12 @@ function PartyCard({
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
-        borderTop: `3px solid ${c.strong}`,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <PartyMark party={p} size={36} />
+        <PartyMark party={p} size={40} />
         <div style={{ minWidth: 0, flex: 1 }}>
-          <p style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.02em', color: palette.ink.strong }}>
+          <p className="lq-display" style={{ fontSize: 18, letterSpacing: '-0.03em' }}>
             {p.name}
           </p>
           <p className="lq-faint lq-num" style={{ fontSize: 12.5 }}>
@@ -323,7 +322,7 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
   const node = useNode();
   const [name, setName] = useState(editing?.name ?? '');
   const [platform, setPlatform] = useState(editing?.platform ?? '');
-  const [shade, setShade] = useState(editing?.hue ?? HUES[a.parties.length % HUES.length] ?? 200);
+  const [shade, setShade] = useState(editing?.hue ?? shadeAt(a.parties.length));
   const [decides, setDecides] = useState<PartyRule>(editing?.decides ?? 'majority');
   const [representative, setRepresentative] = useState<string>(editing?.representative ?? a.me);
   const action = useAction();
@@ -379,24 +378,29 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
           </label>
         </div>
         <div role="radiogroup" aria-label="Colour" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {HUES.map((h) => (
-            <button
-              key={h}
-              type="button"
-              role="radio"
-              aria-checked={shade === h}
-              aria-label={`Colour ${h}`}
-              onClick={() => setShade(h)}
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: 8,
-                border: 'none',
-                background: hue(h).strong,
-                boxShadow: shade === h ? `0 0 0 2px #fff, 0 0 0 4px ${hue(h).strong}` : 'none',
-              }}
-            />
-          ))}
+          {SHAPE_CYCLE.map((colour) => {
+            const picked = colourOf(shade) === colour;
+            return (
+              <button
+                key={colour}
+                type="button"
+                role="radio"
+                aria-checked={picked}
+                aria-label={colour.charAt(0).toUpperCase() + colour.slice(1)}
+                onClick={() => setShade(SHADE_HUES[colour])}
+                style={{
+                  width: 36,
+                  height: 36,
+                  padding: 5,
+                  borderRadius: palette.radius.pill,
+                  border: `1px solid ${picked ? palette.surface.rule : 'transparent'}`,
+                  background: 'none',
+                }}
+              >
+                <Shape kind={partyMarkOf(name || '?', shade).kind} colour={colour} size={24} />
+              </button>
+            );
+          })}
         </div>
         <label className="lq-label">
           What it stands for

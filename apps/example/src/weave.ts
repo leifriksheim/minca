@@ -10,7 +10,7 @@ export const connection = createWeaveConnection({
   // A browser for every space in the account, so it asks for the whole account.
   // An app that needs less asks for less: `scope: 'spaces'`, or `create` a space of its own.
   request: {
-    name: 'Weave example',
+    name: 'Minca',
     access: 'write',
     scope: 'account',
     // No notifications here: connecting asks for none. The person turns them on later (notifications.ts).

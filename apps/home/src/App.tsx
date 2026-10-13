@@ -4,7 +4,7 @@ import { AccountNotices } from './components/AccountNotices';
 import { Settings } from './components/Settings';
 import { HostingDue } from './components/Hosting';
 import { Wordmark } from '@weave/app-shared/Wordmark';
-import { styles } from './styles';
+import { palette, styles } from './styles';
 
 /** The account home: sign in, then the account and everything about it. */
 export function App() {
@@ -13,6 +13,7 @@ export function App() {
   if (state?.stage !== 'ready') {
     return (
       <Page>
+        <Wordmark />
         <WeaveAuth />
       </Page>
     );
@@ -22,7 +23,7 @@ export function App() {
     <Page wide>
       <header style={{ ...styles.headerRow, marginBottom: 32 }}>
         <Wordmark compact />
-        <span style={{ fontSize: 13, color: '#666' }}>Your account home</span>
+        <span style={{ fontSize: 13, color: palette.ink.muted }}>Your account home</span>
       </header>
       <AccountNotices />
       <HostingDue />

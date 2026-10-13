@@ -221,7 +221,17 @@ export function SpaceView({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 12px' }}>
               <SpaceMark space={space} size={32} />
               <div style={{ minWidth: 0 }}>
-                <strong style={{ ...ellipsis, display: 'block', fontSize: 15, color: palette.ink.strong }}>
+                <strong
+                  style={{
+                    ...ellipsis,
+                    display: 'block',
+                    fontFamily: palette.display,
+                    fontSize: 16,
+                    fontWeight: 700,
+                    letterSpacing: '-0.03em',
+                    color: palette.ink.strong,
+                  }}
+                >
                   {space.name}
                 </strong>
                 <Privacy space={space} />
@@ -244,7 +254,7 @@ export function SpaceView({
               {listed.map((app) => (
                 <SideItem
                   key={app.id}
-                  icon={<AppIcon icon={app.icon} hue={app.hue} size={20} />}
+                  icon={<AppIcon id={app.id} size={20} />}
                   label={app.title}
                   unread={unreadOf(unread, app.id)}
                   on={open?.id === app.id}
@@ -369,7 +379,7 @@ export function SpaceView({
                 <SpaceMark space={space} size={30} />
               </span>
             )}
-            {open && <AppIcon icon={open.icon} hue={open.hue} size={28} />}
+            {open && <AppIcon id={open.id} size={28} />}
             <h1 style={{ ...styles.appTitle, ...ellipsis, fontSize: 18, flex: 1, minWidth: 0 }}>{title}</h1>
             {open && <NotifyButton space={space} app={open} collections={collections} />}
             <CallButton space={space} />

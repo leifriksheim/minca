@@ -63,7 +63,7 @@ export function Tags({
                 width: 110,
                 padding: '0 8px',
                 border: `1px solid ${palette.surface.lineStrong}`,
-                borderRadius: 999,
+                borderRadius: palette.radius.pill,
                 fontSize: 12,
               }}
             />
@@ -86,7 +86,7 @@ export const chip = {
   gap: 6,
   height: 24,
   padding: '0 9px',
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.sunken,
   color: palette.ink.body,

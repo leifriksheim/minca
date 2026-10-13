@@ -399,7 +399,7 @@ const syntax = {
   '--sh-entity': palette.ink.strong,
   '--sh-identifier': palette.ink.body,
   '--sh-property': palette.ink.strong,
-  '--sh-string': '#1a7f37',
+  '--sh-string': palette.accent.good,
   '--sh-jsxliterals': palette.ink.body,
   '--sh-sign': palette.ink.faint,
   '--sh-comment': palette.ink.faint,
@@ -540,7 +540,13 @@ function ResultTable({
 }) {
   const anyIncluded = records.some((r) => r.included && Object.keys(r.included).length > 0);
   return (
-    <div style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, overflowX: 'auto' }}>
+    <div
+      style={{
+        border: `1px solid ${palette.surface.line}`,
+        borderRadius: palette.radius.lg,
+        overflowX: 'auto',
+      }}
+    >
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
         <thead>
           <tr>

@@ -92,7 +92,7 @@ export function AutomationsView({
             alignItems: 'center',
             gap: 8,
             padding: '10px 12px',
-            borderRadius: 10,
+            borderRadius: palette.radius.lg,
             background: palette.surface.sunken,
             fontSize: 13,
             color: palette.ink.muted,
@@ -142,8 +142,8 @@ export function AutomationsView({
                     <span
                       style={{
                         ...iconDot,
-                        background: off ? palette.surface.sunken : palette.ink.strong,
-                        color: off ? palette.ink.muted : '#fff',
+                        background: off ? palette.surface.sunken : palette.accent.base,
+                        color: off ? palette.ink.muted : palette.surface.card,
                       }}
                     >
                       <Icon name="bolt" size={14} />
@@ -306,14 +306,14 @@ const ruleCard = {
   gap: 10,
   padding: 14,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
 } as const;
 const ideaTile = {
   display: 'flex',
   alignItems: 'flex-start',
   gap: 10,
   padding: '12px 14px',
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.card,
   color: palette.ink.muted,

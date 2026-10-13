@@ -8,7 +8,8 @@ import { createWeaveAuth } from '@weaveprotocol/core/session';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@weave/app-shared/relay';
 
 export const auth = createWeaveAuth({
-  appName: 'Weave',
+  // The name a passkey prompt shows; the passkey itself is tied to this site, not to it.
+  appName: 'Minca',
   network: { relays: relayUrls(), nodes: CONFIGURED_NODES, hosts: CONFIGURED_HOSTS },
   // Checking, decrypting and syncing happen there, so the page never stutters; the seed stays here.
   // One worker for every tab, where there are shared workers (not Chrome on Android).

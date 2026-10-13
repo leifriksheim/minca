@@ -139,7 +139,7 @@ export function HostStatusRow({
 }) {
   return (
     <>
-      <FeatureIcon kind="online" glyph="cloud" size={size} />
+      <FeatureIcon kind="online" size={size} />
       <div style={{ flex: '1 1 200px', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <strong style={{ fontSize: 14, color: palette.ink.strong }}>{name}</strong>

@@ -9,7 +9,7 @@ import { Proposals } from './MadeApps';
 import { addBuiltIn, moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
-import { styles, palette } from '../../styles';
+import { styles, palette, variants } from '../../styles';
 
 /**
  * A space's apps like a phone's home screen: those added, then proposals and
@@ -75,7 +75,7 @@ export function AppsView({
                 onClick={() => setArranging((was) => !was)}
                 aria-pressed={arranging}
                 data-variant={arranging ? 'primary' : 'quiet'}
-                style={{ ...styles.button, ...inlineButton }}
+                style={{ ...(arranging ? styles.button : variants.quiet), ...inlineButton }}
               >
                 {arranging ? 'Done' : 'Arrange'}
               </button>
@@ -166,7 +166,7 @@ export function AppsView({
             {apps.addable.map((app) => (
               <div key={app.id} style={addRow}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <AppIcon icon={app.icon} hue={app.hue} size={40} />
+                  <AppIcon id={app.id} size={40} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <strong style={cardTitle}>{app.title}</strong>
                     <p style={cardText}>{app.description}</p>
@@ -221,7 +221,7 @@ function AppCard({ app, unread, onClick }: { app: AppEntry; unread: Unread; onCl
       style={card}
     >
       <span style={{ position: 'relative', display: 'inline-flex' }}>
-        <AppIcon icon={app.icon} hue={app.hue} size={44} className="app-card-icon" />
+        <AppIcon id={app.id} size={44} className="app-card-icon" />
         <span className="app-card-count">
           <Count unread={unread} />
         </span>
@@ -256,7 +256,7 @@ function ArrangeCard({
 }) {
   return (
     <div className="app-card" data-arranging style={{ ...card, alignItems: 'center' }}>
-      <AppIcon icon={app.icon} hue={app.hue} size={44} className="app-card-icon" />
+      <AppIcon id={app.id} size={44} className="app-card-icon" />
       <strong style={{ ...cardTitle, flex: 1, minWidth: 0 }}>{app.title}</strong>
       <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         <button
@@ -343,7 +343,7 @@ const iconBox = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
 } as const;
 
 const card = {
@@ -352,7 +352,7 @@ const card = {
   gap: 12,
   padding: 14,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
   font: 'inherit',
   color: 'inherit',
@@ -369,7 +369,7 @@ const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
 const addRow = {
   padding: 12,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
 } as const;
 const inlineButton = {
