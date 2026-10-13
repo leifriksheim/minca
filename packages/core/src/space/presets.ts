@@ -61,10 +61,10 @@ const notHolding = (roles: ReadonlyArray<string>) =>
   roles.map((role) => ['not', ['any', '.roles', ['==', '.', role]]] as const);
 
 /**
- * Whose rules a bot in the space runs (`std.rule`'s `by`): a library command
- * no peer checks, held as a grant like any other (docs/rules.md)
+ * Whose rules a bot in the space runs (`std.automation`'s `by`): a library command
+ * no peer checks, held as a grant like any other (docs/automations.md)
  */
-const INSTRUCT_BOTS: SpaceGrant = Object.freeze({ cmd: '/std.rule/instruct', pol: [] });
+const INSTRUCT_BOTS: SpaceGrant = Object.freeze({ cmd: '/std.automation/instruct', pol: [] });
 
 /** The space's own settings: its key, its relays, its keepers */
 const SETTINGS: ReadonlyArray<SpaceGrant> = [

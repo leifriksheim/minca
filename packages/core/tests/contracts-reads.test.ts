@@ -34,12 +34,13 @@ async function proposalSpace() {
     name: 'app.proposal.passed',
     schema: { type: 'object' },
     links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-    rules: { onePer: ['link:about'], check: [TWO_YES] },
+    rules: { onePer: ['link:about'] },
+    contract: { check: [TWO_YES] },
   });
   await alice.node.collections.define(space, {
     name: 'app.counter',
     schema: { type: 'object' },
-    rules: { check: [BY_ONE] },
+    contract: { check: [BY_ONE] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);

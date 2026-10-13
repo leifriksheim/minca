@@ -17,7 +17,7 @@ Out of scope here, and specified elsewhere:
   ([standard library](../packages/core/docs/standard-library.md)), and collections
   proposed for a space and their review ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)),
   and what a version must be to count, which readers judge and no peer
-  enforces: a definition's `check` and `line` ([09 — Contracts](09-contracts.md)).
+  enforces: a definition's `contract` ([09 — Contracts](09-contracts.md)).
 
 **Terms.** A _record_ is a thing in a space, named by its `key`: a message, a
 task, a vote. It changes by gaining _versions_: a _version_ is one signed state
@@ -469,7 +469,7 @@ their own view of the definition. A writer MUST set `retain: true` when:
   `seen` have `onePer` or `fixed`.
   _Implementation detail:_ the reference writer also sets `retain` on
   `sys.profile`, `sys.box`, `sys.memberkey` and `sys.carrier`, and on every
-  version that is not a delete when the rules in force have `check` (§7.6), so
+  version that is not a delete when the definition in force has a `contract` (§7.6), so
   the library's checks can read the version before and cite it. Peers do not
   require it.
 
@@ -840,7 +840,7 @@ history. In a private space its body is encrypted like any other record's.
 | `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                     |
 | `rules`       | object                | no   | §7                                                                                                                                                                           |
 | `topics`      | string[]              | no   | §8                                                                                                                                                                           |
-| `line`        | object                | no   | A line, judged by readers ([09](09-contracts.md) §7); peers keep it and don't read it (§7.6)                                                                                 |
+| `contract`    | any                   | no   | What a version must be to count: `check` and `line`, judged by readers ([09](09-contracts.md)); peers keep it and don't read it, its type included (§7.6)                    |
 
 A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
@@ -1007,8 +1007,8 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   registry — `sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.fork`,
   `sys.stepdown`, `sys.succeed`, `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
   `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
-  passes and notifications — `sys.carrier`, `sys.pass`, `sys.notify`,
-  `sys.subscription` — in [03](03-spaces.md) §13–15, and how a node uses them
+  passes and automations — `sys.carrier`, `sys.pass`, `sys.automation`,
+  `sys.wake` — in [03](03-spaces.md) §13–15, and how a node uses them
   in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; hosting —
   `sys.hosting` — in [08 — Hosting](08-hosting.md)
   (`sys.relays` and `sys.keepers` also in [05](05-sync-and-storage.md)).
@@ -1069,7 +1069,7 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 > may point at more). That leaves new optional fields, new optional link
 > roles, and changes to `title`, `description` and other annotations.
 > Anything else needs a new name. A keyword the check has no rule for is a
-> break. Rules (`onePer`, `fixed`, `final`, `check`) are the space's
+> break. Rules (`onePer`, `fixed`, `final`) and the contract are the space's
 > governance, not shape: under the same name
 > they may tighten, never loosen. Why this line, after oasdiff:
 > [blueprints and guides](../packages/core/docs/blueprints-and-guides.md#what-additive-means).
@@ -1078,8 +1078,8 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 
 A definition's `rules` say what must be unique, which fields are fixed, and
 whether a record is written once. Every peer enforces them on every version
-it receives. They may also carry `check`, a contract a version must meet to
-count, which peers keep but do not enforce (§7.6).
+it receives. What a version must be to count is not a rule: it is the
+definition's `contract`, which peers keep but do not enforce (§7.6).
 
 ```json
 "rules": {
@@ -1250,8 +1250,8 @@ with `seq > 0` of a collection whose rules in force (as of the version's
 "rules": { "onePer": ["@author", "link:about"], "final": true }
 ```
 
-It is the one way to say "nobody", whatever the space's grants say. `check`
-(§7.6) is not enforced by peers and is not run on deletes. A vote that a
+It is the one way to say "nobody", whatever the space's grants say. A
+`contract` (§7.6) is not enforced by peers. A vote that a
 proof has counted, or the proof itself, must stay what it was.
 
 Two first versions at one key, written apart, both stand, and the ordering
@@ -1260,27 +1260,35 @@ prevent that; telling the two apart, where it matters, is the app's.
 
 ### 7.5 Checking a definition's rules
 
-`rules` MUST be an object with no members other than `onePer`, `fixed`,
-`check` and `final`, each valid as above (`onePer` and `fixed`: non-empty
-lists of non-empty strings; `check`: a list, §7.6; `final`: `true`). A
-definition with anything else, `create`, `edit` and `delete` included, is
-invalid (§6.1).
+`rules` MUST be an object with no members other than `onePer`, `fixed` and
+`final`, each valid as above (`onePer` and `fixed`: non-empty lists of
+non-empty strings; `final`: `true`). A definition with anything else,
+`create`, `edit`, `delete` and `check` included, is invalid (§6.1). A
+contract is not a rule: it is the definition's `contract` (§7.6).
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/contracts-shape.test.ts` ("a contract is not a rule…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
-### 7.6 `check` and `line`
+### 7.6 The contract
 
-A definition's `rules` may carry `check`, a list, and the definition may
-carry `line`, an object (§6.1). Peers keep both as they are and do not read
-what is in them: they never refuse, withdraw or hold back a version because
-of them, and a version that fails them stands like any other. Readers judge
-them as the collection's contract, citing other versions as evidence, and
-count only versions that pass; the language, citations, limits, verdicts
-and the line rule are in [09 — Contracts](09-contracts.md). A peer that has
-never heard of contracts syncs, stores and judges every version's standing
-the same.
+A definition may carry `contract` beside its `rules`: an object of `check`,
+a list of conditions, and `line`, an object. Peers keep it as it is and do
+not read it, not even its type: they never refuse, withdraw or hold back a
+version because of it, and a version that fails it stands like any other.
+Readers judge it, citing other versions as evidence, and count only versions
+that pass; the language, citations, limits, verdicts and the line rule are in
+[09 — Contracts](09-contracts.md). A peer that has never heard of contracts
+syncs, stores and judges every version's standing the same.
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader")._
+```json
+"rules": { "onePer": ["link:about"] },
+"contract": { "check": [{ "that": "versions(body.votes).size() >= 10", "else": "Ten votes" }] }
+```
+
+> Rationale: a rule is what a peer refuses; a contract is what a reader
+> counts. They live apart so that what peers check (§7.5) never names
+> anything only readers judge.
+
+_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-shape.test.ts` ("the same condition under contract.check is judged…")._
 
 ---
 
@@ -1437,7 +1445,7 @@ Given a valid signature and root, whether the version _stands_ in this space:
       in force as of then (§6.3).
    3. The root is a member as of `seen` and holds a grant for what the version does ([03](03-spaces.md) §5.2), `final` allows it (§7.2), and the access history's own judgement of the writer passes (revoked keys, removals, roles taken — [03](03-spaces.md)).
    4. If a definition is in force and the version is not a delete: tags check (§8.4).
-   5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`. `check` is not judged (§7.6).
+   5. If rules are in force: under `final`, no version with `seq > 0`, deletes included (§7.4). Then, if the version is not a delete: `retain` on a `seq 0` under `onePer` or `fixed` (§4.5); `onePer` (§7.3) on `seq 0`; `fixed` (§7.4) on `seq > 0`. The `contract` is not judged (§7.6).
 
    When step 3 fails only on the access history's judgement of a change that came after the version (a removal of its author, or a role taken from it, that it had not seen, a change it saw struck since, its key revoked, or its key's line in its collection proven forked at or before it: [03](03-spaces.md) §5.1 steps 2, 4 and 5, §4.10), the peer still judges steps 4 and 5, and the version is **withdrawn** if they pass, **refused** if they don't. So every peer that can read the body stores the same withdrawn versions, whatever order it checks in; a peer without the key skips what it can't read (§7.3, §8.4).
 
@@ -1487,7 +1495,7 @@ A peer MUST NOT refuse a version on arrival because:
 - its body does not fit the collection's schema, or
 - its links do not conform to the collection's link declarations, or
 - its collection is not defined, or
-- it fails its collection's `check` (§7.6).
+- it fails its collection's `contract` (§7.6).
 
 Each of these depends on which definition, schema or target a peer happens to
 hold, and refusing would leave peers disagreeing forever. A reader may flag

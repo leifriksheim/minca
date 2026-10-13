@@ -8,10 +8,10 @@
  * them all). It is made true by construction: the record's key is derived from
  * what must be unique, so a second vote *is* the first one's next version.
  *
- * What the others can't say, a contract (`check`) can: conditions over the body, the
- * version before and versions it cites (`records/contracts.ts`).
+ * What these can't say, a contract can: conditions over the body, the version
+ * before and versions it cites. It is the definition's `contract`, apart from
+ * these, because readers judge it and peers don't (`records/contracts.ts`).
  */
-import { type Contract } from './contracts.js';
 import { ownedKey } from './key.js';
 import { canonicalize } from '../schema/version.js';
 import { bytesToHex, utf8Encode } from '../utils/encoding.js';
@@ -29,11 +29,6 @@ export interface CollectionRules {
   /** Fields that keep the value the record was created with */
   readonly fixed?: ReadonlyArray<string>;
   /**
-   * Conditions every created or edited version must meet to count, read by
-   * the library and not judged by peers. See `records/contracts.ts`.
-   */
-  readonly check?: ReadonlyArray<Contract>;
-  /**
    * Records are written once: no edit and no delete, by anyone. A vote, a
    * ballot or a proof that others count on stays what it was.
    */
@@ -48,8 +43,10 @@ export function checkRules(rules: unknown, at = 'rules'): string | null {
   for (const key of Object.keys(r)) {
     if (['create', 'edit', 'delete'].includes(key))
       return `${at}.${key} is gone: who may write is the space's grants (spec 02 §7)`;
-    if (!['onePer', 'fixed', 'check', 'final'].includes(key))
-      return `${at}.${key} is not a rule (use onePer, fixed, check, final)`;
+    if (key === 'check')
+      return `${at}.check is gone: a contract is the definition's contract.check (spec 09 §1)`;
+    if (!['onePer', 'fixed', 'final'].includes(key))
+      return `${at}.${key} is not a rule (use onePer, fixed, final)`;
   }
   if (r.final !== undefined && r.final !== true) return `${at}.final must be true`;
   for (const list of ['onePer', 'fixed']) {
@@ -63,9 +60,6 @@ export function checkRules(rules: unknown, at = 'rules'): string | null {
       return `${at}.${list} must be a non-empty list of names`;
     }
   }
-  // Contracts are judged by readers, not by peers (spec/09-contracts.md):
-  // a peer keeps whatever list a definition carries, and its author's node checks it.
-  if (r.check !== undefined && !Array.isArray(r.check)) return `${at}.check must be a list`;
   return null;
 }
 

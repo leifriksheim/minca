@@ -98,6 +98,13 @@ describe('filters', () => {
     assert.equal(matches(r, { tags: { $contains: 'work' } }), false);
   });
 
+  test('$in and $nin: a list field is in when any of its items is', () => {
+    assert.equal(matches(r, { tags: { $in: ['work', 'shop'] } }), true);
+    assert.equal(matches(r, { tags: { $in: ['work'] } }), false);
+    assert.equal(matches(r, { tags: { $nin: ['work'] } }), true);
+    assert.equal(matches(r, { tags: { $nin: ['shop'] } }), false);
+  });
+
   test('comparisons across types never match', () => {
     assert.equal(matches(r, { amount: { $gt: '1' } }), false);
   });

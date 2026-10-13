@@ -66,8 +66,8 @@ about reading your sites.
 
 ## Notifications
 
-It shows none. Apps notify you themselves, about the subscriptions you
-accepted from them; the extension only keeps your spaces online.
+It shows none. Apps notify you themselves, about the automations you kept
+from them; the extension holds their wakes and keeps your spaces online.
 
 The design, and what is still to be checked, is in
 [06 — Nodes, sessions and apps](../../spec/06-nodes-and-sessions.md).

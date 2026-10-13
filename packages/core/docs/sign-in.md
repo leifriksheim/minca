@@ -282,12 +282,12 @@ so each such program is its own. `auth.connections()` lists them.
 the app's connections (by default the app and every program connected through
 it by code; `byCode: true` only those programs; `audience` only that key),
 revokes the keys of those with `access: write`, and, unless only programs
-connected by code go, removes the subscriptions the app proposed.
+connected by code go, removes the automations the app proposed.
 
-**Proposals.** `auth.propose({ origin, request, notify? })` adds the
-subscriptions the person kept: `notify` is the indices kept, default all. The
-home lists the account's subscriptions by app, and the person pauses or removes
-them there.
+**Proposals.** `auth.propose({ origin, request, kept? })` adds the
+automations the person kept as the account's own: `kept` is the indices kept,
+default all. The home lists the account's own automations by app, and the
+person pauses or removes them there.
 
 **Carriers.** `auth.grantCarry({ origin, request })` replaces any earlier
 carrier from the same origin, adds the carrier with `node.carriers.add`

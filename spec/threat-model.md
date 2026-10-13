@@ -293,10 +293,10 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
   - An honest account whose two devices write in one line while apart kills
     that line for good, like a double spend (09 §7.5). Apps keep a line on
     one device at a time.
-  - A newer line declaration with a key an older reader doesn't know leaves
-    that collection, and what cites it, unjudged by that reader: old and new
-    readers' counts split until the old one updates, but never silently
-    (09 §2, §7.1).
+  - A newer contract or line declaration with a key an older reader doesn't
+    know leaves that collection, and what cites it, unjudged by that reader:
+    old and new readers' counts split until the old one updates, but never
+    silently (09 §1, §2, §7.1).
   - A grant of `/member/remove` or `/role/unassign` without a policy on
     `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).
@@ -515,6 +515,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app only the spaces chosen for it (01 §8, 06 §2). It can be given a note
     only for a key it shows it holds, never the home's own or another
     connection's, so disconnecting it revokes nobody else (06 §2.5).
+  - Given the whole account, it can't keep the person from pausing or
+    removing their own automations: they are `sys.automation`, which nothing
+    defines, so no definition it writes applies to them (03 §13.2;
+    `packages/core/tests/own-automations.test.ts`). Disconnecting it removes
+    every automation it proposed and every one its own key wrote, whichever
+    app that one names (06 §2.10; `packages/core/tests/connect.test.ts`,
+    "disconnecting a whole-account app removes what its own key wrote…").
   - Given the whole account, it holds the account key, not the local key, so
     it can't open the registry store's sealed entries, and of those it gets
     nothing else it lacks but invite secrets waiting to be used and the CLI's
@@ -614,6 +621,14 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
+  - From the account's wakes it learns a collection, spaces, topic tags,
+    whether only others' records wake, since when, whether paused, and which
+    app's address a click leads to; never the values behind a private
+    space's tags nor the person's words for what they want to hear about
+    (03 §15; `packages/core/tests/carrier.test.ts`, "a carrier gets tags,
+    never the values it matches"). Any `where` condition on a field declared
+    a topic becomes tags. In a public space a tag can be worked out from the
+    space id, so a guessed value can be checked against it (02 §8.2).
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
@@ -625,12 +640,12 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     every grant the adder holds (`AddBotDialog` in
     `apps/shared/src/CommunitySetup.tsx`), and `weave agent` follows what a
     record asks only when its writer holds every grant of the bot's roles
-    (`writerInstructs` in `packages/cli/src/agent-rules.ts`;
-    `packages/cli/tests/agent-rules.test.ts`, "takes instructions only from
+    (`writerInstructs` in `packages/cli/src/agent-automations.ts`;
+    `packages/cli/tests/agent-automations.test.ts`, "takes instructions only from
     someone holding every grant of its roles"). Neither is protocol: a bot run
     by other code, or a role redefined after the bot was added, can still act
-    for someone with more than they hold, and a rule's own words are its
-    maker's ([#171](https://github.com/leifriksheim/weave/issues/171)).
+    for someone with more than they hold, and an automation's own words are
+    its maker's ([#171](https://github.com/leifriksheim/weave/issues/171)).
   - A removed carrier keeps proving read until the key changes ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what

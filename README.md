@@ -4,7 +4,7 @@ A peer-to-peer data protocol for the browser. You own your identity as a
 written-down code, keep your data in signed records that sync directly between
 devices, and every app is a view onto that data rather than its owner.
 
-> **Building an app?** Short guides — sign-in, collections and rules,
+> **Building an app?** Short guides — sign-in, collections and rules, automations,
 > queries, blueprints, agents — are in [packages/core/docs](packages/core/docs/README.md),
 > and ship in the package as `node_modules/@weaveprotocol/core/docs/`, so a
 > coding agent finds the ones that match the installed version.

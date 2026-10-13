@@ -1,6 +1,6 @@
 /**
  * Contracts written in TypeScript: `contract(schema, ({ body }) => …, else)`
- * builds the CEL a definition's `rules.check` stores, with the body's fields
+ * builds the CEL a definition's `contract.check` stores, with the body's fields
  * and types from the collection's schema. Peers still see CEL: this is the
  * library's way to write it, as a query builder writes SQL.
  *
@@ -531,7 +531,7 @@ function context(body: CelType): Record<string, unknown> {
 /**
  * One condition of a contract, built in TypeScript: `body` is typed from
  * `schema` (a collection definition, a validator, or JSON Schema), and the
- * result is the `{ that, else }` a definition's `rules.check` holds.
+ * result is the `{ that, else }` a definition's `contract.check` holds.
  *
  * ```ts
  * const famous = contract(Fame, ({ body, versions, link }) =>

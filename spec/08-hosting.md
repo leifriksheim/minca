@@ -365,7 +365,7 @@ read. A device MUST say so to the person before it asks a host for a bot.
 while its space's fund (§2) has money in it, or always on a free host, and
 what it spends is taken from that fund, at most `fund.botDailyCap` a day.
 With the fund empty, it stays a member and does nothing. What a bot does is
-the space's rules naming it ([rules](../packages/core/docs/rules.md)); how
+the space's automations naming it ([automations](../packages/core/docs/automations.md)); how
 the host thinks for it is the host's business.
 
 **Calls.** No `Authorization`: an invite is all it takes to add a bot, as it
@@ -442,9 +442,9 @@ _Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `start
 > business: the reference host takes an address with `…/remind` (§1,
 > `packages/cli/src/reminders.ts`), and every device already shows the date
 > it holds. The protocol route is Web Push through the carry space ([06](06-nodes-and-sessions.md) §4.4,
-> Planned): the home writes a
-> `sys.subscription` with no filter and `purpose: "hosting"` when the person
-> allows it, and the host pushes `{ kind: "hosting", host, paidUntil }`,
+> Planned): when the person allows it, the home writes a record in the carry
+> space, apart from wakes ([03](03-spaces.md) §15), asking for reminders about
+> hosting, and the host pushes `{ kind: "hosting", host, paidUntil }`,
 > signed like a status. No new call between home and host. Depends on Web Push.
 >
 > **Paying without being linked to the account.** Today the host can tie a

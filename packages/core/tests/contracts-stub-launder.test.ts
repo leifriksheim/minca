@@ -18,7 +18,7 @@ async function setup(name: string, check: { that: string; else: string }) {
   await alice.node.collections.define(space, {
     name,
     schema: { type: 'object' },
-    rules: { check: [check] },
+    contract: { check: [check] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);

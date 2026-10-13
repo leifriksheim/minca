@@ -405,15 +405,15 @@ describe('collections.define: contracts checked against the schema', () => {
       alice.node.collections.define(space, {
         name: 'app.pay',
         schema: Payment,
-        rules: { check: [{ that: 'body.amont >= 0.0', else: 'x' }] },
+        contract: { check: [{ that: 'body.amont >= 0.0', else: 'x' }] },
       }),
-      /rules\.check\[0\]\.that: body\.amont: body has no field "amont"/,
+      /contract\.check\[0\]\.that: body\.amont: body has no field "amont"/,
     );
     await assert.rejects(
       alice.node.collections.define(space, {
         name: 'app.pay',
         schema: Payment,
-        rules: { check: [{ that: 'body.to == 1', else: 'x' }] },
+        contract: { check: [{ that: 'body.to == 1', else: 'x' }] },
       }),
       /never equal/,
     );
@@ -422,14 +422,14 @@ describe('collections.define: contracts checked against the schema', () => {
       alice.node.collections.define(space, {
         name: 'app.pay',
         schema: Reaction,
-        rules: { check: [contract(Payment, ({ body }) => body.amount.gte(0), 'x')] },
+        contract: { check: [contract(Payment, ({ body }) => body.amount.gte(0), 'x')] },
       }),
       /no field "amount"/,
     );
     const ok = await alice.node.collections.define(space, {
       name: 'app.pay',
       schema: Payment,
-      rules: { check: [contract(Payment, ({ body }) => body.amount.gte(0), 'x')] },
+      contract: { check: [contract(Payment, ({ body }) => body.amount.gte(0), 'x')] },
     });
     assert.equal(ok.name, 'app.pay');
   });

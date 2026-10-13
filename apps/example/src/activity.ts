@@ -9,8 +9,8 @@ import { useMayDefine } from '@weave/app-shared/may';
 import {
   activeNow,
   activity,
-  rule,
-  ruleOf,
+  automation,
+  automationOf,
   type Activity,
   type ActivityState,
 } from '@weaveprotocol/core/schemas';
@@ -43,7 +43,7 @@ export function useActivity(spaceId: string): ReadonlyMap<string, ReadonlyArray<
   return byRecord;
 }
 
-/** Whether a space whose rules ask an agent or bot lacks `std.activity`, and a way to add it; never done on opening. */
+/** Whether a space whose automations ask an agent or bot lacks `std.activity`, and a way to add it; never done on opening. */
 export function useActivityOff(
   spaceId: string,
   writable: boolean,
@@ -54,8 +54,8 @@ export function useActivityOff(
   const asks = useLive(
     spaceId,
     async (n) =>
-      (await n.records.list(spaceId, { collection: rule.name })).some(
-        (record) => ruleOf(record)?.then.kind === 'ask',
+      (await n.records.list(spaceId, { collection: automation.name })).some(
+        (record) => automationOf(record)?.then.kind === 'ask',
       ),
     [],
   );

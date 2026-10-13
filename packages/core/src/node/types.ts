@@ -6,7 +6,7 @@
 import type { MailboxClient } from '../network/mailbox.js';
 import type { BodyOf, Query, ResultOf } from '../query/types.js';
 import type { CollectionRules } from '../records/rules.js';
-import type { Line } from '../records/contracts.js';
+import type { CollectionContract } from '../records/contracts.js';
 import type {
   CollectionDef,
   CryptoProvider,
@@ -27,7 +27,7 @@ import type { WriterKeySource } from './writer-keys.js';
 import type { StoreFactory } from './stores.js';
 import type { JsonSchema, SchemaIssue } from '../schema/collection-def.js';
 import type { Keeper } from '../space/roles.js';
-import type { NotifyWhen } from '../space/notify.js';
+import type { Automation } from '../schemas/automations.js';
 
 export interface NodeNetworkConfig {
   /** Relays for WebRTC, browsers only. Each space meets in the room named after its id. */
@@ -289,8 +289,10 @@ export interface NodeCollection {
   readonly links: Readonly<Record<string, LinkDeclaration>>;
   /** The identity that first defined it — it, and anyone who can manage the space, may change it */
   readonly definedBy: string | null;
-  /** Who may create, edit and delete, what must be unique — for records created from now on */
+  /** What must be unique, which fields are fixed — for records created from now on */
   readonly rules: CollectionRules;
+  /** What a version must be to count, judged by readers; absent when it has none */
+  readonly contract?: CollectionContract;
   /** Fields whose values are topics, tagged on the outside of each record so keepers can match them unread */
   readonly topics: ReadonlyArray<string>;
   readonly records: number;
@@ -308,12 +310,15 @@ export interface DefineCollection {
   readonly history?: 'latest' | 'all';
   /** The link roles its records may carry, and what each may point at */
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
-  /** Who may create, edit and delete, what must be unique, which fields are fixed */
+  /** What must be unique, which fields are fixed, whether records are written once: what every peer checks */
   readonly rules?: CollectionRules;
   /** Fields whose values are topics — `channel`, `mentions` — so a keeper can match them without reading (`StoredCollection.topics`) */
   readonly topics?: ReadonlyArray<string>;
-  /** One line per account, at `lineKey(account, name)`: `once` fields claim each citation once along it (packages/core/docs/contracts.md) */
-  readonly line?: Line;
+  /**
+   * What a version must be to count, judged by readers: `check`, conditions in CEL, and `line`,
+   * one line per account at `lineKey(account, name)` (packages/core/docs/contracts.md)
+   */
+  readonly contract?: CollectionContract;
 }
 
 export interface NodeCollections {
@@ -598,22 +603,30 @@ export interface NodeCarriers {
   remove(space: string): Promise<void>;
 }
 
-/** A subscription, as the person made it (`space/notify.ts`) */
-export interface NotifyView extends NotifyWhen {
+/** One of the account's own automations, kept in its registry (`space/own-automations.ts`) */
+export interface OwnAutomationView extends Automation {
+  /** Its record key in the registry */
   readonly id: string;
 }
 
-/** "Let me know when…": noticed by the account's carriers, which get each value as a topic tag. Needs the account key */
-export interface NodeNotifications {
-  list(): Promise<ReadonlyArray<NotifyView>>;
-  /** Starts one; `topic` matches exact values of a topic field: `{ field: 'mentions', value: myDid }` */
-  add(when: Omit<NotifyWhen, 'since'> & { readonly since?: string }): Promise<NotifyView>;
-  /** Changes its label, pauses or resumes it */
-  update(id: string, changes: { readonly label?: string; readonly paused?: boolean }): Promise<NotifyView>;
+/**
+ * "Let me know when…": the account's own automations, across its spaces,
+ * noticed by its carriers, which get each value as a topic tag. Needs the
+ * account key.
+ */
+export interface NodeAutomations {
+  list(): Promise<ReadonlyArray<OwnAutomationView>>;
+  /** Starts one: `when.query` is a collection and a `where` over each new record, `$me` the account */
+  add(own: Omit<Automation, 'since'> & { readonly since?: string }): Promise<OwnAutomationView>;
+  /** Renames it, pauses or resumes it */
+  update(
+    id: string,
+    changes: { readonly name?: string; readonly paused?: boolean },
+  ): Promise<OwnAutomationView>;
   remove(id: string): Promise<void>;
-  /** Every version of these subscriptions, signed, for another device of the account to `take` */
+  /** Every version of these, signed, for another device of the account to `take` */
   versions(ids: ReadonlyArray<string>): Promise<ReadonlyArray<Version>>;
-  /** Takes in subscriptions handed over outside sync, checked as a peer's. How many were new */
+  /** Takes in automations handed over outside sync, checked as a peer's. How many were new */
   take(versions: ReadonlyArray<Version>): Promise<number>;
 }
 
@@ -891,8 +904,8 @@ export interface P2PNode {
   readonly carriers: NodeCarriers;
   /** Hosts the account pays to keep its spaces online */
   readonly hosting: NodeHosting;
-  /** "Let me know when…" — noticed by the account's carriers, which can't read what they notice */
-  readonly notifications: NodeNotifications;
+  /** The account's own automations, kept in its registry */
+  readonly automations: NodeAutomations;
   /** People: the account's contact list, and asking to be added */
   readonly contacts: NodeContacts;
   /** Direct messages: text only some members of a space can read */

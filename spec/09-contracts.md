@@ -24,8 +24,8 @@ _cited_ version is one it names by id through `versions(...)`. A version
 _counts_ for a reader when it stands and its contract passes.
 
 ```json
-"rules": {
-  "onePer": ["link:about"],
+"rules": { "onePer": ["link:about"] },
+"contract": {
   "check": [
     {
       "that": "versions(body.votes).filter(v, v.collection == \"std.vote\" && v.link(\"about\") == link(\"about\") && v.body.choice == 0.0).map(v, v.author).distinct().size() >= 10",
@@ -53,17 +53,29 @@ confirms it from exactly what was cited.
 
 ## 1. Where a contract lives
 
-A collection's contract is its definition's `rules.check` (02 §7.6), a list
-of conditions (§3), and its line declaration is the definition's `line`
-member (§7.1). Which definition applies is the one in force as of the judged
-version's `seen` (02 §6.3), as for every rule.
+A collection's contract is its definition's `contract` member (02 §7.6), an
+object:
 
-The field keeps the name `check`: peers check that `rules` has no members
-but `onePer`, `fixed`, `check` and `final` (02 §7.5), so a new name would make
-every older peer treat the definition as invalid. `line` is a top-level
-member, which peers ignore (02 §6.1).
+| Key     | Type   | Meaning                                            |
+| ------- | ------ | -------------------------------------------------- |
+| `check` | list   | The conditions a version must meet (§3). Optional  |
+| `line`  | object | The collection is a line, and how (§7.1). Optional |
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/schema/collection-def.ts` (`StoredCollection`), `packages/core/src/node/space-runtime.ts` (`rulesAt`, `checksOf`)._
+Which definition applies is the one in force as of the judged version's
+`seen` (02 §6.3), as for every rule. A collection with no `contract`, or one
+with neither key (or an empty `check` and no `line`), has no contract: every
+version that stands passes.
+
+**Its keys are closed.** A reader that finds a key it doesn't know in a
+`contract` doesn't judge that collection: its versions are **unjudged**
+(§2). A `contract` that is not an object (an array included) can't be read,
+and every version under it fails.
+
+`contract` is a top-level member of the definition, which peers ignore (02
+§6.1), and never part of `rules`: a definition with `check` in its rules is
+invalid (02 §7.5). What peers check never names what only readers judge.
+
+_Source: `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`, `hasContract`), `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/schema/collection-def.ts` (`StoredCollection`), `packages/core/src/node/space-runtime.ts` (`rulesAt`, `checksOf`). Tests: `packages/core/tests/contracts-shape.test.ts` (all)._
 
 ## 2. Verdicts
 
@@ -85,7 +97,8 @@ A reader judges a standing version's contract to one of four verdicts:
 - A version is **unjudged** when the reader can't open its body, the
   version before it (when that is kept whole) or a version it cites,
   because it is sealed with a key the reader does not hold; when its
-  collection declares a line with a key the reader doesn't know (§7.1); or
+  collection's `contract` (§1) or line declaration (§7.1) has a key the
+  reader doesn't know; or
   when the version before it, or one it cites, is unjudged (§6.2). The reader
   **MUST NOT** count it, and **MUST NOT** fail it; it says why, and judges it
   again when it gets the key. Counting it on the rest would let a version
@@ -96,8 +109,8 @@ version under it, so an older reader hides that collection rather than count
 what it can't judge.
 
 > Rationale: two readers that judged one collection by different rules would
-> disagree without either knowing. An unknown line key leaves the
-> collection uncounted and says so, as a peer stays out of a space with a
+> disagree without either knowing. An unknown contract or line key leaves
+> the collection uncounted and says so, as a peer stays out of a space with a
 > resolver it doesn't know (03 §1).
 
 _Source: `packages/core/src/node/space-runtime.ts` (`checksOf`, `counts`, `contractsFor`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-line.test.ts` ("a line declared with a key it doesn't know leaves the collection unjudged…", "a version sealed with a key the reader lacks is unjudged…")._
@@ -356,8 +369,8 @@ not resolve decides:
 5. It fails its own contract, judged as of its own `seen`: it fails; or the
    judged version is pending, if that is pending.
 6. Sealed with a key the reader does not hold, or in a collection whose
-   line declaration the reader doesn't know: the judged version is
-   unjudged (§2).
+   contract or line declaration has a key the reader doesn't know: the
+   judged version is unjudged (§2).
 
 A cited version that fails rule 2, 3, 4 or 5 fails the judged version,
 whatever `&&` or `||` around it would decide. A version's id covers its
@@ -405,10 +418,10 @@ without a global one.
 
 ### 7.1 The declaration
 
-A collection is a line when its definition has a `line` member, an object:
+A collection is a line when its contract (§1) has a `line` member, an object:
 
 ```json
-{ "name": "app.pay", "schema": { "type": "object" }, "rules": { "check": [ … ] }, "line": { "once": ["received"] } }
+{ "name": "app.pay", "schema": { "type": "object" }, "contract": { "check": [ … ], "line": { "once": ["received"] } } }
 ```
 
 | Key    | Type     | Meaning                                                                        |
@@ -494,8 +507,11 @@ _Source: `packages/core/src/records/contracts.ts` (`checkLine`, `onceCitations`,
 
 ## 8. Checking a definition
 
-Peers keep whatever `check` list and `line` a definition holds (02 §7.6).
-The node that defines a collection **SHOULD** refuse a definition unless:
+Peers keep whatever `contract` a definition holds (02 §7.6). The node that
+defines a collection **SHOULD** refuse a definition unless:
+
+- `contract`, when present, is an object whose only keys are `check` and
+  `line` (§1);
 
 - `check` is a list of 1 to 16 conditions as in §3, every condition parses
   within the subset (§5), every name is one in §5.2 or a macro's variable
@@ -505,8 +521,8 @@ The node that defines a collection **SHOULD** refuse a definition unless:
 
 A definition that arrives with a `check` a reader can't read (written by
 another implementation, or by hand) still stands; its contract fails every
-version it judges (§2). One with a `line` key a reader doesn't know leaves
-the collection unjudged (§7.1).
+version it judges (§2). One with a `contract` or `line` key a reader doesn't
+know leaves the collection unjudged (§1, §7.1).
 
 _Source: `packages/core/src/records/contracts.ts` (`checkContracts`, `checkLine`), `packages/core/src/node/space-runtime.ts` (`define`). Tests: `packages/core/tests/contracts.test.ts` ("contracts: a definition"), `packages/core/tests/contracts-line.test.ts` ("the library refuses to define a line with a key it does not know")._
 

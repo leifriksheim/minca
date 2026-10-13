@@ -3,7 +3,7 @@ import type { SpaceSummary } from '@weaveprotocol/core';
 import { useAccount, useCollections } from '@weaveprotocol/core/react';
 import { useDismiss } from '@weave/app-shared/useDismiss';
 import { markRead, useAlerts, useTabDot } from '../alerts';
-import { useAppNotifications, useSubscriptions } from '../notifications';
+import { useAppNotifications, useOwnAutomations } from '../notifications';
 import { ago } from '../derive/time';
 import { SpaceMark } from './SpaceList';
 import { Icon } from './Icon';
@@ -175,7 +175,7 @@ function Settings({
   setup: ReturnType<typeof useAppNotifications>;
   onBuild: () => void;
 }) {
-  const watches = useSubscriptions();
+  const watches = useOwnAutomations();
   const where = (spaceIds: 'all' | ReadonlyArray<string>) =>
     spaceIds === 'all'
       ? 'All your spaces'
@@ -225,12 +225,10 @@ function Settings({
                   <Icon name={sub.paused ? 'bell' : 'bellOn'} size={14} />
                 </span>
                 <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>
-                    {sub.label}
-                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{sub.name}</span>
                   <span style={{ fontSize: 12, color: palette.ink.faint }}>
-                    {where(sub.spaces)}
-                    {sub.where !== undefined ? ' · with conditions' : ''}
+                    {where(sub.spaces ?? 'all')}
+                    {sub.when?.query.where !== undefined ? ' · with conditions' : ''}
                     {sub.paused ? ' · paused' : ''}
                   </span>
                 </span>

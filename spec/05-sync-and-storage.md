@@ -246,9 +246,15 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 7` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 8` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
+
+> Rationale: 8 since a definition's contract left its `rules` for a
+> `contract` of its own ([02](02-records.md) §7.6), and carriers read wakes
+> ([03](03-spaces.md) §15). A reader of 7 would count what a `contract`
+> fails, and a peer of 8 holds a definition with `rules.check` as invalid;
+> they don't sync instead.
 
 > Rationale: two versions that cannot reconcile should fail loudly, not leave
 > a quiet partial sync.
@@ -273,7 +279,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 7,
+  "v": 8,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -1039,16 +1045,17 @@ A segment is UTF-8 JSON:
 The versions are exactly as on the wire — private bodies still sealed. A
 segment carries its own version, apart from the sync messages' (§4): a mirror
 outlives the peers that wrote it, so a reader meets old segments long after
-it last met an old peer. `v` is `7` since a space's id is the hash of its
-constitution ([03](03-spaces.md) §1); a reader MUST treat bytes that
-are not JSON, or `v` other than `7`, or a missing `versions` array, as holding nothing, so a
+it last met an old peer. `v` is `8` with sync's (§4): a reader of 7 would
+count versions under a definition's `contract` that a reader of 8 fails
+([02](02-records.md) §7.6). A reader MUST treat bytes that
+are not JSON, or `v` other than `8`, or a missing `versions` array, as holding nothing, so a
 segment of the old format is never misread; entries that are not objects
 with a string `id` are skipped.
 
 Its name is `<counter>-<hash>.seg`: the store writer's counter (from 1, decimal,
 zero-padded to 6 digits) and the first 8 bytes of SHA-256 of the segment's
-bytes, as 16 lower-case hex. The empty segment `{"v":7,"versions":[]}` written
-first is `000001-375639ae09b6f3ee.seg`. Only names ending `.seg` are segments.
+bytes, as 16 lower-case hex. The empty segment `{"v":8,"versions":[]}` written
+first is `000001-10773071eecc244b.seg`. Only names ending `.seg` are segments.
 
 > Rationale: the counter sorts a listing for people reading it; the hash
 > means a retried upload lands on the same name.

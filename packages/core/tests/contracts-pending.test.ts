@@ -31,7 +31,8 @@ test('a pending decision becomes visible in list once its cited vote arrives', a
     name: 'app.proposal.passed',
     schema: { type: 'object' },
     links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-    rules: { onePer: ['link:about'], check: [TWO_YES] },
+    rules: { onePer: ['link:about'] },
+    contract: { check: [TWO_YES] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);

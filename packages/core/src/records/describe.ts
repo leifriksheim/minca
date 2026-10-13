@@ -13,6 +13,7 @@
  * lie it exists to prevent.
  */
 import type { CollectionRules } from './rules.js';
+import type { CollectionContract } from './contracts.js';
 import type { LinkDeclaration } from './links.js';
 import { isList, isObject } from '../utils/guards.js';
 
@@ -25,10 +26,11 @@ export interface Describable {
   readonly history?: 'latest' | 'all';
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
   readonly rules?: CollectionRules;
+  readonly contract?: CollectionContract;
 }
 
 /** Every rule there is. A new one in `CollectionRules` must be added here, with its sentence. */
-const KNOWN_RULES = ['create', 'edit', 'delete', 'onePer', 'fixed', 'check', 'final'] as const;
+const KNOWN_RULES = ['create', 'edit', 'delete', 'onePer', 'fixed', 'final'] as const;
 
 /** `closePolls` → `close polls`, `app.carpool.trip` → `trip` */
 const words = (name: string) =>
@@ -107,7 +109,8 @@ export function describeCollection(definition: Describable): ReadonlyArray<strin
   }
 
   // Checks: their own words, which are what a refusal says
-  for (const check of rules.check ?? []) sentences.push(`Every change is checked: “${check.else.trim()}”`);
+  for (const check of definition.contract?.check ?? [])
+    sentences.push(`Every change is checked: “${check.else.trim()}”`);
 
   // What it points at
   for (const [rel, link] of Object.entries(definition.links ?? {})) {

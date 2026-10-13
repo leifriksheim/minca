@@ -1,11 +1,10 @@
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
+import { matches, type NodeCollection, type NodeRecord, type SpaceSummary } from '@weaveprotocol/core';
 import { useAccess, useLive } from '@weaveprotocol/core/react';
-import type { AppNotify } from '@weaveprotocol/core/schemas';
+import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@weaveprotocol/core/schemas';
 import { hash } from '@weave/app-shared/hash';
 import { APPS, type WeaveApp } from './index';
 import { launcherApp, sortLauncher, type LauncherApp } from './launcher';
 import type { Glyph } from '../Icon';
-import { isObject } from '../../derive/schema-ui';
 
 /**
  * An app a space can open, whichever kind: written as code here, or made for
@@ -22,7 +21,7 @@ export interface AppEntry {
   readonly description?: string | undefined;
   readonly icon: Glyph;
   readonly hue: number;
-  readonly notify: ReadonlyArray<AppNotify>;
+  readonly notify: ReadonlyArray<AppAutomation>;
   readonly builtIn?: WeaveApp;
   /** A made app's launcher record, which is the app */
   readonly made?: NodeRecord<LauncherApp>;
@@ -32,26 +31,26 @@ export interface AppEntry {
  * What a made app notifies about: what it says, or else new records in the
  * first collection it shows, usually the thing it is about.
  */
-export function madeNotify(body: LauncherApp): ReadonlyArray<AppNotify> {
+export function madeNotify(body: LauncherApp): ReadonlyArray<AppAutomation> {
   if (body.notify) return body.notify;
   const first = body.collections?.[0];
-  return first ? [{ label: `New in ${body.title ?? first}`, collection: first }] : [];
+  return first ? [notifyOn(`New in ${body.title ?? first}`, first)] : [];
 }
 
 /** An entry about records that name the person — "Mentions me", "A seat on my trip" */
-export const isForMe = (notify: AppNotify): boolean => !!notify.topic && 'me' in notify.topic;
+export const isForMe = (notify: AppAutomation): boolean => namesTheRunner(notify);
 
-/** Whether a record is one of an app's "…me" entries is about: its topic field holds the person */
+/** Whether a record is one of an app's "…me" entries is about: its `where` holds, with the person as `$me` */
 export function namesMe(
-  notify: ReadonlyArray<AppNotify>,
+  notify: ReadonlyArray<AppAutomation>,
   collection: string,
-  body: unknown,
+  record: NodeRecord,
   did: string,
 ): boolean {
   return notify.some((entry) => {
-    if (!isForMe(entry) || entry.collection !== collection || !entry.topic) return false;
-    const value = isObject(body) ? body[entry.topic.field] : undefined;
-    return Array.isArray(value) ? value.includes(did) : value === did;
+    const { collection: about, where } = entry.when.query;
+    if (!isForMe(entry) || about !== collection || !where) return false;
+    return matches(record, asRunner(where, did));
   });
 }
 

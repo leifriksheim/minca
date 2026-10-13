@@ -27,7 +27,7 @@ import { blueprint, type Blueprint } from '../schemas/library/collections.js';
 import { guidesOf } from '../schemas/guides.js';
 import { standardDefinition, standardGroups } from '../schemas/standard.js';
 import { toJsonSchema } from '../schema/collection-def.js';
-import { ACTIVITY_STATES, setActivity } from '../schemas/rules.js';
+import { ACTIVITY_STATES, setActivity } from '../schemas/automations.js';
 import { describeCollection } from '../records/describe.js';
 import { isRecord } from '../utils/guards.js';
 
@@ -486,13 +486,21 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
             '"final": true }. onePer makes at most one record per author + linked record (+ body field): writing again changes it. ' +
             "fixed fields keep their first value. final records are written once. Who may write is the space's grants, not a rule.",
         },
+        contract: {
+          type: 'object',
+          description:
+            'Optional: what a version must be to count, judged by every reader, not by peers: ' +
+            '{ "check": [{ "that": "body.amount > 0.0", "else": "An amount above 0" }] }, conditions in a subset of CEL ' +
+            'over the body, the version before (prev) and versions it cites by id (versions(body.votes)); ' +
+            'and "line": { "once": ["received"] } for one sequence per account, where two versions after the same one cancel.',
+        },
         topics: {
           type: 'array',
           items: { type: 'string' },
           description:
             'Optional: up to 8 fields whose values can be matched without reading the record, like ["driver"] or ["mentions"]. ' +
             'Name the field that holds a person when people should be able to be told about records naming them ' +
-            '(a notify entry with "topic": { "field": "driver", "me": true }).',
+            '(a notify entry whose where is { "driver": { "$contains": "$me" } }).',
         },
       },
       required: ['space', 'name', 'schema'],
@@ -515,7 +523,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'needs, such as a carpool, a sign-up sheet or a decision log. It writes one std.blueprint record: a title, a line on ' +
       'what it is for, and the collections. Use standard ones wherever they fit: read collections_standard and pass each ' +
       'by name ("std.event"); it is then exactly the standard shape, so other apps read its records. Give each collection ' +
-      'of your own exactly as collections_define takes it (name, title, description, schema, links, rules, ' +
+      'of your own exactly as collections_define takes it (name, title, description, schema, links, rules, contract, ' +
       'topics, no version), named after what it is for ("carpool.ride"); std.* names are only the library\'s. Nothing is ' +
       'defined yet: everyone in the space sees it, with what each collection allows worked out from its rules. ' +
       'Read collections_list first and reuse what the space already has rather than inventing a twin; the guides it ' +

@@ -59,9 +59,11 @@ import {
 } from '../records/key.js';
 import { checkLinks } from '../records/links.js';
 import {
+  checkContractShape,
   checkContracts,
   checkContractTypes,
   checkLine,
+  hasContract,
   onceCitations,
   runContracts,
   type Contract,
@@ -1174,7 +1176,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   ): Promise<{
     rules: NonNullable<StoredCollection['rules']>;
     topics: ReadonlyArray<string>;
-    line: unknown;
+    contract: unknown;
   } | null> {
     if (collection.startsWith('sys.')) return null;
     const id = await inForce(state, collection);
@@ -1185,7 +1187,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       : {
           rules: found.definition.rules ?? {},
           topics: found.definition.topics ?? [],
-          line: found.definition.line,
+          contract: found.definition.contract,
         };
   }
 
@@ -1478,12 +1480,23 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const state = (await access()).history.at(version.seen ?? [], within);
       if (!state) return { pending: true };
       const defined = await rulesAt(state, version.collection);
-      const listed: unknown = defined?.rules.check;
+      const contract = defined?.contract;
+      if (contract === undefined) return NO_CHECKS;
+      // A contract with a key this library doesn't know: not judged, as a line's below.
+      const shape = checkContractShape(contract);
+      if (shape === 'unknown')
+        return { passes: null, unjudged: `${version.collection} has a contract this library doesn't know` };
+      if (shape !== null || !isRecord(contract))
+        return { passes: false, reason: `The contract of ${version.collection} can't be read` };
+      const listed: unknown = contract.check;
       const checks: unknown = Array.isArray(listed) && listed.length === 0 ? undefined : listed;
-      const line = defined?.line;
+      const line: unknown = contract.line;
       if (checks === undefined && line === undefined) return NO_CHECKS;
       // Peers keep any list; one its author's node would have refused can't be read, so nothing passes it.
-      if (checks !== undefined && (checkContracts(checks, 'rules.check') !== null || !Array.isArray(checks)))
+      if (
+        checks !== undefined &&
+        (checkContracts(checks, 'contract.check') !== null || !Array.isArray(checks))
+      )
         return { passes: false, reason: `The contract of ${version.collection} can't be read` };
       // A line declaration with a key this library doesn't know: not judged, as a space with an unknown resolver.
       const lineProblem = line === undefined ? null : checkLine(line);
@@ -1515,8 +1528,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (previous && !previous.retain && !previous.deleted) {
         const then = (await access()).history.at(previous.seen ?? []);
         const before = then ? await rulesAt(then, previous.collection) : null;
-        const check = before?.rules.check;
-        if ((Array.isArray(check) && check.length > 0) || before?.line !== undefined)
+        if (hasContract(before?.contract))
           return { passes: false, reason: 'It follows a version under a contract that was not kept whole' };
       }
       if (previous && !isStub(previous)) {
@@ -1991,6 +2003,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       links: definition?.links ?? {},
       definedBy: entry?.definedBy ?? null,
       rules: definition?.rules ?? {},
+      ...(definition?.contract !== undefined ? { contract: definition.contract } : {}),
       topics: definition?.topics ?? [],
       records,
     });
@@ -3119,7 +3132,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       definition?.history === 'all' ||
       (version.seq === 0 && !!(definition?.rules?.onePer || definition?.rules?.fixed)) ||
       // Every version under a contract: it reads the one before, and others cite it.
-      (!deleted && (!!definition?.rules?.check?.length || definition?.line !== undefined));
+      (!deleted && hasContract(definition?.contract));
 
     // The next place in this key's line for the collection: given back if the version is refused below.
     const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {
@@ -3131,7 +3144,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         return then ? rulesAt(then, collection) : null;
       })();
       const then = await checkedThen;
-      const keep = retain || (!deleted && (!!then?.rules.check?.length || then?.line !== undefined));
+      const keep = retain || (!deleted && hasContract(then?.contract));
       const made = await signer.sign(
         createVersion({
           author: writer.did,
@@ -4031,7 +4044,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     async define(input: DefineCollection): Promise<NodeCollection> {
       const recordKey = `collection:${input.name}`;
       const current = (await catalog()).get(input.name) ?? null;
-      const version = input.version ?? (current ? current.definition.version + 1 : 1);
+      // Peers don't order definitions by version (spec 02 §6.3): a stored one past what can be
+      // counted on, written to lock the collection, is simply followed by 1 again.
+      const after =
+        current && Number.isSafeInteger(current.definition.version + 1) ? current.definition.version : 0;
+      const version = input.version ?? after + 1;
       const definition: StoredCollection = {
         name: input.name,
         ...(input.title !== undefined ? { title: input.title } : {}),
@@ -4042,19 +4059,23 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ...(input.links !== undefined ? { links: input.links } : {}),
         ...(input.rules !== undefined ? { rules: input.rules } : {}),
         ...(input.topics !== undefined ? { topics: input.topics } : {}),
-        ...(input.line !== undefined ? { line: input.line } : {}),
+        ...(input.contract !== undefined ? { contract: input.contract } : {}),
       };
-      const lineProblem = definition.line !== undefined ? checkLine(definition.line) : null;
+      const contract = definition.contract;
+      const shapeProblem = contract !== undefined ? checkContractShape(contract) : null;
+      const lineProblem = contract?.line !== undefined ? checkLine(contract.line) : null;
       const problem =
         checkStoredCollection(definition) ??
-        (definition.rules?.check !== undefined
-          ? (checkContracts(definition.rules.check, 'rules.check') ??
+        (shapeProblem === 'unknown' ? 'contract takes only "check" and "line"' : shapeProblem) ??
+        (contract?.check !== undefined
+          ? (checkContracts(contract.check, 'contract.check') ??
             // The library's own care, not protocol: a contract that misreads the schema is refused here.
-            checkContractTypes(definition.rules.check, definition.schema, 'rules.check'))
+            checkContractTypes(contract.check, definition.schema, 'contract.check'))
           : null) ??
-        (lineProblem === 'unknown' ? 'line takes only "once"' : lineProblem);
+        (lineProblem === 'unknown' ? 'contract.line takes only "once"' : lineProblem);
       if (problem) throw new Error(problem);
-      if (current && version <= current.definition.version) {
+      if (!Number.isSafeInteger(version)) throw new Error(`version must be a whole number below 2^53`);
+      if (current && version <= after) {
         throw new Error(
           `${input.name} is at version ${current.definition.version}; a new definition needs a higher one`,
         );
