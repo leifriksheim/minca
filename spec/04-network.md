@@ -590,7 +590,7 @@ over the same `T`.
 In a room that asks no proof (a channel's room, pairing or connecting by
 code, which secures its own payloads), the hellos are still exchanged and no proofs are sent.
 
-Example (public space, placeholder fingerprints; the prover is the account of sixteen `07` bytes, the author of [02](02-records.md) §3.4; the verifier, of sixteen zero bytes):
+Example (public space, placeholder fingerprints; the prover signs with the key of the seed of sixteen `07` bytes, the author of [02](02-records.md) §3.4; the verifier holds the key of sixteen zero bytes):
 
 ```
 T = "minca-mesh/v1|example-space-id|did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E|did:key:zDnaenhB7GpWm1sDUA2mcNLjbZG85bD5uv8kXnX39YE9rGV3d|_8bGsP1hPeS2r_CFgK10jg|sha-256 AA:BB|sha-256 CC:DD"

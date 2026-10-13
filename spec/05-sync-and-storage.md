@@ -224,7 +224,7 @@ A → B   61 00 00 02 02 <id1> <id2>
         │  │  └ bound id length 0
         │  └ bound timestamp: infinity
         └ version 1
-        base64url: YQAAAgIBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        base64url: YQAAAgIBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 B → A   61 00 00 02 02 <id1> <id3>
 A:      have = [id2], need = [id3], done (nothing more to send)
 ```

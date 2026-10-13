@@ -358,14 +358,14 @@ Example (shortened):
         "nbf": 1790022901,
         "nonce": "pr0q7Vm5c2T8xkWa",
         "pol": [],
-        "sub": "space:bafk…"
+        "sub": "space:blm7z6…"
       },
       "sig": "…",
       "type": "minca/ucan/dlg@1"
     },
     "access": "write",
     "scope": "spaces",
-    "spaces": [{ "id": "bafk…", "name": "Todos", "invite": "…", "memberKey": "q0v…" }],
+    "spaces": [{ "id": "blm7z6…", "name": "Todos", "invite": "…", "memberKey": "q0v…" }],
     "relays": ["wss://p2p-web-relay.fly.dev"],
     "expiresAt": 1792614901
   }
@@ -561,7 +561,7 @@ Example:
         "label": "New message in Club",
         "collection": "std.message",
         "others": true,
-        "spaces": ["bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"]
+        "spaces": ["blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq"]
       }
     ]
   }
