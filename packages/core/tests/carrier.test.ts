@@ -391,12 +391,13 @@ describe('notifications through a carrier', () => {
       [
         { id: 'club', key, visibility: 'private', topics: declares },
         { id: 'blog', key: null, visibility: 'public', topics: declares },
-        { id: 'locked', key: null, visibility: 'private', topics: declares },
+        { id: 'locked', key: null, visibility: 'private', topics: () => [] },
         { id: 'plain', key: null, visibility: 'public', topics: () => [] },
       ],
       'did:key:zMe',
     );
     assert.equal(JSON.stringify(wake).includes('zMe'), false);
+    assert.equal(JSON.stringify(wake).includes('Mentioned'), false, 'nor the person’s words');
     assert.deepEqual(
       wake.tags?.['locked'],
       [],

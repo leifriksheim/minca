@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { checkRules } from '../src/records/rules.js';
 import { checkContractShape } from '../src/records/contracts.js';
 import { communityNode } from './helpers/community.js';
+import { lineKey } from '../src/records/key.js';
 
 const NEVER = [{ that: 'false', else: 'Never' }];
 
@@ -76,6 +77,58 @@ describe('contracts: where they live', () => {
     await c.add(later);
     assert.equal(await c.verdict(later), 'fail');
     assert.equal(await c.verdict(mint), 'unjudged');
+  });
+
+  test('a top-level line, the older format, leaves its collection unjudged: twins never both count', async () => {
+    const c = await communityNode(1, []);
+    const bob = c.members[0]!;
+    const old = await c.sign(c.founder, {
+      collection: 'sys.collection',
+      body: { name: 'app.log', schema: { type: 'object' }, version: 1, line: { once: ['received'] } },
+      version: { key: 'collection:app.log', seq: 0 },
+    });
+    await c.add(old);
+    const key = await lineKey(bob.node.did, 'app.log');
+    const b0 = await c.sign(bob, {
+      collection: 'app.log',
+      body: { n: 0, received: [] },
+      version: { key, seq: 0 },
+    });
+    const twin = (n: number) =>
+      c.sign(bob, {
+        collection: 'app.log',
+        body: { n, received: [] },
+        version: { key, seq: 1, prev: b0.id, genesis: b0.id },
+      });
+    const t1 = await twin(1);
+    const t2 = await twin(2);
+    await c.add(b0, t1, t2);
+    assert.deepEqual(await c.verdicts(b0, t1, t2), ['unjudged', 'unjudged', 'unjudged']);
+  });
+
+  test('a step under the older format, not kept whole, leaves what follows it uncounted after the fix', async () => {
+    const c = await communityNode(1, []);
+    const bob = c.members[0]!;
+    const old = await c.sign(c.founder, {
+      collection: 'sys.collection',
+      body: { name: 'app.pay', schema: { type: 'object' }, version: 1, rules: { check: NEVER } },
+      version: { key: 'collection:app.pay', seq: 0 },
+    });
+    await c.add(old);
+    const v0 = await c.sign(bob, { collection: 'app.pay', body: { amount: 1_000_000 }, retain: false });
+    await c.add(v0);
+    await c.founder.node.collections.define(c.space, {
+      name: 'app.pay',
+      schema: { type: 'object' },
+      contract: { check: [{ that: 'body.amount > 0.0', else: 'More than nothing' }] },
+    });
+    const v1 = await c.sign(bob, {
+      collection: 'app.pay',
+      body: { amount: 1_000_000 },
+      version: { key: v0.key, seq: 1, prev: v0.id, genesis: v0.id },
+    });
+    await c.add(v1);
+    assert.notEqual(await c.verdict(v1), 'pass');
   });
 
   test('the same condition under contract.check is judged: no reader counts what fails it', async () => {

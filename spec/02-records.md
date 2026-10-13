@@ -1265,11 +1265,12 @@ prevent that; telling the two apart, where it matters, is the app's.
 non-empty lists of non-empty strings; `final`: `true`). A definition with
 anything else, `create`, `edit` and `delete` included, is invalid (§6.1).
 
-`check` is where an older format kept a contract. Peers keep it and do not
-read it, so `onePer`, `fixed` and `final` beside it still hold. Readers do
-not judge it: they leave the collection's versions unjudged
-([09](09-contracts.md) §1). A writer MUST NOT put `check` in `rules`; a
-contract is the definition's `contract` (§7.6).
+`check` is where an older format kept a contract, as was a top-level `line`
+on the definition. Peers keep both and do not read them, so `onePer`, `fixed`
+and `final` beside them still hold. Readers do not judge them: they leave the
+collection's versions unjudged ([09](09-contracts.md) §1). A writer MUST NOT
+put `check` in `rules`, nor `line` beside it; a contract is the definition's
+`contract` (§7.6).
 
 > Rationale: a definition with `check` in its rules was written by every
 > library before the contract moved, and stores keep definitions across an

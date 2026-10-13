@@ -319,12 +319,13 @@ export async function wakeFor(
   const looked = only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id));
   const tags: Record<string, string[]> = {};
   for (const space of looked) {
-    const required = requiredValues(resolved, space.topics(collection));
-    if (!required || new Set(required.values).size > MAX_WAKE_TAGS) continue;
+    // Without its key a device can read neither the space's records nor its topics: never wake there.
     if (space.visibility === 'private' && !space.key) {
       tags[space.id] = [];
       continue;
     }
+    const required = requiredValues(resolved, space.topics(collection));
+    if (!required || new Set(required.values).size > MAX_WAKE_TAGS) continue;
     const key = await topicKey(
       space.visibility === 'private' ? { spaceKey: space.key!.raw } : { spaceId: space.id },
     );

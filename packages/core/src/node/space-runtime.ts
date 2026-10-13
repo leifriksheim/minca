@@ -491,6 +491,16 @@ function isFolderAdapter(adapter: StorageAdapter): adapter is FolderAdapter {
 
 const isLinks = (links: unknown): links is ReadonlyArray<Link> => checkLinks(links) === null;
 const isLine = (line: unknown): line is Line => checkLine(line) === null;
+
+/**
+ * Whether a definition keeps a contract where an older format did: in
+ * `rules.check`, or as a top-level `line`. No reader judges it, and nothing
+ * under it counts as if there were none (spec 02 §7.5, 09 §1).
+ */
+function oldFormatContract(definition: object): boolean {
+  const rules: unknown = 'rules' in definition ? definition.rules : undefined;
+  return (isRecord(rules) && 'check' in rules) || 'line' in definition;
+}
 const areKeepers = (keepers: unknown): keepers is Keeper[] => checkKeepers(keepers) === null;
 
 function isPending(value: unknown): value is Pending {
@@ -1177,7 +1187,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     rules: NonNullable<StoredCollection['rules']>;
     topics: ReadonlyArray<string>;
     contract: unknown;
-    /** A contract where an older library kept one, `rules.check`: read by no reader */
+    /** A contract where an older format kept one, `rules.check` or a top-level `line`: read by no reader */
     oldContract: boolean;
   } | null> {
     if (collection.startsWith('sys.')) return null;
@@ -1190,7 +1200,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           rules: found.definition.rules ?? {},
           topics: found.definition.topics ?? [],
           contract: found.definition.contract,
-          oldContract: isRecord(found.definition.rules) && 'check' in found.definition.rules,
+          oldContract: oldFormatContract(found.definition),
         };
   }
 
@@ -1487,7 +1497,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (defined?.oldContract)
         return {
           passes: null,
-          unjudged: `${version.collection} keeps its contract in rules.check, which no reader reads: define it again`,
+          unjudged: `${version.collection} keeps its contract where an older format did, which no reader reads: define it again`,
         };
       const contract = defined?.contract;
       if (contract === undefined) return NO_CHECKS;
@@ -1537,7 +1547,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (previous && !previous.retain && !previous.deleted) {
         const then = (await access()).history.at(previous.seen ?? []);
         const before = then ? await rulesAt(then, previous.collection) : null;
-        if (hasContract(before?.contract))
+        if (hasContract(before?.contract) || before?.oldContract)
           return { passes: false, reason: 'It follows a version under a contract that was not kept whole' };
       }
       if (previous && !isStub(previous)) {
@@ -3141,7 +3151,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       definition?.history === 'all' ||
       (version.seq === 0 && !!(definition?.rules?.onePer || definition?.rules?.fixed)) ||
       // Every version under a contract: it reads the one before, and others cite it.
-      (!deleted && (hasContract(definition?.contract) || 'check' in (definition?.rules ?? {})));
+      (!deleted && (hasContract(definition?.contract) || (!!definition && oldFormatContract(definition))));
 
     // The next place in this key's line for the collection: given back if the version is refused below.
     const signed = await deps.writers.append(writer.did, space.id, collection, async (log) => {

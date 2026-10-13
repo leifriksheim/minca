@@ -118,6 +118,7 @@ import {
   type WakeSpace,
 } from '../space/own-automations.js';
 import type { Automation } from '../schemas/automations.js';
+import { canonicalize } from '../schema/version.js';
 import { DEFINITION_COLLECTION } from '../space/roles.js';
 import {
   createHostClient,
@@ -1016,12 +1017,31 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   /** The registry's record defining the collection the account's own automations are kept in */
   const DEFINES_OWN = `collection:${OWN_AUTOMATIONS.name}`;
 
+  /**
+   * Keeps the registry's definition of the account's own automations the
+   * library's: any key with the whole account could define it again, `final`
+   * say, and the person could then no longer pause or remove one.
+   */
+  async function ownDefinition(registryRt: SpaceRuntime): Promise<void> {
+    const found = (await registryRt.collections()).find(
+      (collection) => collection.name === OWN_AUTOMATIONS.name && collection.version !== null,
+    );
+    if (
+      found &&
+      canonicalize(found.schema) === canonicalize(OWN_AUTOMATIONS.schema) &&
+      canonicalize(found.rules) === canonicalize({}) &&
+      found.contract === undefined
+    )
+      return;
+    await registryRt.define({ ...OWN_AUTOMATIONS, version: (found?.version ?? 0) + 1 });
+  }
+
   /** Writes one of the account's own automations, checked, and hands every carrier the wakes as they are now */
   async function writeOwn(id: string | null, body: Automation): Promise<OwnAutomationView> {
     const registryRt = await requireAccount('Making an automation');
     const problem = checkOwnAutomation(body);
     if (problem) throw new Error(problem);
-    await ensureDefined(registryRt, OWN_AUTOMATIONS);
+    await ownDefinition(registryRt);
     const written = id
       ? await registryRt.update<Automation>(id, body)
       : await registryRt.put<Automation>(OWN_AUTOMATIONS.name, body);
@@ -1050,6 +1070,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async remove(id) {
       const registryRt = await requireAccount('Making an automation');
       if (!(await ownAutomations()).some((view) => view.id === id)) return;
+      await ownDefinition(registryRt);
       await registryRt.remove(id);
       await passWakesOn();
     },
