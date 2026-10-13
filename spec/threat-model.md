@@ -614,6 +614,12 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
+  - From the account's wakes it learns a collection, spaces and topic tags,
+    never the values behind a private space's tags nor the person's words
+    for what they want to hear about (03 §15; `packages/core/tests/carrier.test.ts`,
+    "a carrier gets tags, never the values it matches"). In a public space a
+    tag can be worked out from the space id, so a guessed value can be
+    checked against it (02 §8.2).
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
@@ -629,8 +635,8 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     `packages/cli/tests/agent-automations.test.ts`, "takes instructions only from
     someone holding every grant of its roles"). Neither is protocol: a bot run
     by other code, or a role redefined after the bot was added, can still act
-    for someone with more than they hold, and a rule's own words are its
-    maker's ([#171](https://github.com/leifriksheim/weave/issues/171)).
+    for someone with more than they hold, and an automation's own words are
+    its maker's ([#171](https://github.com/leifriksheim/weave/issues/171)).
   - A removed carrier keeps proving read until the key changes ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what

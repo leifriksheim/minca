@@ -1,6 +1,6 @@
 /**
- * Running a node's rules (`std.automation`): what `weave agent --no-chat` does at a
- * terminal, and what a host does for each bot it runs. Rules that ask the
+ * Running a node's automations (`std.automation`): what `weave agent --no-chat` does at a
+ * terminal, and what a host does for each bot it runs. Automations that ask the
  * agent start a fresh conversation each time, one at a time, with nobody
  * there to allow deleting or overwriting, so those are refused. What someone
  * set off is counted against them, so nobody can spend the day for everyone.
@@ -22,7 +22,7 @@ export interface RuleRunnerOptions {
   readonly account: string;
   /** The bot's name, when this is a bot */
   readonly bot?: string;
-  /** A way to think, made fresh for each rule set off */
+  /** A way to think, made fresh for each automation set off */
   readonly think: () => Think;
   readonly model: string;
   readonly price?: Price;
@@ -34,14 +34,14 @@ export interface RuleRunnerOptions {
   /** Dollars a day for what each person sets off; null for no limit of their own */
   readonly capEach: number | null;
   readonly log: (line: string) => void;
-  /** Told the rules this runs, each time they change */
+  /** Told the automations this runs, each time they change */
   readonly onRules?: (names: ReadonlyArray<string>) => void;
 }
 
 /** What each person who sets a bot off may spend a day unless told: a quarter of its cap, so nobody spends the day for everyone */
 export const capEachOf = (dailyCap: number) => dailyCap / 4;
 
-/** Starts running the rules that name this node; returns how to stop */
+/** Starts running the automations that name this node; returns how to stop */
 export function runAutomations(options: RuleRunnerOptions): () => void {
   const { node, spend, log } = options;
   const names = new Map<string, string>();
@@ -55,7 +55,7 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
   const today = async () => `$${(await spend.today()).toFixed(2)} of $${options.dailyCap.toFixed(2)} today`;
 
   /**
-   * Says on the record that set a rule off (or the rule, for one set off by
+   * Says on the record that set an automation off (or the automation, for one set off by
    * the time) where the work stands, for apps to show. Never in the way of it.
    */
   // Once for each space where nobody can see it at work, since the space keeps no std.activity.
@@ -63,17 +63,17 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
   const mark = (trigger: AutomationTrigger, state: ActivityState) =>
     setActivity(
       node,
-      trigger.rule.space,
-      trigger.match?.record.key ?? trigger.rule.key,
+      trigger.automation.space,
+      trigger.match?.record.key ?? trigger.automation.key,
       state,
-      // The rule's name to begin with; at the end, whatever the model said it was doing stays.
-      state === 'done' || state === 'failed' ? undefined : trigger.rule.body.name.slice(0, 120),
+      // The automation's name to begin with; at the end, whatever the model said it was doing stays.
+      state === 'done' || state === 'failed' ? undefined : trigger.automation.body.name.slice(0, 120),
     )
       .then((set) => {
-        if (!set && !unseen.has(trigger.rule.space)) {
-          unseen.add(trigger.rule.space);
+        if (!set && !unseen.has(trigger.automation.space)) {
+          unseen.add(trigger.automation.space);
           log(
-            `  ${trigger.rule.space} keeps no std.activity, so nobody sees it at work there. ` +
+            `  ${trigger.automation.space} keeps no std.activity, so nobody sees it at work there. ` +
               'Someone who may add collections can show it: in the app, Automations, “Show it”.',
           );
         }
@@ -84,8 +84,8 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
   let queue: Promise<unknown> = Promise.resolve();
   const answer = async (sealed: AutomationTrigger): Promise<{ did: string; ok: boolean }> => {
     const trigger = await openTrigger(node, sealed);
-    const name = trigger.rule.body.name;
-    const space = trigger.rule.space;
+    const name = trigger.automation.body.name;
+    const space = trigger.automation.space;
     const who = trigger.match?.record.createdBy ?? null;
     const by = who ? ` by ${await nameOf(space, who)}` : '';
     if (who && who !== options.account && options.capEach !== null) {
@@ -118,7 +118,7 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
       const { cost, text } = await run.say(
         triggerPrompt(trigger, PEER_CONTENT_NOTE, {
           ...(context ? { context } : {}),
-          ...(shown ? { activityOn: sealed.match?.record.key ?? sealed.rule.key } : {}),
+          ...(shown ? { activityOn: sealed.match?.record.key ?? sealed.automation.key } : {}),
           writerInstructs: await writerInstructs(node, trigger, {
             account: options.account,
             bot: !!options.bot,
@@ -139,7 +139,7 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
   return startAutomations(node, {
     account: options.account,
     ...(options.bot ? { bot: true } : {}),
-    // A person's app may run the same rules; the earlier of two claims acts.
+    // A person's app may run the same automations; the earlier of two claims acts.
     claimMs: 1500,
     ask: (trigger) => {
       // Queued behind another: waiting, until its turn comes.
@@ -153,8 +153,8 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
     },
     onRules: (rules) => options.onRules?.(rules.map((rule) => rule.body.name)),
     onRun: (trigger, run) => {
-      if (trigger.rule.body.then.kind !== 'ask') log(`  [${trigger.rule.body.name}] ${run.did}`);
+      if (trigger.automation.body.then.kind !== 'ask') log(`  [${trigger.automation.body.name}] ${run.did}`);
     },
-    onError: (error) => log(`  Rules: ${messageOf(error)}`),
+    onError: (error) => log(`  Automations: ${messageOf(error)}`),
   });
 }

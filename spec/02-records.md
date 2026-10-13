@@ -1007,8 +1007,8 @@ library does with it: [collections](../packages/core/docs/collections.md#version
   registry — `sys.role`, `sys.assign`, `sys.remove`, `sys.invite`, `sys.revoke`, `sys.fork`,
   `sys.stepdown`, `sys.succeed`, `sys.key`, `sys.box`, `sys.memberkey`, `sys.relays`, `sys.keepers`,
   `sys.profile`, `sys.joined` — in [03 — Spaces](03-spaces.md); carriers,
-  passes and notifications — `sys.carrier`, `sys.pass`, `sys.notify`,
-  `sys.subscription` — in [03](03-spaces.md) §13–15, and how a node uses them
+  passes and wakes — `sys.carrier`, `sys.pass`, `sys.wake` — in
+  [03](03-spaces.md) §13–15, and how a node uses them
   in [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4; hosting —
   `sys.hosting` — in [08 — Hosting](08-hosting.md)
   (`sys.relays` and `sys.keepers` also in [05](05-sync-and-storage.md)).

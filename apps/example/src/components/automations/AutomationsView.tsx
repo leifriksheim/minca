@@ -20,14 +20,14 @@ import { useAction } from '@weave/app-shared/action';
 import { useActivityOff } from '../../activity';
 
 type Open = {
-  readonly kind: 'rule';
+  readonly kind: 'automation';
   readonly editing?: NodeRecord;
-  /** Someone else's rule, to save as one of your own */
+  /** Someone else's automation, to save as one of your own */
   readonly copying?: NodeRecord;
   readonly start?: PickedRule;
 } | null;
 
-/** The space's rules in sentences, what each did lately, and the bots that run them; only a rule's maker changes it */
+/** The space's automations in sentences, what each did lately, and the bots that run them; only an automation's maker changes it */
 export function AutomationsView({
   space,
   collections,
@@ -62,7 +62,7 @@ export function AutomationsView({
         if (automation) byRule.set(automation, [...(byRule.get(automation) ?? []), run]);
       }
       const shown = rules.filter((r) => automationOf(r) !== null);
-      // Someone else's rule can't be changed, since it runs as them; one who may moderate can still delete it.
+      // Someone else's automation can't be changed, since it runs as them; one who may moderate can still delete it.
       const deletable = new Set<string>();
       for (const r of shown) if (await n.records.can(space.id, 'delete', r.key)) deletable.add(r.key);
       return { rules: shown, runs: byRule, deletable };
@@ -122,10 +122,10 @@ export function AutomationsView({
 
       <section style={section}>
         <SectionHead
-          title="Rules"
+          title="Automations"
           about="Everyone here sees these. Each runs as its maker, on their devices or agent, or as the bot it names."
-          action="New rule"
-          onAction={() => setOpen({ kind: 'rule' })}
+          action="New automation"
+          onAction={() => setOpen({ kind: 'automation' })}
           disabled={!space.writable}
         />
         {rules === undefined ? null : rules.rules.length === 0 ? (
@@ -135,7 +135,7 @@ export function AutomationsView({
             {rules.rules.map((record) => {
               const automation = automationOf(record)!;
               const mine = record.createdBy === did;
-              // A rule written under a records-only note (an agent's) waits for its person to save it themselves.
+              // An automation written under a records-only note (an agent's) waits for its person to save it themselves.
               const suggested = record.recordsOnly === true;
               const off = automation.paused || suggested;
               const agentOnly = automation.then.kind === 'ask' || (!automation.when && !!automation.every);
@@ -193,7 +193,7 @@ export function AutomationsView({
                       )}
                       {mine ? (
                         <button
-                          onClick={() => setOpen({ kind: 'rule', editing: record })}
+                          onClick={() => setOpen({ kind: 'automation', editing: record })}
                           data-variant="quiet"
                           style={styles.smallButton}
                         >
@@ -202,9 +202,9 @@ export function AutomationsView({
                       ) : (
                         space.writable && (
                           <button
-                            onClick={() => setOpen({ kind: 'rule', copying: record })}
+                            onClick={() => setOpen({ kind: 'automation', copying: record })}
                             data-variant="quiet"
-                            title="Save it as a rule of your own, which you can change"
+                            title="Save it as an automation of your own, which you can change"
                             style={styles.smallButton}
                           >
                             Make a copy
@@ -214,7 +214,7 @@ export function AutomationsView({
                       {rules.deletable.has(record.key) && (
                         <button
                           onClick={() => {
-                            if (globalThis.confirm(`Delete the rule “${automation.name}”?`))
+                            if (globalThis.confirm(`Delete the automation “${automation.name}”?`))
                               act(() => node.records.delete(space.id, record.key));
                           }}
                           data-variant="danger"
@@ -275,7 +275,7 @@ export function AutomationsView({
               {starters.map((idea) => (
                 <button
                   key={idea.title}
-                  onClick={() => setOpen({ kind: 'rule', start: idea.rule })}
+                  onClick={() => setOpen({ kind: 'automation', start: idea.rule })}
                   data-tile
                   style={ideaTile}
                 >
@@ -290,7 +290,7 @@ export function AutomationsView({
         )}
       </section>
 
-      {open?.kind === 'rule' && (
+      {open?.kind === 'automation' && (
         <AutomationBuilder
           space={space}
           collections={collections}

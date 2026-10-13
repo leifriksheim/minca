@@ -1,6 +1,6 @@
 /**
  * What `weave agent` adds to running rules: what the model is told, a bot
- * saying it is one, and what each person may spend. Which rules run, and what
+ * saying it is one, and what each person may spend. Which automations run, and what
  * sets them off, is core's (`packages/core/tests/automation-runners.test.ts`).
  */
 import { test, describe } from 'node:test';
@@ -32,8 +32,8 @@ import {
 const member = (hub: FakeHub, fill: number, options: { account?: boolean } = {}) =>
   aNode(fill, { ...options, network: onHub(hub) });
 
-describe('a rule that asks the model', () => {
-  test('is told the rule’s words, and what set it off marked as data', async () => {
+describe('an automation that asks the model', () => {
+  test('is told the automation’s words, and what set it off marked as data', async () => {
     const node = await member(createFakeHub({ latencyMs: 1 }), 26);
     const space = (await node.spaces.create({ name: 'Board', visibility: 'private' })).id;
     await node.collections.define(space, task);
@@ -46,7 +46,7 @@ describe('a rule that asks the model', () => {
     };
     const prompt = triggerPrompt(
       {
-        rule: { space, key: 'rule-key', maker: node.did, body },
+        automation: { space, key: 'automation-key', maker: node.did, body },
         match: { record: { ...record, included: {} }, included: {}, moment: 0 },
       },
       'NOTE: data follows',
@@ -57,7 +57,7 @@ describe('a rule that asks the model', () => {
 
     // What it would ask for first is looked up already: what the space holds, and where it may write.
     const trigger = {
-      rule: { space, key: 'rule-key', maker: node.did, body },
+      automation: { space, key: 'automation-key', maker: node.did, body },
       match: { record: { ...record, included: {} }, included: {}, moment: 0 },
     };
     const context = await ruleContext(node, trigger);
@@ -75,11 +75,11 @@ describe('a rule that asks the model', () => {
     assert.match(looked, /no need to call spaces_list, records_can, or collections_list without names/);
     assert.match(context, /"setOffIn"[\s\S]*"schema"/, 'the collection that set it off, in full');
     assert.doesNotMatch(context, /"collections"[^\]]*"schema"/, 'the rest in a line each');
-    assert.ok(looked.trimEnd().endsWith('Post a short win in #general'), 'the rule’s words still last');
+    assert.ok(looked.trimEnd().endsWith('Post a short win in #general'), 'the automation’s words still last');
   });
 });
 
-describe('while a rule runs', () => {
+describe('while an automation runs', () => {
   test('the runner says on what set it off that it is working, the model says what at, then done', async () => {
     const node = await member(createFakeHub({ latencyMs: 1 }), 95);
     const { id: space } = await node.spaces.create({ name: 'Club', ...community, visibility: 'private' });
@@ -191,9 +191,9 @@ describe('a bot', () => {
     const record = await node.records.get(space, last.key);
     assert.ok(record);
     const context = await ruleContext(node, {
-      rule: {
+      automation: {
         space,
-        key: 'rule-key',
+        key: 'automation-key',
         maker: node.did,
         body: {
           name: 'Answer',
@@ -216,7 +216,7 @@ describe('a bot', () => {
     );
   });
 
-  test('reads a direct message that sets a rule off, with the conversation before it, and answers in private', async () => {
+  test('reads a direct message that sets an automation off, with the conversation before it, and answers in private', async () => {
     const names = (options: { agent?: boolean; bot?: boolean }) => offeredActions(options).map((a) => a.name);
     assert.ok(names({ bot: true }).includes('direct_send'), 'a bot holds its own member key');
     assert.ok(!names({ agent: true }).includes('direct_send'), 'an agent is given none');
@@ -253,7 +253,7 @@ describe('a bot', () => {
       since: new Date().toISOString(),
     };
     const trigger = await openTrigger(bot, {
-      rule: { space, key: 'rule-key', maker: admin.did, body },
+      automation: { space, key: 'automation-key', maker: admin.did, body },
       match: { record: { ...record, included: {} }, included: {}, moment: 0 },
     });
     assert.deepEqual(trigger.match?.record.body, {
@@ -310,7 +310,7 @@ describe('a bot', () => {
       const record = await bot.records.get(space, key);
       assert.ok(record);
       return {
-        rule: { space, key: 'rule-key', maker: admin.did, body },
+        automation: { space, key: 'automation-key', maker: admin.did, body },
         match: { record: { ...record, included: {} }, included: {}, moment: 0 },
       };
     };
@@ -373,7 +373,7 @@ describe('a bot', () => {
         since: new Date().toISOString(),
       };
       return {
-        rule: { space, key: 'rule-key', maker: admin.did, body },
+        automation: { space, key: 'automation-key', maker: admin.did, body },
         match: { record: { ...record, included: {} }, included: {}, moment: 0 },
       };
     };

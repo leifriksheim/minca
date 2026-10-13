@@ -109,7 +109,7 @@ Usage:
   weave agent --bot [--name NAME] [--invite LINK] [--daily-cap-each 0.5]
                                              an account of its own, as a bot in its spaces
   weave bots                                 the bots kept here, to start again
-  weave rule add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
+  weave automation add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
                  [--from ROLES] [--do TEXT] [--by BOT|me]
   weave collections define --standard std.automation [--space ID]
   weave actions
@@ -243,7 +243,11 @@ const MENU: ReadonlyArray<{
   { label: 'Connect an agent to my account', hint: 'weave connect', words: ['connect'] },
   { label: 'Run my agent', hint: 'weave agent', words: ['agent'] },
   { label: 'Run a bot for a community', hint: 'weave agent --bot', words: ['agent', '--bot'] },
-  { label: 'Tell an agent or bot what to do, and when', hint: 'weave rule add', words: ['rule', 'add'] },
+  {
+    label: 'Tell an agent or bot what to do, and when',
+    hint: 'weave automation add',
+    words: ['automation', 'add'],
+  },
   { label: 'Every command', hint: 'weave help', words: null },
 ];
 
@@ -475,11 +479,11 @@ async function botAccount(globals: Globals, name?: string): Promise<{ unlocked: 
   return { unlocked: await unlock(botHome, created.account, { passphrase }), folder: made };
 }
 
-/** How a bot gets work in a space: a rule naming it, which only someone who may instruct it can add */
+/** How a bot gets work in a space: an automation naming it, which only someone who may instruct it can add */
 const botWork = (name: string, did: string) =>
-  `It does nothing there until a rule asks it. Someone who may instruct it adds one: in the app, ` +
-  `Automations, with “Done by” ${name}; or \`weave rule add --by ${did}\`. ` +
-  `A rule for messages mentioning it has it answer when someone writes @${name}.`;
+  `It does nothing there until an automation asks it. Someone who may instruct it adds one: in the app, ` +
+  `Automations, with “Done by” ${name}; or \`weave automation add --by ${did}\`. ` +
+  `An automation for messages mentioning it has it answer when someone writes @${name}.`;
 
 /**
  * Joins the space of `--invite`; or, at a terminal, when the bot is in none
@@ -555,7 +559,7 @@ interface Runner {
 }
 
 /**
- * `weave agent`: a node, a chat in this terminal, and the rules it runs. The
+ * `weave agent`: a node, a chat in this terminal, and the automations it runs. The
  * model's words go to stdout; what it does goes to stderr.
  */
 async function runAgent(
@@ -606,7 +610,7 @@ async function runAgent(
             ? rules.map((name) => `“${name}”`).join(', ')
             : runner.bot
               ? `none yet. ${botWork(runner.bot, runner.account)}`
-              : 'none yet. Add one in an app, under Automations, or with `weave rule add`.'
+              : 'none yet. Add one in an app, under Automations, or with `weave automation add`.'
         }`,
       ),
   });
@@ -618,7 +622,7 @@ async function runAgent(
     ).reduce((sum, count) => sum + count, 0);
     if (waiting)
       stderr(
-        `  ${waiting} rule${waiting === 1 ? '' : 's'} the agent suggested ${waiting === 1 ? 'waits' : 'wait'} for you to save it in an app.`,
+        `  ${waiting} automation${waiting === 1 ? '' : 's'} the agent suggested ${waiting === 1 ? 'waits' : 'wait'} for you to save it in an app.`,
       );
   }
 
@@ -627,7 +631,7 @@ async function runAgent(
     await runner.close();
   };
   if (!options.chat) {
-    stderr(`weave agent: ${runner.intro}, running rules. ${options.model.name}, ${await today()}.`);
+    stderr(`weave agent: ${runner.intro}, running automations. ${options.model.name}, ${await today()}.`);
     return untilStopped({ close });
   }
 
@@ -956,7 +960,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     return runAgent(home, runner, { model, dailyCap, capEach, chat: !values['no-chat'] });
   }
 
-  if (command === 'rule' && args[0] === 'add') {
+  if (command === 'automation' && args[0] === 'add') {
     const { values } = parseArgs({
       args: args.slice(1),
       options: {

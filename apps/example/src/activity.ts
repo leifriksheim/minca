@@ -43,7 +43,7 @@ export function useActivity(spaceId: string): ReadonlyMap<string, ReadonlyArray<
   return byRecord;
 }
 
-/** Whether a space whose rules ask an agent or bot lacks `std.activity`, and a way to add it; never done on opening. */
+/** Whether a space whose automations ask an agent or bot lacks `std.activity`, and a way to add it; never done on opening. */
 export function useActivityOff(
   spaceId: string,
   writable: boolean,

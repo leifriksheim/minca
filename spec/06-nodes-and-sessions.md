@@ -56,7 +56,7 @@ A node MAY hold the **account key** ([01 §11.1](01-identity.md)). A node that i
 not one of the account's own devices (an app's, or any other program's) is
 never given the local key.
 With it the node follows the account registry — the account's list of spaces,
-its name, its carriers, hosts and subscriptions — and joins and leaves spaces as
+its name, its carriers, hosts and own automations — and joins and leaves spaces as
 the account does on any device (§1.3). Without it, the node holds only the
 spaces it was given or joined itself.
 
@@ -229,9 +229,9 @@ are absent or valid as above; when `recordsOnly: true`, `access` is not
 `carry`, `create` is absent and `contacts` is not true; when `via` is present,
 it is `code` and `access` is not `carry`.
 
-Connecting offers no subscriptions: a person signing in has asked to be told
+Connecting offers no automations: a person signing in has asked to be told
 about nothing yet. An app asks later, when they do (§2.11). A home MUST NOT
-add a subscription while connecting.
+add one while connecting.
 
 Example:
 
@@ -464,8 +464,8 @@ the same app again with a new key revokes the old one the same way:
   space, and the account registry.
 
 Disconnecting an app (not only the programs connected through it, which go
-with it) also removes every subscription
-whose `app.origin` is its origin (§2.11, §4.4).
+with it) also removes every automation of the account's own whose
+`app.origin` is its origin (§2.11, §4.4).
 
 Revoking writes a `sys.revoke` record naming the key ([03](03-spaces.md) §6.4).
 From then on nothing that key signed counts, except what the revoker had
@@ -475,35 +475,37 @@ key revoked are in [the account home's side](../packages/core/docs/sign-in.md#th
 
 _Source: `packages/core/src/session/auth.ts` (`disconnect`, `connections`), `packages/core/src/node/node.ts` (`checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …")._
 
-### 2.11 Proposing subscriptions
+### 2.11 Proposing automations
 
-Only an app offers subscriptions, and only when the person asks it to: never
-while connecting (§2.4), never a
-carrier or a program connected by code, and never the home on its own. The home lets the person
-pause and remove what they kept, not add to it. The app uses the exchange of
-§2.3 with a `ProposeRequest` in place of the
-`ConnectRequest`:
+"Let me know when…" is an automation of the account's own: what the account
+wants to hear about, kept in its registry. Only an app offers one, and only
+when the person asks it to: never while connecting (§2.4), never a carrier or
+a program connected by code, and never the home on its own. The home lets the
+person pause and remove what they kept, not add to it. The app uses the
+exchange of §2.3 with a `ProposeRequest` in place of the `ConnectRequest`:
 
-| Field    | Type                   | Meaning                                                      |
-| -------- | ---------------------- | ------------------------------------------------------------ |
-| `v`      | `1`                    |                                                              |
-| `kind`   | `"propose"`            | Tells it apart from a `ConnectRequest`, which has no `kind`. |
-| `name`   | string, ≤ 80, optional | What it calls itself. Shown, never trusted.                  |
-| `notify` | `NotifyProposal[]`     | 1 to 8 subscriptions to offer the person.                    |
+| Field         | Type                   | Meaning                                                      |
+| ------------- | ---------------------- | ------------------------------------------------------------ |
+| `v`           | `1`                    |                                                              |
+| `kind`        | `"propose"`            | Tells it apart from a `ConnectRequest`, which has no `kind`. |
+| `name`        | string, ≤ 80, optional | What it calls itself. Shown, never trusted.                  |
+| `automations` | object[]               | 1 to 8 automations to offer the person.                      |
 
-`NotifyProposal` is `{ label, collection, topic?, others?, where?, spaces?, open? }`,
-each field as in `NotifyWhen` ([03](03-spaces.md) §15), except that `topic`
-is `{ field, value }` or `{ field, me: true }` (`me` stands for
-the account's DID, which an app given only some spaces does not know). It looks
-at the spaces the app may reach (step 2 below), or with `spaces` only those of
-them; it cannot widen them.
+Each entry is `{ name, when, then?, spaces?, open? }`: an automation in the
+library's format
+([automations](../packages/core/docs/automations.md#the-accounts-own)),
+without what the home fills in. What it finds and how it reads `$me` are the
+library's. Two things in it are the protocol's, because the home enforces
+them for the person: `spaces`, a list of space ids it looks at, which cannot
+widen what the app may reach (step 2 below); and `open`, an address a click
+on its notification leads to, which must be on the app's own origin.
 
 A home MUST refuse a request with a `kind` as malformed (§2.3 step 4) unless
-it has no member but those in the table, `v` is `1`, `kind` is `propose`, `name` is absent or valid, and `notify` has 1
-to 8 entries, each of which would be a valid `NotifyWhen` ([03](03-spaces.md)
-§15) with `app.origin` the request's origin and `spaces` its `spaces` when
-given (else `"all"`), and whose `open`, when given, is on the request's
-origin: a click on a notification leads only back to the app that proposed it.
+it has no member but those in the table, `v` is `1`, `kind` is `propose`,
+`name` is absent or valid, and `automations` has 1 to 8 entries, each one the
+home can read as an automation of the account's own, and whose `open`, when
+given, is on the request's origin. A home that cannot read an entry refuses
+the request; it never writes what it could not show the person.
 
 When the person approves some or all of the proposals, the home:
 
@@ -514,26 +516,25 @@ When the person approves some or all of the proposals, the home:
    (none: it refuses).
 3. Checks every kept proposal before writing any. It MUST refuse the whole
    proposal when one names in `spaces` a space outside that reach.
-4. Adds each kept proposal to the account's subscriptions ([03](03-spaces.md)
-   §15): `spaces` is the proposal's own, else the reach; `me` becomes the
-   account's DID; `others` defaults to true; `open` defaults to `<origin>/`;
-   `since` is now; `app` is `{ origin, name? }` with `name` the connection's,
-   else the request's, cut to 80. A proposal equal to a subscription the same
-   origin already has (same collection, spaces, topic and `others`) is not
-   added again.
+4. Adds each kept proposal to the account's own automations, naming the app:
+   `spaces` is the proposal's own, else the reach; `open` defaults to
+   `<origin>/`; `app` is `{ origin, name? }` with `name` the connection's,
+   else the request's, cut to 80. One the same origin already has that asks
+   for the same thing is not added again.
 5. Answers `weave:grant` with `Proposed`:
-   `{ v: 1, kind: "proposed", notify: { id, label }[], versions? }`, the
-   subscriptions added or found; empty when the person kept none. For an app
+   `{ v: 1, kind: "proposed", automations: { id, name }[], versions? }`, the
+   automations added or found; empty when the person kept none. For an app
    with `scope: account` that kept at least one, `versions` MUST hold every
-   version the home keeps of each of them, as stored in the registry: signed,
-   its body sealed. For any other app it MUST be absent.
+   version the home keeps of each of them, and of the registry's definition
+   of their collection, as stored in the registry: signed, their bodies
+   sealed. For any other app it MUST be absent.
 
 An app given `versions` SHOULD store them at once, each only once it passes
-every check a version arriving from a peer would ([05](05-sync-and-storage.md)), and only
-versions of `sys.notify` in its own registry. The home's window closes when it
-answers, often before the two have met on the network; without them, the
-subscriptions would reach the app only when it next meets another device of
-the account.
+every check a version arriving from a peer would ([05](05-sync-and-storage.md)),
+and only versions of those automations and their collection's definition in
+its own registry. The home's window closes when it answers, often before the
+two have met on the network; without them, the automations would reach the
+app only when it next meets another device of the account.
 
 Nothing else changes: the app gets no access it did not have, no note, and
 learns only which of its suggestions were kept, and a whole-account app only
@@ -548,11 +549,10 @@ Example:
     "v": 1,
     "kind": "propose",
     "name": "Chat",
-    "notify": [
+    "automations": [
       {
-        "label": "New message in Club",
-        "collection": "std.message",
-        "others": true,
+        "name": "New message in Club",
+        "when": { "query": { "collection": "std.message" }, "others": true },
         "spaces": ["bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"]
       }
     ]
@@ -568,24 +568,26 @@ answered with
   "grant": {
     "v": 1,
     "kind": "proposed",
-    "notify": [{ "id": "notify:k3v6mzq4ha2tmbyx", "label": "New message in Club" }]
+    "automations": [
+      { "id": "iz75dwgy223gqtlqlqv3qzjq4y.k3v6mzq4ha2tmbyxk3v6mzq4ha", "name": "New message in Club" }
+    ]
   }
 }
 ```
 
 The app shows the notifications itself; how the reference matches records
-against its subscriptions is in
+against the account's own automations is in
 [the app-side client](../packages/core/docs/node.md#the-app-side-client).
 
-> Rationale: the home writes the subscriptions, not the app. A subscription is
-> the person's intent: the app knows good collections and labels, the person
-> says yes, and says no later in one place for every app.
+> Rationale: the home writes them, not the app. What the account wants to
+> hear about is the person's intent: the app knows good collections and
+> names, the person says yes, and says no later in one place for every app.
 
-> Rationale: a carrier cannot read what it would notify about, and a label it
+> Rationale: a carrier cannot read what it would notify about, and a name it
 > chose from the kinds of record it sees go by would be a guess at the
 > person's words. An app they are looking at knows what its records mean.
 
-_Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `proposeToHome`, `isRequest`), `packages/core/src/session/auth.ts` (`propose`, `subscriptionsFrom`), `packages/core/src/session/connection.ts` (`propose`), `packages/core/src/node/node.ts` (`notifications.versions`, `notifications.take`), `packages/core/src/node/space-runtime.ts` (`versionsOf`, `take`), `packages/core/src/space/notify.ts` (`checkProposal`, `proposalSpaces`, `fromProposal`, `sameSubscription`), `apps/home/src/components/ConnectPage.tsx` (`ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("an app proposing subscriptions", "the home receiving a request")._
+_Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `proposeToHome`, `isRequest`), `packages/core/src/session/auth.ts` (`propose`, `automationsFrom`), `packages/core/src/session/connection.ts` (`propose`), `packages/core/src/node/node.ts` (`automations.versions`, `automations.take`), `packages/core/src/node/space-runtime.ts` (`versionsOf`, `take`), `packages/core/src/space/own-automations.ts` (`checkProposal`, `proposalSpaces`, `fromProposal`, `sameAutomation`), `apps/home/src/components/ConnectPage.tsx` (`ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("an app proposing automations", "the home receiving a request")._
 
 > **Planned: a wallet as the account home.** The same job — hold the root and
 > hand an app's key a note — done by a credential wallet through the Digital
@@ -730,7 +732,7 @@ read them. It holds:
 
 - its own P-256 key (its DID is what peers and keepers lists name);
 - the key of its **carry space**, which holds nothing but passes and
-  subscriptions;
+  wakes;
 - for each carried space, a **pass**: the space's constitution and, for a private
   space, its read key seed;
 - the records of each carried space exactly as they travel.
@@ -768,7 +770,7 @@ Using a carrier needs the account key:
 
 Every device holding the account key keeps each live carrier's carry space in
 step with the account (§1.3): one `sys.pass` record per space, and one
-`sys.subscription` per notification subscription.
+`sys.wake` per automation of the account's own ([03](03-spaces.md) §15).
 
 **Pass records.** Collection `sys.pass`, key
 `pass:<hex of the first 20 bytes of SHA-256(utf8(space id))>`, body `SpacePass`:
@@ -839,56 +841,36 @@ carrier (§4.2).
 
 _Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`), `packages/core/src/session/auth.ts` (`grantCarry`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home")._
 
-### 4.4 Subscriptions, and carriers
+### 4.4 Wakes, and carriers
 
-"Let me know when…" subscriptions are kept in the account registry as `sys.notify` records, key
-`notify:<base32 of 10 random bytes>`, body `NotifyWhen`, defined in
-[03](03-spaces.md) §15.
+What the account wants to hear about is kept as automations of its own, in
+the account registry (§2.11). An app proposes them when the person asks it
+to, and the home adds the ones the person keeps, naming the app. Disconnecting
+an app removes them (§2.10). The app shows what they match itself, while it
+runs (§2.11).
 
-An app proposes them when the person asks it to, and the home adds the ones
-the person keeps, naming the app (§2.11). Disconnecting an app removes its
-subscriptions (§2.10). The app shows what they match itself, while it runs
-(§2.11). A subscription without `app` was made by an earlier home and is kept.
+Each device holding the account key copies each into every carry space as a
+wake ([03](03-spaces.md) §15), and a carrier matches arriving versions
+against the wakes there, from their outside alone. No carrier acts on a
+match today: the wakes are there for waking an app that is closed (below).
 
-Each device copies every subscription into every carry space as
-`sys.subscription` (same key), with the topic value replaced by the tag it has
-in each space ([02](02-records.md)):
-`{ v: 1, label, collection, spaces, tags?: { <spaceId>: [<tag>] }, others, open?, paused, since }`.
-A private space whose key the device lacks gets no tag.
+_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
 
-A version matches a carried subscription when all hold: not paused; same collection; `seq` 0 and not deleted; the space is in
-`spaces`; `createdAt` is not before `since` and within the last 24 hours; with
-`others`, the record's root is not the account; with `tags`, the record
-carries one of that space's tags. No carrier acts on a match today: the copies
-are there for waking an app that is closed (below).
-
-_Source: `packages/core/src/space/notify.ts`, `packages/core/src/node/node.ts` (`notifications`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
-
-> **Planned: matching any of several topic values.** `topic` names one
-> value, which is enough for "mentions me" but not for an area: places carry
-> their geohash cells as a topic, and everything within a radius is in one of
-> nine cells (the library's "Places and areas"). The plan: `topic` may be
-> `{ field, values }` with 1–9 values, and a version matches when it carries
-> a tag for any of them. The carried copy already holds a list of tags per
-> space, so carriers change only in computing one tag per value. Tracked in
-> [#141](https://github.com/leifriksheim/weave/issues/141).
-
-> **Planned: devices deliver subscriptions, by Web Push.** Issue:
-> [#60](https://github.com/leifriksheim/weave/issues/60). Subscriptions are
-> the account's and apps propose them (above); which device shows a match is
+> **Planned: devices deliver wakes, by Web Push.** Issue:
+> [#60](https://github.com/leifriksheim/weave/issues/60). The account's own
+> automations are the account's and apps propose them (above); which device shows a match is
 > not modeled yet. Today only an app that is running shows a match (§2.11),
 > so nothing reaches a device where it is closed, and an app with
 > `scope: spaces`, which cannot read the registry, shows nothing. The plan:
 >
 > - Each device registers as a **receiver** in its own record, apart from
->   subscriptions: `push: { endpoint, p256dh, auth }` (the browser's
->   `PushSubscription`, for the app that proposed the subscription) and
->   `device` (a name for people). Subscription records hold no device or
->   endpoint data.
-> - By default every receiver gets every subscription; a device can opt out
+>   wakes: `push: { endpoint, p256dh, auth }` (the browser's
+>   `PushSubscription`, for the app that proposed the automation) and
+>   `device` (a name for people). Wakes hold no device or endpoint data.
+> - By default every receiver gets every wake; a device can opt out
 >   on its own. A removed device's receiver record goes with it.
-> - A carrier that stores a new version matching a subscription (the rules
->   above) sends a Web Push to each receiver's endpoint: one HTTPS POST,
+> - A carrier that stores a new version that wakes a wake
+>   ([03](03-spaces.md) §15) sends a Web Push to each receiver's endpoint: one HTTPS POST,
 >   VAPID-signed (RFC 8292), payload encrypted to the device (RFC 8291). The
 >   payload is the version as the carrier holds it (private body still
 >   encrypted) when it fits in about 3 KB, otherwise its id and space.
@@ -900,9 +882,9 @@ _Source: `packages/core/src/space/notify.ts`, `packages/core/src/node/node.ts` (
 >   iOS 16.4 or later from the home screen) opens the space key from its own storage,
 >   decrypts, checks the rest of the filter (`where` included), and shows the
 >   notification. Browsers require every push to show one (`userVisibleOnly`),
->   so a device cannot quietly drop most of a stream: a subscription whose
->   carrier-side part is only a busy collection with no topic tag SHOULD be
->   refused when made, naming the fields to mark as topics.
+>   so a device cannot quietly drop most of a stream: an automation whose
+>   wake is only a busy collection with no topic tag SHOULD be refused when
+>   made, naming the fields to mark as topics.
 >
 > The push service (chosen by the browser) sees timing and size, never
 > content. A carrier learns a device's endpoint and how often a tag matches.
@@ -910,9 +892,9 @@ _Source: `packages/core/src/space/notify.ts`, `packages/core/src/node/node.ts` (
 >
 > _Open:_ a push subscription is bound to one sender's VAPID key
 > (`applicationServerKey`). Several carriers pushing to one device need either
-> one subscription per carrier (the device subscribes with each carrier's key;
-> a host's description would list it as `vapid`) or carriers sharing a key.
-> Also open: which device copies subscriptions into carry spaces; where
+> one push subscription per carrier (the device subscribes with each carrier's
+> key; a host's description would list it as `vapid`) or carriers sharing a
+> key. Also open: which device copies wakes into carry spaces; where
 > receiver records live and which carrier sends to which endpoint; whether
 > "not on this device" syncs.
 

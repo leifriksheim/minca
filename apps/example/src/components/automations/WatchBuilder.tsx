@@ -53,7 +53,7 @@ export function WatchBuilder({
 
   const offered = useMemo(() => {
     const usable = collections.filter(
-      (c) => c.schema !== null && c.version !== null && !c.name.startsWith('app.rule'),
+      (c) => c.schema !== null && c.version !== null && !c.name.startsWith('app.automation'),
     );
     const first = usable.filter((c) => prefer.includes(c.name));
     return [...first, ...usable.filter((c) => !prefer.includes(c.name))];

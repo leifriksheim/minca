@@ -66,9 +66,9 @@ export function AutomationBuilder({
 }: {
   space: SpaceSummary;
   collections: ReadonlyArray<NodeCollection>;
-  /** A rule to change, instead of making one */
+  /** An automation to change, instead of making one */
   editing?: NodeRecord;
-  /** Someone else's rule, which starts a new one of yours */
+  /** Someone else's automation, which starts a new one of yours */
   copying?: NodeRecord;
   /** Where a new one starts: an idea picked from the list */
   start?: PickedRule;
@@ -108,14 +108,14 @@ export function AutomationBuilder({
   const [every, setEvery] = useState(stored?.every ?? SCHEDULES[0]!.value);
   const [ownTime, setOwnTime] = useState(!SCHEDULES.some((s) => s.value === every));
   const everyProblem = timed ? checkCron(every) : null;
-  // The bots the space's host runs, whoever says so on their own profile here, and the one a rule being changed names.
+  // The bots the space's host runs, whoever says so on their own profile here, and the one an automation being changed names.
   const saidBots = useBots(space.id);
   const { bots: known } = useSpaceBots(space.id, space.writable);
   const bots = [
     ...new Set([...known.map((bot) => bot.did), ...saidBots, ...(stored?.by ? [stored.by] : [])]),
   ].map((d) => ({ did: d, name: known.find((bot) => bot.did === d)?.name ?? nameOf(d, people) }));
-  // Who does it, for a rule that asks or runs at set times: their own agent, or a bot here. A new
-  // rule starts with the space's bot, one the host runs first: the agent needs a computer left on.
+  // Who does it, for an automation that asks or runs at set times: their own agent, or a bot here. A new
+  // automation starts with the space's bot, one the host runs first: the agent needs a computer left on.
   const [chosenBy, setBy] = useState<string | null>(stored ? (stored.by ?? '') : null);
   const by = chosenBy ?? known.find((bot) => bot.state === 'on')?.did ?? bots[0]?.did ?? '';
   const { run, busy, error, setError } = useAction();
@@ -148,7 +148,7 @@ export function AutomationBuilder({
       ? `${whenWords(when, collections, who)}, ${thenWords(then, collections, collection)}.`
       : '';
   const shownName =
-    name ?? (timed ? scheduleWords(every) : chosen ? `${collectionLabel(chosen)} rule` : 'Automation');
+    name ?? (timed ? scheduleWords(every) : chosen ? `${collectionLabel(chosen)} automation` : 'Automation');
 
   const has = (n: string) => collections.some((c) => c.name === n && c.version !== null);
   const settable = fields.filter((f) => ['choice', 'yesno', 'number', 'text'].includes(f.kind));
@@ -164,13 +164,13 @@ export function AutomationBuilder({
   );
   const agentDoes = then.kind === 'ask' || timed;
   const botName = by ? (bots.find((b) => b.did === by)?.name ?? nameOf(by, people)) : null;
-  // A bot runs a member's rules only while they may instruct it here.
+  // A bot runs a member's automations only while they may instruct it here.
   const mayInstruct = useMay(space.id, INSTRUCT);
   // Whether this account may change only what it added there, by its grants.
   const changesOthers = useMay(space.id, RECORD_WRITE, { collection: chosen?.name ?? '', byCreator: false });
   const onlyTheirs = !!chosen && !changesOthers;
 
-  // What it holds for right now: shown, never acted on — a rule acts on what changes after it's made.
+  // What it holds for right now: shown, never acted on — an automation acts on what changes after it's made.
   const [found, setFound] = useState<{ for: typeof when; matches: ReadonlyArray<AutomationMatch> } | null>(
     null,
   );
@@ -194,7 +194,7 @@ export function AutomationBuilder({
     setError(null);
     if (everyProblem) return setError(`When: ${everyProblem}`);
     if (agentDoes && by && !mayInstruct)
-      return setError(`${botName ?? 'That bot'} only runs rules of people who may instruct it here.`);
+      return setError(`${botName ?? 'That bot'} only runs automations of people who may instruct it here.`);
     if (then.kind !== 'set' && !then.text.trim()) return setError('Say what it should say');
     if (count && !Number.isFinite(count.value)) return setError('Say how many');
     await run(async () => {
@@ -202,11 +202,11 @@ export function AutomationBuilder({
         if (has(definition.name)) continue;
         if (!mayDefine)
           throw new Error(
-            'Rules aren’t set up in this space yet: someone who can add collections needs to make the first one.',
+            'Automations aren’t set up in this space yet: someone who can add collections needs to make the first one.',
           );
         await node.collections.define(space.id, definition);
       }
-      // Where the agent or bot says it is working on what set the rule off, for apps to show; not needed to run.
+      // Where the agent or bot says it is working on what set the automation off, for apps to show; not needed to run.
       if (agentDoes && !has(activityCollection.name) && mayDefine)
         await node.collections.define(space.id, activityCollection).catch(() => {});
       const body: Automation = {
@@ -214,7 +214,7 @@ export function AutomationBuilder({
         ...(timed ? { every: every.trim() } : { when: compile(when), picked: when }),
         then,
         ...(agentDoes && by ? { by } : {}),
-        // A rule made elsewhere that has both keeps its time when its records are changed here.
+        // An automation made elsewhere that has both keeps its time when its records are changed here.
         ...(!timed && stored?.every ? { every: stored.every } : {}),
         ...(editing && stored?.paused ? { paused: true } : {}),
         since: new Date().toISOString(),
@@ -228,7 +228,7 @@ export function AutomationBuilder({
   return (
     <>
       <Modal
-        title={editing ? 'Change rule' : copying ? 'Copy rule' : 'New rule'}
+        title={editing ? 'Change automation' : copying ? 'Copy automation' : 'New automation'}
         onClose={onClose}
         width={680}
       >
@@ -319,7 +319,7 @@ export function AutomationBuilder({
                       setWithin([]);
                       setCount(null);
                       if (then.kind === 'set') setThen({ kind: 'notify', text: '{title}' });
-                      // What a new record can point at depends on what the rule is about
+                      // What a new record can point at depends on what the automation is about
                       if (then.kind === 'add') {
                         const links = addable(collections, next).find(
                           (t) => t.collection.name === then.collection,
@@ -568,7 +568,7 @@ export function AutomationBuilder({
             <span style={{ color: palette.ink.strong, fontWeight: 500 }}>{sentence}</span>
             <span style={{ color: palette.ink.muted }}>
               {by ? `${botName} does it` : 'Your agent does it'} at those times, in its local time, while it
-              runs. This app doesn’t run rules at set times.
+              runs. This app doesn’t run automations at set times.
             </span>
           </div>
         ) : (
@@ -626,7 +626,7 @@ export function AutomationBuilder({
             data-variant="primary"
             style={{ ...styles.button, width: 'auto' }}
           >
-            {busy ? 'Saving…' : editing ? 'Save rule' : 'Turn on rule'}
+            {busy ? 'Saving…' : editing ? 'Save automation' : 'Turn on automation'}
           </button>
         </div>
       </Modal>

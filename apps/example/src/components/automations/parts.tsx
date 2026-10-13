@@ -325,7 +325,7 @@ export const card: CSSProperties = {
   background: palette.surface.card,
 };
 
-/** What a rule or notification would have caught, under the builder */
+/** What an automation or notification would have caught, under the builder */
 export const previewBox: CSSProperties = {
   padding: '12px 14px',
   borderRadius: 10,
@@ -471,7 +471,7 @@ export const iconDot = {
   color: palette.ink.body,
 } as const;
 
-/** "in any channel", or one of them: where a rule's or notification's records must be */
+/** "in any channel", or one of them: where an automation's or notification's records must be */
 export function PlacePill({
   spaceId,
   collections,

@@ -1,4 +1,4 @@
-/** Rules picked from the space's collections, kept with what was picked so they can be shown in words; run by `startAutomations` while this app is open. */
+/** Automations picked from the space's collections, kept with what was picked so they can be shown in words; run by `startAutomations` while this app is open. */
 import { useEffect } from 'react';
 import { useAccount, useNode } from '@weaveprotocol/core/react';
 import type { Filter, NodeCollection, QueryRecord } from '@weaveprotocol/core';
@@ -32,7 +32,7 @@ export interface Within {
 }
 
 /** What a person picked: records of a collection, where they are, some of their fields, and perhaps how many point at them */
-// A type, not an interface, so it is also the plain object a rule's `picked` is.
+// A type, not an interface, so it is also the plain object an automation's `picked` is.
 export type Picked = {
   readonly collection: string;
   readonly clauses: ReadonlyArray<Clause>;
@@ -40,14 +40,14 @@ export type Picked = {
   readonly count?: CountClause;
 };
 
-/** A rule as the builder starts or reopens it */
+/** An automation as the builder starts or reopens it */
 export interface PickedRule {
   readonly name: string;
   readonly picked: Picked;
   readonly then: AutomationAction;
 }
 
-/** The include a counted rule reads, which `{count}` in its text fills in */
+/** The include a counted automation reads, which `{count}` in its text fills in */
 const COUNTED = 'count';
 
 function isClause(value: unknown): value is Clause {
@@ -73,7 +73,7 @@ function isCount(value: unknown): value is CountClause {
   );
 }
 
-/** What was picked for a rule, when this app built it */
+/** What was picked for an automation, when this app built it */
 export function pickedOf(rule: Automation): Picked | null {
   const picked = rule.picked;
   if (!isObject(picked) || typeof picked.collection !== 'string' || !Array.isArray(picked.clauses))
@@ -96,7 +96,7 @@ const COUNT_OPERATOR: Readonly<Record<CountClause['op'], string>> = {
   is: '$eq',
 };
 
-/** What was picked, as the rule runs it: a query, counts as includes, and the conditions; "me" is `$me`, whoever runs it */
+/** What was picked, as the automation runs it: a query, counts as includes, and the conditions; "me" is `$me`, whoever runs it */
 export function compile(picked: Picked): AutomationWhen {
   const parts: Filter[] = [];
   const own = whereOf(picked.clauses, ME);
@@ -134,13 +134,13 @@ export const ACTIONS: ReadonlyArray<{ kind: AutomationAction['kind']; label: str
   { kind: 'ask', label: 'Ask an agent', hint: 'Your agent, or a bot here, does what you say' },
 ];
 
-/** Where a rule can add a record, and the links a new one could point at the record it is about by */
+/** Where an automation can add a record, and the links a new one could point at the record it is about by */
 export interface AddTarget {
   readonly collection: NodeCollection;
   readonly links: ReadonlyArray<string>;
 }
 
-/** The collections a rule can add to for a record of `about`, by one line of text, those that can link to it first */
+/** The collections an automation can add to for a record of `about`, by one line of text, those that can link to it first */
 export function addable(collections: ReadonlyArray<NodeCollection>, about: string): ReadonlyArray<AddTarget> {
   const pointing = attachable(collections, about);
   const found = collections
@@ -157,7 +157,7 @@ export function addable(collections: ReadonlyArray<NodeCollection>, about: strin
 }
 
 /**
- * The links that say where a record of `collection` is, to narrow a rule by: each pointing at one other
+ * The links that say where a record of `collection` is, to narrow an automation by: each pointing at one other
  * collection, like a message's channel. A reply's message, pointing back at its own collection, isn't a place.
  */
 export function places(
@@ -172,11 +172,11 @@ export function places(
   );
 }
 
-/** The link an added record points at the rule's record by, if any */
+/** The link an added record points at the automation's record by, if any */
 export const linkToIt = (then: AutomationAction): string | undefined =>
   then.kind === 'add' ? then.links?.find((l) => l.to === IT)?.rel : undefined;
 
-/** An add action, pointing at the rule's record by `link` when given */
+/** An add action, pointing at the automation's record by `link` when given */
 export const addAction = (collection: string, text: string, link?: string): AutomationAction => ({
   kind: 'add',
   collection,
@@ -296,7 +296,7 @@ export function scheduleWords(every: string, start = true): string {
   return start ? words : words.charAt(0).toLowerCase() + words.slice(1);
 }
 
-/** A whole rule in words; one made elsewhere, by hand or by an agent, by what it looks at */
+/** A whole automation in words; one made elsewhere, by hand or by an agent, by what it looks at */
 export function ruleWords(
   rule: Automation,
   collections: ReadonlyArray<NodeCollection>,
@@ -323,18 +323,18 @@ function fieldsFor(collections: ReadonlyArray<NodeCollection>, name: string): Re
   return found ? clauseFields(found) : [];
 }
 
-/** A rule's `notify`, on this device: a browser notification, when they are on */
+/** An automation's `notify`, on this device: a browser notification, when they are on */
 function notify(title: string, text: string, record?: QueryRecord): boolean {
   if (typeof globalThis.Notification !== 'function' || Notification.permission !== 'granted') return false;
   new Notification(title, { body: text, tag: `${title}:${record?.key ?? ''}` });
   return true;
 }
 
-/** Runs this account's rules in every space while the app is open; those that ask an agent or run on a timer are `weave agent`'s */
+/** Runs this account's automations in every space while the app is open; those that ask an agent or run on a timer are `weave agent`'s */
 export function useRunAutomations(): void {
   const node = useNode();
   const { did } = useAccount();
-  // Their agent may run the same rules; the earlier of two claims acts.
+  // Their agent may run the same automations; the earlier of two claims acts.
   useEffect(() => startAutomations(node, { account: did, notify, timed: false, claimMs: 1500 }), [node, did]);
 }
 

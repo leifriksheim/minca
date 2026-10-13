@@ -1,6 +1,6 @@
 /**
  * The flows a person follows once, walked through at a terminal: which model
- * an agent thinks with, a rule, a standard collection. Each is also a set of
+ * an agent thinks with, an automation, a standard collection. Each is also a set of
  * flags, so an agent or a script gets there without being asked anything
  * (`ask.ts`).
  */
@@ -212,14 +212,14 @@ const readJson = (text: string, flag: string): Record<string, unknown> => {
  * add collections.
  */
 export async function addRule(node: P2PNode, flags: RuleFlags): Promise<unknown> {
-  ask.intro('A new rule');
+  ask.intro('A new automation');
   const space = flags.space ?? (await pickSpace(node, 'Which space is it for?'));
   const collections = await node.collections.list(space);
   for (const definition of [automation, automationRun]) {
     if (collections.some((c) => c.name === definition.name && c.version !== null)) continue;
     if (!(await node.spaces.may(space, COLLECTION_DEFINE, { collection: definition.name })))
       throw new Error(
-        'This space has no rules yet, and you may not add collections to it. Ask someone who can, or `weave collections define --standard std.automation`.',
+        'This space has no automations yet, and you may not add collections to it. Ask someone who can, or `weave collections define --standard std.automation`.',
       );
     await node.collections.define(space, definition);
   }
@@ -344,7 +344,7 @@ export async function addRule(node: P2PNode, flags: RuleFlags): Promise<unknown>
   return { key: written.key, space, ...body };
 }
 
-/** Who runs a rule: the account's own agent, or a bot that says so on its profile here */
+/** Who runs an automation: the account's own agent, or a bot that says so on its profile here */
 async function pickRunner(node: P2PNode, space: string): Promise<string | undefined> {
   const bots = (await node.records.list(space, { collection: profile.name }).catch(() => [])).filter(
     (record) => isRecord(record.body) && record.body.bot === true && !!record.createdBy,

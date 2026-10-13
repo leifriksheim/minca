@@ -1,5 +1,5 @@
 /**
- * Rules as records (`std.automation`): a query, a condition over each result, and
+ * Automations as records (`std.automation`): a query, a condition over each result, and
  * what to do — run by their maker, once per record.
  */
 import { test, describe, afterEach } from 'node:test';
@@ -64,8 +64,8 @@ const busyChannels = (n: number, since: string): Automation => ({
   since,
 });
 
-describe('rules', () => {
-  test('a rule is a query and a condition that may read what the query included', () => {
+describe('automations', () => {
+  test('an automation is a query and a condition that may read what the query included', () => {
     const since = new Date().toISOString();
     assert.equal(checkAutomation(busyChannels(10, since)), null);
     assert.match(checkAutomation({ ...busyChannels(10, since), when: { query: {} } })!, /collection/);
@@ -172,7 +172,7 @@ describe('rules', () => {
     );
   });
 
-  test('what came to hold before the rule was made does not set it off', async () => {
+  test('what came to hold before the automation was made does not set it off', async () => {
     const { node, did, space } = await alone();
     const design = await node.records.put(space, channel.name, { name: 'design' });
     for (const text of ['a', 'b']) {
@@ -184,7 +184,7 @@ describe('rules', () => {
     assert.equal((await node.records.list(space, { collection: automationRun.name })).length, 0);
   });
 
-  test('only its maker runs a rule', async () => {
+  test('only its maker runs an automation', async () => {
     const { node, space } = await alone();
     const design = await node.records.put(space, channel.name, { name: 'design' });
     await node.records.put(
@@ -198,7 +198,7 @@ describe('rules', () => {
     assert.equal((await node.records.list(space, { collection: automationRun.name })).length, 0);
   });
 
-  test('nothing a rule wrote sets off a rule, so “when a message is added, add a message” answers once', async () => {
+  test('nothing an automation wrote sets off an automation, so “when a message is added, add a message” answers once', async () => {
     const { node, did, space } = await alone();
     const echo: Automation = {
       name: 'Echo',
@@ -212,7 +212,7 @@ describe('rules', () => {
       since: new Date(Date.now() - 1000).toISOString(),
     };
     await node.records.put(space, automation.name, echo);
-    // And a second rule answering the first's messages the same way: two rules can't answer each other either.
+    // And a second automation answering the first's messages the same way: two automations can't answer each other either.
     await node.records.put(space, automation.name, { ...echo, name: 'Echo again' });
     const said = await node.records.put(space, message.name, { text: 'hi' });
     for (let i = 0; i < 4; i++) await runAutomations(node, space, did);
