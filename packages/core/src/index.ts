@@ -498,7 +498,7 @@ export { checkRules, onePerKey, onePerSecret } from './records/rules.js';
 export { keyKind, lineKey, ownedKey } from './records/key.js';
 export { describeCollection } from './records/describe.js';
 export type { CollectionRules } from './records/rules.js';
-export type { Contract, Condition } from './records/contracts.js';
+export type { Contract, Condition, CollectionContract, Line } from './records/contracts.js';
 export { contractCostHints } from './records/contracts.js';
 // Contracts written in TypeScript, typed from the collection's schema, built into CEL
 export { contract } from './records/contract-builder.js';

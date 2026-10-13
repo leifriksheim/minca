@@ -17,7 +17,7 @@ export const SEGMENT_SUFFIX = '.seg';
  * (spec 03 §2): an older segment's access records are ones no peer reads
  * now, so a reader holds nothing for it instead.
  */
-const SEGMENT_VERSION = 7;
+const SEGMENT_VERSION = 8;
 
 /** Packs versions into a segment's bytes */
 export function packSegment(versions: ReadonlyArray<Version>): Uint8Array {

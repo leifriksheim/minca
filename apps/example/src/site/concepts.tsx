@@ -298,7 +298,7 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     code: `const fame = collection({
   name: 'app.fame',
   schema: Fame, // the reactions it cites
-  rules: { check: [contract(Fame, ({ body, versions }) =>
+  contract: { check: [contract(Fame, ({ body, versions }) =>
     versions(body.reactions).of(Reaction)
       .where((r) => r.body.emoji.eq('🙂'))
       .map((r) => r.author).distinct().count().gte(5),

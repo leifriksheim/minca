@@ -111,6 +111,8 @@ export const proposal = typed<Proposal>()({
   links: { topic: one(['liquid.topic'], 'The topic it belongs to') },
   rules: {
     fixed: ['voters', 'toPass'],
+  },
+  contract: {
     check: [
       {
         that: `seq != 0 || (size(body.voters) >= 1 && size(body.voters) <= ${MAX_VOTERS} && body.voters.distinct().size() == size(body.voters) && body.voters.all(it, member(it)))`,
@@ -230,6 +232,8 @@ export const decision = typed<Decision>()({
   rules: {
     onePer: ['link:about'],
     final: true,
+  },
+  contract: {
     check: [
       {
         that: [
@@ -288,6 +292,8 @@ export const conflict = typed<Conflict>()({
   rules: {
     onePer: ['record'],
     final: true,
+  },
+  contract: {
     check: [
       {
         that: [
@@ -351,7 +357,7 @@ export const party = typed<Party>()({
     },
     required: ['name', 'members', 'stewards', 'decides'],
   },
-  rules: {
+  contract: {
     check: [
       {
         that: 'size(body.stewards) >= 1 && body.stewards.all(it, it in body.members) && (prev == null ? author in body.stewards : author in prev.body.stewards)',
@@ -412,6 +418,8 @@ export const partyRoll = typed<PartyRoll>()({
   rules: {
     onePer: ['link:party', 'link:about'],
     final: true,
+  },
+  contract: {
     check: [
       {
         that: [
@@ -467,6 +475,8 @@ export const partyBallot = typed<PartyBallot>()({
   rules: {
     onePer: ['link:party', 'link:about'],
     final: true,
+  },
+  contract: {
     check: [
       {
         that: [

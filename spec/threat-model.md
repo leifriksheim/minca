@@ -293,10 +293,10 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
   - An honest account whose two devices write in one line while apart kills
     that line for good, like a double spend (09 §7.5). Apps keep a line on
     one device at a time.
-  - A newer line declaration with a key an older reader doesn't know leaves
-    that collection, and what cites it, unjudged by that reader: old and new
-    readers' counts split until the old one updates, but never silently
-    (09 §2, §7.1).
+  - A newer contract or line declaration with a key an older reader doesn't
+    know leaves that collection, and what cites it, unjudged by that reader:
+    old and new readers' counts split until the old one updates, but never
+    silently (09 §1, §2, §7.1).
   - A grant of `/member/remove` or `/role/unassign` without a policy on
     `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).

@@ -84,8 +84,7 @@ const pays = (
 ): DefineCollection => ({
   name: 'app.pay',
   schema: Payment,
-  rules: { check },
-  line,
+  contract: { check, line },
 });
 
 // -- The story ---------------------------------------------------------------------

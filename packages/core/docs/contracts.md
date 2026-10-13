@@ -14,7 +14,7 @@ library builds, checks and runs them.
 
 `contract(schema, that, else)` builds one condition from TypeScript, typed
 from the collection's schema, and gives the `{ that, else }` that
-`rules.check` holds. Peers still see CEL: the builder writes it, as a query
+`contract.check` holds. Peers still see CEL: the builder writes it, as a query
 builder writes SQL.
 
 ```ts
@@ -28,7 +28,7 @@ export const fame = collection({
   name: 'app.fame',
   schema: Fame,
   links: { on: { to: ['app.comment'], cardinality: 'one' } },
-  rules: {
+  contract: {
     check: [
       contract(
         Fame,
@@ -93,7 +93,7 @@ A condition is a CEL string, and a hand-written one is stored the same way:
 await node.collections.define(space, {
   name: 'app.pay',
   schema: Payment,
-  rules: {
+  contract: {
     check: [
       {
         that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount + sum(versions(body.received).map(r, r.body.amount))',
@@ -101,8 +101,8 @@ await node.collections.define(space, {
       },
       { that: 'body.balance >= -100.0', else: 'No account goes below −100' },
     ],
+    line: { once: ['received'] },
   },
-  line: { once: ['received'] },
 });
 
 // The first payment starts this account's line, at its line key;
@@ -112,10 +112,10 @@ await node.records.put(space, 'app.pay', { to, amount: 30, balance: -30, receive
 await node.records.update(space, line, { to: other, amount: 20, balance: -50, received: [] });
 ```
 
-The definition's field is still `rules.check`: peers check the names in
-`rules`, so renaming it would make older peers treat new definitions as
-invalid. The functions and types are `Contract`, `contract`,
-`contractCostHints` and `node.records.contracts`.
+A contract is the definition's `contract`, apart from its `rules`: peers
+check `rules` and refuse `check` there, and never read `contract`
+(spec 09 §1). The functions and types are `Contract`, `CollectionContract`,
+`contract`, `contractCostHints` and `node.records.contracts`.
 
 ## Checked against the schema when defined
 
@@ -173,7 +173,8 @@ untyped, since `sum([])` is `0.0`.
   payment a double spend, and every version citing it fail with it.
 - **Defining.** `collections.define` refuses a contract outside the subset,
   one that misreads its schema ([above](#checked-against-the-schema-when-defined)),
-  and a `line` with any key but `once` (spec 09 §8).
+  a `contract` with any key but `check` and `line`, and a `line` with any key
+  but `once` (spec 09 §8).
 - **Cost hints.** `contractCostHints(check)` flags conditions whose cost grows
   fast with the records they read (macros three deep, `versions()` inside a
   macro), so one that passes on small records doesn't run out of steps on
@@ -183,4 +184,4 @@ A line is checked by walking its counted chain for each version judged, so a
 very long line costs time in proportion to its length squared, once; the
 verdicts are cached.
 
-_Source: `packages/core/src/records/contract-builder.ts` (`contract`), `packages/core/src/records/cel-types.ts` (`typeCheckCel`, `typeOfSchema`), `packages/core/src/records/contracts.ts` (`checkContracts`, `checkContractTypes`, `runContracts`, `contractCostHints`, `checkLine`), `packages/core/src/node/space-runtime.ts` (`checksOf`, `lineBreak`, `contractsFor`, `counts`, `recordsChanged`, `after`, `write`, `define`), `packages/core/src/node/node.ts` (`records.contracts`). Tests: `packages/core/tests/contract-builder.test.ts`, `packages/core/tests/contracts.test.ts`, `packages/core/tests/contracts-line.test.ts`, `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-reads.test.ts`, `scenarios/tests/fame.test.ts` and `scenarios/tests/credit.test.ts` (each case with the built contract and the hand-written one)._
+_Source: `packages/core/src/records/contract-builder.ts` (`contract`), `packages/core/src/records/cel-types.ts` (`typeCheckCel`, `typeOfSchema`), `packages/core/src/records/contracts.ts` (`checkContracts`, `checkContractShape`, `checkContractTypes`, `runContracts`, `contractCostHints`, `checkLine`), `packages/core/src/node/space-runtime.ts` (`checksOf`, `lineBreak`, `contractsFor`, `counts`, `recordsChanged`, `after`, `write`, `define`), `packages/core/src/node/node.ts` (`records.contracts`). Tests: `packages/core/tests/contract-builder.test.ts`, `packages/core/tests/contracts.test.ts`, `packages/core/tests/contracts-shape.test.ts`, `packages/core/tests/contracts-line.test.ts`, `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-reads.test.ts`, `scenarios/tests/fame.test.ts` and `scenarios/tests/credit.test.ts` (each case with the built contract and the hand-written one)._

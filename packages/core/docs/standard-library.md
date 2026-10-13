@@ -81,7 +81,8 @@ In the tables, a **bold** field is required; `string 1–200` gives its
 `minLength`–`maxLength`, `[]` a list with its `maxItems`, and `a`/`b` an
 `enum`. Links read `role` → where it may point, cardinality. Rules are what
 a definition asks of its records ([spec 02 §7](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)):
-`onePer`, `fixed`, `final`, `check`. Who may add, change and remove records
+`onePer`, `fixed`, `final`; a contract (`check`) is the definition's
+`contract`, beside them. Who may add, change and remove records
 is not the definition's to say but the space's grants
 ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)):
 in the `community` template, members change only what they made, moderators

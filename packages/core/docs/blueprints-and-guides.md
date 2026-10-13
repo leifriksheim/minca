@@ -179,7 +179,7 @@ every peer will enforce.
    first." (with `@author`); otherwise "… — anyone adding another replaces the
    first.", or with `final`, "… — the first one added holds it."
 3. `fixed`: "Once a poll is added, its “options” can't be changed."
-4. Each contract (`check`), in its own words: "Every change is checked: “…”".
+4. Each condition of the contract (`contract.check`), in its own words: "Every change is checked: “…”".
 5. One per declared link: "Each vote points at one thing: a poll (“about”)." or
    "A comment can point at anything in the space (“about”)."
 6. `history: "all"`: "Every earlier version of a … is kept."

@@ -35,9 +35,8 @@ const PAY: Contract[] = [
 const pays = (line: unknown = { once: ['received'] }): DefineCollection => ({
   name: 'app.pay',
   schema: { type: 'object' },
-  rules: { check: PAY },
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a declaration another implementation may have written
-  line: line as DefineCollection['line'],
+  contract: { check: PAY, line: line as NonNullable<DefineCollection['contract']>['line'] },
 });
 
 interface Pay {
@@ -168,7 +167,7 @@ describe('the line rule: closed keys', () => {
       {
         name: 'app.claim',
         schema: { type: 'object' },
-        rules: { check: [{ that: 'versions(body.cites).size() == 1', else: 'Cite one' }] },
+        contract: { check: [{ that: 'versions(body.cites).size() == 1', else: 'Cite one' }] },
       },
     ]);
     const alice = c.founder;
@@ -180,8 +179,7 @@ describe('the line rule: closed keys', () => {
         name: 'app.pay',
         schema: { type: 'object' },
         version: 1,
-        rules: { check: PAY },
-        line: { once: ['received'], restate: ['to', 'amount'] },
+        contract: { check: PAY, line: { once: ['received'], restate: ['to', 'amount'] } },
       },
       version: { key: 'collection:app.pay', seq: 0 },
     });
@@ -273,12 +271,12 @@ describe('the line rule: deletes', () => {
       {
         name: 'app.claim',
         schema: { type: 'object' },
-        rules: {
+        contract: {
           check: [
             { that: 'versions(body.claimed).all(v, v.collection == "app.thing")', else: 'Claim things' },
           ],
+          line: { once: ['claimed'] },
         },
-        line: { once: ['claimed'] },
       },
     ]);
     const alice = c.founder;
@@ -336,11 +334,15 @@ describe('the line rule: deletes', () => {
   });
   test('a version sealed with a key the reader lacks is unjudged, and so is what cites it: neither counts', async () => {
     const c = await communityNode(0, [
-      { name: 'app.note', schema: { type: 'object' }, rules: { check: [{ that: 'true', else: 'Never' }] } },
+      {
+        name: 'app.note',
+        schema: { type: 'object' },
+        contract: { check: [{ that: 'true', else: 'Never' }] },
+      },
       {
         name: 'app.claim',
         schema: { type: 'object' },
-        rules: { check: [{ that: 'versions(body.cites).size() == 1', else: 'Cite one' }] },
+        contract: { check: [{ that: 'versions(body.cites).size() == 1', else: 'Cite one' }] },
       },
     ]);
     const alice = c.founder;

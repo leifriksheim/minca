@@ -6,7 +6,7 @@
 import type { MailboxClient } from '../network/mailbox.js';
 import type { BodyOf, Query, ResultOf } from '../query/types.js';
 import type { CollectionRules } from '../records/rules.js';
-import type { Line } from '../records/contracts.js';
+import type { CollectionContract } from '../records/contracts.js';
 import type {
   CollectionDef,
   CryptoProvider,
@@ -289,8 +289,10 @@ export interface NodeCollection {
   readonly links: Readonly<Record<string, LinkDeclaration>>;
   /** The identity that first defined it — it, and anyone who can manage the space, may change it */
   readonly definedBy: string | null;
-  /** Who may create, edit and delete, what must be unique — for records created from now on */
+  /** What must be unique, which fields are fixed — for records created from now on */
   readonly rules: CollectionRules;
+  /** What a version must be to count, judged by readers; absent when it has none */
+  readonly contract?: CollectionContract;
   /** Fields whose values are topics, tagged on the outside of each record so keepers can match them unread */
   readonly topics: ReadonlyArray<string>;
   readonly records: number;
@@ -308,12 +310,15 @@ export interface DefineCollection {
   readonly history?: 'latest' | 'all';
   /** The link roles its records may carry, and what each may point at */
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
-  /** Who may create, edit and delete, what must be unique, which fields are fixed */
+  /** What must be unique, which fields are fixed, whether records are written once: what every peer checks */
   readonly rules?: CollectionRules;
   /** Fields whose values are topics — `channel`, `mentions` — so a keeper can match them without reading (`StoredCollection.topics`) */
   readonly topics?: ReadonlyArray<string>;
-  /** One line per account, at `lineKey(account, name)`: `once` fields claim each citation once along it (packages/core/docs/contracts.md) */
-  readonly line?: Line;
+  /**
+   * What a version must be to count, judged by readers: `check`, conditions in CEL, and `line`,
+   * one line per account at `lineKey(account, name)` (packages/core/docs/contracts.md)
+   */
+  readonly contract?: CollectionContract;
 }
 
 export interface NodeCollections {

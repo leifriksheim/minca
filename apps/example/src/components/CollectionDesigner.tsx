@@ -291,6 +291,7 @@ export function CollectionEditor({
         ...(collection ? { history: collection.history } : {}),
         links: nextLinks,
         rules,
+        ...(collection?.contract ? { contract: collection.contract } : {}),
       });
       onDone(name);
     });
