@@ -85,20 +85,20 @@ const APPS = (
   <div
     className="viz"
     role="img"
-    aria-label="An app asks your account home, you approve, and it gets a scoped pass"
+    aria-label="An app asks your account home for access; you approve, and the app gets back a pass for exactly that"
   >
-    <div className="viz-flow">
-      <Box name="Poll app" sub="no keys, no password" />
+    <div className="viz-flow column">
+      <Box name="Poll app" sub="wants: Club, write, 7 days" />
       <Arrow label="asks" />
       <Box ink name="Your account home" sub="you approve" />
+      <Arrow label="a pass" />
+      <Box name="Poll app" sub="holds the pass">
+        <span className="viz-note">Club · write · 7 days</span>
+      </Box>
     </div>
-    <span className="viz-arrow down">
-      <span aria-hidden>→</span>
-      <small>a pass, back to the app</small>
-    </span>
-    <Box name="Pass" sub="Club space · write · 7 days">
-      <span className="viz-note">every device checks it · revoke anytime</span>
-    </Box>
+    <div className="viz-caption">
+      every device checks the pass · you can revoke it anytime · the app never sees your keys
+    </div>
   </div>
 );
 

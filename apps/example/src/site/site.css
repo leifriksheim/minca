@@ -587,6 +587,16 @@
   font-size: inherit;
   color: var(--body);
 }
+/* A flow read top to bottom at every width: the Apps drawing, a request and its answer */
+.site .viz-flow.column {
+  flex-direction: column;
+}
+.site .viz-flow.column .viz-arrow > span {
+  transform: rotate(90deg);
+}
+.site .viz-flow.column .viz-note {
+  white-space: nowrap;
+}
 .site .viz-note {
   display: block;
   margin-top: 6px;
