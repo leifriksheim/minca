@@ -73,7 +73,7 @@ interface ScreenRecord {
   readonly updatedAt: string;
   /** Whether the person looking created it */
   readonly mine: boolean;
-  /** Written by an agent for `createdBy`'s account */
+  /** Written under a records-only note: an agent or other program `createdBy`'s account connected */
   readonly viaAgent: boolean;
 }
 
@@ -108,7 +108,7 @@ Every write is checked against the collection's rules, as the person looking: a 
 An error the screen doesn't catch is shown to the person, so they can tell you about it.
 Links look like { rel: "game", to: "<record key>" }, with the roles the definition declares.
 Draw everything from weave.list(...) and redraw on weave.onChange — other people's moves arrive that way.
-Two people can write at once: design collections so that clashes resolve by the rules (onePer, creator-only edits), not by the screen.
+Two people can write at once: design collections so that clashes resolve by the rules (onePer, each person changing only their own records), not by the screen.
 Use plain DOM; no libraries can be loaded. Prefer system fonts and simple, readable styling that works in light and dark.`;
 
 /** The script put in front of a screen's document: `window.weave`, over the port the host page kept for it */

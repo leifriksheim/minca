@@ -172,8 +172,8 @@ export function Home() {
             doesn’t get around it.
           </Feature>
           <Feature icon="M2 4h12M2 8h12M2 12h8" title="No terms to change overnight">
-            No ads, no one reading along, no feed deciding what members see. The only rules are the ones your
-            group wrote down.
+            No ads, no one reading along, no feed deciding what members see. Your space’s constitution says
+            who founded it, or that nobody sits above the roles, and no one can rewrite it.
           </Feature>
           <Feature icon="M1.5 4h5v8h-5zM9.5 4h5v8h-5zM6.5 8h3" title="Share what works">
             Made a great rota? Propose it in another community you’re part of. The people there decide for

@@ -157,8 +157,8 @@ export function NewAssembly({
           <span>
             Members can invite others
             <span className="lq-faint" style={{ display: 'block', fontSize: 12.5 }}>
-              Every account is one vote, so whoever can invite decides who votes. Off, only you and moderators
-              can.
+              Every account is one vote, so whoever can invite decides who votes. Off, only you, admins and
+              moderators can.
             </span>
           </span>
         </label>

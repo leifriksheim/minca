@@ -30,7 +30,7 @@ const CLI = (import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli conne
 );
 
 /**
- * What an admin can add to a community, at the top of its screen: two tiles,
+ * What whoever manages a community can add to it, at the top of its screen: two tiles,
  * Always online and an AI helper, each opening a dialog. Only those who may
  * manage the community see it, and "Not now" puts it away for a month.
  */
@@ -407,7 +407,7 @@ export function AddBotDialog({
                     Turn on profiles
                   </button>
                 ) : (
-                  'An admin who may add collections can turn them on.'
+                  'Someone who may add collections can turn them on.'
                 )}
               </div>
             )}

@@ -150,7 +150,7 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
                 ? view.line
                 : mayChoose
                   ? 'A host can keep it reachable when everyone is offline, without reading it.'
-                  : 'A host can keep it reachable when everyone is offline. An admin can turn that on.'
+                  : 'A host can keep it reachable when everyone is offline. Whoever manages the space can turn that on.'
           }
         >
           {host?.error && (
@@ -228,7 +228,7 @@ function StopHost({
         <p style={said}>
           {mayManage
             ? `${botNames} ${bots.length === 1 ? 'is' : 'are'} removed from the community: ${host.name} runs ${bots.length === 1 ? 'it' : 'them'}.`
-            : `${botNames} ${bots.length === 1 ? 'stays' : 'stay'} until an admin removes ${bots.length === 1 ? 'it' : 'them'}: ${host.name} reads what ${bots.length === 1 ? 'it' : 'they'} can read.`}
+            : `${botNames} ${bots.length === 1 ? 'stays' : 'stay'} until someone who manages the space removes ${bots.length === 1 ? 'it' : 'them'}: ${host.name} reads what ${bots.length === 1 ? 'it' : 'they'} can read.`}
         </p>
       )}
       {host.error && (
@@ -388,7 +388,7 @@ export function KeepOnline({
           )}
           {!mayChoose ? (
             <p style={{ fontSize: 13, color: palette.ink.muted }}>
-              An admin of this community can turn it on.
+              Whoever manages this community can turn it on.
             </p>
           ) : !offerAsked ? (
             <p role="status" style={{ fontSize: 13, color: palette.ink.muted }}>

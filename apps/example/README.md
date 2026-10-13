@@ -31,14 +31,19 @@ apps live.
 How the account itself works — the password, passkeys, pods, pairing a phone —
 is in [home/README.md](../home/README.md).
 
-## The four kinds of space
+## Spaces
 
-Two independent choices — who may write, and who may read:
+A space's constitution is fixed when it is made, and its hash is the space's
+id: its name, whether it is **private** (every body encrypted with the space
+key, the relay never sees content) or **public** (readable by anyone with the
+link), who sits at the top, and the roles it starts with. So the name and
+whether it is private can't change later.
 
-|                | 👤 Personal                                                  | 👥 Shared                                                             |
-| -------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
-| 🔒 **Private** | Encrypted, yours alone. Only your DID's writes are accepted. | Encrypted for whoever holds the invite; the relay never sees content. |
-| 🌍 **Public**  | Readable by anyone you hand it to, but only you can write.   | An open space — anyone with the link reads and writes.                |
+This app founds every space with `rolePresets.team`: you are its founder and
+hold every command; an Editor role is there for whoever you invite. Who may
+do what is grants held by roles, changed in **People & roles**: define a role,
+assign it, take it back, remove someone, step down as a founder, or follow a
+successor space someone named.
 
 Each space has its own store, its own sync and its own gossip
 room. Sharing one tells a peer nothing about the others.
@@ -160,10 +165,10 @@ VITE_SIGNALING_URL=wss://your-relay.example npm run dev
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Account home           | Connecting: the home signs a note from the account to this app's own key, and the app never sees the seed              |
 | Delegation (UCAN 1.0)  | Every record is signed by this app's key, under that note; peers check that the account signed it                      |
-| Spaces                 | Four kinds of space, each with its own database, sync and gossip room                                                  |
+| Spaces                 | Private or public, each founded with a constitution, with its own database, sync and gossip room                       |
 | E2EE                   | Private spaces encrypt bodies before signing; a record says _encrypted_ when it had to be opened                       |
 | Validation             | Shape, signature and capability checks run on everything, including what peers send                                    |
-| Authorization          | A personal space rejects writes not rooted in its owner — the _rejected_ counter shows what was dropped                |
+| Authorization          | Every write is judged by the grants its author's roles hold — the _rejected_ counter shows what was dropped            |
 | Derived UI             | Forms, tables, "+ Add …" buttons and tallies worked out from each space's own definitions                              |
 | Profiles               | Everyone in a space shown by the name they gave, which only they can change                                            |
 | Sync by reconciliation | Peers compare a fingerprint per collection, and reconcile the ones that differ (Negentropy), over WebRTC data channels |

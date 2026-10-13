@@ -142,7 +142,7 @@ function mayDefine(access: SpaceAccess | null | undefined, did: string | null): 
 /**
  * Whether a launcher record's current version stands for the space: written
  * by someone whose role may define collections, with a key whose note let
- * them. An agent's write, or an edit by anyone else, makes it a proposal again.
+ * them. A records-only write (an agent's), or an edit by anyone else, makes it a proposal again.
  */
 const vouchedFor = (record: NodeRecord<LauncherApp>, access: SpaceAccess | null | undefined) =>
   !record.recordsOnly && mayDefine(access, record.root);

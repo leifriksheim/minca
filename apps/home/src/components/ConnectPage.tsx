@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
+import type { NewSpace, SpaceSummary } from '@weaveprotocol/core';
 import {
   isProposeRequest,
   receiveConnectRequest,
@@ -222,8 +222,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
               <div key={index} style={choice}>
                 <span style={{ flex: 1 }}>{space.name}</span>
                 <span style={{ color: palette.ink.faint, fontSize: 12 }}>
-                  {space.visibility} ·{' '}
-                  {space.roles ? space.roles.map((role) => role.title ?? role.name).join(', ') : 'just you'}
+                  {space.visibility} · {constitution(space)}
                 </span>
               </div>
             ))}
@@ -533,6 +532,24 @@ function Answer({
       </div>
     </>
   );
+}
+
+/**
+ * A new space's constitution in a few words: who founds it, and its roles.
+ * "You found it · Admin, Member"; "No founder · Steward, Member".
+ */
+function constitution(space: NewSpace): string {
+  const roles = (space.roles ?? []).map((role) => role.title ?? role.name);
+  const others = space.cofounders?.length ?? 0;
+  const top =
+    space.top === 'none'
+      ? 'No founder'
+      : others
+        ? `You and ${others === 1 ? 'one other' : `${others} others`} found it`
+        : roles.length
+          ? 'You found it'
+          : 'Just you';
+  return roles.length ? `${top} · ${roles.join(', ')}` : top;
 }
 
 /** "7 days", "1 year" */
