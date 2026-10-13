@@ -131,6 +131,25 @@ describe('contracts: where they live', () => {
     assert.notEqual(await c.verdict(v1), 'pass');
   });
 
+  test('an empty list in rules.check asks nothing: the contract beside it is judged', async () => {
+    const c = await communityNode(0, []);
+    const def = await c.sign(c.founder, {
+      collection: 'sys.collection',
+      body: {
+        name: 'app.note',
+        schema: { type: 'object' },
+        version: 1,
+        rules: { check: [] },
+        contract: { check: NEVER },
+      },
+      version: { key: 'collection:app.note', seq: 0 },
+    });
+    await c.add(def);
+    const note = await c.sign(c.founder, { collection: 'app.note', body: { n: 1 } });
+    await c.add(note);
+    assert.equal(await c.verdict(note), 'fail');
+  });
+
   test('the same condition under contract.check is judged: no reader counts what fails it', async () => {
     const c = await communityNode(0, [
       { name: 'app.note', schema: { type: 'object' }, contract: { check: NEVER } },

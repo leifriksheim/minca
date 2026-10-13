@@ -1754,7 +1754,8 @@ is in [06](06-nodes-and-sessions.md) §1.3. The registry holds other records
 of the library's own too, such as the account's name
 ([docs](../packages/core/docs/spaces.md#profiles)). What a `sys.automation`
 body says is the library's ([automations](../packages/core/docs/automations.md#the-accounts-own));
-peers check only that the account wrote it. It is a system collection so that
+peers check only that a member of the registry wrote it, and the library
+counts only the account's own. It is a system collection so that
 nothing defines it: no key of the account can redefine it to keep the person
 from pausing or removing one.
 

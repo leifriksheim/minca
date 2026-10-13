@@ -784,6 +784,38 @@ describe('an app proposing automations', () => {
       ['New todo'],
     );
   });
+
+  test('disconnecting a whole-account app removes what its own key wrote, whatever app that names', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node } = auth.getState().session!;
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://evil.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
+      spaceIds: [],
+    });
+    const evil = await app(hub, grant, key);
+    const own = (name: string, origin: string) => ({
+      ...notifyOn(name, 'app.chat.message'),
+      then: { kind: 'notify' as const, text: name },
+      spaces: 'all' as const,
+      app: { origin },
+    });
+    await evil.automations.add(own('Own', 'https://evil.test'));
+    await evil.automations.add({
+      ...own('Your bank: sign in again', 'https://bank.test'),
+      open: 'https://evil.test/phish',
+    });
+    await until(
+      async () => (await node.automations.list()).length === 2,
+      5000,
+      'its automations to reach the home',
+    );
+
+    await auth.disconnect('https://evil.test');
+    assert.deepEqual(await node.automations.list(), []);
+  });
 });
 
 describe('an app showing its own notifications', () => {

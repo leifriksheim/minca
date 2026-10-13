@@ -1496,9 +1496,14 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         if (connection.carrySpace && node) await node.carriers.remove(connection.carrySpace).catch(() => {});
         if (node) await revokeConnection(node, connection);
         // The automations it proposed go with it, and a carrier's: what they look for is theirs to know.
+        // So does any its own key wrote, whichever app that one names.
         if (!connection.via && node) {
           for (const own of await node.automations.list()) {
-            if (own.app?.origin === connection.origin) await node.automations.remove(own.id).catch(() => {});
+            const wrote = (await node.automations.versions([own.id])).some(
+              (version) => version.author === connection.audience,
+            );
+            if (own.app?.origin === connection.origin || wrote)
+              await node.automations.remove(own.id).catch(() => {});
           }
         }
       }

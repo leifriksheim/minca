@@ -465,7 +465,8 @@ the same app again with a new key revokes the old one the same way:
 
 Disconnecting an app (not only the programs connected through it, which go
 with it) also removes every automation of the account's own whose
-`app.origin` is its origin (§2.11, §4.4).
+`app.origin` is its origin (§2.11, §4.4), and every one with a version its
+key signed, whatever app that one names.
 
 Revoking writes a `sys.revoke` record naming the key ([03](03-spaces.md) §6.4).
 From then on nothing that key signed counts, except what the revoker had

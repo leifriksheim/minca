@@ -530,9 +530,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     only for a key it shows it holds, never the home's own or another
     connection's, so disconnecting it revokes nobody else (06 §2.5).
   - Given the whole account, it can't keep the person from pausing or
-    removing their own automations, or keep its own past a disconnect: they
-    are `sys.automation`, which nothing defines, so no definition it writes
-    applies to them (03 §13.2; `packages/core/tests/own-automations.test.ts`).
+    removing their own automations: they are `sys.automation`, which nothing
+    defines, so no definition it writes applies to them (03 §13.2;
+    `packages/core/tests/own-automations.test.ts`). Disconnecting it removes
+    every automation it proposed and every one its own key wrote, whichever
+    app that one names (06 §2.10; `packages/core/tests/connect.test.ts`,
+    "disconnecting a whole-account app removes what its own key wrote…").
   - Given the whole account, it holds the account key, not the local key, so
     it can't open the registry store's sealed entries, and of those it gets
     nothing else it lacks but invite secrets waiting to be used and the CLI's

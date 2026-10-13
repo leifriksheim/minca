@@ -36,8 +36,10 @@ describe('the account’s own automations', () => {
     const spam = await node.automations.add(own('Spam'));
     await node.automations.add(own('Other'));
     const registry = (await deriveAccountRegistry(accountKey, identity.did)).space.id;
-    // What a whole-account app's key could sign: a std.automation there, final, at the highest version.
-    await node.collections.define(registry, { ...automation, version: 2 ** 53, rules: { final: true } });
+    // What a whole-account app's key could sign: no definition of sys.automation is a definition at all,
+    // and one of std.automation there, final at the highest version it may have, reaches nothing of it.
+    await assert.rejects(node.collections.define(registry, { ...automation, name: 'sys.automation' }));
+    await node.collections.define(registry, { ...automation, version: 2 ** 53 - 1, rules: { final: true } });
     await node.automations.update(spam.id, { paused: true });
     assert.equal((await node.automations.list()).find((one) => one.id === spam.id)?.paused, true);
     await node.automations.remove(spam.id);

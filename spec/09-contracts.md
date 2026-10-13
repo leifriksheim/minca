@@ -73,8 +73,8 @@ and every version under it fails.
 
 `contract` is a top-level member of the definition, which peers ignore (02
 §6.1), and never part of `rules`. A definition that still keeps `check` in
-`rules`, or a `line` of its own beside it, as an older format did, keeps its
-rules at every peer (02 §7.5),
+`rules` (other than an empty list, which asks nothing), or a `line` of its
+own beside it, as an older format did, keeps its rules at every peer (02 §7.5),
 but a reader doesn't judge it: its versions are unjudged, whatever
 `contract` says, and stay so after the collection is defined again, since a
 version is judged as of its `seen`. What peers check never names what only

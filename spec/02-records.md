@@ -1268,7 +1268,9 @@ anything else, `create`, `edit` and `delete` included, is invalid (§6.1).
 `check` is where an older format kept a contract, as was a top-level `line`
 on the definition. Peers keep both and do not read them, so `onePer`, `fixed`
 and `final` beside them still hold. Readers do not judge them: they leave the
-collection's versions unjudged ([09](09-contracts.md) §1). A writer MUST NOT
+collection's versions unjudged ([09](09-contracts.md) §1). An empty list in
+`rules.check` asks nothing and is read as if absent; any other value there is
+the older format. A writer MUST NOT
 put `check` in `rules`, nor `line` beside it; a contract is the definition's
 `contract` (§7.6).
 
