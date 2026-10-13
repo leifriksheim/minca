@@ -40,7 +40,8 @@ The **writer** (`from`) is the root of the record's first version. The
 In a private space the whole body is also encrypted with the space key, so
 peers outside the space see only the envelope. Other members see `to`, `from`
 and when: who wrote to whom, not what. `to` is a topic, so "direct messages to
-me" is a subscription a keeper can match without reading it.
+me" is an automation of the account's own whose wake a keeper can match
+without reading it ([automations](automations.md#the-accounts-own)).
 
 ## Sealing
 
@@ -99,7 +100,7 @@ They need the account's member key for the space. An agent isn't given it, so
 an agent may only ask `reachable`. A bot is an account of its own and holds
 one, so it reads and sends them like anyone: the actions `direct_list` and
 `direct_send` ([actions](actions.md)) are offered to bots, not to agents,
-and a rule set off by a direct message hands the bot the message opened.
+and an automation set off by a direct message hands the bot the message opened.
 
 _Source:_ `packages/core/src/node/actions.ts` (`direct_list`, `direct_send`),
 `packages/core/src/node/actions.ts` (`offeredActions`), `packages/cli/src/agent-automations.ts`

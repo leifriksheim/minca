@@ -443,8 +443,8 @@ _Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `start
 > `packages/cli/src/reminders.ts`), and every device already shows the date
 > it holds. The protocol route is Web Push through the carry space ([06](06-nodes-and-sessions.md) §4.4,
 > Planned): the home writes a
-> `sys.subscription` with no filter and `purpose: "hosting"` when the person
-> allows it, and the host pushes `{ kind: "hosting", host, paidUntil }`,
+> `sys.wake` ([03](03-spaces.md) §15) with no collection filter and
+> `purpose: "hosting"` when the person allows it, and the host pushes `{ kind: "hosting", host, paidUntil }`,
 > signed like a status. No new call between home and host. Depends on Web Push.
 >
 > **Paying without being linked to the account.** Today the host can tie a

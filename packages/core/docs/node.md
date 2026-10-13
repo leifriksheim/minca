@@ -403,7 +403,7 @@ records change in the account registry, one run at a time. It:
 4. writes a `sys.joined` record for any space held here that the account
    registry has never heard of (joined before the registry existed, or on a
    node without the account key);
-5. brings every carrier's passes and subscriptions up to date
+5. brings every carrier's passes and wakes up to date
    ([spec 06 §4.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md));
 6. names the account's carriers as keepers of the open spaces it manages
    (also whenever a space opens);
@@ -733,23 +733,23 @@ config is only a default). It switches to `expired` at `expiresAt` and does not
 load an expired grant from storage, nor one of another format (`v` other
 than `GRANT_VERSION`, 2): the person connects again. When the node sees its own note revoked in
 a space it emits `revoked` ([events](#events)), and the connection forgets the
-grant and the app key. `propose(notify)` sends a proposal to the grant's home
+grant and the app key. `propose(automations)` sends a proposal to the grant's home
 ([spec 06 §2.11](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
 
 **Showing notifications.** The app shows its own notifications.
 `watchNotifications(node, { origin?, onNotify })` needs the account key (an
-app with `scope: account`): it reads the subscriptions naming the app's origin
-from the registry and hands the app each record that arrives matching one,
-with the body in hand (`matchesRecord`): not paused, the collection, one of the
-spaces, created at or after `since` and within the last 24 hours, by another
-account when `others`, holding the topic value when there is one, and for
-which its `where` holds when it has one (`whereHolds`). What the node held
-before it started is never news, and neither is what a collection held the
-first time a subscription made it look there; anything arriving after that
+app with `scope: account`): it reads the account's own automations naming the
+app's origin from the registry and hands the app each record that arrives
+matching one, as `{ automation, record }`, with the body in hand
+(`matchesRecord`): not paused, the collection, one of the spaces, created at
+or after `since` and within the last 24 hours, by another account when
+`others`, and for which its `where` holds, with `$me` the account. What the
+node held before it started is never news, and neither is what a collection
+held the first time an automation made it look there; anything arriving after that
 is, even while the account or the list of spaces changes. How the app shows a match is its own
 to decide; a "Notify me" button is where a proposal usually starts.
 
-_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `grantSigner`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/notify.ts` (`matchesRecord`, `whereHolds`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("a subscription’s where"), `packages/core/tests/watch-notifications.test.ts`._
+_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `grantSigner`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
 
 ## Carriers, hosting and notifications
 
@@ -763,15 +763,17 @@ the carry space, named `Carried by <name>` (name trimmed to 80, default
 writes `carry:closed` and deletes the record; the node keeps the carry space
 open for 30 days after, so a carrier that is offline still hears it.
 
-**Subscriptions.** `node.notifications` (needs the account key) lists, adds,
-updates (`label`, `paused`) and removes the account's `sys.notify` records. The
-reference home adds them when a person keeps an app's proposal, and lists them
-by app for the person to pause or remove ([sign-in](sign-in.md#the-account-homes-side)).
+**The account's own automations.** `node.automations` (needs the account
+key) lists, adds, updates (`name`, `paused`) and removes the account's own
+automations, kept in its registry ([automations](automations.md#the-accounts-own)),
+and copies a wake for each into every carry space. The reference home adds
+them when a person keeps an app's proposal, and lists them by app for the
+person to pause or remove ([sign-in](sign-in.md#the-account-homes-side)).
 
-**A carrier's matches.** `CarrierNode` reports a version matching a carried
-subscription through `notify`, with only the subscription, the space and the
-record's key, collection and `createdAt`. Nothing shows these yet, the browser
-extension included.
+**A carrier's matches.** `CarrierNode` reports a version that wakes one of
+the account's wakes through a `wake` event, with only the wake, the space and
+the record's key, collection and `createdAt`; `wakes()` lists the wakes it
+holds. Nothing shows these yet, the browser extension included.
 
 **Hosting.** `node.hosting`:
 

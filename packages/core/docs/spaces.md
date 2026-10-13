@@ -2,7 +2,7 @@
 
 What the library chooses when it creates, invites to, reads and keeps
 spaces: constitution templates, invite defaults, profiles, the space manager, and how
-an app shows a subscription.
+an app shows the account's own automations.
 
 > Not protocol. None of this is checked by a peer, and another implementation
 > may do it differently and still interoperate. What peers must agree on about
@@ -248,38 +248,35 @@ keeps the newer one.
 
 _Source: `packages/core/src/space/space-manager.ts`. Tests: `packages/core/tests/space.test.ts` ("space manager")._
 
-## Subscriptions
+## The account's own automations
 
-A subscription's `app` names the app that proposed it
-([spec 03 §15](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
-and that app shows what it matches. A home adds no subscription of its own.
-One without `app` was made by an earlier home, or proposed by an earlier
-extension (which is why an extension's origin stays valid), and nothing shows
-it now.
+What the account wants to hear about is an automation of its own, kept in
+its registry ([automations](automations.md#the-accounts-own)). Its `app`
+names the app that proposed it, and that app shows what it matches. A home
+adds none of its own.
 
-**Narrowing with `where`.** A subscription, a proposal and an app's `notify`
-entry may carry `where`: a filter over the record, the same as a query's
-([query-format.md](query-format.md)): body fields, `link:<rel>`, and of the
-record's own fields `@key`, `@collection`, `@createdBy` and `@createdAt`. An
-app can build one from what a person picks — "a task whose priority is at
-least 3", "a poll that isn't closed" — rather than offering a fixed list.
-`checkFilter` says whether one can be kept, and `matches(record, filter)`
-whether it holds, which an app can use to show what a subscription would
-have matched before proposing it.
+**Narrowing with `where`.** A proposal, and an app's `notify` entry, may
+carry a `where` in its query: a filter over the record, the same as a
+query's ([query-format.md](query-format.md)): body fields, `link:<rel>`, and
+of the record's own fields `@key`, `@collection`, `@createdBy` and
+`@createdAt`. An app can build one from what a person picks — "a task whose
+priority is at least 3", "a poll that isn't closed" — rather than offering a
+fixed list. `checkOwnAutomation` says whether one can be kept, and
+`matches(record, filter)` whether it holds, which an app can use to show
+what it would have matched before proposing it.
 
 ```typescript
 await connection.propose([
-  {
-    label: 'Urgent task for me',
-    collection: 'std.task',
-    topic: { field: 'assignees', me: true },
-    where: { priority: { $gte: 3 } },
-  },
+  notifyOn('Urgent task for me', 'std.task', {
+    assignees: { $contains: '$me' },
+    priority: { $gte: 3 },
+  }),
 ]);
 ```
 
-Put what a carrier can match in `topic` when there is one: `where` is judged
-only by the app, so a carrier matching on `collection` alone wakes the app for
-records it then turns down.
+A condition on a topic field, at the top of `where` or in an `$and` there,
+is what a carrier's wake matches; the rest is judged only by the app. Without
+one, a carrier wakes the app for every new record of the collection, and the
+app turns down the rest.
 
-_Source: `packages/core/src/space/notify.ts` (`checkNotify`, `whereHolds`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/core/src/node/node.ts` (`notifications`), `apps/example/src/notifications.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/topics.test.ts` ("a subscription’s where")._
+_Source: `packages/core/src/space/own-automations.ts` (`checkOwnAutomation`, `notifyOn`, `matchesRecord`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/core/src/node/node.ts` (`automations`), `apps/example/src/notifications.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where")._

@@ -97,7 +97,7 @@ filter on them with `link:<rel>` ([records-and-queries.md](records-and-queries.m
 **A record that points at another record says so with a link**, never with
 the other record's key in a body field. Everything that follows relations
 works on links and only on links: declarations and conformance, `onePer`,
-contracts, `include` and counts, rules ([rules.md](automations.md)), and the "what
+contracts, `include` and counts, automations ([automations.md](automations.md)), and the "what
 points here" a record's page shows. A key in a body field is a string to all
 of them. Fields are for values and for people (DIDs); links are for records.
 If a keeper must match on a link without reading, make it a topic:
@@ -331,7 +331,8 @@ record.
   keeps every version whole, so its contract can read the one before and cite it.
 - `topics: ['mentions', 'link:channel']` lets a node that can't read the
   space still match records by a field's value, or by where a link of that
-  role points, for notifications. At most 8.
+  role points, for the account's wakes ([automations](automations.md#the-accounts-own)).
+  At most 8.
 - `version`: see [below](#versions-of-a-definition).
 
 ## Versions of a definition

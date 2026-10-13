@@ -148,7 +148,7 @@ untyped, since `sum([])` is `0.0`.
 ## How the library reads them
 
 - **Counted only when it passes.** `get`, `list`, `linked`, queries and their
-  counts, rules and notifications count only versions that pass; `history`
+  counts, automations and notifications count only versions that pass; `history`
   lists every version and gives a failing one its reason.
 - **`node.records.contracts(space, key, version?)`** says how the record's
   newest version that stands fares, or the version named:

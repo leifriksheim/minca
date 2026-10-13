@@ -13,8 +13,8 @@ account.
 ## At a terminal, and anywhere else
 
 Run `weave` alone at a terminal and pick what to do: set up an account,
-invite someone, join a space, connect or run an agent, run a bot, add a
-rule. Any command asks for what it still needs there: a space picked from
+invite someone, join a space, connect or run an agent, run a bot, add an
+automation. Any command asks for what it still needs there: a space picked from
 your spaces, a role, a collection, a record, a yes before something that
 can't be undone.
 
@@ -190,7 +190,7 @@ weave host --host 0.0.0.0 --port 8787 --data /var/lib/weave-host
 - **Bots.** With `WEAVE_HOST_BOTS=1` and a model's key, the host runs
   bots for the spaces it carries: an admin adds one from the app ("Set up this
   community", Add a bot), the host makes its account in `--data`'s `bots/`
-  and joins with the invite, and it runs the space's rules that name it while
+  and joins with the invite, and it runs the space's automations that name it while
   its community's fund has money in it. What a bot spends is taken from that
   fund at `WEAVE_BOT_MARKUP` times what the host pays (default 1.5); on a
   free host bots cost nothing. `WEAVE_BOT_MODEL` (default `claude-sonnet-5-5`) and
@@ -306,22 +306,22 @@ nothing more it signs counts. The second one to start says the agent is
 already running, and stops (a lock in the agent's folder, taken over once the
 process holding it is gone).
 
-It also runs your **rules** (`std.automation`, see
+It also runs your **automations** (`std.automation`, see
 `packages/core/docs/automations.md`): what to do when some records come to be a
 certain way, or at set times ("when a task is given to me, add it to my weekly
 plan note"; "weekdays at 8, plan my day"). Those that ask an agent start a
 fresh conversation each time, with nobody there to allow deleting or
 overwriting, so those are refused; they share the daily cap. Ask the agent to
-keep an eye on something and it writes a rule as a suggestion; it starts once
+keep an eye on something and it writes an automation as a suggestion; it starts once
 you turn it on in an app (the example app's **Automations**). What the agent
-writes never sets a rule off.
+writes never sets an automation off.
 
-`--no-chat` runs only the rules, until stopped: on a server, or in the
+`--no-chat` runs only the automations, until stopped: on a server, or in the
 background.
 
 ### Always on, on a server
 
-`weave agent --no-chat` runs your rules with every device of yours closed; on
+`weave agent --no-chat` runs your automations with every device of yours closed; on
 a server it stays that way. `fly.agent.toml` and `Dockerfile.agent` do it on
 Fly (the commands are at the top of the toml):
 
@@ -348,7 +348,7 @@ and at what price, and keeps the answer in `~/.weave/agent/model.json`.
 `weave agent` thinks with Anthropic's models by default. `--provider openai`
 talks to any server that speaks OpenAI's Chat Completions instead: OpenAI,
 OpenRouter, DeepSeek, Kimi, Groq, Mistral, or a model on your own machine.
-The tools, the confirmations, the caps and the rules are the same whichever
+The tools, the confirmations, the caps and the automations are the same whichever
 model answers.
 
 ```bash
@@ -410,27 +410,27 @@ A bot made before bots had folders of their own kept its account at the top
 of its `--home`. Move that folder to `bots/<name>` in the data folder to run
 it with `--name`.
 
-Someone who may instruct it adds rules for it, as themselves, naming it in
+Someone who may instruct it adds automations for it, as themselves, naming it in
 `by`:
 
 ```bash
-weave rule add         # at a terminal: space, what sets it off, from whom, what to do, who does it
-weave rule add --space <id> --name "Answer when mentioned" --collection std.message \
+weave automation add   # at a terminal: space, what sets it off, from whom, what to do, who does it
+weave automation add --space <id> --name "Answer when mentioned" --collection std.message \
   --where '{"mentions":{"$contains":"$me"}}' --from member --do "Answer them briefly" --by <bot DID>
-weave rule add --space <id> --name Mornings --every "0 8 * * 1-5" --do "Post today's plan" --by me
+weave automation add --space <id> --name Mornings --every "0 8 * * 1-5" --do "Post today's plan" --by me
 ```
 
-`weave rule add` defines `std.automation` in the space first when it has none and
+`weave automation add` defines `std.automation` in the space first when it has none and
 you may add collections; `weave collections define --standard <std.name>`
-does that for any collection in the library. `$me` is whoever runs the rule:
+does that for any collection in the library. `$me` is whoever runs the automation:
 the bot, or you.
 
-It runs the rules in a space that name it in `by`, made by its founder or
-members whose roles grant `/std.automation/instruct` there. What sets a rule off
+It runs the automations in a space that name it in `by`, made by its founder or
+members whose roles grant `/std.automation/instruct` there. What sets an automation off
 is data to it, except when its writer holds that grant too, and every grant
-of the bot's own roles: then an "Answer when mentioned" rule lets them ask it for
+of the bot's own roles: then an "Answer when mentioned" automation lets them ask it for
 things ("make us an expenses app"), and it sees the replies before it.
-A rule's `from` narrows what sets it off to records by some roles, so
+An automation's `from` narrows what sets it off to records by some roles, so
 `"from": ["member"]` is "a mention from anyone with a role".
 `--daily-cap-each` limits what each person who sets it off may spend in a
 day, a quarter of `--daily-cap` unless given, so nobody can spend the day for

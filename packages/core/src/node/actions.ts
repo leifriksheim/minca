@@ -500,7 +500,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
           description:
             'Optional: up to 8 fields whose values can be matched without reading the record, like ["driver"] or ["mentions"]. ' +
             'Name the field that holds a person when people should be able to be told about records naming them ' +
-            '(a notify entry with "topic": { "field": "driver", "me": true }).',
+            '(a notify entry whose where is { "driver": { "$contains": "$me" } }).',
         },
       },
       required: ['space', 'name', 'schema'],

@@ -259,11 +259,12 @@ the `community` template leaves `std.host` to admins and moderators.
 
 _Source: `packages/core/src/schemas/library/community.ts` (`host`)._
 
-**Rules**
+**Automations**
 
 `std.automation` and `std.automation-run`: what a space does by itself when records come
-to be a certain way, or at set times, and what each rule did. Described in
-[rules.md](automations.md).
+to be a certain way, or at set times, and what each automation did. An
+account keeps automations of its own in its registry too, which notify it. Described in
+[automations.md](automations.md).
 
 **Activity.** `std.activity` is someone at work on a record, for apps to show
 while it lasts: "My bot is working on it…" under a message, a spinner on a
@@ -282,11 +283,11 @@ writer may have gone away mid-way. `setActivity(node, space, key, state,
 label?)` writes one, and `activeNow(body)` says whether one is going on now.
 A setting without a label keeps the label it had. The action
 `activity_set` ([actions](actions.md)) lets an agent or bot say what it is
-doing in its own words ("Reading the thread", "Making an app"). A bot's rule
-runner marks what set each rule off: `waiting` when queued, `working` with
-the rule's name when it starts, then `done` or `failed`, keeping whatever the
+doing in its own words ("Reading the thread", "Making an app"). A bot's
+automation runner marks what set each automation off: `waiting` when queued,
+`working` with the automation's name when it starts, then `done` or `failed`, keeping whatever the
 model last said it was doing; it tells the model which record to say it on
-([rules.md](automations.md#running)).
+([automations.md](automations.md#running)).
 
 _Source: `packages/core/src/schemas/automations.ts` (`activity`, `setActivity`, `activeNow`), `packages/cli/src/bot-runner.ts` (`runAutomations`), `apps/example/src/activity.ts`, `apps/example/src/components/apps/Chat.tsx` (`Working`). Tests: `packages/core/tests/automation-runners.test.ts` ("std.activity"), `packages/cli/tests/agent-automations.test.ts` ("while a rule runs")._
 
@@ -311,10 +312,10 @@ apps may show it; it is the account's word, like its name, so it proves
 nothing about an account that leaves it out. A bot whose role may add
 collections adds `std.profile` where a space keeps none, as an app does when
 it starts a hosted bot.
-Besides its own rules, it runs the rules in a space that name it in `by`,
+Besides its own automations, it runs the automations in a space that name it in `by`,
 made by members granted `/std.automation/instruct` there
-([rules.md](automations.md#who-runs-a-rule)). In the `community` template, admins
-and moderators hold it. Nothing the bot writes sets a rule off.
+([automations.md](automations.md#who-runs-an-automation)). In the `community` template, admins
+and moderators hold it. Nothing the bot writes sets an automation off.
 What it writes shows as the bot, and every member's device checks it against
 the bot's role, so a role that may post messages but not delete keeps a
 misled bot from deleting.
@@ -327,12 +328,12 @@ the accounts it calls on in `mentions` (as do `std.note`, `std.doc-block` and
 message, comment or post, their account in `replyingTo`. An app should fill
 them from what the person picked (an `@name` they chose, the one they replied
 to), never from matching text. They are topics (with the `channel` link on a message),
-so a subscription can ask for only those that mention the account, or reply to
-it, or are in one channel
-([spec 06 §2.11](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md), `topic: { field: "mentions", me: true }`),
-and a carrier can match it unread ([spec 02 §8](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+so an automation of the account's own can ask for only those that mention the
+account, or reply to it, or are in one channel
+([automations](automations.md#the-accounts-own), `where: { "mentions": { "$contains": "$me" } }`),
+and a carrier's wake can match it unread ([spec 02 §8](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
 A `std.task`'s `assignees` is a topic in the same way: "assigned to me" is
-`topic: { field: "assignees", me: true }`, with a tag for each assignee.
+`where: { "assignees": { "$contains": "$me" } }`, with a tag for each assignee.
 
 ```json
 { "text": "@Sam are you coming?", "mentions": ["did:key:zDnae…Sam"], "replyingTo": "did:key:zDnae…Sam" }
@@ -351,8 +352,8 @@ what it is about, a `std.rsvp` the event's, a `std.booking` the slot's, a
 `std.vote` or `std.ballot` the poll's or proposal's, a `std.pledge` the
 goal's, a `std.claim` the claimed record's, a `std.order` the listing's, and a
 `std.order-update` the order's. It is their topic, so "someone reacted to,
-commented on, or answered what I wrote" is `topic: { field: "respondingTo",
-me: true }`, matched unread by a carrier. The link says the same for a node
+commented on, or answered what I wrote" is `where: { "respondingTo":
+{ "$contains": "$me" } }`, matched unread by a carrier's wake. The link says the same for a node
 that can read, but a carrier can't read a private space's links, so the
 account is written out. An app fills it from the author of the record it
 links to, and leaves it out when that is the writer themselves.
@@ -391,7 +392,8 @@ a direct message.
 only the people in `to` and whoever wrote it can read `data`. A chat groups
 them into conversations by everyone in them, `to` plus the writer, and must
 show one it can't open as unreadable, not drop it. `to` is a topic, so
-"direct messages to me" is a subscription a keeper can match unread.
+"direct messages to me" is an automation of the account's own whose wake a
+keeper can match unread.
 
 _Source: `packages/core/src/schemas/library/publishing.ts` (`channel`, `direct`), `packages/core/src/privacy/direct.ts`, `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`._
 
