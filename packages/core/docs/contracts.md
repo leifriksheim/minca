@@ -8,7 +8,86 @@ What they mean exactly (the language, citations, limits, verdicts and the
 line rule) is protocol, in [spec 09](../../../spec/09-contracts.md), so that
 two implementations count the same records. How to write contracts, with
 patterns, is in [collections.md](collections.md#contracts). This page is how the
-library runs them.
+library builds, checks and runs them.
+
+## Writing one in TypeScript
+
+`contract(schema, that, else)` builds one condition from TypeScript, typed
+from the collection's schema, and gives the `{ that, else }` that
+`rules.check` holds. Peers still see CEL: the builder writes it, as a query
+builder writes SQL.
+
+```ts
+import * as z from 'zod';
+import { collection, contract } from '@weaveprotocol/core';
+
+const Reaction = z.object({ emoji: z.string() });
+const Fame = z.object({ reactions: z.array(z.string()) });
+
+export const fame = collection({
+  name: 'app.fame',
+  schema: Fame,
+  links: { on: { to: ['app.comment'], cardinality: 'one' } },
+  rules: {
+    check: [
+      contract(
+        Fame,
+        ({ body, versions, link }) =>
+          versions(body.reactions)
+            .of(Reaction)
+            .where((r) =>
+              r.collection.eq('app.reaction').and(r.link('on').eq(link('on')), r.body.emoji.eq('🙂')),
+            )
+            .map((r) => r.author)
+            .distinct()
+            .count()
+            .gte(5),
+        'Needs five different people',
+      ),
+    ],
+  },
+});
+```
+
+That stores:
+
+```
+versions(body.reactions).filter(x0, x0.collection == "app.reaction" && x0.link("on") == link("on") && x0.body.emoji == "🙂").map(x0, x0.author).distinct().size() >= 5
+```
+
+- **Typed from the schema.** The first argument is the collection's schema
+  (a validator with Standard Schema types, or JSON Schema), or a definition
+  that has one. `body.` completes its fields, and `body.amont`,
+  `body.to.eq(1)` or `versions(body.game)` on a string are type errors. A
+  cited version is generic, its body untyped, until `.of(collection)` types
+  it. `.of` is a promise, not a check: test `collection` too.
+- **What it reads:** `body`, `prev` (`prev.eq(null)` on a first version),
+  `links`, `key`, `seq`, `collection`, `author`, `creator`, `createdAt`, and
+  the functions `versions(ids)`, `link(rel)`, `member(did)`, `hash(x)`,
+  `has(field)`, `when(test, then, otherwise)` and `raw(cel)`.
+- **Methods by type.** Comparison: `eq` `ne` `lt` `lte` `gt` `gte` `in`.
+  Numbers: `add` `sub` `mul` `div` `neg`, ints also `mod`, and `toInt`,
+  `toDouble`. Bools: `and` `or` `not`. Strings: `size` `contains`
+  `startsWith` `endsWith` `add`. Lists: `size` (or `count`), `where` (or
+  `filter`), `map`, `all`, `exists`, `existsOne`, `distinct`, `sum`,
+  `includes`, `at`.
+- **Literals take the kind CEL needs.** A body's numbers are doubles and a
+  size is an int, so `body.amount.gte(0)` writes `0.0` and
+  `list.count().gte(5)` writes `5`. A fraction where an int is needed throws.
+- **`raw(cel)`** writes CEL by hand for what the builder doesn't cover:
+  `math.greatest`, map literals, `string()`, indexing a map. Its result is
+  untyped unless you say: `raw<boolean>('…')`.
+- `contract` throws when what it builds isn't a condition `define` would
+  take, saying why, with the CEL.
+
+What it can't express, and `raw` covers: map literals, `math.greatest` and
+`math.least`, `string()`, `bool()`, `uint` values, `.map` with a filter
+(`map(x, p, t)`), and a field of an untyped value whose name is one of the
+methods above (use `.get('size')`).
+
+## Writing it by hand
+
+A condition is a CEL string, and a hand-written one is stored the same way:
 
 ```ts
 await node.collections.define(space, {
@@ -33,8 +112,32 @@ await node.records.update(space, key, { to, amount: 30, balance: -30, received: 
 
 The definition's field is still `rules.check`: peers check the names in
 `rules`, so renaming it would make older peers treat new definitions as
-invalid. The functions and types are `Contract`, `contractCostHints` and
-`node.records.contracts`.
+invalid. The functions and types are `Contract`, `contract`,
+`contractCostHints` and `node.records.contracts`.
+
+## Checked against the schema when defined
+
+`collections.define` reads every condition, built or hand-written, against
+the collection's JSON Schema, and refuses one that is wrong for every body
+the schema allows, saying where:
+
+- a field the schema doesn't have (`body.amont`, `prev.body.balanse`), unless
+  that object says `additionalProperties: true`;
+- a comparison that is never equal or always an error: a string with a
+  number, `body.n > "1"`;
+- arithmetic that is always an error: `body.n + 1` (a body's numbers are
+  doubles: write `1.0`);
+- a value used where it can't be: `versions(body.game)` on a string,
+  `sum()` of strings, `size()` of a number, `&&` on a string, a field of a
+  string, a condition that gives anything but a bool.
+
+This is the library's care, not protocol: another writer's definition that
+it would refuse still stands, and peers judge it by spec 09. It can't catch:
+a missing optional field (ask `has()`); anything read from a cited version
+not narrowed by the schema (a cited body is untyped to it); a cited version
+of the wrong collection; values out of range; and whatever `dyn()` or a
+schema it can't follow (no `type`, a mix of types) hides. A number's
+`integer` type reads as a double, as CEL reads JSON.
 
 ## How the library reads them
 
@@ -63,6 +166,7 @@ invalid. The functions and types are `Contract`, `contractCostHints` and
   throws away every cached verdict in the space, since it can make a counted
   payment a double spend, and every version citing it fail with it.
 - **Defining.** `collections.define` refuses a contract outside the subset,
+  one that misreads its schema ([above](#checked-against-the-schema-when-defined)),
   and a `line` with any key but `once` (spec 09 §8).
 - **Cost hints.** `contractCostHints(check)` flags conditions whose cost grows
   fast with the records they read (macros three deep, `versions()` inside a
@@ -73,4 +177,4 @@ A line is checked by walking its counted chain for each version judged, so a
 very long line costs time in proportion to its length squared, once; the
 verdicts are cached.
 
-_Source: `packages/core/src/records/contracts.ts` (`checkContracts`, `runContracts`, `contractCostHints`, `checkLine`), `packages/core/src/node/space-runtime.ts` (`checksOf`, `lineBreak`, `contractsFor`, `counts`, `recordsChanged`, `after`, `write`, `define`), `packages/core/src/node/node.ts` (`records.contracts`). Tests: `packages/core/tests/contracts.test.ts`, `packages/core/tests/contracts-line.test.ts`, `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-reads.test.ts`._
+_Source: `packages/core/src/records/contract-builder.ts` (`contract`), `packages/core/src/records/cel-types.ts` (`typeCheckCel`, `typeOfSchema`), `packages/core/src/records/contracts.ts` (`checkContracts`, `checkContractTypes`, `runContracts`, `contractCostHints`, `checkLine`), `packages/core/src/node/space-runtime.ts` (`checksOf`, `lineBreak`, `contractsFor`, `counts`, `recordsChanged`, `after`, `write`, `define`), `packages/core/src/node/node.ts` (`records.contracts`). Tests: `packages/core/tests/contract-builder.test.ts`, `packages/core/tests/contracts.test.ts`, `packages/core/tests/contracts-line.test.ts`, `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-reads.test.ts`, `scenarios/tests/fame.test.ts` and `scenarios/tests/credit.test.ts` (each case with the built contract and the hand-written one)._

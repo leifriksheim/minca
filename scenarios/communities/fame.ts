@@ -4,33 +4,60 @@
  * the claim, doesn't un-fame it (spec 09 §4). Judged by the library: a
  * founder's node holds the space, and every member signs their own records.
  */
+import * as z from 'zod';
 import type { Contract } from '../../packages/core/src/records/contracts.js';
+import { contract } from '../../packages/core/src/records/contract-builder.js';
 import type { DefineCollection } from '../../packages/core/src/node/types.js';
 import type { Version } from '../../packages/core/src/types.js';
 import { communityNode } from '../../packages/core/tests/helpers/community.js';
 import type { Person } from '../../packages/core/tests/helpers/person.js';
 
-// -- The community: a CEL contract, on a claim that cites the reactions -------------
+// -- The community: a contract on a claim that cites the reactions -----------------
 
-const claimContract: Contract[] = [
-  {
-    that: "versions(body.reactions).filter(r, r.collection == 'app.reaction' && !r.deleted && r.link('on') == link('on') && r.body.emoji == '🙂').map(r, r.author).distinct().size() >= 5",
-    else: "A comment enters the hall of fame with 5 different people's 🙂",
-  },
-];
+const Comment = z.object({ text: z.string() });
+const Reaction = z.object({ emoji: z.string() });
+const Fame = z.object({ reactions: z.array(z.string()) });
+
+const ELSE = "A comment enters the hall of fame with 5 different people's 🙂";
+
+/** Built in TypeScript, typed from the schemas */
+const famous: Contract = contract(
+  Fame,
+  ({ body, versions, link }) =>
+    versions(body.reactions)
+      .of(Reaction)
+      .where((r) =>
+        r.collection
+          .eq('app.reaction')
+          .and(r.deleted.not(), r.link('on').eq(link('on')), r.body.emoji.eq('🙂')),
+      )
+      .map((r) => r.author)
+      .distinct()
+      .count()
+      .gte(5),
+  ELSE,
+);
+
+/** The same, written by hand: the tests check that both give the same verdicts */
+const famousByHand: Contract = {
+  that: "versions(body.reactions).filter(r, r.collection == 'app.reaction' && !r.deleted && r.link('on') == link('on') && r.body.emoji == '🙂').map(r, r.author).distinct().size() >= 5",
+  else: ELSE,
+};
+
+export const claimContracts = { built: famous, 'by hand': famousByHand } as const;
 
 const on = { on: { to: ['app.comment'], cardinality: 'one' as const } };
-const collections: DefineCollection[] = [
-  { name: 'app.comment', schema: { type: 'object' } },
-  { name: 'app.reaction', schema: { type: 'object' }, links: on },
-  { name: 'app.fame', schema: { type: 'object' }, links: on, rules: { check: claimContract } },
+const collections = (claim: Contract): DefineCollection[] => [
+  { name: 'app.comment', schema: Comment },
+  { name: 'app.reaction', schema: Reaction, links: on },
+  { name: 'app.fame', schema: Fame, links: on, rules: { check: [claim] } },
 ];
 
 // -- The story ---------------------------------------------------------------------
 
 /** Alice founds it; m1–m6 are members. m1–m5 react 🙂, m6 😐, and Alice claims fame. */
-export async function story() {
-  const c = await communityNode(6, collections);
+export async function story(claimContract: Contract = famous) {
+  const c = await communityNode(6, collections(claimContract));
   const alice = c.founder;
   const m = (i: number): Person => c.members[i - 1]!;
   const comment = await c.sign(alice, { collection: 'app.comment', body: { text: 'gg' } });

@@ -228,6 +228,12 @@ macros nested three deep, or `versions()` called inside a macro. A check
 over more than its limits is refused, so a check that passes on small
 records can fail on large ones; the hints say where to look.
 
+To write a condition in TypeScript instead, typed from the schema, use
+`contract(schema, that, else)`, which builds the CEL
+([contracts.md](contracts.md#writing-one-in-typescript)). Either way,
+`collections.define` refuses a condition that misreads the schema, like a
+misspelled field or a string compared with a number.
+
 Bytes, timestamps, durations, regular expressions and types as values are
 left out. The exact subset, and its limits, are in [spec 09](../../../spec/09-contracts.md).
 

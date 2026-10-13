@@ -7,33 +7,84 @@
  * counts, from whichever devices. Judged by the library: a founder's node
  * holds the space, and every member signs their own payments.
  */
+import * as z from 'zod';
 import type { Contract } from '../../packages/core/src/records/contracts.js';
+import { contract } from '../../packages/core/src/records/contract-builder.js';
 import type { DefineCollection } from '../../packages/core/src/node/types.js';
 import type { Version } from '../../packages/core/src/types.js';
 import { lineKey } from '../../packages/core/src/records/key.js';
 import { communityNode, type Community } from '../../packages/core/tests/helpers/community.js';
 import type { Person } from '../../packages/core/tests/helpers/person.js';
 
-// -- The community: a CEL contract, and the line rule: `"line": { "once": ["received"] }` --
+// -- The community: a contract, and the line rule: `"line": { "once": ["received"] }` --
 
+const Payment = z.object({
+  to: z.string(),
+  amount: z.number(),
+  balance: z.number(),
+  received: z.array(z.string()),
+});
+
+const WHY = {
+  amount: 'Pay someone else, an amount of at least 0',
+  claims: 'Claim only payments to you',
+  balance: 'The balance follows from the one before',
+  limit: 'No account goes below −100',
+};
+
+/** Built in TypeScript, typed from the schema */
 const payContract: Contract[] = [
-  { that: 'body.amount >= 0.0 && body.to != author', else: 'Pay someone else, an amount of at least 0' },
-  {
-    that: "versions(body.received).all(r, r.collection == 'app.pay' && r.body.to == author)",
-    else: 'Claim only payments to you',
-  },
-  {
+  contract(Payment, ({ body, author }) => body.amount.gte(0).and(body.to.ne(author)), WHY.amount),
+  contract(
+    Payment,
+    ({ body, author, versions }) =>
+      versions(body.received)
+        .of(Payment)
+        .all((r) => r.collection.eq('app.pay').and(r.body.to.eq(author))),
+    WHY.claims,
+  ),
+  contract(
+    Payment,
     // `sum([])` is `0.0`: a payment that claims nothing adds up without padding.
-    that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount + sum(versions(body.received).map(r, r.body.amount))',
-    else: 'The balance follows from the one before',
-  },
-  { that: 'body.balance >= -100.0', else: 'No account goes below −100' },
+    ({ body, prev, versions, when }) =>
+      body.balance.eq(
+        when(prev.eq(null), 0, prev.body.balance)
+          .sub(body.amount)
+          .add(
+            versions(body.received)
+              .of(Payment)
+              .map((r) => r.body.amount)
+              .sum(),
+          ),
+      ),
+    WHY.balance,
+  ),
+  contract(Payment, ({ body }) => body.balance.gte(-100), WHY.limit),
 ];
 
-const pays = (line: Readonly<Record<string, unknown>> = { once: ['received'] }): DefineCollection => ({
+/** The same, written by hand: the tests check that both give the same verdicts */
+const payContractByHand: Contract[] = [
+  { that: 'body.amount >= 0.0 && body.to != author', else: WHY.amount },
+  {
+    that: "versions(body.received).all(r, r.collection == 'app.pay' && r.body.to == author)",
+    else: WHY.claims,
+  },
+  {
+    that: 'body.balance == (prev == null ? 0.0 : prev.body.balance) - body.amount + sum(versions(body.received).map(r, r.body.amount))',
+    else: WHY.balance,
+  },
+  { that: 'body.balance >= -100.0', else: WHY.limit },
+];
+
+export const payContracts = { built: payContract, 'by hand': payContractByHand } as const;
+
+const pays = (
+  line: Readonly<Record<string, unknown>> = { once: ['received'] },
+  check: ReadonlyArray<Contract> = payContract,
+): DefineCollection => ({
   name: 'app.pay',
-  schema: { type: 'object' },
-  rules: { check: payContract },
+  schema: Payment,
+  rules: { check },
   line,
 });
 
@@ -47,8 +98,8 @@ interface Pay {
 }
 
 /** Alice founds it; Bob, Carol and Dave are members */
-export async function story(line?: Readonly<Record<string, unknown>>) {
-  const c: Community = await communityNode(3, [pays(line)]);
+export async function story(line?: Readonly<Record<string, unknown>>, check?: ReadonlyArray<Contract>) {
+  const c: Community = await communityNode(3, [pays(line, check)]);
   const bob = c.members[0]!;
   const carol = c.members[1]!;
   const dave = c.members[2]!;

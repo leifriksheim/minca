@@ -500,6 +500,23 @@ export { describeCollection } from './records/describe.js';
 export type { CollectionRules } from './records/rules.js';
 export type { Contract, Condition } from './records/contracts.js';
 export { contractCostHints } from './records/contracts.js';
+// Contracts written in TypeScript, typed from the collection's schema, built into CEL
+export { contract } from './records/contract-builder.js';
+export type {
+  CelExpr,
+  CelInt,
+  Cited,
+  ContractContext,
+  Expr,
+  BoolExpr,
+  NumExpr,
+  IntExpr,
+  StrExpr,
+  ListExpr,
+  ObjExpr,
+  VersionExpr,
+  DynExpr,
+} from './records/contract-builder.js';
 /** Conditions over one record, in a check's language: a subscription's `where`, and an app's own filters */
 
 // Hosting: a subscription key, signed requests to a host, and a client for one
