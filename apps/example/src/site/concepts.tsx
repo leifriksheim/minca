@@ -202,6 +202,9 @@ const CONTRACTS = (
         <Box name="✓ Agent" sub="passes" />
       </div>
     </div>
+    <div className="viz-caption">
+      a claim with four reactions, or one person twice: it syncs, and counts for no one
+    </div>
   </div>
 );
 
@@ -281,9 +284,34 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     id: 'contracts',
     name: 'Contracts',
     icon: 'M14.5 8a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0zM5.5 8l2 2 3.5-4',
-    intro:
-      'Some results everyone must agree on: did the vote pass, does the balance cover it. Whoever claims one cites its proof, and every device checks it the same way. Smart contracts, without a blockchain.',
-    code: 'await node.records.contracts(space.id, claim.key);\n// { passes: true }',
+    intro: (
+      <>
+        <p>
+          A contract is a rule for what records mean, such as “a comment is in the hall of fame once five
+          different people react 🙂”. It’s stored with the collection, so every app and device runs the same
+          one.
+        </p>
+        <ol>
+          <li>Someone claims a result: “this comment is in the hall of fame”.</li>
+          <li>The claim cites its proof: the five reactions, by id.</li>
+          <li>Every device checks the proof against the rule. Same records in, same answer out.</li>
+        </ol>
+        <p>
+          A claim that doesn’t add up still syncs, but counts for no one. Smart contracts without a
+          blockchain: no server, no global order, and it works offline.
+        </p>
+      </>
+    ),
+    code: `// The rule, stored with the collection
+check: [contract(Fame, ({ body, versions }) =>
+  versions(body.reactions).of(Reaction)
+    .where((r) => r.body.emoji.eq('🙂'))
+    .map((r) => r.author).distinct().count().gte(5),
+  'Needs five different people')]
+
+// Any device checks a claim the same way
+await node.records.contracts(space.id, claim.key);
+// { passes: true }`,
     visual: CONTRACTS,
   },
   {

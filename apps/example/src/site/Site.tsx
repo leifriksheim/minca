@@ -433,7 +433,11 @@ function Concepts() {
         <div className="concept">
           <div>
             <h3>{concept.name}</h3>
-            <p>{concept.intro}</p>
+            {typeof concept.intro === 'string' ? (
+              <p>{concept.intro}</p>
+            ) : (
+              <div className="concept-intro">{concept.intro}</div>
+            )}
             {concept.code && <Code>{concept.code}</Code>}
           </div>
           {concept.visual}
