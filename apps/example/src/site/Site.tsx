@@ -274,29 +274,39 @@ await node.collections.define(space.id, votes);
 `;
 
 const CONTRACT_DECIDED = `
-import { proposal, decision } from '@weaveprotocol/core/schemas';
+import { proposal, ballot, decision, type Ballot } from '@weaveprotocol/core/schemas';
 
-const vote = await node.records.put(space.id, proposal, {
-  title: 'Paint the clubhouse?',
-  options: ['Yes', 'No'],
-  quorum: 5, // five ballots for one option decide it
+// 1. Put it to the group: five ballots for one option decide it
+const paint = await node.records.put(space.id, proposal, {
+  title: 'Paint the clubhouse?', options: ['Yes', 'No'], quorum: 5,
 });
+const about = [{ rel: 'about', to: paint.key }];
 
-// Once five people have cast "Yes", anyone can record it.
-// The decision cites the ballots; its contract checks them.
-await node.records.put(space.id, decision, {
+// 2. Members cast ballots: one each, and they can't be changed
+await node.records.put(space.id, ballot, { choice: 0 }, { links: about });
+
+// 3. Anyone who sees five "Yes" claims the result, citing the proof
+const yes = (await node.records.linked<Ballot>(space.id, paint.key,
+  { rel: 'about', collection: ballot.name }))
+  .filter((b) => b.body?.choice === 0);
+
+const decided = await node.records.put(space.id, decision, {
   outcome: 0,
-  proposal: vote.version,
-  ballots: yes.map((ballot) => ballot.version),
-}, { links: [{ rel: 'about', to: vote.key }] });
-// Four ballots, or someone's twice: it counts nowhere.
+  proposal: paint.version,
+  ballots: yes.map((b) => b.version), // the exact ballots, by id
+}, { links: about });
+
+// 4. Every device checks the proof, and gets the same answer
+await node.records.contracts(space.id, decided.key);
+// { passes: true }. With four ballots, one person twice, or a
+// forged ballot: { passes: false }. It still syncs; it counts for no one.
 `;
 
 const CONTRACT_OWN = `
 import { contract } from '@weaveprotocol/core';
 
-// Or write your own, typed from the schema.
-// A score only goes up by one:
+// Your own rule, typed from the schema: fields autocomplete,
+// and a wrong comparison won't compile. A score only goes up by one:
 rules: {
   check: [
     contract(Score, ({ body, prev }) =>
@@ -427,6 +437,26 @@ const CONSENSUS: ReadonlyArray<Part> = [
   {
     title: 'Access you can take back',
     body: 'Remove someone or disconnect an app, and from then on their changes stop counting on every device. Backdating a change doesn’t get around it.',
+  },
+];
+
+/** How a contract works, in four steps */
+const CONTRACT_STEPS: ReadonlyArray<Part> = [
+  {
+    title: '1. Someone claims a result',
+    body: 'Alice’s app sees five “Yes” ballots and writes a decision: “Yes won”. Any member’s app can; nobody is in charge of counting.',
+  },
+  {
+    title: '2. The claim brings its proof',
+    body: 'The decision cites the five ballots by their exact ids. The proof is part of the record, so it travels with it.',
+  },
+  {
+    title: '3. The rule travels with the data',
+    body: 'The decision collection carries its contract: “counts only with ballots from five different members, all for this option”. Every app and agent sees the same rule.',
+  },
+  {
+    title: '4. Every device checks',
+    body: 'Same records in, same verdict out, on every device, whenever the decision arrives. Four ballots, a double vote or a forgery: it syncs, and counts for no one.',
   },
 ];
 
@@ -596,15 +626,35 @@ export function Developers() {
 
       <Band
         kicker="Contracts"
-        title="Contracts, without a chain."
+        title="Smart contracts, without a blockchain."
         intro={
-          <p>
-            Some rules need proof: enough votes, a legal move, a balance that covers it. A record can cite the
-            records that prove it, and every device checks the proof before it counts. No server decides, and
-            no blockchain has to agree on an order.
-          </p>
+          <>
+            <p>
+              Some results a group has to agree on: did the vote pass, does the balance cover it, was that a
+              legal move. A blockchain gets everyone to agree by putting every event in one global order, then
+              running the code. Weave turns it around:
+            </p>
+            <p>
+              <strong>Whoever claims a result brings the proof. Every device checks it.</strong> Checking a
+              proof needs no order, no server and no consensus, and it works offline.
+            </p>
+          </>
         }
       >
+        <Points points={CONTRACT_STEPS} />
+        <div className="split">
+          <div>
+            <h3>A vote, start to finish</h3>
+            <p>
+              The standard <code>std.proposal</code>, <code>std.ballot</code> and <code>std.decision</code>{' '}
+              collections ship with their contract. Put something to the group, let people vote, and let
+              anyone record the outcome: if the ballots they cite don’t add up, no device counts it.
+            </p>
+          </div>
+          <div className="stack">
+            <Code file="decide.ts">{CONTRACT_DECIDED}</Code>
+          </div>
+        </div>
         <Points points={CONTRACTS} />
         <div className="split">
           <div>
@@ -635,7 +685,6 @@ export function Developers() {
             </ul>
           </div>
           <div className="stack">
-            <Code file="decide.ts">{CONTRACT_DECIDED}</Code>
             <Code file="rules.ts">{CONTRACT_OWN}</Code>
           </div>
         </div>
