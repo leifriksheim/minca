@@ -53,6 +53,8 @@ export interface WorkerLike {
   postMessage(message: unknown, transfer: Transferable[]): void;
   /** A dedicated worker ends with the node it holds */
   terminate?(): void;
+  /** Where a worker that fails to load says so (a `Worker`, or a `SharedWorker` beside its port) */
+  addEventListener?(type: 'error', listener: () => void): void;
 }
 
 const TAG = 'weave-worker';
@@ -74,11 +76,13 @@ function locks(): LockManager | null {
  *
  * @param worker Running `runNodeWorker`, as `@weaveprotocol/core/node-worker` does
  * @param config.signer Who the node acts for; its key stays on this side
- * @throws When the worker could not start the node, with its reason
+ * @param startTimeoutMs How long to wait for the worker to say the node started. Default 30 s.
+ * @throws When the worker could not start the node, with its reason, or said nothing in time
  */
 export async function startNodeInWorker(
   worker: WorkerLike,
   config: WorkerNodeConfig & { readonly signer: RootSigner },
+  startTimeoutMs = 30_000,
 ): Promise<P2PNode> {
   const { signer, ...sent } = config;
   const tab = globalThis.crypto.randomUUID();
@@ -113,10 +117,19 @@ export async function startNodeInWorker(
   };
 
   const started = new Promise<void>((resolve, reject) => {
+    // A worker that never loads says nothing at all, so the page would wait forever.
+    const giveUp = () => {
+      globalThis.clearTimeout(timer);
+      nodes.port1.removeEventListener('message', onMessage);
+      reject(new Error('The node’s worker did not start.'));
+    };
+    const timer = globalThis.setTimeout(giveUp, startTimeoutMs);
+    worker.addEventListener?.('error', giveUp);
     const onMessage = (event: MessageEvent) => {
       const message: unknown = event.data;
       if (!isRecord(message) || message[TAG] !== true) return;
       nodes.port1.removeEventListener('message', onMessage);
+      globalThis.clearTimeout(timer);
       if (message.ok === true) resolve();
       else reject(new Error(typeof message.error === 'string' ? message.error : 'The node could not start'));
     };

@@ -32,6 +32,7 @@ export function ConnectPage() {
     return (
       <Frame>
         <p style={styles.hint}>Waiting for the app…</p>
+        <SlowApp />
       </Frame>
     );
 
@@ -64,6 +65,19 @@ export function ConnectPage() {
     <ApproveCarrier incoming={incoming} request={request} />
   ) : (
     <Approve incoming={incoming} request={request} />
+  );
+}
+
+/** After a few seconds: a phone may pause the app's tab while this one is in front */
+function SlowApp() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!slow) return null;
+  return (
+    <p style={styles.hint}>Taking a while? Switch back to the app's tab for a moment, then come back here.</p>
   );
 }
 

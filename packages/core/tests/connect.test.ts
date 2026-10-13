@@ -881,6 +881,56 @@ describe('an app showing its own notifications', () => {
   });
 });
 
+describe('the app asking its home', () => {
+  test('a hello that arrives before the request is ready is still answered', async () => {
+    const { connectToHome } = await import('../src/session/connect.js');
+    const key = await testAppKey('early-hello');
+    const toHome: Array<{ message: unknown; origin: string }> = [];
+    const popup = {
+      closed: false,
+      close() {},
+      postMessage: (message: unknown, origin: string) => toHome.push({ message, origin }),
+    };
+    type Heard = { source: unknown; origin: string; data: unknown };
+    const listeners = new Set<(event: Heard) => void>();
+    const g: {
+      open?: unknown;
+      location?: unknown;
+      addEventListener?: unknown;
+      removeEventListener?: unknown;
+    } = globalThis;
+    const saved = {
+      open: g.open,
+      location: g.location,
+      addEventListener: g.addEventListener,
+      removeEventListener: g.removeEventListener,
+    };
+    Object.assign(g, {
+      open: () => popup,
+      location: { href: 'https://app.test/' },
+      addEventListener: (_type: string, listener: (event: Heard) => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: (event: Heard) => void) => listeners.delete(listener),
+    });
+    const fromHome = (data: unknown) => {
+      for (const listener of [...listeners]) listener({ source: popup, origin: 'https://home.test', data });
+    };
+    try {
+      const asking = connectToHome({ home: 'https://home.test/connect', key, request: { access: 'write' } });
+      // The home loaded and said hello while the app was still making its proof.
+      fromHome({ type: 'weave:hello' });
+      await until(() => toHome.length > 0);
+      const [sent] = toHome;
+      assert.equal(sent?.origin, 'https://home.test', 'only to the home');
+      assert.ok(isRecord(sent?.message) && sent.message.type === 'weave:request');
+      assert.ok(isRecord(sent.message.request) && sent.message.request.audience === key.did);
+      fromHome({ type: 'weave:denied', reason: 'Not now' });
+      await assert.rejects(asking, /Not now/);
+    } finally {
+      Object.assign(g, saved);
+    }
+  });
+});
+
 describe('the home receiving a request', () => {
   /** The fields of a message event the home reads */
   type PageMessage = { source: unknown; data: unknown; origin: string };
@@ -923,6 +973,48 @@ describe('the home receiving a request', () => {
         }),
     };
   }
+
+  const isHello = (message: unknown) => isRecord(message) && message.type === 'weave:hello';
+
+  test('it says hello until the app answers, so an app that missed the first still gets asked', async () => {
+    const popup = popupWindow();
+    try {
+      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const received = receiveConnectRequest(5000);
+      // A phone that paused the app's tab: the first hello went unheard.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const hellos = popup.sent.filter((m) => isHello(m.message));
+      assert.ok(hellos.length >= 3, `said hello ${hellos.length} times`);
+      assert.ok(
+        hellos.every((m) => m.origin === '*'),
+        'a hello carries nothing secret',
+      );
+      popup.send({
+        type: 'weave:request',
+        request: await asked({ v: 1, audience: 'did:key:zApp', access: 'write' }),
+      });
+      const incoming = await received;
+      assert.equal(incoming?.origin, 'https://app.test');
+      const after = popup.sent.length;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      assert.equal(popup.sent.length, after, 'and stops once asked');
+    } finally {
+      popup.restore();
+    }
+  });
+
+  test('it stops waiting when the app that opened it is gone', async () => {
+    const popup = popupWindow();
+    try {
+      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const received = receiveConnectRequest(60_000);
+      const g: { opener?: unknown } = globalThis;
+      if (isRecord(g.opener)) g.opener.closed = true;
+      assert.equal(await received, null);
+    } finally {
+      popup.restore();
+    }
+  });
 
   test('a request it cannot read is refused out loud, not left waiting', async () => {
     const popup = popupWindow();

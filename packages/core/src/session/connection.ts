@@ -135,13 +135,17 @@ export function createWeaveConnection(config: WeaveConnectionConfig): WeaveConne
   async function open(grant: Grant): Promise<void> {
     unwatch?.();
     await state.node?.close();
-    const node = await startConnectedNode({
-      grant,
-      key: await appKey(),
-      ...(config.network ? { network: config.network } : {}),
-      ...(config.stores ? { stores: config.stores(grant) } : {}),
-      ...(config.worker ? { worker: config.worker } : {}),
-    });
+    const key = await appKey();
+    const start = (worker?: () => WorkerLike) =>
+      startConnectedNode({
+        grant,
+        key,
+        ...(config.network ? { network: config.network } : {}),
+        ...(config.stores ? { stores: config.stores(grant) } : {}),
+        ...(worker ? { worker } : {}),
+      });
+    // A browser whose workers can't run the node still gets one, in the page.
+    const node = config.worker ? await start(config.worker).catch(() => start()) : await start();
     update({ status: 'ready', home: grant.home, grant, node, error: null });
 
     // The home disconnected this app: nothing it writes counts any more, so stop.

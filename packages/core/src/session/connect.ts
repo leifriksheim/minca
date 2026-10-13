@@ -382,24 +382,26 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   // Opened before anything is awaited, so it still counts as the click's.
   const popup = openHome(homeUrl);
-  let audience: string;
-  let proof: string;
-  const byCode = options.audience !== undefined;
-  if (options.audience !== undefined) {
-    if (!options.audienceProof) throw new Error('Asking for another key needs its proof (keyProof).');
-    audience = options.audience;
-    proof = options.audienceProof;
-  } else {
-    const key = options.key ?? (await appKey(options.keyName));
-    audience = key.did;
-    proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
+  if (options.audience !== undefined && !options.audienceProof) {
+    popup.close();
+    throw new Error('Asking for another key needs its proof (keyProof).');
   }
-  const grant = await askHome<Grant>(
-    popup,
-    homeUrl.origin,
-    { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) },
-    options.timeoutMs,
-  );
+  const byCode = options.audience !== undefined;
+  const request = (async (): Promise<ConnectRequest> => {
+    let audience: string;
+    let proof: string;
+    if (options.audience !== undefined && options.audienceProof) {
+      audience = options.audience;
+      proof = options.audienceProof;
+    } else {
+      const key = options.key ?? (await appKey(options.keyName));
+      audience = key.did;
+      proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
+    }
+    return { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) };
+  })();
+  const grant = await askHome<Grant>(popup, homeUrl.origin, request, options.timeoutMs);
+  const { audience } = await request;
   await checkGrant(grant, audience, { recordsOnly: options.request.recordsOnly === true });
   return { ...grant, home: homeUrl.href };
 }
@@ -421,13 +423,13 @@ export async function connectCarrier(options: {
 }): Promise<CarryGrant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   const popup = openHome(homeUrl);
-  const request: ConnectRequest = {
+  const request = keyProof(options.key).then((proof): ConnectRequest => ({
     v: 1,
     audience: options.key.did,
-    proof: await keyProof(options.key),
+    proof,
     access: 'carry',
     ...(options.name ? { name: options.name } : {}),
-  };
+  }));
   const grant = await askHome<CarryGrant>(popup, homeUrl.origin, request, options.timeoutMs);
   checkCarryGrant(grant);
   return { ...grant, home: homeUrl.href };
@@ -495,26 +497,45 @@ function openHome(homeUrl: URL): Window {
   return popup;
 }
 
-/** Sends the request once the home says hello, and waits for its answer, which the caller checks. */
+/**
+ * Sends the request each time the home says hello, and waits for its answer,
+ * which the caller checks. It listens before the request is ready: a phone may
+ * hardly run this page while the home is in front, and a hello that arrives
+ * meanwhile is answered once the request is made.
+ */
 function askHome<T>(
   popup: Window,
   homeOrigin: string,
-  request: ConnectRequest | ProposeRequest,
+  request: Promise<ConnectRequest | ProposeRequest> | ConnectRequest | ProposeRequest,
   timeoutMs = 10 * 60_000,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    let finished = false;
     const done = (finish: () => void) => {
+      if (finished) return;
+      finished = true;
       globalThis.removeEventListener('message', onMessage);
       globalThis.clearInterval(watch);
       globalThis.clearTimeout(timer);
       finish();
     };
+    const ready = Promise.resolve(request);
+    ready.catch((error: unknown) =>
+      done(() => {
+        popup.close();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }),
+    );
     const onMessage = (event: MessageEvent) => {
       // Only the popup we opened, at the address we opened it on.
       if (event.source !== popup || event.origin !== homeOrigin) return;
       const data: unknown = event.data;
       if (!isObject(data)) return;
-      if (data.type === HELLO) popup.postMessage({ type: REQUEST, request }, homeOrigin);
+      if (data.type === HELLO)
+        void ready.then(
+          (made) => finished || popup.postMessage({ type: REQUEST, request: made }, homeOrigin),
+          () => {},
+        );
       else if (data.type === GRANT && data.grant)
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant, checkCarryGrant and proposeToHome check it
         done(() => resolve(data.grant as T));
@@ -645,21 +666,27 @@ export interface IncomingRequest {
 }
 
 /**
- * Waits for the app that opened this page to say what it wants.
- * @returns The request, or null when this page was not opened by an app
+ * Waits for the app that opened this page to say what it wants. It says hello
+ * again every half second until the app answers: on a phone the app's tab
+ * behind this one may not run for a while, and may miss the first.
+ * @returns The request, or null when this page was not opened by an app, the app's window closed, or none came in time
  */
-export function receiveConnectRequest(timeoutMs = 10_000): Promise<IncomingRequest | null> {
+export function receiveConnectRequest(timeoutMs = 10 * 60_000): Promise<IncomingRequest | null> {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- lib.dom has it as any, and an opener on another origin is no instanceof Window here
   const opener = globalThis.opener as Window | null;
   if (!opener) return Promise.resolve(null);
 
   return new Promise((resolve) => {
+    const stop = () => {
+      globalThis.removeEventListener('message', onMessage);
+      globalThis.clearTimeout(timer);
+      globalThis.clearInterval(hello);
+    };
     const onMessage = (event: MessageEvent) => {
       if (event.source !== opener) return;
       const data: unknown = event.data;
       if (!isObject(data) || data.type !== REQUEST) return;
-      globalThis.removeEventListener('message', onMessage);
-      globalThis.clearTimeout(timer);
+      stop();
 
       // A request this home cannot read — often an app newer than the home —
       // is answered, not ignored: otherwise both sides wait with nothing said.
@@ -691,13 +718,20 @@ export function receiveConnectRequest(timeoutMs = 10_000): Promise<IncomingReque
       });
     };
     const timer = globalThis.setTimeout(() => {
-      globalThis.removeEventListener('message', onMessage);
+      stop();
       resolve(null);
     }, timeoutMs);
-    globalThis.addEventListener('message', onMessage);
     // Nothing secret in a hello, so any origin may hear it; the request that
     // answers it is what names the app.
-    opener.postMessage({ type: HELLO }, '*');
+    const sayHello = () => {
+      if (opener.closed) {
+        stop();
+        resolve(null);
+      } else opener.postMessage({ type: HELLO }, '*');
+    };
+    const hello = globalThis.setInterval(sayHello, 500);
+    globalThis.addEventListener('message', onMessage);
+    sayHello();
   });
 }
 

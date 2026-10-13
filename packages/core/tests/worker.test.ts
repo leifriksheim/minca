@@ -99,6 +99,30 @@ describe('a node in a worker', () => {
     assert.equal(fake.terminated, true);
   });
 
+  test('a worker that never loads is given up on, not waited for forever', async () => {
+    let terminated = false;
+    const silent = { postMessage: () => {}, terminate: () => (terminated = true) };
+    const me = await signer();
+    await assert.rejects(
+      () => startNodeInWorker(silent, { signer: me, stores: { indexedDB: 'x' } }, 200),
+      /did not start/,
+    );
+    assert.equal(terminated, true);
+  });
+
+  test('a worker that fails to load is given up on at once', async () => {
+    const heard: Array<() => void> = [];
+    const broken = {
+      postMessage: () => {},
+      addEventListener: (_type: 'error', listener: () => void) => void heard.push(listener),
+    };
+    const me = await signer();
+    const starting = startNodeInWorker(broken, { signer: me, stores: { indexedDB: 'x' } });
+    await until(() => heard.length > 0);
+    for (const listener of heard) listener();
+    await assert.rejects(starting, /did not start/);
+  });
+
   test('only plain data of a network config is sent', () => {
     assert.deepEqual(
       workerNetwork({

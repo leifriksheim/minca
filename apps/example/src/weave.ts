@@ -18,13 +18,19 @@ export const connection = createWeaveConnection({
   network: { relays: relayUrls(), nodes: CONFIGURED_NODES, hosts: CONFIGURED_HOSTS },
   // Checking, decrypting and syncing happen there, so the page never stutters. One worker for
   // every tab where there are shared workers (not Chrome on Android): the tabs share one node.
-  worker: () =>
-    typeof SharedWorker === 'function'
-      ? new SharedWorker(new URL('./weave-worker.ts', import.meta.url), {
-          type: 'module',
-          name: 'weave-node',
-        }).port
-      : new Worker(new URL('./weave-worker.ts', import.meta.url), { type: 'module' }),
+  // A worker that fails to load says so, and the node runs in the page instead.
+  worker: () => {
+    if (typeof SharedWorker !== 'function')
+      return new Worker(new URL('./weave-worker.ts', import.meta.url), { type: 'module' });
+    const shared = new SharedWorker(new URL('./weave-worker.ts', import.meta.url), {
+      type: 'module',
+      name: 'weave-node',
+    });
+    return {
+      postMessage: (message: unknown, transfer: Transferable[]) => shared.port.postMessage(message, transfer),
+      addEventListener: (type: 'error', listener: () => void) => shared.addEventListener(type, listener),
+    };
+  },
 });
 
 /** The node acting for the account, for code outside React (the WebMCP tools). Null before connecting. */

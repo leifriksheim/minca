@@ -173,10 +173,12 @@ client reads what a person typed is in
 The app:
 
 1. MUST open the home in a popup from a user gesture, before awaiting anything.
-2. Listens for `message` events and MUST ignore any whose `source` is not the
-   popup it opened or whose `origin` is not the home's origin.
-3. On `{ type: "weave:hello" }`, posts `{ type: "weave:request", request }` to
-   the popup with `targetOrigin` = the home's origin.
+2. Listens for `message` events from the moment the popup opens, and MUST
+   ignore any whose `source` is not the popup it opened or whose `origin` is
+   not the home's origin.
+3. On each `{ type: "weave:hello" }`, posts `{ type: "weave:request", request }`
+   to the popup with `targetOrigin` = the home's origin, once the request is
+   ready.
 4. On `{ type: "weave:grant", grant }`, checks the grant (§2.6) and resolves
    (for a proposal, §2.11, `grant` is the `Proposed` answer instead). On
    `{ type: "weave:denied", reason? }`, fails with `reason`.
@@ -185,8 +187,10 @@ The app:
 The home:
 
 1. Does nothing unless `window.opener` is set.
-2. Posts `{ type: "weave:hello" }` to the opener with `targetOrigin` `*`. The
-   hello carries nothing secret.
+2. Posts `{ type: "weave:hello" }` to the opener with `targetOrigin` `*`, and
+   again at intervals until a request arrives: a phone may not run the app's
+   tab while the home is in front, so the first can go unheard. The hello
+   carries nothing secret.
 3. Takes the first `message` whose `source` is the opener and whose `type` is
    `weave:request`. The **origin of that event**, as the browser reports it, is
    the app's identity; the home MUST NOT trust any name the request gives
@@ -195,13 +199,14 @@ The home:
    saying it did not understand, to that origin, and closes.
 5. Otherwise waits for the person, then posts exactly one of `weave:grant` or
    `weave:denied` to that origin only, and closes itself.
-6. Gives up silently if no request arrives within the timeout.
+6. Gives up silently if no request arrives within the timeout, or once the
+   opener is closed.
 
 The reference timings (popup size, polling, timeouts) are in
 [the app-side client](../packages/core/docs/node.md#the-app-side-client) and
 [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
-_Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `receiveConnectRequest`, `homeAddress`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "an account home typed by a person")._
+_Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `receiveConnectRequest`, `homeAddress`). Tests: `packages/core/tests/connect.test.ts` ("the app asking its home", "the home receiving a request", "an account home typed by a person")._
 
 ### 2.4 The request
 

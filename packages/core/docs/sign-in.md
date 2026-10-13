@@ -256,10 +256,11 @@ What a home receives from an app, what it must check and what it answers are
 protocol ([spec 06 §2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). An account home built on `createWeaveAuth` does
 its side with these:
 
-**Receiving a request.** `receiveConnectRequest(timeoutMs = 10 000)` does
-nothing without `window.opener`, says hello, and resolves with the first
-request from the opener and the origin the browser reports for it, or `null`
-after the timeout. Answering closes the window 100 ms later.
+**Receiving a request.** `receiveConnectRequest(timeoutMs = 10 minutes)` does
+nothing without `window.opener`, says hello every 500 ms until the opener
+answers, and resolves with the first request from the opener and the origin
+the browser reports for it, or `null` once the opener is closed or after the
+timeout. Answering closes the window 100 ms later.
 
 **Granting.** `auth.grant({ origin, request, spaceIds, days? })` makes the
 grant: `spaceIds` are the spaces the person picked, `days` their choice of

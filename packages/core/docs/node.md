@@ -709,7 +709,8 @@ Example: `weave.example.com` → `https://weave.example.com/connect`.
 
 **Asking the home.** `connectToHome` (and `proposeToHome`, for a proposal)
 opens the home in a popup named `weave-home` with features
-`popup,width=460,height=720`, polls every 500 ms to see whether the person
+`popup,width=460,height=720`, listens from that moment and answers every hello
+once its request is made, polls every 500 ms to see whether the person
 closed it, and gives up after 10 minutes by default.
 
 **Starting the node.** `startConnectedNode({ grant, key?, network?, stores?, cache? })`
@@ -727,7 +728,9 @@ It then joins each granted space it does not hold yet, passing its `memberKey`.
 
 **The connection.** `createWeaveConnection({ home, request, network?, storage?, stores? })`
 is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
-`connecting`, `ready`, `expired`. It keeps the grant in `localStorage` under
+`connecting`, `ready`, `expired`. With `worker`, it runs the node there
+(`startNodeInWorker`); a worker that reports a load error, or does not say the
+node started within 30 s, is given up on and the node runs in the page. It keeps the grant in `localStorage` under
 `weave.grant` and the person's chosen home under `weave.home` (`home` in the
 config is only a default). It switches to `expired` at `expiresAt` and does not
 load an expired grant from storage, nor one of another format (`v` other
