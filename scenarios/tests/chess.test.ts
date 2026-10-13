@@ -17,7 +17,7 @@ import {
   assignments,
   moderation,
   game,
-  grants,
+  chessGrants as grants,
   moveContract,
   moves,
 } from '../communities/chess.js';

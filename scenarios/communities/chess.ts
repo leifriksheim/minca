@@ -18,7 +18,7 @@ export const MO = 'did:key:mo'; // moderator, appointed by Erin
 
 // -- The community: UCAN grants, a CEL contract ---------------------------------
 
-export const grants: Delegation[] = [
+export const chessGrants: Delegation[] = [
   { iss: ALICE, aud: 'role:member', cmd: '/record/write', pol: [['==', '.collection', 'app.chess']] },
   {
     iss: ALICE,

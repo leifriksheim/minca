@@ -19,7 +19,7 @@ import {
   ballot,
   ballots,
   everything,
-  grants,
+  coopGrants as grants,
   host,
   p1,
   removal,
