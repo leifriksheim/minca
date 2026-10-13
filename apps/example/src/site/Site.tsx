@@ -1,7 +1,8 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { parse, render } from 'sugar-high/core';
 import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
+import { CONNECT, SCENARIOS, type Scenario } from './walkthrough';
 import './site.css';
 
 /** Syntax highlighting: sugar-high's core and just the two languages used here */
@@ -212,67 +213,6 @@ function Code({
 
 // ─── For developers ─────────────────────────────────────────────────
 
-const NODE = `
-import {
-  createNode, createIdentityManager,
-  createLocalRootSigner, indexedDBStores, rolePresets,
-} from '@weaveprotocol/core';
-
-// Someone's account, from the password they keep
-const manager = createIdentityManager();
-const me = await manager.fromRecoveryCode(password);
-
-const node = await createNode({
-  signer: createLocalRootSigner(me, manager.getProvider()),
-  stores: indexedDBStores('my-app'), // or a pod: folderStores(dir)
-  network: { relays: ['wss://p2p-web-relay.fly.dev'] },
-});
-
-const space = await node.spaces.create({
-  name: 'Trip', visibility: 'private',
-  ...rolePresets.team, // you found it; editors for whoever's invited
-});
-
-// A friend calls node.spaces.join(invite)
-const invite = await node.spaces.invite(space.id);
-`;
-
-const STEP_POLL = `
-import * as z from 'zod'; // or Valibot, ArkType: any Standard Schema
-import { collection } from '@weaveprotocol/core';
-
-const Poll = z.object({
-  question: z.string().min(1).max(500),
-  options: z.array(z.string().min(1)).min(2).max(10),
-});
-
-const polls = collection({
-  name: 'app.poll',
-  schema: Poll, // stored in the space as plain JSON Schema
-  rules: { fixed: ['options'] }, // votes point at these
-  // Who may edit or remove one is the space's roles, below
-});
-await node.collections.define(space.id, polls);
-`;
-
-const STEP_VOTE = `
-const Vote = z.object({
-  // Which option, by its place in the list. The hint lets any
-  // app show "Lisbon" instead of 0, and count the votes.
-  choice: z.int().min(0).meta({
-    'x-choicesFrom': { rel: 'about', field: 'options' },
-  }),
-});
-
-const votes = collection({
-  name: 'app.poll.vote',
-  schema: Vote,
-  links: { about: { to: ['app.poll'], cardinality: 'one' } },
-  rules: { onePer: ['@author', 'link:about'] }, // one per person per poll
-});
-await node.collections.define(space.id, votes);
-`;
-
 const CONTRACT_DECIDED = `
 import { proposal, ballot, decision, type Ballot } from '@weaveprotocol/core/schemas';
 
@@ -316,79 +256,12 @@ rules: {
 }
 `;
 
-const STEP_USE = `
-// Typed from the schema: leave out the options, and it won't compile
-const poll = await node.records.put(space.id, polls, {
-  question: 'Where should we go in May?',
-  options: ['Lisbon', 'Oslo', 'Rome'],
-});
-
-const about = [{ rel: 'about', to: poll.key }];
-const vote = await node.records.put(space.id, votes,
-  { choice: 0 }, { links: about });
-
-// Changed your mind? Voting again replaces your vote:
-// its key comes from you + the poll, so it's the same record
-await node.records.put(space.id, votes, { choice: 2 }, { links: about });
-
-// Or take it back
-await node.records.delete(space.id, vote.key);
-`;
-
-const STEP_COUNT = `
-// Every poll with its votes, again whenever a peer syncs a change
-const stop = node.records.watch(space.id, {
-  collection: polls,
-  sort: { '@createdAt': 'desc' },
-  include: { votes: { rel: 'about', from: votes } },
-}, ({ records }) => {
-  // Typed all the way down: body is a Poll, each vote a Vote
-  for (const { body, included } of records) {
-    const tally = body.options.map((option, i) => ({
-      option,
-      count: included.votes.filter((v) => v.body.choice === i).length,
-    }));
-    render(body.question, tally);
-  }
-});
-`;
-
-const STEP_RULES = `
-// Bob tries to reword Anna's question
-await node.records.update(space.id, poll.key, { ...poll.body,
-  question: 'Pizza or tacos?' });
-// ✗ Its author holds no grant to write this app.poll record
-
-// Anna tries to swap the options after people voted
-await node.records.update(space.id, poll.key, { ...poll.body,
-  options: ['Paris', 'Rome'] });
-// ✗ "options" is fixed once a app.poll record is created
-
-// A modified app skips the checks and sends a second vote.
-// Every other device refuses it on arrival:
-// ✗ app.poll.vote allows one per @author + link:about
-
-// Roles hold grants in the space, not code in your app.
-// Members write and delete their own (.byCreator);
-// a host may remove any poll, and let people in
-await node.spaces.defineRole(space.id, {
-  name: 'host', title: 'Host',
-  grants: [
-    { cmd: '/record/delete', pol: [['==', '.collection', 'app.poll']] },
-    { cmd: '/role/assign', pol: [['==', '.role', 'member']] },
-  ],
-});
-
-// Hide the button, rather than show the error
-const mayEdit = await node.records.can(space.id, 'edit', poll.key);
-`;
-
 const SCHEMAS = `
 import {
   poll, vote, reaction, useSchemas,
 } from '@weaveprotocol/core/schemas';
 
-// The poll above ships ready-made, as std.poll and std.vote
+// A poll ships ready-made, as std.poll and std.vote
 await useSchemas(node, space.id, [poll, vote, reaction]);
 
 const lunch = await node.records.put(space.id, poll, {
@@ -580,6 +453,124 @@ function Layer({
   );
 }
 
+/** Where each of the walkthrough's steps falls among the five */
+const STEP_NUMBER: Readonly<Record<string, number>> = {
+  'Start the space': 1,
+  'Describe the data': 2,
+  'Say who may do what': 3,
+  'Say what counts': 3,
+  'Use it': 4,
+  'What it shows': 5,
+  'What it proves': 5,
+};
+
+/** The scenario the URL's hash names (`#coop`), or the first */
+function scenarioFromHash(): string {
+  const id = typeof location === 'undefined' ? '' : location.hash.slice(1);
+  return SCENARIOS.some((s) => s.id === id) ? id : (SCENARIOS[0]?.id ?? '');
+}
+
+/**
+ * Tabs, one per scenario: arrow keys, Home and End move between them, and
+ * the chosen one is kept in the URL's hash.
+ */
+function Walkthrough() {
+  const [selected, setSelected] = useState(scenarioFromHash);
+  const tabs = useRef<Array<HTMLButtonElement | null>>([]);
+  const base = useId();
+  useEffect(() => {
+    // A link to #coop opens the walkthrough on the co-op
+    if (location.hash.slice(1) === scenarioFromHash())
+      document.getElementById('walkthrough')?.scrollIntoView();
+    const onHash = () => setSelected(scenarioFromHash());
+    addEventListener('hashchange', onHash);
+    return () => removeEventListener('hashchange', onHash);
+  }, []);
+  const choose = (id: string) => {
+    setSelected(id);
+    history.replaceState(null, '', `#${id}`);
+  };
+  const onKey = (event: KeyboardEvent, index: number) => {
+    const last = SCENARIOS.length - 1;
+    const to =
+      event.key === 'ArrowRight'
+        ? index === last
+          ? 0
+          : index + 1
+        : event.key === 'ArrowLeft'
+          ? index === 0
+            ? last
+            : index - 1
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? last
+              : null;
+    const next = to === null ? undefined : SCENARIOS[to];
+    if (!next) return;
+    event.preventDefault();
+    choose(next.id);
+    tabs.current[to ?? 0]?.focus();
+  };
+  const current: Scenario | undefined = SCENARIOS.find((s) => s.id === selected) ?? SCENARIOS[0];
+  return (
+    <>
+      <div className="split walk-step">
+        <div>
+          <div className="step-label">First</div>
+          <h3>Connect</h3>
+          <p>
+            A node is the whole stack: give it something that signs for the user, somewhere to store things,
+            and relays to meet peers. It handles keys, encryption, checking and sync. Every tab below starts
+            here.
+          </p>
+        </div>
+        <Code file="node.ts">{CONNECT}</Code>
+      </div>
+      <div className="tabs" role="tablist" aria-label="Scenarios">
+        {SCENARIOS.map((scenario, i) => (
+          <button
+            key={scenario.id}
+            ref={(el) => {
+              tabs.current[i] = el;
+            }}
+            type="button"
+            role="tab"
+            id={`${base}-${scenario.id}-tab`}
+            aria-selected={scenario.id === current?.id}
+            aria-controls={`${base}-${scenario.id}`}
+            tabIndex={scenario.id === current?.id ? 0 : -1}
+            onClick={() => choose(scenario.id)}
+            onKeyDown={(event) => onKey(event, i)}
+          >
+            {scenario.name}
+          </button>
+        ))}
+      </div>
+      {current && (
+        <div
+          role="tabpanel"
+          id={`${base}-${current.id}`}
+          aria-labelledby={`${base}-${current.id}-tab`}
+          className="tab-panel"
+        >
+          <p className="tab-summary">{current.summary}</p>
+          {current.steps.map((step) => (
+            <div key={step.label} className="split walk-step">
+              <div>
+                <div className="step-label">Step {STEP_NUMBER[step.label]}</div>
+                <h3>{step.label}</h3>
+                <p>{step.text}</p>
+              </div>
+              <Code file={step.file}>{step.code}</Code>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function Developers() {
   const [openLayer, setOpenLayer] = useState<string | null>(null);
   const toggle = (name: string) => ({
@@ -610,6 +601,21 @@ export function Developers() {
           </div>
         </div>
       </section>
+
+      <Band
+        id="walkthrough"
+        kicker="How it fits together"
+        title="One space, start to finish."
+        intro={
+          <p>
+            Every app on Weave does the same five things: start a space, describe its data, say who may do
+            what, use it, and read what it shows or proves. Pick a community to see them in its terms; each
+            one runs as a test in the repository.
+          </p>
+        }
+      >
+        <Walkthrough />
+      </Band>
 
       <Band
         kicker="Rules without a referee"
@@ -860,131 +866,10 @@ export function Developers() {
         <div className="wrap">
           <div className="split">
             <div>
-              <h3>A node is the whole stack</h3>
-              <p>
-                Give it something that signs for the user and somewhere to store things. It handles session
-                keys, delegation renewal, encryption, validation and sync.
-              </p>
-              <ul>
-                <li>
-                  <code>stores</code>: IndexedDB for one origin, or a pod folder shared by every app
-                </li>
-                <li>
-                  <code>network</code>: relays to meet peers; an always-on node for availability
-                </li>
-                <li>
-                  <code>signer</code>: a local key, or anything that can sign — an account home, a hardware
-                  key
-                </li>
-              </ul>
-            </div>
-            <Code file="node.ts">{NODE}</Code>
-          </div>
-        </div>
-      </section>
-
-      <Band
-        kicker="Guide"
-        title="Build a poll, step by step."
-        intro={
-          <p>
-            Questions, options, one vote each, live results, and rules nobody can get around. There's no
-            server anywhere: every rule below is checked by every device.
-          </p>
-        }
-      >
-        <div className="split">
-          <div>
-            <div className="step-label">Step 1</div>
-            <h3>Say what a poll is</h3>
-            <p>
-              Describe the shape with the validator you already use, and say who may do what. The definition
-              is saved in the space itself, so another app, or an agent, opens it and knows what a poll is
-              without your code.
-            </p>
-            <p>
-              The options are fixed once a poll is asked, because votes point at them. Who may edit or remove
-              one isn't here: it's a grant the space's roles hold, in step 5.
-            </p>
-          </div>
-          <Code file="poll.ts">{STEP_POLL}</Code>
-        </div>
-
-        <div className="split">
-          <div>
-            <div className="step-label">Step 2</div>
-            <h3>One vote per person</h3>
-            <p>
-              A vote points at its poll. <code>onePer</code> makes the vote's key out of who voted and which
-              poll, so there can only ever be one. Nobody has to look through every vote to stop a second one.
-            </p>
-            <p>
-              The <code>x-choicesFrom</code> hint says the number picks from the poll's options, so a generic
-              app shows "Lisbon" and can count the votes without knowing what a poll is.
-            </p>
-          </div>
-          <Code file="vote.ts">{STEP_VOTE}</Code>
-        </div>
-
-        <div className="split">
-          <div>
-            <div className="step-label">Step 3</div>
-            <h3>Ask, and vote</h3>
-            <p>
-              Records are signed and saved on the device first, then synced to everyone in the space. Changing
-              your vote is just voting again. Taking it back is a delete.
-            </p>
-          </div>
-          <Code file="ask.ts">{STEP_USE}</Code>
-        </div>
-
-        <div className="split">
-          <div>
-            <div className="step-label">Step 4</div>
-            <h3>Count the votes, live</h3>
-            <p>
-              Queries are plain JSON: Mongo-style filters, Prisma-style <code>include</code> to pull in the
-              votes that point at each poll. Name collections by their definitions, and the results are typed
-              from your schemas, votes included. Watch one, and it runs again whenever a vote arrives from
-              anyone.
-            </p>
-          </div>
-          <Code file="results.ts">{STEP_COUNT}</Code>
-        </div>
-
-        <div className="split">
-          <div>
-            <div className="step-label">Step 5</div>
-            <h3>Try to cheat</h3>
-            <p>
-              Your app refuses a broken rule before anything is signed, with the reason. An app that skips the
-              checks gets nowhere either: every device checks every record that arrives, and they all reach
-              the same verdict.
-            </p>
-            <ul>
-              <li>
-                Who may write or delete is a grant a role holds: <code>/record/write</code>,{' '}
-                <code>/record/delete</code>, narrowed by a policy like <code>.byCreator</code>
-              </li>
-              <li>
-                Roles live in the space; its constitution says who sits above them. Start from{' '}
-                <code>rolePresets</code>: <code>solo</code>, <code>team</code>, <code>community</code>,{' '}
-                <code>coop</code>
-              </li>
-            </ul>
-          </div>
-          <Code file="rules.ts">{STEP_RULES}</Code>
-        </div>
-      </Band>
-
-      <section className="band">
-        <div className="wrap">
-          <div className="split">
-            <div>
-              <h3>Or skip to the end</h3>
+              <h3>Or use the standard ones</h3>
               <p>
                 The protocol has no built-in kinds of record. For the things nearly every app needs, there's
-                an optional library of ready-made definitions, including the poll you just built.
+                an optional library of ready-made definitions.
               </p>
               <p>
                 They're ordinary collections, nothing special. Using the same ones is simply how two apps

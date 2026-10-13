@@ -449,6 +449,59 @@
   color: var(--body);
 }
 
+/* The walkthrough: tabs, one per scenario, and its steps in tighter rows */
+.site .walk-step + .tabs {
+  margin-top: 56px;
+}
+.site .tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.site .tabs::-webkit-scrollbar {
+  display: none;
+}
+.site .tabs [role='tab'] {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  margin-bottom: -1px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.site .tabs [role='tab']:hover {
+  color: var(--ink);
+}
+.site .tabs [role='tab'][aria-selected='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+.site .tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.site .tab-panel {
+  padding-top: 32px;
+}
+.site .tab-summary {
+  font-size: 17px;
+  color: var(--body);
+  margin-bottom: 40px;
+}
+.site .walk-step + .walk-step {
+  margin-top: 48px;
+}
+
 /* Layers: a line each, and "Read more" opens its parts underneath */
 .site .layers {
   display: flex;
@@ -1373,6 +1426,12 @@
   }
   .site .split {
     gap: 20px;
+  }
+  .site .walk-step + .walk-step {
+    margin-top: 40px;
+  }
+  .site .tabs [role='tab'] {
+    padding: 10px 10px;
   }
   .site .layer-head {
     grid-template-columns: 1fr;
