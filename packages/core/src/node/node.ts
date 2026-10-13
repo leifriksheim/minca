@@ -17,7 +17,7 @@ import {
   type ResultOf,
 } from '../query/types.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
-import type { Link, SpaceRole, Version } from '../types.js';
+import type { Link, SpaceRole } from '../types.js';
 import { didOf } from '../identity/did.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
 import {
@@ -118,8 +118,6 @@ import {
   type WakeSpace,
 } from '../space/own-automations.js';
 import type { Automation } from '../schemas/automations.js';
-import { canonicalize } from '../schema/version.js';
-import { DEFINITION_COLLECTION } from '../space/roles.js';
 import {
   createHostClient,
   createSpaceHostClient,
@@ -137,7 +135,7 @@ import {
   type Hosting,
   type SignedStatus,
 } from '../session/hosting.js';
-import { hashedKey } from '../utils/hash.js';
+import { base32Encode, hashedKey } from '../utils/hash.js';
 import type {
   ContactRequest,
   ContactView,
@@ -717,8 +715,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!accountSpaceId) return [];
     const found = await ownRecords<Automation>(
       await runtime(accountSpaceId),
-      { collection: OWN_AUTOMATIONS.name },
-      (record) => checkOwnAutomation(record.body) === null,
+      { collection: OWN_AUTOMATIONS },
+      (record) => record.key.startsWith('automation:') && checkOwnAutomation(record.body) === null,
     );
     return found
       .map((record) => ({ ...record.body!, id: record.key }))
@@ -1014,46 +1012,26 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     await reconcile();
   }
 
-  /** The registry's record defining the collection the account's own automations are kept in */
-  const DEFINES_OWN = `collection:${OWN_AUTOMATIONS.name}`;
-
-  /**
-   * Keeps the registry's definition of the account's own automations the
-   * library's: any key with the whole account could define it again, `final`
-   * say, and the person could then no longer pause or remove one.
-   */
-  async function ownDefinition(registryRt: SpaceRuntime): Promise<void> {
-    const found = (await registryRt.collections()).find(
-      (collection) => collection.name === OWN_AUTOMATIONS.name && collection.version !== null,
-    );
-    if (
-      found &&
-      canonicalize(found.schema) === canonicalize(OWN_AUTOMATIONS.schema) &&
-      canonicalize(found.rules) === canonicalize({}) &&
-      found.contract === undefined
-    )
-      return;
-    await registryRt.define({ ...OWN_AUTOMATIONS, version: (found?.version ?? 0) + 1 });
-  }
-
   /** Writes one of the account's own automations, checked, and hands every carrier the wakes as they are now */
-  async function writeOwn(id: string | null, body: Automation): Promise<OwnAutomationView> {
+  async function writeOwn(id: string, body: Automation): Promise<OwnAutomationView> {
     const registryRt = await requireAccount('Making an automation');
     const problem = checkOwnAutomation(body);
     if (problem) throw new Error(problem);
-    await ownDefinition(registryRt);
-    const written = id
-      ? await registryRt.update<Automation>(id, body)
-      : await registryRt.put<Automation>(OWN_AUTOMATIONS.name, body);
+    // A system collection: nothing defines it, so no other key of the account can make it final.
+    await registryRt.upsertSystem<Automation>(OWN_AUTOMATIONS, id, body);
     await passWakesOn();
-    return { ...body, id: written.key };
+    return { ...body, id };
   }
 
   const automations = Object.freeze<NodeAutomations>({
     list: ownAutomations,
 
     add: (own) =>
-      writeOwn(null, { ...own, name: own.name.trim(), since: own.since ?? new Date().toISOString() }),
+      writeOwn(`automation:${base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(10)))}`, {
+        ...own,
+        name: own.name.trim(),
+        since: own.since ?? new Date().toISOString(),
+      }),
 
     async update(id, changes) {
       await requireAccount('Making an automation');
@@ -1070,20 +1048,16 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async remove(id) {
       const registryRt = await requireAccount('Making an automation');
       if (!(await ownAutomations()).some((view) => view.id === id)) return;
-      await ownDefinition(registryRt);
-      await registryRt.remove(id);
+      await registryRt.removeSystem(id);
       await passWakesOn();
     },
 
     async versions(ids) {
-      if (!accountSpaceId || ids.length === 0) return [];
-      const rt = await runtime(accountSpaceId);
-      // Their collection's definition first: an access record each version saw, without which it waits.
-      const definition = (await rt.versionsOf([DEFINES_OWN])).filter(
-        (version) => version.collection === DEFINITION_COLLECTION,
+      if (!accountSpaceId) return [];
+      const keys = ids.filter((id) => id.startsWith('automation:'));
+      return (await (await runtime(accountSpaceId)).versionsOf(keys)).filter(
+        (version) => version.collection === OWN_AUTOMATIONS,
       );
-      const own = (await rt.versionsOf(ids)).filter((version) => version.collection === OWN_AUTOMATIONS.name);
-      return [...definition, ...own];
     },
 
     async take(versions) {
@@ -1093,15 +1067,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         (version) =>
           typeof version === 'object' &&
           version !== null &&
-          (version.collection === OWN_AUTOMATIONS.name ||
-            (version.collection === DEFINITION_COLLECTION && version.key === DEFINES_OWN)) &&
+          version.collection === OWN_AUTOMATIONS &&
           version.space === accountSpaceId,
       );
       if (mine.length === 0) return 0;
-      const rt = await runtime(accountSpaceId);
-      // The definition first, on its own: the automations' standing reads it as an access record.
-      const defines = (version: Version) => version.collection === DEFINITION_COLLECTION;
-      const taken = (await rt.take(mine.filter(defines))) + (await rt.take(mine.filter((v) => !defines(v))));
+      const taken = await (await runtime(accountSpaceId)).take(mine);
       if (taken > 0) await passWakesOn();
       return taken;
     },

@@ -526,7 +526,8 @@ When the person approves some or all of the proposals, the home:
    (none: it refuses).
 3. Checks every kept proposal before writing any. It MUST refuse the whole
    proposal when one names in `spaces` a space outside that reach.
-4. Adds each kept proposal to the account's own automations, naming the app:
+4. Adds each kept proposal to the account's own automations
+   (`sys.automation`, [03](03-spaces.md) §13.2), naming the app:
    `spaces` is the proposal's own, else the reach; `open` defaults to
    `<origin>/`; `app` is `{ origin, name? }` with `name` the connection's,
    else the request's, cut to 80. One the same origin already has that asks
@@ -535,14 +536,13 @@ When the person approves some or all of the proposals, the home:
    `{ v: 2, kind: "proposed", automations: { id, name }[], versions? }`, the
    automations added or found; empty when the person kept none. For an app
    with `scope: account` that kept at least one, `versions` MUST hold every
-   version the home keeps of each of them, and of the registry's definition
-   of their collection, as stored in the registry: signed, their bodies
-   sealed. For any other app it MUST be absent.
+   version the home keeps of each of them (`sys.automation`, [03](03-spaces.md)
+   §13.2), as stored in the registry: signed, their bodies sealed. For any
+   other app it MUST be absent.
 
 An app given `versions` SHOULD store them at once, each only once it passes
 every check a version arriving from a peer would ([05](05-sync-and-storage.md)),
-and only versions of those automations and their collection's definition in
-its own registry. The home's window closes when it answers, often before the
+and only versions of `sys.automation` in its own registry. The home's window closes when it answers, often before the
 two have met on the network; without them, the automations would reach the
 app only when it next meets another device of the account.
 
@@ -578,9 +578,7 @@ answered with
   "grant": {
     "v": 2,
     "kind": "proposed",
-    "automations": [
-      { "id": "iz75dwgy223gqtlqlqv3qzjq4y.k3v6mzq4ha2tmbyxk3v6mzq4ha", "name": "New message in Club" }
-    ]
+    "automations": [{ "id": "automation:k3v6mzq4ha2tmbyx", "name": "New message in Club" }]
   }
 }
 ```

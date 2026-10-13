@@ -2,9 +2,10 @@
  * The account's own automations: "let me know when…", across its spaces,
  * noticed by nodes that can't read.
  *
- * An automation kept in the account registry instead of a space
- * (`std.automation`, `schemas/automations.ts`) is the account's alone: nobody
- * else sees it, and it looks at the spaces it names, or all of them. For now
+ * An automation kept in the account registry instead of a space — the body
+ * of a `std.automation` (`schemas/automations.ts`), in `sys.automation` — is
+ * the account's alone: nobody else sees it, and it looks at the spaces it
+ * names, or all of them. For now
  * it only notifies: new records a query finds in those spaces, perhaps only
  * other people's. Not protocol: a peer that has never heard of it syncs and
  * judges it like any other record (docs/automations.md).
@@ -38,7 +39,6 @@ import { canonicalize } from '../schema/version.js';
 import { COLLECTION_NAME, schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import {
   asRunner,
-  automation,
   checkAutomation,
   type Automation,
   type AutomationApp,
@@ -463,5 +463,9 @@ export function matchesRecord(
   );
 }
 
-/** The collection the account's own automations are kept in, in its registry */
-export const OWN_AUTOMATIONS = automation;
+/**
+ * The collection the account's own automations are kept in, in its registry:
+ * a system one, which nothing defines, so no other key of the account can
+ * redefine it to lock the person out of pausing or removing one.
+ */
+export const OWN_AUTOMATIONS = 'sys.automation';

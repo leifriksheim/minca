@@ -499,7 +499,9 @@ const isLine = (line: unknown): line is Line => checkLine(line) === null;
  */
 function oldFormatContract(definition: object): boolean {
   const rules: unknown = 'rules' in definition ? definition.rules : undefined;
-  return (isRecord(rules) && 'check' in rules) || 'line' in definition;
+  // An empty check asked nothing, then as now.
+  const check = isRecord(rules) ? rules.check : undefined;
+  return (check !== undefined && !(Array.isArray(check) && check.length === 0)) || 'line' in definition;
 }
 const areKeepers = (keepers: unknown): keepers is Keeper[] => checkKeepers(keepers) === null;
 

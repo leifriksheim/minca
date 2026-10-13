@@ -306,8 +306,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     09 §1; `packages/core/tests/contracts-shape.test.ts`). The cost falls on
     honest history: every `std.decision` and `std.goal-reached` written
     before the upgrade stops counting, and a `onePer` slot taken then stays
-    taken, so no later version there counts either. A community decides
-    again under the new definition.
+    taken, so no later version there counts either: a community decides
+    again on a new proposal. A line is worse: its key is fixed per account
+    and collection, so whoever wrote in an old-format line never counts in
+    that collection again; only a collection of another name starts their
+    line over.
   - A grant of `/member/remove` or `/role/unassign` without a policy on
     `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).
@@ -526,6 +529,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app only the spaces chosen for it (01 §8, 06 §2). It can be given a note
     only for a key it shows it holds, never the home's own or another
     connection's, so disconnecting it revokes nobody else (06 §2.5).
+  - Given the whole account, it can't keep the person from pausing or
+    removing their own automations, or keep its own past a disconnect: they
+    are `sys.automation`, which nothing defines, so no definition it writes
+    applies to them (03 §13.2; `packages/core/tests/own-automations.test.ts`).
   - Given the whole account, it holds the account key, not the local key, so
     it can't open the registry store's sealed entries, and of those it gets
     nothing else it lacks but invite secrets waiting to be used and the CLI's

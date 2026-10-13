@@ -637,7 +637,7 @@ describe('an app proposing automations', () => {
     assert.equal((await node.automations.list())[0]?.spaces, 'all');
   });
 
-  test('a whole-account app is handed the automations in the answer, with their definition: it holds them without ever meeting the home', async () => {
+  test('a whole-account app is handed the automations in the answer: it holds them without ever meeting the home', async () => {
     const auth = await home(createFakeHub({ latencyMs: 1 }));
     const { node } = auth.getState().session!;
     const key = await appKey();
@@ -656,8 +656,8 @@ describe('an app proposing automations', () => {
     // Asked again, the one it has is found, and every version of it handed over.
     const answer = await auth.propose({ origin: 'https://chat.test', request });
     const versions = answer.versions ?? [];
-    assert.equal(versions.length, 3, 'the definition, the first version and the pause');
-    assert.equal(await chat.automations.take(versions), 3);
+    assert.equal(versions.length, 2, 'the first version and the pause');
+    assert.equal(await chat.automations.take(versions), 2);
     assert.deepEqual(
       (await chat.automations.list()).map((sub) => [sub.id, sub.paused]),
       [[made!.id, true]],

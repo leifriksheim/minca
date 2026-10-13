@@ -16,7 +16,7 @@ import { notifyOn } from '../src/space/own-automations.js';
 import { memoryStores } from './helpers/memory-stores.js';
 
 describe('the account’s own automations', () => {
-  test('a key of the account that defines them final can’t keep them: the account defines them again', async () => {
+  test('they are a system collection: no definition another key of the account writes can stop the person pausing or removing one', async () => {
     const manager = createIdentityManager();
     const seed = generateSeed();
     const identity = await manager.fromSeed(seed);
@@ -36,19 +36,15 @@ describe('the account’s own automations', () => {
     const spam = await node.automations.add(own('Spam'));
     await node.automations.add(own('Other'));
     const registry = (await deriveAccountRegistry(accountKey, identity.did)).space.id;
-    const defined = () =>
-      node.collections.list(registry).then((all) => all.find((c) => c.name === automation.name));
-    assert.equal((await defined())?.version, 1, 'defined once, not again with each one');
-
-    // What a whole-account app's key could sign: the same collection, now final.
-    await node.collections.define(registry, { ...automation, version: 2, rules: { final: true } });
+    // What a whole-account app's key could sign: a std.automation there, final, at the highest version.
+    await node.collections.define(registry, { ...automation, version: 2 ** 53, rules: { final: true } });
     await node.automations.update(spam.id, { paused: true });
+    assert.equal((await node.automations.list()).find((one) => one.id === spam.id)?.paused, true);
     await node.automations.remove(spam.id);
     assert.deepEqual(
       (await node.automations.list()).map((one) => one.name),
       ['Other'],
     );
-    assert.equal((await defined())?.version, 3, 'the library’s definition, again');
     await node.close();
   });
 });

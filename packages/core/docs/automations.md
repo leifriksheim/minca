@@ -184,9 +184,12 @@ _Source: `packages/core/src/schemas/automations.ts` (`automation`, `automationRu
 
 "Let me know when someone mentions me, in any of my spaces." An automation
 kept in the account registry rather than in a space is the account's own:
-nobody else sees it, and it looks at the spaces it names. It is the same
-`std.automation` record, with three more fields, and for now it only
-notifies:
+nobody else sees it, and it looks at the spaces it names. Its body is a
+`std.automation`'s, with three more fields, kept as `sys.automation` at
+`automation:<id>` ([spec 03 §13.2](../../../spec/03-spaces.md)). A system
+collection has no definition, so no key of the account, an app given all of
+it included, can redefine it to stop the person pausing or removing one. For
+now it only notifies:
 
 ```json
 {

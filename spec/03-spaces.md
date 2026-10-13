@@ -1737,11 +1737,12 @@ account is ignored by readers), and nothing written under a note without
 
 ### 13.2 What the registry records
 
-| Collection    | Record key                      | Body                                  | Meaning                                                                                                                          |
-| ------------- | ------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `sys.joined`  | `space:<spaceId>`               | `{ space: spaceId, invite }`          | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
-| `sys.carrier` | `carrier:<hex40(carrySpaceId)>` | `{ space, invite, did, name, since }` | A carrier the account uses (§14).                                                                                                |
-| `sys.hosting` | —                               | —                                     | Hosting; see [08](08-hosting.md).                                                                                                |
+| Collection       | Record key                               | Body                                   | Meaning                                                                                                                          |
+| ---------------- | ---------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`           | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
+| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ space, invite, did, name, since }`  | A carrier the account uses (§14).                                                                                                |
+| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format | One of the account's own automations, from which its wakes are made (§15).                                                       |
+| `sys.hosting`    | —                                        | —                                      | Hosting; see [08](08-hosting.md).                                                                                                |
 
 A membership counts only if it verifies, its root is the account, and (unless
 deleted) its key is `space:<body.space>`.
@@ -1751,8 +1752,11 @@ lists and no others, and **SHOULD** keep each membership's invite carrying the
 space's current key, so a new device joins with it. How the library does this
 is in [06](06-nodes-and-sessions.md) §1.3. The registry holds other records
 of the library's own too, such as the account's name
-([docs](../packages/core/docs/spaces.md#profiles)) and the account's own
-automations ([docs](../packages/core/docs/automations.md#the-accounts-own)).
+([docs](../packages/core/docs/spaces.md#profiles)). What a `sys.automation`
+body says is the library's ([automations](../packages/core/docs/automations.md#the-accounts-own));
+peers check only that the account wrote it. It is a system collection so that
+nothing defines it: no key of the account can redefine it to keep the person
+from pausing or removing one.
 
 _Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`, `ownName`). Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
 
@@ -1842,8 +1846,8 @@ space, the version's `tags` include one of that entry's. A space with no
 entry lets any version through; an empty entry lets none through.
 
 What a wake is made from, and how a device works out its tags, is the
-library's: it keeps the account's own automations in the registry and makes
-one wake from each
+library's: it keeps the account's own automations in the registry
+(`sys.automation`, §13.2) and makes one wake from each
 ([automations](../packages/core/docs/automations.md#the-accounts-own)). A
 wake carries no words of the person's and no topic values, only their tags,
 at most 16 for a space; a device that would need more leaves that space
