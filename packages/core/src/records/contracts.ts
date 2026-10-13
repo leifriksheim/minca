@@ -40,6 +40,7 @@ import {
   type CelNode,
   type CelValue,
 } from './cel.js';
+import { INT, STRING, typeCheckCel, typeOfSchema, versionType, type CelType } from './cel-types.js';
 
 /**
  * A line collection's declaration (spec 09 §6): one line per account, at
@@ -153,6 +154,31 @@ export function checkContracts(checks: unknown, at = 'rules.check'): string | nu
     if (problem) return `${at}[${i}].that: ${problem}`;
     if (count.nodes > MAX_CHECK_NODES)
       return `${at}: checks are too large (at most ${MAX_CHECK_NODES} parts)`;
+  }
+  return null;
+}
+
+/**
+ * Mistakes in a collection's checks for the bodies its schema allows: a
+ * field it doesn't have, a string compared with a number. Library only: the
+ * writer refuses to define it, and peers never ask (`./cel-types.ts` says
+ * what this can't catch). Run on checks `checkContracts` accepted.
+ */
+export function checkContractTypes(
+  checks: ReadonlyArray<Contract>,
+  schema: unknown,
+  at = 'rules.check',
+): string | null {
+  const version = versionType(typeOfSchema(schema));
+  if (version.t !== 'object') return null;
+  const names = new Map<string, CelType>(Object.entries(version.fields));
+  for (const name of ['id', 'deleted']) names.delete(name);
+  names.set('creator', STRING).set('prev', version).set('seq', INT);
+  for (const [i, check] of checks.entries()) {
+    const node = parse(check.that, `${at}[${i}].that`);
+    if (typeof node === 'string') return node;
+    const problem = typeCheckCel(node, names);
+    if (problem) return `${at}[${i}].that: ${problem}`;
   }
   return null;
 }

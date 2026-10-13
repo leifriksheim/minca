@@ -13,7 +13,7 @@ import { version } from '../host/space.js';
 export const CONSTITUTION = 'space:coop';
 
 /** Members add members */
-export const grants: Delegation[] = [
+export const coopGrants: Delegation[] = [
   {
     iss: CONSTITUTION,
     aud: 'role:member',

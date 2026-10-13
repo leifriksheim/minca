@@ -60,6 +60,7 @@ import {
 import { checkLinks } from '../records/links.js';
 import {
   checkContracts,
+  checkContractTypes,
   checkLine,
   onceCitations,
   runContracts,
@@ -4047,7 +4048,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const problem =
         checkStoredCollection(definition) ??
         (definition.rules?.check !== undefined
-          ? checkContracts(definition.rules.check, 'rules.check')
+          ? (checkContracts(definition.rules.check, 'rules.check') ??
+            // The library's own care, not protocol: a contract that misreads the schema is refused here.
+            checkContractTypes(definition.rules.check, definition.schema, 'rules.check'))
           : null) ??
         (lineProblem === 'unknown' ? 'line takes only "once"' : lineProblem);
       if (problem) throw new Error(problem);
