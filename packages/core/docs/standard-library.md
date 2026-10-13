@@ -85,7 +85,7 @@ a definition asks of its records ([spec 02 §7](https://github.com/leifriksheim/
 is not the definition's to say but the space's grants
 ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)):
 in the `community` template, members change only what they made, moderators
-anything, and only moderators and admins start the collections in
+anything, and only moderators and admins write in the collections in
 `STAFF_COLLECTIONS` ([spaces](spaces.md#presets)).
 
 **Annotations**
@@ -224,12 +224,12 @@ every device checks the proof before it counts one ([contracts.md](contracts.md)
 proof is there:
 
 - `std.decision` cites the proposal's first version (`proposal`) and ballots
-  (`ballots`). Its checks: the proposal is the one it is `about`, as first
+  (`ballots`). Its contract: the proposal is the one it is `about`, as first
   put; `outcome` is one of its options; and the ballots cited that are about
   that proposal and chose `outcome` come from at least `quorum` different
   people. A proposal without a `quorum` can't be decided this way.
 - `std.goal-reached` cites the goal's first version (`goal`) and pledges
-  (`pledges`). Its checks: the goal is the one it is `about`, as first set;
+  (`pledges`). Its contract: the goal is the one it is `about`, as first set;
   each person's pledge counts once; and the pledges add up to `target`.
 
 A cited version proves what was signed, so what they count is final: a
@@ -311,9 +311,9 @@ nothing about an account that leaves it out. A bot whose role may add
 collections adds `std.profile` where a space keeps none, as an app does when
 it starts a hosted bot.
 Besides its own rules, it runs the rules in a space that name it in `by`,
-made by members holding `std.rule/instruct` there
-([rules.md](rules.md#who-runs-a-rule)). In the `community` preset, admins
-(`*`) and moderators (`*/*`) hold it. Nothing the bot writes sets a rule off.
+made by members granted `/std.rule/instruct` there
+([rules.md](rules.md#who-runs-a-rule)). In the `community` template, admins
+and moderators hold it. Nothing the bot writes sets a rule off.
 What it writes shows as the bot, and every member's device checks it against
 the bot's role, so a role that may post messages but not delete keeps a
 misled bot from deleting.

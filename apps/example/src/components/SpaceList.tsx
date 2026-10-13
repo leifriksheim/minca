@@ -208,8 +208,8 @@ export function SpaceDialog({
     const trimmed = name.trim();
     if (!trimmed) return;
     void me.save();
-    // An Owner and an Editor to start, so inviting someone later needs no setup
-    // first. Roles can be renamed, added or removed in People.
+    // You found it, with an Editor role to start, so inviting someone later
+    // needs no setup first. Roles can be changed or added in People.
     onCreate({ name: trimmed, visibility, ...rolePresets.team });
     onClose();
   };

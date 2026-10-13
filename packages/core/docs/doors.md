@@ -103,11 +103,11 @@ longer held is deleted.
 written, and the knocker is not blocked. **Clearing** a door purges all of its
 knocks and keeps the door open.
 
-| Collection         | Fields                                                                          | Rules                | Where                    |
-| ------------------ | ------------------------------------------------------------------------------- | -------------------- | ------------------------ |
-| `std.knock`        | `space` ≤256, `name` ≤64, `door` ≤64, `sign` ≤64, `invite` ≤8000 (all required) | `onePer: ['space']`  | Knocker's contacts space |
-| `std.knock-answer` | `sig` ≤200 (required)                                                           | edit/delete: creator | The space for two        |
-| `std.contact`      | adds `door` ≤64, optional                                                       | as before            | Owner's contacts space   |
+| Collection         | Fields                                                                          | Rules               | Where                    |
+| ------------------ | ------------------------------------------------------------------------------- | ------------------- | ------------------------ |
+| `std.knock`        | `space` ≤256, `name` ≤64, `door` ≤64, `sign` ≤64, `invite` ≤8000 (all required) | `onePer: ['space']` | Knocker's contacts space |
+| `std.knock-answer` | `sig` ≤200 (required)                                                           | —                   | The space for two        |
+| `std.contact`      | adds `door` ≤64, optional                                                       | as before           | Owner's contacts space   |
 
 **Who may.** Knocking and accepting create or join a space, so they need a note
 that grants `/account/write` for the whole account, as `contacts.ask`

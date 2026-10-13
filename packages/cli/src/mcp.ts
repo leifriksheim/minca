@@ -56,7 +56,7 @@ export function toolInstructions(node: P2PNode, options: McpOptions = {}): strin
     'Standard collections (collections_standard) are shared by every app that uses them; prefer them to shapes of your own.' +
     (options.bot
       ? ' You are a bot: an account of your own, which spaces added as a member to help everyone in them. What you ' +
-        "write shows as you, and every member's device checks it against your role there. You cannot add " +
+        "write shows as you, and every member's device checks it against the grants your roles hold there. You cannot add " +
         'collections or change who is in a space; to make something new, propose the collections it needs ' +
         "(collections_propose) and someone who may adds them. A collection's guides (collections_list) say how " +
         'the apps in a space want new things proposed.'

@@ -26,6 +26,8 @@ const COMMANDS: Readonly<Record<string, string>> = {
   '/key/change': "change the space's key",
   '/space/relays': 'choose where the space meets',
   '/space/keepers': 'choose who keeps the space',
+  '/space/succeed': 'name a space that succeeds this one',
+  '/std.rule/instruct': 'instruct bots',
 };
 
 /** One statement of a policy, in a few words; its JSON when it is not one of the usual shapes */

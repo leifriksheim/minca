@@ -468,10 +468,10 @@ What the node does with each is its own:
 - A withdrawn version (allowed when written, then taken away by a removal or
   a revoke it had not seen) is stored and passed on like one that stands,
   emits no `rejected` event, and never shows as a record: `records.get` and queries skip
-  it. It is there for proofs that cite it ([checks](contracts.md#citing-a-version)).
-- A version that fails its collection's checks stands: it is stored and
+  it. It is there for proofs that cite it ([spec 09 §6](https://github.com/leifriksheim/weave/blob/main/spec/09-contracts.md)).
+- A version that fails its collection's contract stands: it is stored and
   passed on, emits no `rejected` event, and `records.get` and queries skip
-  it ([checks](contracts.md)).
+  it ([contracts](contracts.md)).
 - A refused version emits a `rejected` event with the peer and the reason,
   and is remembered as (peer, id), at most 10,000, so it is not asked of that
   peer again. Never by id alone: a copy with a mangled signature has the
@@ -575,7 +575,8 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   open space), `revoke(key)` (one of the account's keys, by DID, in the account registry). All need the account
   key.
 - `node.contacts` — [contacts.md](contacts.md). `ask` and `accept` make or join a space
-  for two, so they need a session note with `with: "*"` (whole-account access).
+  for two, so they need a note granting `/account/write` over the whole
+  account (whole-account access).
 - `node.direct` — [direct-messages.md](direct-messages.md): `reachable`, `send`
   and `list`. Needs the account's member key for the space.
 - `node.doors` — [doors.md](doors.md), [07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md). Needs the contact key; knocking and

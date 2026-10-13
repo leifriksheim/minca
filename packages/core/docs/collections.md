@@ -97,7 +97,7 @@ filter on them with `link:<rel>` ([records-and-queries.md](records-and-queries.m
 **A record that points at another record says so with a link**, never with
 the other record's key in a body field. Everything that follows relations
 works on links and only on links: declarations and conformance, `onePer`,
-checks, `include` and counts, rules ([rules.md](rules.md)), and the "what
+contracts, `include` and counts, rules ([rules.md](rules.md)), and the "what
 points here" a record's page shows. A key in a body field is a string to all
 of them. Fields are for values and for people (DIDs); links are for records.
 If a keeper must match on a link without reading, make it a topic:
@@ -187,7 +187,7 @@ await node.records.put(
 );
 ```
 
-A check never searches, because no device holds everything. The writer does
+A contract never searches, because no device holds everything. The writer does
 the work (finds the votes, adds up the balances, picks the move) and cites
 what proves it. Every reader then checks that exactly what was cited proves
 it.
@@ -197,7 +197,7 @@ Contracts are judged by readers, not enforced by peers
 everywhere like any other, but `get`, `list` and queries count only a
 record's newest version that passes: one that fails is skipped, and the
 version before shows instead. Your own node refuses to sign a version that
-fails, with the check's `else` as the reason. `node.records.contracts(space, key)`
+fails, with the condition's `else` as the reason. `node.records.contracts(space, key)`
 says how a record's newest version fares, and why. A version citing one that
 hasn't arrived yet is pending, and doesn't count until it does.
 
@@ -220,12 +220,12 @@ Some things to know:
 - Reading a field that isn't there is an error, not `null`: ask
   `has(body.note)` first. `&&` and `||` let an error pass when the other side
   decides.
-- A condition holds only when it gives `true`, and a check always ends: its
+- A condition holds only when it gives `true`, and it always ends: its
   only loops are over lists in hand, and there is a step limit.
 
-`contractCostHints(checks)` flags what makes a check costly as records grow:
-macros nested three deep, or `versions()` called inside a macro. A check
-over more than its limits is refused, so a check that passes on small
+`contractCostHints(check)` flags what makes a condition costly as records grow:
+macros nested three deep, or `versions()` called inside a macro. A condition
+over more than its limits is refused, so one that passes on small
 records can fail on large ones; the hints say where to look.
 
 To write a condition in TypeScript instead, typed from the schema, use
@@ -247,9 +247,9 @@ a time. Each citation in a `once` field may appear only once along the line
 
 **What can be cited.** Only versions kept whole, so every device reads the
 same thing however late it joins: any version in a collection with
-`history: 'all'` or with checks of its own (the node keeps those whole), and
+`history: 'all'` or with a contract of its own (the node keeps those whole), and
 a first version under `onePer` or `fixed`. A cited version must also pass its
-own checks. Give a collection you mean to cite `history: 'all'`,
+own contract. Give a collection you mean to cite `history: 'all'`,
 or an edited vote's latest version can't be cited. A cited version proves
 what was signed, not that it is still current, so make evidence final where
 it matters: `final: true` on a vote, so nobody can change or delete it once
@@ -279,7 +279,7 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 - **Commit, then reveal.** A player first writes `hash` of a secret, then
   reveals it: `hash(body.secret) == "<the commitment>"`.
   Shared dice, lotteries and sealed bids need nothing else.
-- **Closing a set.** A check can prove that something exists, not that nothing
+- **Closing a set.** A contract can prove that something exists, not that nothing
   else does. For "a majority" or "nobody objected", someone granted it
   signs a record that closes the vote and lists what counts, and the result
   cites that.
@@ -327,7 +327,7 @@ record.
   whole and forgets what earlier ones said, and what a deleted record said.
   With `onePer` or `fixed` in the rules, a record's first version is kept
   whole too: those rules are checked against it. With `check`, the node
-  keeps every version whole, so checks can read the one before and cite it.
+  keeps every version whole, so its contract can read the one before and cite it.
 - `topics: ['mentions', 'link:channel']` lets a node that can't read the
   space still match records by a field's value, or by where a link of that
   role points, for notifications. At most 8.

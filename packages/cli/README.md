@@ -59,12 +59,15 @@ binary with no Node at all: `bun build.ts --native`.
 weave init --name Leif --passphrase          # prints your recovery code once
 export WEAVE_PASSPHRASE='…'                  # so later commands don't ask
 
-weave spaces create --name Groceries --visibility private --roles team
+weave spaces create --name Groceries --visibility private --roles team   # or solo, community, coop
 weave records put --space <id> --collection app.todo.item --body '{"text":"milk","completed":false,"order":1}'
 weave records list --space <id>
-weave spaces invite --space <id>             # a secret: it carries the space key and the write key
+weave spaces invite --space <id>             # a secret: it carries the space key and the invite's own secret
 weave spaces invite --space <id> --view-only # they can read it, not change it
 weave spaces join --invite 'https://…#invite=…'
+weave spaces assign --space <id> --did <did> --role editor   # --remove takes it away
+weave spaces step_down --space <id> --keep editor            # stop being a founder, for good
+weave spaces succeed --space <id> --successor <new id>       # name the space that carries on from this one
 weave run                                    # stay up and serve; --create makes an account on first start
 ```
 
@@ -246,9 +249,11 @@ npx @weaveprotocol/cli connect wv_…      # in this repo: npm run weave -- conn
 ```
 
 It makes a key for this computer's agent (it never leaves `~/.weave/agent/`),
-finds the app through the relay, and waits while you allow it at your account
-home, which signs a records-only note (`/record`) for every space in your
-account, for as long as you chose. Then it adds `weave` to Claude Code (`claude mcp add`), Claude Desktop
+meets the app on a channel only that code opens (introduced by a relay, sealed
+end to end), and waits while you allow it at your account home, which signs a
+records-only note (`/record`) for every space in your account, for as long as
+you chose. The agent is a program connected by code, not a kind of account:
+nothing in the note marks it as an agent except that it grants records only. Then it adds `weave` to Claude Code (`claude mcp add`), Claude Desktop
 and Cursor, where it finds them. `--no-configure` prints the config instead,
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
 one the app uses (`$WEAVE_RELAYS` sets the defaults).
@@ -387,8 +392,8 @@ weave agent --bot
 ```
 
 At a terminal that is all: it asks the bot's name, makes its account (with
-its own recovery code), asks for an invite an admin made, with the role the
-bot should hold, and joins. The name is what the space shows and what people
+its own recovery code), asks for an invite for the role the bot should hold,
+made by someone who may assign that role, and joins. The name is what the space shows and what people
 type after "@" to mention it.
 
 Each bot is kept in a folder of its own, `bots/<name>` in the data folder
@@ -451,10 +456,13 @@ the same answer as for a space the node does not hold, so a web page cannot ask
 your node which spaces you have.
 A **public** space is served to anyone, as its data is public anyway.
 
-Writing is checked separately, record by record: its author must hold a role in
-the space, as of the access history the record says it saw, and the node
-refuses any that doesn't, as every peer does. Roles and members are kept in the
-clear, so a node holding no key of a private space still judges its writes.
+Writing is checked separately, record by record: its author must be a
+founder, or hold a role whose grants allow that command (`/record/write`,
+`/record/delete`, …) on that record, as of the access history the record says
+it saw; and the note its key signs under must allow it too. The node refuses
+any that doesn't, as every peer does. The constitution, roles, their grants and
+members are kept in the clear, so a node holding no key of a private space
+still judges its writes.
 
 ## Your node follows your account
 

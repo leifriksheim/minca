@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
+import type { NewSpace, SpaceSummary } from '@weaveprotocol/core';
 import {
   isProposeRequest,
   receiveConnectRequest,
@@ -219,12 +219,17 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           <p style={styles.fieldLabel}>New spaces for it</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {creating.map((space, index) => (
-              <div key={index} style={choice}>
+              <div key={index} style={{ ...choice, flexWrap: 'wrap' }}>
                 <span style={{ flex: 1 }}>{space.name}</span>
                 <span style={{ color: palette.ink.faint, fontSize: 12 }}>
-                  {space.visibility} ·{' '}
-                  {space.roles ? space.roles.map((role) => role.title ?? role.name).join(', ') : 'just you'}
+                  {space.visibility} · {constitution(space, session.did)}
                 </span>
+                {space.top !== 'none' && cofoundersOf(space, session.did).length > 0 && (
+                  <span style={{ ...styles.errorHint, flexBasis: '100%' }}>
+                    Also founders, who hold everything there and can't be removed:{' '}
+                    {cofoundersOf(space, session.did).join(', ')}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -533,6 +538,29 @@ function Answer({
       </div>
     </>
   );
+}
+
+/**
+ * A new space's constitution in a few words: who founds it, and its roles.
+ * "You found it · Admin, Member"; "No founder · Steward, Member".
+ */
+/** The other founders an app names, each once, never the person themselves */
+function cofoundersOf(space: NewSpace, me: string): string[] {
+  return [...new Set(space.cofounders ?? [])].filter((did) => did !== me);
+}
+
+function constitution(space: NewSpace, me: string): string {
+  const roles = (space.roles ?? []).map((role) => role.title ?? role.name);
+  const others = cofoundersOf(space, me).length;
+  const top =
+    space.top === 'none'
+      ? 'No founder'
+      : others
+        ? `You and ${others === 1 ? 'one other' : `${others} others`} found it`
+        : roles.length
+          ? 'You found it'
+          : 'Just you';
+  return roles.length ? `${top} · ${roles.join(', ')}` : top;
 }
 
 /** "7 days", "1 year" */

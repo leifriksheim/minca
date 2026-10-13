@@ -120,9 +120,13 @@ await node.spaces.join(invite); // on the friend's side
 await node.spaces.closeInvite(space.id, invite); // nobody else joins with it
 ```
 
-- `rolePresets`: `solo` (just you; invites are view-only), `team` (everyone
-  invited can write, invite and add collections), `community` (admins,
-  moderators, members). Or pass your own `roles`.
+- `rolePresets` are constitution templates: `solo` (just you; invites are
+  view-only), `team` (everyone invited can write, invite and add
+  collections), `community` (admins, moderators, members) and `coop` (no
+  founders: stewards and members, `top: 'none'`). Or pass your own `roles`.
+  Under the first three you are the space's founder: you hold every command,
+  and nobody else can remove you; `spaces.stepDown` gives that up
+  ([spaces.md](spaces.md#the-top-and-founders)).
 - A private invite carries the space key. Anyone holding it can read the
   space, so don't log it or put it in a URL a server sees (use the fragment,
   `#invite=…`).

@@ -192,7 +192,7 @@ the web has no filesystem change notification.
 
 - **A passkey that works on a new device.** Today a passkey synced by iCloud or Bitwarden gates a key that stays in one browser, so a new device still needs pairing or the recovery code. With the PRF extension the passkey could wrap the seed itself, its user handle could name the DID, and an always-on node could keep the wrapped copy — at the cost of working only with managers that implement PRF, and of those copies becoming a target.
 
-- **Members and roles.** Screens to see who is in a space and what they hold, edit roles, make an invite link per role, hand over, and leave. So far only `example/` has these (`RolesView`). The copy should be honest: someone removed keeps what they already downloaded, and view-only links made before a removal stop working.
+- **Members and roles.** Screens to see who is in a space and what they hold, edit roles and their grants, make an invite link per role, step down as a founder, name or follow a successor space, and leave. So far only `example/` has these (`RolesView`). The copy should be honest: someone removed keeps what they already downloaded, and view-only links made before a removal stop working.
 - **Notifications per device.** The app that asked shows its notifications itself; say which devices and apps are showing them.
 - **Hosting.**
   - Say plainly, before a lapsed host deletes data, that it will.

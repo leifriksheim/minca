@@ -15,15 +15,19 @@ specified in `spec/` in the repository: https://github.com/leifriksheim/weave/tr
 - A **node** (`createNode`) is the whole stack in one object: it signs, stores,
   encrypts, checks and syncs. Everything below goes through it.
 - A **space** is a shared place: its members, their roles, and its data.
-  Private spaces are encrypted end to end.
+  Its first record is its constitution: its founders, if any, and the roles
+  it starts with. Private spaces are encrypted end to end.
 - A **collection** is a named kind of record in a space, like `app.todo.item`.
   Its definition (a JSON Schema, links, rules) is stored in the space itself.
 - A **record** is a signed JSON body with a key that stays the same across
   edits. Every edit is a new version.
-- **Rules** say who may create, edit and delete. Every device checks every
-  record that arrives against them, so there is no server to write.
-  **Contracts** say what a record must be, citing other records as
-  evidence; every reader counts only records that pass them (spec 09).
+- **Grants** say who may do what: each role holds commands like
+  `/record/write`, narrowed by a policy, and accounts get them by being
+  assigned a role. A collection's **rules** say what its records must keep
+  to. Every device checks every record that arrives against both, so there
+  is no server to write. **Contracts** say what a record must be, citing
+  other records as evidence; every reader counts only records that pass
+  them (spec 09).
 - **Queries** are plain JSON: Mongo-style filters, sorting, paging, and
   `include` to follow links.
 

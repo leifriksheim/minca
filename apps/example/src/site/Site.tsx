@@ -230,7 +230,7 @@ const node = await createNode({
 
 const space = await node.spaces.create({
   name: 'Trip', visibility: 'private',
-  ...rolePresets.team, // an owner, and editors for whoever's invited
+  ...rolePresets.team, // you found it; editors for whoever's invited
 });
 
 // A friend calls node.spaces.join(invite)
@@ -273,9 +273,8 @@ const votes = collection({
 await node.collections.define(space.id, votes);
 `;
 
-const CHECK_DECIDED = `
-import { proposal, ballot, decision }
-  from '@weaveprotocol/core/schemas';
+const CONTRACT_DECIDED = `
+import { proposal, decision } from '@weaveprotocol/core/schemas';
 
 const vote = await node.records.put(space.id, proposal, {
   title: 'Paint the clubhouse?',
@@ -284,22 +283,26 @@ const vote = await node.records.put(space.id, proposal, {
 });
 
 // Once five people have cast "Yes", anyone can record it.
-// The decision cites the ballots; every device checks them.
+// The decision cites the ballots; its contract checks them.
 await node.records.put(space.id, decision, {
   outcome: 0,
   proposal: vote.version,
   ballots: yes.map((ballot) => ballot.version),
 }, { links: [{ rel: 'about', to: vote.key }] });
-// Four ballots, or someone's twice: refused, everywhere.
+// Four ballots, or someone's twice: it counts nowhere.
 `;
 
-const CHECK_OWN = `
-// Or write your own. A score only goes up by one:
+const CONTRACT_OWN = `
+import { contract } from '@weaveprotocol/core';
+
+// Or write your own, typed from the schema.
+// A score only goes up by one:
 rules: {
-  check: [{
-    that: 'body.score == prev.body.score + 1.0',
-    else: 'The score goes up by one',
-  }],
+  check: [
+    contract(Score, ({ body, prev }) =>
+      prev.eq(null).or(body.score.eq(prev.body.score.add(1))),
+      'The score goes up by one'),
+  ],
 }
 `;
 
@@ -355,8 +358,9 @@ await node.records.update(space.id, poll.key, { ...poll.body,
 // Every other device refuses it on arrival:
 // ✗ app.poll.vote allows one per @author + link:about
 
-// Roles are grants in the space, not code in your app:
-// members change their own polls, hosts remove any
+// Roles hold grants in the space, not code in your app.
+// Members write and delete their own (.byCreator);
+// a host may remove any poll, and let people in
 await node.spaces.defineRole(space.id, {
   name: 'host', title: 'Host',
   grants: [
@@ -410,7 +414,7 @@ const PROTOCOLS = ['Weave', 'AT Protocol (Bluesky)', 'Nostr', 'Solid'] as const;
 const CONSENSUS: ReadonlyArray<Part> = [
   {
     title: 'Roles you design',
-    body: 'Owner, moderator, guest, or whatever your app needs. Each role is a list of what it may do, as grants, and it lives in the space, not in your code.',
+    body: 'Admin, moderator, guest, or whatever your app needs. Each role holds grants: what it may do, and on what. They live in the space, not in your code, and the space’s founders sit above them, or no one does.',
   },
   {
     title: 'Every device is the referee',
@@ -426,8 +430,8 @@ const CONSENSUS: ReadonlyArray<Part> = [
   },
 ];
 
-/** What checks with evidence make possible, without a server or a chain */
-const CHECKS: ReadonlyArray<Part> = [
+/** What contracts make possible, without a server or a chain */
+const CONTRACTS: ReadonlyArray<Part> = [
   {
     title: 'Unlock when enough agree',
     body: 'A proposal passes, a role is granted or a reward is released only with enough signed approvals behind it. Three of five admins, ten members, whatever the space decides.',
@@ -591,7 +595,7 @@ export function Developers() {
       </Band>
 
       <Band
-        kicker="Checks with evidence"
+        kicker="Contracts"
         title="Contracts, without a chain."
         intro={
           <p>
@@ -601,31 +605,38 @@ export function Developers() {
           </p>
         }
       >
-        <Points points={CHECKS} />
+        <Points points={CONTRACTS} />
         <div className="split">
           <div>
             <h3>The app proves it, every device checks</h3>
             <p>
-              A check never goes looking for records. The app that writes does the work: it finds the ballots
-              and cites them. Every other device only checks that what was cited proves it, so they all reach
-              the same verdict, whenever they see it.
+              A contract never goes looking for records. The app that writes does the work: it finds the
+              ballots and cites them. Every other device only checks that what was cited proves it, so they
+              all reach the same verdict, whenever they see it. A version that fails is still kept and synced;
+              it just doesn't count.
             </p>
             <p>
-              Checks are JSON stored with the collection, so they travel with the data and every app and agent
-              sees the same rule. They always finish and read no clock.
+              Write one in TypeScript with <code>contract(…)</code>, typed from your schema. It's stored with
+              the collection as CEL, so it travels with the data and every app and agent sees the same rule.
+              It always finishes and reads no clock.
             </p>
             <ul>
               <li>
                 Ready-made: <code>std.decision</code> for proposals, <code>std.goal-reached</code> for pledges
               </li>
               <li>
-                Or your own <code>check</code>, over the record, the version before it, and what it cites
+                Or your own, over the record, the version before it, and what it cites; read a verdict with{' '}
+                <code>records.contracts</code>
+              </li>
+              <li>
+                Payments and balances: a <code>line</code> makes each account's versions one sequence, so
+                spending twice cancels out
               </li>
             </ul>
           </div>
           <div className="stack">
-            <Code file="decide.ts">{CHECK_DECIDED}</Code>
-            <Code file="rules.ts">{CHECK_OWN}</Code>
+            <Code file="decide.ts">{CONTRACT_DECIDED}</Code>
+            <Code file="rules.ts">{CONTRACT_OWN}</Code>
           </div>
         </div>
       </Band>
@@ -689,7 +700,7 @@ export function Developers() {
               },
               {
                 title: 'Rules instead of an API',
-                body: 'Say who may create, edit and delete, what must be unique, which fields are fixed, and what a record must prove. Every device enforces it, so there’s no permission server to write.',
+                body: 'Roles say who may write and delete. Rules say what must be unique, which fields are fixed, and what a record must prove. Every device enforces them, so there’s no permission server to write.',
               },
               {
                 title: 'Collaboration included',
@@ -843,8 +854,8 @@ export function Developers() {
               without your code.
             </p>
             <p>
-              The options are fixed once a poll is asked, because votes point at them. Only the asker can
-              edit, and moderators can remove it.
+              The options are fixed once a poll is asked, because votes point at them. Who may edit or remove
+              one isn't here: it's a grant the space's roles hold, in step 5.
             </p>
           </div>
           <Code file="poll.ts">{STEP_POLL}</Code>
@@ -903,12 +914,13 @@ export function Developers() {
             </p>
             <ul>
               <li>
-                Rules name <code>member</code>, <code>creator</code>, or <code>can:</code> a permission you
-                declare
+                Who may write or delete is a grant a role holds: <code>/record/write</code>,{' '}
+                <code>/record/delete</code>, narrowed by a policy like <code>.byCreator</code>
               </li>
               <li>
-                Roles live in the space. Start from <code>rolePresets</code>: <code>solo</code>,{' '}
-                <code>team</code>, <code>community</code>
+                Roles live in the space; its constitution says who sits above them. Start from{' '}
+                <code>rolePresets</code>: <code>solo</code>, <code>team</code>, <code>community</code>,{' '}
+                <code>coop</code>
               </li>
             </ul>
           </div>
