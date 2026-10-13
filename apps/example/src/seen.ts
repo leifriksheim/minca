@@ -102,7 +102,7 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
   const watch = apps.map((app) => ({
     id: app.id,
     notify: app.notify,
-    collections: [...new Set(app.notify.map((n) => n.collection))],
+    collections: [...new Set(app.notify.map((n) => n.when.query.collection))],
     after: Date.parse(seenAt(seen, spaceId, app.id)),
   }));
   const signature = JSON.stringify(watch);
@@ -120,7 +120,7 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
           for (const record of records) {
             if (record.createdBy === did || Date.parse(record.createdAt) <= app.after) continue;
             count++;
-            if (namesMe(app.notify, collection, record.body, did)) forMe++;
+            if (namesMe(app.notify, collection, record, did)) forMe++;
           }
         }
         out.set(app.id, { count, forMe });

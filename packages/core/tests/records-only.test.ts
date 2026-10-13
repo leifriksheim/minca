@@ -748,7 +748,6 @@ describe('what a collection allows, in words', () => {
     const samples: Record<string, CollectionRules> = {
       onePer: { onePer: ['@author'] },
       fixed: { fixed: ['x'] },
-      check: { check: [{ that: 'body.amount > 0', else: 'An amount is more than 0' }] },
       final: { final: true },
     };
     const baseline = describeCollection({ name: 'app.thing' });
@@ -760,6 +759,13 @@ describe('what a collection allows, in words', () => {
       const said = describeCollection({ name: 'app.thing', rules: samples[rule]! });
       assert.notDeepEqual(said, baseline, `the rule "${rule}" changes nothing in the summary`);
     }
+    // A contract is not a rule, and says itself in its own words.
+    assert.ok(
+      describeCollection({
+        name: 'app.thing',
+        contract: { check: [{ that: 'body.amount > 0', else: 'An amount is more than 0' }] },
+      }).some((sentence) => sentence.includes('An amount is more than 0')),
+    );
     // A rule from some later version, beside one this version knows.
     const later = { final: true as const, someday: true };
     assert.throws(() => describeCollection({ name: 'app.thing', rules: later }), /No way to describe/);

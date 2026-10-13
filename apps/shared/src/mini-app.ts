@@ -15,7 +15,7 @@
  */
 import type { ComponentType } from 'react';
 import type { DefineCollection, P2PNode, SpaceSummary } from '@minca/core';
-import type { AppNotify } from '@minca/core/schemas';
+import type { AppAutomation } from '@minca/core/schemas';
 
 export interface MiniApp {
   /** Stable, lower case: how a host remembers it */
@@ -30,7 +30,7 @@ export interface MiniApp {
   /** The collections it works in: a host defines the missing ones when it is added */
   readonly needs: ReadonlyArray<DefineCollection>;
   /** What in it is worth hearing about */
-  readonly notify?: ReadonlyArray<AppNotify>;
+  readonly notify?: ReadonlyArray<AppAutomation>;
   /** Runs once, right after it is added to a space */
   readonly setup?: (node: P2PNode, spaceId: string) => Promise<void>;
   /** Puts its own stylesheet in the page, once; the host's base styles are already there */

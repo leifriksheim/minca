@@ -116,10 +116,11 @@ function operatorHolds(op: string, value: unknown, operand: unknown): boolean {
       const c = compare(value, operand);
       return c !== null && ORDERED[op]!(c);
     }
+    // A list field is in the operand when any of its items is: "tagged with any of these".
     case '$in':
-      return Array.isArray(operand) && operand.some((o) => equal(value, o));
+      return Array.isArray(operand) && anyIn(value, operand);
     case '$nin':
-      return Array.isArray(operand) && !operand.some((o) => equal(value, o));
+      return Array.isArray(operand) && !anyIn(value, operand);
     case '$exists':
       return (value !== undefined) === operand;
     case '$contains':
@@ -130,6 +131,12 @@ function operatorHolds(op: string, value: unknown, operand: unknown): boolean {
     default:
       throw new Error(`Unknown operator ${op}`);
   }
+}
+
+/** Whether a value, or any item of a list, equals one of these */
+function anyIn(value: unknown, operand: ReadonlyArray<unknown>): boolean {
+  const items = Array.isArray(value) ? value : [value];
+  return items.some((item) => operand.some((o) => equal(item, o))) || operand.some((o) => equal(value, o));
 }
 
 /** Whether one field satisfies a condition: an operator object, or a value to equal. */

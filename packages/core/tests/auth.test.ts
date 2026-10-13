@@ -224,6 +224,26 @@ describe('createMincaAuth', () => {
     assert.match(state.error?.message ?? '', /different account, not Ada/);
   });
 
+  test('a recovery code after "another account" opens that account, not the one listed', async () => {
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    await auth.signOut();
+
+    const other = testAuth();
+    await other.start();
+    await other.createAccount('Grace');
+    const graces = other.getState().freshCode!;
+    const graceDid = other.getState().session!.did;
+    await other.signOut();
+
+    auth.showExisting();
+    auth.showRestore();
+    await auth.signInWithCode(graces);
+    assert.equal(auth.getState().error, null);
+    assert.equal(auth.getState().session?.did, graceDid);
+  });
+
   test('something that is not a recovery code says what one looks like', async () => {
     const auth = started();
     await auth.start();

@@ -34,6 +34,7 @@ import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { deriveContactKeyBytes } from '../src/identity/contact-key.js';
 import { until } from './helpers/until.js';
 import { watchNotifications, type NotifyMatch } from '../src/node/watch-notifications.js';
+import { notifyOn } from '../src/space/own-automations.js';
 import { asked, testAppKey } from './helpers/person.js';
 
 const cleanup: Array<() => Promise<unknown>> = [];
@@ -559,8 +560,12 @@ describe('connecting a carrier to an account home', () => {
   });
 });
 
-describe('an app proposing subscriptions', () => {
-  const propose = (notify: ProposeRequest['notify']): ProposeRequest => ({ v: 1, kind: 'propose', notify });
+describe('an app proposing automations', () => {
+  const propose = (automations: ProposeRequest['automations']): ProposeRequest => ({
+    v: 2,
+    kind: 'propose',
+    automations,
+  });
   const connect = async (
     auth: Awaited<ReturnType<typeof home>>,
     request: Partial<ConnectRequest>,
@@ -575,38 +580,38 @@ describe('an app proposing subscriptions', () => {
   test("the ones the person says yes to become the account's, naming the app, looking at the spaces it was given, or some of them", async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
-    const { node, did } = auth.getState().session!;
+    const { node } = auth.getState().session!;
     const club = await node.spaces.create({ name: 'Club', visibility: 'private' });
     const work = await node.spaces.create({ name: 'Work', visibility: 'private' });
     await connect(auth, { name: 'Chat' }, [club.id, work.id]);
 
     const request = propose([
-      { label: 'Mentioned in chat', collection: 'app.chat.message', topic: { field: 'mentions', me: true } },
-      { label: 'New message in Club', collection: 'app.chat.message', spaces: [club.id] },
-      { label: 'Not this one', collection: 'app.chat.poll' },
+      notifyOn('Mentioned in chat', 'app.chat.message', { mentions: { $contains: '$me' } }),
+      { ...notifyOn('New message in Club', 'app.chat.message'), spaces: [club.id] },
+      notifyOn('Not this one', 'app.chat.poll'),
     ]);
-    const answer = await auth.propose({ origin: 'https://chat.test', request, notify: [0, 1] });
+    const answer = await auth.propose({ origin: 'https://chat.test', request, kept: [0, 1] });
 
-    const subs = await node.notifications.list();
-    const find = (label: string) => subs.find((sub) => sub.label === label);
+    const subs = await node.automations.list();
+    const find = (label: string) => subs.find((sub) => sub.name === label);
     assert.equal(answer.kind, 'proposed');
-    assert.deepEqual(answer.notify.map((sub) => sub.label).sort(), [
+    assert.deepEqual(answer.automations.map((sub) => sub.name).sort(), [
       'Mentioned in chat',
       'New message in Club',
     ]);
     assert.deepEqual(find('Mentioned in chat')?.spaces, [club.id, work.id], "the grant's spaces");
     assert.deepEqual(find('New message in Club')?.spaces, [club.id], 'or the ones it named');
     assert.deepEqual(
-      find('Mentioned in chat')?.topic,
-      { field: 'mentions', value: did },
-      '"me" is the account',
+      find('Mentioned in chat')?.when?.query.where,
+      { mentions: { $contains: '$me' } },
+      '"$me" stays whoever runs it: the account',
     );
     assert.deepEqual(subs[0]!.app, { origin: 'https://chat.test', name: 'Chat' });
     assert.equal(subs[0]!.open, 'https://chat.test/', 'a click goes back to the app');
 
     // Proposing again adds nothing twice.
-    await auth.propose({ origin: 'https://chat.test', request, notify: [0] });
-    assert.equal((await node.notifications.list()).length, 2);
+    await auth.propose({ origin: 'https://chat.test', request, kept: [0] });
+    assert.equal((await node.automations.list()).length, 2);
   });
 
   test('proposing the same thing several times at once adds it once', async () => {
@@ -615,9 +620,9 @@ describe('an app proposing subscriptions', () => {
     const { node } = auth.getState().session!;
     const club = await node.spaces.create({ name: 'Club', visibility: 'private' });
     await connect(auth, { name: 'Chat' }, [club.id]);
-    const request = propose([{ label: 'New message', collection: 'app.chat.message' }]);
+    const request = propose([notifyOn('New message', 'app.chat.message')]);
     await Promise.all([1, 2, 3].map(() => auth.propose({ origin: 'https://chat.test', request })));
-    assert.equal((await node.notifications.list()).length, 1);
+    assert.equal((await node.automations.list()).length, 1);
   });
 
   test("a whole-account app's look at every space", async () => {
@@ -627,12 +632,12 @@ describe('an app proposing subscriptions', () => {
     await connect(auth, { scope: 'account' });
     await auth.propose({
       origin: 'https://chat.test',
-      request: propose([{ label: 'New message', collection: 'app.chat.message' }]),
+      request: propose([notifyOn('New message', 'app.chat.message')]),
     });
-    assert.equal((await node.notifications.list())[0]?.spaces, 'all');
+    assert.equal((await node.automations.list())[0]?.spaces, 'all');
   });
 
-  test('a whole-account app is handed the subscriptions in the answer: it holds them without ever meeting the home', async () => {
+  test('a whole-account app is handed the automations in the answer: it holds them without ever meeting the home', async () => {
     const auth = await home(createFakeHub({ latencyMs: 1 }));
     const { node } = auth.getState().session!;
     const key = await appKey();
@@ -643,24 +648,24 @@ describe('an app proposing subscriptions', () => {
     });
     // A hub of its own: the home's window closes before the two ever meet.
     const chat = await app(createFakeHub({ latencyMs: 1 }), grant, key);
-    const request = propose([{ label: 'New message', collection: 'app.chat.message' }]);
+    const request = propose([notifyOn('New message', 'app.chat.message')]);
     const first = await auth.propose({ origin: 'https://chat.test', request });
-    const [made] = first.notify;
-    await node.notifications.update(made!.id, { paused: true });
+    const [made] = first.automations;
+    await node.automations.update(made!.id, { paused: true });
 
     // Asked again, the one it has is found, and every version of it handed over.
     const answer = await auth.propose({ origin: 'https://chat.test', request });
     const versions = answer.versions ?? [];
     assert.equal(versions.length, 2, 'the first version and the pause');
-    assert.equal(await chat.notifications.take(versions), 2);
+    assert.equal(await chat.automations.take(versions), 2);
     assert.deepEqual(
-      (await chat.notifications.list()).map((sub) => [sub.id, sub.paused]),
+      (await chat.automations.list()).map((sub) => [sub.id, sub.paused]),
       [[made!.id, true]],
     );
-    assert.equal(await chat.notifications.take(versions), 0, 'nothing new the second time');
+    assert.equal(await chat.automations.take(versions), 0, 'nothing new the second time');
   });
 
-  test('handed-over versions are refused when they are not subscriptions, or do not check out', async () => {
+  test('handed-over versions are refused when they are not automations, or do not check out', async () => {
     const auth = await home(createFakeHub({ latencyMs: 1 }));
     const key = await appKey();
     const grant = await auth.grant({
@@ -671,21 +676,21 @@ describe('an app proposing subscriptions', () => {
     const chat = await app(createFakeHub({ latencyMs: 1 }), grant, key);
     const answer = await auth.propose({
       origin: 'https://chat.test',
-      request: propose([{ label: 'New message', collection: 'app.chat.message' }]),
+      request: propose([notifyOn('New message', 'app.chat.message')]),
     });
     const [version] = answer.versions!;
 
     assert.equal(
-      await chat.notifications.take([{ ...version!, collection: 'sys.profile' }]),
+      await chat.automations.take([{ ...version!, collection: 'sys.profile' }]),
       0,
       'another collection',
     );
     assert.equal(
-      await chat.notifications.take([{ ...version!, createdAt: new Date(0).toISOString() }]),
+      await chat.automations.take([{ ...version!, createdAt: new Date(0).toISOString() }]),
       0,
       'changed after signing',
     );
-    assert.deepEqual(await chat.notifications.list(), []);
+    assert.deepEqual(await chat.automations.list(), []);
   });
 
   test('an app given only some spaces, which cannot read them, is handed none', async () => {
@@ -695,9 +700,9 @@ describe('an app proposing subscriptions', () => {
     await connect(auth, {}, [club.id]);
     const answer = await auth.propose({
       origin: 'https://chat.test',
-      request: propose([{ label: 'New message', collection: 'app.chat.message' }]),
+      request: propose([notifyOn('New message', 'app.chat.message')]),
     });
-    assert.equal(answer.notify.length, 1);
+    assert.equal(answer.automations.length, 1);
     assert.equal(answer.versions, undefined);
   });
 
@@ -735,9 +740,7 @@ describe('an app proposing subscriptions', () => {
       spaceIds: [],
     });
 
-    const one = propose([
-      { label: 'New', collection: 'app.chat.message', topic: { field: 'mentions', me: true } },
-    ]);
+    const one = propose([notifyOn('New', 'app.chat.message', { mentions: { $contains: '$me' } })]);
     for (const origin of ['https://stranger.test', extension, 'https://code.test'])
       await assert.rejects(() => auth.propose({ origin, request: one }), /Connect it first/, origin);
     await assert.rejects(
@@ -745,13 +748,13 @@ describe('an app proposing subscriptions', () => {
         auth.propose({
           origin: 'https://chat.test',
           request: propose([
-            { label: 'Fine', collection: 'app.chat.message' },
-            { label: 'In Work', collection: 'app.chat.message', spaces: [work.id] },
+            notifyOn('Fine', 'app.chat.message'),
+            { ...notifyOn('In Work', 'app.chat.message'), spaces: [work.id] },
           ]),
         }),
       /not given/,
     );
-    assert.deepEqual(await node.notifications.list(), [], 'nothing written, not even the one that was fine');
+    assert.deepEqual(await node.automations.list(), [], 'nothing written, not even the one that was fine');
   });
 
   test('disconnecting the app removes its subscriptions, and leaves the others', async () => {
@@ -765,21 +768,53 @@ describe('an app proposing subscriptions', () => {
       spaceIds: [],
     });
     const request = propose([
-      { label: 'New message', collection: 'app.chat.message' },
-      { label: 'Mentioned', collection: 'app.chat.message', topic: { field: 'mentions', me: true } },
+      notifyOn('New message', 'app.chat.message'),
+      notifyOn('Mentioned', 'app.chat.message', { mentions: { $contains: '$me' } }),
     ]);
     await auth.propose({ origin: 'https://chat.test', request });
     await auth.propose({
       origin: 'https://todo.test',
-      request: propose([{ label: 'New todo', collection: 'app.todo.item' }]),
+      request: propose([notifyOn('New todo', 'app.todo.item')]),
     });
-    assert.equal((await node.notifications.list()).length, 3);
+    assert.equal((await node.automations.list()).length, 3);
 
     await auth.disconnect('https://chat.test');
     assert.deepEqual(
-      (await node.notifications.list()).map((sub) => sub.label),
+      (await node.automations.list()).map((sub) => sub.name),
       ['New todo'],
     );
+  });
+
+  test('disconnecting a whole-account app removes what its own key wrote, whatever app that names', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node } = auth.getState().session!;
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://evil.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
+      spaceIds: [],
+    });
+    const evil = await app(hub, grant, key);
+    const own = (name: string, origin: string) => ({
+      ...notifyOn(name, 'app.chat.message'),
+      then: { kind: 'notify' as const, text: name },
+      spaces: 'all' as const,
+      app: { origin },
+    });
+    await evil.automations.add(own('Own', 'https://evil.test'));
+    await evil.automations.add({
+      ...own('Your bank: sign in again', 'https://bank.test'),
+      open: 'https://evil.test/phish',
+    });
+    await until(
+      async () => (await node.automations.list()).length === 2,
+      5000,
+      'its automations to reach the home',
+    );
+
+    await auth.disconnect('https://evil.test');
+    assert.deepEqual(await node.automations.list(), []);
   });
 });
 
@@ -816,20 +851,21 @@ describe('an app showing its own notifications', () => {
     await auth.propose({
       origin: 'https://chat.test',
       request: {
-        v: 1,
+        v: 2,
         kind: 'propose',
-        notify: [
-          { label: 'Mentioned', collection: 'app.chat.message', topic: { field: 'mentions', me: true } },
-          { label: 'Paused', collection: 'app.chat.poll' },
+        automations: [
+          notifyOn('Mentioned', 'app.chat.message', { mentions: { $contains: '$me' } }),
+          notifyOn('Paused', 'app.chat.poll'),
         ],
       },
     });
-    const paused = (await homeNode.notifications.list()).find((sub) => sub.label === 'Paused')!;
-    await homeNode.notifications.update(paused.id, { paused: true });
-    // Another app's subscription is that app's to show.
-    await homeNode.notifications.add({
-      label: 'Elsewhere',
-      collection: 'app.chat.message',
+    const paused = (await homeNode.automations.list()).find((sub) => sub.name === 'Paused')!;
+    await homeNode.automations.update(paused.id, { paused: true });
+    // Another app's automation is that app's to show.
+    await homeNode.automations.add({
+      name: 'Elsewhere',
+      when: { query: { collection: 'app.chat.message' } },
+      then: { kind: 'notify', text: 'Elsewhere' },
       spaces: 'all',
       app: { origin: 'https://other.test' },
     });
@@ -848,7 +884,7 @@ describe('an app showing its own notifications', () => {
     });
     cleanup.push(async () => stop());
     await until(
-      async () => (await chat.notifications.list()).length === 3,
+      async () => (await chat.automations.list()).length === 3,
       5000,
       'the subscriptions to reach the app',
     );
@@ -874,7 +910,7 @@ describe('an app showing its own notifications', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.deepEqual(
-      heard.map((match) => [match.subscription.label, match.record.key]),
+      heard.map((match) => [match.automation.name, match.record.key]),
       [['Mentioned', wanted.key]],
       "only Bob's mention: not the app's own, not one about no one, not the paused one, not before",
     );
@@ -1049,9 +1085,9 @@ describe('the home receiving a request', () => {
         v: 1,
         audience: 'did:key:zChat',
         access: 'write',
-        notify: [{ label: 'New message', collection: 'app.chat.message' }],
+        automations: [notifyOn('New message', 'app.chat.message')],
       }),
-      { v: 1, kind: 'propose', notify: [{ label: 'New', collection: 'app.chat.message' }], extra: true },
+      { v: 2, kind: 'propose', automations: [notifyOn('New', 'app.chat.message')], extra: true },
       // There is no kind of key to name, only what it may do.
       await asked({ v: 1, audience: 'did:key:zOld', access: 'write', agent: true }),
       // Records only goes with no contacts, no spaces made for it and no carrying; a program by code carries nothing.
@@ -1088,11 +1124,11 @@ describe('the home receiving a request', () => {
     const { receiveConnectRequest } = await import('../src/session/connect.js');
     const asked = [
       {
-        v: 1,
+        v: 2,
         kind: 'propose',
-        notify: [{ label: 'New', collection: 'app.chat.message', open: 'https://elsewhere.test/' }],
+        automations: [{ ...notifyOn('New', 'app.chat.message'), open: 'https://elsewhere.test/' }],
       },
-      { v: 1, kind: 'propose', notify: [{ label: 'New', collection: 'sys.notify' }] },
+      { v: 2, kind: 'propose', automations: [notifyOn('New', 'sys.wake')] },
     ];
     for (const request of asked) {
       const popup = popupWindow();
@@ -1112,14 +1148,14 @@ describe('the home receiving a request', () => {
       popup.send({
         type: 'minca:request',
         request: {
-          v: 1,
+          v: 2,
           kind: 'propose',
-          notify: [{ label: 'New', collection: 'app.chat.message', open: 'https://app.test/inbox' }],
+          automations: [{ ...notifyOn('New', 'app.chat.message'), open: 'https://app.test/inbox' }],
         },
       });
       const incoming = await received;
       assert.ok(incoming && 'kind' in incoming.request, 'one leading back to the app is read');
-      assert.equal(incoming.request.notify.length, 1);
+      assert.equal(incoming.request.automations.length, 1);
     } finally {
       popup.restore();
     }
@@ -1154,9 +1190,9 @@ describe('the home receiving a request', () => {
     const { receiveConnectRequest, isProposeRequest } = await import('../src/session/connect.js');
     const origin = 'https://app.test';
     for (const request of [
-      { v: 1, kind: 'propose', notify: [] },
-      { v: 1, kind: 'propose', notify: [{ label: 'New', collection: 'sys.notify' }] },
-      { v: 1, kind: 'something-new', notify: [{ label: 'New', collection: 'app.chat.message' }] },
+      { v: 2, kind: 'propose', automations: [] },
+      { v: 2, kind: 'propose', automations: [notifyOn('New', 'sys.wake')] },
+      { v: 1, kind: 'something-new', automations: [notifyOn('New', 'app.chat.message')] },
     ]) {
       const popup = popupWindow();
       try {
@@ -1176,9 +1212,9 @@ describe('the home receiving a request', () => {
         {
           type: 'minca:request',
           request: {
-            v: 1,
+            v: 2,
             kind: 'propose',
-            notify: [{ label: 'New', collection: 'app.chat.message', spaces: ['s1'] }],
+            automations: [{ ...notifyOn('New', 'app.chat.message'), spaces: ['s1'] }],
           },
         },
         origin,

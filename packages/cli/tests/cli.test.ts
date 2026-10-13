@@ -534,19 +534,19 @@ describe('the minca command', () => {
     assert.ok(typeof space === 'string');
     await refused(['records', 'get', '--space', space], /Missing --key/);
 
-    // A standard collection by its name, and a rule by flags alone.
+    // A standard collection by its name, and an automation by flags alone.
     const defined: unknown = JSON.parse(
-      (await minca('collections', 'define', '--standard', 'std.rule', '--space', space)).stdout,
+      (await minca('collections', 'define', '--standard', 'std.automation', '--space', space)).stdout,
     );
-    assert.equal(at(defined, 'name'), 'std.rule');
+    assert.equal(at(defined, 'name'), 'std.automation');
     await refused(
-      ['rule', 'add', '--space', space, '--name', 'Mentions', '--collection', 'std.message'],
+      ['automation', 'add', '--space', space, '--name', 'Mentions', '--collection', 'std.message'],
       /Missing --do/,
     );
     const mentions: unknown = JSON.parse(
       (
         await minca(
-          'rule',
+          'automation',
           'add',
           '--space',
           space,
@@ -571,7 +571,7 @@ describe('the minca command', () => {
     const scheduled: unknown = JSON.parse(
       (
         await minca(
-          'rule',
+          'automation',
           'add',
           '--space',
           space,
@@ -586,7 +586,7 @@ describe('the minca command', () => {
     );
     assert.equal(at(scheduled, 'every'), '0 8 * * 1-5');
     await refused(
-      ['rule', 'add', '--space', space, '--name', 'Bad', '--every', 'at noon daily', '--do', 'x'],
+      ['automation', 'add', '--space', space, '--name', 'Bad', '--every', 'at noon daily', '--do', 'x'],
       /--every: /,
     );
     await refused(

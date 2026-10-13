@@ -50,7 +50,7 @@ const on = { on: { to: ['app.comment'], cardinality: 'one' as const } };
 const collections = (claim: Contract): DefineCollection[] => [
   { name: 'app.comment', schema: Comment },
   { name: 'app.reaction', schema: Reaction, links: on },
-  { name: 'app.fame', schema: Fame, links: on, rules: { check: [claim] } },
+  { name: 'app.fame', schema: Fame, links: on, contract: { check: [claim] } },
 ];
 
 // -- The story ---------------------------------------------------------------------

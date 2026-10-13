@@ -21,7 +21,7 @@
  * every version is checked against the one before is a state machine, and
  * versions citing versions build on each other the way a ledger does.
  */
-import { isObject } from '../utils/guards.js';
+import { isObject, isRecord } from '../utils/guards.js';
 import { canonicalize } from '../schema/version.js';
 import type { Link } from '../types.js';
 import { LINK_REL_PATTERN } from './links.js';
@@ -49,6 +49,43 @@ import { INT, STRING, typeCheckCel, typeOfSchema, versionType, type CelType } fr
  */
 export interface Line {
   readonly once?: ReadonlyArray<string>;
+}
+
+/**
+ * A collection's contract (spec 09 §1): the conditions its versions must meet
+ * to count, and whether it is a line. A definition's top-level `contract`,
+ * which peers keep and never read; readers judge it. Its keys are closed.
+ */
+export interface CollectionContract {
+  readonly check?: ReadonlyArray<Contract>;
+  readonly line?: Line;
+}
+
+/** The keys a contract may have */
+const CONTRACT_KEYS: ReadonlyArray<string> = ['check', 'line'];
+
+/**
+ * Whether a contract's outside can be judged: null when it can, `unknown`
+ * when it has a key this library doesn't know (the collection is then
+ * unjudged, as for a line), or why it is malformed. Its `check` and `line`
+ * are checked by `checkContracts` and `checkLine`.
+ */
+export function checkContractShape(contract: unknown): string | null {
+  if (!isRecord(contract)) return 'contract must be an object';
+  if (Object.keys(contract).some((k) => !CONTRACT_KEYS.includes(k))) return 'unknown';
+  return null;
+}
+
+/** Whether a contract asks anything of a version: a check, or a line */
+export function hasContract(contract: unknown): boolean {
+  if (!isRecord(contract)) return contract !== undefined;
+  const check = contract.check;
+  return (
+    (Array.isArray(check) && check.length > 0) ||
+    (check !== undefined && !Array.isArray(check)) ||
+    contract.line !== undefined ||
+    Object.keys(contract).some((k) => !CONTRACT_KEYS.includes(k))
+  );
 }
 
 /** The keys a line declaration may have */
@@ -137,7 +174,7 @@ function parse(condition: unknown, at: string): CelNode | string {
 }
 
 /** Why a collection's checks can't be kept, or null */
-export function checkContracts(checks: unknown, at = 'rules.check'): string | null {
+export function checkContracts(checks: unknown, at = 'contract.check'): string | null {
   if (!Array.isArray(checks) || checks.length === 0 || checks.length > MAX_CHECKS)
     return `${at} must be a list of 1 to ${MAX_CHECKS} checks`;
   const count = { nodes: 0 };
@@ -167,7 +204,7 @@ export function checkContracts(checks: unknown, at = 'rules.check'): string | nu
 export function checkContractTypes(
   checks: ReadonlyArray<Contract>,
   schema: unknown,
-  at = 'rules.check',
+  at = 'contract.check',
 ): string | null {
   const version = versionType(typeOfSchema(schema));
   if (version.t !== 'object') return null;

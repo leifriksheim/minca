@@ -370,7 +370,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
     .find((known) => known.origin === origin && !known.via && known.access !== 'carry');
   const spaces = useSpaces(false);
   const [kept, setKept] = useState<ReadonlySet<number>>(
-    () => new Set(request.notify.map((_, index) => index)),
+    () => new Set(request.automations.map((_, index) => index)),
   );
   const { run, busy, error } = useAction();
 
@@ -383,7 +383,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
   };
 
   const allow = () =>
-    run(async () => incoming.approve(await auth.propose({ origin, request, notify: [...kept] })));
+    run(async () => incoming.approve(await auth.propose({ origin, request, kept: [...kept] })));
 
   if (!connection) {
     return (
@@ -415,7 +415,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
 
       <section style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {request.notify.map((proposal, index) => (
+          {request.automations.map((proposal, index) => (
             <label key={index} data-choice style={styles.choice}>
               <input
                 type="checkbox"
@@ -423,7 +423,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
                 onChange={() => setKept((was) => toggled(was, index))}
                 style={{ ...styles.checkbox, marginTop: 0 }}
               />
-              <span style={{ flex: 1 }}>{proposal.label}</span>
+              <span style={{ flex: 1 }}>{proposal.name}</span>
               <span style={{ color: palette.ink.faint, fontSize: 12 }}>{where(proposal.spaces)}</span>
             </label>
           ))}

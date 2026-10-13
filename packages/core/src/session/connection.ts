@@ -35,7 +35,7 @@ import {
   type Grant,
   type Proposed,
 } from './connect.js';
-import type { NotifyProposal } from '../space/notify.js';
+import type { AutomationProposal } from '../space/own-automations.js';
 import { WORKER_NOT_STARTED, type WorkerLike } from '../node/worker.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 
@@ -89,11 +89,11 @@ export interface MincaConnection {
   /** Forgets the grant and this app's key, and stops the node. The account is untouched. */
   disconnect(): Promise<void>;
   /**
-   * Offers the person subscriptions — "notify me when…" — once connected.
+   * Offers the person automations that notify them — "notify me when…" — once connected.
    * Opens the home; call it from a click.
    * @returns What they kept
    */
-  propose(notify: ReadonlyArray<NotifyProposal>): Promise<Proposed>;
+  propose(automations: ReadonlyArray<AutomationProposal>): Promise<Proposed>;
 }
 
 export function createMincaConnection(config: MincaConnectionConfig): MincaConnection {
@@ -217,16 +217,16 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
 
     disconnect: () => end(null),
 
-    async propose(notify) {
+    async propose(automations) {
       if (!state.grant) throw new Error('Connect to your account home first.');
       const answer = await proposeToHome({
         home: state.grant.home,
-        notify,
+        automations,
         ...(config.request.name ? { name: config.request.name } : {}),
       });
       // The home's window closes now: take what it wrote rather than wait to meet it over the network.
       if (Array.isArray(answer.versions) && answer.versions.length > 0)
-        await state.node?.notifications.take(answer.versions).catch(() => 0);
+        await state.node?.automations.take(answer.versions).catch(() => 0);
       return answer;
     },
   };

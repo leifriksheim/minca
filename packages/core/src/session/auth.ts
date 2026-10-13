@@ -80,13 +80,8 @@ import {
   checkKeyProof,
   requestTerms,
 } from './connect.js';
-import {
-  fromProposal,
-  proposalSpaces,
-  sameSubscription,
-  type NotifySpaces,
-  type NotifyWhen,
-} from '../space/notify.js';
+import { fromProposal, proposalSpaces, sameAutomation } from '../space/own-automations.js';
+import type { Automation, AutomationApp, AutomationSpaces } from '../schemas/automations.js';
 import {
   clearPairingTicket,
   receiveFromDesktop,
@@ -284,7 +279,7 @@ export interface ProposeChoice {
   readonly origin: string;
   readonly request: ProposeRequest;
   /** Which proposals they said yes to, by index. Default: all of them. */
-  readonly notify?: ReadonlyArray<number>;
+  readonly kept?: ReadonlyArray<number>;
 }
 
 export interface AuthState {
@@ -448,41 +443,37 @@ const afterStorage = (accounts: ReadonlyArray<unknown>): AuthStage =>
   accounts.length > 0 ? 'signIn' : 'welcome';
 
 /**
- * The subscriptions an app's proposals become, for the ones the person kept.
+ * The automations an app's proposals become, for the ones the person kept.
  * Checked whole before any is written: a proposal naming a space the app
  * can't reach refuses them all.
  */
-function subscriptionsFrom(
-  proposals: ProposeRequest['notify'],
+function automationsFrom(
+  proposals: ProposeRequest['automations'],
   kept: ReadonlyArray<number> | undefined,
-  context: {
-    readonly app: NotifyWhen['app'] & {};
-    readonly reach: NotifySpaces;
-    readonly account: string;
-  },
-): NotifyWhen[] {
-  const made: NotifyWhen[] = [];
+  context: { readonly app: AutomationApp; readonly reach: AutomationSpaces },
+): Automation[] {
+  const made: Automation[] = [];
   for (const [index, proposal] of proposals.entries()) {
     if (kept && !kept.includes(index)) continue;
     const spaces = proposalSpaces(proposal, context.reach);
-    if (!spaces) throw new Error(`“${proposal.label}” looks at a space it was not given.`);
-    made.push(fromProposal(proposal, { app: context.app, spaces, account: context.account }));
+    if (!spaces) throw new Error(`“${proposal.name}” looks at a space it was not given.`);
+    made.push(fromProposal(proposal, { app: context.app, spaces }));
   }
   return made;
 }
 
 /** Adds each, unless the same origin already has the same one */
-async function addSubscriptions(
+async function addAutomations(
   node: P2PNode,
   origin: string,
-  subscriptions: ReadonlyArray<NotifyWhen>,
-): Promise<Array<{ id: string; label: string }>> {
-  if (subscriptions.length === 0) return [];
-  const existing = (await node.notifications.list()).filter((sub) => sub.app?.origin === origin);
-  const added: Array<{ id: string; label: string }> = [];
-  for (const when of subscriptions) {
-    const made = existing.find((sub) => sameSubscription(sub, when)) ?? (await node.notifications.add(when));
-    added.push({ id: made.id, label: made.label });
+  automations: ReadonlyArray<Automation>,
+): Promise<Array<{ id: string; name: string }>> {
+  if (automations.length === 0) return [];
+  const existing = (await node.automations.list()).filter((own) => own.app?.origin === origin);
+  const added: Array<{ id: string; name: string }> = [];
+  for (const own of automations) {
+    const made = existing.find((found) => sameAutomation(found, own)) ?? (await node.automations.add(own));
+    added.push({ id: made.id, name: made.name });
   }
   return added;
 }
@@ -1053,6 +1044,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     showSignIn() {
       update({ error: null, stage: 'signIn' });
+      // Back from "another account", which let go of the one picked: pick it again.
+      if (!state.selectedId && state.place) void refresh(state.place).catch(() => {});
     },
 
     showWelcome() {
@@ -1060,7 +1053,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     },
 
     showExisting() {
-      update({ error: null, stage: 'existing' });
+      // Any account, not the one the list had picked: a recovery code from
+      // here opens whichever account it belongs to.
+      update({ error: null, stage: 'existing', selectedId: null, entry: null });
     },
 
     showRestore() {
@@ -1395,7 +1390,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       };
     },
 
-    async propose({ origin, request, notify: kept }) {
+    async propose({ origin, request, kept }) {
       const session = state.session;
       if (!session) throw new Error('Sign in first.');
       const { node } = session;
@@ -1408,7 +1403,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
           'Only an app connected to your account here may suggest what to notify you about. Connect it first.',
         );
       // What it may reach: every space for a whole-account app, else the spaces it was given, less the contacts space.
-      let reach: NotifySpaces = 'all';
+      let reach: AutomationSpaces = 'all';
       if (connection.scope === 'spaces') {
         const contactsSpace = connection.spaces.length ? await node.contacts.space().catch(() => null) : null;
         reach = connection.spaces.map((space) => space.id).filter((id) => id !== contactsSpace);
@@ -1422,15 +1417,15 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
             ? { name: request.name.slice(0, 80) }
             : {}),
       };
-      const when = subscriptionsFrom(request.notify, kept, { app, reach, account: session.did });
+      const made = automationsFrom(request.automations, kept, { app, reach });
       // One at a time: two popups answered together would each find the other's not there yet.
-      const adding = subscribing.then(() => addSubscriptions(node, origin, when));
+      const adding = subscribing.then(() => addAutomations(node, origin, made));
       subscribing = adding.catch(() => {});
-      const notify = await adding;
+      const automations = await adding;
       // An app with the account key reads them from its own node: handed over now, they are there on its next load.
-      if (reach !== 'all' || notify.length === 0) return { v: 1, kind: 'proposed', notify };
-      const versions = await node.notifications.versions(notify.map((sub) => sub.id));
-      return { v: 1, kind: 'proposed', notify, versions };
+      if (reach !== 'all' || automations.length === 0) return { v: 2, kind: 'proposed', automations };
+      const versions = await node.automations.versions(automations.map((own) => own.id));
+      return { v: 2, kind: 'proposed', automations, versions };
     },
 
     async grantCarry({ origin, request }) {
@@ -1500,11 +1495,15 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         // Like a revoke below: one that can't be done must not keep the rest from happening.
         if (connection.carrySpace && node) await node.carriers.remove(connection.carrySpace).catch(() => {});
         if (node) await revokeConnection(node, connection);
-        // The app's own subscriptions go with it, and a carrier's: what they look for is theirs to know.
+        // The automations it proposed go with it, and a carrier's: what they look for is theirs to know.
+        // So does any its own key wrote, whichever app that one names.
         if (!connection.via && node) {
-          for (const sub of await node.notifications.list()) {
-            if (sub.app?.origin === connection.origin)
-              await node.notifications.remove(sub.id).catch(() => {});
+          for (const own of await node.automations.list()) {
+            const wrote = (await node.automations.versions([own.id])).some(
+              (version) => version.author === connection.audience,
+            );
+            if (own.app?.origin === connection.origin || wrote)
+              await node.automations.remove(own.id).catch(() => {});
           }
         }
       }

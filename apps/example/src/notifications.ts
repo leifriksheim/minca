@@ -1,8 +1,14 @@
 /** Notifications: each app's `notify` offered through the account home, then matched and shown by this app while it is open. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount, useConnection, useNode } from '@minca/core/react';
-import { MAX_PROPOSALS, watchNotifications, type NotifyProposal, type NotifyView } from '@minca/core';
-import type { AppNotify } from '@minca/core/schemas';
+import {
+  MAX_PROPOSALS,
+  ownQuery,
+  watchNotifications,
+  type AutomationProposal,
+  type OwnAutomationView,
+} from '@minca/core';
+import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { APPS } from './components/apps';
 import { isForMe, madeNotify, needsOf } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
@@ -10,27 +16,30 @@ import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
 
 /** Offered whatever apps a space has */
-const CONTACTS: NotifyProposal = {
-  label: 'Someone asks to be your contact',
-  collection: 'std.contact-request',
-  others: true,
-};
+const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact', 'std.contact-request');
 
 const supported = () => typeof globalThis.Notification === 'function';
 
 /** Where the account home keeps the person's notifications */
 const manageUrl = (home: string) => `${new URL('.', home).href}#notifications`;
 
-/** This app's subscriptions, as the account keeps them */
-export function useSubscriptions(): ReadonlyArray<NotifyView> {
+/** What an automation looks for, as the same thing asked for again would be */
+const lookingFor = (own: Pick<AppAutomation, 'when'>) =>
+  `${own.when.query.collection} ${JSON.stringify(own.when.query.where ?? null)}`;
+
+/** The same, for one the account keeps */
+const keptFor = (own: OwnAutomationView) => lookingFor({ when: { query: ownQuery(own) } });
+
+/** This app's automations, as the account keeps them */
+export function useOwnAutomations(): ReadonlyArray<OwnAutomationView> {
   const node = useNode();
-  const [mine, setMine] = useState<ReadonlyArray<NotifyView>>([]);
+  const [mine, setMine] = useState<ReadonlyArray<OwnAutomationView>>([]);
   useEffect(() => {
     let live = true;
     const load = () =>
-      void node.notifications
+      void node.automations
         .list()
-        .then((all) => live && setMine(all.filter((sub) => sub.app?.origin === globalThis.location.origin)))
+        .then((all) => live && setMine(all.filter((own) => own.app?.origin === globalThis.location.origin)))
         .catch(() => {});
     load();
     const stop = node.subscribe((event) => {
@@ -45,8 +54,8 @@ export function useSubscriptions(): ReadonlyArray<NotifyView> {
 }
 
 /** One proposal, as the same thing asked for again would be */
-const proposalKey = (proposal: NotifyProposal) =>
-  `${proposal.collection} ${JSON.stringify(proposal.topic ?? null)} ${JSON.stringify(proposal.where ?? null)} ${proposal.spaces?.join(',') ?? 'all'}`;
+const proposalKey = (proposal: AutomationProposal) =>
+  `${lookingFor(proposal)} ${proposal.spaces?.join(',') ?? 'all'}`;
 
 /** Asks the browser, then the home, from the click; what the home kept counts as on at once, before the account space syncs */
 export function useAsk() {
@@ -72,7 +81,7 @@ export function useAsk() {
 
   /** Resolves to whether the person kept any of them */
   const ask = useCallback(
-    (proposals: ReadonlyArray<NotifyProposal>): Promise<boolean> => {
+    (proposals: ReadonlyArray<AutomationProposal>): Promise<boolean> => {
       setError(null);
       // Everything asked for is on already: nothing to open the home for.
       if (proposals.length === 0) return Promise.resolve(true);
@@ -93,8 +102,8 @@ export function useAsk() {
       setAsking(true);
       return proposing
         .then((answer) => {
-          const labels = new Set(answer.notify.map((sub) => sub.label));
-          const yes = proposals.filter((proposal) => labels.has(proposal.label.trim()));
+          const names = new Set(answer.automations.map((own) => own.name));
+          const yes = proposals.filter((proposal) => names.has(proposal.name.trim()));
           setKept((was) => new Set([...was, ...yes.map(proposalKey)]));
           return yes.length > 0;
         })
@@ -119,9 +128,9 @@ export function useAsk() {
 }
 
 /** Everything this app can notify about, in every space, worked out before the click that opens the home's popup */
-function useEverything(): ReadonlyArray<NotifyProposal> {
+function useEverything(): ReadonlyArray<AutomationProposal> {
   const node = useNode();
-  const [offers, setOffers] = useState<ReadonlyArray<NotifyProposal>>(() => gather([]));
+  const [offers, setOffers] = useState<ReadonlyArray<AutomationProposal>>(() => gather([]));
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -155,17 +164,15 @@ function useEverything(): ReadonlyArray<NotifyProposal> {
 }
 
 /** Contact requests, the built-in apps and these made ones, once each, as many as one request may carry */
-function gather(made: ReadonlyArray<LauncherApp>): ReadonlyArray<NotifyProposal> {
+function gather(made: ReadonlyArray<LauncherApp>): ReadonlyArray<AutomationProposal> {
   const all = [CONTACTS, ...APPS.flatMap((app) => app.notify), ...made.flatMap(madeNotify)];
-  const once = new Map(
-    all.map((offer) => [`${offer.collection} ${JSON.stringify(offer.topic ?? null)}`, offer]),
-  );
+  const once = new Map(all.map((offer) => [lookingFor(offer), offer]));
   return [...once.values()].slice(0, MAX_PROPOSALS);
 }
 
 /** This app's notifications as the account keeps them, and turning them all on */
 export function useAppNotifications() {
-  const mine = useSubscriptions();
+  const mine = useOwnAutomations();
   const everything = useEverything();
   const { permission, error, asking, kept, ask, allow, manage } = useAsk();
   // What is on everywhere already is not asked for again.
@@ -175,18 +182,13 @@ export function useAppNotifications() {
         everything.filter(
           (offer) =>
             !kept.has(proposalKey(offer)) &&
-            !mine.some(
-              (sub) =>
-                sub.spaces === 'all' &&
-                sub.collection === offer.collection &&
-                (offer.topic ? sub.topic?.field === offer.topic.field : !sub.topic),
-            ),
+            !mine.some((own) => (own.spaces ?? 'all') === 'all' && keptFor(own) === lookingFor(offer)),
         ),
       ),
     [ask, everything, kept, mine],
   );
   return {
-    on: mine.filter((sub) => !sub.paused).length,
+    on: mine.filter((own) => !own.paused).length,
     permission,
     error,
     asking,
@@ -197,26 +199,20 @@ export function useAppNotifications() {
 }
 
 /** One app's notifications in one space (all, or only what names you): whether each is on, and turning one on */
-export function useNotifyFor(spaceId: string, offers: ReadonlyArray<AppNotify>) {
-  const { did } = useAccount();
-  const mine = useSubscriptions();
+export function useNotifyFor(spaceId: string, offers: ReadonlyArray<AppAutomation>) {
+  const mine = useOwnAutomations();
   const { permission, error, asking, kept, ask, allow, manage } = useAsk();
-  const covers = (offer: AppNotify) =>
+  const covers = (offer: AppAutomation) =>
     kept.has(proposalKey({ ...offer, spaces: [spaceId] })) ||
-    mine.some(
-      (sub) =>
-        !sub.paused &&
-        sub.collection === offer.collection &&
-        (sub.spaces === 'all' || sub.spaces.includes(spaceId)) &&
-        (offer.topic
-          ? sub.topic?.field === offer.topic.field &&
-            sub.topic.value === ('me' in offer.topic ? did : offer.topic.value)
-          : !sub.topic) &&
-        JSON.stringify(sub.where ?? null) === JSON.stringify(offer.where ?? null),
-    );
-  const everything = offers.filter((offer) => !offer.topic);
+    mine.some((own) => {
+      const spaces = own.spaces ?? 'all';
+      return (
+        !own.paused && (spaces === 'all' || spaces.includes(spaceId)) && keptFor(own) === lookingFor(offer)
+      );
+    });
+  const everything = offers.filter((offer) => !isForMe(offer));
   const forMe = offers.filter(isForMe);
-  const turnOn = (which: ReadonlyArray<AppNotify>) =>
+  const turnOn = (which: ReadonlyArray<AppAutomation>) =>
     void ask(which.filter((offer) => !covers(offer)).map((offer) => ({ ...offer, spaces: [spaceId] })));
   return {
     everything,
@@ -234,11 +230,11 @@ export function useNotifyFor(spaceId: string, offers: ReadonlyArray<AppNotify>) 
   };
 }
 
-/** How long to wait for every subscription a record matches, before showing one notification for it */
+/** How long to wait for every automation a record matches, before showing one notification for it */
 const GATHER_MS = 150;
 
 /**
- * What this app's subscriptions match: each goes in the bell, and is shown as a notification
+ * What this app's automations match: each goes in the bell, and is shown as a notification
  * while nobody looks. A record several match is one, under the most particular.
  */
 export function useShowNotifications(openSpace: (id: string) => void) {
@@ -265,13 +261,14 @@ export function useShowNotifications(openSpace: (id: string) => void) {
       });
     };
     const stop = watchNotifications(node, {
-      onNotify: ({ subscription, record }) => {
-        const particular = !!subscription.topic;
+      onNotify: ({ automation, record }) => {
+        const particular = automation.when?.query.where !== undefined;
+        const label = automation.then.kind === 'notify' ? automation.then.text : automation.name;
         const before = waiting.get(record.key);
         if (before && (before.particular || !particular)) return;
         if (before) clearTimeout(before.timer);
-        const timer = setTimeout(() => show(record.key, subscription.label, record.space), GATHER_MS);
-        waiting.set(record.key, { label: subscription.label, particular, timer });
+        const timer = setTimeout(() => show(record.key, label, record.space), GATHER_MS);
+        waiting.set(record.key, { label, particular, timer });
       },
     });
     return () => {

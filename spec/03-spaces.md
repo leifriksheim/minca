@@ -4,8 +4,8 @@ A **space** is the container every record lives in. This part specifies what a
 space is and how its id is made; how roles, members and invites are recorded
 inside it and replayed into one answer about who may do what; how a private
 space encrypts its records and changes its key; and the few spaces and
-collections built on top of that: the account registry, passes, subscriptions
-and profiles. Contacts, built on these, are described in the library's docs
+collections built on top of that: the account registry, passes, wakes and
+profiles. Contacts, built on these, are described in the library's docs
 ([contacts](../packages/core/docs/contacts.md)).
 
 What a record is, how it is signed, hashed and versioned, and how collection
@@ -28,7 +28,7 @@ How peers connect and prove they may read is in [04 — Network](04-network.md).
 - [12. The space manager](#12-the-space-manager)
 - [13. The account registry](#13-the-account-registry)
 - [14. Passes and carry spaces](#14-passes-and-carry-spaces)
-- [15. Subscriptions (notify)](#15-subscriptions-notify)
+- [15. Wakes](#15-wakes)
 - [16. Contacts](#16-contacts)
 - [17. Not yet specified](#17-not-yet-specified)
 
@@ -1513,8 +1513,8 @@ _Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `pa
 >   the key must still recognise the access collections to replay the
 >   history. Depends on and touches: the envelope and the rules
 >   ([02](02-records.md)); the collections named in a sync hello and what a
->   partial holder keeps ([05](05-sync-and-storage.md)); carried
->   subscriptions, which a carrier matches by collection (§15). _Open:_
+>   partial holder keeps ([05](05-sync-and-storage.md)); wakes, which a
+>   carrier matches by collection (§15). _Open:_
 >   whether names are hashed or encrypted, and under which key.
 
 ---
@@ -1737,12 +1737,12 @@ account is ignored by readers), and nothing written under a note without
 
 ### 13.2 What the registry records
 
-| Collection    | Record key                           | Body                                  | Meaning                                                                                                                          |
-| ------------- | ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `sys.joined`  | `space:<spaceId>`                    | `{ space: spaceId, invite }`          | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
-| `sys.carrier` | `carrier:<hex40(carrySpaceId)>`      | `{ space, invite, did, name, since }` | A carrier the account uses (§14).                                                                                                |
-| `sys.notify`  | `notify:<base32 of 10 random bytes>` | `NotifyWhen` (§15)                    | A subscription.                                                                                                                  |
-| `sys.hosting` | —                                    | —                                     | Hosting; see [08](08-hosting.md).                                                                                                |
+| Collection       | Record key                               | Body                                   | Meaning                                                                                                                          |
+| ---------------- | ---------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`           | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
+| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ space, invite, did, name, since }`  | A carrier the account uses (§14).                                                                                                |
+| `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format | One of the account's own automations, from which its wakes are made (§15).                                                       |
+| `sys.hosting`    | —                                        | —                                      | Hosting; see [08](08-hosting.md).                                                                                                |
 
 A membership counts only if it verifies, its root is the account, and (unless
 deleted) its key is `space:<body.space>`.
@@ -1752,7 +1752,12 @@ lists and no others, and **SHOULD** keep each membership's invite carrying the
 space's current key, so a new device joins with it. How the library does this
 is in [06](06-nodes-and-sessions.md) §1.3. The registry holds other records
 of the library's own too, such as the account's name
-([docs](../packages/core/docs/spaces.md#profiles)).
+([docs](../packages/core/docs/spaces.md#profiles)). What a `sys.automation`
+body says is the library's ([automations](../packages/core/docs/automations.md#the-accounts-own));
+peers check only that a member of the registry wrote it, and the library
+counts only the account's own. It is a system collection so that
+nothing defines it: no key of the account can redefine it to keep the person
+from pausing or removing one.
 
 _Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/node.ts` (`memberships`, `remember`, `forget`, `reconcileOnce`, `ownName`). Tests: `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples"), `packages/core/tests/account.test.ts` ("the account name"), `packages/core/tests/space-access.test.ts` ("invite secrets are never kept…")._
 
@@ -1791,83 +1796,71 @@ _Source: `packages/core/src/space/pass.ts`, `packages/core/src/node/node.ts` (`s
 
 ---
 
-## 15. Subscriptions (notify)
+## 15. Wakes
 
-A subscription says what the account wants to hear about. It is kept in the
-registry, sealed like everything there:
+A **wake** tells the account's carriers which new records are worth waking
+one of its apps for. Carriers cannot read, so a wake says it by what is on
+the outside of a version: its collection, its space, its author's root and
+its topic tags ([02](02-records.md) §8).
+
+Each device of the account holding the account key writes the wakes into
+every carry space (§14), one record each:
 
 ```
-sys.notify at notify:<id>
-NotifyWhen = { label, collection, spaces: "all" | spaceId[], topic?: { field, value },
-               others?: boolean (default true), where?: Filter, open?: url,
-               paused?: boolean, since: ISO date, app?: { origin, name? } }
+sys.wake at wake:<id>
+Wake = { v: 1, collection, spaces: "all" | spaceId[], tags?: { <spaceId>: [tag] },
+         others: boolean, open?: url, paused: boolean, since: ISO date }
 ```
 
-For example, urgent tasks assigned to the account:
+For example, a wake for new messages that mention the account, in either of
+two spaces, with the tag its device worked out for the first:
 
 ```json
 {
-  "label": "Urgent task for me",
-  "collection": "std.task",
-  "spaces": "all",
-  "topic": { "field": "assignees", "value": "did:key:zDnae…" },
-  "where": { "priority": { "$gte": 3 } },
+  "v": 1,
+  "collection": "std.message",
+  "spaces": ["bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku", "bafkreigq7c…"],
+  "tags": {
+    "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku": [
+      "Xq3vS0fH2r6NwXg0qU9n8ZlF4kM7yQ1pJ5tAeB2cD9E"
+    ]
+  },
+  "others": true,
+  "paused": false,
   "since": "2026-09-29T12:00:00.000Z"
 }
 ```
 
-Valid (`checkNotify`) when: `label` 1–120 characters, not blank; `collection`
-is a collection name ([02](02-records.md) §6.1, `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`) and does not start with `sys.`;
-`spaces` is `"all"` or 1–256 strings; `topic.field` is a valid topic, a
-field or `link:<role>` ([02](02-records.md) §8.1), and `topic.value` a string, number or boolean; `where`,
-when present, is a filter in the library's query format that reads only
-body fields, `link:<role>`, `@key`, `@collection`, `@createdBy` and
-`@createdAt` (`checkFilter`); `open`
-an `https://` URL (or `http://` on localhost / 127.0.0.1); `since` a date;
-`app.origin`, when present, a web origin (scheme, host and port, nothing
-after) or a browser extension's (`chrome-extension://`, `moz-extension://` or
-`safari-web-extension://`, then 1–64 letters, digits or dashes), and
-`app.name` at most 80 characters.
+A carrier **MUST** take a wake only from a version that verifies and whose
+root is the account, and **MUST** ignore one that is not valid (`readWake`):
+`v` is 1; `collection` is a collection name ([02](02-records.md) §6.1) that
+does not start with `sys.`; `spaces` is `"all"` or 1–256 strings; `tags`,
+when present, maps space ids to lists of at most 16 strings, each at most 64
+characters; `others` and `paused` are
+booleans; `since` is a date; `open`, when present, is a string.
 
-`where` narrows a subscription to records it matches: a filter in the
-library's query format (`packages/core/docs/query-format.md`), judged by a
-device that can read the record, over its body, its links and its `@key`,
-`@collection`, `@createdBy` and `@createdAt`. It is never carried: a carrier matches on the outside alone
-and may wake an app for a record the app then turns down.
+A version **wakes** a wake when all hold: not paused; same collection; `seq`
+is 0 and not deleted; the space is in `spaces` (or `spaces` is `"all"`); its
+`createdAt` is at or after `since` and within 24 hours of now; with
+`others`, its root is not the account; and, where `tags` has an entry for the
+space, the version's `tags` include one of that entry's. A space with no
+entry lets any version through; an empty entry lets none through.
 
-`app` names the app that proposed the subscription, by the origin the browser
-reported; the account home writes it on its behalf when the person says yes
-([06](06-nodes-and-sessions.md) §2.11). How apps show what a subscription
-matches is not protocol; see
-[the library's docs](../packages/core/docs/spaces.md#subscriptions). `app` and `where` are
-not copied to the carried form.
+What a wake is made from, and how a device works out its tags, is the
+library's: it keeps the account's own automations in the registry
+(`sys.automation`, §13.2) and makes one wake from each
+([automations](../packages/core/docs/automations.md#the-accounts-own)). A
+wake carries no words of the person's and no topic values, only their tags,
+at most 16 for a space; a device that would need more leaves that space
+without an entry.
+No carrier shows a notification yet; a wake is what a carrier needs to wake
+an app that is closed ([06](06-nodes-and-sessions.md) §4.4).
 
-Carriers cannot read, so each device with the account key copies every
-subscription into every carry space with the value replaced by tags:
+_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`), `packages/core/src/node/node.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else")._
 
-```
-sys.subscription at notify:<id>   (same key)
-CarriedSubscription = { v: 1, label, collection, spaces, tags?: { <spaceId>: [tag] },
-                        others, open?, paused, since }
-```
-
-`tags[spaceId]` = `[topicTag(topicKey(space), collection, field, value)]`
-([02](02-records.md)), for each space the subscription looks at; a private
-space whose key the device lacks gets no entry (never matches). No `topic` →
-no `tags`.
-
-A carrier matches an arriving version when: not paused; same collection; `seq`
-is 0 and not deleted; the space is in `spaces` (or `"all"`); its `createdAt`
-is at or after `since` and within 24 hours of now; if `others`, its root is
-not the account; and if `tags` is present, the version's `tags` include one of
-`tags[spaceId]`. No carrier shows a notification yet; the carried form is
-what a carrier needs to wake an app that is closed ([06](06-nodes-and-sessions.md) §4.4).
-
-_Source: `packages/core/src/space/notify.ts` (`checkNotify`, `whereHolds`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/core/src/node/node.ts` (`notifications`, `syncPasses`), `packages/core/src/node/carrier.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/topics.test.ts` ("a subscription’s where", "names a collection the way a definition must…")._
-
-> **Planned: devices deliver subscriptions, by Web Push.** Issue:
+> **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to
-> per-device receiver records, apart from subscriptions. Specified in
+> per-device receiver records, apart from wakes. Specified in
 > [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4.4.
 
 ---

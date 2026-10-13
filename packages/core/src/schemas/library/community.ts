@@ -165,7 +165,8 @@ export const decision = define({
     required: ['outcome', 'proposal', 'ballots'],
   },
   links: { about: one(['std.proposal'], 'The proposal decided') },
-  rules: { onePer: ['link:about'], check: DECIDES },
+  rules: { onePer: ['link:about'] },
+  contract: { check: DECIDES },
 });
 export type Decision = BodyOf<typeof decision>;
 
@@ -248,7 +249,8 @@ export const goalReached = define({
     required: ['goal', 'pledges'],
   },
   links: { about: one(['std.goal'], 'The goal reached') },
-  rules: { onePer: ['link:about'], check: REACHES },
+  rules: { onePer: ['link:about'] },
+  contract: { check: REACHES },
 });
 export type GoalReached = BodyOf<typeof goalReached>;
 

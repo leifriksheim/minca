@@ -18,7 +18,7 @@ test('a failing first version, then a delete, is laundered by the version after'
   await alice.node.collections.define(space, {
     name: 'app.claim',
     schema: { type: 'object' },
-    rules: {
+    contract: {
       check: [{ that: 'seq > 0 || body.n <= 10.0', else: 'Created with at most 10' }],
     },
   });

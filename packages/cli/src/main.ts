@@ -25,7 +25,7 @@ import path from 'node:path';
 import { createInterface as createPromiseInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 import { isValidRecoveryCode, NODE_ACTIONS, runAction, type NodeAction, type P2PNode } from '@minca/core';
-import { suggestedRules } from '@minca/core/schemas';
+import { suggestedAutomations } from '@minca/core/schemas';
 import {
   chooseAccount,
   createAccount,
@@ -70,7 +70,7 @@ import {
   watchRelayRefusal,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
-import { capEachOf, runRules } from './bot-runner.js';
+import { capEachOf, runAutomations } from './bot-runner.js';
 import { chooseModel, isLoopback, isPlain, thinker, type ModelChoice } from './model.js';
 import { configSnippet, configureClients, serverCommand } from './clients.js';
 import { addRule, defineStandard, loadModelSetting, setUpModel } from './guide.js';
@@ -103,9 +103,9 @@ Usage:
   minca agent --bot [--name NAME] [--invite LINK] [--daily-cap-each 0.5]
                                              an account of its own, as a bot in its spaces
   minca bots                                 the bots kept here, to start again
-  minca rule add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
+  minca automation add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
                  [--from ROLES] [--do TEXT] [--by BOT|me]
-  minca collections define --standard std.rule [--space ID]
+  minca collections define --standard std.automation [--space ID]
   minca actions
 
 Agents (Claude Code, Claude Desktop, Cursor):
@@ -119,7 +119,7 @@ Agents (Claude Code, Claude Desktop, Cursor):
   terminal, with your Anthropic API key (ANTHROPIC_API_KEY, or asked for once
   and kept in the agent's folder). Deleting or overwriting asks you first, and
   it stops for the day once --daily-cap dollars are spent. It also runs your
-  rules (std.rule records): what to do when some records appear or change,
+  rules (std.automation records): what to do when some records appear or change,
   or at set times. --no-chat runs only those, until stopped.
 
   Any server that speaks OpenAI's Chat Completions works with --provider
@@ -134,7 +134,7 @@ Agents (Claude Code, Claude Desktop, Cursor):
   spending; --name picks one, or makes it, and "minca bots" lists them.
   --invite joins a space. It says it is a bot on its std.profile where a
   space keeps them, and runs the rules that name it (by) of its founder and
-  members granted /std.rule/instruct there.
+  members granted /std.automation/instruct there.
   --daily-cap-each limits what each person who sets it off may spend a day
   (a quarter of --daily-cap unless given).
 
@@ -237,7 +237,11 @@ const MENU: ReadonlyArray<{
   { label: 'Connect an agent to my account', hint: 'minca connect', words: ['connect'] },
   { label: 'Run my agent', hint: 'minca agent', words: ['agent'] },
   { label: 'Run a bot for a community', hint: 'minca agent --bot', words: ['agent', '--bot'] },
-  { label: 'Tell an agent or bot what to do, and when', hint: 'minca rule add', words: ['rule', 'add'] },
+  {
+    label: 'Tell an agent or bot what to do, and when',
+    hint: 'minca automation add',
+    words: ['automation', 'add'],
+  },
   { label: 'Every command', hint: 'minca help', words: null },
 ];
 
@@ -469,11 +473,11 @@ async function botAccount(globals: Globals, name?: string): Promise<{ unlocked: 
   return { unlocked: await unlock(botHome, created.account, { passphrase }), folder: made };
 }
 
-/** How a bot gets work in a space: a rule naming it, which only someone who may instruct it can add */
+/** How a bot gets work in a space: an automation naming it, which only someone who may instruct it can add */
 const botWork = (name: string, did: string) =>
-  `It does nothing there until a rule asks it. Someone who may instruct it adds one: in the app, ` +
-  `Automations, with “Done by” ${name}; or \`minca rule add --by ${did}\`. ` +
-  `A rule for messages mentioning it has it answer when someone writes @${name}.`;
+  `It does nothing there until an automation asks it. Someone who may instruct it adds one: in the app, ` +
+  `Automations, with “Done by” ${name}; or \`minca automation add --by ${did}\`. ` +
+  `An automation for messages mentioning it has it answer when someone writes @${name}.`;
 
 /**
  * Joins the space of `--invite`; or, at a terminal, when the bot is in none
@@ -549,7 +553,7 @@ interface Runner {
 }
 
 /**
- * `minca agent`: a node, a chat in this terminal, and the rules it runs. The
+ * `minca agent`: a node, a chat in this terminal, and the automations it runs. The
  * model's words go to stdout; what it does goes to stderr.
  */
 async function runAgent(
@@ -583,7 +587,7 @@ async function runAgent(
   const thinking = await thinker(model, apiKey);
   const modelOptions = { model: model.name, price: model.price, ...(isPlain(model) ? { plain: true } : {}) };
   const today = async () => `$${(await spend.today()).toFixed(2)} of $${options.dailyCap.toFixed(2)} today`;
-  const stopRules = runRules({
+  const stopRules = runAutomations({
     node,
     account: runner.account,
     ...(runner.bot ? { bot: runner.bot } : {}),
@@ -600,19 +604,19 @@ async function runAgent(
             ? rules.map((name) => `“${name}”`).join(', ')
             : runner.bot
               ? `none yet. ${botWork(runner.bot, runner.account)}`
-              : 'none yet. Add one in an app, under Automations, or with `minca rule add`.'
+              : 'none yet. Add one in an app, under Automations, or with `minca automation add`.'
         }`,
       ),
   });
   if (!runner.bot) {
     const waiting = (
       await Promise.all(
-        (await node.spaces.list()).map((space) => suggestedRules(node, space.id, runner.account)),
+        (await node.spaces.list()).map((space) => suggestedAutomations(node, space.id, runner.account)),
       )
     ).reduce((sum, count) => sum + count, 0);
     if (waiting)
       stderr(
-        `  ${waiting} rule${waiting === 1 ? '' : 's'} the agent suggested ${waiting === 1 ? 'waits' : 'wait'} for you to save it in an app.`,
+        `  ${waiting} automation${waiting === 1 ? '' : 's'} the agent suggested ${waiting === 1 ? 'waits' : 'wait'} for you to save it in an app.`,
       );
   }
 
@@ -621,7 +625,7 @@ async function runAgent(
     await runner.close();
   };
   if (!options.chat) {
-    stderr(`minca agent: ${runner.intro}, running rules. ${options.model.name}, ${await today()}.`);
+    stderr(`minca agent: ${runner.intro}, running automations. ${options.model.name}, ${await today()}.`);
     return untilStopped({ close });
   }
 
@@ -950,7 +954,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     return runAgent(home, runner, { model, dailyCap, capEach, chat: !values['no-chat'] });
   }
 
-  if (command === 'rule' && args[0] === 'add') {
+  if (command === 'automation' && args[0] === 'add') {
     const { values } = parseArgs({
       args: args.slice(1),
       options: {
@@ -972,7 +976,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       options: { standard: { type: 'string' }, space: { type: 'string' } },
     });
     const name = values.standard;
-    if (!name) throw new Error('--standard needs a name, like std.rule');
+    if (!name) throw new Error('--standard needs a name, like std.automation');
     return withNode(globals, async (node) => print(await defineStandard(node, name, values.space)));
   }
 

@@ -31,7 +31,8 @@ test('a failing decision squats its onePer key: the real one can never be writte
     name: 'app.proposal.passed',
     schema: { type: 'object' },
     links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-    rules: { onePer: ['link:about'], check: [TWO_YES] },
+    rules: { onePer: ['link:about'] },
+    contract: { check: [TWO_YES] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);

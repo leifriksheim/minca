@@ -111,13 +111,13 @@ import {
 } from '../space/account-registry.js';
 import { CARRY_CLOSED_KEY, makePass, PASS_COLLECTION, passKey, type SpacePass } from '../space/pass.js';
 import {
-  carriedFor,
-  checkNotify,
-  NOTIFY_COLLECTION,
-  SUBSCRIPTION_COLLECTION,
-  type NotifySpace,
-  type NotifyWhen,
-} from '../space/notify.js';
+  checkOwnAutomation,
+  OWN_AUTOMATIONS,
+  WAKE_COLLECTION,
+  wakeFor,
+  type WakeSpace,
+} from '../space/own-automations.js';
+import type { Automation } from '../schemas/automations.js';
 import {
   createHostClient,
   createSpaceHostClient,
@@ -149,8 +149,8 @@ import type {
   NodeRecord,
   NodeAccount,
   NodeCarriers,
-  NodeNotifications,
-  NotifyView,
+  NodeAutomations,
+  OwnAutomationView,
   NodeHosting,
   HostingView,
   SpaceHostingView,
@@ -652,13 +652,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
   /**
    * Puts a pass in a carrier's space for each of the account's spaces, and
-   * takes away the rest; and its subscriptions, with each value replaced by
+   * takes away the rest; and a wake for each of its own automations, each value replaced by
    * the space's tag: the carrier matches, never learns.
    */
   async function syncPasses(carrier: Carrier): Promise<void> {
     if (!account || narrowNote) return;
     const passes = new Map<string, SpacePass>();
-    const spaces: NotifySpace[] = [];
+    const spaces: WakeSpace[] = [];
     // The registry and the contacts too, so a restore can come through the carrier.
     passes.set(await passKey(account.space.id), await makePass(account));
     if (contactsRecord) passes.set(await passKey(contactsRecord.space.id), await makePass(contactsRecord));
@@ -666,7 +666,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (membership.deleted || !membership.body || hidden(membership.body.space)) continue;
       const record = await registry.get(membership.body.space);
       if (!record) continue;
-      spaces.push({ id: record.space.id, key: record.key, visibility: record.space.visibility });
+      const declared = new Map(
+        (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c.topics]),
+      );
+      spaces.push({
+        id: record.space.id,
+        key: record.key,
+        visibility: record.space.visibility,
+        topics: (collection) => declared.get(collection) ?? [],
+      });
       try {
         passes.set(await passKey(record.space.id), await makePass(record));
       } catch {
@@ -675,9 +683,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     }
     const carry = await runtime(carrier.space);
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
-    const subscriptions = new Map<string, unknown>();
-    for (const view of await notifyRecords()) subscriptions.set(view.id, await carriedFor(view, spaces));
-    await writeExactly(carry, SUBSCRIPTION_COLLECTION, subscriptions, () => true);
+    const wakes = new Map<string, unknown>();
+    for (const own of await ownAutomations())
+      wakes.set(`wake:${own.id}`, await wakeFor(own, spaces, config.signer.did));
+    await writeExactly(carry, WAKE_COLLECTION, wakes, () => true);
   }
 
   /** Makes what this account wrote in a collection, among the keys `mine` takes, say exactly `wanted` */
@@ -701,13 +710,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     for (const [key, record] of held) if (!record.deleted) await rt.removeSystem(key);
   }
 
-  /** The account's subscriptions, as it made them */
-  async function notifyRecords(): Promise<ReadonlyArray<NotifyView>> {
+  /** The account's own automations, as it made them */
+  async function ownAutomations(): Promise<ReadonlyArray<OwnAutomationView>> {
     if (!accountSpaceId) return [];
-    const found = await ownRecords<NotifyWhen>(
+    const found = await ownRecords<Automation>(
       await runtime(accountSpaceId),
-      { collection: NOTIFY_COLLECTION },
-      (record) => record.key.startsWith('notify:') && checkNotify(record.body) === null,
+      { collection: OWN_AUTOMATIONS },
+      (record) => record.key.startsWith('automation:') && checkOwnAutomation(record.body) === null,
     );
     return found
       .map((record) => ({ ...record.body!, id: record.key }))
@@ -718,8 +727,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const liveCarriers = async (): Promise<Carrier[]> =>
     (await carrierRecords()).flatMap(({ record }) => (!record.deleted && record.body ? [record.body] : []));
 
-  /** Every carrier gets the subscriptions as they are now */
-  async function passSubscriptionsOn(): Promise<void> {
+  /** Every carrier gets the wakes as they are now */
+  async function passWakesOn(): Promise<void> {
     for (const carrier of await liveCarriers()) await syncPasses(carrier).catch(() => {});
   }
 
@@ -1003,66 +1012,67 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     await reconcile();
   }
 
-  /** Writes a subscription, checked, and hands every carrier the subscriptions as they are now */
-  async function writeNotify(id: string, body: NotifyWhen): Promise<NotifyView> {
-    const registryRt = await requireAccount('Subscribing');
-    const problem = checkNotify(body);
+  /** Writes one of the account's own automations, checked, and hands every carrier the wakes as they are now */
+  async function writeOwn(id: string, body: Automation): Promise<OwnAutomationView> {
+    const registryRt = await requireAccount('Making an automation');
+    const problem = checkOwnAutomation(body);
     if (problem) throw new Error(problem);
-    await registryRt.upsertSystem<NotifyWhen>(NOTIFY_COLLECTION, id, body);
-    await passSubscriptionsOn();
+    // A system collection: nothing defines it, so no other key of the account can make it final.
+    await registryRt.upsertSystem<Automation>(OWN_AUTOMATIONS, id, body);
+    await passWakesOn();
     return { ...body, id };
   }
 
-  const notifications = Object.freeze<NodeNotifications>({
-    list: notifyRecords,
+  const automations = Object.freeze<NodeAutomations>({
+    list: ownAutomations,
 
-    add: (when) =>
-      writeNotify(`notify:${base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(10)))}`, {
-        ...when,
-        label: when.label.trim(),
-        since: when.since ?? new Date().toISOString(),
+    add: (own) =>
+      writeOwn(`automation:${base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(10)))}`, {
+        ...own,
+        name: own.name.trim(),
+        since: own.since ?? new Date().toISOString(),
       }),
 
     async update(id, changes) {
-      await requireAccount('Subscribing');
-      const current = (await notifyRecords()).find((view) => view.id === id);
-      if (!current) throw new Error('There is no such subscription');
+      await requireAccount('Making an automation');
+      const current = (await ownAutomations()).find((view) => view.id === id);
+      if (!current) throw new Error('There is no such automation');
       const { id: _id, ...was } = current;
-      return writeNotify(id, {
+      return writeOwn(id, {
         ...was,
-        ...(changes.label !== undefined ? { label: changes.label.trim() } : {}),
+        ...(changes.name !== undefined ? { name: changes.name.trim() } : {}),
         ...(changes.paused !== undefined ? { paused: changes.paused } : {}),
       });
     },
 
     async remove(id) {
-      const registryRt = await requireAccount('Subscribing');
-      if (!(await notifyRecords()).some((view) => view.id === id)) return;
+      const registryRt = await requireAccount('Making an automation');
+      if (!(await ownAutomations()).some((view) => view.id === id)) return;
       await registryRt.removeSystem(id);
-      await passSubscriptionsOn();
+      await passWakesOn();
     },
 
     async versions(ids) {
       if (!accountSpaceId) return [];
-      const keys = ids.filter((id) => id.startsWith('notify:'));
+      const keys = ids.filter((id) => id.startsWith('automation:'));
       return (await (await runtime(accountSpaceId)).versionsOf(keys)).filter(
-        (version) => version.collection === NOTIFY_COLLECTION,
+        (version) => version.collection === OWN_AUTOMATIONS,
       );
     },
 
     async take(versions) {
       if (!accountSpaceId) return 0;
-      // Subscriptions only: whatever else rides along waits for sync.
+      // The account's own automations only: whatever else rides along waits for sync.
       const mine = versions.filter(
         (version) =>
           typeof version === 'object' &&
           version !== null &&
-          version.collection === NOTIFY_COLLECTION &&
+          version.collection === OWN_AUTOMATIONS &&
           version.space === accountSpaceId,
       );
       if (mine.length === 0) return 0;
       const taken = await (await runtime(accountSpaceId)).take(mine);
-      if (taken > 0) await passSubscriptionsOn();
+      if (taken > 0) await passWakesOn();
       return taken;
     },
   });
@@ -2487,7 +2497,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     account: accountApi,
     carriers,
     hosting,
-    notifications,
+    automations,
     contacts,
     direct,
     doors,

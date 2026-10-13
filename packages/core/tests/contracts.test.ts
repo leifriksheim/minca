@@ -65,10 +65,10 @@ const run = (that: Condition, values?: Record<string, unknown>, held?: ReadonlyA
 describe('checks: a definition', () => {
   test('takes a list of { that, else }, each a CEL expression', () => {
     assert.equal(checkContracts([{ that: 'body.amount > 0', else: 'Give something' }]), null);
-    assert.equal(
-      checkRules({ check: [{ that: 'true', else: 'Always' }] }),
-      null,
-      'rules take check alongside the rest',
+    assert.match(
+      checkRules({ check: [{ that: 'true', else: 'Always' }] }) ?? '',
+      /contract\.check/,
+      'a contract is not a rule (contracts-shape.test.ts)',
     );
     assert.match(checkContracts([]) ?? '', /1 to 16 checks/);
     assert.match(checkContracts([{ that: 'true' }]) ?? '', /else says why/);
@@ -77,7 +77,7 @@ describe('checks: a definition', () => {
   });
 
   test('refuses what no peer could judge the same way', () => {
-    const problem = (that: string) => checkContracts([{ that, else: 'x' }], 'rules.check') ?? '';
+    const problem = (that: string) => checkContracts([{ that, else: 'x' }], 'contract.check') ?? '';
     assert.match(problem('eval(1)'), /eval\(\) is not in the subset/);
     assert.match(problem('size(1, 2)'), /takes 1 arguments/);
     assert.match(problem('body.x =='), /unexpected end/);
@@ -317,12 +317,13 @@ async function proposalSpace(visibility: 'public' | 'private' = 'public') {
     name: 'app.proposal.passed',
     schema: { type: 'object' },
     links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-    rules: { onePer: ['link:about'], check: [TWO_YES] },
+    rules: { onePer: ['link:about'] },
+    contract: { check: [TWO_YES] },
   });
   await alice.node.collections.define(space, {
     name: 'app.counter',
     schema: { type: 'object' },
-    rules: { check: [BY_ONE] },
+    contract: { check: [BY_ONE] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);

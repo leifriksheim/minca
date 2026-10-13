@@ -19,7 +19,7 @@
  * from the guide it writes in the space (`std.guide`, `LAUNCHER_GUIDE`).
  */
 import {
-  checkAppNotify,
+  checkAppAutomation,
   COLLECTION_DEFINE,
   grantFits,
   type DefineCollection,
@@ -37,7 +37,7 @@ import {
   // Defines what a space lacks; not a React hook, whatever its name says.
   useSchemas as addSchemas,
   writeGuide,
-  type AppNotify,
+  type AppAutomation,
   type DraftCollection,
 } from '@minca/core/schemas';
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
@@ -51,7 +51,7 @@ export interface LauncherApp {
   /** The collections it shows, by name */
   readonly collections?: ReadonlyArray<string>;
   /** What in it is worth hearing about */
-  readonly notify?: ReadonlyArray<AppNotify>;
+  readonly notify?: ReadonlyArray<AppAutomation>;
   /** Its own screen: one HTML document, run sealed (`screens.ts`) */
   readonly screen?: string;
   /** Exact origins that screen may connect to; none keeps it sealed */
@@ -112,10 +112,10 @@ export function checkLauncherApp(body: LauncherApp): string | null {
   const network = checkScreenNetwork(body.network, body.screen !== undefined);
   if (network) return network;
   for (const [index, entry] of (body.notify ?? []).entries()) {
-    const problem = checkAppNotify(entry);
+    const problem = checkAppAutomation(entry);
     if (problem) return `notify[${index}]: ${problem}`;
-    if (!names.has(entry.collection))
-      return `notify[${index}]: ${entry.collection} is not one of its collections`;
+    if (!names.has(entry.when.query.collection))
+      return `notify[${index}]: ${entry.when.query.collection} is not one of its collections`;
   }
   return null;
 }

@@ -97,7 +97,7 @@ filter on them with `link:<rel>` ([records-and-queries.md](records-and-queries.m
 **A record that points at another record says so with a link**, never with
 the other record's key in a body field. Everything that follows relations
 works on links and only on links: declarations and conformance, `onePer`,
-contracts, `include` and counts, rules ([rules.md](rules.md)), and the "what
+contracts, `include` and counts, automations ([automations.md](automations.md)), and the "what
 points here" a record's page shows. A key in a body field is a string to all
 of them. Fields are for values and for people (DIDs); links are for records.
 If a keeper must match on a link without reading, make it a topic:
@@ -116,15 +116,16 @@ who may create, change and delete records is the space's grants, held by its
 roles ([roles](#roles)). Its rules are about the records alone
 ([spec 02 §7](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)):
 
-| Rule     | Means                                                         | Default |
-| -------- | ------------------------------------------------------------- | ------- |
-| `onePer` | At most one record per combination of these                   | none    |
-| `fixed`  | Fields that keep the value the record was created with        | none    |
-| `check`  | Conditions a version must meet to count ([below](#contracts)) | none    |
-| `final`  | `true`: written once, then never edited or deleted            | none    |
+| Rule     | Means                                                  | Default |
+| -------- | ------------------------------------------------------ | ------- |
+| `onePer` | At most one record per combination of these            | none    |
+| `fixed`  | Fields that keep the value the record was created with | none    |
+| `final`  | `true`: written once, then never edited or deleted     | none    |
 
-A definition with `create`, `edit` or `delete` is invalid: every peer treats
-it as no definition at all, and the node refuses to write it.
+A definition with `create`, `edit`, `delete` or `check` in its rules is
+invalid: every peer treats it as no definition at all, and the node refuses
+to write it. What a version must be to count is not a rule but the
+definition's `contract` ([below](#contracts)).
 
 `onePer` names `@author` (the writer), `link:<rel>` (the record a link points
 at) or a body field. It works by construction: the record's key is derived
@@ -151,7 +152,7 @@ _Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerKey`). Tests
 ## Contracts
 
 Grants say who may write, and the rules above what a record must keep to;
-every peer enforces both. A contract, the definition's `check`, says
+every peer enforces both. A contract, the definition's `contract`, says
 what a version must be to count: conditions over the body, the version before
 it, and other versions it **cites** as evidence. With them a space can hold things
 that normally need a server or a smart contract: a proposal that passes only
@@ -163,8 +164,8 @@ export const passed = collection({
   name: 'app.proposal.passed',
   schema: z.object({ votes: z.array(z.string()) }),
   links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-  rules: {
-    onePer: ['link:about'], // one "passed" per proposal
+  rules: { onePer: ['link:about'] }, // one "passed" per proposal
+  contract: {
     check: [
       {
         // At least three members' yes votes on this proposal, among those cited
@@ -237,7 +238,7 @@ misspelled field or a string compared with a number.
 Bytes, timestamps, durations, regular expressions and types as values are
 left out. The exact subset, and its limits, are in [spec 09](../../../spec/09-contracts.md).
 
-**Lines.** A collection declared with `line: { once: [...] }` is one line per
+**Lines.** A collection whose contract has `line: { once: [...] }` is one line per
 account, at `lineKey(account, collection)`: each version names the account's
 previous one, so a payment can carry a running balance its contract checks.
 Two versions after the same one are a double spend, and neither counts, nor
@@ -326,18 +327,20 @@ record.
   (`node.records.history`). The default, `latest`, keeps the current one
   whole and forgets what earlier ones said, and what a deleted record said.
   With `onePer` or `fixed` in the rules, a record's first version is kept
-  whole too: those rules are checked against it. With `check`, the node
+  whole too: those rules are checked against it. With a `contract`, the node
   keeps every version whole, so its contract can read the one before and cite it.
 - `topics: ['mentions', 'link:channel']` lets a node that can't read the
   space still match records by a field's value, or by where a link of that
-  role points, for notifications. At most 8.
+  role points, for the account's wakes ([automations](automations.md#the-accounts-own)).
+  At most 8.
 - `version`: see [below](#versions-of-a-definition).
 
 ## Versions of a definition
 
 Defining a collection again writes the next version of its definition, one
 higher unless you give a `version`. The node refuses a `version` that is not
-higher than the one in force; peers don't check it. Records don't name the
+higher than the one in force, or not below 2^53; peers don't check it. One in
+force at 2^53 or more, which nothing could follow, is followed by 1. Records don't name the
 version they were written under: each is judged by the definition in force
 as of the access changes it saw
 ([spec 03 §5](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).

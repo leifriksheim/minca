@@ -527,7 +527,7 @@ describe('liquid: a decision fits in one check', () => {
       links: [],
     };
     const held = new Map([...cited, theProposal].map((v) => [v.id, v]));
-    const outcome = await runContracts(decision.rules.check, {
+    const outcome = await runContracts(decision.contract.check, {
       values: {
         body: { outcome: 'passed', proposal: theProposal.id, voters, votes: cited.map((v) => v.id) },
         links: [{ rel: 'about', to: 'proposal-key' }],
@@ -551,7 +551,7 @@ describe('liquid: a decision fits in one check', () => {
       author: voters[i]!,
     }));
     const heldStrict = new Map([...most, strict].map((v) => [v.id, v]));
-    const strictOutcome = await runContracts(decision.rules.check, {
+    const strictOutcome = await runContracts(decision.contract.check, {
       values: {
         body: { outcome: 'passed', proposal: strict.id, voters, votes: most.map((v) => v.id) },
         links: [{ rel: 'about', to: 'proposal-key' }],
