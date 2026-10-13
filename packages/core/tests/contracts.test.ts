@@ -65,10 +65,10 @@ const run = (that: Condition, values?: Record<string, unknown>, held?: ReadonlyA
 describe('checks: a definition', () => {
   test('takes a list of { that, else }, each a CEL expression', () => {
     assert.equal(checkContracts([{ that: 'body.amount > 0', else: 'Give something' }]), null);
-    assert.match(
-      checkRules({ check: [{ that: 'true', else: 'Always' }] }) ?? '',
-      /contract\.check/,
-      'a contract is not a rule: peers refuse it in rules',
+    assert.equal(
+      checkRules({ check: [{ that: 'true', else: 'Always' }] }),
+      null,
+      'where an older library kept a contract: peers keep it unread (contracts-shape.test.ts)',
     );
     assert.match(checkContracts([]) ?? '', /1 to 16 checks/);
     assert.match(checkContracts([{ that: 'true' }]) ?? '', /else says why/);

@@ -139,8 +139,18 @@ const PROPOSAL: JsonSchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
-    when: { type: 'object' },
-    then: { type: 'object' },
+    when: {
+      type: 'object',
+      properties: { query: { type: 'object' }, others: { type: 'boolean' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    then: {
+      type: 'object',
+      properties: { kind: { const: 'notify' }, text: { type: 'string' } },
+      required: ['kind', 'text'],
+      additionalProperties: false,
+    },
     spaces: { type: 'array', items: { type: 'string' } },
     open: { type: 'string' },
   },
@@ -240,6 +250,9 @@ export interface WakeSpace {
   readonly topics: (collection: string) => ReadonlyArray<string>;
 }
 
+/** At most this many tags a wake holds for one space; a `where` that names more values wakes on any record there */
+export const MAX_WAKE_TAGS = 16;
+
 /** An automation as a carrier holds it: no values, only tags */
 export interface Wake {
   readonly v: 1;
@@ -307,7 +320,7 @@ export async function wakeFor(
   const tags: Record<string, string[]> = {};
   for (const space of looked) {
     const required = requiredValues(resolved, space.topics(collection));
-    if (!required) continue;
+    if (!required || new Set(required.values).size > MAX_WAKE_TAGS) continue;
     if (space.visibility === 'private' && !space.key) {
       tags[space.id] = [];
       continue;
@@ -316,7 +329,7 @@ export async function wakeFor(
       space.visibility === 'private' ? { spaceKey: space.key!.raw } : { spaceId: space.id },
     );
     tags[space.id] = await Promise.all(
-      required.values.map((value) => topicTag(key, collection, required.field, value)),
+      [...new Set(required.values)].map((value) => topicTag(key, collection, required.field, value)),
     );
   }
   return {
@@ -339,7 +352,14 @@ const WAKE: JsonSchema = {
     spaces: {
       anyOf: [{ const: 'all' }, { type: 'array', minItems: 1, maxItems: 256, items: { type: 'string' } }],
     },
-    tags: { type: 'object', additionalProperties: { type: 'array', items: { type: 'string' } } },
+    tags: {
+      type: 'object',
+      additionalProperties: {
+        type: 'array',
+        maxItems: MAX_WAKE_TAGS,
+        items: { type: 'string', maxLength: 64 },
+      },
+    },
     others: { type: 'boolean' },
     open: { type: 'string' },
     paused: { type: 'boolean' },

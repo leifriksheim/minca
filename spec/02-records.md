@@ -840,7 +840,7 @@ history. In a private space its body is encrypted like any other record's.
 | `links`       | object                | no   | Link declarations (§5.2)                                                                                                                                                     |
 | `rules`       | object                | no   | §7                                                                                                                                                                           |
 | `topics`      | string[]              | no   | §8                                                                                                                                                                           |
-| `contract`    | object                | no   | What a version must be to count: `check` and `line`, judged by readers ([09](09-contracts.md)); peers keep it and don't read it (§7.6)                                       |
+| `contract`    | any                   | no   | What a version must be to count: `check` and `line`, judged by readers ([09](09-contracts.md)); peers keep it and don't read it, its type included (§7.6)                    |
 
 A definition body that fails any check in this section is **invalid**. A peer
 MUST treat an invalid definition as no definition at all: its collection then
@@ -1260,19 +1260,30 @@ prevent that; telling the two apart, where it matters, is the app's.
 
 ### 7.5 Checking a definition's rules
 
-`rules` MUST be an object with no members other than `onePer`, `fixed` and
-`final`, each valid as above (`onePer` and `fixed`: non-empty lists of
-non-empty strings; `final`: `true`). A definition with anything else,
-`create`, `edit`, `delete` and `check` included, is invalid (§6.1). A
-contract is the definition's `contract` (§7.6), never a rule.
+`rules` MUST be an object with no members other than `onePer`, `fixed`,
+`final` and `check`, the first three valid as above (`onePer` and `fixed`:
+non-empty lists of non-empty strings; `final`: `true`). A definition with
+anything else, `create`, `edit` and `delete` included, is invalid (§6.1).
+
+`check` is where an older format kept a contract. Peers keep it and do not
+read it, so `onePer`, `fixed` and `final` beside it still hold. Readers do
+not judge it: they leave the collection's versions unjudged
+([09](09-contracts.md) §1). A writer MUST NOT put `check` in `rules`; a
+contract is the definition's `contract` (§7.6).
+
+> Rationale: a definition with `check` in its rules was written by every
+> library before the contract moved, and stores keep definitions across an
+> upgrade. Were it invalid, its collection would lose its rules on every peer
+> at once, and its contract with them, and what was written meanwhile would
+> count.
 
 _Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
 ### 7.6 The contract
 
-A definition may carry `contract`, an object (§6.1), beside its `rules`:
-`check`, a list of conditions, and `line`, an object. Peers keep it as it is
-and do not read what is in it: they never refuse, withdraw or hold back a
+A definition may carry `contract` beside its `rules`: an object of `check`,
+a list of conditions, and `line`, an object. Peers keep it as it is and do
+not read it, not even its type: they never refuse, withdraw or hold back a
 version because of it, and a version that fails it stands like any other.
 Readers judge it, citing other versions as evidence, and count only versions
 that pass; the language, citations, limits, verdicts and the line rule are in
@@ -1288,7 +1299,7 @@ syncs, stores and judges every version's standing the same.
 > counts. They live apart so that what peers check (§7.5) never names
 > anything only readers judge.
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-shape.test.ts` ("a peer treats a definition with a contract in its rules as no definition…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-shape.test.ts` ("a definition with its contract in rules keeps its rules, and leaves what is written under it unjudged…")._
 
 ---
 

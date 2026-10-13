@@ -562,7 +562,7 @@ describe('connecting a carrier to an account home', () => {
 
 describe('an app proposing automations', () => {
   const propose = (automations: ProposeRequest['automations']): ProposeRequest => ({
-    v: 1,
+    v: 2,
     kind: 'propose',
     automations,
   });
@@ -819,7 +819,7 @@ describe('an app showing its own notifications', () => {
     await auth.propose({
       origin: 'https://chat.test',
       request: {
-        v: 1,
+        v: 2,
         kind: 'propose',
         automations: [
           notifyOn('Mentioned', 'app.chat.message', { mentions: { $contains: '$me' } }),
@@ -958,7 +958,7 @@ describe('the home receiving a request', () => {
         access: 'write',
         automations: [notifyOn('New message', 'app.chat.message')],
       }),
-      { v: 1, kind: 'propose', automations: [notifyOn('New', 'app.chat.message')], extra: true },
+      { v: 2, kind: 'propose', automations: [notifyOn('New', 'app.chat.message')], extra: true },
       // There is no kind of key to name, only what it may do.
       await asked({ v: 1, audience: 'did:key:zOld', access: 'write', agent: true }),
       // Records only goes with no contacts, no spaces made for it and no carrying; a program by code carries nothing.
@@ -995,11 +995,11 @@ describe('the home receiving a request', () => {
     const { receiveConnectRequest } = await import('../src/session/connect.js');
     const asked = [
       {
-        v: 1,
+        v: 2,
         kind: 'propose',
         automations: [{ ...notifyOn('New', 'app.chat.message'), open: 'https://elsewhere.test/' }],
       },
-      { v: 1, kind: 'propose', automations: [notifyOn('New', 'sys.wake')] },
+      { v: 2, kind: 'propose', automations: [notifyOn('New', 'sys.wake')] },
     ];
     for (const request of asked) {
       const popup = popupWindow();
@@ -1019,7 +1019,7 @@ describe('the home receiving a request', () => {
       popup.send({
         type: 'weave:request',
         request: {
-          v: 1,
+          v: 2,
           kind: 'propose',
           automations: [{ ...notifyOn('New', 'app.chat.message'), open: 'https://app.test/inbox' }],
         },
@@ -1061,8 +1061,8 @@ describe('the home receiving a request', () => {
     const { receiveConnectRequest, isProposeRequest } = await import('../src/session/connect.js');
     const origin = 'https://app.test';
     for (const request of [
-      { v: 1, kind: 'propose', automations: [] },
-      { v: 1, kind: 'propose', automations: [notifyOn('New', 'sys.wake')] },
+      { v: 2, kind: 'propose', automations: [] },
+      { v: 2, kind: 'propose', automations: [notifyOn('New', 'sys.wake')] },
       { v: 1, kind: 'something-new', automations: [notifyOn('New', 'app.chat.message')] },
     ]) {
       const popup = popupWindow();
@@ -1083,7 +1083,7 @@ describe('the home receiving a request', () => {
         {
           type: 'weave:request',
           request: {
-            v: 1,
+            v: 2,
             kind: 'propose',
             automations: [{ ...notifyOn('New', 'app.chat.message'), spaces: ['s1'] }],
           },

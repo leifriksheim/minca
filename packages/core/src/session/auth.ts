@@ -1423,9 +1423,9 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       subscribing = adding.catch(() => {});
       const automations = await adding;
       // An app with the account key reads them from its own node: handed over now, they are there on its next load.
-      if (reach !== 'all' || automations.length === 0) return { v: 1, kind: 'proposed', automations };
+      if (reach !== 'all' || automations.length === 0) return { v: 2, kind: 'proposed', automations };
       const versions = await node.automations.versions(automations.map((own) => own.id));
-      return { v: 1, kind: 'proposed', automations, versions };
+      return { v: 2, kind: 'proposed', automations, versions };
     },
 
     async grantCarry({ origin, request }) {

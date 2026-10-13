@@ -297,6 +297,12 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     know leaves that collection, and what cites it, unjudged by that reader:
     old and new readers' counts split until the old one updates, but never
     silently (09 §1, §2, §7.1).
+  - A definition that keeps its contract in `rules.check`, as libraries did
+    before the contract moved, keeps `onePer`, `fixed` and `final` at every
+    peer, and leaves its versions unjudged by every reader, then and after
+    the collection is defined again: nothing written under it counts as if
+    it had no contract (02 §7.5, 09 §1; `packages/core/tests/contracts-shape.test.ts`,
+    "a definition with its contract in rules keeps its rules…").
   - A grant of `/member/remove` or `/role/unassign` without a policy on
     `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).
@@ -614,12 +620,14 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
-  - From the account's wakes it learns a collection, spaces and topic tags,
-    never the values behind a private space's tags nor the person's words
-    for what they want to hear about (03 §15; `packages/core/tests/carrier.test.ts`,
-    "a carrier gets tags, never the values it matches"). In a public space a
-    tag can be worked out from the space id, so a guessed value can be
-    checked against it (02 §8.2).
+  - From the account's wakes it learns a collection, spaces, topic tags,
+    whether only others' records wake, since when, whether paused, and which
+    app's address a click leads to; never the values behind a private
+    space's tags nor the person's words for what they want to hear about
+    (03 §15; `packages/core/tests/carrier.test.ts`, "a carrier gets tags,
+    never the values it matches"). Any `where` condition on a field declared
+    a topic becomes tags. In a public space a tag can be worked out from the
+    space id, so a guessed value can be checked against it (02 §8.2).
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#171](https://github.com/leifriksheim/weave/issues/171)) _(traced)_.

@@ -100,7 +100,7 @@ export interface ConnectRequest {
  * carrier's and a program's connected by code.
  */
 export interface ProposeRequest {
-  readonly v: 1;
+  readonly v: 2;
   readonly kind: 'propose';
   /** What it calls itself. Shown, never trusted. */
   readonly name?: string;
@@ -110,7 +110,7 @@ export interface ProposeRequest {
 
 /** What the home answers a {@link ProposeRequest} with, once the person decided */
 export interface Proposed {
-  readonly v: 1;
+  readonly v: 2;
   readonly kind: 'proposed';
   /** The automations added or found, by the person's yes: none when they kept none */
   readonly automations: ReadonlyArray<{ readonly id: string; readonly name: string }>;
@@ -455,7 +455,7 @@ export async function proposeToHome(options: {
   const homeUrl = new URL(options.home, globalThis.location.href);
   const popup = openHome(homeUrl);
   const request: ProposeRequest = {
-    v: 1,
+    v: 2,
     kind: 'propose',
     ...(options.name ? { name: options.name } : {}),
     automations: options.automations,
@@ -727,7 +727,7 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
   if (proposal.kind !== undefined) {
     return (
       onlyFields(proposal, PROPOSE_FIELDS) &&
-      proposal.v === 1 &&
+      proposal.v === 2 &&
       proposal.kind === 'propose' &&
       (proposal.name === undefined || (typeof proposal.name === 'string' && proposal.name.length <= 80)) &&
       Array.isArray(proposal.automations) &&

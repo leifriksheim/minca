@@ -72,10 +72,12 @@ version that stands passes.
 and every version under it fails.
 
 `contract` is a top-level member of the definition, which peers ignore (02
-§6.1), and never part of `rules`: peers check that `rules` has no members
-but `onePer`, `fixed` and `final`, and treat a definition that puts `check`
-there as invalid (02 §7.5). What peers check never names what only readers
-judge.
+§6.1), and never part of `rules`. A definition that still keeps `check` in
+`rules`, as an older format did, keeps its rules at every peer (02 §7.5),
+but a reader doesn't judge it: its versions are unjudged, whatever
+`contract` says, and stay so after the collection is defined again, since a
+version is judged as of its `seen`. What peers check never names what only
+readers judge.
 
 _Source: `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`, `hasContract`), `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/schema/collection-def.ts` (`StoredCollection`), `packages/core/src/node/space-runtime.ts` (`rulesAt`, `checksOf`). Tests: `packages/core/tests/contracts-shape.test.ts` (all)._
 

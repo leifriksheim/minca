@@ -486,26 +486,36 @@ exchange of §2.3 with a `ProposeRequest` in place of the `ConnectRequest`:
 
 | Field         | Type                   | Meaning                                                      |
 | ------------- | ---------------------- | ------------------------------------------------------------ |
-| `v`           | `1`                    |                                                              |
+| `v`           | `2`                    |                                                              |
 | `kind`        | `"propose"`            | Tells it apart from a `ConnectRequest`, which has no `kind`. |
 | `name`        | string, ≤ 80, optional | What it calls itself. Shown, never trusted.                  |
-| `automations` | object[]               | 1 to 8 automations to offer the person.                      |
+| `automations` | `Proposal[]`           | 1 to 8 automations to offer the person.                      |
 
-Each entry is `{ name, when, then?, spaces?, open? }`: an automation in the
-library's format
-([automations](../packages/core/docs/automations.md#the-accounts-own)),
-without what the home fills in. What it finds and how it reads `$me` are the
-library's. Two things in it are the protocol's, because the home enforces
-them for the person: `spaces`, a list of space ids it looks at, which cannot
-widen what the app may reach (step 2 below); and `open`, an address a click
-on its notification leads to, which must be on the app's own origin.
+A `Proposal` has no members but these:
+
+| Field    | Type                       | Meaning                                                                                        |
+| -------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `name`   | string, 1–120, not blank   | What the person sees, and what the notification says unless `then` does                        |
+| `when`   | `{ query, others? }`       | `query` is `{ collection, where? }` and nothing else; `others`, a boolean, default `true`      |
+| `then`   | `{ kind: "notify", text }` | Optional. `text` is 1–500 characters, not blank                                                |
+| `spaces` | string[], 1–256, optional  | Only these of the spaces the app may reach (step 2 below)                                      |
+| `open`   | string, optional           | Where a click leads: an `https://` address (or `http://` on localhost) on the request's origin |
+
+`collection` is a collection name ([02](02-records.md) §6.1) that does not
+start with `sys.`. `where` is a filter over one record: an object whose
+members are body field paths, `link:<role>`, `@key`, `@collection`,
+`@createdBy` or `@createdAt`, each a value to equal or an object of the
+operators `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`,
+`$exists`, `$contains`; or `$and`, `$or` (lists of filters) and `$not` (a
+filter), nested at most 16 deep. The string `"$me"` anywhere in it stands for
+the account. What these operators mean is the library's
+([query format](../packages/core/docs/query-format.md)); the home checks only
+the shape, and shows the person `name` and the spaces.
 
 A home MUST refuse a request with a `kind` as malformed (§2.3 step 4) unless
-it has no member but those in the table, `v` is `1`, `kind` is `propose`,
-`name` is absent or valid, and `automations` has 1 to 8 entries, each one the
-home can read as an automation of the account's own, and whose `open`, when
-given, is on the request's origin. A home that cannot read an entry refuses
-the request; it never writes what it could not show the person.
+it has no member but those in the table, `v` is `2`, `kind` is `propose`,
+`name` is absent or valid, and `automations` has 1 to 8 entries, each a valid
+`Proposal`.
 
 When the person approves some or all of the proposals, the home:
 
@@ -522,7 +532,7 @@ When the person approves some or all of the proposals, the home:
    else the request's, cut to 80. One the same origin already has that asks
    for the same thing is not added again.
 5. Answers `weave:grant` with `Proposed`:
-   `{ v: 1, kind: "proposed", automations: { id, name }[], versions? }`, the
+   `{ v: 2, kind: "proposed", automations: { id, name }[], versions? }`, the
    automations added or found; empty when the person kept none. For an app
    with `scope: account` that kept at least one, `versions` MUST hold every
    version the home keeps of each of them, and of the registry's definition
@@ -546,7 +556,7 @@ Example:
 {
   "type": "weave:request",
   "request": {
-    "v": 1,
+    "v": 2,
     "kind": "propose",
     "name": "Chat",
     "automations": [
@@ -566,7 +576,7 @@ answered with
 {
   "type": "weave:grant",
   "grant": {
-    "v": 1,
+    "v": 2,
     "kind": "proposed",
     "automations": [
       { "id": "iz75dwgy223gqtlqlqv3qzjq4y.k3v6mzq4ha2tmbyxk3v6mzq4ha", "name": "New message in Club" }
@@ -587,7 +597,7 @@ against the account's own automations is in
 > chose from the kinds of record it sees go by would be a guess at the
 > person's words. An app they are looking at knows what its records mean.
 
-_Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `proposeToHome`, `isRequest`), `packages/core/src/session/auth.ts` (`propose`, `automationsFrom`), `packages/core/src/session/connection.ts` (`propose`), `packages/core/src/node/node.ts` (`automations.versions`, `automations.take`), `packages/core/src/node/space-runtime.ts` (`versionsOf`, `take`), `packages/core/src/space/own-automations.ts` (`checkProposal`, `proposalSpaces`, `fromProposal`, `sameAutomation`), `apps/home/src/components/ConnectPage.tsx` (`ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("an app proposing automations", "the home receiving a request")._
+_Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `proposeToHome`, `isRequest`), `packages/core/src/session/auth.ts` (`propose`, `automationsFrom`), `packages/core/src/session/connection.ts` (`propose`), `packages/core/src/node/node.ts` (`automations.versions`, `automations.take`), `packages/core/src/node/space-runtime.ts` (`versionsOf`, `take`), `packages/core/src/space/own-automations.ts` (`checkProposal`, `proposalSpaces`, `fromProposal`, `sameAutomation`), `apps/home/src/components/ConnectPage.tsx` (`ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("an app proposing automations", "the home receiving a request"), `packages/core/tests/topics.test.ts` ("a proposal has only the members the home checks")._
 
 > **Planned: a wallet as the account home.** The same job — hold the root and
 > hand an app's key a note — done by a credential wallet through the Digital

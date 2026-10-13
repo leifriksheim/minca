@@ -1830,7 +1830,8 @@ A carrier **MUST** take a wake only from a version that verifies and whose
 root is the account, and **MUST** ignore one that is not valid (`readWake`):
 `v` is 1; `collection` is a collection name ([02](02-records.md) §6.1) that
 does not start with `sys.`; `spaces` is `"all"` or 1–256 strings; `tags`,
-when present, maps space ids to lists of strings; `others` and `paused` are
+when present, maps space ids to lists of at most 16 strings, each at most 64
+characters; `others` and `paused` are
 booleans; `since` is a date; `open`, when present, is a string.
 
 A version **wakes** a wake when all hold: not paused; same collection; `seq`
@@ -1844,7 +1845,9 @@ What a wake is made from, and how a device works out its tags, is the
 library's: it keeps the account's own automations in the registry and makes
 one wake from each
 ([automations](../packages/core/docs/automations.md#the-accounts-own)). A
-wake carries no words of the person's and no topic values, only their tags.
+wake carries no words of the person's and no topic values, only their tags,
+at most 16 for a space; a device that would need more leaves that space
+without an entry.
 No carrier shows a notification yet; a wake is what a carrier needs to wake
 an app that is closed ([06](06-nodes-and-sessions.md) §4.4).
 

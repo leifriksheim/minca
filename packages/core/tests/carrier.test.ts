@@ -403,6 +403,17 @@ describe('notifications through a carrier', () => {
       'a private space with no key here gets no tag, so never matches',
     );
     assert.equal(wake.tags?.['plain'], undefined, 'where mentions is no topic, any new record wakes');
+    const many = await wakeFor(
+      {
+        ...own,
+        when: {
+          query: { collection: 'app.chat', where: { mentions: { $in: [...Array(17).keys()].map(String) } } },
+        },
+      },
+      [{ id: 'blog', key: null, visibility: 'public', topics: declares }],
+      'did:key:zMe',
+    );
+    assert.equal(many.tags, undefined, 'more values than a wake holds: any new record wakes, the app judges');
     const version = {
       id: 'x',
       author: 'did:key:zAnna',

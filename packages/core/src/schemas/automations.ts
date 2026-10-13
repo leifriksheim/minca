@@ -238,7 +238,7 @@ export const INSTRUCT = `/${automation.name}/instruct`;
 
 const said = { type: 'string', pattern: '\\S' };
 const named = { type: 'string', minLength: 1 };
-const saying = { type: 'object', properties: { text: said }, required: ['text'] };
+const saying = { type: 'object', properties: { text: { ...said, maxLength: 500 } }, required: ['text'] };
 /** Each kind of action's shape, which the stored schema leaves open */
 const ACTIONS: Readonly<Record<string, JsonSchema>> = {
   notify: saying,

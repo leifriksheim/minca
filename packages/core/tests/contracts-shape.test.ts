@@ -1,8 +1,8 @@
 /**
  * Where a contract lives (spec 09 §1): a definition's `contract`, apart from
- * its `rules`. Peers check `rules` and refuse a definition that puts a
- * contract there; readers judge `contract`, and leave unjudged one with a
- * member they don't know.
+ * its `rules`. Peers keep a contract left in `rules.check` unread, so the
+ * rules still hold; readers leave its collection unjudged. Readers judge
+ * `contract`, and leave unjudged one with a member they don't know.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,29 +13,69 @@ import { communityNode } from './helpers/community.js';
 const NEVER = [{ that: 'false', else: 'Never' }];
 
 describe('contracts: where they live', () => {
-  test('a contract in rules is refused: rules are what peers check, a contract is what readers count', () => {
-    assert.match(checkRules({ check: NEVER }) ?? '', /contract\.check/);
-    assert.match(checkRules({ onePer: ['@author'], check: NEVER }) ?? '', /contract\.check/);
+  test('a contract in rules is kept unread by peers, and the library writes none there', async () => {
+    assert.equal(checkRules({ check: NEVER }), null);
+    assert.equal(checkRules({ onePer: ['@author'], check: NEVER }), null);
     assert.equal(checkContractShape({ check: NEVER, line: { once: ['x'] } }), null);
     assert.equal(checkContractShape({ check: NEVER, later: true }), 'unknown');
     assert.match(checkContractShape([]) ?? '', /must be an object/);
+    const c = await communityNode(0, []);
+    await assert.rejects(
+      c.founder.node.collections.define(c.space, {
+        name: 'app.note',
+        schema: { type: 'object' },
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- where an older library put it
+        rules: { check: NEVER } as never,
+      }),
+      /contract\.check/,
+    );
   });
 
-  test('a peer treats a definition with a contract in its rules as no definition: nothing is judged by it', async () => {
-    const c = await communityNode(0, []);
+  test('a definition with its contract in rules keeps its rules, and leaves what is written under it unjudged, even after it is fixed', async () => {
+    const c = await communityNode(1, []);
     const alice = c.founder;
-    // Written by hand, or by an implementation from before contracts left rules.
+    const bob = c.members[0]!;
+    const atMost10 = [{ that: 'body.amount <= 10.0', else: 'At most 10' }];
+    // As an older library stored it, or as written by hand.
     const old = await c.sign(alice, {
       collection: 'sys.collection',
-      body: { name: 'app.note', schema: { type: 'object' }, version: 1, rules: { check: NEVER } },
-      version: { key: 'collection:app.note', seq: 0 },
+      body: {
+        name: 'app.pay',
+        schema: { type: 'object' },
+        version: 1,
+        rules: { final: true, check: atMost10 },
+      },
+      version: { key: 'collection:app.pay', seq: 0 },
     });
     await c.add(old);
-    const listed = (await alice.node.collections.list(c.space)).find((one) => one.name === 'app.note');
-    assert.equal(listed?.version ?? null, null, 'an invalid definition is no definition');
-    const note = await c.sign(alice, { collection: 'app.note', body: { n: 1 } });
-    await c.add(note);
-    assert.equal(await c.verdict(note), 'pass', 'no contract is in force, so none fails it');
+    const listed = (await alice.node.collections.list(c.space)).find((one) => one.name === 'app.pay');
+    assert.equal(listed?.version, 1, 'still a definition');
+
+    const mint = await c.sign(bob, { collection: 'app.pay', body: { amount: 1_000_000 } });
+    await c.add(mint);
+    assert.equal(await c.verdict(mint), 'unjudged', 'a contract no reader reads: never counted as if none');
+    const edit = await c.sign(bob, {
+      collection: 'app.pay',
+      body: { amount: 2_000_000 },
+      version: { key: mint.key, seq: 1, prev: mint.id, genesis: mint.id },
+    });
+    await c.add(edit);
+    const kept = (await alice.node.records.list(c.space, { collection: 'app.pay' })).find(
+      (r) => r.key === mint.key,
+    );
+    assert.notEqual(kept?.seq, 1, 'final still holds: the edit does not stand');
+
+    // Defined again the new way: what comes after is judged, what came before still counts for nothing.
+    await alice.node.collections.define(c.space, {
+      name: 'app.pay',
+      schema: { type: 'object' },
+      rules: { final: true },
+      contract: { check: atMost10 },
+    });
+    const later = await c.sign(bob, { collection: 'app.pay', body: { amount: 1_000_000 } });
+    await c.add(later);
+    assert.equal(await c.verdict(later), 'fail');
+    assert.equal(await c.verdict(mint), 'unjudged');
   });
 
   test('the same condition under contract.check is judged: no reader counts what fails it', async () => {

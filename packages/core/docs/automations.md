@@ -217,7 +217,7 @@ no `include`, and no `holds` or `from`. `$me` is the account. It looks at new
 records only: `seq` 0, written after `since` and within the last day.
 
 **Apps propose them**, the person says yes in the account home, and the home
-writes them, naming the app ([spec 06 §2.11](../../../spec/06-nodes-and-sessions.md)).
+writes them, naming the app ([spec 06 §2.11](../../../spec/06-nodes-and-sessions.md), whose `Proposal` is the shape below).
 An app describes what it can notify about with `notifyOn`:
 
 ```ts

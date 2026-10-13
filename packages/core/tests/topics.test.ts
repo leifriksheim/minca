@@ -638,6 +638,20 @@ describe('an automation of the account’s own: its where', () => {
     );
   });
 
+  test('a proposal has only the members the home checks (spec 06 §2.11)', () => {
+    const fine = notifyOn('Mentioned', 'std.message', { mentions: { $contains: '$me' } });
+    assert.equal(checkProposal(fine), null);
+    assert.match(checkProposal({ ...fine, by: 'did:key:zBot' })!, /additional|by/);
+    assert.match(checkProposal({ ...fine, when: { ...fine.when, holds: {} } })!, /additional|holds/);
+    assert.match(checkProposal({ ...fine, then: { kind: 'ask', text: 'x' } })!, /notify|kind/);
+    assert.match(checkProposal({ ...fine, then: { kind: 'notify', text: 'x'.repeat(501) } })!, /500|long/);
+    assert.match(checkProposal({ ...fine, name: 'x'.repeat(121) })!, /120|long/);
+    assert.match(
+      checkProposal({ ...fine, open: 'https://elsewhere.test/' }, 'https://chat.test')!,
+      /own site/,
+    );
+  });
+
   test('only notifies, by the account, on one collection read record by record', () => {
     const since = new Date().toISOString();
     const base = own('std.task', undefined, since);
