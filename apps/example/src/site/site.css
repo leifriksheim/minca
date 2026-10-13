@@ -449,86 +449,300 @@
   color: var(--body);
 }
 
-/* Layers: a line each, and "Read more" opens its parts underneath */
-.site .layers {
+/* The walkthrough: tabs, one per scenario, and its steps in tighter rows */
+.site .walk-step + .tabs {
+  margin-top: 56px;
+}
+.site .tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.site .tabs::-webkit-scrollbar {
+  display: none;
+}
+.site .tabs [role='tab'] {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  margin-bottom: -1px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.site .tabs [role='tab']:hover {
+  color: var(--ink);
+}
+.site .tabs [role='tab'][aria-selected='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+.site .tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.site .tab-panel {
+  padding-top: 32px;
+}
+.site .tab-summary {
+  font-size: 17px;
+  color: var(--body);
+  margin-bottom: 40px;
+}
+.site .walk-step + .walk-step {
+  margin-top: 48px;
+}
+
+/* Tabs with an icon before the name */
+.site .tabs [role='tab'] svg {
+  vertical-align: -3px;
+  margin-right: 8px;
+}
+
+/* The concepts: a few lines and a line of code, beside a drawing */
+.site .concept {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 48px;
+  align-items: start;
+}
+.site .concept h3 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+.site .concept p {
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+.site .concept .code pre {
+  padding: 14px 16px;
+  font-size: 12.5px;
+}
+
+/* A drawing: boxes and arrows in HTML, on a sunken panel */
+.site .viz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sunken);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.site .viz-row,
+.site .viz-flow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+.site .viz-row {
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.site .viz-col {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.site .layer {
+.site .viz-box {
+  background: #fff;
   border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  min-width: 0;
+}
+.site .viz-box.ink {
+  border-color: var(--ink);
+}
+.site .viz-box b {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+.site .viz-box small,
+.site .viz-caption,
+.site .viz-arrow small {
+  display: block;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.site .viz-caption code {
+  font-size: inherit;
+  color: var(--body);
+}
+/* Two parties and what passes between them: the Apps drawing */
+.site .viz-exchange {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.site .viz-exchange-mid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.site .viz-exchange-arrow > span[aria-hidden] {
+  display: inline-block;
+  font-size: 15px;
+}
+.site .viz-exchange-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--faint);
+  font-family: 'Geist Mono', monospace;
+  font-size: 11.5px;
+}
+.site .viz-exchange-arrow small {
+  color: var(--muted);
+  font-size: inherit;
+}
+.site .viz-pass b {
+  display: block;
+  font-weight: 600;
+}
+.site .viz-pass {
+  text-align: center;
+  padding: 3px 8px;
+  border: 1px dashed #c9c9c9;
+  border-radius: 4px;
+  background: var(--paper, #fff);
+  color: var(--body);
+  font-family: inherit;
+  white-space: nowrap;
+}
+.site .viz-note {
+  display: block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border: 1px dashed #c9c9c9;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--body);
+}
+.site .viz-note svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.site .viz-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--faint);
+  font-size: 18px;
+  line-height: 1;
+}
+.site .viz-arrow.down > span,
+.site .viz-flow .viz-arrow > span {
+  display: inline-block;
+}
+.site .viz-arrow.down > span {
+  transform: rotate(90deg);
+}
+.site .viz-arrow small.viz-lock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.site .viz-cites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.site .viz-cites span {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.site .viz-space {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--ink);
   border-radius: 12px;
   background: #fff;
-  transition: border-color 0.15s ease;
 }
-.site .layer:hover {
-  border-color: #c9c9c9;
-}
-.site .layer.app {
+.site .viz-space .viz-box {
   background: var(--sunken);
 }
-.site .layer-head {
-  display: grid;
-  grid-template-columns: 200px 1fr auto;
-  gap: 24px;
-  align-items: baseline;
-  width: 100%;
-  padding: 20px 24px;
-  font: inherit;
-  text-align: left;
-  color: inherit;
-  background: none;
-  border: none;
+
+/* A preset a walkthrough step spreads, written out under its code */
+.site .preset {
+  border: 1px solid var(--line);
   border-radius: 12px;
-  cursor: pointer;
+  padding: 16px 20px;
+  font-size: 14px;
 }
-.site .layer-head:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
+.site .split .preset p {
+  font-size: 14px;
 }
-.site .layer .name {
+.site .preset-head {
   font-weight: 600;
   color: var(--ink);
-  letter-spacing: -0.02em;
+  margin-bottom: 4px;
 }
-.site .layer .what {
-  color: var(--muted);
-  font-size: 15px;
+.site .preset-role {
+  margin-top: 14px;
 }
-.site .layer .more {
+.site .preset-role h4 {
+  margin: 0 0 6px;
+  font-family: 'Geist Mono', monospace;
   font-size: 13px;
-  color: var(--faint);
-  white-space: nowrap;
-  transition: color 0.15s ease;
-}
-.site .layer-head:hover .more,
-.site .layer-head[aria-expanded='true'] .more {
+  font-weight: 600;
   color: var(--ink);
 }
-.site .parts {
+.site .preset dl {
+  margin: 0;
+}
+.site .preset dl > div {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px 48px;
-  padding: 24px 24px 28px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 12px;
+  padding: 6px 0;
   border-top: 1px solid var(--line);
 }
-.site .parts[hidden] {
-  display: none;
-}
-.site .part h4 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-.site .part p {
-  font-size: 15px;
+.site .preset dt {
   color: var(--muted);
 }
-.site .part code {
-  font-size: 13.5px;
-  color: var(--body);
+.site .preset dd {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.site .split .preset code {
+  font-size: 12px;
+}
+.site .split .preset-foot {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--faint);
 }
 
 /* Points: a heading and a few lines each, no boxes */
@@ -1374,16 +1588,36 @@
   .site .split {
     gap: 20px;
   }
-  .site .layer-head {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .site .walk-step + .walk-step {
+    margin-top: 40px;
   }
-  .site .layer .more {
-    justify-self: start;
+  .site .tabs [role='tab'] {
+    padding: 10px 10px;
   }
-  .site .parts {
+  .site .concept {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .site .viz-flow {
+    flex-direction: column;
+  }
+  .site .viz-exchange {
     grid-template-columns: 1fr;
-    gap: 20px;
+    justify-items: center;
+  }
+  .site .viz-exchange-arrow > span[aria-hidden] {
+    transform: rotate(90deg);
+  }
+  .site .viz-flow + .viz-flow {
+    border-top: 1px dashed #c9c9c9;
+    padding-top: 14px;
+  }
+  .site .viz-flow .viz-arrow > span {
+    transform: rotate(90deg);
+  }
+  .site .preset dl > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
   .site .points {
     grid-template-columns: 1fr;
