@@ -219,11 +219,17 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           <p style={styles.fieldLabel}>New spaces for it</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {creating.map((space, index) => (
-              <div key={index} style={choice}>
+              <div key={index} style={{ ...choice, flexWrap: 'wrap' }}>
                 <span style={{ flex: 1 }}>{space.name}</span>
                 <span style={{ color: palette.ink.faint, fontSize: 12 }}>
-                  {space.visibility} · {constitution(space)}
+                  {space.visibility} · {constitution(space, session.did)}
                 </span>
+                {space.top !== 'none' && cofoundersOf(space, session.did).length > 0 && (
+                  <span style={{ ...styles.errorHint, flexBasis: '100%' }}>
+                    Also founders, who hold everything there and can't be removed:{' '}
+                    {cofoundersOf(space, session.did).join(', ')}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -538,9 +544,14 @@ function Answer({
  * A new space's constitution in a few words: who founds it, and its roles.
  * "You found it · Admin, Member"; "No founder · Steward, Member".
  */
-function constitution(space: NewSpace): string {
+/** The other founders an app names, each once, never the person themselves */
+function cofoundersOf(space: NewSpace, me: string): string[] {
+  return [...new Set(space.cofounders ?? [])].filter((did) => did !== me);
+}
+
+function constitution(space: NewSpace, me: string): string {
   const roles = (space.roles ?? []).map((role) => role.title ?? role.name);
-  const others = space.cofounders?.length ?? 0;
+  const others = cofoundersOf(space, me).length;
   const top =
     space.top === 'none'
       ? 'No founder'
