@@ -62,10 +62,10 @@ describe('a node in a worker', () => {
   test('acts for the signer on the page, and is used from the page', async () => {
     const me = await signer();
     const fake = fakeWorker();
-    const node = await startNodeInWorker(fake.worker, { signer: me, stores: { indexedDB: 'weave:test' } });
+    const node = await startNodeInWorker(fake.worker, { signer: me, stores: { indexedDB: 'minca:test' } });
     cleanup.push(() => node.close());
 
-    assert.deepEqual(fake.opened, [{ indexedDB: 'weave:test' }]);
+    assert.deepEqual(fake.opened, [{ indexedDB: 'minca:test' }]);
     assert.equal(node.did, me.did);
     assert.equal(node.delegation().payload.iss, me.did, 'the session was signed by the key on the page');
     const { id: space } = await node.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
@@ -180,11 +180,11 @@ describe('a node shared by the tabs of a site', () => {
     const shared = fakeSharedWorker();
     const first = await startNodeInWorker(shared.connect(), {
       signer: me,
-      stores: { indexedDB: 'weave:me' },
+      stores: { indexedDB: 'minca:me' },
     });
     const second = await startNodeInWorker(shared.connect(), {
       signer: me,
-      stores: { indexedDB: 'weave:me' },
+      stores: { indexedDB: 'minca:me' },
     });
     cleanup.push(
       () => first.close(),
@@ -207,14 +207,14 @@ describe('a node shared by the tabs of a site', () => {
   test('another account, or other stores, get a node of their own', async () => {
     const shared = fakeSharedWorker();
     const me = await signer();
-    const a = await startNodeInWorker(shared.connect(), { signer: me, stores: { indexedDB: 'weave:me' } });
+    const a = await startNodeInWorker(shared.connect(), { signer: me, stores: { indexedDB: 'minca:me' } });
     const b = await startNodeInWorker(shared.connect(), {
       signer: await signer(),
-      stores: { indexedDB: 'weave:me' },
+      stores: { indexedDB: 'minca:me' },
     });
     const c = await startNodeInWorker(shared.connect(), {
       signer: me,
-      stores: { indexedDB: 'weave:elsewhere' },
+      stores: { indexedDB: 'minca:elsewhere' },
     });
     cleanup.push(
       () => a.close(),
@@ -229,11 +229,11 @@ describe('a node shared by the tabs of a site', () => {
     const shared = fakeSharedWorker();
     const first = await startNodeInWorker(shared.connect(), {
       signer: me,
-      stores: { indexedDB: 'weave:me' },
+      stores: { indexedDB: 'minca:me' },
     });
     const second = await startNodeInWorker(shared.connect(), {
       signer: me,
-      stores: { indexedDB: 'weave:me' },
+      stores: { indexedDB: 'minca:me' },
     });
     const { id: space } = await first.spaces.create({ name: 'Groceries', ...team, visibility: 'private' });
 
@@ -248,7 +248,7 @@ describe('a node shared by the tabs of a site', () => {
     await second.close();
     const later = await startNodeInWorker(shared.connect(), {
       signer: me,
-      stores: { indexedDB: 'weave:me' },
+      stores: { indexedDB: 'minca:me' },
     });
     cleanup.push(() => later.close());
     assert.notEqual(later.sessionDid, second.sessionDid, 'a new node, the old one having closed');
@@ -270,16 +270,16 @@ describe('a node shared by the tabs of a site', () => {
       const shared = fakeSharedWorker();
       const gone = await startNodeInWorker(shared.connect(), {
         signer: me,
-        stores: { indexedDB: 'weave:me' },
+        stores: { indexedDB: 'minca:me' },
       });
       const tab = shared.tabs[0]!;
       // What the browser does when a tab closes: its locks are let go. Taking this one lets go of the tab's hold.
-      await navigator.locks.request(`weave-node-tab:${tab}`, { steal: true }, async () => {});
+      await navigator.locks.request(`minca-node-tab:${tab}`, { steal: true }, async () => {});
 
       let next = gone;
       await until(
         async () => {
-          next = await startNodeInWorker(shared.connect(), { signer: me, stores: { indexedDB: 'weave:me' } });
+          next = await startNodeInWorker(shared.connect(), { signer: me, stores: { indexedDB: 'minca:me' } });
           cleanup.push(() => next.close());
           return next.sessionDid !== gone.sessionDid;
         },

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { CarrierSummary } from '@weaveprotocol/core/node';
+import type { CarrierSummary } from '@minca/core/node';
 import {
   MIN_PASSWORD_LENGTH,
   STAY_SIGNED_IN_CHOICES,
@@ -8,11 +8,11 @@ import {
   recoveryKit,
   type Connection,
   type StaySignedIn,
-} from '@weaveprotocol/core/session';
-import { useAuth, useSession } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
-import { message, useAction, useCopy } from '@weave/app-shared/action';
+} from '@minca/core/session';
+import { useAuth, useSession } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { PairPhone } from './PairPhone';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';

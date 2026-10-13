@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
 import type { Choice, PartyRule } from './schema';
 import type { Assembly, PartyFull, TopicView } from './model';
 import { PARTY_SHARE, type Step, type Tally } from './tally';

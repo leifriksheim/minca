@@ -2,7 +2,7 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
-    "customConditions": ["@weaveprotocol/source"],
+    "customConditions": ["@minca/source"],
     "noEmit": true
   },
   "include": ["**/*.ts"]

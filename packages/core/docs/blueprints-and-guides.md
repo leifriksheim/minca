@@ -17,7 +17,7 @@ the [standard library](standard-library.md).
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md).
+> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
 
 ## Who proposes
 
@@ -36,7 +36,7 @@ blueprint is the space's grants: under the `community` template, only its
 proposer, moderators and admins.
 
 ```typescript
-import { proposeCollections, reviewBlueprint, applyBlueprint } from '@weaveprotocol/core/schemas';
+import { proposeCollections, reviewBlueprint, applyBlueprint } from '@minca/core/schemas';
 
 const proposal = await proposeCollections(node, space.id, {
   title: 'Chores',
@@ -185,7 +185,7 @@ every peer will enforce.
 6. `history: "all"`: "Every earlier version of a … is kept."
 
 Who may add, change or remove records is not the definition's to say: it is
-the space's grants ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
+the space's grants ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)),
 so the description says nothing of it.
 
 Nouns come from `title`, else the last segment of `name`; field labels from
@@ -206,10 +206,10 @@ definition it did not write is a question for the app, not for peers: a peer
 stores and judges every record the same way whatever the answer.
 
 > **Planned.** Not built. Issues:
-> [#11](https://github.com/leifriksheim/weave/issues/11),
-> [#12](https://github.com/leifriksheim/weave/issues/12). The parts peers
+> [#11](https://github.com/leifriksheim/minca/issues/11),
+> [#12](https://github.com/leifriksheim/minca/issues/12). The parts peers
 > would check, content-addressed definitions and additive-only changes, are
-> planned in [spec 02 §6.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md).
+> planned in [spec 02 §6.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 
 ### The check: `compare(held, wanted)`
 
@@ -232,7 +232,7 @@ Anything the checker cannot decide is a break.
 
 - **Fields.** Reading needs every body the space accepts to be one the app
   accepts (held ⊆ wanted); writing needs wanted ⊆ held. Over the schema
-  keywords a definition may use ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md))
+  keywords a definition may use ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md))
   this is a walk of both schemas: `type` sets contained (`integer` inside
   `number`); a field one side relies on is `required` on the other; numeric
   and length ranges contained; `enum`, `const` and `oneOf` value sets
@@ -336,4 +336,4 @@ Like `x-choicesFrom`, hints are display only and never checked when
 validating, and [`compare`](#compatible-definitions) ignores them. They would go in a new
 top-level definition member rather than as schema keywords: unknown
 top-level members are ignored by today's peers, while an unknown schema
-keyword makes the definition invalid ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)). Added when a derived view falls short. _Open:_ the format.
+keyword makes the definition invalid ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)). Added when a derived view falls short. _Open:_ the format.

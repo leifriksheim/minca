@@ -20,7 +20,7 @@ std.warrant at a fresh key of its writer's
 
 `evidence[0]` is the offending version, and its signer's root is the accused
 account. The key is the writer's own
-([spec 02 §4.1](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)),
+([spec 02 §4.1](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)),
 so nobody, the accused least of all, can write its first version: what a
 warrant proves is in its body. Only
 the warrant's first version counts as proof, and one offence counts once per
@@ -73,7 +73,7 @@ somewhere it shouldn't be, and revoking that key (`spaces.revoke`) takes
 back what it signed.
 
 Like any record, a warrant is withdrawn when its writer is removed by a
-change whose cutoff doesn't cover it, or revokes the key that signed it ([#166](https://github.com/leifriksheim/weave/issues/166)). More kinds are planned in
-[#148](https://github.com/leifriksheim/weave/issues/148).
+change whose cutoff doesn't cover it, or revokes the key that signed it ([#166](https://github.com/leifriksheim/minca/issues/166)). More kinds are planned in
+[#148](https://github.com/leifriksheim/minca/issues/148).
 
 _Source: `packages/core/src/records/warrant.ts` (`readWarrant`, `knownKind`), `packages/core/src/node/space-runtime.ts` (`ownView`, `warrantShape`, `warrantVerdict`, `evidenceHolds`, `violationIn`, `warrantIfDue`, `flagged`), `packages/core/src/space/space-access.ts` (`WARRANT_COLLECTION`). Tests: `packages/core/tests/warrants.test.ts`._

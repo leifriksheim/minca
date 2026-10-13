@@ -1,5 +1,5 @@
 /**
- * What `weave agent` adds to running rules: what the model is told, a bot
+ * What `minca agent` adds to running rules: what the model is told, a bot
  * saying it is one, and what each person may spend. Which rules run, and what
  * sets them off, is core's (`packages/core/tests/rule-runners.test.ts`).
  */
@@ -104,7 +104,7 @@ describe('while a rule runs', () => {
     let asked = '';
     let prompt = '';
     let turn = 0;
-    const dir = await tempDir('weave-run-');
+    const dir = await tempDir('minca-run-');
     const stop = runRules({
       node,
       account: node.did,
@@ -457,7 +457,7 @@ describe('a bot’s name', () => {
 
 describe('spending', () => {
   test('counts each person’s share of the day, as well as the total', async () => {
-    const spend = fileSpend(await tempDir('weave-spend-'));
+    const spend = fileSpend(await tempDir('minca-spend-'));
     await spendFor(spend, 'did:bob').add(0.25);
     await spendFor(spend, 'did:bob').add(0.25);
     await spend.add(0.1);

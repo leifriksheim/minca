@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useAction } from '@weave/app-shared/action';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
+import { useAction } from '@minca/app-shared/action';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { useLive, useNode, useProfiles } from '@minca/core/react';
 import { SchemaForm } from '../SchemaForm';
 import { Value } from '../Value';
 import {

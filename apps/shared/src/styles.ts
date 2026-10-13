@@ -55,14 +55,14 @@ export const baseCss = `
 
     [data-row-action] { transition: opacity .12s ease; }
 
-    @keyframes weave-fade { from { opacity: 0 } to { opacity: 1 } }
-    @keyframes weave-slide { from { opacity: 0; transform: translateX(24px) } to { opacity: 1; transform: none } }
+    @keyframes minca-fade { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes minca-slide { from { opacity: 0; transform: translateX(24px) } to { opacity: 1; transform: none } }
     [data-editable]:focus { border-color: ${surface.lineStrong} !important; background: ${surface.card} !important; box-shadow: none !important; }
     .inline-field select, .inline-field input { height: 32px !important; border-color: transparent !important; background: none !important; margin-left: -8px; padding-left: 8px !important; width: calc(100% + 8px) !important; }
     .inline-field select:focus, .inline-field input:focus { border-color: ${surface.lineStrong} !important; background: ${surface.card} !important; box-shadow: none !important; }
     .space-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
     [data-tile] { transition: border-color .15s ease, box-shadow .15s ease; }
-    @keyframes weave-rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+    @keyframes minca-rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
     /* A dialog taller than the window scrolls, and what is in it keeps its size rather than squashing. */
     .modal { max-height: calc(100dvh - 40px); overflow-y: auto; }
     .modal > * { flex-shrink: 0; }
@@ -428,7 +428,7 @@ export const styles = {
     color: ink.muted,
     textAlign: 'left',
     fontWeight: 400,
-    animation: 'weave-fade .1s ease',
+    animation: 'minca-fade .1s ease',
   },
 
   /** Dims the page behind a modal, and centres it. */
@@ -441,7 +441,7 @@ export const styles = {
     justifyContent: 'center',
     padding: 20,
     backgroundColor: surface.scrim,
-    animation: 'weave-fade .12s ease',
+    animation: 'minca-fade .12s ease',
   },
   modal: {
     width: '100%',
@@ -451,7 +451,7 @@ export const styles = {
     border: `1px solid ${surface.rule}`,
     padding: '24px 22px',
     boxShadow: shadow.float,
-    animation: 'weave-rise .16s ease',
+    animation: 'minca-rise .16s ease',
     display: 'flex',
     flexDirection: 'column',
     gap: 14,

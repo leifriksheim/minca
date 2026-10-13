@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Band, Page, Points } from './Site';
 import { HeroSpace } from './HeroSpace';
-import { Morph, Shape, shapeFor, type ShapeKind } from '@weave/app-shared/shapes';
+import { Morph, Shape, shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
 
 /**
  * The front page, for community builders: it sells the Minca app. A minca

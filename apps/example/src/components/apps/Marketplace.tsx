@@ -1,10 +1,10 @@
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
-import { useAccount, useCan, useLive, useNode } from '@weaveprotocol/core/react';
-import type { IncludedOf, QueryRecord } from '@weaveprotocol/core';
-import { comment, listing, order, orderUpdate, type Listing, type Money } from '@weaveprotocol/core/schemas';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useAccount, useCan, useLive, useNode } from '@minca/core/react';
+import type { IncludedOf, QueryRecord } from '@minca/core';
+import { comment, listing, order, orderUpdate, type Listing, type Money } from '@minca/core/schemas';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
 import { respondingTo } from '../../derive/people';
 import { ago } from '../../derive/time';
 import { styles, palette, ui } from '../../styles';
@@ -1059,14 +1059,14 @@ const sortOf = (value: string): Sort =>
 /** The currency this person last priced something in, so they don't pick it every time */
 function lastCurrency(): string {
   try {
-    return globalThis.localStorage.getItem('weave:market-currency') ?? 'EUR';
+    return globalThis.localStorage.getItem('minca:market-currency') ?? 'EUR';
   } catch {
     return 'EUR';
   }
 }
 function rememberCurrency(currency: string) {
   try {
-    globalThis.localStorage.setItem('weave:market-currency', currency);
+    globalThis.localStorage.setItem('minca:market-currency', currency);
   } catch {
     // Private windows can refuse; picking it again is all that costs.
   }

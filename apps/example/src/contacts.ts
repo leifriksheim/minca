@@ -1,7 +1,7 @@
 /** Contacts (`node.contacts`) and doors (`node.doors`), for the screens that show them. */
 import { useEffect, useState } from 'react';
-import type { ContactView, P2PNode } from '@weaveprotocol/core';
-import { useLive, useNode } from '@weaveprotocol/core/react';
+import type { ContactView, P2PNode } from '@minca/core';
+import { useLive, useNode } from '@minca/core/react';
 
 /** A link that knocks on a door: this app, with the code after `#door=` */
 export function doorLink(code: string): string {

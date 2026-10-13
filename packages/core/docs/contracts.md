@@ -19,7 +19,7 @@ builder writes SQL.
 
 ```ts
 import * as z from 'zod';
-import { collection, contract } from '@weaveprotocol/core';
+import { collection, contract } from '@minca/core';
 
 const Reaction = z.object({ emoji: z.string() });
 const Fame = z.object({ reactions: z.array(z.string()) });

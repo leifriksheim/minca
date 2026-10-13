@@ -1,10 +1,10 @@
-# weave — the protocol from a terminal
+# minca — the protocol from a terminal
 
 One program, three jobs:
 
-- **Manage your spaces** — every command the Node API has, as `weave spaces …` and `weave records …`
-- **Run an always-on node** — `weave run` keeps every space syncing, serves sockets browsers dial into, and is a relay too
-- **Connect an agent** — `weave connect <code>`, then Claude Code, Claude Desktop or Cursor starts `weave mcp` by itself, or `weave agent` runs it on its own
+- **Manage your spaces** — every command the Node API has, as `minca spaces …` and `minca records …`
+- **Run an always-on node** — `minca run` keeps every space syncing, serves sockets browsers dial into, and is a relay too
+- **Connect an agent** — `minca connect <code>`, then Claude Code, Claude Desktop or Cursor starts `minca mcp` by itself, or `minca agent` runs it on its own
 
 It uses the same data folder layout a browser does. Point `--home` at the folder
 you picked in Chrome and the CLI, the daemon and the browser all share one
@@ -12,7 +12,7 @@ account.
 
 ## At a terminal, and anywhere else
 
-Run `weave` alone at a terminal and pick what to do: set up an account,
+Run `minca` alone at a terminal and pick what to do: set up an account,
 invite someone, join a space, connect or run an agent, run a bot, add a
 rule. Any command asks for what it still needs there: a space picked from
 your spaces, a role, a collection, a record, a yes before something that
@@ -23,8 +23,8 @@ asked, since nobody would answer. A missing value fails at once and names
 the flag that gives it:
 
 ```
-$ weave spaces invite
-weave: Missing --space. Its id is in `weave spaces list`.
+$ minca spaces invite
+minca: Missing --space. Its id is in `minca spaces list`.
 ```
 
 So every question has a flag, and a person and an agent reach the same result
@@ -35,44 +35,44 @@ straight to a person (an invite then prints on its own line, to copy).
 ## Quick start
 
 In this repo, `npm run dev` (at the root) already runs a node with a throwaway
-identity, and `npm run weave -- <command>` talks to it — no setup.
+identity, and `npm run minca -- <command>` talks to it — no setup.
 
 To make the dev node _your_ account's node — so it serves every list you make
 in the browser, with nothing to hand it — give it your account password once:
 
 ```bash
-rm -rf .weave-dev                                  # drop the throwaway identity
-WEAVE_RECOVERY_CODE='XXXX-…' npm run weave -- init --existing --passphrase --name Me
+rm -rf .minca-dev                                  # drop the throwaway identity
+MINCA_RECOVERY_CODE='XXXX-…' npm run minca -- init --existing --passphrase --name Me
 npm run dev
 ```
 
-To have `weave` everywhere:
+To have `minca` everywhere:
 
 ```bash
-npm install -g @weaveprotocol/cli            # or run it without installing: npx @weaveprotocol/cli <command>
+npm install -g @minca/cli            # or run it without installing: npx @minca/cli <command>
 ```
 
 From this repo: `npm install` at the repo root (the CLI is a workspace), then `cd packages/cli && npm run bundle && npm link`, or a
 binary with no Node at all: `bun build.ts --native`.
 
 ```bash
-weave init --name Leif --passphrase          # prints your recovery code once
-export WEAVE_PASSPHRASE='…'                  # so later commands don't ask
+minca init --name Leif --passphrase          # prints your recovery code once
+export MINCA_PASSPHRASE='…'                  # so later commands don't ask
 
-weave spaces create --name Groceries --visibility private --roles team   # or solo, community, coop
-weave records put --space <id> --collection app.todo.item --body '{"text":"milk","completed":false,"order":1}'
-weave records list --space <id>
-weave spaces invite --space <id>             # a secret: it carries the space key and the invite's own secret
-weave spaces invite --space <id> --view-only # they can read it, not change it
-weave spaces join --invite 'https://…#invite=…'
-weave spaces assign --space <id> --did <did> --role editor   # --remove takes it away
-weave spaces step_down --space <id> --keep editor            # stop being a founder, for good
-weave spaces succeed --space <id> --successor <new id>       # name the space that carries on from this one
-weave run                                    # stay up and serve; --create makes an account on first start
+minca spaces create --name Groceries --visibility private --roles team   # or solo, community, coop
+minca records put --space <id> --collection app.todo.item --body '{"text":"milk","completed":false,"order":1}'
+minca records list --space <id>
+minca spaces invite --space <id>             # a secret: it carries the space key and the invite's own secret
+minca spaces invite --space <id> --view-only # they can read it, not change it
+minca spaces join --invite 'https://…#invite=…'
+minca spaces assign --space <id> --did <did> --role editor   # --remove takes it away
+minca spaces step_down --space <id> --keep editor            # stop being a founder, for good
+minca spaces succeed --space <id> --successor <new id>       # name the space that carries on from this one
+minca run                                    # stay up and serve; --create makes an account on first start
 ```
 
-Every data command is an action from `NODE_ACTIONS`: `weave records put` runs
-`records_put`, and its flags are that action's input fields. `weave actions`
+Every data command is an action from `NODE_ACTIONS`: `minca records put` runs
+`records_put`, and its flags are that action's input fields. `minca actions`
 prints them all with their schemas. `--json '{…}'` passes an input whole.
 
 ## Unlocking
@@ -81,8 +81,8 @@ Secrets never go on the command line, where `ps` shows them:
 
 |                                                |                                             |
 | ---------------------------------------------- | ------------------------------------------- |
-| `WEAVE_RECOVERY_CODE` or `--code-file FILE`    | the account's recovery code                 |
-| `WEAVE_PASSPHRASE` or `--passphrase-file FILE` | a passphrase added with `init --passphrase` |
+| `MINCA_RECOVERY_CODE` or `--code-file FILE`    | the account's recovery code                 |
+| `MINCA_PASSPHRASE` or `--passphrase-file FILE` | a passphrase added with `init --passphrase` |
 | neither                                        | you are asked, without echo                 |
 
 Nothing ever writes the seed in the clear: the account file holds only wrapped
@@ -91,14 +91,14 @@ copies, exactly as in a browser folder.
 ## The always-on node
 
 ```bash
-weave run --port 8787
+minca run --port 8787
 ```
 
 - `ws://host:8787/peer?space=<id>` — the protocol's WebSocket transport. Browsers
   reach it with `network: { nodes: ['wss://host/peer#<account DID>'] }` (the
-  example app reads `VITE_WEAVE_NODES`). No relay, no TURN. The fragment pins
+  example app reads `VITE_MINCA_NODES`). No relay, no TURN. The fragment pins
   the node to your account, so nothing else answering at that address is let
-  in; `weave run` prints the pinned address when it starts. Plain `ws://` works
+  in; `minca run` prints the pinned address when it starts. Plain `ws://` works
   only on this machine.
 - `ws://host:8787` — the signaling relay, so one process bootstraps a space.
 - `GET /health` — `{"ok":true}`, nothing more
@@ -108,40 +108,40 @@ whatever terminates TLS — browsers need `wss://` anyway — or pass
 `--host 0.0.0.0` to listen on every interface.
 
 It opens every space the account holds and notices new ones within five
-seconds, whoever added them: `weave spaces join` in another terminal, a browser
+seconds, whoever added them: `minca spaces join` in another terminal, a browser
 pointed at the same folder, a pairing. It also meets the account's other
-devices, a browser among them, through the relays (`$WEAVE_RELAYS`, or the
-default) over WebRTC, so a fresh `weave init --existing` on a laptop finds its
+devices, a browser among them, through the relays (`$MINCA_RELAYS`, or the
+default) over WebRTC, so a fresh `minca init --existing` on a laptop finds its
 spaces with nothing pointed at it. `--no-relays` leaves that out, for a node
 that browsers dial; a single-file binary, which carries no WebRTC, always does. It validates everything with the same
 gates as any peer. It is an **anchor, not a host** — uptime, no authority.
 
 For a server, `bun build.ts` makes single-file binaries for this machine,
-`linux-x64` and `linux-arm64`; `weave-node.service` is a systemd unit.
+`linux-x64` and `linux-arm64`; `minca-node.service` is a systemd unit.
 
 ## Hosting other people's spaces
 
-`weave host` is a hosting service in one process. It carries every paying
+`minca host` is a hosting service in one process. It carries every paying
 account's spaces — sealed, as they travel — and serves them over sockets and a
-relay, like `weave run`. It holds no account and no space key.
+relay, like `minca run`. It holds no account and no space key.
 
 ```bash
 # Try it on this machine: every subscription counts as paid
-weave host --free --port 8787
+minca host --free --port 8787
 
 # Host only yourself and your family, on a server: the accounts named, and nobody else
-weave host --free --host 0.0.0.0 --allow did:key:zDnae… --allow did:key:zDnae…
+minca host --free --host 0.0.0.0 --allow did:key:zDnae… --allow did:key:zDnae…
 
 # As a service: Stripe for payments, R2 (or any S3) for storage
 STRIPE_SECRET_KEY=sk_live_… STRIPE_WEBHOOK_SECRET=whsec_… \
 STRIPE_PRICE_MONTHLY=price_… STRIPE_PRICE_YEARLY=price_… \
-WEAVE_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com WEAVE_S3_BUCKET=weave-host \
-WEAVE_S3_ACCESS_KEY_ID=… WEAVE_S3_SECRET_ACCESS_KEY=… \
-weave host --host 0.0.0.0 --port 8787 --data /var/lib/weave-host
+MINCA_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com MINCA_S3_BUCKET=minca-host \
+MINCA_S3_ACCESS_KEY_ID=… MINCA_S3_SECRET_ACCESS_KEY=… \
+minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
 ```
 
 - `--free` on an address others can reach needs `--allow` (or
-  `WEAVE_HOST_ALLOW`, comma separated): otherwise anyone who found it could
+  `MINCA_HOST_ALLOW`, comma separated): otherwise anyone who found it could
   fill its disk. An account's DID is under its name in the account home's
   Settings, with a Copy button. `--allow` works on a paying host too.
 - The host's key is made once, in `--data` (`host-key`, readable by you alone).
@@ -157,23 +157,23 @@ weave host --host 0.0.0.0 --port 8787 --data /var/lib/weave-host
   to your address. Next to Stripe, or instead of it:
 
   ```bash
-  WEAVE_WALLET_ADDRESS=0x… WEAVE_WALLET_MONTHLY=4 WEAVE_WALLET_YEARLY=36 \
-  weave host --host 0.0.0.0 --port 8787 --data /var/lib/weave-host
+  MINCA_WALLET_ADDRESS=0x… MINCA_WALLET_MONTHLY=4 MINCA_WALLET_YEARLY=36 \
+  minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   ```
 
   The home shows a payment request for the plan's price plus a fraction of a
   cent that marks it as theirs: a QR code for a phone wallet, a link, and one
   click for a wallet in the browser (MetaMask, Coinbase Wallet, Rabby…). The
   host reads the network every 10 s while a payment is open, sees it arrive,
-  then adds a month or a year. Time is paid up front. `WEAVE_WALLET_NETWORK=base-sepolia` tries it
-  with test USDC; `WEAVE_WALLET_RPC` points at a network node of your own or a
+  then adds a month or a year. Time is paid up front. `MINCA_WALLET_NETWORK=base-sepolia` tries it
+  with test USDC; `MINCA_WALLET_RPC` points at a network node of your own or a
   provider's (default: the network's public one). Keep the address's private
   key off the host — it only needs to receive.
 
 - **Communities pay through a fund.** A community names the host in its
   space (`std.host`), and anyone in it adds to its fund from the app, any
   amount, by card or wallet, once or (by card) every month, with no sign-in at
-  the host. Keeping the space online takes `WEAVE_FUND_MONTHLY` dollars a
+  the host. Keeping the space online takes `MINCA_FUND_MONTHLY` dollars a
   month from it (default the wallet's monthly price, or 4), by the second, and
   its bots take what they spend. Every status says what is in it, what it
   spends a day, and when it will run out at that rate. Card payments need no
@@ -183,27 +183,27 @@ weave host --host 0.0.0.0 --port 8787 --data /var/lib/weave-host
   hand the host the space's pass once there is money in the fund, and it
   carries the space blind, like an account's. A host with `--allow` carries no
   space for itself.
-- Each account's spaces may take `WEAVE_HOST_QUOTA_GB` (default 10 on a
+- Each account's spaces may take `MINCA_HOST_QUOTA_GB` (default 10 on a
   paying host, no limit on a free one; 0 is none). Every status says what
   they take, and the home shows it. At the limit the host takes no new space
   for that account; what it carries stays and keeps syncing.
-- **Bots.** With `WEAVE_HOST_BOTS=1` and a model's key, the host runs
+- **Bots.** With `MINCA_HOST_BOTS=1` and a model's key, the host runs
   bots for the spaces it carries: an admin adds one from the app ("Set up this
   community", Add a bot), the host makes its account in `--data`'s `bots/`
   and joins with the invite, and it runs the space's rules that name it while
   its community's fund has money in it. What a bot spends is taken from that
-  fund at `WEAVE_BOT_MARKUP` times what the host pays (default 1.5); on a
-  free host bots cost nothing. `WEAVE_BOT_MODEL` (default `claude-sonnet-5-5`) and
-  `WEAVE_BOT_DAILY_CAP` (dollars a day each, default 1) set what they think
+  fund at `MINCA_BOT_MARKUP` times what the host pays (default 1.5); on a
+  free host bots cost nothing. `MINCA_BOT_MODEL` (default `claude-sonnet-5-5`) and
+  `MINCA_BOT_DAILY_CAP` (dollars a day each, default 1) set what they think
   with and may spend. The key is `ANTHROPIC_API_KEY`; or, with
-  `WEAVE_BOT_PROVIDER=openai`, `OPENAI_API_KEY` and any Chat Completions server
-  (`WEAVE_BOT_BASE_URL`, default OpenAI's), naming the model. A model whose
-  price isn't built in needs `WEAVE_BOT_PRICE`, dollars per million tokens
-  like `1.25/10`, as `weave agent --price` takes it. The host
+  `MINCA_BOT_PROVIDER=openai`, `OPENAI_API_KEY` and any Chat Completions server
+  (`MINCA_BOT_BASE_URL`, default OpenAI's), naming the model. A model whose
+  price isn't built in needs `MINCA_BOT_PRICE`, dollars per million tokens
+  like `1.25/10`, as `minca agent --price` takes it. The host
   holds each bot's keys, so it reads what the bot can read: the app says so.
-- **Reminders by email**, for time paid up front: set `WEAVE_MAIL_API_KEY`
-  and `WEAVE_MAIL_FROM` (Resend's API; `WEAVE_MAIL_URL` for another that takes
-  the same JSON), and `WEAVE_HOST_URL` for the links. The home and the apps
+- **Reminders by email**, for time paid up front: set `MINCA_MAIL_API_KEY`
+  and `MINCA_MAIL_FROM` (Resend's API; `MINCA_MAIL_URL` for another that takes
+  the same JSON), and `MINCA_HOST_URL` for the links. The home and the apps
   then offer "Email me before it runs out". Nothing but a link to confirm reaches an address until
   it is confirmed; then a mail 14 and 3 days before the time runs out and one
   when the grace period starts, each with a link that stops them.
@@ -212,7 +212,7 @@ weave host --host 0.0.0.0 --port 8787 --data /var/lib/weave-host
 - Before it takes anyone's money: [HOSTING.md](HOSTING.md).
 - Put it behind something that terminates TLS (Caddy does it in two lines).
   The account home offers it under **Keep my spaces online** when built with
-  `VITE_WEAVE_HOST=https://<host>`, and every app built with it looks there
+  `VITE_MINCA_HOST=https://<host>`, and every app built with it looks there
   for an account's registry, so a new device restores from the recovery code
   alone.
 - Devices reach it at the socket its description names (`"peer": "/peer"`),
@@ -221,22 +221,22 @@ weave host --host 0.0.0.0 --port 8787 --data /var/lib/weave-host
 ## Your own host
 
 To keep your own spaces online, run a host for yourself rather than a node
-that holds your account: `weave host --free` limited to your account. It
+that holds your account: `minca host --free` limited to your account. It
 carries your spaces sealed, like any host, so the server never holds your
 recovery code or a key to your spaces, and the account home uses it like any
 other host.
 
 ```bash
-weave host --free --host 0.0.0.0 --allow did:key:zDnae…   # behind TLS
+minca host --free --host 0.0.0.0 --allow did:key:zDnae…   # behind TLS
 ```
 
 On Fly, `fly.self.toml` does it (the commands are at its top): set
-`WEAVE_HOST_ALLOW` to your account's DID (Settings, under your name), deploy,
+`MINCA_HOST_ALLOW` to your account's DID (Settings, under your name), deploy,
 then in the account home choose **Keep my spaces online**, **Use another
-host**, and paste its address. `WEAVE_HOST_FREE=1` stands for `--free`, so the
+host**, and paste its address. `MINCA_HOST_FREE=1` stands for `--free`, so the
 image needs no flags. A few dollars a month on a small machine.
 
-`weave run` is still there for a node that acts as your account (writes, runs
+`minca run` is still there for a node that acts as your account (writes, runs
 rules): it needs the account unlocked on the server, a host never does.
 
 ## Agents
@@ -245,62 +245,62 @@ In an app, choose **Connect an agent** in the account menu. It shows one
 command:
 
 ```bash
-npx @weaveprotocol/cli connect wv_…      # in this repo: npm run weave -- connect wv_…
+npx @minca/cli connect mc_…      # in this repo: npm run minca -- connect mc_…
 ```
 
-It makes a key for this computer's agent (it never leaves `~/.weave/agent/`),
+It makes a key for this computer's agent (it never leaves `~/.minca/agent/`),
 meets the app on a channel only that code opens (introduced by a relay, sealed
 end to end), and waits while you allow it at your account home, which signs a
 records-only note (`/record`) for every space in your account, for as long as
 you chose. The agent is a program connected by code, not a kind of account:
-nothing in the note marks it as an agent except that it grants records only. Then it adds `weave` to Claude Code (`claude mcp add`), Claude Desktop
+nothing in the note marks it as an agent except that it grants records only. Then it adds `minca` to Claude Code (`claude mcp add`), Claude Desktop
 and Cursor, where it finds them. `--no-configure` prints the config instead,
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
-one the app uses (`$WEAVE_RELAYS` sets the defaults).
+one the app uses (`$MINCA_RELAYS` sets the defaults).
 
-From then on the agent starts `weave mcp` itself. It's a node of its own: it
+From then on the agent starts `minca mcp` itself. It's a node of its own: it
 follows your account's list of spaces, meets your other devices over WebRTC,
 and keeps working with every tab closed. What it writes is marked as written
 under a records-only note, which the example app shows as "via agent". It
 isn't offered what needs a person (making, joining or leaving spaces, invites,
 roles, defining collections), and its note doesn't let it: it proposes
-collections with `collections_propose`, and you add them. `weave disconnect`
+collections with `collections_propose`, and you add them. `minca disconnect`
 forgets it on this computer; disconnecting it in your account home stops its
 note working everywhere.
 
-`weave mcp --account` serves the unlocked account instead, as you:
+`minca mcp --account` serves the unlocked account instead, as you:
 
 ```json
 {
   "mcpServers": {
-    "weave": { "command": "weave", "args": ["mcp", "--account"], "env": { "WEAVE_PASSPHRASE": "…" } }
+    "minca": { "command": "minca", "args": ["mcp", "--account"], "env": { "MINCA_PASSPHRASE": "…" } }
   }
 }
 ```
 
-It works offline against the folder; with `weave run` on the same folder,
+It works offline against the folder; with `minca run` on the same folder,
 whatever the agent writes is synced within seconds.
 
 ### The agent on its own
 
-`weave agent` runs the connected agent without a chat client: its own node,
+`minca agent` runs the connected agent without a chat client: its own node,
 and a chat with it in this terminal. It thinks with your own Anthropic API key,
 from `ANTHROPIC_API_KEY`, or asked for once and kept in
-`~/.weave/agent/anthropic-key`, readable only by you.
+`~/.minca/agent/anthropic-key`, readable only by you.
 
 ```bash
-npx @weaveprotocol/cli connect wv_…      # once
-npx @weaveprotocol/cli agent             # in this repo: npm run weave -- agent
+npx @minca/cli connect mc_…      # once
+npx @minca/cli agent             # in this repo: npm run minca -- agent
 ```
 
-It has the tools `weave mcp` serves an agent, and the same limits. Anything
+It has the tools `minca mcp` serves an agent, and the same limits. Anything
 that deletes or overwrites asks you first (and is refused when input is piped).
 Every model call is priced; after each answer it shows what it cost, and once
 today's spend reaches `--daily-cap` (dollars, default 2) it starts no more calls
 until tomorrow. `--model` picks the model (default `claude-opus-5-5`, or
-`$WEAVE_AGENT_MODEL`); it must be one whose price it knows.
+`$MINCA_AGENT_MODEL`); it must be one whose price it knows.
 
-Only one of `weave agent` and `weave mcp` can use an agent at a time: they sign
+Only one of `minca agent` and `minca mcp` can use an agent at a time: they sign
 with the same key, and two signing at once would fork its log, after which
 nothing more it signs counts. The second one to start says the agent is
 already running, and stops (a lock in the agent's folder, taken over once the
@@ -321,31 +321,31 @@ background.
 
 ### Always on, on a server
 
-`weave agent --no-chat` runs your rules with every device of yours closed; on
+`minca agent --no-chat` runs your rules with every device of yours closed; on
 a server it stays that way. `fly.agent.toml` and `Dockerfile.agent` do it on
 Fly (the commands are at the top of the toml):
 
 1. Deploy it with your model's key as a secret (`ANTHROPIC_API_KEY`, or
-   `OPENAI_API_KEY` with `--provider openai …` in `WEAVE_AGENT_ARGS`).
+   `OPENAI_API_KEY` with `--provider openai …` in `MINCA_AGENT_ARGS`).
 2. In an app, choose **Connect an agent**, and run the command it shows over
    `fly ssh console`, with `--no-configure`. Allow it at your account home.
 3. It starts within half a minute, and after every restart.
 
-`WEAVE_HOSTS=https://<host>` lets it find your spaces through the host your
+`MINCA_HOSTS=https://<host>` lets it find your spaces through the host your
 account uses, with none of your devices online. The same image runs a
-community's bot: `WEAVE_AGENT_ARGS="--bot"`, then the command the app shows
-under **Set up this community**, **Add a bot** (`weave agent --bot --name …
+community's bot: `MINCA_AGENT_ARGS="--bot"`, then the command the app shows
+under **Set up this community**, **Add a bot** (`minca agent --bot --name …
 --invite …`) over `fly ssh console`, and the bot's password as the secret
-`WEAVE_PASSPHRASE`. Its daily cap (`--daily-cap`) is the most it can cost you.
+`MINCA_PASSPHRASE`. Its daily cap (`--daily-cap`) is the most it can cost you.
 
 ### Other models
 
-At a terminal, the first `weave agent` asks where the model runs (Claude,
+At a terminal, the first `minca agent` asks where the model runs (Claude,
 DeepSeek, Kimi, OpenAI, OpenRouter, Ollama or another server), which model
-and at what price, and keeps the answer in `~/.weave/agent/model.json`.
-`weave agent --setup` asks again; flags and the environment win over it.
+and at what price, and keeps the answer in `~/.minca/agent/model.json`.
+`minca agent --setup` asks again; flags and the environment win over it.
 
-`weave agent` thinks with Anthropic's models by default. `--provider openai`
+`minca agent` thinks with Anthropic's models by default. `--provider openai`
 talks to any server that speaks OpenAI's Chat Completions instead: OpenAI,
 OpenRouter, DeepSeek, Kimi, Groq, Mistral, or a model on your own machine.
 The tools, the confirmations, the caps and the rules are the same whichever
@@ -353,24 +353,24 @@ model answers.
 
 ```bash
 # DeepSeek
-OPENAI_API_KEY=sk-… weave agent --provider openai --base-url https://api.deepseek.com \
+OPENAI_API_KEY=sk-… minca agent --provider openai --base-url https://api.deepseek.com \
   --model deepseek-v4-pro --price 0.66/1.98
 
 # A model on this machine, with Ollama: no key, nothing leaves the machine
-weave agent --provider openai --base-url http://localhost:11434/v1 --model qwen3 --price 0/0
+minca agent --provider openai --base-url http://localhost:11434/v1 --model qwen3 --price 0/0
 ```
 
 - `--price` is dollars per million tokens, `input/output` or
-  `input/output/cached`. It is needed for any model whose price `weave agent`
+  `input/output/cached`. It is needed for any model whose price `minca agent`
   doesn't know (it knows Anthropic's), since the daily caps depend on it.
-- The key comes from `OPENAI_API_KEY` (or `WEAVE_AGENT_API_KEY`), or is asked
-  for once and kept in `~/.weave/agent/openai-key`. A server on `localhost`
+- The key comes from `OPENAI_API_KEY` (or `MINCA_AGENT_API_KEY`), or is asked
+  for once and kept in `~/.minca/agent/openai-key`. A server on `localhost`
   needs none.
 - `--base-url` with the default provider points it at an Anthropic-compatible
   endpoint instead (DeepSeek and Kimi offer one); Anthropic's own additions,
   like thinking and fallbacks, are left out there.
-- `WEAVE_AGENT_PROVIDER`, `WEAVE_AGENT_MODEL`, `WEAVE_AGENT_BASE_URL` and
-  `WEAVE_AGENT_PRICE` set the same from the environment.
+- `MINCA_AGENT_PROVIDER`, `MINCA_AGENT_MODEL`, `MINCA_AGENT_BASE_URL` and
+  `MINCA_AGENT_PRICE` set the same from the environment.
 
 Models differ a lot in how well they use tools and resist instructions hidden
 in what they read. That matters most for a bot that writes in a community:
@@ -378,7 +378,7 @@ its role still limits what it can do, but pick a strong model for one.
 
 ### A bot for a space
 
-`weave agent --bot` runs an account of its own as a **bot**: something a
+`minca agent --bot` runs an account of its own as a **bot**: something a
 community adds to its spaces to help everyone, rather than one person's
 agent. Where a space keeps `std.profile`, it sets `bot: true` on its own
 there, so apps can show it as one and offer it under "Done by"; where it
@@ -388,7 +388,7 @@ as itself, and every member's device checks what it writes against its role.
 People mention it by its own name.
 
 ```bash
-weave agent --bot
+minca agent --bot
 ```
 
 At a terminal that is all: it asks the bot's name, makes its account (with
@@ -397,13 +397,13 @@ made by someone who may assign that role, and joins. The name is what the space 
 type after "@" to mention it.
 
 Each bot is kept in a folder of its own, `bots/<name>` in the data folder
-(`~/.weave/bots/club-bot`), with its account, model, API key and spending.
-It is never the account the data folder already holds. `weave bots` lists
-them; `weave agent --bot --name "Club Bot"` starts one again, and at a
-terminal `weave agent --bot` asks which. By flags alone:
+(`~/.minca/bots/club-bot`), with its account, model, API key and spending.
+It is never the account the data folder already holds. `minca bots` lists
+them; `minca agent --bot --name "Club Bot"` starts one again, and at a
+terminal `minca agent --bot` asks which. By flags alone:
 
 ```bash
-WEAVE_PASSPHRASE=… weave agent --bot --name "Club Bot" --invite 'https://…#invite=…' --no-chat
+MINCA_PASSPHRASE=… minca agent --bot --name "Club Bot" --invite 'https://…#invite=…' --no-chat
 ```
 
 A bot made before bots had folders of their own kept its account at the top
@@ -414,14 +414,14 @@ Someone who may instruct it adds rules for it, as themselves, naming it in
 `by`:
 
 ```bash
-weave rule add         # at a terminal: space, what sets it off, from whom, what to do, who does it
-weave rule add --space <id> --name "Answer when mentioned" --collection std.message \
+minca rule add         # at a terminal: space, what sets it off, from whom, what to do, who does it
+minca rule add --space <id> --name "Answer when mentioned" --collection std.message \
   --where '{"mentions":{"$contains":"$me"}}' --from member --do "Answer them briefly" --by <bot DID>
-weave rule add --space <id> --name Mornings --every "0 8 * * 1-5" --do "Post today's plan" --by me
+minca rule add --space <id> --name Mornings --every "0 8 * * 1-5" --do "Post today's plan" --by me
 ```
 
-`weave rule add` defines `std.rule` in the space first when it has none and
-you may add collections; `weave collections define --standard <std.name>`
+`minca rule add` defines `std.rule` in the space first when it has none and
+you may add collections; `minca collections define --standard <std.name>`
 does that for any collection in the library. `$me` is whoever runs the rule:
 the bot, or you.
 
@@ -466,22 +466,22 @@ still judges its writes.
 
 ## Your node follows your account
 
-Run the node as _your_ account (`weave init --existing` with your recovery code)
+Run the node as _your_ account (`minca init --existing` with your recovery code)
 and it follows the account registry: every space you create or join, on any
 device, is served by the node within moments — no invites to hand it. Leaving a
 space anywhere leaves it everywhere.
 
 The other commands work offline, on what the folder has seen. On a new
-computer, run `weave run` while a browser with your account is open, until it
+computer, run `minca run` while a browser with your account is open, until it
 says it is serving your spaces; until then a command naming one says it is
 unknown here.
 
 ## Not yet
 
-- **WebRTC in the single-file binaries.** `weave run` from npm meets devices
+- **WebRTC in the single-file binaries.** `minca run` from npm meets devices
   through relays with `node-datachannel`; the Bun binaries don't carry it, so
   browsers reach them over WebSocket only.
-- **Publishing.** `weave-protocol-cli` on npm (or a built JS package), and
+- **Publishing.** `minca-protocol-cli` on npm (or a built JS package), and
   trying the Bun binary with `node-datachannel`.
 - **Hosting, before it's offered to anyone.** The checklist, what it costs
   to run and the breach plan are in [HOSTING.md](HOSTING.md): a real Stripe

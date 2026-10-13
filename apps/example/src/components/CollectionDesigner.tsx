@@ -1,8 +1,8 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { useMayDefine } from '@weave/app-shared/may';
-import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useAccount, useCollections, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { useAction } from '@weave/app-shared/action';
+import { useMayDefine } from '@minca/app-shared/may';
+import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@minca/core';
+import { useAccount, useCollections, useNode, useProfiles } from '@minca/core/react';
+import { useAction } from '@minca/app-shared/action';
 import { nameOf, peopleFrom } from '../derive/people';
 import { collectionLabel, humanize, isObject } from '../derive/schema-ui';
 import {

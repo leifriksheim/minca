@@ -1,5 +1,5 @@
 /**
- * Delegations in Weave's JSON profile of UCAN 1.0 (spec 01 §7): the token,
+ * Delegations in Minca's JSON profile of UCAN 1.0 (spec 01 §7): the token,
  * its one form, and notes — one link from the account, never passed on.
  */
 import { test, describe } from 'node:test';
@@ -47,10 +47,10 @@ describe('the token (01 §7.1)', () => {
   // The example of spec 01 §7.8: the root key of §3.3 to the did:key spec's example key.
   const example = {
     signed:
-      '{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr"},"type":"weave/ucan/dlg@1"}',
+      '{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT"},"type":"minca/ucan/dlg@1"}',
     token:
-      '{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr"},"sig":"5nEZcQqVKr77iRLSYCRVC-W7AYbE-4MTEZSPC4FMjuQBk9UVvQLN-34gst5lghf3y0YRWT9m5Vaqkt6XcBu7Qw","type":"weave/ucan/dlg@1"}',
-    id: 'b6zstk7cjkyvhhcdfdoihjemyyq5s4frwwvk3aijuf5ykcqa4fbya',
+      '{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT"},"sig":"HBKED5Qimk7X5F0Xd79Gcm4F64GdtYbFqyt7B-kO-ZEl8e2gD3mW07VQaVYfnngREQ5FmzHLA8tCZckpLo7QDg","type":"minca/ucan/dlg@1"}',
+    id: 'bcmmtwj62gmokzcmv4h7devlpn2fgrkwof3gj6xv3lkpefcn7x6wa',
   };
 
   test('the example of 01 §7.8: its bytes, its id, and it verifies', async () => {
@@ -109,7 +109,7 @@ describe('the token (01 §7.1)', () => {
     const root = await makeKey();
     const session = await makeKey();
     const token = await note(root, session.did, { command: '/record/write', subject: 'space:bspace' });
-    assert.equal(token.type, 'weave/ucan/dlg@1');
+    assert.equal(token.type, 'minca/ucan/dlg@1');
     assert.equal(token.payload.iss, root.did);
     assert.equal(token.payload.aud, session.did);
     assert.equal(token.payload.sub, 'space:bspace');

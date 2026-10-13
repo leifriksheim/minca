@@ -1,22 +1,17 @@
 import { useState } from 'react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { useAccount, useLive, useNode } from '@weaveprotocol/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { useAccount, useLive, useNode } from '@minca/core/react';
 import { nameOf } from '../../derive/people';
 import { ago } from '../../derive/time';
-import {
-  rule as ruleCollection,
-  ruleOf,
-  ruleRun as runCollection,
-  type RuleRun,
-} from '@weaveprotocol/core/schemas';
+import { rule as ruleCollection, ruleOf, ruleRun as runCollection, type RuleRun } from '@minca/core/schemas';
 import { ideas, ruleWords, type PickedRule } from '../../rules';
 import { Person, usePeopleHere } from '../Person';
 import { Icon } from '../Icon';
 import { styles, palette } from '../../styles';
 import { RuleBuilder } from './RuleBuilder';
 import { Empty, SectionHead, iconDot, list, section } from './parts';
-import { SpaceBots } from '@weave/app-shared/CommunitySetup';
-import { useAction } from '@weave/app-shared/action';
+import { SpaceBots } from '@minca/app-shared/CommunitySetup';
+import { useAction } from '@minca/app-shared/action';
 import { useActivityOff } from '../../activity';
 
 type Open = {
@@ -161,7 +156,7 @@ export function AutomationsView({
                             run by <Person did={rule.by} />
                           </>
                         ) : agentOnly ? (
-                          `runs while ${mine ? 'your' : 'their'} agent does (weave agent)`
+                          `runs while ${mine ? 'your' : 'their'} agent does (minca agent)`
                         ) : mine ? (
                           'runs while this app is open on one of your devices'
                         ) : (

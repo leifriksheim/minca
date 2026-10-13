@@ -243,7 +243,7 @@ describe('the S3 driver', () => {
       seen.push(request);
       const url = new URL(request.url);
       const [, bucket, ...rest] = url.pathname.split('/');
-      assert.equal(bucket, 'weave');
+      assert.equal(bucket, 'minca');
       const key = rest.map(decodeURIComponent).join('/');
       if (request.method === 'PUT') {
         // The first write is turned away, as a busy bucket does: the driver waits and tries again.
@@ -280,7 +280,7 @@ describe('the S3 driver', () => {
     const bucket = fakeS3();
     const store = createS3BlobStore({
       endpoint: 'https://account.r2.test',
-      bucket: 'weave',
+      bucket: 'minca',
       accessKeyId: 'AKID',
       secretAccessKey: 'SECRET',
       prefix: 'host-1',
@@ -315,7 +315,7 @@ describe('the S3 driver', () => {
     const bucket = fakeS3(3);
     const store = createS3BlobStore({
       endpoint: 'https://account.r2.test',
-      bucket: 'weave',
+      bucket: 'minca',
       accessKeyId: 'A',
       secretAccessKey: 'S',
       fetch: bucket.fetchS3,

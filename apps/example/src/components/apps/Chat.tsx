@@ -8,19 +8,19 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { useAction } from '@weave/app-shared/action';
-import { useAccess, useAccount, useCan, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { useMayDefine } from '@weave/app-shared/may';
-import type { DirectMessage, NodeRecord, ResultOf } from '@weaveprotocol/core';
-import { channel, message, poll, positionBetween, reaction, vote } from '@weaveprotocol/core/schemas';
-import type { Channel } from '@weaveprotocol/core/schemas';
+import { useAction } from '@minca/app-shared/action';
+import { useAccess, useAccount, useCan, useLive, useNode, useProfiles } from '@minca/core/react';
+import { useMayDefine } from '@minca/app-shared/may';
+import type { DirectMessage, NodeRecord, ResultOf } from '@minca/core';
+import { channel, message, poll, positionBetween, reaction, vote } from '@minca/core/schemas';
+import type { Channel } from '@minca/core/schemas';
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
 import { useActivity, type AtWork } from '../../activity';
 import { Icon } from '../Icon';
 import { ago } from '../../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { createPortal } from 'react-dom';
-import { Modal } from '@weave/app-shared/Modal';
+import { Modal } from '@minca/app-shared/Modal';
 import { Reactions } from '../std/Reactions';
 import { useBots } from '../../bots';
 import { MentionField, MentionList, MentionText, useMentions } from '../std/Mentions';

@@ -134,7 +134,7 @@ export function createWriters(storeOf: (did: string) => HeadStore | null): Write
       const run = (queues.get(key) ?? Promise.resolve())
         .catch(() => {})
         // A key kept where other nodes can reach it takes each place under the lock they share.
-        .then(() => (storeOf(did) ? exclusively(`weave-writer:${key}`, take) : take()));
+        .then(() => (storeOf(did) ? exclusively(`minca-writer:${key}`, take) : take()));
       queues.set(key, run);
       return run;
     },

@@ -1,10 +1,10 @@
 /**
- * Rules that ask an agent: what `weave agent` tells the model when one is set
+ * Rules that ask an agent: what `minca agent` tells the model when one is set
  * off. Which rules it runs, what sets them off and what never does is
- * `startRules` in `@weaveprotocol/core/schemas`; this is only the words.
+ * `startRules` in `@minca/core/schemas`; this is only the words.
  */
-import { runAction, type P2PNode } from '@weaveprotocol/core';
-import { INSTRUCT, type RuleTrigger } from '@weaveprotocol/core/schemas';
+import { runAction, type P2PNode } from '@minca/core';
+import { INSTRUCT, type RuleTrigger } from '@minca/core/schemas';
 
 /**
  * What the model is told when a rule asks it: the rule's own words, which are

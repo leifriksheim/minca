@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { useAccount, useConnection } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { useDismiss } from '@weave/app-shared/useDismiss';
-import { useCopy } from '@weave/app-shared/action';
+import { useAccount, useConnection } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { useDismiss } from '@minca/app-shared/useDismiss';
+import { useCopy } from '@minca/app-shared/action';
 import { ConnectAgent } from './ConnectAgent';
 import { palette } from '../styles';
 
@@ -27,7 +27,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
   const openHome = () => {
     setOpen(false);
     // The account page sits beside the connect page, at whichever home the person uses.
-    globalThis.open(new URL('.', state.home).href, 'weave-account', 'popup,width=720,height=820');
+    globalThis.open(new URL('.', state.home).href, 'minca-account', 'popup,width=720,height=820');
   };
 
   return (
@@ -193,7 +193,7 @@ const menu = {
   borderRadius: palette.radius.lg,
   backgroundColor: palette.surface.card,
   boxShadow: palette.shadow.float,
-  animation: 'weave-fade .1s ease',
+  animation: 'minca-fade .1s ease',
   overflow: 'hidden',
 };
 

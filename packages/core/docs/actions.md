@@ -5,7 +5,7 @@ of them.
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md).
+> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
 
 ## Actions
 
@@ -47,14 +47,14 @@ The actions (R = readOnly, S = sensitive, D = destructive, P = peerContent):
 | `spaces_status`         | R     | **`space`**                                                                                                                                                  | `spaces.status()`                                                                                                                                                                                                                                                                                                                                                                           |
 | `spaces_profiles`       | R P   | **`space`**                                                                                                                                                  | `spaces.profiles()`                                                                                                                                                                                                                                                                                                                                                                         |
 | `collections_list`      | R P   | **`space`**, `names`                                                                                                                                         | Without `names`: each collection in a line, `{ name, title?, description?, records, links, guides? }` with `links` its link roles' names and `guides` the `std.guide` records about it, `{ key, title }`. With them: those collections in full, as `collections.list()` gives them; refuses a name the space doesn't have.                                                                  |
-| `collections_standard`  | R     | `names`                                                                                                                                                      | Without `names`: the standard library by area, each `{ name, title, description }`. With them: each definition in full, plus `summary`. Refuses a name not in the library ([what a `std.*` name means](standard-library.md#what-a-std-name-means); [spec 02 §6.4](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).                                                     |
+| `collections_standard`  | R     | `names`                                                                                                                                                      | Without `names`: the standard library by area, each `{ name, title, description }`. With them: each definition in full, plus `summary`. Refuses a name not in the library ([what a `std.*` name means](standard-library.md#what-a-std-name-means); [spec 02 §6.4](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).                                                     |
 | `collections_define`    | D     | **`space`**, **`name`**, **`schema`**, `title`, `description`, `version`, `history` (`latest`\|`all`), `links`, `rules`, `topics`                            | The definition, plus `summary`: what its rules say, in words.                                                                                                                                                                                                                                                                                                                               |
 | `collections_propose`   |       | **`space`**, **`title`**, **`collections`** (definitions, or standard names like `"std.event"`), `description`, `updates` (key of the blueprint it replaces) | Writes a `std.blueprint`, a standard name stored as the library's definition; returns `{ key, proposed, applied: false, next, collections, warnings? }`, warning when it would change a collection another applied blueprint uses. Refuses an `updates` that names no blueprint in the space, and a `std.*` collection that is not the library's ([standard library](standard-library.md)). |
 | `collections_proposals` | R P   | **`space`**                                                                                                                                                  | Blueprints: `key`, `title`, `description`, `proposedBy`, `recordsOnly?`, `updates?`, `applied`, `superseded`, `problem`, `collections[]` (each `name`, `status`, `summary`, `changes`, and `usedBy`: the applied blueprints a change would touch).                                                                                                                                          |
 | `collections_apply`     | D     | **`space`**, **`key`**                                                                                                                                       | `applyBlueprint()`: `{ applied, collections }`. Needs a grant of `/collection/define` in the space, and a note that grants it.                                                                                                                                                                                                                                                              |
 | `collections_delete`    | D     | **`space`**, **`name`**                                                                                                                                      | `collections.delete()`                                                                                                                                                                                                                                                                                                                                                                      |
 | `records_list`          | R P   | **`space`**, `collection`, `limit`, `newestFirst`                                                                                                            | `records.list()`                                                                                                                                                                                                                                                                                                                                                                            |
-| `records_query`         | R P   | **`space`**, **`collection`**, `where`, `include`, `sort`, `limit`, `cursor`                                                                                 | `records.query()` ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md))                                                                                                                                                                                                                                                                                                |
+| `records_query`         | R P   | **`space`**, **`collection`**, `where`, `include`, `sort`, `limit`, `cursor`                                                                                 | `records.query()` ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md))                                                                                                                                                                                                                                                                                                |
 | `records_get`           | R P   | **`space`**, **`key`**                                                                                                                                       | `records.get()`                                                                                                                                                                                                                                                                                                                                                                             |
 | `records_history`       | R P   | **`space`**, **`key`**                                                                                                                                       | `records.history()`                                                                                                                                                                                                                                                                                                                                                                         |
 | `records_put`           |       | **`space`**, **`collection`**, **`body`**, `key`, `links`                                                                                                    | `records.put()`                                                                                                                                                                                                                                                                                                                                                                             |
@@ -84,8 +84,8 @@ every action for the account itself; for a bot, all but `PERSON_ONLY`
 
 **Front ends.** Each exposes the same list under the same names:
 
-- **CLI** (`weave <action>`): flags from `input`. _Implementation detail._
-- **MCP** (`weave mcp`, stdio, newline-delimited JSON-RPC 2.0): `initialize`
+- **CLI** (`minca <action>`): flags from `input`. _Implementation detail._
+- **MCP** (`minca mcp`, stdio, newline-delimited JSON-RPC 2.0): `initialize`
   (protocol versions `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`;
   capability `tools`), `ping`, `tools/list`, `tools/call`. Each action becomes a
   tool with `inputSchema = input` and annotations `readOnlyHint = readOnly`,
@@ -103,17 +103,17 @@ _Source: `packages/core/src/node/actions.ts` (`callAction`, `offeredActions`), `
 
 ## The agent on a computer
 
-_Implementation detail of the CLI._ `weave connect` makes a P-256 key once and
+_Implementation detail of the CLI._ `minca connect` makes a P-256 key once and
 keeps it as JWK in `<home>/agent/key.json` (mode 0600), the grant in
-`grant.json`, and the spaces in `data/`. `weave mcp` then starts a node of its
+`grant.json`, and the spaces in `data/`. `minca mcp` then starts a node of its
 own: signer `grantSigner(grant)`, session key = the agent key, the grant's
-account key when present, relays = the grant's ∪ `$WEAVE_RELAYS` (default
+account key when present, relays = the grant's ∪ `$MINCA_RELAYS` (default
 `wss://p2p-web-relay.fly.dev`), WebRTC via `node-datachannel`; joins any granted
 spaces it lacks; wraps the node with `asAgent`; holds every space; and serves
 MCP over stdio: `offeredActions({ agent: true })`, without the `PERSON_ONLY`
 actions or direct messages ([actions](#actions)).
 
-Only one `weave mcp` or `weave agent` with the same `--home` runs at a time:
+Only one `minca mcp` or `minca agent` with the same `--home` runs at a time:
 both sign with the one agent key, which is held under a lock in the agent's
 folder, so a second says the agent is already running and stops.
 

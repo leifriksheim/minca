@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useNode } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
-import { SpaceHosting } from '@weave/app-shared/SpaceHosting';
-import { SpaceBots } from '@weave/app-shared/CommunitySetup';
+import { useNode } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
+import { SpaceHosting } from '@minca/app-shared/SpaceHosting';
+import { SpaceBots } from '@minca/app-shared/CommunitySetup';
 import type { Assembly, PartyFull } from './model';
 import {
   EVERYTHING,
@@ -14,9 +14,9 @@ import {
   type PartyRule,
 } from './schema';
 import { PARTY_RULE_LABEL, PartyChip, PartyMark, Problem, Who, decidesText } from './ui';
-import { useAction } from '@weave/app-shared/action';
-import { Shape } from '@weave/app-shared/shapes';
-import { SHAPE_CYCLE } from '@weave/app-shared/tokens';
+import { useAction } from '@minca/app-shared/action';
+import { Shape } from '@minca/app-shared/shapes';
+import { SHAPE_CYCLE } from '@minca/app-shared/tokens';
 import { SHADE_HUES, colourOf, palette, partyMarkOf } from './styles';
 
 /** A party picks one of the shapes' colours; its record keeps it as a hue */

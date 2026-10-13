@@ -1,13 +1,13 @@
-# Building on Weave
+# Building on Minca
 
-Short guides for building an app with `@weaveprotocol/core`. They ship in the
+Short guides for building an app with `@minca/core`. They ship in the
 package, so they always match the version installed: an agent working in an
-app's repository finds them at `node_modules/@weaveprotocol/core/docs/`.
+app's repository finds them at `node_modules/@minca/core/docs/`.
 
-The repository's README (https://github.com/leifriksheim/weave) gives the
+The repository's README (https://github.com/leifriksheim/minca) gives the
 whole picture, and where each thing is described. The protocol
 itself (what goes over the wire, what is signed, what every peer checks) is
-specified in `spec/` in the repository: https://github.com/leifriksheim/weave/tree/main/spec
+specified in `spec/` in the repository: https://github.com/leifriksheim/minca/tree/main/spec
 
 ## The model in ten lines
 
@@ -52,7 +52,7 @@ the others wrote.
 | Page                                                 | Covers                                                                                                                                                                                   |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [node.md](node.md)                                   | `createNode`: configuration, root signers and session notes, stores, holding spaces, following the account, events, the network, the app-side client, carriers and hosting, doors, React |
-| [sign-in.md](sign-in.md)                             | `createWeaveAuth`: places, account stores, ways in, passkeys, staying signed in, pods, pairing, the account home's side                                                                  |
+| [sign-in.md](sign-in.md)                             | `createMincaAuth`: places, account stores, ways in, passkeys, staying signed in, pods, pairing, the account home's side                                                                  |
 | [actions.md](actions.md)                             | The node's actions, and the CLI, MCP and WebMCP tools made of them                                                                                                                       |
 | [query-format.md](query-format.md)                   | The JSON query format: filters, operators, sort and cursor, include                                                                                                                      |
 | [standard-library.md](standard-library.md)           | Every `std.*` collection, and the conventions they follow                                                                                                                                |
@@ -69,11 +69,11 @@ the others wrote.
 
 ## Rules of thumb
 
-- Import only from the package's entry points: `@weaveprotocol/core`, and
+- Import only from the package's entry points: `@minca/core`, and
   `/react`, `/session`, `/schemas`, `/elements`, `/calls` for those parts.
 - Name your collections reverse-DNS style, `app.<yours>.<thing>`. `sys.*` is
   the protocol's own, and `std.*` is the shared library in `/schemas`.
-- Check the standard library (`@weaveprotocol/core/schemas`) before defining a
+- Check the standard library (`@minca/core/schemas`) before defining a
   reaction, comment, tag, message, task or poll of your own. Using the same
   one is how two apps see each other's data.
 - Never keep state outside records if other people should see it. Records are
@@ -83,7 +83,7 @@ the others wrote.
 
 ## Planned in the library
 
-What the protocol still has planned is in [the spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md),
+What the protocol still has planned is in [the spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md),
 under **Planned** in each part. Library work that isn't protocol:
 
 - **Typed queries, further.** Typed field paths and operator values in
@@ -95,10 +95,10 @@ under **Planned** in each part. Library work that isn't protocol:
   `node.use(space, Poll)`.
 - **Definitions that update themselves.** `useSchemas` and `applyBlueprint` applying
   harmless changes, with `differences()` in `packages/core/src/schemas/blueprints.ts`
-  replaced by the planned `compare` ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md),
+  replaced by the planned `compare` ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md),
   compatible definitions).
 - **Asking for what a version cites.** A version pending on a cited version
   from a collection this node doesn't hold, asking for it
   ([spec 09 §9](../../../spec/09-contracts.md#9-planned-asking-for-what-a-version-cites),
-  [#79](https://github.com/leifriksheim/weave/issues/79)).
+  [#79](https://github.com/leifriksheim/minca/issues/79)).
 - **Web components** for the standard schemas.

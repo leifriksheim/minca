@@ -201,7 +201,7 @@ describe('WebSocket transport', () => {
       return { transport, seen: watch(transport) };
     }
 
-    /** A node whose session key acts for an account, as `weave run` does: the key changes on restart, the account doesn't */
+    /** A node whose session key acts for an account, as `minca run` does: the key changes on restart, the account doesn't */
     async function sessionNode() {
       const account = await nodeIdentity();
       const session = await nodeIdentity();

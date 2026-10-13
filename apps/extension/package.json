@@ -1,5 +1,5 @@
 {
-  "name": "weave-extension",
+  "name": "@minca/extension",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@weave/app-shared": "*",
-    "@weaveprotocol/core": "*"
+    "@minca/app-shared": "*",
+    "@minca/core": "*"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.0",

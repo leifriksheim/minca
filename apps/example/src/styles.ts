@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { baseCss, hoverCss, palette, styles } from '@weave/app-shared/styles';
+import { baseCss, hoverCss, palette, styles } from '@minca/app-shared/styles';
 
 export { palette, styles };
 
@@ -22,10 +22,10 @@ const SIDEBAR_WIDTH = 248;
  * instead of an inline style. The rest of the layout stays inline.
  */
 export function injectBaseStyles(): void {
-  if (globalThis.document.getElementById('weave-base-styles')) return;
+  if (globalThis.document.getElementById('minca-base-styles')) return;
 
   const style = globalThis.document.createElement('style');
-  style.id = 'weave-base-styles';
+  style.id = 'minca-base-styles';
   style.textContent = `
     ${baseCss}
 
@@ -418,7 +418,7 @@ export function injectBaseStyles(): void {
         max-height: 92dvh;
         border-radius: ${radius.lg}px !important;
         padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
-        animation: weave-sheet .2s ease !important;
+        animation: minca-sheet .2s ease !important;
       }
 
       /* Floating panels are anchored to what opened them, which on a phone
@@ -450,7 +450,7 @@ export function injectBaseStyles(): void {
       .code-layer, .mention-layer { font-size: 16px !important; }
     }
 
-    @keyframes weave-sheet { from { transform: translateY(100%) } to { transform: none } }
+    @keyframes minca-sheet { from { transform: translateY(100%) } to { transform: none } }
   `;
   globalThis.document.head.appendChild(style);
 }

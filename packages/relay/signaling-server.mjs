@@ -5,7 +5,7 @@
  *   node packages/relay/signaling-server.mjs [port]
  *   TURN_SECRET=… TURN_URLS=turn:host:3478 node packages/relay/signaling-server.mjs
  *
- * An always-on node (`weave serve`) runs the same relay next to its own
+ * An always-on node (`minca serve`) runs the same relay next to its own
  * sockets, so either works as a relay for the app.
  */
 

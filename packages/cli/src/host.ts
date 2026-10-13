@@ -1,11 +1,11 @@
 /**
- * `weave host`: a hosting service in one process.
+ * `minca host`: a hosting service in one process.
  *
  * A host node (`packages/core/src/node/host.ts`) carrying every subscription's spaces, served
- * the way `weave run` serves: sockets at `/peer?space=`, the relay on every
+ * the way `minca run` serves: sockets at `/peer?space=`, the relay on every
  * other path. Plus what a home and a person need (spec/06-nodes-and-sessions.md, Hosts):
  *
- *   GET    /.well-known/weave-host                who the host is: key, name, plans, where it takes peers
+ *   GET    /.well-known/minca-host                who the host is: key, name, plans, where it takes peers
  *   GET    /host/subscriptions/:id                its status, signed by the host
  *   PUT    /host/subscriptions/:id/carry          { account, invite } — the account's carry space
  *   DELETE /host/subscriptions/:id/carry
@@ -49,7 +49,7 @@ import {
   type HostStatus,
   type PayAnswer,
   type StoreFactory,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 import { isRecord, messageOf } from './json.js';
 import { createInboundPeers, serve, type Served } from './serve.js';
 import type { WalletPayments } from './wallet.js';
@@ -90,7 +90,7 @@ export interface HostOptions {
   readonly stores: StoreFactory;
   readonly port: number;
   readonly host?: string;
-  /** What it calls itself; default "Weave host" */
+  /** What it calls itself; default "Minca host" */
   readonly name?: string;
   /** Its price, for people ("$4 a month or $36 a year"); default from the wallet prices */
   readonly price?: string;
@@ -243,7 +243,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   const wallet = options.wallet ?? null;
   const reminders = options.reminders && options.publicUrl ? options.reminders : null;
   if (options.reminders && !options.publicUrl)
-    throw new Error('Reminders by email need the host’s public address (WEAVE_HOST_URL) for their links');
+    throw new Error('Reminders by email need the host’s public address (MINCA_HOST_URL) for their links');
   // The transactions already counted, so none pays twice — on disk, and in the bucket when there is one.
   const spentStore = wallet || billing ? await options.stores('host-wallet') : null;
   const isSpent = async (tx: string) =>
@@ -359,7 +359,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   const signedStatusOf = async (id: string) =>
     signStatus(await statusOf(id), options.key.privateKey, provider);
 
-  const name = options.name?.trim() || 'Weave host';
+  const name = options.name?.trim() || 'Minca host';
   // Card prices as people read them, asked of the provider once; its plan names without them.
   const labels: Record<string, string> = (await billing?.labels?.().catch(() => ({}))) ?? {};
   const period = (id: string) => (id === 'yearly' ? 'a year' : 'a month');
@@ -401,7 +401,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     mirror: options.mirror ?? null,
   });
   const description: HostDescription = {
-    weave: 'host/1',
+    minca: 'host/1',
     did: node.did,
     name,
     free: !!options.free,

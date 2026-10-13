@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useNode, useLive, useProfiles, useCan } from '@weaveprotocol/core/react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { reaction, comment, tag } from '@weaveprotocol/core/schemas';
+import { useNode, useLive, useProfiles, useCan } from '@minca/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { reaction, comment, tag } from '@minca/core/schemas';
 import {
   belonging,
   bodyOf,
@@ -22,13 +22,13 @@ import { nameOf, peopleFrom, writerOf } from '../derive/people';
 import { ago } from '../derive/time';
 import { SchemaForm, FieldInput } from './SchemaForm';
 import { Value } from './Value';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { Reactions } from './std/Reactions';
 import { Tags } from './std/Tags';
 import { Comments } from './std/Comments';
 import { LinkPicker } from './LinkPicker';
 import { styles, palette, ui } from '../styles';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
 
@@ -666,7 +666,7 @@ const scrimStyle = {
   inset: 0,
   background: `color-mix(in srgb, ${palette.ink.strong} 18%, transparent)`,
   zIndex: 30,
-  animation: 'weave-fade .12s ease',
+  animation: 'minca-fade .12s ease',
 };
 const panel = {
   position: 'fixed' as const,
@@ -679,7 +679,7 @@ const panel = {
   zIndex: 31,
   display: 'flex',
   flexDirection: 'column' as const,
-  animation: 'weave-slide .16s ease',
+  animation: 'minca-slide .16s ease',
 };
 const bigTitle = {
   fontFamily: palette.display,

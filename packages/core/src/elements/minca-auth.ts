@@ -1,29 +1,29 @@
 /**
- * @module elements/weave-auth
- * `<weave-auth>`: the whole sign-in flow as one element.
+ * @module elements/minca-auth
+ * `<minca-auth>`: the whole sign-in flow as one element.
  *
  * ```html
- * <weave-auth app-name="Todo" relays="wss://relay.example"></weave-auth>
+ * <minca-auth app-name="Todo" relays="wss://relay.example"></minca-auth>
  * <script type="module">
- *   import '@weaveprotocol/core/elements';
- *   document.querySelector('weave-auth').addEventListener('weave-session', (event) => {
+ *   import '@minca/core/elements';
+ *   document.querySelector('minca-auth').addEventListener('minca-session', (event) => {
  *     const session = event.detail.session;   // null when signed out
  *     if (session) start(session.node);
  *   });
  * </script>
  * ```
  *
- * Or hand it a flow you made yourself: `element.auth = createWeaveAuth({ … })`.
+ * Or hand it a flow you made yourself: `element.auth = createMincaAuth({ … })`.
  * It draws into its light DOM, not a shadow root, because password managers
  * fill forms there far more reliably; its styles are scoped to the element.
  */
 import {
-  createWeaveAuth,
+  createMincaAuth,
   MIN_PASSWORD_LENGTH,
   type AuthError,
   type AuthState,
-  type WeaveAuth,
-  type WeaveSession,
+  type MincaAuth,
+  type MincaSession,
 } from '../session/auth.js';
 import { accountCredentialName, offerToSave, recoveryKit } from '../session/credentials.js';
 import type { PairingStage } from '../session/pairing.js';
@@ -31,9 +31,9 @@ import type { AccountSummary } from '../identity/account-store.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
 import { AUTH_CSS } from './auth-styles.js';
 
-/** What `weave-session` carries */
-export interface WeaveSessionEventDetail {
-  readonly session: WeaveSession | null;
+/** What `minca-session` carries */
+export interface MincaSessionEventDetail {
+  readonly session: MincaSession | null;
 }
 
 // Where there is no DOM the module still loads; the element is only ever made where there is one.
@@ -216,10 +216,10 @@ function describePairing(stage: PairingStage): string {
   }
 }
 
-export class WeaveAuthElement extends Base {
-  #auth: WeaveAuth | null = null;
+export class MincaAuthElement extends Base {
+  #auth: MincaAuth | null = null;
   #unsubscribe: (() => void) | null = null;
-  #announced: WeaveSession | null | undefined = undefined;
+  #announced: MincaSession | null | undefined = undefined;
 
   // What only this element cares about: which fold is open, what is typed.
   #drafts = new Map<string, string>();
@@ -233,8 +233,8 @@ export class WeaveAuthElement extends Base {
   #lastStage: string | null = null;
 
   /** The flow this element draws. Set it to share one with the rest of the page; otherwise one is made from the attributes. */
-  get auth(): WeaveAuth {
-    this.#auth ??= createWeaveAuth({
+  get auth(): MincaAuth {
+    this.#auth ??= createMincaAuth({
       ...(this.getAttribute('app-name') ? { appName: this.getAttribute('app-name')! } : {}),
       network: {
         relays: (this.getAttribute('relays') ?? '')
@@ -250,14 +250,14 @@ export class WeaveAuthElement extends Base {
     return this.#auth;
   }
 
-  set auth(auth: WeaveAuth) {
+  set auth(auth: MincaAuth) {
     if (auth === this.#auth) return;
     this.#auth = auth;
     if (this.isConnected) this.#follow();
   }
 
   connectedCallback(): void {
-    adoptStyles('weave-auth', AUTH_CSS);
+    adoptStyles('minca-auth', AUTH_CSS);
     if (this.#auth) {
       this.#follow();
       return;
@@ -295,7 +295,7 @@ export class WeaveAuthElement extends Base {
     if (session !== this.#announced) {
       this.#announced = session;
       this.dispatchEvent(
-        new CustomEvent<WeaveSessionEventDetail>('weave-session', {
+        new CustomEvent<MincaSessionEventDetail>('minca-session', {
           detail: { session },
           bubbles: true,
           composed: true,
@@ -995,19 +995,19 @@ export class WeaveAuthElement extends Base {
   }
 }
 
-/** Registers `<weave-auth>`, once. Importing this module does it for you. */
-export function defineWeaveAuth(tag = 'weave-auth'): void {
+/** Registers `<minca-auth>`, once. Importing this module does it for you. */
+export function defineMincaAuth(tag = 'minca-auth'): void {
   const registry = globalThis.customElements;
-  if (registry && !registry.get(tag)) registry.define(tag, WeaveAuthElement);
+  if (registry && !registry.get(tag)) registry.define(tag, MincaAuthElement);
 }
 
-defineWeaveAuth();
+defineMincaAuth();
 
 declare global {
   interface HTMLElementTagNameMap {
-    'weave-auth': WeaveAuthElement;
+    'minca-auth': MincaAuthElement;
   }
   interface HTMLElementEventMap {
-    'weave-session': CustomEvent<WeaveSessionEventDetail>;
+    'minca-session': CustomEvent<MincaSessionEventDetail>;
   }
 }

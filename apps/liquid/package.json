@@ -1,5 +1,5 @@
 {
-  "name": "@weave/liquid",
+  "name": "@minca/liquid",
   "private": true,
   "type": "module",
   "description": "Liquid: an assembly that decides together, where anyone can vote or trust someone to vote for them, topic by topic. A mini app: a standalone site, and ./app for a host like the example app.",
@@ -8,11 +8,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tests",
-    "test": "node --conditions=@weaveprotocol/source --import tsx --test tests/*.test.ts"
+    "test": "node --conditions=@minca/source --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
-    "@weave/app-shared": "*",
-    "@weaveprotocol/core": "*",
+    "@minca/app-shared": "*",
+    "@minca/core": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

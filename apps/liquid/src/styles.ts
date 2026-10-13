@@ -1,6 +1,6 @@
-import { baseCss, hoverCss, palette } from '@weave/app-shared/styles';
-import { SHAPE_CYCLE, type ShapeColour } from '@weave/app-shared/tokens';
-import { shapeFor, type ShapeKind } from '@weave/app-shared/shapes';
+import { baseCss, hoverCss, palette } from '@minca/app-shared/styles';
+import { SHAPE_CYCLE, type ShapeColour } from '@minca/app-shared/tokens';
+import { shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
 
 export { palette };
 
@@ -244,8 +244,8 @@ export function injectAppStyles(): void {
     .lq-path { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; }
     .lq-path-arrow { color: ${ink.faint}; }
 
-    .lq-rise { animation: weave-rise .22s cubic-bezier(.2, .8, .2, 1) both; }
-    .lq-fade { animation: weave-fade .2s ease both; }
+    .lq-rise { animation: minca-rise .22s cubic-bezier(.2, .8, .2, 1) both; }
+    .lq-fade { animation: minca-fade .2s ease both; }
 
     .lq-hero-art { width: 100%; max-width: 440px; height: auto; }
     /* How far below the top a column sticks: under the standalone header, or at the top of a host's frame */

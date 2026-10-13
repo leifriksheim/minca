@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
-import { useAccount, useCan, useLive, useNode } from '@weaveprotocol/core/react';
-import type { IncludedOf, P2PNode, QueryRecord } from '@weaveprotocol/core';
-import { comment, event, rsvp, type CalendarEvent, type Rsvp } from '@weaveprotocol/core/schemas';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useAccount, useCan, useLive, useNode } from '@minca/core/react';
+import type { IncludedOf, P2PNode, QueryRecord } from '@minca/core';
+import { comment, event, rsvp, type CalendarEvent, type Rsvp } from '@minca/core/schemas';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
 import { respondingTo } from '../../derive/people';
 import {
   addDays,

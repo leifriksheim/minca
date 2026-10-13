@@ -11,7 +11,7 @@
  * messages only; anything human-readable goes to stderr.
  */
 import { createInterface } from 'node:readline';
-import { callAction, offeredActions, type NodeAction, type P2PNode } from '@weaveprotocol/core';
+import { callAction, offeredActions, type NodeAction, type P2PNode } from '@minca/core';
 import { isRecord } from './json.js';
 
 const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -36,7 +36,7 @@ type JsonRpcResponse =
   | { jsonrpc: '2.0'; id: string | number | null; error: { code: number; message: string } };
 
 export interface McpOptions {
-  /** Serving an agent's node (`weave connect`), not the account itself */
+  /** Serving an agent's node (`minca connect`), not the account itself */
   readonly agent?: boolean;
   /** A bot: an account of its own that spaces added, offered what an agent is */
   readonly bot?: boolean;

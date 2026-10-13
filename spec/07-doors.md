@@ -46,8 +46,8 @@ Both of a door's keys are derived from the account's **contact key**
 
 ```
 ikm         = contact key private scalar (32 bytes)
-door key    = P-256 scalar from HKDF-SHA-256(ikm, salt = empty, info = UTF-8("weave/p256-door-key/v1|" + doorId), L = 48)
-signing key = P-256 scalar from HKDF-SHA-256(ikm, salt = empty, info = UTF-8("weave/p256-door-sign-key/v1|" + doorId), L = 48)
+door key    = P-256 scalar from HKDF-SHA-256(ikm, salt = empty, info = UTF-8("minca/p256-door-key/v1|" + doorId), L = 48)
+signing key = P-256 scalar from HKDF-SHA-256(ikm, salt = empty, info = UTF-8("minca/p256-door-sign-key/v1|" + doorId), L = 48)
 ```
 
 The 48 bytes are reduced to a scalar exactly as the root key is
@@ -104,7 +104,7 @@ _Source: `packages/core/src/doors/doors.ts` (`encodeDoorCode`, `parseDoorCode`, 
 A door's knocks are filed under its **topic**, a hash of its signing key:
 
 ```
-topic = base64url( SHA-256( UTF-8("weave/door-topic/v1|" + sign) ) )     — 43 characters
+topic = base64url( SHA-256( UTF-8("minca/door-topic/v1|" + sign) ) )     — 43 characters
 ```
 
 A relay can check that whoever clears a topic holds the key it came from (§5),
@@ -165,7 +165,7 @@ needs no `join` and names no DID.
 ```
 
 - `sig` is the door signing key over
-  `UTF-8("weave/door-purge/v1|" + topic + "|" + nonce + "|" + ids)`, where
+  `UTF-8("minca/door-purge/v1|" + topic + "|" + nonce + "|" + ids)`, where
   `ids` is the ids sorted and joined with `,`, or `*` when `ids` is absent
   (clear everything).
 - The relay MUST check that `topic` is the hash of `sign` (§4) and that `sig`
@@ -208,7 +208,7 @@ keeps its code working.
 > knock on an existing door. A fix budgets IPv6 at /64, /56 and /48 together,
 > and keeps the reserve for topics that existed before the mailbox filled.
 > Other implementations SHOULD NOT copy these limits. Tracked in
-> [#23](https://github.com/leifriksheim/weave/issues/23).
+> [#23](https://github.com/leifriksheim/minca/issues/23).
 
 A relay need not keep its mailbox across a restart (the reference relay keeps
 it in memory), which is one reason a knock goes to every relay a door names.
@@ -235,11 +235,11 @@ A knock is a JSON object, signed by the knocker's **session key**:
 
 ```
 sig    = ECDSA-P256-SHA256(session private key, UTF-8(canonicalJSON(body)))   — 64 bytes r‖s, base64url
-sealed = HPKE(door, "weave/knock/v1", { door }, UTF-8(JSON.stringify({ body, sig })))
+sealed = HPKE(door, "minca/knock/v1", { door }, UTF-8(JSON.stringify({ body, sig })))
 ```
 
 `HPKE` is sealing to a key ([01 §9.2](01-identity.md)): to the door key, with
-label `weave/knock/v1` and bound `{ "door": <the door key> }`. The blob is
+label `minca/knock/v1` and bound `{ "door": <the door key> }`. The blob is
 `base64url(0x01 ‖ ephemeral point (65 bytes) ‖ ciphertext)`.
 
 A knocker drops a knock as soon as it signs it.
@@ -249,7 +249,7 @@ A knocker drops a knock as soon as it signs it.
 A door's owner MUST treat a blob as a knock only if all of these hold, and
 otherwise ignore it. `receivedAt` is the relay's `at` for the blob.
 
-1. It opens with the door key, label `weave/knock/v1` and bound `{ "door": <door public key> }`.
+1. It opens with the door key, label `minca/knock/v1` and bound `{ "door": <door public key> }`.
 2. `body.v` is 2 and `body.door` is this door's public key.
 3. Every field has the type and size above.
 4. **Time.** `at` is no more than 5 minutes after now and no more than 14 days
@@ -330,7 +330,7 @@ only ([06 §2.8](06-nodes-and-sessions.md)).
   home, whose note lasts up to its grant's days) can still knock, because the
   owner can't see the knocker's revocations. Revoking a session's note when
   it ends is planned in [01 §7.6](01-identity.md)
-  ([#165](https://github.com/leifriksheim/weave/issues/165)).
+  ([#165](https://github.com/leifriksheim/minca/issues/165)).
 - **Leaked invites.** The invite in a knock is multi-use until the knocker
   closes it. Only the answer, signed with the door's key, makes someone the
   knocker's contact; the invite is closed then
@@ -361,19 +361,19 @@ opposite of "the seed is the account".
 2. **DID → PDS**, from the DID document's `AtprotoPersonalDataServer` service
    (`did:plc` through the PLC directory, `did:web` through the domain).
 3. **PDS → door.** `com.atproto.repo.getRecord`, collection
-   `org.weaveprotocol.door`, key `self`:
-   `{ "$type": "org.weaveprotocol.door", "code": "<door code>", "createdAt": "…" }`.
+   `org.minca.door`, key `self`:
+   `{ "$type": "org.minca.door", "code": "<door code>", "createdAt": "…" }`.
    The repository is signed, so the record is the handle owner's word.
 
 **A checked handle on a knock.** A knock gains an optional `handle` and a
 `handleProof`: the knocker's own door signing key over
-`weave/knock-handle/v1|<door knocked on>|<knock at>`. The owner resolves the
+`minca/knock-handle/v1|<door knocked on>|<knock at>`. The owner resolves the
 handle, reads the knocker's own door record, and checks the proof against the
 `sign` key in that code. This proves the knocker controls the handle's
 repository and a door, without their account DID becoming public.
 
 **Linking a handle** happens at the account home: ATProto OAuth (PAR, PKCE,
-DPoP) asking only to write `org.weaveprotocol.door`; the home opens or picks a
+DPoP) asking only to write `org.minca.door`; the home opens or picks a
 door and writes the record. Unlinking deletes it; rotating writes another
 door's code into it. The account registry remembers which door a handle points
 at.
@@ -384,9 +384,9 @@ limit who may knock is planned in
 
 **Trade-offs.** The PLC directory, a DoH resolver and `bsky.social` owning its
 subdomains become dependencies of _discovery_ only: contacts already made are
-Weave spaces and survive them. A door record makes "this handle uses Weave"
+Minca spaces and survive them. A door record makes "this handle uses Minca"
 public, which is opt-in. A second provider should follow: plain DNS,
-`_weave.<domain>` TXT holding a door code, for people with a domain and no
+`_minca.<domain>` TXT holding a door code, for people with a domain and no
 ATProto account.
 
 ## 10. Not yet specified

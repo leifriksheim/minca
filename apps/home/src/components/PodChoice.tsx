@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { AuthError, Place, PodContents } from '@weaveprotocol/core/session';
-import { Modal } from '@weave/app-shared/Modal';
+import type { AuthError, Place, PodContents } from '@minca/core/session';
+import { Modal } from '@minca/app-shared/Modal';
 import { styles, palette } from '../styles';
 
 /**

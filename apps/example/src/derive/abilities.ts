@@ -10,9 +10,9 @@ import {
   ROLE_UNASSIGN,
   SPACE_KEEPERS,
   SPACE_RELAYS,
-} from '@weaveprotocol/core';
-import type { SpaceGrant as Grant, SpaceAccess } from '@weaveprotocol/core';
-import { describeGrant } from '@weave/app-shared/may';
+} from '@minca/core';
+import type { SpaceGrant as Grant, SpaceAccess } from '@minca/core';
+import { describeGrant } from '@minca/app-shared/may';
 
 /** A role as the space has it now */
 export type RoleView = SpaceAccess['roles'][number];

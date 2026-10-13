@@ -1,9 +1,9 @@
-# Weave home
+# Minca home
 
-Your own account home: the one place your Weave account is ever unlocked.
+Your own account home: the one place your Minca account is ever unlocked.
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/leifriksheim/weave&base=apps/home)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/leifriksheim/weave&root-directory=apps/home)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/leifriksheim/minca&base=apps/home)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/leifriksheim/minca&root-directory=apps/home)
 
 Apps never sign you in. They open your home in a small window, you sign in
 there — with a passkey, or the password your password manager keeps —
@@ -40,9 +40,9 @@ Settings, as build-time environment variables:
 | Variable             | Default                       |                                                                                             |
 | -------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
 | `VITE_SIGNALING_URL` | `wss://p2p-web-relay.fly.dev` | Relays, comma separated. Must include one your apps use, or they cannot sync with the home. |
-| `VITE_WEAVE_NODES`   | —                             | Always-on nodes (`weave run`) to keep a socket to                                           |
+| `VITE_MINCA_NODES`   | —                             | Always-on nodes (`minca run`) to keep a socket to                                           |
 
-Then use it from any Weave app: choose **Use your own home** when connecting
+Then use it from any Minca app: choose **Use your own home** when connecting
 and type its address. The app remembers it, and joins the relays your home
 uses, so the two sync even if they were set up with different ones.
 
@@ -75,7 +75,7 @@ either, every visit asks for the recovery code, and it ends up being used as a
 password after all.
 
 Last, in a browser that can open folders, you are offered a **pod** — a folder
-on your computer that holds your data, which any Weave app you point at it can
+on your computer that holds your data, which any Minca app you point at it can
 open. Or keep it in this browser; you can move it any time from your account
 page.
 
@@ -196,4 +196,4 @@ the web has no filesystem change notification.
 - **Notifications per device.** The app that asked shows its notifications itself; say which devices and apps are showing them.
 - **Hosting.**
   - Say plainly, before a lapsed host deletes data, that it will.
-  - Remind people before time runs out on a device, not only by email (email reminders are built: `RemindMe` in `apps/shared/src/Payment.tsx`); that needs Web Push ([#60](https://github.com/leifriksheim/weave/issues/60)).
+  - Remind people before time runs out on a device, not only by email (email reminders are built: `RemindMe` in `apps/shared/src/Payment.tsx`); that needs Web Push ([#60](https://github.com/leifriksheim/minca/issues/60)).

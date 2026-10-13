@@ -1,5 +1,5 @@
 /**
- * Builds `weave` as single-file executables with Bun: one for this machine and one
+ * Builds `minca` as single-file executables with Bun: one for this machine and one
  * per Linux server architecture. Each carries its runtime, so a server needs
  * nothing installed.
  *
@@ -12,11 +12,11 @@ import { execFileSync } from 'node:child_process';
 
 const native = process.argv.includes('--native');
 const targets: ReadonlyArray<[string, string]> = native
-  ? [['', 'weave']]
+  ? [['', 'minca']]
   : [
-      ['', 'weave'],
-      ['bun-linux-x64', 'weave-linux-x64'],
-      ['bun-linux-arm64', 'weave-linux-arm64'],
+      ['', 'minca'],
+      ['bun-linux-x64', 'minca-linux-x64'],
+      ['bun-linux-arm64', 'minca-linux-arm64'],
     ];
 
 for (const [target, name] of targets) {
@@ -29,7 +29,7 @@ for (const [target, name] of targets) {
       '--compile',
       '--minify',
       '--bytecode',
-      '--conditions=@weaveprotocol/source',
+      '--conditions=@minca/source',
       ...targetFlag,
       '--outfile',
       `dist/${name}`,

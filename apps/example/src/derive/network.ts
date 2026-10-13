@@ -3,7 +3,7 @@
  * what a person needs to know: is this reaching my other devices, and if not,
  * whose fault is it — the relay, the network, or simply nobody else being here.
  */
-import type { MeshStatus, RelayStatus, SpaceStatus } from '@weaveprotocol/core';
+import type { MeshStatus, RelayStatus, SpaceStatus } from '@minca/core';
 
 /** How a space is doing, from best to worst */
 export type Health =

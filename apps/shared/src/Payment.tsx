@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { message, useAction, useCopy } from './action';
 import qrcode from 'qrcode-generator';
-import type { FundOffer, FundPayment, HostPlan, PayAnswer } from '@weaveprotocol/core';
+import type { FundOffer, FundPayment, HostPlan, PayAnswer } from '@minca/core';
 import { Glyph } from './Feature';
 import { styles, palette } from './styles';
 
@@ -403,7 +403,7 @@ function Pulse() {
         height: 10,
         borderRadius: 5,
         background: palette.accent.good,
-        animation: 'weave-fade 0.9s ease-in-out infinite alternate',
+        animation: 'minca-fade 0.9s ease-in-out infinite alternate',
       }}
     />
   );

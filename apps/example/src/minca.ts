@@ -1,11 +1,11 @@
-// This app's Weave setup: it never holds a seed, and connects to the person's account home instead.
-import { createWeaveConnection } from '@weaveprotocol/core/session';
-import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@weave/app-shared/relay';
+// This app's Minca setup: it never holds a seed, and connects to the person's account home instead.
+import { createMincaConnection } from '@minca/core/session';
+import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 
 /** The account home's connect page — ours by default; anyone can run their own */
-const HOME = import.meta.env.VITE_WEAVE_HOME ?? 'https://weave-home.netlify.app/connect';
+const HOME = import.meta.env.VITE_MINCA_HOME ?? 'https://weave-home.netlify.app/connect';
 
-export const connection = createWeaveConnection({
+export const connection = createMincaConnection({
   home: HOME,
   // A browser for every space in the account, so it asks for the whole account.
   // An app that needs less asks for less: `scope: 'spaces'`, or `create` a space of its own.
@@ -21,10 +21,10 @@ export const connection = createWeaveConnection({
   // A worker that fails to load says so, and the node runs in the page instead.
   worker: () => {
     if (typeof SharedWorker !== 'function')
-      return new Worker(new URL('./weave-worker.ts', import.meta.url), { type: 'module' });
-    const shared = new SharedWorker(new URL('./weave-worker.ts', import.meta.url), {
+      return new Worker(new URL('./minca-worker.ts', import.meta.url), { type: 'module' });
+    const shared = new SharedWorker(new URL('./minca-worker.ts', import.meta.url), {
       type: 'module',
-      name: 'weave-node',
+      name: 'minca-node',
     });
     return {
       postMessage: (message: unknown, transfer: Transferable[]) => shared.port.postMessage(message, transfer),

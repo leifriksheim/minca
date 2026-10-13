@@ -5,7 +5,7 @@
  *
  * Web Crypto does the ECDH, the HMAC and the AES. HKDF's two halves are
  * needed apart here, which Web Crypto's HKDF doesn't offer, so they are
- * written out over its HMAC. Weave's own wrapper, `sealTo`, puts a label and
+ * written out over its HMAC. Minca's own wrapper, `sealTo`, puts a label and
  * the fields that say where the sealed thing belongs into HPKE's `info`.
  *
  * ```
@@ -18,7 +18,7 @@ import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Decode, utf8Encode }
 import { bufferSource } from '../utils/guards.js';
 import { boundContext, ENVELOPE_VERSION, type Bound } from './envelope.js';
 
-/** AES-128-GCM (0x0001) or AES-256-GCM (0x0002); Weave seals only with the second */
+/** AES-128-GCM (0x0001) or AES-256-GCM (0x0002); Minca seals only with the second */
 export type HpkeAead = 0x0001 | 0x0002;
 
 const KEM_ID = 0x0010;
@@ -181,7 +181,7 @@ export async function hpkeOpen(params: {
 
 /**
  * DHKEM(P-256)'s DeriveKeyPair (RFC 9180 §7.1.3): what the test vectors make
- * their keys with. Weave's own keys come from elsewhere.
+ * their keys with. Minca's own keys come from elsewhere.
  * @returns The private scalar (32 bytes) and the uncompressed public point
  */
 export async function hpkeDeriveKeyPair(

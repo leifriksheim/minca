@@ -393,7 +393,7 @@ export function createRelay(options = {}) {
     ) {
       return refuse('Not a purge');
     }
-    if (createHash('sha256').update(`weave/door-topic/v1|${sign}`).digest('base64url') !== topic)
+    if (createHash('sha256').update(`minca/door-topic/v1|${sign}`).digest('base64url') !== topic)
       return refuse('That key is not this door’s');
     let good = false;
     try {
@@ -402,7 +402,7 @@ export function createRelay(options = {}) {
         format: 'der',
         type: 'spki',
       });
-      const signed = `weave/door-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`;
+      const signed = `minca/door-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`;
       good = verify(
         'sha256',
         Buffer.from(signed),

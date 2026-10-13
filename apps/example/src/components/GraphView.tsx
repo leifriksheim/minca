@@ -9,14 +9,14 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
 } from 'react';
-import { useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
+import { useLive, useNode, useProfiles } from '@minca/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { RecordPanel } from './RecordPanel';
-import { SHAPE_CYCLE } from '@weave/app-shared/tokens';
+import { SHAPE_CYCLE } from '@minca/app-shared/tokens';
 import { styles, palette, ui } from '../styles';
 import { Person } from './Person';
 
@@ -1098,7 +1098,7 @@ const panel: CSSProperties = {
   border: `1px solid ${palette.surface.rule}`,
   borderRadius: palette.radius.lg,
   boxShadow: palette.shadow.float,
-  animation: 'weave-fade .12s ease',
+  animation: 'minca-fade .12s ease',
   zIndex: 3,
 };
 const panelBody: CSSProperties = {

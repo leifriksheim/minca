@@ -9,7 +9,7 @@
  * nothing pointed at it. That is the whole job. It is a peer with uptime, not a
  * server with authority: everything that arrives passes the same gates.
  */
-import type { P2PNode } from '@weaveprotocol/core';
+import type { P2PNode } from '@minca/core';
 import { enableWebRTC, holdEverySpace } from './agent.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { errorCode, messageOf } from './json.js';
@@ -81,7 +81,7 @@ export async function startDaemon(options: DaemonOptions): Promise<Daemon> {
     await node.close();
     if (errorCode(error) === 'EADDRINUSE') {
       throw new Error(
-        `Port ${options.port} is already in use — is another "weave run" going? Stop it, or pick another port with --port.`,
+        `Port ${options.port} is already in use — is another "minca run" going? Stop it, or pick another port with --port.`,
       );
     }
     throw error;

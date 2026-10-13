@@ -27,7 +27,7 @@ import {
   type NodeRecord,
   type P2PNode,
   type SpaceAccess,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 import {
   applyBlueprint,
   blueprint,
@@ -39,7 +39,7 @@ import {
   writeGuide,
   type AppNotify,
   type DraftCollection,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
 
 export interface LauncherApp {

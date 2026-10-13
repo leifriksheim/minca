@@ -25,8 +25,8 @@
  */
 import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
 import type { InputSchema } from '@mcp-b/webmcp-types';
-import { NODE_ACTIONS, callAction, checkActionInput } from '@weaveprotocol/core';
-import { getNode } from './weave';
+import { NODE_ACTIONS, callAction, checkActionInput } from '@minca/core';
+import { getNode } from './minca';
 
 const text = (value: string, isError = false) => ({
   content: [{ type: 'text' as const, text: value }],

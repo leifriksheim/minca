@@ -2,7 +2,7 @@
  * The cost of churn: Alice creates 100 records and edits each E times; Bob
  * joins, and the time until his list matches hers is measured.
  *
- *   npx tsx --conditions=@weaveprotocol/source tests/bench/churn.ts [E]
+ *   npx tsx --conditions=@minca/source tests/bench/churn.ts [E]
  */
 import { team } from '../../src/space/presets.js';
 import { createFakeHub } from '../helpers/fake-transport.js';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useConnection } from '@weaveprotocol/core/react';
-import { Wordmark } from '@weave/app-shared/Wordmark';
+import { useConnection } from '@minca/core/react';
+import { Wordmark } from '@minca/app-shared/Wordmark';
 import { styles, palette } from '../styles';
 
 /** Before the app is connected: one button that opens the account home, where the person signs in */

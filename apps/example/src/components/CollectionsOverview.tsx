@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { NodeCollection } from '@weaveprotocol/core';
+import type { NodeCollection } from '@minca/core';
 import { collectionLabel, fieldsOf } from '../derive/schema-ui';
 import { namespaceOf } from '../derive/filters';
 import { styles, palette, ui } from '../styles';

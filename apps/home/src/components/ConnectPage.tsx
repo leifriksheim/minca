@@ -1,17 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { NewSpace, SpaceSummary } from '@weaveprotocol/core';
+import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
   isProposeRequest,
   receiveConnectRequest,
   type ConnectRequest,
   type IncomingRequest,
   type ProposeRequest,
-} from '@weaveprotocol/core/session';
-import { WeaveAuth, useAuth, useSession, useWeave } from '@weaveprotocol/core/react';
-import { Wordmark } from '@weave/app-shared/Wordmark';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
-import { useAction } from '@weave/app-shared/action';
+} from '@minca/core/session';
+import { MincaAuth, useAuth, useSession, useMinca } from '@minca/core/react';
+import { Wordmark } from '@minca/app-shared/Wordmark';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 
 /**
@@ -22,7 +22,7 @@ import { styles, palette } from '../styles';
  */
 export function ConnectPage() {
   const [incoming, setIncoming] = useState<IncomingRequest | null | undefined>(undefined);
-  const { state } = useWeave();
+  const { state } = useMinca();
 
   useEffect(() => {
     void receiveConnectRequest().then(setIncoming);
@@ -54,7 +54,7 @@ export function ConnectPage() {
     return (
       <Frame>
         <Asking incoming={incoming} />
-        <WeaveAuth />
+        <MincaAuth />
       </Frame>
     );
   }

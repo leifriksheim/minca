@@ -1,4 +1,4 @@
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
 import type { Unread } from '../../seen';
 
 /**

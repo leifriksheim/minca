@@ -1,20 +1,20 @@
 import type { ReactNode } from 'react';
-import { WeaveAuth, useWeave } from '@weaveprotocol/core/react';
+import { MincaAuth, useMinca } from '@minca/core/react';
 import { AccountNotices } from './components/AccountNotices';
 import { Settings } from './components/Settings';
 import { HostingDue } from './components/Hosting';
-import { Wordmark } from '@weave/app-shared/Wordmark';
+import { Wordmark } from '@minca/app-shared/Wordmark';
 import { palette, styles } from './styles';
 
 /** The account home: sign in, then the account and everything about it. */
 export function App() {
-  const { state } = useWeave();
+  const { state } = useMinca();
 
   if (state?.stage !== 'ready') {
     return (
       <Page>
         <Wordmark />
-        <WeaveAuth />
+        <MincaAuth />
       </Page>
     );
   }

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { Modal } from '@weave/app-shared/Modal';
+import type { SpaceSummary } from '@minca/core';
+import { Modal } from '@minca/app-shared/Modal';
 import { ConnectAgent, useKnownAgent } from '../ConnectAgent';
 import { Icon } from '../Icon';
-import { useNode } from '@weaveprotocol/core/react';
+import { useNode } from '@minca/core/react';
 import { useLauncherRecords } from './entries';
 import { prepareLauncher } from './launcher';
 import { DESIGNS, designPrompt, type Design } from './designs';
@@ -21,7 +21,7 @@ const IDEAS = [
 ] as const;
 
 /** The look picked last time, in this browser */
-const DESIGN_KEY = 'weave:app-design';
+const DESIGN_KEY = 'minca:app-design';
 const rememberedDesign = (): Design => {
   try {
     const id = globalThis.localStorage.getItem(DESIGN_KEY);

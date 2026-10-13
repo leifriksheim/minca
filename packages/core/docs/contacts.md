@@ -8,16 +8,16 @@ This is a convention built on the protocol, not part of it. Peers that have
 never heard of `std.contact` or `std.contact-request` sync, store and judge
 them like any other record. Only apps that want to read each other's contact
 lists and requests have to agree on what follows. It uses these protocol
-parts: the contacts space ([spec 03 §13.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
+parts: the contacts space ([spec 03 §13.1](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)),
 profiles (§11), invites (§7), and the contact key and sealing to it with HPKE
-([spec 01 §10.1, §9.2](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+([spec 01 §10.1, §9.2](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
 Asking someone you share **no** space with goes through a door
-([spec 07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)).
+([spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)).
 
 ## The list: `std.contact`
 
 The list lives in the account's contacts space (derived with the label
-`weave/contacts`), one record per person:
+`minca/contacts`), one record per person:
 
 ```
 std.contact  (rules: onePer ["did"])
@@ -30,7 +30,7 @@ record key = records.onePerKey(contactsSpace, "std.contact", { did })
 
 `name` is what you call them; they never see it. `space` is the id of the
 space for two. `blocked` hides that person's contact requests in every space.
-`door` is set while a knock's answer is still to be written ([spec 07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)).
+`door` is set while a knock's answer is still to be written ([spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)).
 
 A reader must ignore a record whose key is not the one its `did` derives. It
 also ignores one whose root is not the account, as it does for every record in
@@ -59,7 +59,7 @@ what.
 ```
 value  = { invite: <role invite to the space for two>, note?: string ≤2000 }
 bound  = { space: <spaceId>, from: <askerAccountDid>, to: <askeeAccountDid> }
-sealed = HPKE(askee.contactKey, "weave/contact-request/v1", bound, JSON value)
+sealed = HPKE(askee.contactKey, "minca/contact-request/v1", bound, JSON value)
 ```
 
 `HPKE` is sealing to a key, spec 01 §9.2. A sealed `{"invite":"x"}` is
@@ -113,7 +113,7 @@ into another space, or re-posted by someone else, does not open.
 `ask` and `accept` need a session note that grants `/account/write` for the
 whole account, as a knock does. An app granted
 `contacts` sees the list and requests, but may not ask or accept
-([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/schemas/contacts.ts`, `packages/core/src/identity/contact-key.ts` (`deriveContactKeyBytes`), `packages/core/src/identity/hpke.ts` (`sealValueTo`, `openValueFrom`), `packages/core/src/node/node.ts` (contacts section: `REQUEST_LABEL`, `openRequest`, `contacts`), `packages/core/src/node/types.ts` (`NodeContacts`), `packages/core/src/space/account-registry.ts` (`deriveContactsSpace`). Tests: `packages/core/tests/contacts.test.ts`, `packages/core/tests/attacks.test.ts`._
 
@@ -135,4 +135,4 @@ it, into a space nobody holds. And `spaces.leave` on a space for two leaves the
 - `ContactView` gains `waiting: boolean`, true while the other account has no
   member record in the space for two.
 
-Tracked in [#40](https://github.com/leifriksheim/weave/issues/40).
+Tracked in [#40](https://github.com/leifriksheim/minca/issues/40).

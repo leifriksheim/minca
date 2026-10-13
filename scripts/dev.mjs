@@ -3,7 +3,7 @@
  *
  * - node (8787): the always-on node with the throwaway identity in
  *   packages/cli/.env.dev (created on first run); it serves the relay and /peer.
- * - host (8788): `weave host`, what "Keep my spaces online" talks to, and
+ * - host (8788): `minca host`, what "Keep my spaces online" talks to, and
  *   what spaces chip in for. Settings in packages/cli/.env.host.dev,
  *   yours in packages/cli/.env.host.local. Wallet payments on Base Sepolia by default.
  * - stripe: when .env.host.local has a Stripe test key, the Stripe CLI
@@ -54,8 +54,8 @@ function start(name, command, args, cwd, env = {}) {
   return child;
 }
 
-/** The CLI from source, with the protocol from source too (the workspace's `@weaveprotocol/source` condition) */
-const fromSource = ['--conditions=@weaveprotocol/source', '--import', 'tsx'];
+/** The CLI from source, with the protocol from source too (the workspace's `@minca/source` condition) */
+const fromSource = ['--conditions=@minca/source', '--import', 'tsx'];
 
 const say = (name, line) => process.stderr.write(`${colour[name]}[${name}]${colour.reset} ${line}\n`);
 

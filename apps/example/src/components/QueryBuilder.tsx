@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { Query } from '@weaveprotocol/core';
+import type { Query } from '@minca/core';
 import type { Clause, ClauseField } from '../derive/conditions';
 import type { Sort } from '../derive/filters';
 import type { People } from '../derive/people';

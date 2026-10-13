@@ -77,14 +77,14 @@ export async function topicKey(
   const secret =
     'spaceKey' in material
       ? bufferSource(material.spaceKey)
-      : utf8Encode(`weave/public-topics/v1|${material.spaceId}`);
+      : utf8Encode(`minca/public-topics/v1|${material.spaceId}`);
   const base = await globalThis.crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
   return globalThis.crypto.subtle.deriveKey(
     {
       name: 'HKDF',
       hash: 'SHA-256',
       salt: new Uint8Array(0),
-      info: utf8Encode('weave/topic-tags/v1'),
+      info: utf8Encode('minca/topic-tags/v1'),
     },
     base,
     { name: 'HMAC', hash: 'SHA-256', length: 256 },

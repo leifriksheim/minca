@@ -1,6 +1,6 @@
-# The Weave protocol
+# The Minca protocol
 
-This is the specification of Weave: what goes over the wire, what is stored,
+This is the specification of Minca: what goes over the wire, what is stored,
 what is signed, and what every peer must check. It is written so that someone
 can build a client that interoperates with this implementation without
 reading its code, and so that a reader, or a model, can understand the
@@ -143,41 +143,41 @@ not protocol either; a number is, only when the other side enforces it.
 Designed but not built. Each entry is specified, as **Planned**, where it
 belongs. Issues track the larger ones. Known defects link their issue where
 they are described; the smaller ones share
-[#20](https://github.com/leifriksheim/weave/issues/20).
+[#20](https://github.com/leifriksheim/minca/issues/20).
 
 | Planned                                                                                           | Where                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                            |
+| A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/minca/issues/20)                                                            |
 | One spelling per key                                                                              | [01 §4](01-identity.md)                                                                                                                    |
 | Grants narrower than a space (reading)                                                            | [06 §2.8](06-nodes-and-sessions.md)                                                                                                        |
-| Removing a lost device from another one (sign-out already revokes)                                | [01 §7.6](01-identity.md), [#165](https://github.com/leifriksheim/weave/issues/165)                                                        |
+| Removing a lost device from another one (sign-out already revokes)                                | [01 §7.6](01-identity.md), [#165](https://github.com/leifriksheim/minca/issues/165)                                                        |
 | Merging inside one record                                                                         | [02 §4.8](02-records.md)                                                                                                                   |
 | Forgetting in blob stores                                                                         | [02 §4.9](02-records.md)                                                                                                                   |
-| References to records in other spaces                                                             | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/weave/issues/38)                                                           |
+| References to records in other spaces                                                             | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/minca/issues/38)                                                           |
 | `pattern` and `format` in definitions                                                             | [02 §6](02-records.md)                                                                                                                     |
 | Uniqueness that cannot be a key                                                                   | [02 §7.3](02-records.md)                                                                                                                   |
-| Deleted access records can't leave access standing                                                | [03 §7.2](03-spaces.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                            |
-| What a private space still shows (profile keys and collection names)                              | [03 §8.6](03-spaces.md), [#223](https://github.com/leifriksheim/weave/issues/223)                                                          |
-| Access-control convergence                                                                        | [05 §8](05-sync-and-storage.md), [#10](https://github.com/leifriksheim/weave/issues/10)                                                    |
-| Limits on what one peer can cost another                                                          | [04 §7.4](04-network.md), [05 §6.4, §8](05-sync-and-storage.md), [#33](https://github.com/leifriksheim/weave/issues/33)                    |
+| Deleted access records can't leave access standing                                                | [03 §7.2](03-spaces.md), [#20](https://github.com/leifriksheim/minca/issues/20)                                                            |
+| What a private space still shows (profile keys and collection names)                              | [03 §8.6](03-spaces.md), [#223](https://github.com/leifriksheim/minca/issues/223)                                                          |
+| Access-control convergence                                                                        | [05 §8](05-sync-and-storage.md), [#10](https://github.com/leifriksheim/minca/issues/10)                                                    |
+| Limits on what one peer can cost another                                                          | [04 §7.4](04-network.md), [05 §6.4, §8](05-sync-and-storage.md), [#33](https://github.com/leifriksheim/minca/issues/33)                    |
 | Binary sync messages                                                                              | [05 §4](05-sync-and-storage.md)                                                                                                            |
-| Caches that fetch by record key; subsets smaller than a collection                                | [05 §9.1](05-sync-and-storage.md), [#27](https://github.com/leifriksheim/weave/issues/27)                                                  |
+| Caches that fetch by record key; subsets smaller than a collection                                | [05 §9.1](05-sync-and-storage.md), [#27](https://github.com/leifriksheim/minca/issues/27)                                                  |
 | Mirrors: restoring an account, absorbing a quiet store writer                                     | [05 §16.5](05-sync-and-storage.md)                                                                                                         |
-| Files: blob references, bytes synced by hash                                                      | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/weave/issues/37)                                                 |
+| Files: blob references, bytes synced by hash                                                      | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/minca/issues/37)                                                 |
 | A wallet as the account home                                                                      | [06 §2](06-nodes-and-sessions.md)                                                                                                          |
 | Connecting by code: renewing notes, programs that can't run code of their own                     | [06 §3.1](06-nodes-and-sessions.md)                                                                                                        |
-| Subscriptions that match any of several topic values                                              | [06 §4.4](06-nodes-and-sessions.md), [#141](https://github.com/leifriksheim/weave/issues/141)                                              |
-| Subscriptions delivered per device, by Web Push to an app that is closed                          | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/weave/issues/60)                        |
-| Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#117](https://github.com/leifriksheim/weave/issues/117), [#128](https://github.com/leifriksheim/weave/issues/128) |
+| Subscriptions that match any of several topic values                                              | [06 §4.4](06-nodes-and-sessions.md), [#141](https://github.com/leifriksheim/minca/issues/141)                                              |
+| Subscriptions delivered per device, by Web Push to an app that is closed                          | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/minca/issues/60)                        |
+| Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#117](https://github.com/leifriksheim/minca/issues/117), [#128](https://github.com/leifriksheim/minca/issues/128) |
 | Names: handles that lead to a door                                                                | [07 §9](07-doors.md)                                                                                                                       |
 | Corrections in a line, after a double spend                                                       | [09 §7.5](09-contracts.md)                                                                                                                 |
-| Asking for what a version cites                                                                   | [09 §9](09-contracts.md), [#79](https://github.com/leifriksheim/weave/issues/79)                                                           |
-| Content-addressed definitions; definition tiers, additive-only                                    | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/weave/issues/11), [#12](https://github.com/leifriksheim/weave/issues/12)   |
+| Asking for what a version cites                                                                   | [09 §9](09-contracts.md), [#79](https://github.com/leifriksheim/minca/issues/79)                                                           |
+| Content-addressed definitions; definition tiers, additive-only                                    | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/minca/issues/11), [#12](https://github.com/leifriksheim/minca/issues/12)   |
 
 Proposed in an issue but not yet designed into the spec, so listed under
 **Not yet specified** in their part: key rotation, KERI-style pre-rotation
-([01 §16](01-identity.md), [#9](https://github.com/leifriksheim/weave/issues/9)), and access-history checkpoints
-([03 §17](03-spaces.md), [#25](https://github.com/leifriksheim/weave/issues/25)).
+([01 §16](01-identity.md), [#9](https://github.com/leifriksheim/minca/issues/9)), and access-history checkpoints
+([03 §17](03-spaces.md), [#25](https://github.com/leifriksheim/minca/issues/25)).
 
 ## The shape of it, in one page
 

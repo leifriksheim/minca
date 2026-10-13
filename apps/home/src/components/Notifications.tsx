@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { NotifyView, P2PNode, SpaceSummary } from '@weaveprotocol/core/node';
-import { message, useAction } from '@weave/app-shared/action';
+import type { NotifyView, P2PNode, SpaceSummary } from '@minca/core/node';
+import { message, useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 
 /**

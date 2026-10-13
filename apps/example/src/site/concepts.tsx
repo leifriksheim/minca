@@ -241,7 +241,7 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     icon: 'M2.5 2.5h4.5v4.5h-4.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5h-4.5zM9 9h4.5v4.5H9z',
     intro:
       'An app doesn’t get your account. It asks your account home for access, and you see what it wants: which spaces, read or write, for how long. Approve, and it gets a pass that says exactly that, which every device checks and you can take back anytime. It never sees your keys or password.',
-    code: "const connection = createWeaveConnection({\n  home: 'https://weave-home.netlify.app/connect',\n  request: { name: 'Polls', access: 'write',\n    scope: 'spaces' },\n});",
+    code: "const connection = createMincaConnection({\n  home: 'https://weave-home.netlify.app/connect',\n  request: { name: 'Polls', access: 'write',\n    scope: 'spaces' },\n});",
     visual: APPS,
   },
   {

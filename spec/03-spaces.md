@@ -57,7 +57,7 @@ nobody who hands a space on can change or swap any of it.
 
 | Field             | Type                                   | Notes                                                                                                                     |
 | ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `weave`           | `"constitution/1"`                     | The format.                                                                                                               |
+| `minca`           | `"constitution/1"`                     | The format.                                                                                                               |
 | `name`            | string                                 | Display name, at most 100 Unicode code points.                                                                            |
 | `visibility`      | `"public"` \| `"private"`              | Private means record bodies are encrypted (§8).                                                                           |
 | `resolver`        | string                                 | How changes made apart resolve: `strong-remove/1` (§4), the only one there is.                                            |
@@ -91,7 +91,7 @@ of the constitution are omitted when absent, never `null` or empty.
 A peer handed a space — in an invite, a pass, from a host — **MUST** refuse it
 unless all of these hold (`checkSpace`, `constitutionProblem`):
 
-1. `weave` is `constitution/1`;
+1. `minca` is `constitution/1`;
 2. `resolver` is a resolver the peer knows: in this version, `strong-remove/1`;
 3. it has no member but those of §1.1 (and `id`);
 4. `name`, `visibility`, `createdAt` and `nonce` are as §1.1 says;
@@ -125,8 +125,8 @@ it.
 `editor`; a fixed time and nonce:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","name":"Chess club","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"top":{"founders":["did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg"]},"visibility":"public","weave":"constitution/1"}
-→ id bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra
+{"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Chess club","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"top":{"founders":["did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg"]},"visibility":"public"}
+→ id b443onkkeevh6pjxtq7lristjax545z2yxdsqha5jjywlmwzk6haa
 ```
 
 The same space made private with the AES key whose raw bytes are
@@ -134,16 +134,16 @@ The same space made private with the AES key whose raw bytes are
 id and read key as §8.1 and §8.4 derive them:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","encryptionKeyId":"aLhvw5pkV65_lcQHEcUOug","name":"Chess club","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf","resolver":"strong-remove/1","roles":[…as above…],"top":{"founders":[…as above…]},"visibility":"private","weave":"constitution/1"}
-→ id bsm42rv73g4colmj3ozemoklaew2hpmoemcuxqhifc7733hyxftvq
+{"createdAt":"2026-01-01T00:00:00.000Z","encryptionKeyId":"bgk-m-Kq-gEGgJCOOEYNYw","name":"Chess club","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt","resolver":"strong-remove/1","roles":[…as above…],"top":{"founders":[…as above…]},"visibility":"private","minca":"constitution/1"}
+→ id bftzd477fxfxcpnmju27n2wgchz7qmkepz5ttholxo6l6xajvxw7q
 ```
 
 A co-op with no one at the top, whose one role may do anything, assigned to
 the same account, succeeding the chess club:
 
 ```
-{"assigned":{"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg":["steward"]},"createdAt":"2026-01-01T00:00:00.000Z","name":"Bike co-op","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/","pol":[]}],"name":"steward"}],"succeeds":"bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra","top":"none","visibility":"public","weave":"constitution/1"}
-→ id bfr56qir3ofkfn6rawax6zkp7uqvwigxqoybta7mrey7u45red3ra
+{"assigned":{"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg":["steward"]},"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Bike co-op","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/","pol":[]}],"name":"steward"}],"succeeds":"b443onkkeevh6pjxtq7lristjax545z2yxdsqha5jjywlmwzk6haa","top":"none","visibility":"public"}
+→ id bsiokp4o5vf2pz4qjdaidzyb2mzdjzf7xm5vycupeapiwbgundjcq
 ```
 
 ### 1.3 Creating a space
@@ -514,7 +514,7 @@ Example keys for the account above: its assignment of `editor`,
 `assign:0ce7d5918bd19e9cbf36c04809fd02ff2b61e3af`; its removal,
 `remove:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; its stepping down,
 `stepdown:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; naming the chess club
-of §1.2 as a successor, `succeed:1f15c8f3f09a977a46d6db200f2bd93a33a724f3`;
+of §1.2 as a successor, `succeed:748ff2c25e1ecdcb1ba747e990790285192cad88`;
 for the invite DID
 `did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
 `invite:fd8ebfa892a6c4bae7cd265123b7844e49fa50e8`.
@@ -1024,7 +1024,7 @@ found for the stub, which was judged without its body.
 > since they derive those ids (§13.1). A peer without the account key, such as
 > a carrier, a host or a mirror reader, may not be able to tell those spaces
 > from any other, and then lets stand a version the account's devices refuse.
-> Tracked in [#90](https://github.com/leifriksheim/weave/issues/90).
+> Tracked in [#90](https://github.com/leifriksheim/minca/issues/90).
 
 An access record stands when its event's status is `applied`.
 
@@ -1107,7 +1107,7 @@ DID), so no one's writing can crowd out anyone else's, and nobody can make
 themselves unremovable by writing into many collections. What is left out is
 judged with the change. A node covers only the collections it holds: one
 holding part of a space, removing someone, leaves their writes elsewhere to be
-judged with the change ([#166](https://github.com/leifriksheim/weave/issues/166)).
+judged with the change ([#166](https://github.com/leifriksheim/minca/issues/166)).
 
 ```json
 {
@@ -1199,7 +1199,7 @@ An invite link that lets someone join with a role carries a **secret**: 32
 random bytes. It stands for a P-256 key pair:
 
 ```
-seed    = HKDF-SHA256(ikm = secret, salt = empty, info = "weave/space-invite/v1", L = 32)
+seed    = HKDF-SHA256(ikm = secret, salt = empty, info = "minca/space-invite/v1", L = 32)
 keypair = deriveKeyPairFromSeed(seed)      // 01 — Identity
 invite DID = did:key of the public key     // P-256 multicodec
 ```
@@ -1227,7 +1227,7 @@ view-only invite (§7.5) has no record and cannot be closed; only a key change
 > last undeleted version. `closeInvite` writes `open: false`
 > (`packages/core/src/node/space-runtime.ts`). Other implementations MUST NOT rely on a
 > deleted invite staying open.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 > **Planned:** a deleted access record cannot leave access standing. The
 > original design took access back by deleting the record (an assignment,
@@ -1239,7 +1239,7 @@ view-only invite (§7.5) has no record and cannot be closed; only a key change
 > in any access collection other than `sys.collection` (§3.4). The second is
 > simpler and keeps "access is taken away by writing a change" as the only
 > rule. Fixes the known defect above, tracked in
-> [#20](https://github.com/leifriksheim/weave/issues/20).
+> [#20](https://github.com/leifriksheim/minca/issues/20).
 
 ### 7.3 Joining with a secret
 
@@ -1252,7 +1252,7 @@ sys.assign at assign:<hex40(joinerDid + "|" + role)>
   invite: { key: inviteDid, signature: base64url(sig) } }
 
 sig = ECDSA-P256-SHA256 (P1363, 64 bytes) by the invite private key over
-      UTF-8 "weave/space-invite/v1|<spaceId>|<joinerDid>"
+      UTF-8 "minca/space-invite/v1|<spaceId>|<joinerDid>"
 ```
 
 Verification imports the public key from `inviteDid` and checks `sig` over
@@ -1269,7 +1269,7 @@ before it is a member; its `seen` must include the invite event.
 > refuse its assignment, and it converges, but the joiner's own view is
 > optimistic until then. Other implementations MUST NOT treat a join as
 > accepted before the invite's current state says it is open. Tracked in
-> [#10](https://github.com/leifriksheim/weave/issues/10).
+> [#10](https://github.com/leifriksheim/minca/issues/10).
 
 ### 7.4 The invite string
 
@@ -1289,7 +1289,7 @@ An invite is `base64url( UTF-8( JSON.stringify(SpaceInvite) ) )` — plain
 > is in the space's constitution (§1.2), and nothing signs the invite string,
 > so anyone passing the link on can change them. A reader MUST NOT treat them
 > as verified. A fix will authenticate them or drop them from the invite.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20). The
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20). The
 > space's name is its constitution's, so changing it changes the id.
 
 Example (private space of §1.2, role invite with the secret of §7.1), decoded:
@@ -1297,8 +1297,8 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
 ```json
 {
   "space": {
-    "id": "bsm42rv73g4colmj3ozemoklaew2hpmoemcuxqhifc7733hyxftvq",
-    "weave": "constitution/1",
+    "id": "bftzd477fxfxcpnmju27n2wgchz7qmkepz5ttholxo6l6xajvxw7q",
+    "minca": "constitution/1",
     "name": "Chess club",
     "visibility": "private",
     "resolver": "strong-remove/1",
@@ -1327,8 +1327,8 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
     ],
     "createdAt": "2026-01-01T00:00:00.000Z",
     "nonce": "AAECAwQFBgcICQoL",
-    "readKey": "did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf",
-    "encryptionKeyId": "aLhvw5pkV65_lcQHEcUOug"
+    "readKey": "did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt",
+    "encryptionKeyId": "bgk-m-Kq-gEGgJCOOEYNYw"
   },
   "invitedBy": "did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg",
   "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
@@ -1386,8 +1386,8 @@ A space key `K` is 32 random bytes. It is only ever key material for HKDF
 (01 §5); nothing uses it as a key itself. From it:
 
 ```
-sealKey = HKDF(K, "weave/space-seal/v1", 32)                 // AES-256-GCM: every envelope under this space key
-keyId   = base64url(HKDF(K, "weave/space-key-id/v1", 16))    // 22 characters
+sealKey = HKDF(K, "minca/space-seal/v1", 32)                 // AES-256-GCM: every envelope under this space key
+keyId   = base64url(HKDF(K, "minca/space-key-id/v1", 16))    // 22 characters
 readKey = §8.4;  topic key = 02 §8.2
 ```
 
@@ -1396,12 +1396,12 @@ The first key's id is the constitution's `encryptionKeyId`; later keys are named
 record's `earlier`) derives its id from it and takes it only as the key that
 id names.
 
-Example: `K = ff fe … e0` → id `aLhvw5pkV65_lcQHEcUOug`.
+Example: `K = ff fe … e0` → id `bgk-m-Kq-gEGgJCOOEYNYw`.
 
 Envelopes take a random 96-bit nonce, which keeps AES-GCM safe for about 2³²
 seals under one key, and a space's seal key lasts until a member is removed
 (§9); a space that would write more under one key needs to change it first
-([#182](https://github.com/leifriksheim/weave/issues/182)).
+([#182](https://github.com/leifriksheim/minca/issues/182)).
 
 ### 8.2 What is encrypted
 
@@ -1429,7 +1429,7 @@ the envelope. A delete carries no body.
 
 ```
 plaintext = UTF-8( JSON.stringify( links.length ? { body, links } : { body } ) )
-sealed    = envelope(sealKey, "weave/record-body/v1",
+sealed    = envelope(sealKey, "minca/record-body/v1",
                      { space: <space id>, collection, key: <record key>, keyId }, plaintext)   // 01 §9.1
 body      = { sealed: base64url(sealed), keyId }
 ```
@@ -1453,8 +1453,8 @@ nonce `a0 a1 … ab`, plaintext `{"body":{"text":"hi"}}`):
 
 ```json
 {
-  "sealed": "AaChoqOkpaanqKmqq0Fx-eCwOhnoZnLVU8hJnQsqWTBRgYQ5jezwBbEdvJDeKm5_wX3j",
-  "keyId": "aLhvw5pkV65_lcQHEcUOug"
+  "sealed": "AaChoqOkpaanqKmqq07DZlJUgYUf0LLiscCoiOZyTpmIYbOrOnd01S8p1FoAP4mxJDJ7",
+  "keyId": "bgk-m-Kq-gEGgJCOOEYNYw"
 }
 ```
 
@@ -1464,7 +1464,7 @@ A private space has a **read key** pair per space key, so a peer can prove it
 may read without anyone checking it holding the AES key:
 
 ```
-readSeed = HKDF-SHA256(ikm = K, salt = empty, info = "weave/space-read/v1", L = 32)
+readSeed = HKDF-SHA256(ikm = K, salt = empty, info = "minca/space-read/v1", L = 32)
 readKey  = deriveKeyPairFromSeed(readSeed)      // 01 — Identity; did:key P-256
 ```
 
@@ -1472,7 +1472,7 @@ The constitution names the first key's read DID (`readKey`); each `sys.key` name
 the new one's. How a peer proves it holds the read key when connecting is in
 [04 — Network](04-network.md).
 
-Example: the key of §8.1 → `did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf`.
+Example: the key of §8.1 → `did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt`.
 
 _Source: `packages/core/src/privacy/space-encryption.ts` (`spaceKeyFromRaw`, `sealBody`, `openBody`), `packages/core/src/node/space-runtime.ts` (`IN_THE_CLEAR`, `write`, `openBody`), `packages/core/src/space/space-access.ts` (`deriveReadKey`, `deriveReadSeed`). Tests: `packages/core/tests/space.test.ts` ("private space versions"; "a sealed body moved to another record, collection or space does not open"; "the example body of spec 03 §8.3 opens"), `packages/core/tests/space-access.test.ts` ("a view-only invite to a private space reads everything and writes nothing"; the read-key vector)._
 
@@ -1500,7 +1500,7 @@ not in the old space.
 _Source: `packages/core/src/records/rules.ts` (`onePerSecret`, `onePerKey`), `packages/core/src/node/space-runtime.ts` (`onePerKeying`). Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)")._
 
 > **Planned: what it still gives away.** Tracked in
-> [#223](https://github.com/leifriksheim/weave/issues/223).
+> [#223](https://github.com/leifriksheim/minca/issues/223).
 >
 > - **`profile:` keys** (§11) are `hex40` of the account, so anyone can
 >   confirm which known accounts have a profile in a space. Membership is
@@ -1532,7 +1532,7 @@ know of the removal stop sending to them anyway.
 Each account has, per space, a **member key**: a P-256 ECDH key pair derived
 from the account key and the space id ([01 §10.2](01-identity.md),
 `deriveMemberKeyBytes`: HKDF-SHA256(account key, info
-`"weave/p256-member-key/v1|<spaceId>"`, 48 bytes) reduced to a scalar).
+`"minca/p256-member-key/v1|<spaceId>"`, 48 bytes) reduced to a scalar).
 
 Each member publishes its public half, in the clear:
 
@@ -1553,7 +1553,7 @@ publish it again when it differs from what is published.
 > an app's included, or one granted records only, can publish a member key of its own, and
 > it wins as the newest. The next space key is then boxed to it
 > ([01](01-identity.md) §8 asks for more only on access collections).
-> Tracked in [#169](https://github.com/leifriksheim/weave/issues/169).
+> Tracked in [#169](https://github.com/leifriksheim/minca/issues/169).
 
 > Rationale: one per space, so an account home can hand an app the member keys
 > of exactly the spaces it grants.
@@ -1563,7 +1563,7 @@ publish it again when it differs from what is published.
 `keyDue` (§4.4) is true while some applied event that took reading from
 someone (removed, left, or unassigned from their last role) was not seen by the current key's
 event. A key change made at the same time as a removal, not having seen it,
-leaves the key change due ([#173](https://github.com/leifriksheim/weave/issues/173)).
+leaves the key change due ([#173](https://github.com/leifriksheim/minca/issues/173)).
 
 A **former member** is an account named by an applied `assign` or `remove`
 event that is not a reader now: removed, left, or holding no role. Peers
@@ -1579,7 +1579,7 @@ lost their place still reads what others write.
 
 1. generate a new space key `K'`;
 2. `earlier` = base64url of an envelope ([01 §9.1](01-identity.md)) under `K'`'s
-   seal key, label `weave/earlier-keys/v1`, bound `{ space: <spaceId>, keyId: K'.id }`,
+   seal key, label `minca/earlier-keys/v1`, bound `{ space: <spaceId>, keyId: K'.id }`,
    around `JSON [base64url(K) of every key it holds]`;
 3. write `sys.key` at `key:space`: `{ keyId: K'.id, readKey: <K' read DID>, earlier }`;
 4. seal `K'` to each member (§9.4).
@@ -1613,7 +1613,7 @@ The current key is sealed to each reader's member key, in the clear:
 sys.box at box:<hex40("<keyId>|<toDid>|<fromDid>")>
 { keyId, to: <recipient account DID>, sealed }
 
-sealed = HPKE(recipientMemberKey, "weave/space-key-box/v1",
+sealed = HPKE(recipientMemberKey, "minca/space-key-box/v1",
               { space: <spaceId>, keyId, to: <toDid> }, JSON { key: base64url(K) })
 ```
 
@@ -1709,7 +1709,7 @@ and a label:
 ```
 nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1", 32)[0..12] )
 K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1", 32)      // the space key, §8.1
-space   = { weave: "constitution/1", name, visibility: "private",
+space   = { minca: "constitution/1", name, visibility: "private",
             resolver: "strong-remove/1", top: { founders: [accountDid] }, roles: [],
             createdAt: "1970-01-01T00:00:00.000Z", nonce,
             readKey: readDid(K), encryptionKeyId: keyId(K) }
@@ -1722,11 +1722,11 @@ give another id.
 
 | Label                    | Space                | Name               |
 | ------------------------ | -------------------- | ------------------ |
-| `weave/account-registry` | the account registry | `Account registry` |
-| `weave/contacts`         | the contacts space   | `Contacts`         |
+| `minca/account-registry` | the account registry | `Account registry` |
+| `minca/contacts`         | the contacts space   | `Contacts`         |
 
-Example (seed `01 02 … 10`): registry `bedvg3woledl6e5w4kj3okq2yxdmz77s4adfmegkj2n3kjavydfia`
-(nonce `Jx8Oo78z30WwKl1X`), contacts `b43ypkcbueug6yc6fnoumjtzit53yphcv5l5o42l2mqlce7fgnpfa`.
+Example (seed `01 02 … 10`): registry `b42wsegs2enqkhuzz4ba2hwaqgzvdcziz7bkn23ue7qoekuzv5usq`
+(nonce `75Pq-CByGn9iQXOe`), contacts `b4ha5cfxach7u4z2i3so43ftysegxr5jg2x6ji53zc5yfy3scsnga`.
 
 > Rationale: the DID alone is not enough to find them — it appears on
 > everything the account signs.
@@ -1866,7 +1866,7 @@ what a carrier needs to wake an app that is closed ([06](06-nodes-and-sessions.m
 _Source: `packages/core/src/space/notify.ts` (`checkNotify`, `whereHolds`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/core/src/node/node.ts` (`notifications`, `syncPasses`), `packages/core/src/node/carrier.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/topics.test.ts` ("a subscription’s where", "names a collection the way a definition must…")._
 
 > **Planned: devices deliver subscriptions, by Web Push.** Issue:
-> [#60](https://github.com/leifriksheim/weave/issues/60). Delivery moves to
+> [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to
 > per-device receiver records, apart from subscriptions. Specified in
 > [06 — Nodes, sessions and apps](06-nodes-and-sessions.md) §4.4.
 
@@ -1900,27 +1900,27 @@ Moved to [contacts](../packages/core/docs/contacts.md). It is sealed with HPKE, 
 ### 16.5 Asking, accepting and the rest
 
 Moved to [contacts](../packages/core/docs/contacts.md), with its Planned section
-([#40](https://github.com/leifriksheim/weave/issues/40)).
+([#40](https://github.com/leifriksheim/minca/issues/40)).
 
 ---
 
 ## 17. Not yet specified
 
 - Deleting an invite record does not close it; planned in §7.2
-  ([#20](https://github.com/leifriksheim/weave/issues/20)).
+  ([#20](https://github.com/leifriksheim/minca/issues/20)).
 - That every peer reaches the same access state under any interleaving
   through real sync (partitions and heals, the gatekeeper, waiting versions)
   is not yet tested; the replay alone is, against a reference, over random
   histories ([05](05-sync-and-storage.md) §8). Tracked in
-  [#10](https://github.com/leifriksheim/weave/issues/10).
+  [#10](https://github.com/leifriksheim/minca/issues/10).
 - Content-addressed definitions
-  ([#11](https://github.com/leifriksheim/weave/issues/11)), which would pin
+  ([#11](https://github.com/leifriksheim/minca/issues/11)), which would pin
   each record to the definition it was written against, as well as judging
   it by the rules in force (§5.2); see [02](02-records.md).
 - Any bound on how many events a history may hold, or on the replay's cost.
   Signed checkpoints a new peer starts from, replaying the full history in
   the background, are proposed in
-  [#25](https://github.com/leifriksheim/weave/issues/25).
+  [#25](https://github.com/leifriksheim/minca/issues/25).
 - Expiry or single use of invites: an open invite stays open until closed.
 - An argument that tells writing a new record from editing one, so a grant
   of `/record/write` can allow one and not the other: `byCreator` is true for

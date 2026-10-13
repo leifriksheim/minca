@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { COLLECTION_DEFINE, SPACE_KEEPERS } from '@weaveprotocol/core';
-import { useCollections, useNode } from '@weaveprotocol/core/react';
+import { COLLECTION_DEFINE, SPACE_KEEPERS } from '@minca/core';
+import { useCollections, useNode } from '@minca/core/react';
 import { useAssignable, useMay } from './may';
-import { activity, profile } from '@weaveprotocol/core/schemas';
+import { activity, profile } from '@minca/core/schemas';
 import { Modal } from './Modal';
 import { Benefit, FeatureIcon, Glyph, StatusPill } from './Feature';
 import {
@@ -19,15 +19,12 @@ import { styles, palette } from './styles';
 
 /** Where running a bot on a server is explained */
 const SERVER_GUIDE =
-  'https://github.com/leifriksheim/weave/blob/main/packages/cli/README.md#always-on-on-a-server';
-const HIDDEN_KEY = 'weave-community-upgrades-hidden';
+  'https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#always-on-on-a-server';
+const HIDDEN_KEY = 'minca-community-upgrades-hidden';
 /** How long "Not now" keeps the upgrades out of the way */
 const NOT_NOW_MS = 30 * 24 * 3600 * 1000;
-/** How the CLI is run where this app is built, from the connect command (`VITE_WEAVE_CONNECT`) */
-const CLI = (import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli connect').replace(
-  /\s+connect$/,
-  '',
-);
+/** How the CLI is run where this app is built, from the connect command (`VITE_MINCA_CONNECT`) */
+const CLI = (import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect').replace(/\s+connect$/, '');
 
 /**
  * What whoever manages a community can add to it, at the top of its screen: two tiles,

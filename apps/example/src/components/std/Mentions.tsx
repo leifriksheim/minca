@@ -9,7 +9,7 @@ import {
   type RefObject,
   type SyntheticEvent,
 } from 'react';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { nameOf, type People } from '../../derive/people';
 import { palette } from '../../styles';
 import { Person } from '../Person';

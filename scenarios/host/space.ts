@@ -1,5 +1,5 @@
 /**
- * Weave records as the scenarios see them: a space's held versions.
+ * Minca records as the scenarios see them: a space's held versions.
  * Simplified from spec 02: no signatures, keys or sealing; `seen` names
  * versions directly; a version's id is a label.
  */

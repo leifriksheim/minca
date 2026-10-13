@@ -12,10 +12,10 @@
  * else, and dropped with it.
  *
  * Mail goes out through an HTTP API rather than SMTP: Resend's by default
- * (`WEAVE_MAIL_API_KEY`, `WEAVE_MAIL_FROM`), or any server that takes the same
- * JSON at `WEAVE_MAIL_URL`.
+ * (`MINCA_MAIL_API_KEY`, `MINCA_MAIL_FROM`), or any server that takes the same
+ * JSON at `MINCA_MAIL_URL`.
  */
-import type { BlobStore, StorageAdapter, Subscription, SubscriptionState } from '@weaveprotocol/core';
+import type { BlobStore, StorageAdapter, Subscription, SubscriptionState } from '@minca/core';
 import { messageOf } from './json.js';
 
 /** Sends one plain-text mail */
@@ -23,12 +23,12 @@ export interface Mailer {
   send(mail: { to: string; subject: string; text: string }): Promise<void>;
 }
 
-/** Resend's API, or one that takes the same JSON, when WEAVE_MAIL_API_KEY and WEAVE_MAIL_FROM are set */
+/** Resend's API, or one that takes the same JSON, when MINCA_MAIL_API_KEY and MINCA_MAIL_FROM are set */
 export function mailerFromEnv(env: NodeJS.ProcessEnv, fetcher: typeof fetch = fetch): Mailer | null {
-  const key = env.WEAVE_MAIL_API_KEY?.trim();
-  const from = env.WEAVE_MAIL_FROM?.trim();
+  const key = env.MINCA_MAIL_API_KEY?.trim();
+  const from = env.MINCA_MAIL_FROM?.trim();
   if (!key || !from) return null;
-  const url = env.WEAVE_MAIL_URL?.trim() || 'https://api.resend.com/emails';
+  const url = env.MINCA_MAIL_URL?.trim() || 'https://api.resend.com/emails';
   return Object.freeze({
     async send(mail: { to: string; subject: string; text: string }) {
       const response = await fetcher(url, {
@@ -214,7 +214,7 @@ export function createReminders(options: {
             text: [
               text,
               '',
-              `Pay from your Weave home, or from the space in the app you use it with.`,
+              `Pay from your Minca home, or from the space in the app you use it with.`,
               '',
               stopLine(origin, token),
             ].join('\n'),

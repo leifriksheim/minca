@@ -72,14 +72,14 @@ export function recoveryKit({ code, name, did }: { code: string; name: string; d
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '') || 'account';
   const text = [
-    'Weave recovery code',
+    'Minca recovery code',
     '',
     `Account:       ${name}`,
     ...(did ? [`Account ID:    ${did}`] : []),
     `Recovery code: ${code}`,
     '',
-    'This code is your Weave account. It restores the account on any device or',
-    'Weave home, even one that has never seen it. Nobody can reissue it, and',
+    'This code is your Minca account. It restores the account on any device or',
+    'Minca home, even one that has never seen it. Nobody can reissue it, and',
     'anyone who has it can open your account.',
     '',
     'Keep it somewhere safe: a secure note in your password manager, or printed',
@@ -88,5 +88,5 @@ export function recoveryKit({ code, name, did }: { code: string; name: string; d
     `Made ${new Date().toISOString().slice(0, 10)}.`,
     '',
   ].join('\n');
-  return { filename: `weave-recovery-${slug}.txt`, text };
+  return { filename: `minca-recovery-${slug}.txt`, text };
 }

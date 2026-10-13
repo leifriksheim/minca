@@ -88,11 +88,11 @@ describe('derivation is frozen', () => {
   // If any of these change, every existing account silently becomes a
   // different identity — fine before release, never after.
   const golden: ReadonlyArray<readonly [Uint8Array, string]> = [
-    [new Uint8Array(16), 'did:key:zDnaebsZZSYuq5oaFMhu2qAaAygqtwPtZwuiVJpjenjA9GwQE'],
-    [new Uint8Array(16).fill(0xff), 'did:key:zDnaexDGpQByMfPbsypSPAewepYNqS1yerAq5pEpDZwAmFQWS'],
+    [new Uint8Array(16), 'did:key:zDnaenhB7GpWm1sDUA2mcNLjbZG85bD5uv8kXnX39YE9rGV3d'],
+    [new Uint8Array(16).fill(0xff), 'did:key:zDnaeWqjSG4BrSYadheJUx2CC9zxRM6MznQb3bMEW51WEfsxn'],
     [
       Uint8Array.from({ length: 16 }, (_, i) => i * 17),
-      'did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr',
+      'did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT',
     ],
   ];
 
@@ -104,7 +104,7 @@ describe('derivation is frozen', () => {
 
   test('a known recovery code derives its recorded DID', async () => {
     const identity = await createIdentityManager().fromRecoveryCode('K7N6-ERYP-68TZ-A7HN-VJW3-QWKN-CG');
-    assert.equal(identity.did, 'did:key:zDnaeUvx3uMBwitdxXZoqFuvYEqWuuXeEzGb3TLqkbShhPcPR');
+    assert.equal(identity.did, 'did:key:zDnaemD1tuHAjEDpaXZ3agwWSRRFYkYYNVdHKjYWXzVuQSJ5W');
   });
 });
 

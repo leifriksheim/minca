@@ -1,4 +1,4 @@
-# @weaveprotocol/relay
+# @minca/relay
 
 The signaling relay: a WebSocket server that introduces peers and never sees
 their data. What it must do, and what a client may count on, is
@@ -10,7 +10,7 @@ their data. What it must do, and what a client may count on, is
 ## Running it
 
 `signaling-server.mjs` wraps `createRelay` (from `relay.mjs`) in an HTTP
-server. Every always-on node (`weave run`, and `weave host`) runs
+server. Every always-on node (`minca run`, and `minca host`) runs
 the same relay on its own port, beside its `/peer` endpoint.
 
 ```bash
@@ -40,7 +40,7 @@ network: every socket from one IPv4 address, or one IPv6 /64, shares a
 username. A held one is reused while more than half its TTL remains, and a new
 one is minted after that. So asking again is free, and coturn's per-user quota
 caps a network rather than each request. IPv4-mapped IPv6 (`::ffff:a.b.c.d`)
-counts as the IPv4 address. The relay can't tell a Weave peer from anyone
+counts as the IPv4 address. The relay can't tell a Minca peer from anyone
 else, so set coturn's own quotas too (`user-quota`, `total-quota`, `max-bps`);
 the Docker image's coturn is already capped that way.
 

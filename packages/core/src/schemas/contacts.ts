@@ -141,7 +141,7 @@ export const knockAnswer = define({
       sig: {
         type: 'string',
         maxLength: 200,
-        description: 'The door signing key over "weave/knock-answer/v1|<space>|<account>"',
+        description: 'The door signing key over "minca/knock-answer/v1|<space>|<account>"',
       },
     },
     required: ['sig'],

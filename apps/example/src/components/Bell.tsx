@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { useAccount, useCollections } from '@weaveprotocol/core/react';
-import { useDismiss } from '@weave/app-shared/useDismiss';
+import type { SpaceSummary } from '@minca/core';
+import { useAccount, useCollections } from '@minca/core/react';
+import { useDismiss } from '@minca/app-shared/useDismiss';
 import { markRead, useAlerts, useTabDot } from '../alerts';
 import { useAppNotifications, useSubscriptions } from '../notifications';
 import { ago } from '../derive/time';
@@ -341,7 +341,7 @@ const panel = {
   borderRadius: palette.radius.lg,
   backgroundColor: palette.surface.card,
   boxShadow: palette.shadow.float,
-  animation: 'weave-fade .1s ease',
+  animation: 'minca-fade .1s ease',
   overflow: 'hidden',
 };
 const below = { right: 0, top: 44 };

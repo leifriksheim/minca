@@ -1,18 +1,13 @@
 import { useState } from 'react';
-import { message, useAction } from '@weave/app-shared/action';
-import {
-  describeCollection,
-  type NodeCollection,
-  type NodeRecord,
-  type SpaceSummary,
-} from '@weaveprotocol/core';
-import { useLive, useNode, useSpaces } from '@weaveprotocol/core/react';
+import { message, useAction } from '@minca/app-shared/action';
+import { describeCollection, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
+import { useLive, useNode, useSpaces } from '@minca/core/react';
 import {
   blueprint as blueprintSchema,
   reviewBlueprint,
   type Blueprint,
   type BlueprintReview,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import { AppBoard } from './AppBoard';
 import { addMade, copyApp, removeApp, updated, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';

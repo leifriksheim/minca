@@ -330,7 +330,7 @@ export function asStandardSchema(schema: JsonSchema): StandardSchemaV1 {
   return {
     '~standard': {
       version: 1,
-      vendor: 'weave/json-schema',
+      vendor: 'minca/json-schema',
       validate(value: unknown) {
         const issues = validateJsonSchema(schema, value);
         return issues.length

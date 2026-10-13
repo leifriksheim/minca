@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
+import type { SpaceSummary } from '@minca/core';
 import {
   inviteFromLink,
   useAccess,
@@ -9,10 +9,10 @@ import {
   useMyName,
   useQuery,
   useSpaces,
-} from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
-import { useDismiss } from '@weave/app-shared/useDismiss';
+} from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useDismiss } from '@minca/app-shared/useDismiss';
 import { delegation, proposal } from './schema';
 import { AssemblyView } from './Assembly';
 import { NewAssembly } from './NewAssembly';

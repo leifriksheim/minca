@@ -301,9 +301,9 @@ describe('a writer key that outlives the node', () => {
 
   test('where nothing can lock a key, there is no lasting one: the node makes its own', async () => {
     // No IndexedDB here, as in Node.
-    assert.equal(await browserWriterKeys('weave:test').claim(), null);
+    assert.equal(await browserWriterKeys('minca:test').claim(), null);
     const who = await person();
-    const node = await nodeWith(browserWriterKeys('weave:test'), who);
+    const node = await nodeWith(browserWriterKeys('minca:test'), who);
     assert.match(node.sessionDid, /^did:key:/);
   });
 });

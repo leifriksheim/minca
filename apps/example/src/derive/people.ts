@@ -1,5 +1,5 @@
 /** People by name, never letting a name pass for someone else: duplicates get their identity's tail. */
-import { displayName, type SpaceProfile } from '@weaveprotocol/core';
+import { displayName, type SpaceProfile } from '@minca/core';
 
 /** Someone in a space: the name the space keeps, and whether their `std.profile` says they are a bot */
 export type Someone = SpaceProfile & { readonly bot?: true };

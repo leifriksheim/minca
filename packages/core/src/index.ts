@@ -1,12 +1,12 @@
 /**
- * @weaveprotocol/core
+ * @minca/core
  * Self-sovereign, peer-to-peer protocol for the browser.
  *
  * Identity via WebAuthn passkeys, data as signed Versions,
  * sync by range-based set reconciliation (Negentropy),
  * and end-to-end encryption for private Spaces.
  *
- * @module @weaveprotocol/core
+ * @module @minca/core
  */
 
 // Core types

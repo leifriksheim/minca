@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import type { NewSpace, SpaceSummary } from '@weaveprotocol/core';
-import { useMyName, useNode } from '@weaveprotocol/core/react';
+import type { NewSpace, SpaceSummary } from '@minca/core';
+import { useMyName, useNode } from '@minca/core/react';
 // Defines collections in a space; not a React hook, whatever its name says.
-import { useSchemas as defineCollections } from '@weaveprotocol/core/schemas';
-import { Modal, Choice } from '@weave/app-shared/Modal';
+import { useSchemas as defineCollections } from '@minca/core/schemas';
+import { Modal, Choice } from '@minca/app-shared/Modal';
 import { ASSEMBLY, assemblyRoles, topic } from './schema';
 import { Problem, TopicPicker } from './ui';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { palette } from './styles';
 
 /** Topics most groups start with; the person picks some, adds their own, or none */

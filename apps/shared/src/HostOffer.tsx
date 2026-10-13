@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { describeHost, type HostDescription } from '@weaveprotocol/core';
+import { describeHost, type HostDescription } from '@minca/core';
 import { DEFAULT_HOST } from './relay';
 import { HostAddressForm, type Wanted } from './HostAddress';
 import { FeatureIcon, StatusPill, type Tone } from './Feature';

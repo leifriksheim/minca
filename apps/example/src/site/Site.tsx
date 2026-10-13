@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { parse, render } from 'sugar-high/core';
 import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
-import { STAFF_COLLECTIONS } from '@weaveprotocol/core';
-import { Mark } from '@weave/app-shared/Wordmark';
+import { STAFF_COLLECTIONS } from '@minca/core';
+import { Mark } from '@minca/app-shared/Wordmark';
 import { CONCEPTS } from './concepts';
 
 /** How the concepts heading says its count, so it never goes stale */
@@ -22,7 +22,7 @@ import './site.css';
 const LANGUAGES = { typescript: { ...typescript, typescript: true }, shell } as const;
 
 /** The site's pages (`/`, `/developers`, `/protocol`, `/extension`), sharing the example app's fonts and deploy */
-export const GITHUB = 'https://github.com/leifriksheim/weave';
+export const GITHUB = 'https://github.com/leifriksheim/minca';
 export const SPEC = `${GITHUB}/tree/main/spec`;
 /** Links off the site open in a tab of their own */
 export const EXTERNAL = { target: '_blank', rel: 'noreferrer' } as const;
@@ -216,7 +216,7 @@ function Code({
 const SCHEMAS = `
 import {
   poll, vote, reaction, useSchemas,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 
 // A poll ships ready-made, as std.poll and std.vote
 await useSchemas(node, space.id, [poll, vote, reaction]);
@@ -234,18 +234,18 @@ await node.records.put(space.id, reaction.name, { emoji: '🍕' }, {
 
 const AGENTS = `
 # Every node operation, from a terminal
-weave spaces list
-weave records query --space <id> \\
+minca spaces list
+minca records query --space <id> \\
   --collection app.poll \\
   --where '{"question":{"$contains":"may"}}'
 
 # An always-on node: keeps your spaces
 # available, and relays for your devices
-weave run
+minca run
 
 # Connect an agent (Claude Code, Claude Desktop, Cursor) with the
 # code from "Connect an agent" in an app; it then serves MCP by itself
-weave connect wv_…
+minca connect mc_…
 `;
 
 const PROTOCOLS = ['Minca', 'AT Protocol (Bluesky)', 'Nostr', 'Solid'] as const;
@@ -534,7 +534,7 @@ export function Developers() {
           <div className="actions">
             <span className="install">
               <span>$</span>
-              <code>npm install @weaveprotocol/core</code>
+              <code>npm install @minca/core</code>
             </span>
             <a href="/app" className="btn btn-secondary">
               See the example app

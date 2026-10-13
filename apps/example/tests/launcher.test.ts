@@ -6,8 +6,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import type { NodeRecord, P2PNode } from '@weaveprotocol/core';
-import { guide, message, proposeCollections, reaction, type Guide } from '@weaveprotocol/core/schemas';
+import type { NodeRecord, P2PNode } from '@minca/core';
+import { guide, message, proposeCollections, reaction, type Guide } from '@minca/core/schemas';
 import {
   addBuiltIn,
   addMade,
@@ -272,7 +272,7 @@ describe('the launcher', () => {
     assert.equal(guides.length, 1, 'written once');
     assert.deepEqual(guides[0]?.body?.collections, ['launcher.app', 'std.blueprint']);
     assert.match(guides[0]?.body?.text ?? '', /collections_propose/);
-    assert.match(guides[0]?.body?.text ?? '', /window\.weave/);
+    assert.match(guides[0]?.body?.text ?? '', /window\.minca/);
   });
 
   test('copying an app proposes it in another space, with its collections as a blueprint', async () => {

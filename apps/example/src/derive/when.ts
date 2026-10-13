@@ -149,7 +149,7 @@ export function icsOf(
     'VERSION:2.0',
     'PRODID:-//Minca//Events//EN',
     'BEGIN:VEVENT',
-    `UID:${uid}@weave`,
+    `UID:${uid}@minca`,
     `DTSTAMP:${utc(new Date())}`,
     ...(timed(event)
       ? [`DTSTART:${utc(start)}`, ...(event.end ? [`DTEND:${utc(dateOf(event.end))}`] : [])]

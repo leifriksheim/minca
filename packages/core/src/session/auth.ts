@@ -96,7 +96,7 @@ import {
   type PairingStage,
 } from './pairing.js';
 
-export interface WeaveAuthConfig {
+export interface MincaAuthConfig {
   /** What passkey prompts call this app. Default "Minca". */
   readonly appName?: string;
   /** Relays and always-on nodes the signed-in node connects to. Omit to stay offline. */
@@ -105,7 +105,7 @@ export interface WeaveAuthConfig {
   readonly rpId?: string;
   /** Where small choices are remembered — which account, stay signed in. Default `localStorage`. */
   readonly storage?: KeyValueStore | null;
-  /** Namespaces those choices, so two apps on one origin keep their own. Default "weave". */
+  /** Namespaces those choices, so two apps on one origin keep their own. Default "minca". */
   readonly storageKey?: string;
   /** The page a phone-pairing QR opens. Default: this page. */
   readonly pairingLink?: string;
@@ -119,7 +119,7 @@ export interface WeaveAuthConfig {
   };
   /**
    * Runs the node in a worker, off the page's main thread
-   * (`@weaveprotocol/core/node-worker`). Called once per sign-in; the worker
+   * (`@minca/core/node-worker`). Called once per sign-in; the worker
    * ends when the node closes. Not with `browser.stores`, which a worker
    * can't be handed.
    */
@@ -189,7 +189,7 @@ export interface AccountEntry {
 }
 
 /** An open account: who it is, and the node doing its work */
-export interface WeaveSession {
+export interface MincaSession {
   readonly account: AccountSummary;
   /** The account's identity */
   readonly did: string;
@@ -295,7 +295,7 @@ export interface AuthState {
   readonly selectedId: string | null;
   /** Ways into the selected account */
   readonly entry: AccountEntry | null;
-  readonly session: WeaveSession | null;
+  readonly session: MincaSession | null;
   /** The recovery code, while the `recovery` screen shows it; cleared by `codeSaved()` */
   readonly freshCode: string | null;
   /** Set while the account is being set up (`recovery`, `unlock`, `pod`) */
@@ -313,7 +313,7 @@ export interface AuthState {
   readonly moved: MovedToPod | null;
 }
 
-export interface WeaveAuth {
+export interface MincaAuth {
   getState(): AuthState;
   /** Called after every change. Returns a function that stops it. */
   subscribe(listener: (state: AuthState) => void): () => void;
@@ -491,10 +491,10 @@ async function addSubscriptions(
 const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
 
 /** Creates the sign-in flow for this page. */
-export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
+export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   const rpId = config.rpId ?? globalThis.location?.hostname ?? 'localhost';
   const appName = config.appName ?? 'Minca';
-  const prefix = config.storageKey ?? 'weave';
+  const prefix = config.storageKey ?? 'minca';
   const storage = defaultStorage(config.storage);
   const stay = createStaySignedIn(storage, rpId, prefix);
   const { get, set, read } = guardedStorage(storage);
@@ -660,7 +660,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     place: Place,
     account: AccountSummary,
     unlocked: Uint8Array,
-  ): Promise<WeaveSession> {
+  ): Promise<MincaSession> {
     await stopNode();
 
     const { identity, signer } = await rootFromSeed(unlocked);
@@ -681,7 +681,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
     seed = unlocked;
     localKey = key;
-    const session: WeaveSession = Object.freeze({
+    const session: MincaSession = Object.freeze({
       account,
       did: identity.did,
       sessionDid: node.sessionDid,
@@ -712,7 +712,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   }
 
   /** Records that an account was just used, and starts its session. */
-  async function begin(place: Place, summary: AccountSummary, unlocked: Uint8Array): Promise<WeaveSession> {
+  async function begin(place: Place, summary: AccountSummary, unlocked: Uint8Array): Promise<MincaSession> {
     const used: AccountSummary = { ...summary, lastUsedAt: new Date().toISOString() };
     try {
       const vault = await place.store.read(summary.id);
@@ -755,7 +755,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
    * then a way in is chosen. A paired device skips the code: it was never
    * shown one, and the device it came from keeps it.
    */
-  async function arrive(session: WeaveSession, setup: AuthSetup | null): Promise<void> {
+  async function arrive(session: MincaSession, setup: AuthSetup | null): Promise<void> {
     const place = state.place;
     const entry = place ? await openEntry(place, session.account.id) : null;
     const landed = {
@@ -780,7 +780,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   }
 
   /** Runs a way in. One that took the recovery code may lead on to setting up an everyday one. */
-  const enter = (open: () => Promise<{ session: WeaveSession; byCode: boolean }>) =>
+  const enter = (open: () => Promise<{ session: MincaSession; byCode: boolean }>) =>
     run(async () => {
       const { session, byCode } = await open();
       await arrive(session, byCode ? 'restored' : null);
@@ -791,7 +791,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
    * not seen it.
    * @param expected The account the person meant, when they picked one
    */
-  async function openWithCode(code: string, expected: AccountSummary | null): Promise<WeaveSession> {
+  async function openWithCode(code: string, expected: AccountSummary | null): Promise<MincaSession> {
     const place = state.place;
     if (!place) throw new Error('No place to sign in to yet.');
     if (!isValidRecoveryCode(code)) {
@@ -900,7 +900,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
   // ─── The flow ──────────────────────────────────────────────────────
 
-  const auth: WeaveAuth = {
+  const auth: MincaAuth = {
     getState: () => state,
 
     subscribe(listener) {

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { useNode } from '@weaveprotocol/core/react';
-import { Modal } from '@weave/app-shared/Modal';
+import { useNode } from '@minca/core/react';
+import { Modal } from '@minca/app-shared/Modal';
 import type { Assembly, ProposalView, RollView } from './model';
 import {
   CHOICES,
@@ -37,7 +37,7 @@ import {
   Who,
   ago,
 } from './ui';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { palette, tone } from './styles';
 
 type Sort = 'top' | 'new' | 'decided';

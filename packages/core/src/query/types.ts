@@ -43,7 +43,7 @@ export type Filter = {
 /**
  * A collection, by name or by a reference that also carries its records'
  * type: a definition whose schema is a validator (a Zod object), a standard
- * one from `@weaveprotocol/core/schemas`, or a {@link Typed} name. Before a query
+ * one from `@minca/core/schemas`, or a {@link Typed} name. Before a query
  * runs, every reference becomes its name — the query stays plain data.
  */
 export type CollectionRef = string | { readonly name: string };

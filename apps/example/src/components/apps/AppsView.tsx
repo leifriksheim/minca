@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useAction } from '@weave/app-shared/action';
-import type { NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useNode } from '@weaveprotocol/core/react';
-import { has, type WeaveApp } from './index';
+import { useAction } from '@minca/app-shared/action';
+import type { NodeCollection, SpaceSummary } from '@minca/core';
+import { useNode } from '@minca/core/react';
+import { has, type MincaApp } from './index';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
@@ -34,12 +34,12 @@ export function AppsView({
   onCreate: () => void;
 }) {
   const node = useNode();
-  const [adding, setAdding] = useState<WeaveApp | null>(null);
+  const [adding, setAdding] = useState<MincaApp | null>(null);
   const [arranging, setArranging] = useState(false);
   const { run, busy, error } = useAction();
   const arrange = useAction();
 
-  const add = (app: WeaveApp) => {
+  const add = (app: MincaApp) => {
     setAdding(app);
     void run(async () => {
       await addBuiltIn(node, space.id, app, apps.placed);
@@ -294,7 +294,7 @@ function ArrangeCard({
 }
 
 /** What an app reads and writes, and whether this space has each yet */
-function SchemaList({ app, collections }: { app: WeaveApp; collections: ReadonlyArray<NodeCollection> }) {
+function SchemaList({ app, collections }: { app: MincaApp; collections: ReadonlyArray<NodeCollection> }) {
   const rows = [
     ...app.needs.map((s) => ({ s, optional: false })),
     ...(app.uses ?? []).map((s) => ({ s, optional: true })),

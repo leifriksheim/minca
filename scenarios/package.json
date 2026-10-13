@@ -1,9 +1,9 @@
 {
-  "name": "@weaveprotocol/scenarios",
+  "name": "@minca/scenarios",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Weave's scenario suite: kinds of community, written as tests. Not published.",
+  "description": "Minca's scenario suite: kinds of community, written as tests. Not published.",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "scenarios": "node --experimental-vm-modules --import tsx --test tests/*.test.ts",

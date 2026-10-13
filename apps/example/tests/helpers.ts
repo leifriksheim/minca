@@ -9,7 +9,7 @@ import { joined } from '../../../packages/core/tests/helpers/joined.js';
 import { until as untilWithin } from '../../../packages/core/tests/helpers/until.js';
 import { createLocalRootSigner } from '../../../packages/core/src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../../../packages/core/src/identity/did.js';
-import { noteTerms, team } from '@weaveprotocol/core';
+import { noteTerms, team } from '@minca/core';
 
 export const waitFor = (check: () => Promise<boolean>, what: string) => untilWithin(check, 4000, what);
 

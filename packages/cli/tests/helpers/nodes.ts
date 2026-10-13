@@ -19,7 +19,7 @@ after(async () => {
 });
 
 /** A folder of its own under the system's temporary one */
-export async function tempDir(prefix = 'weave-cli-'): Promise<string> {
+export async function tempDir(prefix = 'minca-cli-'): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
   dirs.push(dir);
   return dir;

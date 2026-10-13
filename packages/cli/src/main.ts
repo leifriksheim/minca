@@ -1,37 +1,31 @@
 /**
- * `weave` — the protocol from a terminal.
+ * `minca` — the protocol from a terminal.
  *
- *   weave init                         create an account (prints its recovery code once)
- *   weave whoami
- *   weave spaces list | create | invite | join | leave | assign | step_down | succeed | status
- *   weave records list | get | put | update | delete
- *   weave run                          stay up: sync every space, serve sockets and a relay
- *   weave host                         a hosting service: carry many accounts' spaces, blind
- *   weave connect <code>               connect this computer's agent, with the code from an app
- *   weave mcp                          serve the same operations to an agent over MCP (stdio)
- *   weave agent                        the connected agent on its own, with your Anthropic API key
- *   weave actions                      every operation, with its input schema
+ *   minca init                         create an account (prints its recovery code once)
+ *   minca whoami
+ *   minca spaces list | create | invite | join | leave | assign | step_down | succeed | status
+ *   minca records list | get | put | update | delete
+ *   minca run                          stay up: sync every space, serve sockets and a relay
+ *   minca host                         a hosting service: carry many accounts' spaces, blind
+ *   minca connect <code>               connect this computer's agent, with the code from an app
+ *   minca mcp                          serve the same operations to an agent over MCP (stdio)
+ *   minca agent                        the connected agent on its own, with your Anthropic API key
+ *   minca actions                      every operation, with its input schema
  *
- * Every data command is generated from NODE_ACTIONS: `weave records put` is the
+ * Every data command is generated from NODE_ACTIONS: `minca records put` is the
  * `records_put` action, and its flags are that action's input fields. The same
  * list is what MCP and WebMCP expose, so the three never drift apart.
  *
  * Secrets never go on the command line, where `ps` would show them. An account
- * unlocks with WEAVE_RECOVERY_CODE or WEAVE_PASSPHRASE, a file named by
+ * unlocks with MINCA_RECOVERY_CODE or MINCA_PASSPHRASE, a file named by
  * --code-file / --passphrase-file, or a prompt.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface as createPromiseInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
-import {
-  isValidRecoveryCode,
-  NODE_ACTIONS,
-  runAction,
-  type NodeAction,
-  type P2PNode,
-} from '@weaveprotocol/core';
-import { suggestedRules } from '@weaveprotocol/core/schemas';
+import { isValidRecoveryCode, NODE_ACTIONS, runAction, type NodeAction, type P2PNode } from '@minca/core';
+import { suggestedRules } from '@minca/core/schemas';
 import {
   chooseAccount,
   createAccount,
@@ -86,42 +80,42 @@ import { completeInput } from './complete.js';
 
 const VERSION = '0.1.0';
 
-const USAGE = `weave ${VERSION} — your spaces, from a terminal
+const USAGE = `minca ${VERSION} — your spaces, from a terminal
 
-Run "weave" alone at a terminal to pick what to do. At a terminal, anything a
+Run "minca" alone at a terminal to pick what to do. At a terminal, anything a
 command still needs is asked for: a space from your spaces, a role, a yes or
 no. Anywhere else (an agent, a script, CI) nothing is ever asked: a missing
 value fails at once, naming the flag that gives it. --yes answers yes ahead.
 
 Usage:
-  weave init [--name NAME] [--passphrase] [--existing]
-  weave whoami
-  weave spaces  list | create | invite | join | leave | status   [--flags]
-  weave spaces  access | assign | remove_member | step_down | succeed
-  weave records list | get | put | update | delete               [--flags]
-  weave run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
-  weave host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
-  weave connect <code> [--name NAME] [--relay wss://…] [--no-configure]
-  weave disconnect
-  weave mcp [--account]
-  weave agent [--setup] [--model claude-opus-5-5] [--daily-cap 2] [--no-chat]
+  minca init [--name NAME] [--passphrase] [--existing]
+  minca whoami
+  minca spaces  list | create | invite | join | leave | status   [--flags]
+  minca spaces  access | assign | remove_member | step_down | succeed
+  minca records list | get | put | update | delete               [--flags]
+  minca run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
+  minca host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
+  minca connect <code> [--name NAME] [--relay wss://…] [--no-configure]
+  minca disconnect
+  minca mcp [--account]
+  minca agent [--setup] [--model claude-opus-5-5] [--daily-cap 2] [--no-chat]
               [--provider anthropic|openai] [--base-url URL] [--price IN/OUT]
-  weave agent --bot [--name NAME] [--invite LINK] [--daily-cap-each 0.5]
+  minca agent --bot [--name NAME] [--invite LINK] [--daily-cap-each 0.5]
                                              an account of its own, as a bot in its spaces
-  weave bots                                 the bots kept here, to start again
-  weave rule add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
+  minca bots                                 the bots kept here, to start again
+  minca rule add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
                  [--from ROLES] [--do TEXT] [--by BOT|me]
-  weave collections define --standard std.rule [--space ID]
-  weave actions
+  minca collections define --standard std.rule [--space ID]
+  minca actions
 
 Agents (Claude Code, Claude Desktop, Cursor):
   In the app, choose "Connect an agent" and run the command it shows. It
-  connects this computer's agent to your account, and adds "weave" to the
-  agents it finds. From then on they start "weave mcp" themselves: a node of
-  its own, working with every tab closed. "weave mcp --account" serves the
+  connects this computer's agent to your account, and adds "minca" to the
+  agents it finds. From then on they start "minca mcp" themselves: a node of
+  its own, working with every tab closed. "minca mcp --account" serves the
   unlocked account instead, as you rather than as an agent.
 
-  "weave agent" runs the connected agent on its own instead, chatting in this
+  "minca agent" runs the connected agent on its own instead, chatting in this
   terminal, with your Anthropic API key (ANTHROPIC_API_KEY, or asked for once
   and kept in the agent's folder). Deleting or overwriting asks you first, and
   it stops for the day once --daily-cap dollars are spent. It also runs your
@@ -134,10 +128,10 @@ Agents (Claude Code, Claude Desktop, Cursor):
   whose price it doesn't know need --price, dollars per million tokens.
   The key comes from OPENAI_API_KEY (or ANTHROPIC_API_KEY), or is asked for.
 
-  "weave agent --bot" runs a bot instead: an account of its own that people
+  "minca agent --bot" runs a bot instead: an account of its own that people
   invite to their spaces, known there by its name. Each bot is kept in a
   folder of its own, bots/<name> in the data folder, with its model, key and
-  spending; --name picks one, or makes it, and "weave bots" lists them.
+  spending; --name picks one, or makes it, and "minca bots" lists them.
   --invite joins a space. It says it is a bot on its std.profile where a
   space keeps them, and runs the rules that name it (by) of its founder and
   members granted /std.rule/instruct there.
@@ -145,13 +139,13 @@ Agents (Claude Code, Claude Desktop, Cursor):
   (a quarter of --daily-cap unless given).
 
 Common flags:
-  --home DIR          data folder (default $WEAVE_HOME or ~/.weave) — can be the folder a browser uses
-  --account NAME      which account, when the folder holds several (or $WEAVE_ACCOUNT)
+  --home DIR          data folder (default $MINCA_HOME or ~/.minca) — can be the folder a browser uses
+  --account NAME      which account, when the folder holds several (or $MINCA_ACCOUNT)
   --json '{…}'        pass an action's input as JSON instead of flags
 
 Unlocking (never as a flag value):
-  WEAVE_RECOVERY_CODE / --code-file FILE   the account's recovery code
-  WEAVE_PASSPHRASE / --passphrase-file FILE  a passphrase set with "init --passphrase"
+  MINCA_RECOVERY_CODE / --code-file FILE   the account's recovery code
+  MINCA_PASSPHRASE / --passphrase-file FILE  a passphrase set with "init --passphrase"
   otherwise you are asked
 `;
 
@@ -184,10 +178,10 @@ async function withNode(globals: Globals, work: (node: P2PNode) => Promise<numbe
   try {
     return await work(node);
   } catch (error) {
-    // Commands work offline, on what this folder has seen; a space made in a browser arrives by `weave run`.
+    // Commands work offline, on what this folder has seen; a space made in a browser arrives by `minca run`.
     if (error instanceof Error && error.message.startsWith('Unknown space'))
       throw new Error(
-        `${error.message}. This computer knows only the spaces it has seen: \`weave run\` fetches the rest from ` +
+        `${error.message}. This computer knows only the spaces it has seen: \`minca run\` fetches the rest from ` +
           'your other devices, a browser among them, while one is open. Then try again.',
         { cause: error },
       );
@@ -222,8 +216,8 @@ async function connectHere(home: string, code: string, options: { name?: string;
       (await ask.text({
         flag: 'code',
         message: 'The code from the app (in the app: Connect an agent)',
-        placeholder: 'wv_…',
-        hint: 'Give it as `weave connect wv_…`: in the app, choose "Connect an agent".',
+        placeholder: 'mc_…',
+        hint: 'Give it as `minca connect mc_…`: in the app, choose "Connect an agent".',
       })),
     name: options.name ?? defaultAgentName(),
     relays: [...new Set([...(options.relays ?? []), ...configuredRelays()])],
@@ -231,25 +225,25 @@ async function connectHere(home: string, code: string, options: { name?: string;
   });
 }
 
-/** What `weave` alone offers at a terminal: the things people come to do, each a command */
+/** What `minca` alone offers at a terminal: the things people come to do, each a command */
 const MENU: ReadonlyArray<{
   readonly label: string;
   readonly hint: string;
   readonly words: string[] | null;
 }> = [
-  { label: 'Set up an account on this computer', hint: 'weave init', words: ['init'] },
-  { label: 'Invite someone to a space', hint: 'weave spaces invite', words: ['spaces', 'invite'] },
-  { label: 'Join a space', hint: 'weave spaces join', words: ['spaces', 'join'] },
-  { label: 'Connect an agent to my account', hint: 'weave connect', words: ['connect'] },
-  { label: 'Run my agent', hint: 'weave agent', words: ['agent'] },
-  { label: 'Run a bot for a community', hint: 'weave agent --bot', words: ['agent', '--bot'] },
-  { label: 'Tell an agent or bot what to do, and when', hint: 'weave rule add', words: ['rule', 'add'] },
-  { label: 'Every command', hint: 'weave help', words: null },
+  { label: 'Set up an account on this computer', hint: 'minca init', words: ['init'] },
+  { label: 'Invite someone to a space', hint: 'minca spaces invite', words: ['spaces', 'invite'] },
+  { label: 'Join a space', hint: 'minca spaces join', words: ['spaces', 'join'] },
+  { label: 'Connect an agent to my account', hint: 'minca connect', words: ['connect'] },
+  { label: 'Run my agent', hint: 'minca agent', words: ['agent'] },
+  { label: 'Run a bot for a community', hint: 'minca agent --bot', words: ['agent', '--bot'] },
+  { label: 'Tell an agent or bot what to do, and when', hint: 'minca rule add', words: ['rule', 'add'] },
+  { label: 'Every command', hint: 'minca help', words: null },
 ];
 
 /** Reads a secret without showing it, at a terminal; anywhere else it has to come from the environment. */
 const askSecret = (prompt: string) =>
-  ask.secret(prompt.replace(/:\s*$/, ''), 'set it in the environment, as `weave help` says');
+  ask.secret(prompt.replace(/:\s*$/, ''), 'set it in the environment, as `minca help` says');
 
 async function readSecretFile(file: string | undefined): Promise<string | undefined> {
   return file ? (await readFile(file, 'utf8')).trim() : undefined;
@@ -268,8 +262,8 @@ async function openAccount(globals: Globals) {
   const home = await openHome(globals.home);
   const account = await chooseAccount(home, globals.account);
 
-  let code = process.env.WEAVE_RECOVERY_CODE ?? (await readSecretFile(globals.codeFile));
-  let passphrase = process.env.WEAVE_PASSPHRASE ?? (await readSecretFile(globals.passphraseFile));
+  let code = process.env.MINCA_RECOVERY_CODE ?? (await readSecretFile(globals.codeFile));
+  let passphrase = process.env.MINCA_PASSPHRASE ?? (await readSecretFile(globals.passphraseFile));
   if (!code && !passphrase) {
     const answer = await askSecret(`Recovery code or passphrase for ${account.name}: `);
     if (isValidRecoveryCode(answer)) code = answer;
@@ -351,9 +345,9 @@ function splitGlobals(argv: ReadonlyArray<string>): { globals: Globals; rest: st
   return { globals, rest };
 }
 
-/** A passphrase chosen here: typed twice, unseen, or `WEAVE_PASSPHRASE` */
+/** A passphrase chosen here: typed twice, unseen, or `MINCA_PASSPHRASE` */
 async function newPassphrase(): Promise<string> {
-  if (process.env.WEAVE_PASSPHRASE) return process.env.WEAVE_PASSPHRASE;
+  if (process.env.MINCA_PASSPHRASE) return process.env.MINCA_PASSPHRASE;
   const passphrase = await askSecret('Choose a passphrase for this computer: ');
   if ((await askSecret('Again: ')) !== passphrase) throw new Error('Passphrases did not match');
   return passphrase;
@@ -376,7 +370,7 @@ async function init(home: Home, args: ReadonlyArray<string>): Promise<void> {
     args: [...args],
     options: { name: { type: 'string' }, passphrase: { type: 'boolean' }, existing: { type: 'boolean' } },
   });
-  ask.intro('A Weave account on this computer');
+  ask.intro('A Minca account on this computer');
   // At a terminal, what the flags didn't say is asked; elsewhere the defaults stand, as they always have.
   const existing =
     values.existing ??
@@ -401,7 +395,7 @@ async function init(home: Home, args: ReadonlyArray<string>): Promise<void> {
       : 'Me');
 
   const code = existing
-    ? (process.env.WEAVE_RECOVERY_CODE ?? (await askSecret('Recovery code of the existing account: ')))
+    ? (process.env.MINCA_RECOVERY_CODE ?? (await askSecret('Recovery code of the existing account: ')))
     : undefined;
   const lock =
     values.passphrase ??
@@ -422,11 +416,11 @@ async function init(home: Home, args: ReadonlyArray<string>): Promise<void> {
     `${JSON.stringify({ account: created.account.name, did: created.account.did, home: home.path }, null, 2)}\n`,
   );
   if (created.code) showRecoveryCode(created.code);
-  ask.outro(`${created.account.name} is ready. \`weave\` shows what you can do next.`);
+  ask.outro(`${created.account.name} is ready. \`minca\` shows what you can do next.`);
 }
 
 /**
- * The bot `weave agent --bot` runs, unlocked: one kept under the home's
+ * The bot `minca agent --bot` runs, unlocked: one kept under the home's
  * `bots/`, by `--name`, the only one, or picked at a terminal; made when there
  * is none. Never the home's own account, which is someone's, or a node's.
  */
@@ -478,7 +472,7 @@ async function botAccount(globals: Globals, name?: string): Promise<{ unlocked: 
 /** How a bot gets work in a space: a rule naming it, which only someone who may instruct it can add */
 const botWork = (name: string, did: string) =>
   `It does nothing there until a rule asks it. Someone who may instruct it adds one: in the app, ` +
-  `Automations, with “Done by” ${name}; or \`weave rule add --by ${did}\`. ` +
+  `Automations, with “Done by” ${name}; or \`minca rule add --by ${did}\`. ` +
   `A rule for messages mentioning it has it answer when someone writes @${name}.`;
 
 /**
@@ -493,7 +487,7 @@ async function joinFirstSpace(node: P2PNode, name: string, invite?: string): Pro
   }
   if (!invite)
     ask.note(
-      'Someone who may assign the role it should hold makes an invite for it:\nin the app, People & roles; or `weave spaces invite --role …`.',
+      'Someone who may assign the role it should hold makes an invite for it:\nin the app, People & roles; or `minca spaces invite --role …`.',
       'Invite the bot',
     );
   const link =
@@ -517,14 +511,14 @@ async function joinFirstSpace(node: P2PNode, name: string, invite?: string): Pro
 }
 
 /**
- * `run --create`: make an account on first start, locked with WEAVE_PASSPHRASE.
+ * `run --create`: make an account on first start, locked with MINCA_PASSPHRASE.
  * For dev nodes and fresh servers; does nothing once the home has an account.
  */
 async function createIfEmpty(globals: Globals): Promise<void> {
   const home = await openHome(globals.home);
   if ((await home.accounts.list()).length > 0) return;
-  const passphrase = process.env.WEAVE_PASSPHRASE;
-  if (!passphrase) throw new Error('--create needs WEAVE_PASSPHRASE, to lock the new account with');
+  const passphrase = process.env.MINCA_PASSPHRASE;
+  if (!passphrase) throw new Error('--create needs MINCA_PASSPHRASE, to lock the new account with');
   const { account, code } = await createAccount(home, { name: 'Node', passphrase });
   stderr(`Created account "${account.name}" (${account.did}) in ${home.path}`);
   if (!code) return;
@@ -542,7 +536,7 @@ async function createIfEmpty(globals: Globals): Promise<void> {
   stderr('Copy it somewhere safe — a password manager — and then delete that file.');
 }
 
-/** Who `weave agent` runs as: a person's connected agent, or a bot with an account of its own */
+/** Who `minca agent` runs as: a person's connected agent, or a bot with an account of its own */
 interface Runner {
   readonly node: P2PNode;
   /** The account it acts for, or the bot's own */
@@ -555,7 +549,7 @@ interface Runner {
 }
 
 /**
- * `weave agent`: a node, a chat in this terminal, and the rules it runs. The
+ * `minca agent`: a node, a chat in this terminal, and the rules it runs. The
  * model's words go to stdout; what it does goes to stderr.
  */
 async function runAgent(
@@ -564,23 +558,23 @@ async function runAgent(
   options: { model: ModelChoice; dailyCap: number; capEach: number | null; chat: boolean },
 ): Promise<number> {
   const { node } = runner;
-  sayRelayRefusal(node, 'weave agent', 'Stop that one and start this again');
+  sayRelayRefusal(node, 'minca agent', 'Stop that one and start this again');
 
   const { model } = options;
   const openai = model.provider === 'openai';
   let apiKey =
     (openai ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY)?.trim() ||
-    process.env.WEAVE_AGENT_API_KEY?.trim() ||
+    process.env.MINCA_AGENT_API_KEY?.trim() ||
     (await loadModelKey(home, model.provider));
   // A model on your own machine usually asks for no key.
   if (!apiKey && !(model.baseUrl && isLoopback(model.baseUrl))) {
     stderr(
       openai
-        ? `weave agent thinks with your own API key at ${model.baseUrl ?? 'api.openai.com'}.`
-        : 'weave agent thinks with your own Anthropic API key. Make one at https://platform.claude.com/settings/keys',
+        ? `minca agent thinks with your own API key at ${model.baseUrl ?? 'api.openai.com'}.`
+        : 'minca agent thinks with your own Anthropic API key. Make one at https://platform.claude.com/settings/keys',
     );
     apiKey = await askSecret('API key (kept in the agent folder, readable only by you): ');
-    if (!apiKey) throw new Error('weave agent needs an API key');
+    if (!apiKey) throw new Error('minca agent needs an API key');
     await saveModelKey(home, apiKey, model.provider);
   }
 
@@ -606,7 +600,7 @@ async function runAgent(
             ? rules.map((name) => `“${name}”`).join(', ')
             : runner.bot
               ? `none yet. ${botWork(runner.bot, runner.account)}`
-              : 'none yet. Add one in an app, under Automations, or with `weave rule add`.'
+              : 'none yet. Add one in an app, under Automations, or with `minca rule add`.'
         }`,
       ),
   });
@@ -627,7 +621,7 @@ async function runAgent(
     await runner.close();
   };
   if (!options.chat) {
-    stderr(`weave agent: ${runner.intro}, running rules. ${options.model.name}, ${await today()}.`);
+    stderr(`minca agent: ${runner.intro}, running rules. ${options.model.name}, ${await today()}.`);
     return untilStopped({ close });
   }
 
@@ -652,7 +646,7 @@ async function runAgent(
     ...(runner.bot ? { bot: runner.bot } : {}),
   });
 
-  stderr(`weave agent: ${runner.intro}. ${options.model.name}, ${await today()}.`);
+  stderr(`minca agent: ${runner.intro}. ${options.model.name}, ${await today()}.`);
   stderr('Say what you need. Ctrl-D to stop.');
   lines.setPrompt('\n› ');
   lines.prompt();
@@ -745,8 +739,8 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       options: {
         port: { type: 'string', default: process.env.PORT ?? '8787' },
         host: { type: 'string' },
-        data: { type: 'string', default: process.env.WEAVE_HOST_DATA ?? defaultHostData() },
-        free: { type: 'boolean', default: process.env.WEAVE_HOST_FREE === '1' },
+        data: { type: 'string', default: process.env.MINCA_HOST_DATA ?? defaultHostData() },
+        free: { type: 'boolean', default: process.env.MINCA_HOST_FREE === '1' },
         allow: { type: 'string', multiple: true },
       },
     });
@@ -757,7 +751,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     const wallet = walletFromEnv(process.env);
     if (!billing && !wallet && !values.free) {
       throw new Error(
-        'weave host needs a way to take payments — Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET), a wallet (WEAVE_WALLET_ADDRESS), or both — or --free to host without them.',
+        'minca host needs a way to take payments — Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET), a wallet (MINCA_WALLET_ADDRESS), or both — or --free to host without them.',
       );
     }
     const quotaBytes = quotaFromEnv(process.env, !!values.free);
@@ -769,7 +763,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       ? createReminders({
           store: await stores('host-reminders'),
           mailer,
-          name: presentation.name ?? 'Weave host',
+          name: presentation.name ?? 'Minca host',
           mirror,
           log: logLine,
         })
@@ -835,8 +829,8 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     process.stdout.write(`${JSON.stringify(bots, null, 2)}\n`);
     stderr(
       bots.length
-        ? `Start one again: weave agent --bot --name "${bots[0]!.name}"`
-        : 'No bots here yet. Make one: weave agent --bot',
+        ? `Start one again: minca agent --bot --name "${bots[0]!.name}"`
+        : 'No bots here yet. Make one: minca agent --bot',
     );
     return 0;
   }
@@ -851,13 +845,13 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
 
   if (command === 'mcp' && !args.includes('--account')) {
     // The connected agent: a node of its own, online, acting as the agent.
-    const agent = await startAgentNode(homePath(globals.home), { nodes: commaList(process.env.WEAVE_NODES) });
+    const agent = await startAgentNode(homePath(globals.home), { nodes: commaList(process.env.MINCA_NODES) });
     stderr(
-      `weave mcp: an agent for ${agent.grant.name} (${agent.grant.did}), ${daysLeft(agent.grant)} days left`,
+      `minca mcp: an agent for ${agent.grant.name} (${agent.grant.did}), ${daysLeft(agent.grant)} days left`,
     );
     // A socket left with the agent's key, or a copy of the agent elsewhere, keeps this one out of a relay's rooms.
-    sayRelayRefusal(agent.node, 'weave mcp', 'Writes are kept here and sync once that one stops');
-    await runMcpStdio(agent.node, { name: 'weave', version: VERSION }, { agent: true });
+    sayRelayRefusal(agent.node, 'minca mcp', 'Writes are kept here and sync once that one stops');
+    await runMcpStdio(agent.node, { name: 'minca', version: VERSION }, { agent: true });
     await agent.close();
     // WebRTC keeps the process alive; the agent closed stdin, so it's done.
     process.exit(0);
@@ -901,7 +895,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     }
     // Flags, then the environment, then what setup kept; at a terminal with none of them, setup asks.
     const told =
-      values.provider ?? values.model ?? process.env.WEAVE_AGENT_PROVIDER ?? process.env.WEAVE_AGENT_MODEL;
+      values.provider ?? values.model ?? process.env.MINCA_AGENT_PROVIDER ?? process.env.MINCA_AGENT_MODEL;
     await mkdir(path.join(home, 'agent'), { recursive: true, mode: 0o700 });
     const kept =
       values.setup || (!told && ask.interactive() && !(await loadModelSetting(home)))
@@ -911,15 +905,15 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
           : await loadModelSetting(home);
     const model = chooseModel(
       {
-        provider: values.provider ?? process.env.WEAVE_AGENT_PROVIDER ?? kept?.provider,
-        model: values.model ?? process.env.WEAVE_AGENT_MODEL ?? kept?.model,
-        baseUrl: values['base-url'] ?? process.env.WEAVE_AGENT_BASE_URL ?? kept?.baseUrl,
-        price: values.price ?? process.env.WEAVE_AGENT_PRICE ?? kept?.price,
+        provider: values.provider ?? process.env.MINCA_AGENT_PROVIDER ?? kept?.provider,
+        model: values.model ?? process.env.MINCA_AGENT_MODEL ?? kept?.model,
+        baseUrl: values['base-url'] ?? process.env.MINCA_AGENT_BASE_URL ?? kept?.baseUrl,
+        price: values.price ?? process.env.MINCA_AGENT_PRICE ?? kept?.price,
       },
       DEFAULT_MODEL,
       { provider: '--provider', model: '--model', price: '--price' },
     );
-    const nodes = commaList(process.env.WEAVE_NODES);
+    const nodes = commaList(process.env.MINCA_NODES);
     let runner: Runner;
     if (bot) {
       let name = bot.unlocked.account.name;
@@ -931,7 +925,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
             stderr(
               `  ${space} keeps no std.profile, so apps can't show ${name} as a bot, or offer it under “Done by”. ` +
                 `Someone who may add collections there can: in the app, Automations; or ` +
-                `\`weave collections define --standard std.profile --space ${id}\`.`,
+                `\`minca collections define --standard std.profile --space ${id}\`.`,
             );
           }),
       });
@@ -985,8 +979,8 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   if (command === 'mcp') {
     // Offline: the MCP process writes to the folder; a running daemon syncs it.
     const node = await nodeFor(await openAccount(globals));
-    stderr(`weave mcp: serving ${NODE_ACTIONS.length} tools for ${node.did}`);
-    await runMcpStdio(node, { name: 'weave', version: VERSION });
+    stderr(`minca mcp: serving ${NODE_ACTIONS.length} tools for ${node.did}`);
+    await runMcpStdio(node, { name: 'minca', version: VERSION });
     await node.close();
     return 0;
   }
@@ -996,7 +990,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   const found = command === 'whoami' ? findAction(['node_info']) : findAction([command, ...args]);
   if (!found) {
     stderr(
-      `Unknown command "${[command, ...args].slice(0, 2).join(' ')}". Try "weave help" or "weave actions".`,
+      `Unknown command "${[command, ...args].slice(0, 2).join(' ')}". Try "minca help" or "minca actions".`,
     );
     return 2;
   }
@@ -1039,7 +1033,7 @@ main(process.argv.slice(2)).then(
     process.exitCode = code;
   },
   (error: unknown) => {
-    stderr(`weave: ${messageOf(error)}`);
+    stderr(`minca: ${messageOf(error)}`);
     process.exitCode = 1;
   },
 );

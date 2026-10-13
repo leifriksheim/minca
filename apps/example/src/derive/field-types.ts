@@ -1,6 +1,6 @@
 /** The kinds of field and link a person can pick when defining a collection, spelled as `std.*` fragments spell them. */
-import type { JsonSchema } from '@weaveprotocol/core';
-import { fragments } from '@weaveprotocol/core/schemas';
+import type { JsonSchema } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
 import { isObject, kindOf } from './schema-ui';
 
 export const FIELD_TYPES = {

@@ -301,7 +301,7 @@ export async function profileKey(did: string): Promise<string> {
  * — it cannot match the room to an invite, or to the same space elsewhere.
  */
 export async function relayRoom(spaceId: string): Promise<string> {
-  return base32Encode((await sha256(new TextEncoder().encode(`weave-room/v1|${spaceId}`))).subarray(0, 20));
+  return base32Encode((await sha256(new TextEncoder().encode(`minca-room/v1|${spaceId}`))).subarray(0, 20));
 }
 
 /** The one mesh a node's spaces share, when it has relays to meet on */
@@ -2794,7 +2794,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // already holds the data.
   const channel =
     typeof globalThis.BroadcastChannel === 'function'
-      ? new globalThis.BroadcastChannel(`weave-node:${deps.rootDid}:${space.id}`)
+      ? new globalThis.BroadcastChannel(`minca-node:${deps.rootDid}:${space.id}`)
       : null;
   if (channel) {
     channel.onmessage = () => {

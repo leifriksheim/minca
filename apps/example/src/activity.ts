@@ -4,16 +4,9 @@
  * working or waiting and not gone stale, by the record it is about.
  */
 import { useEffect, useState } from 'react';
-import { useCollections, useLive, useNode } from '@weaveprotocol/core/react';
-import { useMayDefine } from '@weave/app-shared/may';
-import {
-  activeNow,
-  activity,
-  rule,
-  ruleOf,
-  type Activity,
-  type ActivityState,
-} from '@weaveprotocol/core/schemas';
+import { useCollections, useLive, useNode } from '@minca/core/react';
+import { useMayDefine } from '@minca/app-shared/may';
+import { activeNow, activity, rule, ruleOf, type Activity, type ActivityState } from '@minca/core/schemas';
 
 export interface AtWork {
   readonly did: string;

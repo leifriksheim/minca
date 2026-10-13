@@ -6,7 +6,7 @@ import { Band, EXTERNAL, Feature, GITHUB, Page } from './Site';
  * (`netlify.toml`), so it always matches what is deployed.
  */
 
-const DOWNLOAD = '/weave-chrome.zip';
+const DOWNLOAD = '/minca-chrome.zip';
 const SOURCE = `${GITHUB}/tree/main/apps/extension`;
 
 export function Extension() {

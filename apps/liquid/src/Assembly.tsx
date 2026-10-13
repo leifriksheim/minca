@@ -1,19 +1,19 @@
 import { useState, type ReactNode } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { inviteLink, useHoldSpace, useNode } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
-import { Modal } from '@weave/app-shared/Modal';
+import type { SpaceSummary } from '@minca/core';
+import { inviteLink, useHoldSpace, useNode } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { Modal } from '@minca/app-shared/Modal';
 import { useAssembly, type Assembly } from './model';
 import { Proposals } from './Proposals';
 import { Delegations } from './Delegations';
 import { People } from './People';
 import { topic as topicCollection } from './schema';
 import { Problem, TopicChip } from './ui';
-import { useAction, useCopy } from '@weave/app-shared/action';
+import { useAction, useCopy } from '@minca/app-shared/action';
 import { useDuties } from './duties';
 import { palette } from './styles';
-import { CommunitySetup } from '@weave/app-shared/CommunitySetup';
+import { CommunitySetup } from '@minca/app-shared/CommunitySetup';
 
 type Tab = 'proposals' | 'trust' | 'people';
 

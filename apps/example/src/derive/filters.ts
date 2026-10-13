@@ -1,4 +1,4 @@
-import type { SortDirection } from '@weaveprotocol/core';
+import type { SortDirection } from '@minca/core';
 
 export interface Sort {
   readonly field: string;

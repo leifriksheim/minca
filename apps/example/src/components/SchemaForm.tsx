@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { JsonSchema } from '@weaveprotocol/core';
+import type { JsonSchema } from '@minca/core';
 import {
   choicesOf,
   emptyValue,
@@ -13,7 +13,7 @@ import { fieldTypeOf } from '../derive/field-types';
 import { nameOf } from '../derive/people';
 import { usePeopleHere } from './Person';
 import { styles, palette } from '../styles';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 
 /**
  * A form for a record, drawn from its collection's schema. Without a schema,

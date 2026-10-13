@@ -38,7 +38,7 @@ const isStatements = (value: unknown): value is ReadonlyArray<ReadonlyArray<unkn
   Array.isArray(value) && value.every((statement: unknown) => Array.isArray(statement));
 
 /** Tags every message, so a port shared with other traffic can tell ours apart */
-const TAG = 'weave-node';
+const TAG = 'minca-node';
 
 /** The node's own methods that cross; every namespace's do (`node/api.ts`) */
 const OWN_METHODS = Object.freeze({ iceServers: true, revokeSelf: true });
@@ -425,7 +425,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
   return build(0, await ask<NodeState>(0, 'hello', []));
 }
 
-const SIGNER_TAG = 'weave-signer';
+const SIGNER_TAG = 'minca-signer';
 
 /**
  * Signs session delegations for a `remoteSigner` on the other side of `port`.

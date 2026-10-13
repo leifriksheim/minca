@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useCan, useNode } from '@weaveprotocol/core/react';
-import type { NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { tag } from '@weaveprotocol/core/schemas';
+import { useCan, useNode } from '@minca/core/react';
+import type { NodeRecord, SpaceSummary } from '@minca/core';
+import { tag } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { palette } from '../../styles';
 

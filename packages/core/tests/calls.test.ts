@@ -1,5 +1,5 @@
 /**
- * Calls (`weave-protocol/calls`): set up by live messages in a space, a
+ * Calls (`minca-protocol/calls`): set up by live messages in a space, a
  * connection of their own between each pair of people, and only for the
  * space's members.
  */

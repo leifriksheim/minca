@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useConnection } from '@weaveprotocol/core/react';
-import { Shape, shapeFor, type ShapeKind } from '@weave/app-shared/shapes';
-import type { ShapeColour } from '@weave/app-shared/tokens';
+import { useConnection } from '@minca/core/react';
+import { Shape, shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 import { palette, tone } from './styles';
 
 /** Liquid's mark: its shape, the same one a host shows for it, and its name */
@@ -40,7 +40,7 @@ export function Welcome() {
           <Logo />
           <span style={{ flex: 1 }} />
           <a
-            href="https://github.com/leifriksheim/weave"
+            href="https://github.com/leifriksheim/minca"
             className="lq-muted"
             style={{ fontSize: 13, textDecoration: 'none' }}
           >

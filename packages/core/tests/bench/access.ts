@@ -3,7 +3,7 @@
  * private space, and at checkpoints times adding one more and an ordinary
  * write.
  *
- *   npx tsx --conditions=@weaveprotocol/source tests/bench/access.ts [M]
+ *   npx tsx --conditions=@minca/source tests/bench/access.ts [M]
  */
 import { community } from '../../src/space/presets.js';
 import { person, someone, time, ms } from './common.js';

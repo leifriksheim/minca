@@ -1,9 +1,9 @@
-import { useAccount, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
-import { call as callSchema, type Call } from '@weaveprotocol/core/schemas';
+import { useAccount, useLive, useNode, useProfiles } from '@minca/core/react';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { call as callSchema, type Call } from '@minca/core/schemas';
 import { nameOf, peopleFrom, type People } from '../../derive/people';
 import { ago } from '../../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { CallButton } from '../calls/Calls';
 import { styles, palette } from '../../styles';
 import type { AppProps } from './index';

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import type { QueryRecord } from '@weaveprotocol/core';
-import { Avatar } from '@weave/app-shared/Avatar';
+import type { QueryRecord } from '@minca/core';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { ago } from '../../derive/time';
 import { styles, palette, ui } from '../../styles';
 import { Person } from '../Person';

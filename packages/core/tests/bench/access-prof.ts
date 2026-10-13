@@ -2,7 +2,7 @@
  * Where the time goes when adding a member to a space of M: a CPU profile of
  * three adds, written to /tmp/access.cpuprofile (or $PROF_OUT/access.cpuprofile).
  *
- *   npx tsx --conditions=@weaveprotocol/source tests/bench/access-prof.ts [M]
+ *   npx tsx --conditions=@minca/source tests/bench/access-prof.ts [M]
  */
 import { writeFileSync } from 'node:fs';
 import { Session } from 'node:inspector/promises';

@@ -4,15 +4,15 @@
  * a space live as records sync in.
  *
  * ```tsx
- * const auth = createWeaveAuth({ network: { relays } });
+ * const auth = createMincaAuth({ network: { relays } });
  *
  * function Root() {
- *   return <WeaveProvider auth={auth}><App /></WeaveProvider>;
+ *   return <MincaProvider auth={auth}><App /></MincaProvider>;
  * }
  *
  * function App() {
- *   const { state } = useWeave();
- *   if (state?.stage !== 'ready') return <WeaveAuth auth={auth} />;
+ *   const { state } = useMinca();
+ *   if (state?.stage !== 'ready') return <MincaAuth auth={auth} />;
  *   return <Todos space={…} />;
  * }
  *
@@ -27,17 +27,17 @@
  * protocol that imports it.
  */
 export {
-  WeaveProvider,
-  useWeave,
+  MincaProvider,
+  useMinca,
   useAuth,
   useSession,
   useConnection,
   useAccount,
   useNode,
 } from './context.js';
-export type { WeaveProviderProps } from './context.js';
-export { WeaveAuth } from './weave-auth.js';
-export type { WeaveAuthProps } from './weave-auth.js';
+export type { MincaProviderProps } from './context.js';
+export { MincaAuth } from './minca-auth.js';
+export type { MincaAuthProps } from './minca-auth.js';
 export { useLive } from './use-live.js';
 export { useQuery } from './use-query.js';
 export type { QueryState } from './use-query.js';

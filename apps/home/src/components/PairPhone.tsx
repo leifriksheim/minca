@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import type { PairingOffer, PairingStage } from '@weaveprotocol/core/session';
-import { useAuth } from '@weaveprotocol/core/react';
-import { servedOverLan, relayProblem, relayOnlyLocal } from '@weave/app-shared/relay';
-import { Info } from '@weave/app-shared/Info';
+import type { PairingOffer, PairingStage } from '@minca/core/session';
+import { useAuth } from '@minca/core/react';
+import { servedOverLan, relayProblem, relayOnlyLocal } from '@minca/app-shared/relay';
+import { Info } from '@minca/app-shared/Info';
 import { styles, palette } from '../styles';
 
 /** What each stage of the handover should say out loud. */

@@ -53,7 +53,7 @@ const labelled = <const P extends object, const R extends keyof P>(value: P, req
 });
 
 /**
- * A person who may not be on Weave: a subset of JSContact (RFC 9553). For
+ * A person who may not be on Minca: a subset of JSContact (RFC 9553). For
  * people who are, `std.contact` keeps their DID.
  */
 export const card = define({

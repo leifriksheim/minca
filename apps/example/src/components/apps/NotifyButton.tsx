@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import type { NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useDismiss } from '@weave/app-shared/useDismiss';
+import type { NodeCollection, SpaceSummary } from '@minca/core';
+import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useNotifyFor } from '../../notifications';
 import { Icon } from '../Icon';
 import { styles, palette } from '../../styles';

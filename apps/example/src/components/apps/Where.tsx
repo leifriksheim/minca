@@ -1,14 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Filter } from '@weaveprotocol/core';
-import {
-  cellsAround,
-  cellsOf,
-  centreOf,
-  distanceKm,
-  geohash,
-  type CalendarEvent,
-} from '@weaveprotocol/core/schemas';
-import { Modal } from '@weave/app-shared/Modal';
+import type { Filter } from '@minca/core';
+import { cellsAround, cellsOf, centreOf, distanceKm, geohash, type CalendarEvent } from '@minca/core/schemas';
+import { Modal } from '@minca/app-shared/Modal';
 import {
   PLACES_CREDIT,
   PLACES_CREDIT_URL,
@@ -16,7 +9,7 @@ import {
   searchPlaces,
   whereAmI,
   type FoundPlace,
-} from '@weave/app-shared/places';
+} from '@minca/app-shared/places';
 import { styles, palette, ui } from '../../styles';
 
 /** A place as the standard records keep it: a name, an address, a point and its cells */
@@ -40,7 +33,7 @@ export function useDistance(place: Place | undefined): string {
   const km = distanceFrom(useContext(NearContext), place);
   return km === null ? '' : distanceText(km);
 }
-const NEAR_KEY = 'weave:near';
+const NEAR_KEY = 'minca:near';
 
 /**
  * A place found, as a record keeps it. `coarse` keeps only the part of town:

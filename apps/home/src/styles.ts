@@ -1,48 +1,48 @@
 import type { CSSProperties } from 'react';
-import { baseCss, hoverCss, palette, styles as shared } from '@weave/app-shared/styles';
+import { baseCss, hoverCss, palette, styles as shared } from '@minca/app-shared/styles';
 
 export { palette };
 
 const { ink, surface, accent, radius, display, mono, shadow } = palette;
 
 /**
- * The sign-in element from `@weaveprotocol/core` dressed as Minca: its
+ * The sign-in element from `@minca/core` dressed as Minca: its
  * colours through the custom properties it reads, and the few shapes it
  * fixes itself (pill buttons, square options, a framed popover). Its sheet
  * is adopted after this one, so each rule starts at `html` to win.
  */
 const authCss = `
-    html weave-auth {
-      --weave-ink: ${ink.strong};
-      --weave-body: ${ink.body};
-      --weave-muted: ${ink.muted};
-      --weave-faint: ${ink.faint};
-      --weave-surface: ${surface.card};
-      --weave-sunken: ${surface.sunken};
-      --weave-line: ${surface.line};
-      --weave-line-strong: ${surface.lineStrong};
-      --weave-accent: ${accent.base};
-      --weave-accent-hover: ${accent.hover};
-      --weave-on-accent: ${surface.card};
-      --weave-danger: ${accent.danger};
-      --weave-danger-soft: ${accent.dangerSoft};
-      --weave-radius: ${radius.sm}px;
-      --weave-font: ${palette.font};
-      --weave-mono: ${mono};
+    html minca-auth {
+      --minca-ink: ${ink.strong};
+      --minca-body: ${ink.body};
+      --minca-muted: ${ink.muted};
+      --minca-faint: ${ink.faint};
+      --minca-surface: ${surface.card};
+      --minca-sunken: ${surface.sunken};
+      --minca-line: ${surface.line};
+      --minca-line-strong: ${surface.lineStrong};
+      --minca-accent: ${accent.base};
+      --minca-accent-hover: ${accent.hover};
+      --minca-on-accent: ${surface.card};
+      --minca-danger: ${accent.danger};
+      --minca-danger-soft: ${accent.dangerSoft};
+      --minca-radius: ${radius.sm}px;
+      --minca-font: ${palette.font};
+      --minca-mono: ${mono};
     }
     /* The page draws Minca's mark above the element, so its own goes. */
-    html weave-auth .wa-wordmark { display: none; }
-    html weave-auth .wa-card { max-width: none; }
-    html weave-auth .wa-title { font-family: ${display}; font-weight: 700; font-size: 32px; line-height: 1.05; }
-    html weave-auth .wa-button, html weave-auth .wa-secondary { border-radius: ${radius.pill}px; }
-    html weave-auth .wa-option, html weave-auth .wa-error-box, html weave-auth .wa-code { border-radius: 0; }
-    html weave-auth .wa-error-box { border: 1px solid ${accent.danger}; }
-    html weave-auth .wa-option:not(:disabled):hover { border-color: ${surface.rule}; box-shadow: ${shadow.small}; background: ${surface.card}; }
-    html weave-auth input:focus { border-color: ${accent.base}; box-shadow: 0 0 0 3px ${accent.soft}; }
-    html weave-auth input:focus-visible { outline: none; }
-    html weave-auth :focus-visible { outline-color: ${accent.base}; }
-    html weave-auth .wa-avatar { border-radius: 0; }
-    html weave-auth .wa-popover { border-radius: 0; border-color: ${surface.rule}; box-shadow: ${shadow.small}; }
+    html minca-auth .wa-wordmark { display: none; }
+    html minca-auth .wa-card { max-width: none; }
+    html minca-auth .wa-title { font-family: ${display}; font-weight: 700; font-size: 32px; line-height: 1.05; }
+    html minca-auth .wa-button, html minca-auth .wa-secondary { border-radius: ${radius.pill}px; }
+    html minca-auth .wa-option, html minca-auth .wa-error-box, html minca-auth .wa-code { border-radius: 0; }
+    html minca-auth .wa-error-box { border: 1px solid ${accent.danger}; }
+    html minca-auth .wa-option:not(:disabled):hover { border-color: ${surface.rule}; box-shadow: ${shadow.small}; background: ${surface.card}; }
+    html minca-auth input:focus { border-color: ${accent.base}; box-shadow: 0 0 0 3px ${accent.soft}; }
+    html minca-auth input:focus-visible { outline: none; }
+    html minca-auth :focus-visible { outline-color: ${accent.base}; }
+    html minca-auth .wa-avatar { border-radius: 0; }
+    html minca-auth .wa-popover { border-radius: 0; border-color: ${surface.rule}; box-shadow: ${shadow.small}; }
 `;
 
 /**
@@ -54,10 +54,10 @@ const authCss = `
  * Hover applies everywhere, before the base rules so that focus wins over it.
  */
 export function injectBaseStyles(): void {
-  if (globalThis.document.getElementById('weave-base-styles')) return;
+  if (globalThis.document.getElementById('minca-base-styles')) return;
 
   const style = globalThis.document.createElement('style');
-  style.id = 'weave-base-styles';
+  style.id = 'minca-base-styles';
   style.textContent = `
     ${hoverCss}
     ${baseCss}

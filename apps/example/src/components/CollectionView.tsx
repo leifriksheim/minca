@@ -1,14 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { useNode, useLive, useProfiles, useCan, useAccount } from '@weaveprotocol/core/react';
-import type {
-  Filter,
-  NodeCollection,
-  NodeRecord,
-  Query,
-  QueryRecord,
-  SpaceSummary,
-} from '@weaveprotocol/core';
-import { reaction, comment, tag } from '@weaveprotocol/core/schemas';
+import { useNode, useLive, useProfiles, useCan, useAccount } from '@minca/core/react';
+import type { Filter, NodeCollection, NodeRecord, Query, QueryRecord, SpaceSummary } from '@minca/core';
+import { reaction, comment, tag } from '@minca/core/schemas';
 import {
   byRel,
   bodyOf,
@@ -32,11 +25,11 @@ import { ago } from '../derive/time';
 import { SchemaForm } from './SchemaForm';
 import { CollectionEditor, useMayRedefine } from './CollectionDesigner';
 import { Value } from './Value';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { reactionSummary } from './std/Reactions';
 import { chip, tagLabel } from './std/Tags';
 import { styles, palette, ui } from '../styles';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { Lane, Card } from './Lane';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
@@ -49,8 +42,8 @@ type Layout = (typeof LAYOUTS)[number];
 const isLayout = (value: unknown): value is Layout => LAYOUTS.some((layout) => layout === value);
 
 /** Each collection remembers how you last looked at it — on this device only */
-const layoutKey = (space: string, name: string) => `weave.layout:${space}:${name}`;
-const groupKey = (space: string, name: string) => `weave.board:${space}:${name}`;
+const layoutKey = (space: string, name: string) => `minca.layout:${space}:${name}`;
+const groupKey = (space: string, name: string) => `minca.board:${space}:${name}`;
 function remembered(key: string): string | null {
   try {
     return globalThis.localStorage.getItem(key);

@@ -6,7 +6,7 @@ data folder and a blob store, and mirrors a space into one.
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
 > agree on (the sync messages, the store's entries, the data folder, sealing,
-> segments) is in [spec 05](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md).
+> segments) is in [spec 05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
 ## Pacing sync
 
@@ -53,7 +53,7 @@ a change was landing is not kept.
 
 When another writer changed the same store, the node re-reads all of it
 (`invalidate`). Other tabs of one browser are told through a
-`BroadcastChannel` named `weave-node:<root DID>:<space id>`. Where a browser
+`BroadcastChannel` named `minca-node:<root DID>:<space id>`. Where a browser
 has shared workers, the apps in this repository run one node for all of a
 site's tabs in a `SharedWorker`, so those tabs share one store and have
 nothing to tell each other; the channel remains for browsers without them,
@@ -105,9 +105,9 @@ _Source: `packages/core/src/types.ts` (`StorageAdapter`, `BatchOp`). Tests:
 
 `indexedDBStores(prefix)` opens one database per store path, named
 `<prefix>:<path with / replaced by :>`. An account signed in in the browser
-uses the prefix `weave:<dataPath with / replaced by :>`, for example
-`weave:accounts:k3x9q2:stores:spaces:<space id>`; an app connected to an
-account home uses `weave-app:<account DID>` (the grant's `did`). Only this origin reads them.
+uses the prefix `minca:<dataPath with / replaced by :>`, for example
+`minca:accounts:k3x9q2:stores:spaces:<space id>`; an app connected to an
+account home uses `minca-app:<account DID>` (the grant's `did`). Only this origin reads them.
 
 Each database:
 
@@ -128,12 +128,12 @@ Each database:
   range in one `readonly` transaction; `getVersions` is one `readonly`
   transaction.
 
-Accounts kept in a browser live in database `weave-accounts`, object store
-`accounts`. A remembered data-folder handle lives in database `weave-folder`,
+Accounts kept in a browser live in database `minca-accounts`, object store
+`accounts`. A remembered data-folder handle lives in database `minca-folder`,
 object store `handles`, key `data-folder`.
 
 A host keeps its subscriptions in its own store, path `host`, under keys
-`subscription:<id>` ([spec 06](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+`subscription:<id>` ([spec 06](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/storage/indexeddb-adapter.ts`,
 `packages/core/src/storage/directory-access.ts`,
@@ -144,11 +144,11 @@ adapter needs a browser)._
 ## Data folders
 
 The folder's layout, file names and the way several writers converge are
-protocol ([spec 05 §14](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
+protocol ([spec 05 §14](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 How this library gets and writes one is not:
 
 - **In the browser** the folder comes from `showDirectoryPicker` with
-  `id: "weave-pod"`, `mode: "readwrite"`, `startIn: "documents"`, which needs a
+  `id: "minca-pod"`, `mode: "readwrite"`, `startIn: "documents"`, which needs a
   user gesture. The handle is remembered in IndexedDB (above); on a later visit
   `readwrite` permission is queried, and requested again only from a gesture.
   Browsers without the API (Firefox, Safari, mobile) keep data in IndexedDB
@@ -201,7 +201,7 @@ _Source: `packages/core/src/storage/blob-store.ts`,
 ## Mirrors
 
 A mirror's segments, where a store writer may write and how it pulls and compacts
-are protocol ([spec 05 §16](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
+are protocol ([spec 05 §16](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 Today carriers and hosts mirror.
 
 A store writer keeps its state in the store `mirrors/<space id>/<n>`, where `n` is
@@ -229,7 +229,7 @@ _Source: `packages/core/src/storage/mirror.ts`,
 
 > **Planned.** Mirrors on any node, in storage the person already has. What
 > a mirror holds, and absorbing a store writer that went quiet, are protocol and
-> planned in [spec 05 §16.5](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md).
+> planned in [spec 05 §16.5](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
 - **Any node, several mirrors.** A node will take a list of blob stores
   (`NodeConfig.mirrors`), one per space each, since a person may have their

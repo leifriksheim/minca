@@ -626,7 +626,7 @@ export interface StartRulesOptions extends RunRulesOptions {
 /**
  * Runs the rules `account` runs, in every space it follows, until stopped:
  * once at the start, after each change in a space, and at the times rules
- * name. The one loop every runner uses, an app, `weave agent` or a bot.
+ * name. The one loop every runner uses, an app, `minca agent` or a bot.
  */
 export function startRules(node: P2PNode, options: StartRulesOptions): () => void {
   const { account } = options;

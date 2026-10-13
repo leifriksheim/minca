@@ -1,7 +1,7 @@
 import { useState, type DragEvent } from 'react';
-import { useCan, useLive, useNode } from '@weaveprotocol/core/react';
-import type { NodeRecord } from '@weaveprotocol/core';
-import { column, task, positionBetween, type Column, type Task } from '@weaveprotocol/core/schemas';
+import { useCan, useLive, useNode } from '@minca/core/react';
+import type { NodeRecord } from '@minca/core';
+import { column, task, positionBetween, type Column, type Task } from '@minca/core/schemas';
 import { styles, palette } from '../../styles';
 import type { AppProps } from './index';
 import { Lane, Card } from '../Lane';

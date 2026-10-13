@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { NodeCollection } from '@weaveprotocol/core';
-import { useQuery } from '@weaveprotocol/core/react';
+import type { NodeCollection } from '@minca/core';
+import { useQuery } from '@minca/core/react';
 import {
   clauseOn,
   clauseWords,

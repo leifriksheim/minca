@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { useLive, useNode } from '@weaveprotocol/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { useLive, useNode } from '@minca/core/react';
 import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { styles, palette } from '../styles';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 
 /**
  * Links this record to another, in one of the ways its collection allows —

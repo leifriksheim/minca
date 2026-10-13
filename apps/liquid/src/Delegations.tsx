@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { useNode } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
+import { useNode } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
 import type { Assembly, MyDelegation, TopicView } from './model';
 import { EVERYTHING, delegation } from './schema';
 import { follow, type DelegationEdge, type Next } from './tally';
 import { PartyChip, PartyMark, PathView, Problem, TopicChip, Who, decidesText } from './ui';
-import { useAction } from '@weave/app-shared/action';
-import { styles } from '@weave/app-shared/styles';
+import { useAction } from '@minca/app-shared/action';
+import { styles } from '@minca/app-shared/styles';
 import { palette } from './styles';
 
 /** Where someone's vote would go on a topic if nobody voted: the chain of trust alone */

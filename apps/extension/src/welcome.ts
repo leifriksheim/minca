@@ -6,8 +6,8 @@
  * the moment the home's window takes focus, and the home's answer would have
  * nowhere to arrive.
  */
-import { appKey, connectCarrier, homeAddress, type CarryGrant } from '@weaveprotocol/core/session';
-import { pickDataFolder, rememberDataFolder, type DirectoryHandleLike } from '@weaveprotocol/core/storage';
+import { appKey, connectCarrier, homeAddress, type CarryGrant } from '@minca/core/session';
+import { pickDataFolder, rememberDataFolder, type DirectoryHandleLike } from '@minca/core/storage';
 import {
   ask,
   DEFAULT_HOME,
@@ -186,7 +186,7 @@ function podSection(pod: NonNullable<CarryGrant['pod']>): HTMLElement {
   const state = status?.pod.state ?? 'not-picked';
   const choose = () =>
     run(async () => {
-      const folder = await pickDataFolder({ id: 'weave-pod' });
+      const folder = await pickDataFolder({ id: 'minca-pod' });
       await checkPod(folder, pod.dataPath, pod.folder);
       await rememberDataFolder(folder);
       await ask({ to: 'offscreen', type: 'reload' });

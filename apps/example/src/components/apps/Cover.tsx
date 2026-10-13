@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { hash } from '@weave/app-shared/hash';
-import { Shape, shapeFor } from '@weave/app-shared/shapes';
+import { hash } from '@minca/app-shared/hash';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
 import { palette } from '../../styles';
-import type { ShapeColour } from '@weave/app-shared/tokens';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 
 /** A kind of thing, as a cover shows it: a label, a glyph and a colour */
 export interface Kind {

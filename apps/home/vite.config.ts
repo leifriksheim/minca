@@ -17,7 +17,7 @@ import type { Plugin } from 'vite';
  */
 function securityHeaders(mode: string): Plugin {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
-  const configured = [env.VITE_SIGNALING_URL ?? '', env.VITE_WEAVE_NODES ?? '']
+  const configured = [env.VITE_SIGNALING_URL ?? '', env.VITE_MINCA_NODES ?? '']
     .flatMap((list) => list.split(','))
     .map((url) => url.trim())
     .filter(Boolean)
@@ -57,16 +57,16 @@ function securityHeaders(mode: string): Plugin {
 }
 
 /**
- * The protocol comes from the workspace, as source: the `@weaveprotocol/source`
+ * The protocol comes from the workspace, as source: the `@minca/source`
  * export condition points each entry at `packages/core/src`, so there is no
  * build step and edits there hot-reload here.
  */
 export default defineConfig(({ mode }) => ({
   resolve: {
-    conditions: ['@weaveprotocol/source', ...defaultClientConditions],
+    conditions: ['@minca/source', ...defaultClientConditions],
     dedupe: ['react', 'react-dom'],
   },
-  // The node's worker (src/weave-worker.ts) is a module, like the page.
+  // The node's worker (src/minca-worker.ts) is a module, like the page.
   worker: { format: 'es' },
   plugins: [securityHeaders(mode), react()],
   server: { port: 5174 },

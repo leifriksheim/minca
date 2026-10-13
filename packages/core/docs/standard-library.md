@@ -2,14 +2,14 @@
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md).
+> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
 
-An optional library of ordinary definitions (`@weaveprotocol/core/schemas`),
+An optional library of ordinary definitions (`@minca/core/schemas`),
 broad enough that most apps need no definitions of their own. The protocol
 knows none of them; a space learns one when someone defines it there. All are
 `version` 1 when first defined. They are drawn from atproto lexicons, Nostr
 NIPs, JSContact (RFC 9553), JSCalendar (RFC 8984) and schema.org; issue
-[#36](https://github.com/leifriksheim/weave/issues/36) has the sources.
+[#36](https://github.com/leifriksheim/minca/issues/36) has the sources.
 
 ## What a `std.*` name means
 
@@ -18,7 +18,7 @@ and two spaces may give one name different shapes. What lets two apps read
 each other's records is the definition, not the name, and the library exists
 so that apps reach for the same definitions.
 
-`std.*` names are the library's by convention ([spec 02 §6.4](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)); peers do not refuse a
+`std.*` names are the library's by convention ([spec 02 §6.4](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)); peers do not refuse a
 `std.*` definition of another shape. The reference node's agent actions keep
 to the convention:
 
@@ -41,9 +41,9 @@ _Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `pac
 ## Conventions
 
 - What several people edit is several records, not an array in one body,
-  because a record resolves as a whole ([spec 02 §4.3](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)): a list and its items, a
+  because a record resolves as a whole ([spec 02 §4.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)): a list and its items, a
   document and its blocks, an order and the seller's updates to it.
-- "One per person" or "one per slot" is `onePer` ([spec 02 §7.3](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), over links and
+- "One per person" or "one per slot" is `onePer` ([spec 02 §7.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), over links and
   scalar fields only (see the known defect there).
 - Bodies carry no `createdAt`; the record has one. They carry only the times
   of the thing itself (`start`, `due`, `takenAt`).
@@ -53,7 +53,7 @@ _Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `pac
 - What only one person should see — blocks, mutes, reminders, settings — goes
   in that person's own space, not in one others read.
 
-**Fragments.** The dialect has no `$ref` ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), so shared shapes are spelled
+**Fragments.** The dialect has no `$ref` ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), so shared shapes are spelled
 out in each definition, built by the library's `fragments` so they are
 identical everywhere:
 
@@ -70,7 +70,7 @@ identical everywhere:
 | `image`    | `{ blob, alt? }`: `alt` ≤ 2000, what it shows                                                                                                                                                             |
 | `position` | string 1–200 that sorts where a record goes (Positions, below)                                                                                                                                            |
 
-Until the dialect has `format` ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), `when` and `day` are checked only for
+Until the dialect has `format` ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), `when` and `day` are checked only for
 length. How a `blob`'s bytes are stored and fetched is planned
 ([Planned: what the library still waits on](#planned-what-the-library-still-waits-on));
 the reference to them is not.
@@ -80,10 +80,10 @@ the reference to them is not.
 In the tables, a **bold** field is required; `string 1–200` gives its
 `minLength`–`maxLength`, `[]` a list with its `maxItems`, and `a`/`b` an
 `enum`. Links read `role` → where it may point, cardinality. Rules are what
-a definition asks of its records ([spec 02 §7](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)):
+a definition asks of its records ([spec 02 §7](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)):
 `onePer`, `fixed`, `final`, `check`. Who may add, change and remove records
 is not the definition's to say but the space's grants
-([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)):
+([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)):
 in the `community` template, members change only what they made, moderators
 anything, and only moderators and admins write in the collections in
 `STAFF_COLLECTIONS` ([spaces](spaces.md#presets)).
@@ -252,7 +252,7 @@ _Source: `packages/core/src/schemas/library/community.ts` (`ballot`, `decision`,
 
 `std.host` names a host the space pays to keep it online, which anyone in it
 may chip in for; members' devices hand it the space's pass
-([node](node.md#a-space-paying-for-itself), [spec 08 §2](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)).
+([node](node.md#a-space-paying-for-itself), [spec 08 §2](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)).
 Naming a host sends it every member's pass, so only those granted it should:
 the `community` template leaves `std.host` to admins and moderators.
 
@@ -328,8 +328,8 @@ them from what the person picked (an `@name` they chose, the one they replied
 to), never from matching text. They are topics (with the `channel` link on a message),
 so a subscription can ask for only those that mention the account, or reply to
 it, or are in one channel
-([spec 06 §2.11](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md), `topic: { field: "mentions", me: true }`),
-and a carrier can match it unread ([spec 02 §8](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+([spec 06 §2.11](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md), `topic: { field: "mentions", me: true }`),
+and a carrier can match it unread ([spec 02 §8](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 A `std.task`'s `assignees` is a topic in the same way: "assigned to me" is
 `topic: { field: "assignees", me: true }`, with a tag for each assignee.
 
@@ -399,15 +399,15 @@ _Source: `packages/core/src/schemas/library/publishing.ts` (`channel`, `direct`)
 only optional fields and link roles: `std.attachment` a `blob`; `std.task`
 `due`, `status`, `assignees`, `priority` and the `parent` and `project` links;
 `std.message` a `channel`, the `root` link, `mentions`, `replyingTo`, and its
-first topics ([spec 02 §8](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)); `std.vote` `choices` (every
+first topics ([spec 02 §8](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)); `std.vote` `choices` (every
 choice, most preferred first, with `choice` the first of them); `std.proposal`
 `quorum`, for `std.decision`. A space that
 holds an earlier definition keeps it until someone applies a blueprint that
 carries the new one, which its review shows as a change. One of them is not additive in the sense of
-[spec 02 §6.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md): `std.vote`'s `about` may now also point at a `std.proposal`, so an app
+[spec 02 §6.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md): `std.vote`'s `about` may now also point at a `std.proposal`, so an app
 that reads votes may meet one on something that is not a poll.
 
-Since then ([#105](https://github.com/leifriksheim/weave/issues/105)), `std.comment` and `std.post` gained the same optional
+Since then ([#105](https://github.com/leifriksheim/minca/issues/105)), `std.comment` and `std.post` gained the same optional
 `mentions` and `replyingTo` as a message, and `std.note`, `std.doc-block` and
 `std.article` a `mentions`, all as topics; eleven annotations and answers
 gained `respondingTo` (Responses, above); `std.expense` gained `owedBy`; and
@@ -443,7 +443,7 @@ a character of `0123456789bcdefghjkmnpqrstuvwxyz`. For Grünerløkka in Oslo,
 `lat` 59.9226 and `lon` 10.7522 give `["u4x", "u4xs", "u4xsu", "u4xsus"]`.
 
 `std.event` and `std.listing` name `place.cells` as a topic, and `std.place`
-names `cells`, so each cell is a blind tag ([spec 02 §8](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)): a keeper that
+names `cells`, so each cell is a blind tag ([spec 02 §8](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)): a keeper that
 cannot read a private space can still hand over "listings in these cells".
 Tags match by equality only, which is why the cells are written out at each
 size instead of one long geohash and a prefix.
@@ -466,7 +466,7 @@ only the part of town, moving the point to the middle of its precision 6 cell
 and leaving out the street.
 
 Finding places by name is not part of the library. The example asks Photon
-(OpenStreetMap's data, `apps/shared/src/places.ts`), set by `VITE_WEAVE_PLACES`,
+(OpenStreetMap's data, `apps/shared/src/places.ts`), set by `VITE_MINCA_PLACES`,
 and shows OpenStreetMap's credit beside what it finds.
 
 _Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`, `aroundCell`, `distanceKm`), `apps/example/src/components/apps/Where.tsx`, `apps/shared/src/places.ts`. Tests: `packages/core/tests/geo.test.ts` (all)._
@@ -475,16 +475,16 @@ _Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`
 
 > **Planned.** Not normative. Each item names its own issue.
 >
-> - **File bytes** ([spec 05 §16.6](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md),
->   [#37](https://github.com/leifriksheim/weave/issues/37)). The `blob`
+> - **File bytes** ([spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md),
+>   [#37](https://github.com/leifriksheim/minca/issues/37)). The `blob`
 >   fragment names bytes by hash, but a space cannot yet store or send them,
 >   so `std.file`, `std.photo`, `std.video` and the images elsewhere point at
 >   bytes a reader may not be able to fetch.
-> - **References to other spaces** ([spec 02 §5.3](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md),
->   [#38](https://github.com/leifriksheim/weave/issues/38)). `std.follow`'s
+> - **References to other spaces** ([spec 02 §5.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md),
+>   [#38](https://github.com/leifriksheim/minca/issues/38)). `std.follow`'s
 >   `space` is a plain space id, and a repost or a list item can point only
 >   within its own space.
-> - **`format`** ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), to check `when`, `day` and `url`.
+> - **`format`** ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), to check `when`, `day` and `url`.
 
 ## `std.call`
 
@@ -499,7 +499,7 @@ Calls themselves are kept nowhere ([calls](calls.md)). Their history is a
 | `endedAt`   | string ≤ 64 (ISO date)          | For an ended call.                           |
 | `people`    | string[] ≤ 64 items, each ≤ 256 | For an ended call: every account seen in it. |
 
-Rules: none ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)); who may change it is the space's grants.
+Rules: none ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)); who may change it is the space's grants.
 
 ```json
 {
@@ -511,7 +511,7 @@ Rules: none ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-record
 ```
 
 _Implementation detail:_ the call a device is in is kept in `sessionStorage`
-under `weave-call` as `{ space, call }`, so after a reload the page can offer to
+under `minca-call` as `{ space, call }`, so after a reload the page can offer to
 rejoin while the call is still going on.
 
 _Source: `packages/core/src/calls/calls.ts`, `packages/core/src/schemas/library/publishing.ts` (`call`). Tests: `packages/core/tests/calls.test.ts`._

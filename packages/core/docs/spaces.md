@@ -6,13 +6,13 @@ an app shows a subscription.
 
 > Not protocol. None of this is checked by a peer, and another implementation
 > may do it differently and still interoperate. What peers must agree on about
-> spaces is in [spec 03 — Spaces](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md).
+> spaces is in [spec 03 — Spaces](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
 
 ## Presets
 
 A preset is a constitution template: who sits at the top, the roles a space
 is founded with and the grants each holds, and the roles the creator starts
-with ([spec 03 §1–§2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+with ([spec 03 §1–§2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 The protocol reads whatever a constitution names and never looks at a
 preset's name; these are a sensible start for an app. Spread one into
 `spaces.create`, change it, or write your own:
@@ -64,7 +64,7 @@ Their definitions used to say so with `create` rules; now the template does.
 When a space is created with no roles, it gets `solo`. The account's derived
 spaces (the registry, the contacts space) use `solo`'s roles, none, byte for
 byte: their ids depend on it
-([spec 03 §13.1](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+([spec 03 §13.1](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 Changing `solo` would change those ids, so it must not change.
 
 _Source: `packages/core/src/space/presets.ts` (`solo`, `team`, `community`, `coop`, `STAFF_COLLECTIONS`), `packages/core/src/space/grants.ts`, `packages/core/src/space/space-manager.ts` (`create`), `packages/core/src/node/node.ts` (`spaces.create`). Tests: `packages/core/tests/space.test.ts`, `packages/core/tests/roles.test.ts` ("definitions", "`community` admins can remove each other by naming a view before the promotion"), `packages/core/tests/constitution.test.ts` ("the templates are well formed", "a co-op: no founders…")._
@@ -157,7 +157,7 @@ On `join`, relays carried by the invite are a hint: the node uses them only
 when they pass `checkRelays` and it holds no relay list for the space yet.
 While the invite's record has not reached this device, the space is held with
 `joining: true` and the node tries again as records arrive
-([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/node/node.ts` (`spaces.invite`, `preview`, `join`), `packages/core/src/space/space-manager.ts` (`previewInvite`, `join`). Tests: `packages/core/tests/space.test.ts` ("invites"), `packages/core/tests/roles.test.ts` ("invites")._
 
@@ -184,7 +184,7 @@ rules in the space, by warrants members wrote and this node checked
 ## Profiles
 
 The record format, and whose versions count, is protocol
-([spec 03 §11](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+([spec 03 §11](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 The rest is the library's.
 
 **Reading.** For each `profile:` key, the node looks at versions newest first,
@@ -207,7 +207,7 @@ wins. `node.account.setName` writes it. The node publishes that name into
 every space it opens, and again on a rename, except the registry, the
 contacts space and nodes whose note lacks `/account/write` (an agent's); a
 non-member publishes nothing
-([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 > **Planned:** profiles, round two.
 >
@@ -217,7 +217,7 @@ non-member publishes nothing
 >   overwrite it.
 > - **An avatar**, as a reference to an image on the profile. Depends on a
 >   way for a record to carry a file, which is not specified yet (the blob
->   stores of [spec 05](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md) hold mirrors, not files records
+>   stores of [spec 05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md) hold mirrors, not files records
 >   point to).
 > - **Private nicknames for others**: a name you give someone, seen only by
 >   you. It belongs in the account's own spaces, not in the shared one;
@@ -251,7 +251,7 @@ _Source: `packages/core/src/space/space-manager.ts`. Tests: `packages/core/tests
 ## Subscriptions
 
 A subscription's `app` names the app that proposed it
-([spec 03 §15](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
+([spec 03 §15](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)),
 and that app shows what it matches. A home adds no subscription of its own.
 One without `app` was made by an earlier home, or proposed by an earlier
 extension (which is why an extension's origin stays valid), and nothing shows

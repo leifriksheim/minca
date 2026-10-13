@@ -1,19 +1,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import {
-  connectToHome,
-  offerConnectCode,
-  type CodeAsking,
-  type ConnectCodeStage,
-} from '@weaveprotocol/core/session';
-import { useAccount, useConnection } from '@weaveprotocol/core/react';
-import { Choice, Modal } from '@weave/app-shared/Modal';
-import { relayUrls } from '@weave/app-shared/relay';
-import { message, useAction, useCopy } from '@weave/app-shared/action';
+import { connectToHome, offerConnectCode, type CodeAsking, type ConnectCodeStage } from '@minca/core/session';
+import { useAccount, useConnection } from '@minca/core/react';
+import { Choice, Modal } from '@minca/app-shared/Modal';
+import { relayUrls } from '@minca/app-shared/relay';
+import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { styles, palette, variants } from '../styles';
 import { programRequest } from '../program-terms';
 
 /** What people run, before the code */
-const COMMAND = import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli connect';
+const COMMAND = import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect';
 /** The relay the CLI meets on unless told otherwise (`packages/cli/src/agent.ts`) */
 const CLI_RELAY = 'wss://p2p-web-relay.fly.dev';
 
@@ -210,7 +205,7 @@ function Connected({ agent, onClose }: { agent: CodeAsking; onClose: () => void 
         </p>
         <p style={styles.errorHint}>
           To keep it running your automations while this computer is off, connect it on a server the same way
-          and run <code>weave agent --no-chat</code> there.
+          and run <code>minca agent --no-chat</code> there.
         </p>
       </div>
       <button onClick={onClose} data-variant="primary" style={styles.button}>
@@ -263,7 +258,7 @@ const commandBox = {
 } as const;
 
 /** The agent last connected from this browser, by name, until its note runs out: only a hint */
-const agentKey = (did: string) => `weave.agent:${did}`;
+const agentKey = (did: string) => `minca.agent:${did}`;
 const agentListeners = new Set<() => void>();
 const DAY = 24 * 60 * 60 * 1000;
 

@@ -5,7 +5,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createWeaveAuth, type WeaveAuth, type AuthState } from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth, type AuthState } from '../src/session/auth.js';
 import type { KeyValueStore } from '../src/session/stay-signed-in.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
@@ -21,13 +21,13 @@ function memoryStorage(): KeyValueStore {
 }
 
 /** A flow whose "browser" is in memory, so it runs here as it would in a page. */
-function testAuth(): WeaveAuth {
+function testAuth(): MincaAuth {
   const accounts = createFolderAccountStore(createMemoryDirectory().handle);
   const stores = new Map<string, ReturnType<typeof memoryStores>>();
   const storage = memoryStorage();
   // Staying signed in keeps a key in IndexedDB, which Node does not have.
-  storage.setItem('weave.stay-signed-in', JSON.stringify('never'));
-  return createWeaveAuth({
+  storage.setItem('minca.stay-signed-in', JSON.stringify('never'));
+  return createMincaAuth({
     rpId: 'example.test',
     storage,
     browser: {
@@ -41,12 +41,12 @@ function testAuth(): WeaveAuth {
   });
 }
 
-const open: WeaveAuth[] = [];
+const open: MincaAuth[] = [];
 afterEach(async () => {
   await Promise.all(open.splice(0).map((auth) => auth.signOut()));
 });
 
-function started(): WeaveAuth {
+function started(): MincaAuth {
   const auth = testAuth();
   open.push(auth);
   return auth;
@@ -55,7 +55,7 @@ function started(): WeaveAuth {
 const PASSWORD = 'correct horse battery';
 
 /** Makes an account the whole way: name, recovery code, password. Returns its recovery code. */
-async function createAccount(auth: WeaveAuth, name: string, password = PASSWORD): Promise<string> {
+async function createAccount(auth: MincaAuth, name: string, password = PASSWORD): Promise<string> {
   await auth.createAccount(name);
   const code = auth.getState().freshCode!;
   auth.codeSaved();
@@ -63,7 +63,7 @@ async function createAccount(auth: WeaveAuth, name: string, password = PASSWORD)
   return code;
 }
 
-describe('createWeaveAuth', () => {
+describe('createMincaAuth', () => {
   test('an empty place asks whether you have an account', async () => {
     const auth = started();
     await auth.start();

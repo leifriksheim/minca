@@ -81,10 +81,10 @@ export async function onePerSecret(
   const secret =
     'spaceKey' in material
       ? bufferSource(material.spaceKey)
-      : utf8Encode(`weave/public-one-per/v1|${material.spaceId}`);
+      : utf8Encode(`minca/public-one-per/v1|${material.spaceId}`);
   const base = await globalThis.crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
   return globalThis.crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: utf8Encode('weave/one-per/v1') },
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: utf8Encode('minca/one-per/v1') },
     base,
     { name: 'HMAC', hash: 'SHA-256', length: 256 },
     false,

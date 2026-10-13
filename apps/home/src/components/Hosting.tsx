@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSession } from '@weaveprotocol/core/react';
-import { describeHost, type HostDescription } from '@weaveprotocol/core';
-import type { HostingView, P2PNode } from '@weaveprotocol/core/node';
-import { DEFAULT_HOST } from '@weave/app-shared/relay';
-import { Modal } from '@weave/app-shared/Modal';
-import { useWanted, type Wanted } from '@weave/app-shared/HostAddress';
+import { useSession } from '@minca/core/react';
+import { describeHost, type HostDescription } from '@minca/core';
+import type { HostingView, P2PNode } from '@minca/core/node';
+import { DEFAULT_HOST } from '@minca/app-shared/relay';
+import { Modal } from '@minca/app-shared/Modal';
+import { useWanted, type Wanted } from '@minca/app-shared/HostAddress';
 import {
   HostOfferPicker,
   HostStatusRow,
   StopFooter,
   useAskAgain,
   useOffer,
-} from '@weave/app-shared/HostOffer';
-import { PayFlow, RemindMe } from '@weave/app-shared/Payment';
-import { Benefit, FeatureIcon, StatusPill, shortDate, timeLeft, type Tone } from '@weave/app-shared/Feature';
-import { message, useAction } from '@weave/app-shared/action';
+} from '@minca/app-shared/HostOffer';
+import { PayFlow, RemindMe } from '@minca/app-shared/Payment';
+import { Benefit, FeatureIcon, StatusPill, shortDate, timeLeft, type Tone } from '@minca/app-shared/Feature';
+import { message, useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 
 const DAY = 86_400;

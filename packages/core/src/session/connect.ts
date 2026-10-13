@@ -33,10 +33,10 @@ import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signe
 import { isObject } from '../utils/guards.js';
 
 /** Messages between an app and the home it opened */
-const HELLO = 'weave:hello';
-const REQUEST = 'weave:request';
-const GRANT = 'weave:grant';
-const DENIED = 'weave:denied';
+const HELLO = 'minca:hello';
+const REQUEST = 'minca:request';
+const GRANT = 'minca:grant';
+const DENIED = 'minca:denied';
 
 /** What an app asks a home for */
 export interface ConnectRequest {
@@ -212,7 +212,7 @@ export interface CarryGrant {
 
 /**
  * Turns what a person typed into a home's connect page:
- * `weave.example.com` → `https://weave.example.com/connect`. Plain `http` only
+ * `minca.example.com` → `https://minca.example.com/connect`. Plain `http` only
  * for this machine, where development happens.
  * @throws When it is not a web address
  */
@@ -261,7 +261,7 @@ export function grantTerms(
 // ─── The app's side ──────────────────────────────────────────────────
 
 /** What a key signs to show it is the one a connect request names */
-const KEY_PROOF = 'weave/connect-key/v1';
+const KEY_PROOF = 'minca/connect-key/v1';
 
 /**
  * What a key agrees to in a connect request: how it reached the app, how much
@@ -324,7 +324,7 @@ export interface AppKey {
   readonly did: string;
 }
 
-const KEY_DB = 'weave-app-key';
+const KEY_DB = 'minca-app-key';
 
 /**
  * This app's key: made once, kept in this site's IndexedDB, and never
@@ -352,7 +352,7 @@ export async function forgetAppKey(name = 'default'): Promise<void> {
 }
 
 export interface ConnectOptions {
-  /** The home's connect page, e.g. `https://weave.example/connect` */
+  /** The home's connect page, e.g. `https://minca.example/connect` */
   readonly home: string;
   /** What to ask for; `audience`, `proof` and `via` are filled in */
   readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof' | 'via'>;
@@ -492,7 +492,7 @@ function checkCarryGrant(grant: CarryGrant): void {
 }
 
 function openHome(homeUrl: URL): Window {
-  const popup = globalThis.open(homeUrl.href, 'weave-home', 'popup,width=460,height=720');
+  const popup = globalThis.open(homeUrl.href, 'minca-home', 'popup,width=460,height=720');
   if (!popup) throw new Error('The browser blocked the window. Allow pop-ups for this site and try again.');
   return popup;
 }
@@ -625,7 +625,7 @@ export async function startConnectedNode(params: {
     {
       signer: grantSigner(params.grant),
       sessionKey: key.keys,
-      stores: { indexedDB: `weave-app:${params.grant.did}` },
+      stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),
       ...(params.grant.accountKey ? { accountKey: base64UrlDecode(params.grant.accountKey) } : {}),
@@ -646,7 +646,7 @@ export async function startConnectedNode(params: {
 }
 
 /** Where an app keeps its grant between visits */
-export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'weave.grant') {
+export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'minca.grant') {
   const kept = guardedStorage(storage);
   return {
     load(): Grant | null {

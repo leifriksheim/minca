@@ -1,5 +1,5 @@
-import { useWeave } from '@weaveprotocol/core/react';
-import { relayOnlyLocal, relayProblem } from '@weave/app-shared/relay';
+import { useMinca } from '@minca/core/react';
+import { relayOnlyLocal, relayProblem } from '@minca/app-shared/relay';
 import { PodChoice } from './PodChoice';
 import { palette, styles } from '../styles';
 
@@ -9,7 +9,7 @@ import { palette, styles } from '../styles';
  * anything that went wrong.
  */
 export function AccountNotices() {
-  const { auth, state } = useWeave();
+  const { auth, state } = useMinca();
   if (!auth || !state) return null;
   const { podChoice, moved, error, busy } = state;
 

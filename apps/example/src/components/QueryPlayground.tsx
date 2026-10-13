@@ -10,19 +10,12 @@ import {
 } from 'react';
 import { parse, render } from 'sugar-high/core';
 import * as json from 'sugar-high/lang/json';
-import { useNode, useProfiles } from '@weaveprotocol/core/react';
-import type {
-  NodeCollection,
-  NodeRecord,
-  Query,
-  QueryRecord,
-  QueryResult,
-  SpaceSummary,
-} from '@weaveprotocol/core';
+import { useNode, useProfiles } from '@minca/core/react';
+import type { NodeCollection, NodeRecord, Query, QueryRecord, QueryResult, SpaceSummary } from '@minca/core';
 import { collectionLabel, fieldsOf, recordLabel, titleField } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '../derive/time';
-import { message as messageOf } from '@weave/app-shared/action';
+import { message as messageOf } from '@minca/app-shared/action';
 import { styles, palette, ui } from '../styles';
 import { DocsNote } from './DocsNote';
 

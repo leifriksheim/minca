@@ -35,14 +35,14 @@ people edit different ones: one record per vote, per card, per reaction.
 A record's key says whose it is. Every key an account creates starts with its
 owner part, a hash of the account, so no one else can create a record there:
 every peer refuses a first version at a key the writer doesn't own, however
-it got there ([spec 02 §4.1](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+it got there ([spec 02 §4.1](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 
 ```typescript
 const fresh = await node.records.put(space.id, todos, { text: 'milk' });
-fresh.key; // 'iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa'
+fresh.key; // 'akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa'
 
 await node.records.put(space.id, 'app.settings', { theme: 'dark' }, { key: 'settings' });
-const mine = await node.records.keyFor(space.id, 'settings'); // 'iz75dwgy223gqtlqlqv3qzjq4y.settings'
+const mine = await node.records.keyFor(space.id, 'settings'); // 'akthxqofxox3iszhpi5j3zhl6a.settings'
 const hers = await node.records.keyFor(space.id, 'settings', aliceDid); // Alice's, if she wrote one
 await node.records.get(space.id, hers);
 ```
@@ -65,7 +65,7 @@ await node.records.get(space.id, hers);
   space it is keyed with the space's key, so it says nothing to someone who
   can't read the space.
 - An account's line in a collection, for contracts, has the key
-  `lineKey(account, collection)` (exported by `@weaveprotocol/core`), an
+  `lineKey(account, collection)` (exported by `@minca/core`), an
   owned key of the account's.
 
 _Source: `packages/core/src/records/key.ts`, `packages/core/src/node/space-runtime.ts` (`keyToWrite`, `keepsCollection`, `put`, `keyFor`, `onePerKey`). Tests: `packages/core/tests/record-keys.test.ts`, `packages/core/tests/versions.test.ts` ("a deleted key can be written again…")._

@@ -1,6 +1,6 @@
-import { relayOnlyLocal, relayProblem } from '@weave/app-shared/relay';
-import { useNetwork, useNode } from '@weaveprotocol/core/react';
-import { CLOSE_DID_TAKEN } from '@weaveprotocol/core';
+import { relayOnlyLocal, relayProblem } from '@minca/app-shared/relay';
+import { useNetwork, useNode } from '@minca/core/react';
+import { CLOSE_DID_TAKEN } from '@minca/core';
 import { duration, nextRetry } from '../derive/network';
 import { styles } from '../styles';
 import { useNow } from './NetworkView';

@@ -5,7 +5,7 @@
  * one the same way it learns any other, when someone defines it there:
  *
  * ```ts
- * import { reaction, comment, useSchemas } from '@weaveprotocol/core/schemas';
+ * import { reaction, comment, useSchemas } from '@minca/core/schemas';
  *
  * await useSchemas(node, space.id, [reaction, comment]);
  * await node.records.put(space.id, reaction, { emoji: '👍' }, {

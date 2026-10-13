@@ -89,7 +89,7 @@ describe('space access: the keys', () => {
     const spaceKey = await spaceKeyFromRaw(new Uint8Array(32).map((_, i) => 255 - i));
     assert.equal(
       (await deriveReadKey(spaceKey, provider)).did,
-      'did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf',
+      'did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt',
     );
     // The same bytes as an account seed give a different key: each use has its own label.
     assert.notEqual((await createIdentityManager().fromSeed(secret)).did, inviteDid);

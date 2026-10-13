@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { COLLECTION_DEFINE, KEY_CHANGE, RECORD_WRITE, describeHost } from '@weaveprotocol/core';
-import type { FundOffer, SpaceHostingView } from '@weaveprotocol/core';
-import { useAccess, useCollections, useNode } from '@weaveprotocol/core/react';
+import { COLLECTION_DEFINE, KEY_CHANGE, RECORD_WRITE, describeHost } from '@minca/core';
+import type { FundOffer, SpaceHostingView } from '@minca/core';
+import { useAccess, useCollections, useNode } from '@minca/core/react';
 import { useMay } from './may';
-import { host as hostSchema } from '@weaveprotocol/core/schemas';
+import { host as hostSchema } from '@minca/core/schemas';
 import { DEFAULT_HOST } from './relay';
 import { Modal } from './Modal';
 import { useWanted, type Wanted } from './HostAddress';

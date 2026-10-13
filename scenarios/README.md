@@ -3,7 +3,7 @@
 A scenario is a kind of community, written as tests: who founds it, which
 roles and grants it has, what its contracts decide, and a story of records
 with the hard cases (a removal racing an action, a reaction withdrawn, a
-double spend from two devices). Each one says, in code, what Weave must let
+double spend from two devices). Each one says, in code, what Minca must let
 that community do and what it must refuse.
 
 | Scenario      | What it tests                                                                                                                                                                                                                                                                        |
@@ -22,7 +22,7 @@ do, and runs when it lands; it never passes by asserting the attack works.
 
 ```bash
 npm run scenarios                    # from the root
-npm test -w @weaveprotocol/scenarios # the scenarios and the parked Datalog
+npm test -w @minca/scenarios # the scenarios and the parked Datalog
 ```
 
 They also run with `npm test`, since they take well under a second, and in
@@ -57,8 +57,8 @@ CI whenever `spec/`, `packages/core/` or `scenarios/` change.
 
 ## A new kind of community gets a scenario
 
-When a change lets Weave serve a community the scenarios don't cover, or
-when a design question is "can Weave do X?", write the community here first:
+When a change lets Minca serve a community the scenarios don't cover, or
+when a design question is "can Minca do X?", write the community here first:
 its grants and contracts in `communities/`, and tests in `tests/` that show
 it working and show each attack on it refused. What it can't express
 simply is a finding for the spec, not something to work around in a test.

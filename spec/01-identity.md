@@ -9,15 +9,15 @@ keys become DIDs, how the root key delegates to the keys that actually sign
 
 ```
 seed (16 bytes)
- ├─ HKDF "weave/p256-identity-key/v1" ─▶ root key (P-256, ECDSA) ─▶ account DID (did:key:zDn…)
+ ├─ HKDF "minca/p256-identity-key/v1" ─▶ root key (P-256, ECDSA) ─▶ account DID (did:key:zDn…)
  │                                         └─ signs notes ─▶ session / app keys ─▶ sign records
- ├─ HKDF "weave/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
- │                                         ├─ HKDF "weave/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
- │                                         └─ HKDF "weave/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
- ├─ HKDF "weave/local-key/v1"        ─▶ local key (AES-256): seals this device's storage; never handed out
- └─ HKDF "weave/account-key/v1"      ─▶ account key (32 bytes): what an app given the whole account holds
-                                           ├─ HKDF "weave/p256-member-key/v1|<space>" ─▶ member key per space
-                                           └─ HKDF "weave/account-registry/…", "weave/contacts/…" ─▶ account spaces
+ ├─ HKDF "minca/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
+ │                                         ├─ HKDF "minca/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
+ │                                         └─ HKDF "minca/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
+ ├─ HKDF "minca/local-key/v1"        ─▶ local key (AES-256): seals this device's storage; never handed out
+ └─ HKDF "minca/account-key/v1"      ─▶ account key (32 bytes): what an app given the whole account holds
+                                           ├─ HKDF "minca/p256-member-key/v1|<space>" ─▶ member key per space
+                                           └─ HKDF "minca/account-registry/…", "minca/contacts/…" ─▶ account spaces
 ```
 
 Conventions (MUST/SHOULD, encodings, canonical JSON) are those of the
@@ -110,7 +110,7 @@ spellings that decode to the same seed (see the example).
 > Crockford's mod-37 check symbol (which adds `*~$=U` to the alphabet) or a
 > check computed over the 26 symbols in the existing alphabet, and whether to
 > add a version marker at the same time. Replaces the "checksum" line in §16.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 ### 2.4 Example
 
@@ -128,7 +128,7 @@ _Tests:_ `packages/core/tests/recovery-code.test.ts`, `packages/core/tests/ident
 
 ## 3. Deriving P-256 keys
 
-Every signing or key-agreement key in Weave that is not freshly random is
+Every signing or key-agreement key in Minca that is not freshly random is
 derived from bytes by one of two procedures.
 
 ### 3.1 `ScalarFrom(okm)`
@@ -148,7 +148,7 @@ this.
 ### 3.2 `P256KeyFrom(ikm)` — the identity derivation
 
 ```
-okm = HKDF(ikm, "weave/p256-identity-key/v1", 48)
+okm = HKDF(ikm, "minca/p256-identity-key/v1", 48)
 d   = ScalarFrom(okm)
 ```
 
@@ -158,8 +158,8 @@ d   = ScalarFrom(okm)
 | Key                                   | `ikm`                                             |
 | ------------------------------------- | ------------------------------------------------- |
 | **Root key** (the account identity)   | the 16-byte seed                                  |
-| Space invite key ([03](03-spaces.md)) | `HKDF(inviteSecret, "weave/space-invite/v1", 32)` |
-| Space read key ([03](03-spaces.md))   | `HKDF(rawSpaceKey, "weave/space-read/v1", 32)`    |
+| Space invite key ([03](03-spaces.md)) | `HKDF(inviteSecret, "minca/space-invite/v1", 32)` |
+| Space read key ([03](03-spaces.md))   | `HKDF(rawSpaceKey, "minca/space-read/v1", 32)`    |
 
 The contact key and member keys (§10) use `ScalarFrom` directly, with their own
 labels, without the identity label.
@@ -176,10 +176,10 @@ MUST keep passing.
 | okm (48 bytes) | `40e656dfd00c34bd5fd78eafc9af158eeef351b1e9d6444662df48544eaa7db00a50db9fe92caeb7c4e3e16db0f14dd4` |
 | d              | `b8b27c37818b648e8cc2546eb327c6dcd27fd7cc1119666230e7826360508a75`                                 |
 | Q, compressed  | `029084c70c6acbeb1bfbab099abb469443aa06c02bd1b02b830d846b1129d8c7fb`                               |
-| DID            | `did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr`                                        |
+| DID            | `did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT`                                        |
 
-Other recorded vectors: 16 zero bytes → `did:key:zDnaebsZZSYuq5oaFMhu2qAaAygqtwPtZwuiVJpjenjA9GwQE`;
-16 `0xff` bytes → `did:key:zDnaexDGpQByMfPbsypSPAewepYNqS1yerAq5pEpDZwAmFQWS`.
+Other recorded vectors: 16 zero bytes → `did:key:zDnaenhB7GpWm1sDUA2mcNLjbZG85bD5uv8kXnX39YE9rGV3d`;
+16 `0xff` bytes → `did:key:zDnaeWqjSG4BrSYadheJUx2CC9zxRM6MznQb3bMEW51WEfsxn`.
 
 _Source:_ `packages/core/src/identity/crypto-p256.ts`, `packages/core/src/identity/identity-manager.ts` (`fromSeed`, `fromRecoveryCode`).
 _Tests:_ `packages/core/tests/identity.test.ts` ("deriveKeyPairFromSeed", "derivation is frozen", "noble computes the same public point Web Crypto does").
@@ -188,7 +188,7 @@ _Tests:_ `packages/core/tests/identity.test.ts` ("deriveKeyPairFromSeed", "deriv
 
 ## 4. DIDs (`did:key`)
 
-Every key in Weave — root, session, app, invite, read — is named by a
+Every key in Minca — root, session, app, invite, read — is named by a
 `did:key` over its P-256 public key.
 
 ```
@@ -218,7 +218,7 @@ Decoders SHOULD reject a multicodec other than `0x80 0x24`.
 > delegation's `iss` and `aud` are checked already: a P-256 `did:key` in its
 > one spelling (§7.1, `isP256Did` in `packages/core/src/identity/ucan.ts`). A
 > fix will reject any other multicodec when decoding.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 > **Planned: one spelling per key.** Decoders will require the `0x80 0x24`
 > prefix **and** exactly 33 compressed bytes, refusing the uncompressed form.
@@ -231,7 +231,7 @@ Example: see §3.3; the decoded bytes are
 did:key specification's own P-256 example,
 `did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169`, round-trips.
 
-Public keys elsewhere in Weave that are not DIDs (the contact key, member keys)
+Public keys elsewhere in Minca that are not DIDs (the contact key, member keys)
 are the 33-byte compressed point, base64url.
 
 _Source:_ `packages/core/src/identity/did.ts`, `packages/core/src/identity/crypto-p256.ts` (`exportPublicKey`, `importPublicKey`).
@@ -247,32 +247,32 @@ this one own the use; this table is the registry.
 
 | Label (UTF-8)                            | Mechanism                                 | Input                                                                                            | Output                     | Used for                                                     | Defined in                         | Part   |
 | ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------ | ---------------------------------- | ------ |
-| `weave/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                               | P-256 scalar               | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`       | 01     |
-| `weave/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                                             | P-256 scalar (ECDH)        | Contact key                                                  | `identity/contact-key.ts:26`       | 01     |
-| `weave/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                                      | P-256 scalar (ECDH)        | Member key for one space                                     | `identity/contact-key.ts:27`       | 01, 03 |
-| `weave/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:28`       | 01, 07 |
-| `weave/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:29`       | 01, 07 |
-| `weave/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                                | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
-| `weave/local-key/v1`                     | HKDF, L=32                                | seed                                                                                             | AES-256-GCM key            | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`     | 01, 05 |
-| `weave/account-key/v1`                   | HKDF, L=32                                | seed                                                                                             | 32 bytes                   | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`     | 01, 06 |
-| `weave/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                 | `identity/channel.ts:39`           | 01     |
-| `weave/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                                   | AES-256-GCM key            | Pairing messages sent by `<side>` (`offer` or `join`)        | `identity/channel.ts:40`           | 01     |
-| `weave/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                                   | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:18`           | 01     |
-| `weave/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                                      | room id                    | Room for connecting by code                                  | `identity/channel.ts:46`           | 06     |
-| `weave/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                              | AES-256-GCM key            | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`           | 06     |
-| `weave/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                             | `session/connect-code.ts:27`       | 06     |
-| `weave/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                   | `space/space-access.ts:28`         | 03     |
-| `weave/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                                      | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:27`         | 03     |
-| `weave/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                                      | AES-256-GCM key            | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
-| `weave/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                                      | key id (22 characters)     | A space key's id                                             | `privacy/space-encryption.ts:16`   | 03     |
-| `weave/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:82,106` | 03     |
-| `weave/account-registry/key/v1`          | HKDF, L=32                                | account key                                                                                      | space key K                | Account registry space                                       | `space/account-registry.ts:82,108` | 03     |
-| `weave/contacts/nonce/v1`                | as above                                  | account key                                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:95,106` | 03     |
-| `weave/contacts/key/v1`                  | as above                                  | account key                                                                                      | space key K                | Contacts space                                               | `space/account-registry.ts:95,108` | 03     |
-| `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `weave/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:84,87`           | 02     |
-| `weave/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                | 02     |
-| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:284`        | 04     |
+| `minca/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                               | P-256 scalar               | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`       | 01     |
+| `minca/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                                             | P-256 scalar (ECDH)        | Contact key                                                  | `identity/contact-key.ts:26`       | 01     |
+| `minca/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                                      | P-256 scalar (ECDH)        | Member key for one space                                     | `identity/contact-key.ts:27`       | 01, 03 |
+| `minca/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:28`       | 01, 07 |
+| `minca/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:29`       | 01, 07 |
+| `minca/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                                | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
+| `minca/local-key/v1`                     | HKDF, L=32                                | seed                                                                                             | AES-256-GCM key            | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`     | 01, 05 |
+| `minca/account-key/v1`                   | HKDF, L=32                                | seed                                                                                             | 32 bytes                   | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`     | 01, 06 |
+| `minca/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                 | `identity/channel.ts:39`           | 01     |
+| `minca/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                                   | AES-256-GCM key            | Pairing messages sent by `<side>` (`offer` or `join`)        | `identity/channel.ts:40`           | 01     |
+| `minca/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                                   | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:18`           | 01     |
+| `minca/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                                      | room id                    | Room for connecting by code                                  | `identity/channel.ts:46`           | 06     |
+| `minca/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                              | AES-256-GCM key            | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`           | 06     |
+| `minca/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                             | `session/connect-code.ts:27`       | 06     |
+| `minca/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                   | `space/space-access.ts:28`         | 03     |
+| `minca/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                                      | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:27`         | 03     |
+| `minca/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                                      | AES-256-GCM key            | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
+| `minca/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                                      | key id (22 characters)     | A space key's id                                             | `privacy/space-encryption.ts:16`   | 03     |
+| `minca/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:82,106` | 03     |
+| `minca/account-registry/key/v1`          | HKDF, L=32                                | account key                                                                                      | space key K                | Account registry space                                       | `space/account-registry.ts:82,108` | 03     |
+| `minca/contacts/nonce/v1`                | as above                                  | account key                                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:95,106` | 03     |
+| `minca/contacts/key/v1`                  | as above                                  | account key                                                                                      | space key K                | Contacts space                                               | `space/account-registry.ts:95,108` | 03     |
+| `minca/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `minca/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
+| `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:84,87`           | 02     |
+| `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                | 02     |
+| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:284`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -281,43 +281,43 @@ CLI's own node reads:
 
 | Label                      | Primitive | `bound`                                                    | Defined in                           | Part   |
 | -------------------------- | --------- | ---------------------------------------------------------- | ------------------------------------ | ------ |
-| `weave/record-body/v1`     | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
-| `weave/earlier-keys/v1`    | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
-| `weave/membership/v1`      | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
-| `weave/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:139`          | 03     |
-| `weave/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
-| `weave/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
-| `weave/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
-| `weave/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
-| `weave/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:235`                 | 07     |
-| `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1568`                  | docs   |
-| `weave/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
-| `weave/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
-| `weave/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
+| `minca/record-body/v1`     | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
+| `minca/earlier-keys/v1`    | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
+| `minca/membership/v1`      | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
+| `minca/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:139`          | 03     |
+| `minca/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
+| `minca/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
+| `minca/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
+| `minca/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
+| `minca/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:235`                 | 07     |
+| `minca/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1568`                  | docs   |
+| `minca/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
+| `minca/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
+| `minca/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
 
 Strings that separate _signed messages_ rather than derive keys, listed so
 new labels do not collide with them:
 
 | String                                                 | Kind                                                   | Defined in                                                    | Part |
 | ------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | ---- |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:143`                                   | 03   |
-| `{"audience":…,"proof":"weave/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                     | 06   |
-| `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
-| `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
-| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                                | 04   |
-| `weave-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:310`                                    | 04   |
-| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                   | 08   |
+| `minca/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:143`                                   | 03   |
+| `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                     | 06   |
+| `minca/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
+| `minca/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
+| `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                                | 04   |
+| `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:310`                                    | 04   |
+| `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                   | 08   |
 
 Notes:
 
-- `weave/p256-identity-key/v1` is applied to more than one kind of input: the
+- `minca/p256-identity-key/v1` is applied to more than one kind of input: the
   seed, and (as a second stage) invite and read secrets that were first
   expanded under their own labels. The first-stage label is what separates
   them.
-- `weave/space-invite/v1` is both an HKDF label and the prefix of a signed
+- `minca/space-invite/v1` is both an HKDF label and the prefix of a signed
   message. The two uses are in different primitives and do not collide, but a
   new use MUST NOT reuse either string.
-- New labels SHOULD follow the `weave/<purpose>/v<N>` form. A label of a
+- New labels SHOULD follow the `minca/<purpose>/v<N>` form. A label of a
   sealed thing names exactly one use, and no derivation label is reused as one.
 
 ---
@@ -367,24 +367,24 @@ _Tests:_ `packages/core/tests/node.test.ts` ("records outlive the session that w
 A **delegation** is a signed token by which an issuer key passes some of
 what it may do to an audience key. A **note** is the one kind peers accept:
 a delegation from the account's root key to another key (§7.5).
-Weave writes them in its own **JSON profile of UCAN 1.0**: UCAN 1.0's fields
+Minca writes them in its own **JSON profile of UCAN 1.0**: UCAN 1.0's fields
 (`iss`, `aud`, `sub`, `cmd`, `pol`, `nonce`, `meta`, `exp`, `nbf`), its
-command paths and its policy language, in Weave's canonical
-JSON ([02](02-records.md) §1) and signed as Weave signs everything else,
+command paths and its policy language, in Minca's canonical
+JSON ([02](02-records.md) §1) and signed as Minca signs everything else,
 instead of DAG-CBOR with a varsig header. UCAN's chains are not used: a
 note is always one link.
 
-It is **not byte-compatible** with other UCAN tools: a Weave token can't be
-handed to a UCAN library, nor a UCAN token to a Weave peer. That is
-deliberate. Every other signed thing in Weave is canonical JSON with a plain
+It is **not byte-compatible** with other UCAN tools: a Minca token can't be
+handed to a UCAN library, nor a UCAN token to a Minca peer. That is
+deliberate. Every other signed thing in Minca is canonical JSON with a plain
 ES256 signature, and DAG-CBOR and varsig would be a second encoding, a
 second hash and a dependency for one kind of token. The semantics carry over
 whole, so moving to the CBOR form later is a change of encoding, not of
 meaning.
 
-Weave uses delegations, not UCAN invocations: a version, a knock or a peer
+Minca uses delegations, not UCAN invocations: a version, a knock or a peer
 proof is what the key does, and the peer that checks it fills in the
-arguments a policy reads (§8). Weave's revocation is its own, a record that
+arguments a policy reads (§8). Minca's revocation is its own, a record that
 names a key ([03](03-spaces.md) §6.4); UCAN's revocation spec is not used.
 
 ### 7.1 The token
@@ -392,8 +392,8 @@ names a key ([03](03-spaces.md) §6.4); UCAN's revocation spec is not used.
 A token is a JSON object with exactly three members:
 
 ```
-token        = { "payload": <payload>, "sig": <signature>, "type": "weave/ucan/dlg@1" }
-signed bytes = UTF-8( canonicalJSON( { "payload": <payload>, "type": "weave/ucan/dlg@1" } ) )
+token        = { "payload": <payload>, "sig": <signature>, "type": "minca/ucan/dlg@1" }
+signed bytes = UTF-8( canonicalJSON( { "payload": <payload>, "type": "minca/ucan/dlg@1" } ) )
 ```
 
 - `type` names the profile and the kind of token, as UCAN's envelope tag
@@ -589,7 +589,7 @@ registry, with a cutoff at what it wrote, and a device that kept the key
 forgets it (`revokeSelf`); the revokes reach other peers as that device next
 syncs. _Open:_ removing a device from another one, which
 needs the list of the account's session keys
-([#165](https://github.com/leifriksheim/weave/issues/165)).
+([#165](https://github.com/leifriksheim/minca/issues/165)).
 
 ### 7.7 Issuing
 
@@ -606,17 +606,17 @@ only, in collection `app.note`, with fixed times and nonce. The signed
 bytes:
 
 ```
-{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr"},"type":"weave/ucan/dlg@1"}
+{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT"},"type":"minca/ucan/dlg@1"}
 ```
 
 One token over them (ECDSA signatures are randomized, so `sig` differs every
 time it is issued; this one is low-S):
 
 ```
-{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr"},"sig":"5nEZcQqVKr77iRLSYCRVC-W7AYbE-4MTEZSPC4FMjuQBk9UVvQLN-34gst5lghf3y0YRWT9m5Vaqkt6XcBu7Qw","type":"weave/ucan/dlg@1"}
+{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT"},"sig":"HBKED5Qimk7X5F0Xd79Gcm4F64GdtYbFqyt7B-kO-ZEl8e2gD3mW07VQaVYfnngREQ5FmzHLA8tCZckpLo7QDg","type":"minca/ucan/dlg@1"}
 ```
 
-Its id: `b6zstk7cjkyvhhcdfdoihjemyyq5s4frwwvk3aijuf5ykcqa4fbya`. The same
+Its id: `bcmmtwj62gmokzcmv4h7devlpn2fgrkwof3gj6xv3lkpefcn7x6wa`. The same
 token with `s` replaced by `n − s` verifies under Web Crypto, and is
 refused (§7.1).
 
@@ -703,7 +703,7 @@ _Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the no
 
 ## 9. Envelopes
 
-Everything Weave encrypts is sealed one of two ways: under a symmetric key,
+Everything Minca encrypts is sealed one of two ways: under a symmetric key,
 as an **envelope** (§9.1), or to a P-256 public key, with **HPKE** (§9.2).
 Each use names a **label** and a **bound**: the label says what the sealed
 thing is, the bound says where it belongs. Both are authenticated, so a
@@ -711,7 +711,7 @@ sealed thing opens only for the use and the place it was sealed for: moved to
 another record, another space, another account or another slot, or presented
 as something else, it does not open.
 
-- A **label** is a constant string `weave/<purpose>/v1`, listed in §5 with its
+- A **label** is a constant string `minca/<purpose>/v1`, listed in §5 with its
   bound's fields.
 - A **bound** is a flat JSON object whose values are strings or numbers. Its
   bytes are its canonical JSON ([02 — Records](02-records.md)).
@@ -747,12 +747,12 @@ Example (`packages/core/tests/envelope.test.ts`, "opens the fixed vector"):
 |           |                                                                                                                                       |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | key       | `000102…1f`                                                                                                                           |
-| label     | `weave/record-body/v1`                                                                                                                |
-| bound     | `{"space":"bexample","collection":"app.note","key":"k1","keyId":"aLhvw5pkV65_lcQHEcUOug"}`                                            |
-| aad       | `0x01` ‖ `weave/record-body/v1` ‖ `0x00` ‖ `{"collection":"app.note","key":"k1","keyId":"aLhvw5pkV65_lcQHEcUOug","space":"bexample"}` |
+| label     | `minca/record-body/v1`                                                                                                                |
+| bound     | `{"space":"bexample","collection":"app.note","key":"k1","keyId":"bgk-m-Kq-gEGgJCOOEYNYw"}`                                            |
+| aad       | `0x01` ‖ `minca/record-body/v1` ‖ `0x00` ‖ `{"collection":"app.note","key":"k1","keyId":"bgk-m-Kq-gEGgJCOOEYNYw","space":"bexample"}` |
 | nonce     | `a0a1…ab`                                                                                                                             |
 | plaintext | `{"body":{"text":"hi"}}`                                                                                                              |
-| envelope  | `01a0a1a2a3a4a5a6a7a8a9aaab9d3a1e4221b220851947f3b67f0ee2e452c43032efcaf9fa505cbbb531a3a7173c059be663ee`                              |
+| envelope  | `01a0a1a2a3a4a5a6a7a8a9aaab9d3a1e4221b220851947f3b67f0ee2e452c43032efca1438efe7c1526e9fe84d7b4aafc5653a`                              |
 
 ### 9.2 Sealing to a key (HPKE)
 
@@ -791,20 +791,20 @@ and for the same suite with AES-128-GCM (RFC 9180 Appendix A.3), in
 
 | Use                                  | Sealed   | Key                                         | Label                    | `bound`                                                    | Where                             |
 | ------------------------------------ | -------- | ------------------------------------------- | ------------------------ | ---------------------------------------------------------- | --------------------------------- |
-| A record body in a private space     | envelope | the space key's seal key                    | `weave/record-body/v1`   | `space`, `collection`, `key` (the record's), `keyId`       | [03 §8.3](03-spaces.md)           |
-| Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `weave/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)           |
-| A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `weave/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)          |
-| A space key boxed to a member        | HPKE     | the recipient's member key                  | `weave/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)           |
-| A knock                              | HPKE     | the door key                                | `weave/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)              |
-| A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `weave/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                             |
-| A registry value at rest             | envelope | the local key                               | `weave/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md)  |
-| A pairing message                    | envelope | the pairing key of the direction it travels | `weave/pairing/v1`       | `type`, `seq`                                              | §15.2                             |
-| A connect-by-code message            | envelope | the code key of the direction it travels    | `weave/code/v1`          | `type`, `seq`                                              | [06 §3](06-nodes-and-sessions.md) |
+| A record body in a private space     | envelope | the space key's seal key                    | `minca/record-body/v1`   | `space`, `collection`, `key` (the record's), `keyId`       | [03 §8.3](03-spaces.md)           |
+| Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `minca/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)           |
+| A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `minca/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)          |
+| A space key boxed to a member        | HPKE     | the recipient's member key                  | `minca/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)           |
+| A knock                              | HPKE     | the door key                                | `minca/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)              |
+| A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `minca/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                             |
+| A registry value at rest             | envelope | the local key                               | `minca/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md)  |
+| A pairing message                    | envelope | the pairing key of the direction it travels | `minca/pairing/v1`       | `type`, `seq`                                              | §15.2                             |
+| A connect-by-code message            | envelope | the code key of the direction it travels    | `minca/code/v1`          | `type`, `seq`                                              | [06 §3](06-nodes-and-sessions.md) |
 
 Conventions built on the protocol use the same two primitives: direct
-messages (`weave/direct-text/v1`, `weave/direct-box/v1`), contact requests
-(`weave/contact-request/v1`), and the CLI's writer keys on disk
-(`weave/writer-key/v1`); see `packages/core/docs/`.
+messages (`minca/direct-text/v1`, `minca/direct-box/v1`), contact requests
+(`minca/contact-request/v1`), and the CLI's writer keys on disk
+(`minca/writer-key/v1`); see `packages/core/docs/`.
 
 _Source:_ `packages/core/src/identity/envelope.ts` (`sealEnvelope`, `openEnvelope`, `boundContext`), `packages/core/src/identity/hpke.ts` (`hpkeSeal`, `hpkeOpen`, `sealTo`, `openFrom`).
 _Tests:_ `packages/core/tests/envelope.test.ts`.
@@ -821,7 +821,7 @@ A P-256 **key-agreement** key that lets anyone seal a message only the account
 can open, while the account is offline.
 
 ```
-d_contact = ScalarFrom(HKDF(seed, "weave/p256-contact-key/v1", 48))
+d_contact = ScalarFrom(HKDF(seed, "minca/p256-contact-key/v1", 48))
 ```
 
 - It is not the root key (one key should not both sign and decrypt) and not a
@@ -845,15 +845,15 @@ One key-agreement key per account per space, to which a private space's new
 keys are sealed ([03 — Spaces](03-spaces.md), `sys.box`).
 
 ```
-accountKey = HKDF(seed, "weave/account-key/v1", 32)        // §11.1
-d_member   = ScalarFrom(HKDF(accountKey, "weave/p256-member-key/v1|" ‖ spaceId, 48))
+accountKey = HKDF(seed, "minca/account-key/v1", 32)        // §11.1
+d_member   = ScalarFrom(HKDF(accountKey, "minca/p256-member-key/v1|" ‖ spaceId, 48))
 ```
 
 The public half has the same encoding as the contact key. Being per space, an
 account home can give an app the member keys for exactly the spaces it grants.
 
 Example: seed of §3.3, `spaceId = "bexample"` → scalar
-`d6e2d8fba5a6ad5e3e1484236c85c0313a01414bf9bc95fd44e4664946fb8a48`.
+`692597e89fbbfd804d1b090c1a02219cc869a4151860a427c724b5e397c1121a`.
 
 ### 10.3 Door keys
 
@@ -861,14 +861,14 @@ One key-agreement key per **door** (an address the account hands out so that
 strangers can ask to become a contact; [07 — Doors](07-doors.md)):
 
 ```
-d_door = ScalarFrom(HKDF(d_contact_bytes, "weave/p256-door-key/v1|" ‖ doorId, 48))
+d_door = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-door-key/v1|" ‖ doorId, 48))
 ```
 
 where `d_contact_bytes` is the contact key's 32-byte big-endian private scalar
 (§10.1). Beside it, each door has a **signing key**, used only for ECDSA:
 
 ```
-d_door_sign = ScalarFrom(HKDF(d_contact_bytes, "weave/p256-door-sign-key/v1|" ‖ doorId, 48))
+d_door_sign = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-door-sign-key/v1|" ‖ doorId, 48))
 ```
 
 Every device and app holding the contact key derives the same door keys.
@@ -891,8 +891,8 @@ openable one way. The recovery code needs no wrap.
 Two keys are derived from the seed beside the root key, each for one job:
 
 ```
-localKey   = HKDF(seed, "weave/local-key/v1", 32)      // AES-256-GCM
-accountKey = HKDF(seed, "weave/account-key/v1", 32)    // 32 bytes, only ever HKDF input
+localKey   = HKDF(seed, "minca/local-key/v1", 32)      // AES-256-GCM
+accountKey = HKDF(seed, "minca/account-key/v1", 32)    // 32 bytes, only ever HKDF input
 ```
 
 - The **local key** seals what the account's devices keep for themselves:
@@ -914,8 +914,8 @@ nothing else carries: invite secrets waiting to be used (`spaceinvite:`) and
 the CLI's writer keys.
 
 Example (seed of §3.3): local key
-`26e6f39b9eeff4676d4efac5cfc6d075fb3becb6ceb13f9e03f6bc3d11d34fa9`, account key
-`f9b921c105dcc1f1f13b4d643cfe961701b733d3be473c1d0e416db233c5d598`.
+`4b41df023aa99109c19c859f1228674a607d3d5cdfc10f2d748d582636ab9a3d`, account key
+`9d1e01f2d4be2c948e921ac2604087a0b1448422b20d64f88e60f63238e87c9b`.
 
 ### 11.2 Vault format (version 1)
 
@@ -923,8 +923,8 @@ Example (seed of §3.3): local key
 {
   "version": 1,
   "label": "Ada",
-  "did": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
-  "createdAt": "2026-10-11T10:15:34.694Z",
+  "did": "did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT",
+  "createdAt": "2026-10-13T19:44:45.107Z",
   "wraps": [
     {
       "kind": "device",
@@ -939,12 +939,12 @@ Example (seed of §3.3): local key
     },
     {
       "kind": "passphrase",
-      "id": "3FhYYIDMZJI",
+      "id": "w09cUHjZC7k",
       "label": "Passphrase",
-      "addedAt": "2026-10-11T10:15:34.694Z",
-      "salt": "9ae06Gjd9kltZrGo6jupLQ",
+      "addedAt": "2026-10-13T19:44:45.107Z",
+      "salt": "uSTGCMafmVGh1iPTcEQ2RA",
       "iterations": 600000,
-      "sealed": "AWFF7dAydbB7LQNVyPYX5ohUGrCi-n3UnxgyuWup2zlu1qBLRwtVYQft-BBr"
+      "sealed": "ASKGZ7foaMlbiCtMDmgwKfGzVX8nQwaEGmMnIZ6IoIObeD1jqU_MmXEvZdau"
     }
   ]
 }
@@ -988,7 +988,7 @@ Every wrap:
 
 ### 11.3 Wrapping and unwrapping
 
-A wrap is an envelope (§9.1) with label `weave/vault-wrap/v1` around the seed:
+A wrap is an envelope (§9.1) with label `minca/vault-wrap/v1` around the seed:
 
 - **Device wrap:** key = the device key (§12); bound =
   `{ "did": <vault did>, "id": <wrap id>, "kind": "device" }`.
@@ -1187,8 +1187,8 @@ Each use names a **kind**, three labels:
 
 | Kind            | `room`                  | `key`                  | `message`          |
 | --------------- | ----------------------- | ---------------------- | ------------------ |
-| Pairing         | `weave/pairing-room/v1` | `weave/pairing-key/v1` | `weave/pairing/v1` |
-| Connect by code | `weave/code-room/v1`    | `weave/code-key/v1`    | `weave/code/v1`    |
+| Pairing         | `minca/pairing-room/v1` | `minca/pairing-key/v1` | `minca/pairing/v1` |
+| Connect by code | `minca/code-room/v1`    | `minca/code-key/v1`    | `minca/code/v1`    |
 
 The side that made the secret and shows it is `offer`; the side that joins
 with it is `join`. Both join mesh room ([04 — Network](04-network.md)):
@@ -1227,7 +1227,7 @@ does not open.
 Pairing adds a short code both screens show, and a commitment:
 
 ```
-code       = uint32_be(HKDF(ikm, "weave/pairing-code/v1" ‖ transcript, 4)) mod 1000000,
+code       = uint32_be(HKDF(ikm, "minca/pairing-code/v1" ‖ transcript, 4)) mod 1000000,
              as 6 decimal digits, zero-padded
 commitment = base64url(SHA-256(J))
 ```
@@ -1306,5 +1306,5 @@ _Tests:_ `packages/core/tests/pairing.test.ts` ("a message sent back to the side
   is a new identity. A proposal (KERI-style pre-rotation: the identifier is
   the hash of an inception event committing to the next key, with a signed
   key event log synced like records) is issue
-  [#9](https://github.com/leifriksheim/weave/issues/9). It would change
+  [#9](https://github.com/leifriksheim/minca/issues/9). It would change
   the DID format everywhere a root appears.

@@ -1,7 +1,7 @@
 /**
  * The bots kept on this computer. Each is an account of its own, in a folder
  * of its own under the home's `bots/`: never the account the home already
- * holds, and easy to list and start again (`weave bots`, `weave agent --bot`).
+ * holds, and easy to list and start again (`minca bots`, `minca agent --bot`).
  */
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';

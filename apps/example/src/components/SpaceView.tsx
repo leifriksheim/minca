@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
-import { useMayDefine } from '@weave/app-shared/may';
-import type { NodeRecord, SpaceSummary } from '@weaveprotocol/core';
+import { useMayDefine } from '@minca/app-shared/may';
+import type { NodeRecord, SpaceSummary } from '@minca/core';
 import {
   useAccess,
   useCollections,
@@ -9,12 +9,12 @@ import {
   useProfiles,
   useAccount,
   useSpaceStatus,
-} from '@weaveprotocol/core/react';
+} from '@minca/core/react';
 import { RecordPanel } from './RecordPanel';
 import { GraphView } from './GraphView';
 import { QueryPlayground } from './QueryPlayground';
 import { RolesView } from './RolesView';
-import { CommunitySetup } from '@weave/app-shared/CommunitySetup';
+import { CommunitySetup } from '@minca/app-shared/CommunitySetup';
 import { AppsView } from './apps/AppsView';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
@@ -62,7 +62,7 @@ type Hood = (typeof HOOD)[number]['id'];
 const SIDEBAR_APPS = 10;
 
 /** Whether Under the hood was left open in the sidebar, in this browser */
-const HOOD_OPEN_KEY = 'weave:hood-open';
+const HOOD_OPEN_KEY = 'minca:hood-open';
 const hoodWasOpen = (): boolean => {
   try {
     return globalThis.localStorage.getItem(HOOD_OPEN_KEY) === '1';

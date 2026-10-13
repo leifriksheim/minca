@@ -8,14 +8,14 @@
  *   other apps, defines `needs` when someone adds it to a space, and renders
  *   `Space` in its own frame (`fromMiniApp` in `apps/example/src/components/apps/index.tsx`).
  *
- * A mini app reads and writes only through `@weaveprotocol/core/react`
- * below the host's `WeaveProvider`, and only in the collections it names in
+ * A mini app reads and writes only through `@minca/core/react`
+ * below the host's `MincaProvider`, and only in the collections it names in
  * `needs`, so it runs the same wherever it is mounted. It keeps no state the
  * host has to know about.
  */
 import type { ComponentType } from 'react';
-import type { DefineCollection, P2PNode, SpaceSummary } from '@weaveprotocol/core';
-import type { AppNotify } from '@weaveprotocol/core/schemas';
+import type { DefineCollection, P2PNode, SpaceSummary } from '@minca/core';
+import type { AppNotify } from '@minca/core/schemas';
 
 export interface MiniApp {
   /** Stable, lower case: how a host remembers it */

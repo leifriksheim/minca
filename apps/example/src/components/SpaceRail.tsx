@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import type { NewSpace } from '@weaveprotocol/core';
+import type { SpaceSummary } from '@minca/core';
+import type { NewSpace } from '@minca/core';
 import { SpaceDialog, SpaceMark } from './SpaceList';
-import { Mark } from '@weave/app-shared/Wordmark';
+import { Mark } from '@minca/app-shared/Wordmark';
 import { palette } from '../styles';
 import { useCallSpaces } from './calls/Calls';
 import { Count } from './apps/AppIcon';

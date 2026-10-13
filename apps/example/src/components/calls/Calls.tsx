@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@weaveprotocol/core/calls';
-import { useAccount, useCalls, useProfiles } from '@weaveprotocol/core/react';
+import type { SpaceSummary } from '@minca/core';
+import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/core/calls';
+import { useAccount, useCalls, useProfiles } from '@minca/core/react';
 import { nameOf, peopleFrom } from '../../derive/people';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';
 import { styles, palette } from '../../styles';
 

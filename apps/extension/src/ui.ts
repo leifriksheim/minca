@@ -2,10 +2,10 @@
  * The little the two visible pages share: building elements, and drawing the
  * carried spaces and the pod the same way in both.
  */
-import type { CarriedSpace } from '@weaveprotocol/core/node';
-import { ensureFolderPermission, recallDataFolder } from '@weaveprotocol/core/storage';
-import { avatarCells } from '@weave/app-shared/avatar-cells';
-import { MARK_BANDS, MARK_VIEWBOX } from '@weave/app-shared/mark';
+import type { CarriedSpace } from '@minca/core/node';
+import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
+import { avatarCells } from '@minca/app-shared/avatar-cells';
+import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';
 import type { CarrierStatus, PodState } from './shared';
 
 type Child = Node | string | null | false | undefined;

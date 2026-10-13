@@ -93,11 +93,11 @@ describe('topic tags, worked out', () => {
 
   test('the spec’s examples (02 §8.3)', async () => {
     const key = await topicKey({ spaceId: 'bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a' });
-    assert.equal(await topicTag(key, 'app.chat.message', 'channel', 'design'), '77UGGhMoLC5C1rXEcsqWKw');
+    assert.equal(await topicTag(key, 'app.chat.message', 'channel', 'design'), 'Hh5Cwzt8mQlIfYWE_cPjkA');
     const [linked] = await tagsFor(key, 'std.message', ['link:channel'], { text: 'hi' }, [
       { rel: 'channel', to: 'mfrggzdfmztwq2lknnwg23tpoa' },
     ]);
-    assert.equal(linked, 'KmBza5PO__zHr48zfCH8Pw');
+    assert.equal(linked, 'pL1YV0BFW4cn-RZUn8-VZQ');
   });
 
   test('a public space’s tags come from its id: anyone can work them out, and they differ per space', async () => {

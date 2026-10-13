@@ -1,4 +1,4 @@
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { useState } from 'react';
 import { collectionLabel } from '../derive/schema-ui';
 import { namespaceOf } from '../derive/filters';

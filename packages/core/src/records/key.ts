@@ -51,7 +51,7 @@ export function keyKind(key: string): 'owned' | 'shared' | null {
  * case, so a key names a hash of one.
  */
 export async function ownerTag(root: string): Promise<string> {
-  const digest = await sha256(utf8Encode(`weave/record-owner/v1|${root}`));
+  const digest = await sha256(utf8Encode(`minca/record-owner/v1|${root}`));
   return base32Encode(digest.subarray(0, 16));
 }
 

@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { CarrierSummary, SpaceStatus } from '@weaveprotocol/core';
-import { useAccount, useNetwork, useNode } from '@weaveprotocol/core/react';
+import type { CarrierSummary, SpaceStatus } from '@minca/core';
+import { useAccount, useNetwork, useNode } from '@minca/core/react';
 import { healthOf, type Health } from '../derive/network';
 import { Dot, HEALTH_COLOR } from './NetworkView';
 import { nameOf, type People } from '../derive/people';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { styles, palette } from '../styles';
 
 const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);

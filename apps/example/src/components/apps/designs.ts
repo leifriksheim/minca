@@ -6,7 +6,7 @@
  * so everything here is CSS the agent can write inline.
  */
 
-import { accent, display, ink, surface } from '@weave/app-shared/tokens';
+import { accent, display, ink, surface } from '@minca/app-shared/tokens';
 
 /** What every look shares, so a new app sits well beside Minca's own */
 const BASE =

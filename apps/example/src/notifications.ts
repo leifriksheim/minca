@@ -1,12 +1,12 @@
 /** Notifications: each app's `notify` offered through the account home, then matched and shown by this app while it is open. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAccount, useConnection, useNode } from '@weaveprotocol/core/react';
-import { MAX_PROPOSALS, watchNotifications, type NotifyProposal, type NotifyView } from '@weaveprotocol/core';
-import type { AppNotify } from '@weaveprotocol/core/schemas';
+import { useAccount, useConnection, useNode } from '@minca/core/react';
+import { MAX_PROPOSALS, watchNotifications, type NotifyProposal, type NotifyView } from '@minca/core';
+import type { AppNotify } from '@minca/core/schemas';
 import { APPS } from './components/apps';
 import { isForMe, madeNotify, needsOf } from './components/apps/entries';
 import { launcherApp, sortLauncher, type LauncherApp } from './components/apps/launcher';
-import { message } from '@weave/app-shared/action';
+import { message } from '@minca/app-shared/action';
 import { addAlert } from './alerts';
 
 /** Offered whatever apps a space has */
@@ -112,7 +112,7 @@ export function useAsk() {
   }, []);
 
   const manage = useCallback(() => {
-    globalThis.open(manageUrl(state.home), 'weave-account', 'popup,width=720,height=820');
+    globalThis.open(manageUrl(state.home), 'minca-account', 'popup,width=720,height=820');
   }, [state.home]);
 
   return { permission, error, asking, kept, ask, allow, manage };

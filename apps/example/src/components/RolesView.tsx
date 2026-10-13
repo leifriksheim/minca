@@ -1,8 +1,8 @@
 import { useState, type CSSProperties } from 'react';
-import { useAction } from '@weave/app-shared/action';
-import { MEMBER_REMOVE, ROLE_ASSIGN, ROLE_DEFINE, ROLE_UNASSIGN } from '@weaveprotocol/core';
-import type { SpaceGrant as Grant, NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useAccess, useAccount, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
+import { useAction } from '@minca/app-shared/action';
+import { MEMBER_REMOVE, ROLE_ASSIGN, ROLE_DEFINE, ROLE_UNASSIGN } from '@minca/core';
+import type { SpaceGrant as Grant, NodeCollection, SpaceSummary } from '@minca/core';
+import { useAccess, useAccount, useLive, useNode, useProfiles } from '@minca/core/react';
 import {
   abilitiesOf,
   choicesIn,
@@ -12,7 +12,7 @@ import {
   type RoleView,
 } from '../derive/abilities';
 import { nameOf, peopleFrom, type People } from '../derive/people';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { RingButton } from './calls/Calls';
 import { createInviteLink } from '../spaces';
 import { styles, palette, variants } from '../styles';

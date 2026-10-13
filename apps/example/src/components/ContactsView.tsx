@@ -6,16 +6,16 @@ import type {
   KnockView,
   SentKnockView,
   SpaceSummary,
-} from '@weaveprotocol/core';
-import { parseDoorCode } from '@weaveprotocol/core/doors';
-import { useAccount, useNode } from '@weaveprotocol/core/react';
+} from '@minca/core';
+import { parseDoorCode } from '@minca/core/doors';
+import { useAccount, useNode } from '@minca/core/react';
 import { clearDoorFromUrl, doorLink, readDoorFromUrl, takeBack, useContacts, useStanding } from '../contacts';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
 import { styles, palette } from '../styles';
-import { message, useAction, useCopy } from '@weave/app-shared/action';
+import { message, useAction, useCopy } from '@minca/app-shared/action';
 
 /** How often to look in the doors' mailboxes: knocks wait on relays, which tell nobody */
 const KNOCK_POLL_MS = 30_000;

@@ -1,11 +1,5 @@
 import type { ComponentType } from 'react';
-import type {
-  DefineCollection,
-  NodeCollection,
-  NodeRecord,
-  P2PNode,
-  SpaceSummary,
-} from '@weaveprotocol/core';
+import type { DefineCollection, NodeCollection, NodeRecord, P2PNode, SpaceSummary } from '@minca/core';
 import {
   ballot,
   call,
@@ -26,7 +20,7 @@ import {
   task,
   vote,
   positionBetween,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import { CallHistory } from './CallHistory';
 import { Chat } from './Chat';
 import { Decisions } from './Decisions';
@@ -34,10 +28,10 @@ import { Events } from './Events';
 import { Kanban } from './Kanban';
 import { Marketplace } from './Marketplace';
 import { Polls } from './Polls';
-import type { AppNotify } from '@weaveprotocol/core/schemas';
+import type { AppNotify } from '@minca/core/schemas';
 import type { Glyph } from '../Icon';
-import type { MiniApp } from '@weave/app-shared/mini-app';
-import { liquid } from '@weave/liquid/app';
+import type { MiniApp } from '@minca/app-shared/mini-app';
+import { liquid } from '@minca/liquid/app';
 
 export interface AppProps {
   readonly space: SpaceSummary;
@@ -48,7 +42,7 @@ export interface AppProps {
 }
 
 /** An app: a screen that knows some standard schemas, shown wherever a space has them. */
-export interface WeaveApp {
+export interface MincaApp {
   readonly id: string;
   readonly title: string;
   readonly description: string;
@@ -69,11 +63,11 @@ export interface WeaveApp {
 }
 
 /**
- * A mini app (`@weave/app-shared/mini-app`) as one of ours: the same code
+ * A mini app (`@minca/app-shared/mini-app`) as one of ours: the same code
  * that runs as its own site, in a space's frame here. It brings its own
  * stylesheet, put in the page the first time it is shown.
  */
-function fromMiniApp(app: MiniApp): WeaveApp {
+function fromMiniApp(app: MiniApp): MincaApp {
   const Space = app.Space;
   return {
     id: app.id,
@@ -91,7 +85,7 @@ function fromMiniApp(app: MiniApp): WeaveApp {
   };
 }
 
-export const APPS: ReadonlyArray<WeaveApp> = [
+export const APPS: ReadonlyArray<MincaApp> = [
   {
     id: 'chat',
     icon: 'chat',

@@ -1565,7 +1565,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   const contactRecordKey = async (did: string) =>
     (await contactsRuntime()).onePerKey(contactSchema.name, { did }, { onePer: contactSchema.rules.onePer });
   /** The HPKE label a contact request is sealed under; bound to `{ space, from, to }` */
-  const REQUEST_LABEL = 'weave/contact-request/v1';
+  const REQUEST_LABEL = 'minca/contact-request/v1';
 
   async function contactsRuntime(): Promise<SpaceRuntime> {
     if (!contactsSpaceId)

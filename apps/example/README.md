@@ -1,12 +1,12 @@
-# Weave example
+# Minca example
 
-A general-purpose app for your Weave spaces: it shows any kind of data from
+A general-purpose app for your Minca spaces: it shows any kind of data from
 what each space says about itself.
 
 It also serves the landing pages for now: `/` for communities (`/why` too, for
 older links), `/developers` for developers, and the app itself at `/app`
 (`src/site/`). Links made before the move — an invite at `/` — still open the app.
-`public/_redirects` sends every path to `index.html` on Netlify. A Vite + React app on top of [`@weaveprotocol/core`](../../README.md). It imports the
+`public/_redirects` sends every path to `index.html` on Netlify. A Vite + React app on top of [`@minca/core`](../../README.md). It imports the
 protocol straight from its source in the workspace (`packages/core/src`), so
 edits to the library hot-reload here.
 
@@ -20,7 +20,7 @@ and the home at the rest of `npm run dev`. Override any of them in a
 
 ## Connecting
 
-This app never signs anyone in. **Connect with Weave** opens the account home
+This app never signs anyone in. **Connect with Minca** opens the account home
 (`home/`, on :5174 in development) in a small window: you make an account or
 sign in there, and allow this app your whole account. The home hands back a
 note signed by your account for this app's own key; the app keeps it for seven
@@ -108,8 +108,8 @@ met and nobody notices; someone arriving later needs one again.
 To give the dev node a space, create an invite link in the app and:
 
 ```bash
-npm run weave -- spaces join --invite '<link>'
-npm run weave -- records list --space <id>
+npm run minca -- spaces join --invite '<link>'
+npm run minca -- records list --space <id>
 ```
 
 Close every browser holding the space, open the link somewhere else, and the
@@ -129,7 +129,7 @@ is filled in), then one of its plans. What you can pay with:
   then **Pay with this browser's wallet** (or scan the QR code with a phone
   wallet); within a minute the home says "Payment received", shows "paid
   until", and the host takes your spaces. To see payments arrive, set your own
-  address as `WEAVE_WALLET_ADDRESS` in `packages/cli/.env.host.local`.
+  address as `MINCA_WALLET_ADDRESS` in `packages/cli/.env.host.local`.
 - **A card, in Stripe's test mode.** In `packages/cli/.env.host.local`, add
   `STRIPE_SECRET_KEY=sk_test_…` and the price ids of a monthly and a yearly
   recurring test price (`STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY`). With
@@ -216,7 +216,7 @@ changes as you move around.
 **In the browser (WebMCP).** When `/app` loads, it registers every node
 operation as a WebMCP tool on `document.modelContext` (`src/webmcp.ts`, with
 `@mcp-b/webmcp-polyfill`: Chrome's own WebMCP when present, a polyfill
-otherwise). A browser agent sees the same tools as the CLI and `weave mcp`,
+otherwise). A browser agent sees the same tools as the CLI and `minca mcp`,
 and works as the person, with nothing to switch on: anything that can call a
 page's tools can already click through the page. It isn't offered
 `collections_define`: it proposes collections (`collections_propose`) and a
@@ -227,9 +227,9 @@ guide, `src/components/apps/launcher.ts`, and `src/components/apps/screens.ts`).
 
 **On your computer (Claude Code, Claude Desktop, Cursor).** "Connect an
 agent", in the account menu, shows one command:
-`npx @weaveprotocol/cli connect wv_…`. The person allows it at their account
-home, and the command adds `weave` to the agents it finds, which start
-`weave mcp` themselves: a node of its own that keeps working with every tab
+`npx @minca/cli connect mc_…`. The person allows it at their account
+home, and the command adds `minca` to the agents it finds, which start
+`minca mcp` themselves: a node of its own that keeps working with every tab
 closed. See [agents](../../packages/core/docs/agents.md).
 
 ### Mini apps
@@ -245,7 +245,7 @@ It is written once and runs two ways: as its own site, and as one of this
 app's apps, on the same records. The contract is `MiniApp` in
 `apps/shared/src/mini-app.ts`: the collections the app needs, its icon, and a
 `Space` component that shows one space in whatever frame it gets. Liquid
-exports one (`@weave/liquid/app`, from `apps/liquid/src/mini-app.tsx`), its
+exports one (`@minca/liquid/app`, from `apps/liquid/src/mini-app.tsx`), its
 standalone shell wraps the same `Space` in a header of its own, and this app
 lists it with `fromMiniApp` (`src/components/apps/index.tsx`). A new one is a
 workspace under `apps/` that exports a `MiniApp`, plus one line in `APPS`.
@@ -255,13 +255,13 @@ workspace under `apps/` that exports a `MiniApp`, plus one line in `APPS`.
 ```
 src/
   main.tsx                 # routes: /, /why and /developers (site/), /app (the app), /connect (the account home)
-  weave.ts                 # this app's Weave setup: one sign-in flow, and where peers meet
-  App.tsx                  # sign in (<WeaveAuth />), then your spaces and contacts
+  minca.ts                 # this app's Minca setup: one sign-in flow, and where peers meet
+  App.tsx                  # sign in (<MincaAuth />), then your spaces and contacts
   spaces.ts                # invite links
   contacts.ts              # door links, and the contact list kept current
   webmcp.ts                # node operations as WebMCP tools
   derive/                  # pure helpers: UI from schemas and links, names from profiles
-  components/              # spaces, collections, records, security (sign-in is <weave-auth>)
+  components/              # spaces, collections, records, security (sign-in is <minca-auth>)
   site/                    # the landing pages
 ```
 

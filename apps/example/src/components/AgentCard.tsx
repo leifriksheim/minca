@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ConnectAgent } from './ConnectAgent';
-import { Morph, type RoundKind } from '@weave/app-shared/shapes';
-import type { ShapeColour } from '@weave/app-shared/tokens';
+import { Morph, type RoundKind } from '@minca/app-shared/shapes';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 import { Icon } from './Icon';
 import { styles, palette } from '../styles';
 

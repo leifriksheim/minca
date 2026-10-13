@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
-import { WeaveProvider } from '@weaveprotocol/core/react';
+import { MincaProvider } from '@minca/core/react';
 import { App } from './App';
-import { connection } from './weave';
+import { connection } from './minca';
 import { injectStandaloneStyles } from './styles';
 
 injectStandaloneStyles();
@@ -9,7 +9,7 @@ injectStandaloneStyles();
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element not found');
 createRoot(root).render(
-  <WeaveProvider connection={connection}>
+  <MincaProvider connection={connection}>
     <App />
-  </WeaveProvider>,
+  </MincaProvider>,
 );

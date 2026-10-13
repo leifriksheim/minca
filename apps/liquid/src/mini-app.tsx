@@ -1,9 +1,9 @@
 /**
- * Liquid as a mini app (`@weave/app-shared/mini-app`): what a host like the
+ * Liquid as a mini app (`@minca/app-shared/mini-app`): what a host like the
  * example app mounts inside one of its spaces. The standalone site
  * (`main.tsx`) wraps the same `AssemblySpace` in a shell of its own.
  */
-import type { MiniApp } from '@weave/app-shared/mini-app';
+import type { MiniApp } from '@minca/app-shared/mini-app';
 import { AssemblySpace } from './Assembly';
 import { ASSEMBLY, proposal, topic } from './schema';
 import { injectAppStyles } from './styles';

@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { useAccess, useAccount, useNode, useProfiles } from '@weaveprotocol/core/react';
-import type { NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { comment } from '@weaveprotocol/core/schemas';
+import { useAccess, useAccount, useNode, useProfiles } from '@minca/core/react';
+import type { NodeRecord, SpaceSummary } from '@minca/core';
+import { comment } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { ago } from '../../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { styles, palette } from '../../styles';
 import { Person } from '../Person';
 import { peopleFrom, respondingTo } from '../../derive/people';

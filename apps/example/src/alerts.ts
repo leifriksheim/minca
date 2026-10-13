@@ -1,7 +1,7 @@
 /** What this app's notifications matched lately, for the bell and the dot on the tab's icon; kept in this browser only. */
 import { useEffect, useSyncExternalStore } from 'react';
-import { MARK_BANDS } from '@weave/app-shared/mark';
-import { accent, surface } from '@weave/app-shared/tokens';
+import { MARK_BANDS } from '@minca/app-shared/mark';
+import { accent, surface } from '@minca/app-shared/tokens';
 
 export interface Alert {
   /** The record it is about */
@@ -22,7 +22,7 @@ interface Kept {
 const KEEP = 50;
 const EMPTY: Kept = { items: [], readAt: '' };
 
-const keyOf = (did: string) => `weave.alerts:${did}`;
+const keyOf = (did: string) => `minca.alerts:${did}`;
 const cache = new Map<string, Kept>();
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((listener) => listener());
@@ -86,8 +86,8 @@ export function markRead(did: string) {
 
 // Another tab of this app adds or reads them too.
 globalThis.addEventListener?.('storage', (event) => {
-  if (!event.key?.startsWith('weave.alerts:')) return;
-  cache.delete(event.key.slice('weave.alerts:'.length));
+  if (!event.key?.startsWith('minca.alerts:')) return;
+  cache.delete(event.key.slice('minca.alerts:'.length));
   changed();
 });
 
@@ -102,7 +102,7 @@ export function useAlerts(did: string): { items: ReadonlyArray<Alert>; unread: n
   return { items: kept.items, unread: kept.items.filter((item) => item.at > kept.readAt).length };
 }
 
-/** Minca's mark, as the tab's icon: the rainbow (`@weave/app-shared/mark`), lowered to sit in a square */
+/** Minca's mark, as the tab's icon: the rainbow (`@minca/app-shared/mark`), lowered to sit in a square */
 const MARK = `<g transform="translate(0 5.5)">${MARK_BANDS.map(({ d, fill }) => `<path fill="${fill}" d="${d}"/>`).join('')}</g>`;
 const DOT = `<circle cx="20" cy="5" r="4.5" fill="${accent.danger}" stroke="${surface.page}" stroke-width="1.5"/>`;
 const icon = (dot: boolean) =>
