@@ -288,9 +288,9 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
       <>
         <p>
           A contract is a rule stored with a collection: “a comment is in the hall of fame once five different
-          people react 🙂”. When an app sees five, it writes a claim citing them, and every device checks the
-          proof the same way. A claim that doesn’t add up syncs, but counts for no one: smart contracts
-          without a blockchain.
+          people react 🙂”. Whoever adds the fifth 🙂, their app writes a claim along with it, citing the five
+          (or an always-on bot does), and every device checks the proof the same way. A claim that doesn’t add
+          up syncs, but counts for no one: smart contracts without a blockchain.
         </p>
         <p>Just showing it? A live query is enough. A claim makes it a fact that others can build on.</p>
       </>
