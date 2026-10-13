@@ -11,8 +11,8 @@ import {
   SCHEDULES,
   checkCron,
   profile,
-  rule,
-  ruleRun,
+  automation,
+  automationRun,
   standardDefinition,
 } from '@weaveprotocol/core/schemas';
 import * as ask from './ask.js';
@@ -206,20 +206,20 @@ const readJson = (text: string, flag: string): Record<string, unknown> => {
 };
 
 /**
- * Adds a `std.rule` to a space that asks an agent: what the account's own
+ * Adds a `std.automation` to a space that asks an agent: what the account's own
  * agent, or a bot there, does when some records appear or change, or at set
- * times. Defines `std.rule` first when the space lacks it and this account may
+ * times. Defines `std.automation` first when the space lacks it and this account may
  * add collections.
  */
 export async function addRule(node: P2PNode, flags: RuleFlags): Promise<unknown> {
   ask.intro('A new rule');
   const space = flags.space ?? (await pickSpace(node, 'Which space is it for?'));
   const collections = await node.collections.list(space);
-  for (const definition of [rule, ruleRun]) {
+  for (const definition of [automation, automationRun]) {
     if (collections.some((c) => c.name === definition.name && c.version !== null)) continue;
     if (!(await node.spaces.may(space, COLLECTION_DEFINE, { collection: definition.name })))
       throw new Error(
-        'This space has no rules yet, and you may not add collections to it. Ask someone who can, or `weave collections define --standard std.rule`.',
+        'This space has no rules yet, and you may not add collections to it. Ask someone who can, or `weave collections define --standard std.automation`.',
       );
     await node.collections.define(space, definition);
   }
@@ -337,7 +337,7 @@ export async function addRule(node: P2PNode, flags: RuleFlags): Promise<unknown>
     ...(by ? { by } : {}),
     since: new Date().toISOString(),
   };
-  const written = await node.records.put(space, rule.name, body);
+  const written = await node.records.put(space, automation.name, body);
   ask.outro(
     `“${name}” is on. ${by ? 'The bot' : 'Your agent'} runs it while \`weave agent${by ? ' --bot' : ''}\` does.`,
   );

@@ -536,9 +536,9 @@ describe('the weave command', () => {
 
     // A standard collection by its name, and a rule by flags alone.
     const defined: unknown = JSON.parse(
-      (await weave('collections', 'define', '--standard', 'std.rule', '--space', space)).stdout,
+      (await weave('collections', 'define', '--standard', 'std.automation', '--space', space)).stdout,
     );
-    assert.equal(at(defined, 'name'), 'std.rule');
+    assert.equal(at(defined, 'name'), 'std.automation');
     await refused(
       ['rule', 'add', '--space', space, '--name', 'Mentions', '--collection', 'std.message'],
       /Missing --do/,

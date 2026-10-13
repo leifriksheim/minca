@@ -11,7 +11,7 @@ produced by an agent. It runs against the records one node holds of one space.
 > small filter a screen's `weave.list(collection, { where })` takes (field
 > equality and `link:<rel>`, `apps/example/src/components/apps/screens.ts`), which
 > apps that run [screens](blueprints-and-guides.md#apps-with-a-screen-of-their-own) have to agree on.
-> A [rule](rules.md) keeps a query in a record, so everything that runs rules
+> A [rule](automations.md) keeps a query in a record, so everything that runs rules
 > has to read this format the same way; peers that only sync and judge the
 > record still never read it.
 
@@ -96,7 +96,7 @@ never `null`.
 | `@seq`           | `seq`                                                                                                                                                                                                                                           |
 | `@collection`    | `collection`                                                                                                                                                                                                                                    |
 | `link:<rel>`     | the `to` of the record's first link with that `rel`, as contracts' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel. |
-| `include:<name>` | in a [rule](rules.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                                        |
+| `include:<name>` | in a [rule](automations.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                                  |
 | body path        | Walk the body: at each segment, the current value must be a non-null object or array, and the segment one of its own member names, or of an array a position (`0`, `1`, …; nothing else, not `length`); otherwise the value is _missing_.       |
 
 ## Operators

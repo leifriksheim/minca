@@ -11,7 +11,7 @@ import {
 } from '../../derive/conditions';
 import { nameOf, type People } from '../../derive/people';
 import { recordLabel } from '../../derive/schema-ui';
-import { noun, type Within } from '../../rules';
+import { noun, type Within } from '../../automations';
 import { styles, palette } from '../../styles';
 import { Icon } from '../Icon';
 

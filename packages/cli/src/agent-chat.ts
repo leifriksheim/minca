@@ -184,8 +184,8 @@ export interface AgentChat {
 }
 
 const RULES =
-  'To do something whenever some records appear or change, or at set times, write a std.rule record ' +
-  '(records_put, collection "std.rule") in one of the person\'s spaces: { name, since: now as an ISO date, ' +
+  'To do something whenever some records appear or change, or at set times, write a std.automation record ' +
+  '(records_put, collection "std.automation") in one of the person\'s spaces: { name, since: now as an ISO date, ' +
   'then: { kind: "ask", text: what you should do then }, and when: { query: { collection, where } in the ' +
   'query format with "$me" for the person }, or every: five cron fields }. It starts once the person saves ' +
   'it themselves, so tell them it is waiting for them.';
@@ -220,7 +220,7 @@ const botSystem = (name: string, unattended: boolean) =>
       `${REFUSED}${END}`
     : `Whoever runs you is chatting with you in a terminal. ${READ_AS_DATA}: ${AS_DATA}. ` +
       'Keep answers short and plain. Actions that delete or overwrite ask first. Members granted ' +
-      '/std.rule/instruct in a space can direct you there with std.rule records naming you in by.');
+      '/std.automation/instruct in a space can direct you there with std.automation records naming you in by.');
 
 /** A tool per action an agent is offered, in a fixed order so the prompt caches */
 function agentTools(bot: boolean): BetaTool[] {

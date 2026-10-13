@@ -365,7 +365,7 @@ read. A device MUST say so to the person before it asks a host for a bot.
 while its space's fund (§2) has money in it, or always on a free host, and
 what it spends is taken from that fund, at most `fund.botDailyCap` a day.
 With the fund empty, it stays a member and does nothing. What a bot does is
-the space's rules naming it ([rules](../packages/core/docs/rules.md)); how
+the space's rules naming it ([rules](../packages/core/docs/automations.md)); how
 the host thinks for it is the host's business.
 
 **Calls.** No `Authorization`: an invite is all it takes to add a bot, as it

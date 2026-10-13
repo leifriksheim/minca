@@ -1,5 +1,5 @@
 # Your agent on Fly, always on: `weave agent --no-chat` runs your rules
-# (std.rule) with every device closed. Or a community's bot, with its own account.
+# (std.automation) with every device closed. Or a community's bot, with its own account.
 # Change `app` to a name of your own, then, from the repository root:
 #
 #   fly launch --no-deploy --copy-config --config packages/cli/fly.agent.toml --name my-agent

@@ -25,7 +25,7 @@ import { parseSpaceInvite, type P2PNode, type StorageAdapter } from '@weaveproto
 import { createAccount, openHome, unlock } from './home.js';
 import { startBotNode } from './agent.js';
 import { fileSpend, type Price, type Think } from './agent-chat.js';
-import { capEachOf, runRules } from './bot-runner.js';
+import { capEachOf, runAutomations } from './bot-runner.js';
 import { isRecord, messageOf } from './json.js';
 
 /** How the bots a host runs think */
@@ -196,7 +196,7 @@ export function createHostedBots(options: {
           };
           runners.set(
             kept.did,
-            runRules({
+            runAutomations({
               node,
               account: kept.did,
               bot: kept.name,

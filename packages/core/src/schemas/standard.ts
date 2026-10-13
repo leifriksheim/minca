@@ -11,7 +11,7 @@ import { planningGroups } from './library/planning.js';
 import { lifeGroups } from './library/life.js';
 import { moneyGroups } from './library/money.js';
 import { communityGroups } from './library/community.js';
-import { activity, rule, ruleRun } from '../schemas/rules.js';
+import { activity, automation, automationRun } from '../schemas/automations.js';
 import { collectionsGroups } from './library/collections.js';
 
 type Definitions = ReadonlyArray<DefineCollection>;
@@ -32,7 +32,7 @@ export const standardGroups: Readonly<Record<string, Definitions>> = Object.free
   ...lifeGroups,
   ...moneyGroups,
   ...communityGroups,
-  Rules: [rule, ruleRun, activity],
+  Rules: [automation, automationRun, activity],
   ...collectionsGroups,
 });
 

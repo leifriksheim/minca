@@ -260,9 +260,9 @@ _Source: `packages/core/src/schemas/library/community.ts` (`host`)._
 
 **Rules**
 
-`std.rule` and `std.rule-run`: what a space does by itself when records come
+`std.automation` and `std.automation-run`: what a space does by itself when records come
 to be a certain way, or at set times, and what each rule did. Described in
-[rules.md](rules.md).
+[rules.md](automations.md).
 
 **Activity.** `std.activity` is someone at work on a record, for apps to show
 while it lasts: "My bot is working on it…" under a message, a spinner on a
@@ -285,9 +285,9 @@ doing in its own words ("Reading the thread", "Making an app"). A bot's rule
 runner marks what set each rule off: `waiting` when queued, `working` with
 the rule's name when it starts, then `done` or `failed`, keeping whatever the
 model last said it was doing; it tells the model which record to say it on
-([rules.md](rules.md#running)).
+([rules.md](automations.md#running)).
 
-_Source: `packages/core/src/schemas/rules.ts` (`activity`, `setActivity`, `activeNow`), `packages/cli/src/bot-runner.ts` (`runRules`), `apps/example/src/activity.ts`, `apps/example/src/components/apps/Chat.tsx` (`Working`). Tests: `packages/core/tests/rule-runners.test.ts` ("std.activity"), `packages/cli/tests/agent-rules.test.ts` ("while a rule runs")._
+_Source: `packages/core/src/schemas/automations.ts` (`activity`, `setActivity`, `activeNow`), `packages/cli/src/bot-runner.ts` (`runAutomations`), `apps/example/src/activity.ts`, `apps/example/src/components/apps/Chat.tsx` (`Working`). Tests: `packages/core/tests/automation-runners.test.ts` ("std.activity"), `packages/cli/tests/agent-automations.test.ts` ("while a rule runs")._
 
 **Collections**
 
@@ -311,14 +311,14 @@ nothing about an account that leaves it out. A bot whose role may add
 collections adds `std.profile` where a space keeps none, as an app does when
 it starts a hosted bot.
 Besides its own rules, it runs the rules in a space that name it in `by`,
-made by members granted `/std.rule/instruct` there
-([rules.md](rules.md#who-runs-a-rule)). In the `community` template, admins
+made by members granted `/std.automation/instruct` there
+([rules.md](automations.md#who-runs-a-rule)). In the `community` template, admins
 and moderators hold it. Nothing the bot writes sets a rule off.
 What it writes shows as the bot, and every member's device checks it against
 the bot's role, so a role that may post messages but not delete keeps a
 misled bot from deleting.
 
-_Source: `packages/core/src/schemas/library/social.ts` (`profile`), `packages/core/src/schemas/rules.ts` (`rulesFor`), `packages/cli/src/agent.ts` (`discloseBot`). Tests: `packages/cli/tests/agent-rules.test.ts` ("says it is a bot…", "adds std.profile itself…", "a bot’s name"), `packages/core/tests/rule-runners.test.ts` ("a bot")._
+_Source: `packages/core/src/schemas/library/social.ts` (`profile`), `packages/core/src/schemas/automations.ts` (`automationsFor`), `packages/cli/src/agent.ts` (`discloseBot`). Tests: `packages/cli/tests/agent-automations.test.ts` ("says it is a bot…", "adds std.profile itself…", "a bot’s name"), `packages/core/tests/automation-runners.test.ts` ("a bot")._
 
 **Mentions and replies.** A `std.message`, `std.comment` or `std.post` names
 the accounts it calls on in `mentions` (as do `std.note`, `std.doc-block` and

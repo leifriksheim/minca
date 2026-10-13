@@ -9,8 +9,8 @@ import { useMayDefine } from '@weave/app-shared/may';
 import {
   activeNow,
   activity,
-  rule,
-  ruleOf,
+  automation,
+  automationOf,
   type Activity,
   type ActivityState,
 } from '@weaveprotocol/core/schemas';
@@ -54,8 +54,8 @@ export function useActivityOff(
   const asks = useLive(
     spaceId,
     async (n) =>
-      (await n.records.list(spaceId, { collection: rule.name })).some(
-        (record) => ruleOf(record)?.then.kind === 'ask',
+      (await n.records.list(spaceId, { collection: automation.name })).some(
+        (record) => automationOf(record)?.then.kind === 'ask',
       ),
     [],
   );

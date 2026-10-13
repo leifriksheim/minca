@@ -1,14 +1,19 @@
 /**
- * Running a node's rules (`std.rule`): what `weave agent --no-chat` does at a
+ * Running a node's rules (`std.automation`): what `weave agent --no-chat` does at a
  * terminal, and what a host does for each bot it runs. Rules that ask the
  * agent start a fresh conversation each time, one at a time, with nobody
  * there to allow deleting or overwriting, so those are refused. What someone
  * set off is counted against them, so nobody can spend the day for everyone.
  */
 import { PEER_CONTENT_NOTE, type P2PNode } from '@weaveprotocol/core';
-import { setActivity, startRules, type ActivityState, type RuleTrigger } from '@weaveprotocol/core/schemas';
+import {
+  setActivity,
+  startAutomations,
+  type ActivityState,
+  type AutomationTrigger,
+} from '@weaveprotocol/core/schemas';
 import { createAgentChat, spendFor, type Price, type Spend, type Think } from './agent-chat.js';
-import { openTrigger, ruleContext, triggerPrompt, writerInstructs } from './agent-rules.js';
+import { openTrigger, ruleContext, triggerPrompt, writerInstructs } from './agent-automations.js';
 import { messageOf } from './json.js';
 
 export interface RuleRunnerOptions {
@@ -37,7 +42,7 @@ export interface RuleRunnerOptions {
 export const capEachOf = (dailyCap: number) => dailyCap / 4;
 
 /** Starts running the rules that name this node; returns how to stop */
-export function runRules(options: RuleRunnerOptions): () => void {
+export function runAutomations(options: RuleRunnerOptions): () => void {
   const { node, spend, log } = options;
   const names = new Map<string, string>();
   const nameOf = async (space: string, did: string) => {
@@ -55,7 +60,7 @@ export function runRules(options: RuleRunnerOptions): () => void {
    */
   // Once for each space where nobody can see it at work, since the space keeps no std.activity.
   const unseen = new Set<string>();
-  const mark = (trigger: RuleTrigger, state: ActivityState) =>
+  const mark = (trigger: AutomationTrigger, state: ActivityState) =>
     setActivity(
       node,
       trigger.rule.space,
@@ -77,7 +82,7 @@ export function runRules(options: RuleRunnerOptions): () => void {
       .catch(() => null);
 
   let queue: Promise<unknown> = Promise.resolve();
-  const answer = async (sealed: RuleTrigger): Promise<{ did: string; ok: boolean }> => {
+  const answer = async (sealed: AutomationTrigger): Promise<{ did: string; ok: boolean }> => {
     const trigger = await openTrigger(node, sealed);
     const name = trigger.rule.body.name;
     const space = trigger.rule.space;
@@ -131,7 +136,7 @@ export function runRules(options: RuleRunnerOptions): () => void {
     }
   };
 
-  return startRules(node, {
+  return startAutomations(node, {
     account: options.account,
     ...(options.bot ? { bot: true } : {}),
     // A person's app may run the same rules; the earlier of two claims acts.

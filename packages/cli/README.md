@@ -306,8 +306,8 @@ nothing more it signs counts. The second one to start says the agent is
 already running, and stops (a lock in the agent's folder, taken over once the
 process holding it is gone).
 
-It also runs your **rules** (`std.rule`, see
-`packages/core/docs/rules.md`): what to do when some records come to be a
+It also runs your **rules** (`std.automation`, see
+`packages/core/docs/automations.md`): what to do when some records come to be a
 certain way, or at set times ("when a task is given to me, add it to my weekly
 plan note"; "weekdays at 8, plan my day"). Those that ask an agent start a
 fresh conversation each time, with nobody there to allow deleting or
@@ -420,13 +420,13 @@ weave rule add --space <id> --name "Answer when mentioned" --collection std.mess
 weave rule add --space <id> --name Mornings --every "0 8 * * 1-5" --do "Post today's plan" --by me
 ```
 
-`weave rule add` defines `std.rule` in the space first when it has none and
+`weave rule add` defines `std.automation` in the space first when it has none and
 you may add collections; `weave collections define --standard <std.name>`
 does that for any collection in the library. `$me` is whoever runs the rule:
 the bot, or you.
 
 It runs the rules in a space that name it in `by`, made by its founder or
-members whose roles grant `/std.rule/instruct` there. What sets a rule off
+members whose roles grant `/std.automation/instruct` there. What sets a rule off
 is data to it, except when its writer holds that grant too, and every grant
 of the bot's own roles: then an "Answer when mentioned" rule lets them ask it for
 things ("make us an expenses app"), and it sees the replies before it.

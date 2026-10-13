@@ -9,13 +9,13 @@ One kind of record for all of these, whoever runs it: a person's app, their
 agent, or a bot a community added.
 
 > Not protocol. A peer that has never heard of rules syncs, stores and judges
-> `std.rule` and `std.rule-run` like any other record. These are not the
+> `std.automation` and `std.automation-run` like any other record. These are not the
 > `rules` of a definition ([collections.md](collections.md#rules)), which
 > every peer enforces and which can only refuse a version; these act.
 
 ## A rule
 
-A rule is a `std.rule` record, so everyone in the space sees what runs and
+A rule is a `std.automation` record, so everyone in the space sees what runs and
 who made it:
 
 ```json
@@ -95,7 +95,7 @@ that include found: `{messages}` above.
 `ask` is for an agent: `weave agent`, or a bot. It is told the rule's words
 as its maker's, and what set it off as data, never as instructions, with one
 exception: when whoever wrote that record may instruct it (for a bot, the
-rule's maker or any member granted `/std.rule/instruct` in the space, and
+rule's maker or any member granted `/std.automation/instruct` in the space, and
 only one who holds every grant of the bot's roles, so nobody reaches past
 their own grants through it; for a person's own agent, only the person),
 the runner says so, and what they ask
@@ -109,13 +109,13 @@ someone. So whoever may instruct a bot can have it edit or delete a record
 it wrote for someone else, though their own `.byCreator` grant would never
 reach that record.
 
-_Source:_ `packages/cli/src/agent-rules.ts` (`triggerPrompt`, `ruleContext`,
-`writerInstructs`); `packages/cli/tests/agent-rules.test.ts`.
+_Source:_ `packages/cli/src/agent-automations.ts` (`triggerPrompt`, `ruleContext`,
+`writerInstructs`); `packages/cli/tests/agent-automations.test.ts`.
 
 ## Running
 
 For each record a rule newly holds for, the runner first writes a
-`std.rule-run`, then acts, then says in the run what it did, and the key of
+`std.automation-run`, then acts, then says in the run what it did, and the key of
 the record it added (`made`). A run is one per rule per record (`onePer:
 ['link:rule', 'link:about']`), which is how a rule acts once for each record
 however often, and by however many devices, it is looked at; it is the rule's
@@ -156,13 +156,13 @@ A bot answering mentions, from anyone holding a role, run by the bot:
 
 ### Who runs a rule
 
-- Without `by`, its maker: `runRules(node, space, maker)` once, or
-  `startRules(node, { account })`, which runs them in every space the node
+- Without `by`, its maker: `runAutomations(node, space, maker)` once, or
+  `startAutomations(node, { account })`, which runs them in every space the node
   follows, again after each change, and at the times they name. The example
   app runs them while it is open, but not those that ask or run at set times
   (`timed: false`); `weave agent` runs all of them.
 - With `by`, only that bot, and only while the maker may invoke
-  `/std.rule/instruct` in the space (`INSTRUCT`): a grant held by a role says
+  `/std.automation/instruct` in the space (`INSTRUCT`): a grant held by a role says
   who may direct a bot there. It is a command of the library's own: peers
   never check it, and a space grants it like any other, to a role
   ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
@@ -172,9 +172,9 @@ A bot answering mentions, from anyone holding a role, run by the bot:
   waits until the person saves it themselves.
 
 Two runners of one account, an app and an agent, may both claim a record
-before either hears the other. `startRules` waits `claimMs` after claiming;
+before either hears the other. `startAutomations` waits `claimMs` after claiming;
 the earlier claim acts, and the later is taken back. Nothing runs while every
 runner is closed: to keep rules running with every device off, run
 `weave agent --no-chat`, or a bot on a host.
 
-_Source: `packages/core/src/schemas/rules.ts` (`rule`, `ruleRun`, `checkRule`, `matching`, `act`, `rulesFor`, `runRules`, `startRules`, `fillRuleText`, `IT`, `ME`), `packages/core/src/schemas/cron.ts`, `packages/core/src/schema/quick-add.ts` (`quickAddBody`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/cli/src/main.ts` (`runAgent`), `packages/cli/src/agent-rules.ts` (`triggerPrompt`), `apps/example/src/rules.ts` (`compile`, `useRunRules`). Tests: `packages/core/tests/rule-records.test.ts`, `packages/core/tests/rule-runners.test.ts` (all)._
+_Source: `packages/core/src/schemas/automations.ts` (`rule`, `ruleRun`, `checkAutomation`, `matching`, `act`, `automationsFor`, `runAutomations`, `startAutomations`, `fillAutomationText`, `IT`, `ME`), `packages/core/src/schemas/cron.ts`, `packages/core/src/schema/quick-add.ts` (`quickAddBody`), `packages/core/src/query/filter.ts` (`checkFilter`, `matches`), `packages/cli/src/main.ts` (`runAgent`), `packages/cli/src/agent-automations.ts` (`triggerPrompt`), `apps/example/src/automations.ts` (`compile`, `useRunAutomations`). Tests: `packages/core/tests/automation-records.test.ts`, `packages/core/tests/automation-runners.test.ts` (all)._

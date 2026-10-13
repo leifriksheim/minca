@@ -31,7 +31,7 @@ import {
   type NodeAction,
   type P2PNode,
 } from '@weaveprotocol/core';
-import { suggestedRules } from '@weaveprotocol/core/schemas';
+import { suggestedAutomations } from '@weaveprotocol/core/schemas';
 import {
   chooseAccount,
   createAccount,
@@ -76,7 +76,7 @@ import {
   watchRelayRefusal,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
-import { capEachOf, runRules } from './bot-runner.js';
+import { capEachOf, runAutomations } from './bot-runner.js';
 import { chooseModel, isLoopback, isPlain, thinker, type ModelChoice } from './model.js';
 import { configSnippet, configureClients, serverCommand } from './clients.js';
 import { addRule, defineStandard, loadModelSetting, setUpModel } from './guide.js';
@@ -111,7 +111,7 @@ Usage:
   weave bots                                 the bots kept here, to start again
   weave rule add [--space ID] [--name N] [--collection C] [--where JSON] [--every CRON]
                  [--from ROLES] [--do TEXT] [--by BOT|me]
-  weave collections define --standard std.rule [--space ID]
+  weave collections define --standard std.automation [--space ID]
   weave actions
 
 Agents (Claude Code, Claude Desktop, Cursor):
@@ -125,7 +125,7 @@ Agents (Claude Code, Claude Desktop, Cursor):
   terminal, with your Anthropic API key (ANTHROPIC_API_KEY, or asked for once
   and kept in the agent's folder). Deleting or overwriting asks you first, and
   it stops for the day once --daily-cap dollars are spent. It also runs your
-  rules (std.rule records): what to do when some records appear or change,
+  rules (std.automation records): what to do when some records appear or change,
   or at set times. --no-chat runs only those, until stopped.
 
   Any server that speaks OpenAI's Chat Completions works with --provider
@@ -140,7 +140,7 @@ Agents (Claude Code, Claude Desktop, Cursor):
   spending; --name picks one, or makes it, and "weave bots" lists them.
   --invite joins a space. It says it is a bot on its std.profile where a
   space keeps them, and runs the rules that name it (by) of its founder and
-  members granted /std.rule/instruct there.
+  members granted /std.automation/instruct there.
   --daily-cap-each limits what each person who sets it off may spend a day
   (a quarter of --daily-cap unless given).
 
@@ -589,7 +589,7 @@ async function runAgent(
   const thinking = await thinker(model, apiKey);
   const modelOptions = { model: model.name, price: model.price, ...(isPlain(model) ? { plain: true } : {}) };
   const today = async () => `$${(await spend.today()).toFixed(2)} of $${options.dailyCap.toFixed(2)} today`;
-  const stopRules = runRules({
+  const stopRules = runAutomations({
     node,
     account: runner.account,
     ...(runner.bot ? { bot: runner.bot } : {}),
@@ -613,7 +613,7 @@ async function runAgent(
   if (!runner.bot) {
     const waiting = (
       await Promise.all(
-        (await node.spaces.list()).map((space) => suggestedRules(node, space.id, runner.account)),
+        (await node.spaces.list()).map((space) => suggestedAutomations(node, space.id, runner.account)),
       )
     ).reduce((sum, count) => sum + count, 0);
     if (waiting)
@@ -978,7 +978,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       options: { standard: { type: 'string' }, space: { type: 'string' } },
     });
     const name = values.standard;
-    if (!name) throw new Error('--standard needs a name, like std.rule');
+    if (!name) throw new Error('--standard needs a name, like std.automation');
     return withNode(globals, async (node) => print(await defineStandard(node, name, values.space)));
   }
 

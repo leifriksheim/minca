@@ -21,15 +21,15 @@ import {
   ACTIVITY_STALE_SECONDS,
   activeNow,
   activity,
-  checkRule,
-  rule,
-  ruleRun,
+  checkAutomation,
+  automation,
+  automationRun,
   setActivity,
-  startRules,
-  type Rule,
-  type RuleTrigger,
-  type StartRulesOptions,
-} from '../src/schemas/rules.js';
+  startAutomations,
+  type Automation,
+  type AutomationTrigger,
+  type StartAutomationsOptions,
+} from '../src/schemas/automations.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { until } from './helpers/until.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -56,7 +56,8 @@ async function personAndAgent(fill: number) {
   });
   nodes.push(person);
   const space = (await person.spaces.create({ name: 'Board', visibility: 'private' })).id;
-  for (const definition of [task, rule, ruleRun]) await person.collections.define(space, definition);
+  for (const definition of [task, automation, automationRun])
+    await person.collections.define(space, definition);
   const keys = await provider.generateKeyPair();
   const note = await createLocalRootSigner(me, provider).delegate({
     audience: publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC),
@@ -70,11 +71,11 @@ async function personAndAgent(fill: number) {
 }
 
 /** Runs rules on a node with an agent that answers `ask`, and keeps what set it off */
-function running(node: P2PNode, account: string, options: Partial<StartRulesOptions> = {}) {
-  const asked: RuleTrigger[] = [];
+function running(node: P2PNode, account: string, options: Partial<StartAutomationsOptions> = {}) {
+  const asked: AutomationTrigger[] = [];
   const names: string[][] = [];
   stops.push(
-    startRules(node, {
+    startAutomations(node, {
       account,
       ask: (trigger) => {
         asked.push(trigger);
@@ -89,7 +90,7 @@ function running(node: P2PNode, account: string, options: Partial<StartRulesOpti
 
 const now = () => new Date().toISOString();
 
-const doneAndMine = (): Rule => ({
+const doneAndMine = (): Automation => ({
   name: 'Done tasks of mine',
   when: { query: { collection: task.name, where: { status: 'done', assignees: { $contains: '$me' } } } },
   then: { kind: 'ask', text: 'Post a short win in #general' },
@@ -101,7 +102,7 @@ describe('a rule that asks an agent', () => {
     const { person, agent, space, account } = await personAndAgent(21);
     await person.records.put(space, task.name, { title: 'Old', status: 'done', assignees: [account] });
     await settle(5);
-    await person.records.put(space, rule.name, doneAndMine());
+    await person.records.put(space, automation.name, doneAndMine());
     const { asked, names } = running(agent, account);
     await until(() => names.at(-1)?.[0] === 'Done tasks of mine');
 
@@ -127,23 +128,23 @@ describe('a rule that asks an agent', () => {
       asked.map((t) => t.match?.record.key),
       [posters.key],
     );
-    const runs = await person.records.list(space, { collection: ruleRun.name });
+    const runs = await person.records.list(space, { collection: automationRun.name });
     assert.equal(runs.length, 1, 'the run says what the agent did');
   });
 
   test('a runner that can’t ask an agent, like an app, leaves it alone', async () => {
     const { person, space, account } = await personAndAgent(27);
-    await person.records.put(space, rule.name, doneAndMine());
+    await person.records.put(space, automation.name, doneAndMine());
     const { names } = running(person, account, { ask: undefined });
     await person.records.put(space, task.name, { title: 'Done', status: 'done', assignees: [account] });
     await settle(200);
     assert.deepEqual(names.at(-1) ?? [], []);
-    assert.equal((await person.records.list(space, { collection: ruleRun.name })).length, 0);
+    assert.equal((await person.records.list(space, { collection: automationRun.name })).length, 0);
   });
 
   test('a rule an agent wrote waits for the person; saving it themselves turns it on', async () => {
     const { person, agent, space, account } = await personAndAgent(22);
-    const suggested = await agent.records.put(space, rule.name, doneAndMine());
+    const suggested = await agent.records.put(space, automation.name, doneAndMine());
     const { asked, names } = running(agent, account);
     await settle(150);
     assert.deepEqual(names.at(-1) ?? [], []);
@@ -160,7 +161,7 @@ describe('a rule that asks an agent', () => {
 
   test('nothing the agent writes sets a rule off, so it can’t set itself off', async () => {
     const { person, agent, space, account } = await personAndAgent(23);
-    await person.records.put(space, rule.name, doneAndMine());
+    await person.records.put(space, automation.name, doneAndMine());
     const { asked, names } = running(agent, account);
     await until(() => names.at(-1)?.length === 1);
 
@@ -175,13 +176,13 @@ describe('a rule that asks an agent', () => {
 
   test('a paused rule, or one that can’t be read, doesn’t run', async () => {
     const { person, agent, space, account } = await personAndAgent(24);
-    await person.records.put(space, rule.name, { ...doneAndMine(), paused: true });
-    await person.records.put(space, rule.name, {
+    await person.records.put(space, automation.name, { ...doneAndMine(), paused: true });
+    await person.records.put(space, automation.name, {
       name: 'Nothing',
       then: { kind: 'ask', text: 'x' },
       since: now(),
     });
-    await person.records.put(space, rule.name, {
+    await person.records.put(space, automation.name, {
       name: 'Bad time',
       every: 'at noon every day',
       then: { kind: 'ask', text: 'x' },
@@ -196,7 +197,7 @@ describe('a rule that asks an agent', () => {
 describe('the time', () => {
   test('a rule with every runs once in each minute it names', async () => {
     const { person, agent, space, account } = await personAndAgent(25);
-    await person.records.put(space, rule.name, {
+    await person.records.put(space, automation.name, {
       name: 'Weekday mornings',
       every: '0 8 * * 1-5',
       then: { kind: 'ask', text: 'Plan my day' },
@@ -216,7 +217,7 @@ describe('the time', () => {
 
   test('a runner that is not always on leaves the time to one that is', async () => {
     const { person, agent, space, account } = await personAndAgent(26);
-    await person.records.put(space, rule.name, {
+    await person.records.put(space, automation.name, {
       name: 'Every minute',
       every: '* * * * *',
       then: { kind: 'ask', text: 'Anything' },
@@ -240,7 +241,7 @@ describe('the time', () => {
     assert.ok(!cronMatches('0 9 1 * 1', at(29, 9, 0)));
     // A rule changing a record needs one; the time alone has none.
     assert.match(
-      checkRule({
+      checkAutomation({
         name: 'x',
         every: '0 9 * * *',
         then: { kind: 'set', field: 'a', value: 1 },
@@ -274,7 +275,8 @@ async function club(fill: number) {
   const { id: space } = await admin.spaces.create({ name: 'Club', ...community, visibility: 'private' });
   // The founder holds every command; it holds the admin role too, so a rule's `from` names it.
   await admin.spaces.assign(space, admin.did, 'admin');
-  for (const definition of [message, rule, ruleRun]) await admin.collections.define(space, definition);
+  for (const definition of [message, automation, automationRun])
+    await admin.collections.define(space, definition);
   await person.spaces.join(await admin.spaces.invite(space, { role: 'member' }));
   await bot.spaces.join(await admin.spaces.invite(space, { role: 'member' }));
   await hold(admin, space);
@@ -285,7 +287,7 @@ async function club(fill: number) {
   return { admin, person, bot, space };
 }
 
-const mentionsBot = (bot: string): Rule => ({
+const mentionsBot = (bot: string): Automation => ({
   name: 'Answer when mentioned',
   when: { query: { collection: message.name, where: { mentions: { $contains: '$me' } } } },
   then: { kind: 'ask', text: 'Answer them in the same channel' },
@@ -296,9 +298,9 @@ const mentionsBot = (bot: string): Rule => ({
 describe('a bot', () => {
   test('runs the rules naming it of members allowed to instruct it, and not the others’', async () => {
     const { admin, person, bot, space } = await club(31);
-    await admin.records.put(space, rule.name, mentionsBot(bot.did));
-    await person.records.put(space, rule.name, { ...mentionsBot(bot.did), name: 'Not allowed' });
-    await admin.records.put(space, rule.name, {
+    await admin.records.put(space, automation.name, mentionsBot(bot.did));
+    await person.records.put(space, automation.name, { ...mentionsBot(bot.did), name: 'Not allowed' });
+    await admin.records.put(space, automation.name, {
       ...mentionsBot(bot.did),
       name: 'Not for it',
       by: person.did,
@@ -320,7 +322,7 @@ describe('a bot', () => {
 
   test('a rule with from is set off only by members holding one of those roles', async () => {
     const { admin, person, bot, space } = await club(41);
-    await admin.records.put(space, rule.name, {
+    await admin.records.put(space, automation.name, {
       ...mentionsBot(bot.did),
       when: { ...mentionsBot(bot.did).when!, from: ['admin'] },
     });
@@ -339,7 +341,7 @@ describe('a bot', () => {
 
   test('a person’s own runner doesn’t run a rule meant for a bot, nor anyone else’s', async () => {
     const { admin, bot, space } = await club(51);
-    await admin.records.put(space, rule.name, mentionsBot(bot.did));
+    await admin.records.put(space, automation.name, mentionsBot(bot.did));
     const mine = running(admin, admin.did);
     const theirs = running(bot, bot.did);
     // Waited for, not slept on: the rule reaches the bot over the network, which takes longer under load.

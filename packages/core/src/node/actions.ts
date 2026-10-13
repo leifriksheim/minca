@@ -27,7 +27,7 @@ import { blueprint, type Blueprint } from '../schemas/library/collections.js';
 import { guidesOf } from '../schemas/guides.js';
 import { standardDefinition, standardGroups } from '../schemas/standard.js';
 import { toJsonSchema } from '../schema/collection-def.js';
-import { ACTIVITY_STATES, setActivity } from '../schemas/rules.js';
+import { ACTIVITY_STATES, setActivity } from '../schemas/automations.js';
 import { describeCollection } from '../records/describe.js';
 import { isRecord } from '../utils/guards.js';
 

@@ -102,9 +102,9 @@ one, so it reads and sends them like anyone: the actions `direct_list` and
 and a rule set off by a direct message hands the bot the message opened.
 
 _Source:_ `packages/core/src/node/actions.ts` (`direct_list`, `direct_send`),
-`packages/core/src/node/actions.ts` (`offeredActions`), `packages/cli/src/agent-rules.ts`
+`packages/core/src/node/actions.ts` (`offeredActions`), `packages/cli/src/agent-automations.ts`
 (`openTrigger`, `ruleContext`). Tests: `packages/core/tests/direct.test.ts`
-("the direct message actions"), `packages/cli/tests/agent-rules.test.ts`.
+("the direct message actions"), `packages/cli/tests/agent-automations.test.ts`.
 
 _Source: `packages/core/src/privacy/direct.ts` (`sealDirect`, `openDirect`, `directBound`), `packages/core/src/schemas/library/publishing.ts` (`direct`), `packages/core/src/node/node.ts` (`direct`, `directView`), `packages/core/src/node/space-runtime.ts` (`memberKeys`, `ownMemberKey`), `apps/example/src/components/apps/Chat.tsx`. Tests: `packages/core/tests/direct.test.ts`, `packages/core/tests/records-only.test.ts` ("neither sends nor reads direct messages")._
 

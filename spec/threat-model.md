@@ -625,8 +625,8 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     every grant the adder holds (`AddBotDialog` in
     `apps/shared/src/CommunitySetup.tsx`), and `weave agent` follows what a
     record asks only when its writer holds every grant of the bot's roles
-    (`writerInstructs` in `packages/cli/src/agent-rules.ts`;
-    `packages/cli/tests/agent-rules.test.ts`, "takes instructions only from
+    (`writerInstructs` in `packages/cli/src/agent-automations.ts`;
+    `packages/cli/tests/agent-automations.test.ts`, "takes instructions only from
     someone holding every grant of its roles"). Neither is protocol: a bot run
     by other code, or a role redefined after the bot was added, can still act
     for someone with more than they hold, and a rule's own words are its

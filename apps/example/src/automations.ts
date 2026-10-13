@@ -1,4 +1,4 @@
-/** Rules picked from the space's collections, kept with what was picked so they can be shown in words; run by `startRules` while this app is open. */
+/** Rules picked from the space's collections, kept with what was picked so they can be shown in words; run by `startAutomations` while this app is open. */
 import { useEffect } from 'react';
 import { useAccount, useNode } from '@weaveprotocol/core/react';
 import type { Filter, NodeCollection, QueryRecord } from '@weaveprotocol/core';
@@ -6,10 +6,10 @@ import {
   IT,
   ME,
   SCHEDULES,
-  startRules,
-  type Rule,
-  type RuleAction,
-  type RuleWhen,
+  startAutomations,
+  type Automation,
+  type AutomationAction,
+  type AutomationWhen,
 } from '@weaveprotocol/core/schemas';
 import { attachable, isObject, quickAddBody } from './derive/schema-ui';
 import { clausesWords, clauseFields, whereOf, type Clause, type ClauseField } from './derive/conditions';
@@ -44,7 +44,7 @@ export type Picked = {
 export interface PickedRule {
   readonly name: string;
   readonly picked: Picked;
-  readonly then: RuleAction;
+  readonly then: AutomationAction;
 }
 
 /** The include a counted rule reads, which `{count}` in its text fills in */
@@ -74,7 +74,7 @@ function isCount(value: unknown): value is CountClause {
 }
 
 /** What was picked for a rule, when this app built it */
-export function pickedOf(rule: Rule): Picked | null {
+export function pickedOf(rule: Automation): Picked | null {
   const picked = rule.picked;
   if (!isObject(picked) || typeof picked.collection !== 'string' || !Array.isArray(picked.clauses))
     return null;
@@ -97,7 +97,7 @@ const COUNT_OPERATOR: Readonly<Record<CountClause['op'], string>> = {
 };
 
 /** What was picked, as the rule runs it: a query, counts as includes, and the conditions; "me" is `$me`, whoever runs it */
-export function compile(picked: Picked): RuleWhen {
+export function compile(picked: Picked): AutomationWhen {
   const parts: Filter[] = [];
   const own = whereOf(picked.clauses, ME);
   if (own !== undefined) parts.push(own);
@@ -127,7 +127,7 @@ export function compile(picked: Picked): RuleWhen {
   };
 }
 
-export const ACTIONS: ReadonlyArray<{ kind: RuleAction['kind']; label: string; hint: string }> = [
+export const ACTIONS: ReadonlyArray<{ kind: AutomationAction['kind']; label: string; hint: string }> = [
   { kind: 'notify', label: 'Notify me', hint: 'A notification on this device' },
   { kind: 'add', label: 'Add something', hint: 'A record in any collection here, about it' },
   { kind: 'set', label: 'Change it', hint: 'Set one of its fields' },
@@ -145,7 +145,8 @@ export function addable(collections: ReadonlyArray<NodeCollection>, about: strin
   const pointing = attachable(collections, about);
   const found = collections
     .filter(
-      (c) => c.version !== null && !c.name.startsWith('std.rule') && quickAddBody(c.schema, 'text') !== null,
+      (c) =>
+        c.version !== null && !c.name.startsWith('std.automation') && quickAddBody(c.schema, 'text') !== null,
     )
     .map((collection) => {
       const rels = pointing.filter((a) => a.collection.name === collection.name).map((a) => a.rel);
@@ -172,11 +173,11 @@ export function places(
 }
 
 /** The link an added record points at the rule's record by, if any */
-export const linkToIt = (then: RuleAction): string | undefined =>
+export const linkToIt = (then: AutomationAction): string | undefined =>
   then.kind === 'add' ? then.links?.find((l) => l.to === IT)?.rel : undefined;
 
 /** An add action, pointing at the rule's record by `link` when given */
-export const addAction = (collection: string, text: string, link?: string): RuleAction => ({
+export const addAction = (collection: string, text: string, link?: string): AutomationAction => ({
   kind: 'add',
   collection,
   text,
@@ -235,7 +236,7 @@ export function whenWords(
 
 /** "close it", "post “{title} is decided” in chat" */
 export function thenWords(
-  then: RuleAction,
+  then: AutomationAction,
   collections: ReadonlyArray<NodeCollection>,
   collection: string,
 ): string {
@@ -297,7 +298,7 @@ export function scheduleWords(every: string, start = true): string {
 
 /** A whole rule in words; one made elsewhere, by hand or by an agent, by what it looks at */
 export function ruleWords(
-  rule: Rule,
+  rule: Automation,
   collections: ReadonlyArray<NodeCollection>,
   nameOf?: (did: string) => string,
 ): string {
@@ -330,11 +331,11 @@ function notify(title: string, text: string, record?: QueryRecord): boolean {
 }
 
 /** Runs this account's rules in every space while the app is open; those that ask an agent or run on a timer are `weave agent`'s */
-export function useRunRules(): void {
+export function useRunAutomations(): void {
   const node = useNode();
   const { did } = useAccount();
   // Their agent may run the same rules; the earlier of two claims acts.
-  useEffect(() => startRules(node, { account: did, notify, timed: false, claimMs: 1500 }), [node, did]);
+  useEffect(() => startAutomations(node, { account: did, notify, timed: false, claimMs: 1500 }), [node, did]);
 }
 
 /** Starting points for a space, from what its collections say about themselves */
@@ -342,7 +343,7 @@ export function ideas(
   collections: ReadonlyArray<NodeCollection>,
 ): ReadonlyArray<{ title: string; rule: PickedRule }> {
   const live = collections.filter(
-    (c) => c.schema !== null && c.version !== null && !c.name.startsWith('std.rule'),
+    (c) => c.schema !== null && c.version !== null && !c.name.startsWith('std.automation'),
   );
   const found: Array<{ title: string; rule: PickedRule }> = [];
   for (const collection of live) {

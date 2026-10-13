@@ -15,7 +15,7 @@ import { ago } from '../../derive/time';
 import { useAsk } from '../../notifications';
 import { usePeopleHere } from '../Person';
 import { styles, palette } from '../../styles';
-import { places, type Within } from '../../rules';
+import { places, type Within } from '../../automations';
 import { ClauseList, Pill, PlacePill, Sentence, Step, card, previewBox } from './parts';
 
 type Who = 'others' | 'anyone';

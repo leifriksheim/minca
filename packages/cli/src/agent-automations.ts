@@ -1,10 +1,10 @@
 /**
  * Rules that ask an agent: what `weave agent` tells the model when one is set
  * off. Which rules it runs, what sets them off and what never does is
- * `startRules` in `@weaveprotocol/core/schemas`; this is only the words.
+ * `startAutomations` in `@weaveprotocol/core/schemas`; this is only the words.
  */
 import { runAction, type P2PNode } from '@weaveprotocol/core';
-import { INSTRUCT, type RuleTrigger } from '@weaveprotocol/core/schemas';
+import { INSTRUCT, type AutomationTrigger } from '@weaveprotocol/core/schemas';
 
 /**
  * What the model is told when a rule asks it: the rule's own words, which are
@@ -14,7 +14,7 @@ import { INSTRUCT, type RuleTrigger } from '@weaveprotocol/core/schemas';
  * ask in it may be done; with `activityOn`, where it may say what it is doing.
  */
 export function triggerPrompt(
-  trigger: RuleTrigger,
+  trigger: AutomationTrigger,
   note: string,
   extra: {
     readonly context?: string;
@@ -74,7 +74,7 @@ const DIRECT = 'std.direct';
  * body read as `{ from, to, text }`, as the one it is for may. Any other
  * trigger as it is.
  */
-export async function openTrigger(node: P2PNode, trigger: RuleTrigger): Promise<RuleTrigger> {
+export async function openTrigger(node: P2PNode, trigger: AutomationTrigger): Promise<AutomationTrigger> {
   const match = trigger.match;
   if (match?.record.collection !== DIRECT) return trigger;
   const opened = (await node.direct.list(trigger.rule.space).catch(() => [])).find(
@@ -127,7 +127,7 @@ function fitted<T extends { body: unknown }>(thread: ReadonlyArray<T>): T[] {
  * and, for a reply, the messages before it, oldest first, with their writers'
  * names. Read from the node itself, which costs nothing.
  */
-export async function ruleContext(node: P2PNode, trigger: RuleTrigger): Promise<string> {
+export async function ruleContext(node: P2PNode, trigger: AutomationTrigger): Promise<string> {
   const space = trigger.rule.space;
   const collections = await node.collections.list(space);
   // Each collection in a line, and only the one that set it off in full: the model asks for more by name.
@@ -175,7 +175,7 @@ export async function ruleContext(node: P2PNode, trigger: RuleTrigger): Promise<
 
 /**
  * Whether whoever wrote the record that set a rule off may instruct the one
- * running it. A bot: the rule's maker, or any member granted `/std.rule/instruct`
+ * running it. A bot: the rule's maker, or any member granted `/std.automation/instruct`
  * in the space, as for making rules for it, and only one who holds every grant
  * of the bot's roles: what they ask is done with the bot's power, so it must
  * not be more than theirs. Which grants a request in plain words would use
@@ -184,7 +184,7 @@ export async function ruleContext(node: P2PNode, trigger: RuleTrigger): Promise<
  */
 export async function writerInstructs(
   node: P2PNode,
-  trigger: RuleTrigger,
+  trigger: AutomationTrigger,
   runner: { readonly account: string; readonly bot: boolean },
 ): Promise<boolean> {
   const writer = trigger.match?.record.createdBy;

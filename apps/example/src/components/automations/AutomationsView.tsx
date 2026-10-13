@@ -4,16 +4,16 @@ import { useAccount, useLive, useNode } from '@weaveprotocol/core/react';
 import { nameOf } from '../../derive/people';
 import { ago } from '../../derive/time';
 import {
-  rule as ruleCollection,
-  ruleOf,
-  ruleRun as runCollection,
-  type RuleRun,
+  automation as ruleCollection,
+  automationOf,
+  automationRun as runCollection,
+  type AutomationRun,
 } from '@weaveprotocol/core/schemas';
-import { ideas, ruleWords, type PickedRule } from '../../rules';
+import { ideas, ruleWords, type PickedRule } from '../../automations';
 import { Person, usePeopleHere } from '../Person';
 import { Icon } from '../Icon';
 import { styles, palette } from '../../styles';
-import { RuleBuilder } from './RuleBuilder';
+import { AutomationBuilder } from './AutomationBuilder';
 import { Empty, SectionHead, iconDot, list, section } from './parts';
 import { SpaceBots } from '@weave/app-shared/CommunitySetup';
 import { useAction } from '@weave/app-shared/action';
@@ -47,17 +47,21 @@ export function AutomationsView({
     space.id,
     async (n) => {
       if (!defined)
-        return { rules: [], runs: new Map<string, NodeRecord<RuleRun>[]>(), deletable: new Set<string>() };
+        return {
+          rules: [],
+          runs: new Map<string, NodeRecord<AutomationRun>[]>(),
+          deletable: new Set<string>(),
+        };
       const [rules, runs] = await Promise.all([
         n.records.list(space.id, { collection: ruleCollection.name }),
-        n.records.list<RuleRun>(space.id, { collection: runCollection.name, newestFirst: true }),
+        n.records.list<AutomationRun>(space.id, { collection: runCollection.name, newestFirst: true }),
       ]);
-      const byRule = new Map<string, NodeRecord<RuleRun>[]>();
+      const byRule = new Map<string, NodeRecord<AutomationRun>[]>();
       for (const run of runs) {
-        const rule = run.links.find((l) => l.rel === 'rule')?.to;
-        if (rule) byRule.set(rule, [...(byRule.get(rule) ?? []), run]);
+        const automation = run.links.find((l) => l.rel === 'automation')?.to;
+        if (automation) byRule.set(automation, [...(byRule.get(automation) ?? []), run]);
       }
-      const shown = rules.filter((r) => ruleOf(r) !== null);
+      const shown = rules.filter((r) => automationOf(r) !== null);
       // Someone else's rule can't be changed, since it runs as them; one who may moderate can still delete it.
       const deletable = new Set<string>();
       for (const r of shown) if (await n.records.can(space.id, 'delete', r.key)) deletable.add(r.key);
@@ -66,7 +70,7 @@ export function AutomationsView({
     [defined],
   );
   // An idea already turned on is not offered again.
-  const made = new Set((rules?.rules ?? []).map((r) => ruleOf(r)?.name));
+  const made = new Set((rules?.rules ?? []).map((r) => automationOf(r)?.name));
   const starters = ideas(collections).filter((idea) => !made.has(idea.rule.name));
   const who = (d: string) => nameOf(d, people);
 
@@ -129,12 +133,12 @@ export function AutomationsView({
         ) : (
           <ul style={list}>
             {rules.rules.map((record) => {
-              const rule = ruleOf(record)!;
+              const automation = automationOf(record)!;
               const mine = record.createdBy === did;
               // A rule written under a records-only note (an agent's) waits for its person to save it themselves.
               const suggested = record.recordsOnly === true;
-              const off = rule.paused || suggested;
-              const agentOnly = rule.then.kind === 'ask' || (!rule.when && !!rule.every);
+              const off = automation.paused || suggested;
+              const agentOnly = automation.then.kind === 'ask' || (!automation.when && !!automation.every);
               const runs = rules.runs.get(record.key) ?? [];
               return (
                 <li key={record.key} style={{ ...ruleCard, opacity: off ? 0.65 : 1 }}>
@@ -149,16 +153,16 @@ export function AutomationsView({
                       <Icon name="bolt" size={14} />
                     </span>
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <strong style={{ color: palette.ink.strong, fontSize: 14.5 }}>{rule.name}</strong>
+                      <strong style={{ color: palette.ink.strong, fontSize: 14.5 }}>{automation.name}</strong>
                       <span style={{ fontSize: 14, color: palette.ink.body, lineHeight: 1.5 }}>
-                        {ruleWords(rule, collections, who)}
+                        {ruleWords(automation, collections, who)}
                       </span>
                       <span style={{ fontSize: 12.5, color: palette.ink.muted }}>
-                        {suggested ? 'Suggested by an agent' : rule.paused ? 'Paused' : 'On'} · made by{' '}
+                        {suggested ? 'Suggested by an agent' : automation.paused ? 'Paused' : 'On'} · made by{' '}
                         {mine ? 'you' : <Person did={record.createdBy} />} ·{' '}
-                        {rule.by ? (
+                        {automation.by ? (
                           <>
-                            run by <Person did={rule.by} />
+                            run by <Person did={automation.by} />
                           </>
                         ) : agentOnly ? (
                           `runs while ${mine ? 'your' : 'their'} agent does (weave agent)`
@@ -175,9 +179,9 @@ export function AutomationsView({
                           onClick={() =>
                             act(() =>
                               node.records.update(space.id, record.key, {
-                                ...rule,
+                                ...automation,
                                 paused: !off,
-                                since: off ? new Date().toISOString() : rule.since,
+                                since: off ? new Date().toISOString() : automation.since,
                               }),
                             )
                           }
@@ -210,11 +214,11 @@ export function AutomationsView({
                       {rules.deletable.has(record.key) && (
                         <button
                           onClick={() => {
-                            if (globalThis.confirm(`Delete the rule “${rule.name}”?`))
+                            if (globalThis.confirm(`Delete the rule “${automation.name}”?`))
                               act(() => node.records.delete(space.id, record.key));
                           }}
                           data-variant="danger"
-                          aria-label={`Delete ${rule.name}`}
+                          aria-label={`Delete ${automation.name}`}
                           style={{ ...styles.smallButton, color: palette.accent.danger }}
                         >
                           Delete
@@ -287,7 +291,7 @@ export function AutomationsView({
       </section>
 
       {open?.kind === 'rule' && (
-        <RuleBuilder
+        <AutomationBuilder
           space={space}
           collections={collections}
           {...(open.editing ? { editing: open.editing } : {})}

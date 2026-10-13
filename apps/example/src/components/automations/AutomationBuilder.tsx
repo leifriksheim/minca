@@ -22,12 +22,12 @@ import {
   checkCron,
   activity as activityCollection,
   matching,
-  rule as ruleCollection,
-  ruleOf,
-  ruleRun as runCollection,
-  type Rule,
-  type RuleAction,
-  type RuleMatch,
+  automation as ruleCollection,
+  automationOf,
+  automationRun as runCollection,
+  type Automation,
+  type AutomationAction,
+  type AutomationMatch,
 } from '@weaveprotocol/core/schemas';
 import {
   ACTIONS,
@@ -47,7 +47,7 @@ import {
   type Picked,
   type PickedRule,
   type Within,
-} from '../../rules';
+} from '../../automations';
 import { usePeopleHere } from '../Person';
 import { styles, palette } from '../../styles';
 import { ClauseList, Pill, PlacePill, Sentence, Step, ValueInput, card, chip, previewBox } from './parts';
@@ -56,7 +56,7 @@ import { ClauseList, Pill, PlacePill, Sentence, Step, ValueInput, card, chip, pr
 const OTHER = 'other';
 
 /** A rule picked from the space's own definitions: when a record is some way, or at set times, do one thing */
-export function RuleBuilder({
+export function AutomationBuilder({
   space,
   collections,
   editing,
@@ -81,7 +81,7 @@ export function RuleBuilder({
   const here = usePeopleHere();
   const people: People = here?.people ?? new Map();
   const from = editing ?? copying;
-  const stored = from ? ruleOf(from) : null;
+  const stored = from ? automationOf(from) : null;
   const picked = stored ? pickedOf(stored) : (start?.picked ?? null);
   const initial = stored ?? start;
 
@@ -101,7 +101,7 @@ export function RuleBuilder({
   const [clauses, setClauses] = useState<ReadonlyArray<Clause>>(picked?.clauses ?? []);
   const [within, setWithin] = useState<ReadonlyArray<Within>>(picked?.within ?? []);
   const [count, setCount] = useState<CountClause | null>(picked?.count ?? null);
-  const [then, setThen] = useState<RuleAction>(initial?.then ?? { kind: 'notify', text: '{title}' });
+  const [then, setThen] = useState<AutomationAction>(initial?.then ?? { kind: 'notify', text: '{title}' });
   const [name, setName] = useState<string | null>(initial?.name ?? null);
   // Set off by records, or by the time: an agent or a bot runs the latter.
   const [timed, setTimed] = useState(!!stored && !stored.when && !!stored.every);
@@ -148,7 +148,7 @@ export function RuleBuilder({
       ? `${whenWords(when, collections, who)}, ${thenWords(then, collections, collection)}.`
       : '';
   const shownName =
-    name ?? (timed ? scheduleWords(every) : chosen ? `${collectionLabel(chosen)} rule` : 'Rule');
+    name ?? (timed ? scheduleWords(every) : chosen ? `${collectionLabel(chosen)} rule` : 'Automation');
 
   const has = (n: string) => collections.some((c) => c.name === n && c.version !== null);
   const settable = fields.filter((f) => ['choice', 'yesno', 'number', 'text'].includes(f.kind));
@@ -171,7 +171,9 @@ export function RuleBuilder({
   const onlyTheirs = !!chosen && !changesOthers;
 
   // What it holds for right now: shown, never acted on — a rule acts on what changes after it's made.
-  const [found, setFound] = useState<{ for: typeof when; matches: ReadonlyArray<RuleMatch> } | null>(null);
+  const [found, setFound] = useState<{ for: typeof when; matches: ReadonlyArray<AutomationMatch> } | null>(
+    null,
+  );
   const preview = found?.for === when ? found.matches : null;
   useEffect(() => {
     if (!when.collection) return;
@@ -207,8 +209,8 @@ export function RuleBuilder({
       // Where the agent or bot says it is working on what set the rule off, for apps to show; not needed to run.
       if (agentDoes && !has(activityCollection.name) && mayDefine)
         await node.collections.define(space.id, activityCollection).catch(() => {});
-      const body: Rule = {
-        name: shownName.trim() || 'Rule',
+      const body: Automation = {
+        name: shownName.trim() || 'Automation',
         ...(timed ? { every: every.trim() } : { when: compile(when), picked: when }),
         then,
         ...(agentDoes && by ? { by } : {}),
@@ -637,11 +639,11 @@ export function RuleBuilder({
 
 /** A new action of a kind, keeping the words already typed */
 function startAction(
-  kind: RuleAction['kind'],
+  kind: AutomationAction['kind'],
   settable: ReadonlyArray<ClauseField>,
   targets: ReadonlyArray<AddTarget>,
-  was: RuleAction,
-): RuleAction {
+  was: AutomationAction,
+): AutomationAction {
   const text = 'text' in was ? was.text : '{title}';
   if (kind === 'notify' || kind === 'ask') return { kind, text };
   if (kind === 'add') {
@@ -665,8 +667,8 @@ function ActionDetail({
   people,
   me,
 }: {
-  then: RuleAction;
-  onChange: (then: RuleAction) => void;
+  then: AutomationAction;
+  onChange: (then: AutomationAction) => void;
   settable: ReadonlyArray<ClauseField>;
   counting: boolean;
   /** A record set it off, so its name can go in the words */

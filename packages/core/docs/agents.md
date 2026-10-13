@@ -106,7 +106,7 @@ the app's: `collections_list` points at the guides a space's apps wrote
 ## Rules
 
 An agent that runs by itself (`weave agent`) also runs the person's rules
-([rules.md](rules.md)), and does what those that ask it say: when some
+([rules.md](automations.md)), and does what those that ask it say: when some
 records come to be a certain way, or at set times. An agent may write a rule
 when asked, but it runs only once the person has saved it themselves.
 
@@ -121,11 +121,11 @@ A bot is the same program running as an account of its own
 writes as itself, is checked against its role like any member, and is
 mentioned by the name its account says, like anyone: the one it was made
 with, unless its account already says another. It runs the rules that name
-it in `by`, of members granted `/std.rule/instruct` in a space. Where a space
+it in `by`, of members granted `/std.automation/instruct` in a space. Where a space
 keeps `std.profile`, it says it is a bot there with `bot: true`, as soon as
 the definition arrives, and where its role may add collections it adds
 `std.profile` itself. Apps list bots from that, so a space without it shows
-none. See [rules.md](rules.md#who-runs-a-rule)
+none. See [rules.md](automations.md#who-runs-a-rule)
 and [standard-library.md](standard-library.md) (Bots).
 
 The usual way to have one is to let the host that keeps the community online

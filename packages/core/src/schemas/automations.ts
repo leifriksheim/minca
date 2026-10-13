@@ -3,7 +3,7 @@
  * rules a definition carries, which every peer checks (spec 02 §7) and which
  * can only refuse; these act, as whoever runs them.
  *
- * A rule is an ordinary record (`std.rule`), so everyone in the space can see
+ * A rule is an ordinary record (`std.automation`), so everyone in the space can see
  * what runs and who made it. What sets it off is a query, in the format
  * `records.query` takes, and a condition over each result, in the language of
  * checks, that may read what the query's `include` found; or the times it
@@ -12,7 +12,7 @@
  * bot the maker may instruct. Whatever it writes is written as its runner, so
  * a rule can do nothing its runner couldn't do by hand.
  *
- * Each time it acts on a record it leaves a run (`std.rule-run`), one per
+ * Each time it acts on a record it leaves a run (`std.automation-run`), one per
  * rule per record by construction (`onePer`): that is how it acts once for
  * each record, whichever device or agent looks, and the rule's history for
  * anyone. A run names the record the rule wrote, and nothing a rule wrote sets
@@ -20,7 +20,7 @@
  * itself forever, and so would two rules that answer each other.
  *
  * Not protocol: a peer that has never heard of rules syncs and judges these
- * records like any other. See `packages/core/docs/rules.md`.
+ * records like any other. See `packages/core/docs/automations.md`.
  */
 import type { NodeRecord, P2PNode, SpaceAccess } from '../node/types.js';
 import {
@@ -39,7 +39,7 @@ import { checkCron, cronMatches } from './cron.js';
 import { about, define, one, person, text, typed, when as moment, words } from './fragments.js';
 
 /** A link a rule's new record carries: to a record by key, or to `$it`, the record the rule holds for */
-export interface RuleLink {
+export interface AutomationLink {
   readonly rel: string;
   readonly to: string;
 }
@@ -51,19 +51,19 @@ export interface RuleLink {
  * comment, a task, or one someone defined yesterday, with the links it names.
  * `ask` gives its text, in the maker's words, to an agent that runs rules.
  */
-export type RuleAction =
+export type AutomationAction =
   | { readonly kind: 'notify'; readonly text: string }
   | {
       readonly kind: 'add';
       readonly collection: string;
       readonly text: string;
-      readonly links?: ReadonlyArray<RuleLink>;
+      readonly links?: ReadonlyArray<AutomationLink>;
     }
   | { readonly kind: 'set'; readonly field: string; readonly value: string | number | boolean }
   | { readonly kind: 'ask'; readonly text: string };
 
 /** What sets a rule off: the records a query finds, those a condition holds for */
-export interface RuleWhen {
+export interface AutomationWhen {
   /** `records.query`'s format; `include` is how a rule counts or reads what points at a record */
   readonly query: Query;
   /** A filter over each result, which may also read `include:<name>`, what the query included (`checkFilter`) */
@@ -72,13 +72,13 @@ export interface RuleWhen {
   readonly from?: ReadonlyArray<string>;
 }
 
-export interface Rule {
+export interface Automation {
   readonly name: string;
   /** What records set it off. A rule has this, `every`, or both. */
-  readonly when?: RuleWhen;
+  readonly when?: AutomationWhen;
   /** When it runs by itself: five cron fields, minute hour day month weekday, in the runner's local time */
   readonly every?: string;
-  readonly then: RuleAction;
+  readonly then: AutomationAction;
   /** The bot that runs it, when its maker may instruct bots here; else its maker's own devices and agent */
   readonly by?: string;
   /** How an app's builder showed it, so it can be shown and changed again. Never read to run it. */
@@ -88,11 +88,11 @@ export interface Rule {
   readonly since: string;
 }
 
-export type RuleRun = BodyOf<typeof ruleRun>;
+export type AutomationRun = BodyOf<typeof automationRun>;
 
-export const rule = typed<Rule>()({
-  name: 'std.rule',
-  title: 'Rule',
+export const automation = typed<Automation>()({
+  name: 'std.automation',
+  title: 'Automation',
   description: 'When records in the space are a certain way, or at set times, do something.',
   schema: {
     type: 'object',
@@ -110,9 +110,9 @@ export const rule = typed<Rule>()({
   },
 });
 
-export const ruleRun = define({
-  name: 'std.rule-run',
-  title: 'Rule run',
+export const automationRun = define({
+  name: 'std.automation-run',
+  title: 'Automation run',
   description: 'A rule acted on a record: once each, whichever device did it.',
   schema: {
     type: 'object',
@@ -120,10 +120,10 @@ export const ruleRun = define({
     required: ['did', 'ok', 'at'],
   },
   links: {
-    rule: one([rule.name], 'The rule that ran'),
+    automation: one([automation.name], 'The automation that ran'),
     about: about('The record it ran for'),
   },
-  rules: { onePer: ['link:rule', 'link:about'] },
+  rules: { onePer: ['link:automation', 'link:about'] },
 });
 
 /** Where a bot, an agent or anyone's work on something stands */
@@ -204,9 +204,9 @@ export const ME = '$me';
 
 /**
  * The command a maker needs a grant of in a space for a bot there to run
- * their rules: a library command, which no peer checks (docs/rules.md)
+ * their rules: a library command, which no peer checks (docs/automations.md)
  */
-export const INSTRUCT = `/${rule.name}/instruct`;
+export const INSTRUCT = `/${automation.name}/instruct`;
 
 const said = { type: 'string', pattern: '\\S' };
 const named = { type: 'string', minLength: 1 };
@@ -234,18 +234,18 @@ const ACTIONS: Readonly<Record<string, JsonSchema>> = {
   },
 };
 /** A rule's shape, with what sets it off spelled out */
-const RULE: JsonSchema = {
-  ...rule.schema,
+const AUTOMATION: JsonSchema = {
+  ...automation.schema,
   properties: {
-    ...rule.schema.properties,
+    ...automation.schema.properties,
     when: { type: 'object', properties: { from: { type: 'array', items: named } } },
   },
 };
 
 /** Why this can't be a rule, or null when it can */
-export function checkRule(value: unknown): string | null {
+export function checkAutomation(value: unknown): string | null {
   if (!isObject(value)) return 'A rule must be an object';
-  const shape = schemaProblem(RULE, value);
+  const shape = schemaProblem(AUTOMATION, value);
   if (shape) return shape;
   if (typeof value.name !== 'string' || !value.name.trim()) return 'A rule needs a name';
   if (value.when === undefined && value.every === undefined)
@@ -270,11 +270,11 @@ export function checkRule(value: unknown): string | null {
   return null;
 }
 
-const isRule = (value: unknown): value is Rule => checkRule(value) === null;
+const isAutomation = (value: unknown): value is Automation => checkAutomation(value) === null;
 
 /** A rule record's body, when it is one */
-export const ruleOf = (record: { readonly body: unknown }): Rule | null =>
-  isRule(record.body) ? record.body : null;
+export const automationOf = (record: { readonly body: unknown }): Automation | null =>
+  isAutomation(record.body) ? record.body : null;
 
 /** `$me` wherever it is a value, as the account running the rule */
 function asRunner<T>(value: T, me: string): T {
@@ -283,7 +283,7 @@ function asRunner<T>(value: T, me: string): T {
 }
 
 /** One record a rule holds for now */
-export interface RuleMatch {
+export interface AutomationMatch {
   readonly record: QueryRecord;
   /** What its query's `include` found, as the condition read it: a count as a number */
   readonly included: Readonly<Record<string, unknown>>;
@@ -299,10 +299,10 @@ export interface RuleMatch {
 export async function matching(
   node: P2PNode,
   space: string,
-  ruleWhen: RuleWhen,
+  ruleWhen: AutomationWhen,
   me: string,
   limit = 200,
-): Promise<ReadonlyArray<RuleMatch>> {
+): Promise<ReadonlyArray<AutomationMatch>> {
   const when = asRunner(ruleWhen, me);
   const query = plainQuery(when.query);
   const counted = new Set<string>();
@@ -320,7 +320,7 @@ export async function matching(
     sort: query.sort ?? { '@updatedAt': 'desc' },
     limit: query.limit ?? limit,
   });
-  const found: RuleMatch[] = [];
+  const found: AutomationMatch[] = [];
   for (const record of records) {
     let latest = Date.parse(record.updatedAt);
     const included: Record<string, unknown> = {};
@@ -350,9 +350,9 @@ function titleOf(record: QueryRecord): string {
 }
 
 /** `{title}`, and `{<include>}` as a count, filled in */
-export function fillRuleText(
+export function fillAutomationText(
   text: string,
-  match: Pick<RuleMatch, 'record' | 'included'> | undefined,
+  match: Pick<AutomationMatch, 'record' | 'included'> | undefined,
   title = titleOf,
 ) {
   return text.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (whole, name: string) => {
@@ -366,32 +366,32 @@ export function fillRuleText(
 }
 
 /** A rule as it runs: where it is kept, who made it, and what it says */
-export interface ActiveRule {
+export interface ActiveAutomation {
   readonly space: string;
   readonly key: string;
   /** The account that made it */
   readonly maker: string;
-  readonly body: Rule;
+  readonly body: Automation;
 }
 
 /** A rule set off: by a record it came to hold for, or by the time */
-export interface RuleTrigger {
-  readonly rule: ActiveRule;
-  readonly match?: RuleMatch;
+export interface AutomationTrigger {
+  readonly rule: ActiveAutomation;
+  readonly match?: AutomationMatch;
   /** When a time set it off */
   readonly at?: Date;
 }
 
 /** What a device does for a rule's `notify`: shows it, and says whether it could */
-export type RuleNotifier = (title: string, text: string, record?: QueryRecord) => boolean;
+export type AutomationNotifier = (title: string, text: string, record?: QueryRecord) => boolean;
 
-export interface RunRulesOptions {
+export interface RunAutomationsOptions {
   /** A bot, running as an account of its own: nothing it writes sets a rule off */
   readonly bot?: boolean;
   /** Shows a notification. Without it, a `notify` rule's run says nothing could. */
-  readonly notify?: RuleNotifier;
+  readonly notify?: AutomationNotifier;
   /** Does what a rule asks an agent. Without it, rules that ask are left to a runner that can. */
-  readonly ask?: (trigger: RuleTrigger) => Promise<Pick<RuleRun, 'did' | 'ok'>>;
+  readonly ask?: (trigger: AutomationTrigger) => Promise<Pick<AutomationRun, 'did' | 'ok'>>;
   /** What a record is called, for `{title}` */
   readonly title?: (record: QueryRecord) => string;
   /** Records being acted on now, shared across calls so a second look leaves them alone */
@@ -403,20 +403,20 @@ export interface RunRulesOptions {
    */
   readonly claimMs?: number;
   /** Each time a rule acted */
-  readonly onRun?: (trigger: RuleTrigger, run: RuleRun) => void;
+  readonly onRun?: (trigger: AutomationTrigger, run: AutomationRun) => void;
 }
 
 /** Does what a rule says, as whoever runs it; says what happened */
 export async function act(
   node: P2PNode,
-  trigger: RuleTrigger,
-  options: RunRulesOptions = {},
-): Promise<RuleRun> {
+  trigger: AutomationTrigger,
+  options: RunAutomationsOptions = {},
+): Promise<AutomationRun> {
   const { rule: active, match } = trigger;
   const space = active.space;
   const body = active.body;
   const at = new Date().toISOString();
-  const text = (template: string) => fillRuleText(template, match, options.title);
+  const text = (template: string) => fillAutomationText(template, match, options.title);
   const then = body.then;
   try {
     switch (then.kind) {
@@ -469,19 +469,19 @@ const holdsOneOf = (access: SpaceAccess | undefined, did: string, names: Readonl
 /**
  * The rules in a space that `account` runs, none paused and none whose
  * current version an agent wrote: those it made without `by`, and those
- * naming it in `by` whose maker may instruct it here (`std.rule/instruct`).
+ * naming it in `by` whose maker may instruct it here (`std.automation/instruct`).
  */
-export async function rulesFor(
+export async function automationsFor(
   node: P2PNode,
   space: string,
   account: string,
   access?: SpaceAccess,
-): Promise<ReadonlyArray<ActiveRule>> {
-  const records = await node.records.list(space, { collection: rule.name });
-  const active: ActiveRule[] = [];
+): Promise<ReadonlyArray<ActiveAutomation>> {
+  const records = await node.records.list(space, { collection: automation.name });
+  const active: ActiveAutomation[] = [];
   for (const record of records) {
     const maker = record.createdBy;
-    const body = ruleOf(record);
+    const body = automationOf(record);
     // A key given records only, an agent's, may suggest a rule; it runs once the person saves it themselves.
     if (!record.verified || record.recordsOnly || !maker || !body || body.paused) continue;
     const runs =
@@ -497,8 +497,8 @@ export async function rulesFor(
 }
 
 /** How many rules in a space an agent wrote for `account`, waiting for the person to save them */
-export async function suggestedRules(node: P2PNode, space: string, account: string): Promise<number> {
-  const records = await node.records.list(space, { collection: rule.name });
+export async function suggestedAutomations(node: P2PNode, space: string, account: string): Promise<number> {
+  const records = await node.records.list(space, { collection: automation.name });
   return records.filter((record) => record.createdBy === account && record.recordsOnly).length;
 }
 
@@ -509,9 +509,9 @@ async function runsIn(
 ): Promise<{ by: Map<string, Set<string>>; made: Set<string> }> {
   const by = new Map<string, Set<string>>();
   const made = new Set<string>();
-  for (const run of await node.records.list(space, { collection: ruleRun.name })) {
+  for (const run of await node.records.list(space, { collection: automationRun.name })) {
     if (isObject(run.body) && typeof run.body.made === 'string') made.add(run.body.made);
-    const ran = run.links.find((l) => l.rel === 'rule')?.to;
+    const ran = run.links.find((l) => l.rel === 'automation')?.to;
     const on = run.links.find((l) => l.rel === 'about')?.to;
     if (!ran || !on) continue;
     const seen = by.get(ran) ?? new Set<string>();
@@ -529,12 +529,12 @@ async function runsIn(
 async function first(node: P2PNode, space: string, mine: NodeRecord, wait: number): Promise<boolean> {
   if (wait <= 0) return true;
   await new Promise((resolve) => setTimeout(resolve, wait));
-  const ran = mine.links.find((l) => l.rel === 'rule')?.to;
+  const ran = mine.links.find((l) => l.rel === 'automation')?.to;
   const on = mine.links.find((l) => l.rel === 'about')?.to;
   if (!ran || !on) return true;
-  const claims = (await node.records.linked(space, on, { rel: 'about', collection: ruleRun.name })).filter(
-    (run) => run.links.some((l) => l.rel === 'rule' && l.to === ran),
-  );
+  const claims = (
+    await node.records.linked(space, on, { rel: 'about', collection: automationRun.name })
+  ).filter((run) => run.links.some((l) => l.rel === 'automation' && l.to === ran));
   const earliest = [...claims].sort(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.key.localeCompare(b.key),
   )[0];
@@ -545,20 +545,20 @@ async function first(node: P2PNode, space: string, mine: NodeRecord, wait: numbe
 
 /**
  * Runs, once, every rule `account` runs in a space: acts for each record a
- * rule newly holds for, and leaves a run for it. `startRules` calls it when
+ * rule newly holds for, and leaves a run for it. `startAutomations` calls it when
  * records change; a device can call it itself.
  */
-export async function runRules(
+export async function runAutomations(
   node: P2PNode,
   space: string,
   account: string,
-  options: RunRulesOptions = {},
+  options: RunAutomationsOptions = {},
 ): Promise<void> {
   const collections = await node.collections.list(space);
   const defined = (name: string) => collections.some((c) => c.name === name && c.version !== null);
-  if (!defined(rule.name) || !defined(ruleRun.name)) return;
+  if (!defined(automation.name) || !defined(automationRun.name)) return;
   const access = await node.spaces.access(space).catch(() => undefined);
-  const rules = (await rulesFor(node, space, account, access)).filter(
+  const rules = (await automationsFor(node, space, account, access)).filter(
     (r) => r.body.when && (r.body.then.kind !== 'ask' || options.ask),
   );
   if (rules.length === 0) return;
@@ -584,13 +584,13 @@ export async function runRules(
       busy.add(claim);
       try {
         const links = [
-          { rel: 'rule', to: active.key },
+          { rel: 'automation', to: active.key },
           { rel: 'about', to: record.key },
         ];
         // Claimed first, so a second look while this acts leaves it alone.
         const run = await node.records.put(
           space,
-          ruleRun.name,
+          automationRun.name,
           { did: 'Running…', ok: true, at: new Date().toISOString() },
           { links },
         );
@@ -607,7 +607,7 @@ export async function runRules(
   }
 }
 
-export interface StartRulesOptions extends RunRulesOptions {
+export interface StartAutomationsOptions extends RunAutomationsOptions {
   /** The account running them: a person's, for their app or agent, or a bot's own */
   readonly account: string;
   /**
@@ -616,7 +616,7 @@ export interface StartRulesOptions extends RunRulesOptions {
    */
   readonly timed?: boolean;
   /** Called with the rules it runs, whenever they change */
-  readonly onRules?: (rules: ReadonlyArray<ActiveRule>) => void;
+  readonly onRules?: (rules: ReadonlyArray<ActiveAutomation>) => void;
   readonly onError?: (error: unknown) => void;
   /** How often the time is checked against `every`. Default 15 s. */
   readonly tickMs?: number;
@@ -628,20 +628,20 @@ export interface StartRulesOptions extends RunRulesOptions {
  * once at the start, after each change in a space, and at the times rules
  * name. The one loop every runner uses, an app, `weave agent` or a bot.
  */
-export function startRules(node: P2PNode, options: StartRulesOptions): () => void {
+export function startAutomations(node: P2PNode, options: StartAutomationsOptions): () => void {
   const { account } = options;
   const busy = options.busy ?? new Set<string>();
   const now = options.now ?? (() => new Date());
   let stopped = false;
   let spaces: ReadonlyArray<string> = [];
-  const kept = new Map<string, ReadonlyArray<ActiveRule>>();
+  const kept = new Map<string, ReadonlyArray<ActiveAutomation>>();
   let shown: string | null = null;
   let running: Promise<void> | null = null;
   /** Spaces with a change not yet looked at; null means the list of spaces changed */
   const dirty = new Set<string | null>([null]);
   /** The minute each timed rule last ran, so it runs once in it */
   const ranAt = new Map<string, string>();
-  const runnable = (r: ActiveRule) => r.body.then.kind !== 'ask' || !!options.ask;
+  const runnable = (r: ActiveAutomation) => r.body.then.kind !== 'ask' || !!options.ask;
 
   async function run(): Promise<void> {
     while (dirty.size && !stopped) {
@@ -656,8 +656,8 @@ export function startRules(node: P2PNode, options: StartRulesOptions): () => voi
         for (const space of looking) {
           if (stopped) return;
           const access = await node.spaces.access(space).catch(() => undefined);
-          kept.set(space, (await rulesFor(node, space, account, access)).filter(runnable));
-          await runRules(node, space, account, { ...options, busy });
+          kept.set(space, (await automationsFor(node, space, account, access)).filter(runnable));
+          await runAutomations(node, space, account, { ...options, busy });
         }
         const all = [...kept.values()].flat();
         const names = all.map((r) => `${r.space}/${r.key}/${r.body.name}`).join();

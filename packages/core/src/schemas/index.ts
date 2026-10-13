@@ -132,8 +132,8 @@ export {
 } from './blueprints.js';
 export { guidesOf, writeGuide } from './guides.js';
 export {
-  rule,
-  ruleRun,
+  automation,
+  automationRun,
   activity,
   ACTIVITY_STATES,
   ACTIVITY_STALE_SECONDS,
@@ -142,31 +142,31 @@ export {
   IT,
   ME,
   INSTRUCT,
-  checkRule,
-  ruleOf,
+  checkAutomation,
+  automationOf,
   matching,
   act,
-  runRules,
-  startRules,
-  rulesFor,
-  suggestedRules,
-  fillRuleText,
-} from './rules.js';
+  runAutomations,
+  startAutomations,
+  automationsFor,
+  suggestedAutomations,
+  fillAutomationText,
+} from './automations.js';
 export type {
-  ActiveRule,
-  Rule,
-  RuleAction,
-  RuleLink,
-  RuleMatch,
-  RuleRun,
+  ActiveAutomation,
+  Automation,
+  AutomationAction,
+  AutomationLink,
+  AutomationMatch,
+  AutomationRun,
   Activity,
   ActivityState,
-  RuleTrigger,
-  RuleWhen,
-  RuleNotifier,
-  RunRulesOptions,
-  StartRulesOptions,
-} from './rules.js';
+  AutomationTrigger,
+  AutomationWhen,
+  AutomationNotifier,
+  RunAutomationsOptions,
+  StartAutomationsOptions,
+} from './automations.js';
 export { checkCron, cronMatches, SCHEDULES } from './cron.js';
 export type { BlueprintReview, CollectionReview, ReviewContext } from './blueprints.js';
 export type { AppNotify } from '../space/notify.js';
