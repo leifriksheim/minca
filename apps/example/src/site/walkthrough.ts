@@ -3,6 +3,10 @@
  * terms of each community in `scenarios/communities/`. Every snippet is the
  * real library API; each tab's steps run in order as one program.
  */
+import { rolePresets, STAFF_COLLECTIONS, type RolePreset, type Statement } from '@weaveprotocol/core';
+
+/** The constitution templates a step can spread */
+type PresetName = keyof typeof rolePresets;
 
 export interface WalkStep {
   /** Which of the five steps: start, data, rules, use, proof */
@@ -10,6 +14,8 @@ export interface WalkStep {
   readonly text: string;
   readonly file: string;
   readonly code: string;
+  /** The preset its code spreads, written out under it */
+  readonly preset?: PresetName;
 }
 
 export interface Scenario {
@@ -53,6 +59,7 @@ const space = await node.spaces.create({
   cofounders: [samDid], // founded with Sam
 });
 `,
+        preset: 'team',
       },
       {
         label: 'Describe the data',
@@ -119,6 +126,7 @@ const space = await node.spaces.create({
   ...rolePresets.community, // admin, moderator, member
 });
 `,
+        preset: 'community',
       },
       {
         label: 'Describe the data',
@@ -196,6 +204,7 @@ const space = await node.spaces.create({
 });
 space.founders; // []: nobody is permanent
 `,
+        preset: 'coop',
       },
       {
         label: 'Describe the data',
@@ -365,3 +374,88 @@ head?.body?.balance; // what Bob has, as every device sees it
     ],
   },
 ];
+
+// ─── A preset, written out ──────────────────────────────────────────
+
+/** Commands that hold under the same conditions */
+interface GrantLine {
+  /** The conditions, in words: "always" when there are none */
+  readonly when: string;
+  readonly cmds: ReadonlyArray<string>;
+}
+
+interface PresetRole {
+  readonly name: string;
+  readonly lines: ReadonlyArray<GrantLine>;
+}
+
+interface PresetSummary {
+  readonly name: PresetName;
+  /** Who is at the top, in a sentence */
+  readonly top: string;
+  readonly roles: ReadonlyArray<PresetRole>;
+  /** Whether a condition names the staff collections, which the summary then lists */
+  readonly staff: boolean;
+}
+
+const isList = (value: unknown): value is ReadonlyArray<unknown> => Array.isArray(value);
+
+/** The values a list of statements compares `field` to, when each is `['==', field, value]` */
+function equalsAll(list: unknown, field: string): ReadonlyArray<string> | null {
+  if (!isList(list)) return null;
+  const values: string[] = [];
+  for (const statement of list) {
+    if (!isList(statement) || statement[0] !== '==' || statement[1] !== field) return null;
+    if (typeof statement[2] !== 'string') return null;
+    values.push(statement[2]);
+  }
+  return values;
+}
+
+const sameSet = (a: ReadonlyArray<string>, b: ReadonlyArray<string>) =>
+  a.length === b.length && a.every((value) => b.includes(value));
+
+/** One policy statement, in words, for the shapes the presets use; anything else as it is written */
+function inWords(statement: Statement): string {
+  const [op, a, b] = statement;
+  if (op === '==' && a === '.byCreator' && b === true) return 'own records';
+  if (op === '==' && a === '.role' && typeof b === 'string') return `the ${b} role`;
+  if (op === '!=' && a === '.role' && typeof b === 'string') return `any role but ${b}`;
+  const roles = op === 'or' ? equalsAll(a, '.role') : null;
+  if (roles) return `the ${roles.join(' or ')} role`;
+  if (op === 'not' && isList(a)) {
+    const held = a[0] === 'any' && a[1] === '.roles' ? equalsAll([a[2]], '.') : null;
+    if (held) return `whoever isn't ${held.join(', ')}`;
+    const collections = a[0] === 'or' ? equalsAll(a[1], '.collection') : null;
+    if (collections)
+      return sameSet(collections, STAFF_COLLECTIONS)
+        ? 'outside the staff collections'
+        : `outside ${collections.join(', ')}`;
+  }
+  return JSON.stringify(statement);
+}
+
+/** What a preset holds: who is at the top, and each role's commands grouped by their conditions */
+export function describePreset(name: PresetName): PresetSummary {
+  const preset: RolePreset = rolePresets[name];
+  const roles = preset.roles.map((role) => {
+    const lines: Array<{ when: string; cmds: string[] }> = [];
+    for (const grant of role.grants) {
+      const when = grant.pol.length ? grant.pol.map(inWords).join(', ') : 'always';
+      const line = lines.find((l) => l.when === when);
+      if (line) line.cmds.push(grant.cmd);
+      else lines.push({ when, cmds: [grant.cmd] });
+    }
+    return { name: role.name, lines };
+  });
+  const top =
+    preset.top === 'founders'
+      ? 'You, and any cofounders, are its founders: you hold every command, and no one else can remove you.'
+      : `No founders: you start as ${(preset.creatorRoles ?? []).join(', ')}, and that is all.`;
+  return {
+    name,
+    top,
+    roles,
+    staff: roles.some((role) => role.lines.some((line) => line.when.includes('staff'))),
+  };
+}
