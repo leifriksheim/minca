@@ -401,7 +401,8 @@
   align-items: start;
 }
 .site .split + .split,
-.site .points + .split {
+.site .points + .split,
+.site .split + .points {
   margin-top: 72px;
 }
 .site .stack {
