@@ -287,44 +287,23 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     intro: (
       <>
         <p>
-          A contract is a rule for what records mean, such as “a comment is in the hall of fame once five
-          different people react 🙂”. It’s stored with the collection, so every app and device runs the same
-          one.
+          A contract is a rule stored with a collection: “a comment is in the hall of fame once five different
+          people react 🙂”. When an app sees five, it writes a claim citing them, and every device checks the
+          proof the same way. A claim that doesn’t add up syncs, but counts for no one: smart contracts
+          without a blockchain.
         </p>
-        <ol>
-          <li>
-            An app sees five 🙂 and writes the claim “this comment is in the hall of fame”, on its own; nobody
-            has to press anything.
-          </li>
-          <li>The claim cites its proof: the five reactions, by id.</li>
-          <li>Every device checks the proof against the rule. Same records in, same answer out.</li>
-        </ol>
-        <p>
-          A claim that doesn’t add up still syncs, but counts for no one. Smart contracts without a
-          blockchain: no server, no global order, and it works offline.
-        </p>
-        <p>
-          Only want to show it? A live query does that, no claim needed. A claim makes it a fact: it stays
-          once proven, and a badge or a reward can cite it.
-        </p>
+        <p>Just showing it? A live query is enough. A claim makes it a fact that others can build on.</p>
       </>
     ),
-    code: `// Hall-of-fame claims, and their rule
-const fame = collection({
+    code: `const fame = collection({
   name: 'app.fame',
   schema: Fame, // the reactions it cites
-  rules: {
-    check: [contract(Fame, ({ body, versions }) =>
-      versions(body.reactions).of(Reaction)
-        .where((r) => r.body.emoji.eq('🙂'))
-        .map((r) => r.author).distinct().count().gte(5),
-      'Needs five different people')],
-  },
-});
-
-// Any device checks a claim the same way
-await node.records.contracts(space.id, claim.key);
-// { passes: true }`,
+  rules: { check: [contract(Fame, ({ body, versions }) =>
+    versions(body.reactions).of(Reaction)
+      .where((r) => r.body.emoji.eq('🙂'))
+      .map((r) => r.author).distinct().count().gte(5),
+    'Needs five different people')] },
+});`,
     visual: CONTRACTS,
   },
   {
