@@ -1053,6 +1053,8 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
     showSignIn() {
       update({ error: null, stage: 'signIn' });
+      // Back from "another account", which let go of the one picked: pick it again.
+      if (!state.selectedId && state.place) void refresh(state.place).catch(() => {});
     },
 
     showWelcome() {
@@ -1060,7 +1062,9 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     },
 
     showExisting() {
-      update({ error: null, stage: 'existing' });
+      // Any account, not the one the list had picked: a recovery code from
+      // here opens whichever account it belongs to.
+      update({ error: null, stage: 'existing', selectedId: null, entry: null });
     },
 
     showRestore() {
