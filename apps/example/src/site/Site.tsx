@@ -418,11 +418,11 @@ const CONSENSUS: ReadonlyArray<Part> = [
   },
   {
     title: 'Every device is the referee',
-    body: 'When a change arrives, each device checks who made it and whether their role allowed it. Anything that breaks the rules is refused, everywhere.',
+    body: 'When a change arrives, each device checks who made it and whether their role allowed it, and refuses what breaks the rules. Devices that were offline, or saw changes in another order, reach the same verdict. No leader, no server, no vote to wait for.',
   },
   {
-    title: 'The same answer, everywhere',
-    body: 'Devices that were offline, or saw changes in a different order, replay the same history and reach the same verdict. No leader, no server, no vote to wait for.',
+    title: 'Founded with a constitution',
+    body: 'A space starts from its constitution: who founded it, and how conflicts resolve. Founders can’t be pushed out, but can step down. Or a space has no one at the top, like a co-op. To change the founding rules, members move to a successor space and each chooses whether to follow.',
   },
   {
     title: 'Access you can take back',
@@ -433,8 +433,8 @@ const CONSENSUS: ReadonlyArray<Part> = [
 /** What contracts make possible, without a server or a chain */
 const CONTRACTS: ReadonlyArray<Part> = [
   {
-    title: 'Unlock when enough agree',
-    body: 'A proposal passes, a role is granted or a reward is released only with enough signed approvals behind it. Three of five admins, ten members, whatever the space decides.',
+    title: 'Decided when enough agree',
+    body: 'A proposal passes or a reward is released only with enough signed approvals behind it. Three of five admins, ten members, whatever the space decides. (Votes that change who holds power are next on the roadmap.)',
   },
   {
     title: 'Moves that must be legal',
@@ -445,8 +445,8 @@ const CONTRACTS: ReadonlyArray<Part> = [
     body: 'Credits, badges and balances that cite the records they came from. Every device checks the sums.',
   },
   {
-    title: 'Fair dice, sealed bids',
-    body: 'Commit to a hidden value, reveal it later, and every device checks it matches. Randomness and auctions with nobody to trust.',
+    title: 'Fair dice',
+    body: 'Commit to a hidden value, reveal it later, and every device checks it matches: randomness with nobody to trust. What needs a deadline, like an auction that closes Friday, needs a witness, which is on the roadmap.',
   },
 ];
 
