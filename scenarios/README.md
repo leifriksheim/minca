@@ -49,6 +49,10 @@ CI whenever `spec/`, `packages/core/` or `scenarios/` change.
   the version's `seen`, one pass over that state's roles), but it is a new
   protocol function, so it waits for a change of its own with its adversarial
   review and the co-op moved onto a real node.
+- `sql/`: the hall of fame, mutual credit, co-op and chess contracts in SQL
+  on a locked-down SQLite (`@sqlite.org/sqlite-wasm`), with determinism
+  probes, from [the SQL comparison](../spec/drafts/sql-contracts.md). A
+  prototype, not protocol; it runs with `npm test`.
 - `parked-datalog/`: the chess club, co-op and company team in Datalog, from
   [the comparison](../spec/drafts/contracts-comparison.md). Datalog is parked
   as a possible library query layer, not protocol. It runs with `npm test`
