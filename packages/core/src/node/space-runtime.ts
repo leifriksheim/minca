@@ -1614,7 +1614,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     }
     if (once.length === 0 || version.deleted) return null;
     // Back to the nearest step whose claims are known, then forward: judging a line is linear.
-    const fields = once.join('\n');
+    const fields = JSON.stringify(once);
     const path: Version[] = [];
     let known: ReadonlySet<string> | undefined;
     for (let step: Version | null = version; step;) {
@@ -1624,8 +1624,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       step = step.seq > 0 && step.prev ? await storage.getVersion(step.prev) : null;
     }
     const claimed = new Set(known);
+    // A stub's claims can't be read yet, so a walk through one isn't kept: the whole version may arrive.
+    let throughStub = false;
     for (const step of path.reverse()) {
       if (step.deleted) continue;
+      if (isStub(step)) throughStub = true;
       const opened = await openBody(step);
       if (opened.body === null && opened.encrypted) return UNJUDGED;
       for (const citation of onceCitations(opened.body, once)) {
@@ -1634,6 +1637,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
     }
     // An id names its content, and so its whole chain: what it claimed never changes.
+    if (throughStub) return null;
     onceClaimed.set(`${version.id}|${fields}`, claimed);
     if (onceClaimed.size > MAX_ONCE_CLAIMED) onceClaimed.delete(onceClaimed.keys().next().value!);
     return null;
