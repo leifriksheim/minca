@@ -105,9 +105,11 @@ await node.collections.define(space, {
   line: { once: ['received'] },
 });
 
-// A payment: the next version of this account's line.
-const key = await lineKey(node.did, 'app.pay');
-await node.records.update(space, key, { to, amount: 30, balance: -30, received: [] });
+// The first payment starts this account's line, at its line key;
+// each one after is the line's next version.
+const line = await lineKey(node.did, 'app.pay');
+await node.records.put(space, 'app.pay', { to, amount: 30, balance: -30, received: [] }, { key: line });
+await node.records.update(space, line, { to: other, amount: 20, balance: -50, received: [] });
 ```
 
 The definition's field is still `rules.check`: peers check the names in

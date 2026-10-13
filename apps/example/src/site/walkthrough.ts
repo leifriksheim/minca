@@ -345,7 +345,7 @@ await node.collections.define(space.id, pay);
 const line = await lineKey(node.did, 'app.pay');
 const first = await node.records.put(space.id, pay,
   { to: bobDid, amount: 30, balance: -30, received: [] },
-  { key: line.slice(line.indexOf('.') + 1) });
+  { key: line });
 
 // Each payment after is the line's next version
 await node.records.update(space.id, first.key,
