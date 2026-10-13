@@ -171,3 +171,30 @@ describe('contracts: where they live', () => {
     assert.equal(await alice.node.records.get(c.space, note.key), null);
   });
 });
+
+describe('a definition’s version', () => {
+  test('one stored past 2^53 can’t lock the collection: the library follows it with 1, and writes none like it', async () => {
+    const c = await communityNode(0, []);
+    const alice = c.founder;
+    const locked = await c.sign(alice, {
+      collection: 'sys.collection',
+      body: { name: 'app.note', schema: { type: 'object' }, version: 2 ** 53, rules: { final: true } },
+      version: { key: 'collection:app.note', seq: 0 },
+    });
+    await c.add(locked);
+    const defined = await alice.node.collections.define(c.space, {
+      name: 'app.note',
+      schema: { type: 'object' },
+    });
+    assert.equal(defined.version, 1);
+    assert.deepEqual(defined.rules, {});
+    await assert.rejects(
+      alice.node.collections.define(c.space, {
+        name: 'app.other',
+        schema: { type: 'object' },
+        version: 2 ** 53,
+      }),
+      /below 2\^53/,
+    );
+  });
+});

@@ -4065,7 +4065,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     async define(input: DefineCollection): Promise<NodeCollection> {
       const recordKey = `collection:${input.name}`;
       const current = (await catalog()).get(input.name) ?? null;
-      const version = input.version ?? (current ? current.definition.version + 1 : 1);
+      // Peers don't order definitions by version (spec 02 §6.3): a stored one past what can be
+      // counted on, written to lock the collection, is simply followed by 1 again.
+      const after =
+        current && Number.isSafeInteger(current.definition.version + 1) ? current.definition.version : 0;
+      const version = input.version ?? after + 1;
       const definition: StoredCollection = {
         name: input.name,
         ...(input.title !== undefined ? { title: input.title } : {}),
@@ -4094,7 +4098,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           : null) ??
         (lineProblem === 'unknown' ? 'contract.line takes only "once"' : lineProblem);
       if (problem) throw new Error(problem);
-      if (current && version <= current.definition.version) {
+      if (!Number.isSafeInteger(version)) throw new Error(`version must be a whole number below 2^53`);
+      if (current && version <= after) {
         throw new Error(
           `${input.name} is at version ${current.definition.version}; a new definition needs a higher one`,
         );

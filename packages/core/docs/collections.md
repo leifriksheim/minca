@@ -339,7 +339,8 @@ record.
 
 Defining a collection again writes the next version of its definition, one
 higher unless you give a `version`. The node refuses a `version` that is not
-higher than the one in force; peers don't check it. Records don't name the
+higher than the one in force, or not below 2^53; peers don't check it. One in
+force at 2^53 or more, which nothing could follow, is followed by 1. Records don't name the
 version they were written under: each is judged by the definition in force
 as of the access changes it saw
 ([spec 03 §5](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
