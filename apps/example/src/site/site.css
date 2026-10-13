@@ -596,6 +596,10 @@
   font-size: 12px;
   color: var(--body);
 }
+.site .viz-note svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
 .site .viz-arrow {
   display: flex;
   flex-direction: column;

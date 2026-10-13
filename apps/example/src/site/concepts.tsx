@@ -81,11 +81,32 @@ const IDENTITY = (
   </div>
 );
 
+const APPS = (
+  <div
+    className="viz"
+    role="img"
+    aria-label="An app asks your account home, you approve, and it gets a scoped pass"
+  >
+    <div className="viz-flow">
+      <Box name="Poll app" sub="no keys, no password" />
+      <Arrow label="asks" />
+      <Box ink name="Your account home" sub="you approve" />
+    </div>
+    <span className="viz-arrow down">
+      <span aria-hidden>→</span>
+      <small>a pass, back to the app</small>
+    </span>
+    <Box name="Pass" sub="Club space · write · 7 days">
+      <span className="viz-note">every device checks it · revoke anytime</span>
+    </Box>
+  </div>
+);
+
 const SPACES = (
   <div className="viz" role="img" aria-label="A space: its constitution, and its members' devices in sync">
     <div className="viz-space">
       <div className="viz-caption">space · Bike co-op</div>
-      <Box ink name="Constitution" sub="top: none · roles: steward, member" />
+      <Box ink name="Constitution" sub="its founding rules" />
       <div className="viz-row">
         <Box name="Ann" sub="steward" />
         <Box name="Bea" sub="member" />
@@ -93,6 +114,27 @@ const SPACES = (
       </div>
     </div>
     <div className="viz-caption">⇄ synced between the members’ devices</div>
+  </div>
+);
+
+const CONSTITUTION = (
+  <div
+    className="viz"
+    role="img"
+    aria-label="A constitution, sealed by its hash, and a successor members may follow"
+  >
+    <div className="viz-flow">
+      <Box ink name="Constitution">
+        <small>top: founders · Alice</small>
+        <small>roles: admin, member</small>
+        <small>conflicts: strong-remove/1</small>
+        <span className="viz-note">{LOCK} its id is its hash</span>
+      </Box>
+      <Arrow label="members start" />
+      <Box name="Successor" sub="new founding rules">
+        <span className="viz-note">each member chooses</span>
+      </Box>
+    </div>
   </div>
 );
 
@@ -185,13 +227,31 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     visual: IDENTITY,
   },
   {
+    id: 'apps',
+    name: 'Apps',
+    icon: 'M2.5 2.5h4.5v4.5h-4.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5h-4.5zM9 9h4.5v4.5H9z',
+    intro:
+      'An app doesn’t get your account. It asks your account home for access, and you see what it wants: which spaces, read or write, for how long. Approve, and it gets a pass that says exactly that, which every device checks and you can take back anytime. It never sees your keys or password.',
+    code: "const connection = createWeaveConnection({\n  home: 'https://weave-home.netlify.app/connect',\n  request: { name: 'Polls', access: 'write',\n    scope: 'spaces' },\n});",
+    visual: APPS,
+  },
+  {
     id: 'spaces',
     name: 'Spaces',
     icon: 'M2.5 2.5h11v11h-11zM5 6h6M5 9.5h3',
     intro:
-      'A space is a group’s shared data, kept on each member’s devices and synced between them. It starts from its constitution: its founders, or no one at the top, and the roles it begins with.',
+      'A space is a group’s shared data: its members, their roles and their records, kept on each member’s devices and synced between them.',
     code: "const space = await node.spaces.create(\n  { name: 'Club', visibility: 'private' });",
     visual: SPACES,
+  },
+  {
+    id: 'constitution',
+    name: 'Constitution',
+    icon: 'M2 6l6-3.5L14 6zM3.5 6.5V12M6.5 6.5V12M9.5 6.5V12M12.5 6.5V12M2 13.5h12',
+    intro:
+      'Every space starts from its constitution, its founding rules: who’s at the top (founders, who can’t be pushed out but may step down, or no one, like a co-op), the roles it begins with, and how conflicts resolve. Its id is its hash, so it can never be swapped. To change the founding rules, members start a successor space, and each chooses whether to follow.',
+    code: "const space = await node.spaces.create({\n  name: 'Bike co-op',\n  visibility: 'private',\n  ...rolePresets.coop, // top: 'none'\n});",
+    visual: CONSTITUTION,
   },
   {
     id: 'records',
@@ -199,7 +259,7 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     icon: 'M4 1.5h5.5l3 3v10h-8.5zM9.5 1.5v3h3',
     intro:
       'Data is typed records in collections, whose schemas live in the space. A record is a chain of signed versions, and its key says whose it is.',
-    code: "await node.records.update(space.id, task.key,\n  { title: 'Ship v1.0', done: true });",
+    code: "const Task = z.object({\n  title: z.string(), done: z.boolean() });\n\nconst tasks = collection({\n  name: 'app.task', schema: Task,\n  // links and rules are optional\n});\nawait node.collections.define(\n  space.id, tasks);\nawait node.records.put(space.id, tasks,\n  { title: 'Ship v1', done: false });",
     visual: RECORDS,
   },
   {
