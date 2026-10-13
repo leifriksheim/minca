@@ -280,6 +280,13 @@ describe('a record’s chain', () => {
     );
     assert.equal(example.bodyHash, 'b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq');
     assert.equal(example.id, 'bvtkn4kg5z6qhfqvovhxypxvm767aqz6llyd67wztupdwixpfl7xa');
+    // The signature the spec shows checks against the author (a fresh one differs: ECDSA is randomized).
+    const shown = {
+      ...example,
+      signature: '6F_VmcmIYOMpViiFd3Wfn3j3MVll9hZ3GIP8si1sZrwz4QrwTOo8lREtoOvoqZjPrOzQppD58IskU5qvGcKyoQ',
+    };
+    const publicKey = await manager.getProvider().importPublicKey(didToPublicKey(me.did).publicKeyBytes);
+    assert.equal(await createSigner(manager.getProvider()).verify(shown, publicKey), true, example.signature);
   });
 
   test('the body is signed through its hash: a stub checks alone, another body does not', async () => {

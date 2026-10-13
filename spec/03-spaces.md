@@ -119,14 +119,14 @@ it.
 > disagrees in the open. And nobody who passes a space on can change its
 > name, who founded it, with which grants, or with which first key.
 
-**Example.** Founder `did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg`
+**Example.** Founder `did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd`
 (the account of seed `01 02 … 10`), founded with one role, `editor` (title
 `Editor`), which may do anything to records, define collections and assign
 `editor`; a fixed time and nonce:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Chess club","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"top":{"founders":["did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg"]},"visibility":"public"}
-→ id b443onkkeevh6pjxtq7lristjax545z2yxdsqha5jjywlmwzk6haa
+{"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Chess club","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"top":{"founders":["did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd"]},"visibility":"public"}
+→ id blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq
 ```
 
 The same space made private with the AES key whose raw bytes are
@@ -134,16 +134,16 @@ The same space made private with the AES key whose raw bytes are
 id and read key as §8.1 and §8.4 derive them:
 
 ```
-{"createdAt":"2026-01-01T00:00:00.000Z","encryptionKeyId":"bgk-m-Kq-gEGgJCOOEYNYw","name":"Chess club","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt","resolver":"strong-remove/1","roles":[…as above…],"top":{"founders":[…as above…]},"visibility":"private","minca":"constitution/1"}
-→ id bftzd477fxfxcpnmju27n2wgchz7qmkepz5ttholxo6l6xajvxw7q
+{"createdAt":"2026-01-01T00:00:00.000Z","encryptionKeyId":"bgk-m-Kq-gEGgJCOOEYNYw","minca":"constitution/1","name":"Chess club","nonce":"AAECAwQFBgcICQoL","readKey":"did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt","resolver":"strong-remove/1","roles":[…as above…],"top":{"founders":[…as above…]},"visibility":"private"}
+→ id bvvz7u7w4jvlzzbkkaqs4em7ahvxmhnsrjqnupq475wlslsl7uqfa
 ```
 
 A co-op with no one at the top, whose one role may do anything, assigned to
 the same account, succeeding the chess club:
 
 ```
-{"assigned":{"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg":["steward"]},"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Bike co-op","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/","pol":[]}],"name":"steward"}],"succeeds":"b443onkkeevh6pjxtq7lristjax545z2yxdsqha5jjywlmwzk6haa","top":"none","visibility":"public"}
-→ id bsiokp4o5vf2pz4qjdaidzyb2mzdjzf7xm5vycupeapiwbgundjcq
+{"assigned":{"did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd":["steward"]},"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Bike co-op","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/","pol":[]}],"name":"steward"}],"succeeds":"blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq","top":"none","visibility":"public"}
+→ id brsvdnrzmurfdbm6inw6sv6shuw7lheubbibawsqljsckuxrrsena
 ```
 
 ### 1.3 Creating a space
@@ -511,13 +511,13 @@ are versions of one record, and two made apart are rivals (§4.4).
 > hash of the thing and the body names the thing itself.
 
 Example keys for the account above: its assignment of `editor`,
-`assign:0ce7d5918bd19e9cbf36c04809fd02ff2b61e3af`; its removal,
-`remove:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; its stepping down,
-`stepdown:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab`; naming the chess club
-of §1.2 as a successor, `succeed:748ff2c25e1ecdcb1ba747e990790285192cad88`;
+`assign:ccb96616c9f3e392394ad3a7332f2d061a9bedd3`; its removal,
+`remove:6f84748d0060d75ec4767c101275af7b2e7c4ab1`; its stepping down,
+`stepdown:6f84748d0060d75ec4767c101275af7b2e7c4ab1`; naming the chess club
+of §1.2 as a successor, `succeed:e97c86b71857105804aba53feb034af8c419f9bb`;
 for the invite DID
-`did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`:
-`invite:fd8ebfa892a6c4bae7cd265123b7844e49fa50e8`.
+`did:key:zDnaepvP6YSjYyaBgu3v9VSziUgdmpk4t5a4Xw9VVA1e1BEd9`:
+`invite:13d55f0d88a0d85e161fee68b002cb9a68e8cb45`.
 
 ### 3.2 Every record names what it saw
 
@@ -1205,7 +1205,7 @@ invite DID = did:key of the public key     // P-256 multicodec
 ```
 
 Example: secret `00 01 02 … 1f` (base64url `AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8`)
-→ `did:key:zDnaeVSCSBvS7JUHhskZ9mPRzhjsxsgTwSe6h5a9VSE1LJ2vw`.
+→ `did:key:zDnaepvP6YSjYyaBgu3v9VSziUgdmpk4t5a4Xw9VVA1e1BEd9`.
 
 A secret of any length other than 32 bytes **MUST** be refused.
 
@@ -1297,13 +1297,13 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
 ```json
 {
   "space": {
-    "id": "bftzd477fxfxcpnmju27n2wgchz7qmkepz5ttholxo6l6xajvxw7q",
+    "id": "bvvz7u7w4jvlzzbkkaqs4em7ahvxmhnsrjqnupq475wlslsl7uqfa",
     "minca": "constitution/1",
     "name": "Chess club",
     "visibility": "private",
     "resolver": "strong-remove/1",
     "top": {
-      "founders": ["did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg"]
+      "founders": ["did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd"]
     },
     "roles": [
       {
@@ -1330,7 +1330,7 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
     "readKey": "did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt",
     "encryptionKeyId": "bgk-m-Kq-gEGgJCOOEYNYw"
   },
-  "invitedBy": "did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg",
+  "invitedBy": "did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd",
   "key": "__79_Pv6-fj39vX08_Lx8O_u7ezr6uno5-bl5OPi4eA",
   "invite": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
   "role": "editor",
@@ -1338,7 +1338,7 @@ Example (private space of §1.2, role invite with the secret of §7.1), decoded:
 }
 ```
 
-encoded: `eyJzcGFjZSI6eyJpZCI6ImJzbTQycnY3M2c0Y29sbWozb3plbW9rbGFldzJocG1vZW1jdXhxaGlmYzc3MzNoeXhmdHZxIiwi…`
+encoded: `eyJzcGFjZSI6eyJpZCI6ImJ2dno3dTd3NGp2bHp6YmtrYXFzNGVtN2FodnhtaG5zcmpxbnVwcTQ3NXdsc2xzbDd1cWZhIiwi…`
 (the full string is the base64url of the JSON above).
 
 A private-space invite carries the space key, so the whole string is a

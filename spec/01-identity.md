@@ -173,9 +173,9 @@ MUST keep passing.
 |                |                                                                                                    |
 | -------------- | -------------------------------------------------------------------------------------------------- |
 | seed           | `00112233445566778899aabbccddeeff`                                                                 |
-| okm (48 bytes) | `40e656dfd00c34bd5fd78eafc9af158eeef351b1e9d6444662df48544eaa7db00a50db9fe92caeb7c4e3e16db0f14dd4` |
-| d              | `b8b27c37818b648e8cc2546eb327c6dcd27fd7cc1119666230e7826360508a75`                                 |
-| Q, compressed  | `029084c70c6acbeb1bfbab099abb469443aa06c02bd1b02b830d846b1129d8c7fb`                               |
+| okm (48 bytes) | `b1fc34eb5cbbdbabadec3403288c38f11ff530ad0e5e5561c1e8a36698232fdb11c563fc83da5893315f3e37cd3ed86d` |
+| d              | `686fc0350a6b8c186f7b0b7856e67534000e51f22a79609256330344e73c2dee`                                 |
+| Q, compressed  | `02388118d5b41d2e75aa0732d0b00606b5c1c085aaaff729fbcfc0349aa42247e2`                               |
 | DID            | `did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT`                                        |
 
 Other recorded vectors: 16 zero bytes → `did:key:zDnaenhB7GpWm1sDUA2mcNLjbZG85bD5uv8kXnX39YE9rGV3d`;
@@ -227,7 +227,7 @@ Decoders SHOULD reject a multicodec other than `0x80 0x24`.
 > This fixes the known defect above.
 
 Example: see §3.3; the decoded bytes are
-`8024029084c70c6acbeb1bfbab099abb469443aa06c02bd1b02b830d846b1129d8c7fb`. The
+`802402388118d5b41d2e75aa0732d0b00606b5c1c085aaaff729fbcfc0349aa42247e2`. The
 did:key specification's own P-256 example,
 `did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169`, round-trips.
 
@@ -272,7 +272,7 @@ this one own the use; this table is the registry.
 | `minca/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `minca/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
 | `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:84,87`           | 02     |
 | `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                | 02     |
-| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:284`        | 04     |
+| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:304`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -836,8 +836,8 @@ d_contact = ScalarFrom(HKDF(seed, "minca/p256-contact-key/v1", 48))
   granted contacts ([06](06-nodes-and-sessions.md)).
 
 Example (seed of §3.3): scalar
-`c030558f2c355efdec2c21246e4d422143cad65af9c28532ba1a3fc34f2e0b83`, public
-`AuK878OMKr6if2UO2L9nhzisStKD5W8tYM7ldyetTMdr`.
+`1d513eb757cd656fa9aee6e6f54a0506965be5279c281ae9520601bece578201`, public
+`AwFM-6h0Js6WTFMPqM9EDDkDHknhhgfst2aD-fROgWoV`.
 
 ### 10.2 Member keys
 
@@ -950,7 +950,7 @@ Example (seed of §3.3): local key
 }
 ```
 
-(The passphrase wrap above opens with `hunter2 hunter2` to the seed of §3.3.)
+(The passphrase wrap above opens with `hunter2 hunter2` to the seed of §3.3. The device wrap's `sealed` is illustrative: its device key is not given.)
 
 | Field       | Type            | Meaning                                                                                   |
 | ----------- | --------------- | ----------------------------------------------------------------------------------------- |
@@ -1197,7 +1197,7 @@ with it is `join`. Both join mesh room ([04 — Network](04-network.md)):
 room = CID(UTF-8(room label) ‖ secret)     // raw concatenation
 ```
 
-Example (pairing, the secret above): room `bxvuzmmg4srdji5su7e2hyj56x55ohpyaczgg6aquq6iw55bcijha`.
+Example (pairing, the secret above): room `bha5qohdu5w35oenvib6zfdg4blcbzc4onwelk4nium6ooen6nq7q`.
 
 Each side makes an ephemeral P-256 ECDH key for this exchange only. `O` is the
 offering side's public point and `J` the joining side's, each as the 65-byte

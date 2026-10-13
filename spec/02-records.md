@@ -247,7 +247,7 @@ The version:
   "links": [{ "rel": "about", "to": "list.groceries" }],
   "bodyHash": "b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
   "body": { "text": "Buy milk", "done": false },
-  "signature": "N2adN6lob2aMxJCp5WMu9wx6pWKkSqi6sR7KW32E28qdUvou4MqeYFxxdqiE9kbEWUZxHEwfRCGKEGYEkee0cg"
+  "signature": "6F_VmcmIYOMpViiFd3Wfn3j3MVll9hZ3GIP8si1sZrwz4QrwTOo8lREtoOvoqZjPrOzQppD58IskU5qvGcKyoQ"
 }
 ```
 

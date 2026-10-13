@@ -129,8 +129,8 @@ room = lowercase( base32( SHA-256( UTF-8("minca-room/v1|" + spaceId) )[0..20) ) 
 bytes give exactly 32 characters.
 
 Example: space id `example-space-id` →
-SHA-256 prefix `4cb4dac634926d7b5a4de659ec8ea1328d616cca` →
-room **`js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk`**.
+SHA-256 prefix `9c76ed8676b603bf3ec19ec228ef20fbbaa6ffcf` →
+room **`tr3o3btwwyb36pwbt3bcr3za7o5kn76p`**.
 
 A client MUST use this derivation for a space's room; two implementations
 that differ here never meet.
@@ -185,13 +185,13 @@ The relay passes it through untouched.
 Examples (DIDs shortened for readability; real ones are full `did:key`s):
 
 ```json
-→ {"type":"join","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk","from":"did:key:zDnaeV1Sz…"}
-← {"type":"join","from":"did:key:zDnaebEo…","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk"}
+→ {"type":"join","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p","from":"did:key:zDnaeV1Sz…"}
+← {"type":"join","from":"did:key:zDnaebEo…","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p"}
 → {"type":"offer","to":"did:key:zDnaebEo…","payload":{"type":"offer","sdp":"v=0\r\n…"},"from":"did:key:zDnaeV1Sz…"}
 ← {"type":"offer","from":"did:key:zDnaeV1Sz…","to":"did:key:zDnaebEo…","payload":{"type":"offer","sdp":"v=0\r\n…"}}
 → {"type":"candidate","to":"did:key:zDnaeV1Sz…","payload":{"candidate":"candidate:1 1 udp 2122260223 192.168.1.2 54321 typ host","sdpMid":"0","sdpMLineIndex":0},"from":"did:key:zDnaebEo…"}
-→ {"type":"leave","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk","from":"did:key:zDnaeV1Sz…"}
-← {"type":"leave","from":"did:key:zDnaeV1Sz…","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk"}
+→ {"type":"leave","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p","from":"did:key:zDnaeV1Sz…"}
+← {"type":"leave","from":"did:key:zDnaeV1Sz…","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p"}
 → {"type":"ice","from":"did:key:zDnaeV1Sz…"}
 ← {"type":"ice","payload":{"servers":[{"urls":["turn:turn.example.com:3478"],"username":"1790000000:3q2-7wX0aBcD","credential":"n3Jk…="}],"expiresAt":1790000000000}}
 ```
@@ -590,11 +590,11 @@ over the same `T`.
 In a room that asks no proof (a channel's room, pairing or connecting by
 code, which secures its own payloads), the hellos are still exchanged and no proofs are sent.
 
-Example (public space, placeholder fingerprints):
+Example (public space, placeholder fingerprints; the prover is the account of sixteen `07` bytes, the author of [02](02-records.md) §3.4; the verifier, of sixteen zero bytes):
 
 ```
-T = "minca-mesh/v1|example-space-id|did:key:zDnaeV1SzGREx4fjGtUofWfZfnH42TV5EboaJ6deJLxvmo6jd|did:key:zDnaebEoAa6Zv2oVPznMq3oDqaXb9jCUUX15n4LzqpwMRLxzp|_8bGsP1hPeS2r_CFgK10jg|sha-256 AA:BB|sha-256 CC:DD"
-proof = {"sig":"tSsGyRGc85v0Q6QwVpHwssS0PeNyR3wqX_bK3y8w0AGeOEew4Iyu2wZ-FlBzl67tjNv3NYsgw3NWyPup4I7CQQ"}
+T = "minca-mesh/v1|example-space-id|did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E|did:key:zDnaenhB7GpWm1sDUA2mcNLjbZG85bD5uv8kXnX39YE9rGV3d|_8bGsP1hPeS2r_CFgK10jg|sha-256 AA:BB|sha-256 CC:DD"
+proof = {"sig":"TajJEwHsk_JRk6cPhnN3l0dbvZB6aCYtaIX_d2aHjDKqxJPtbdmv99hK3DcpW1mwwvJOwAQR1jNi9ouUFuLSEA"}
 ```
 
 > Rationale: someone in the middle holds a different certificate pair on

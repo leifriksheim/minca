@@ -122,6 +122,8 @@ signer is not the subscription in the path. Example:
 Authorization: Minca did=did:key:zDnaet57TmtMH7vQJT8HzNLSZV5sc5JGJub2ZzpX3oHshR2k2, at=1790422901, sig=UD0ynCDYHqxRQ2N08X3On5ljQhEZwyczof1_Zuiv0jhN4rYpoh0pEZ88mPx7hit20d9A5T2oSgvK-UPTetIO_Q
 ```
 
+(The format only: the signature is illustrative, as the key is not given.)
+
 **Calls.** `<id>` is the subscription DID, URL-encoded or not.
 
 | Call                                    | Body                                                                         | Answer                                                                                                                                  |
@@ -163,6 +165,8 @@ its `host` equals that DID, and its `subscription` is the device's own. Example:
   "sig": "cC4uQLCnF0tkMzhAuxHp58tjc2XWhdRpj9RpWgb-wYIhzKvhXhi97DoBn_hvcz9NLyv0ch2bqFMJfTIXgYxQhw"
 }
 ```
+
+(The format only: the DIDs are shortened and the signature is illustrative.)
 
 **Paying.** A device never handles a payment: it shows the host's plans, and
 what the host answers when asked to start one. A **pay answer** is one of:
