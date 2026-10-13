@@ -23,8 +23,9 @@ The list lives in the account's contacts space (derived with the label
 std.contact  (rules: onePer ["did"])
 { did: string ≤256, name: string ≤200, space?: string ≤256, note?: string ≤2000,
   blocked?: boolean, door?: string ≤64 }
-record key = onePerKey("std.contact", ["did"], …)
-           = "one:" + hex40("std.contact\ndid=" + JSON.stringify(did))     // spec 02
+record key = records.onePerKey(contactsSpace, "std.contact", { did })
+           = "one:" + hex(HMAC(oneKey, "std.contact\ndid=" + canonical(did))[0..20))
+             // a shared key, spec 02 §7.3: onePer without @author
 ```
 
 `name` is what you call them; they never see it. `space` is the id of the
@@ -45,7 +46,7 @@ in spec 01 §10.1. A node holds the private half only when it was given it
 ## `std.contact-request`
 
 ```
-std.contact-request  (rules: edit "creator", delete "creator"; create: any member)
+std.contact-request  (no rules; who may post one is the space's grants)
 { to: <askee account DID, ≤256>, sealed: string ≤16000 }
 ```
 
@@ -78,7 +79,8 @@ receiver's account, and `from` (the record's root) equals the root of the
 record's first version and is not the receiver. It must use the bound built
 from the space the record is in and that `from`. It must then reject the value
 unless `invite` parses as an invite (spec 03 §7.4) to a **private** space whose
-`creator` is `from` and which carries a `key`.
+constitution names `from` as its one founder, assigning no roles of its own
+(spec 03 §1), and which carries a `key`.
 
 Binding the seal to the space and to who asked whom means a request copied
 into another space, or re-posted by someone else, does not open.

@@ -26,7 +26,7 @@ keys, each opening `data` to a different text
 ## `std.direct`
 
 ```
-std.direct  (topics: to; rules: edit "creator", delete "creator"; create: any member)
+std.direct  (topics: to; no rules; who may write one is the space's grants)
 {
   to:    [<account DID>, …],               // 1–16, sorted, once each, not the writer
   data:  string ≤ 60000,                   // the text, sealed with the message key

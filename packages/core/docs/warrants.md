@@ -24,8 +24,9 @@ account. The key is the writer's own
 so nobody, the accused least of all, can write its first version: what a
 warrant proves is in its body. Only
 the warrant's first version counts as proof, and one offence counts once per
-writer, however many records say it. Any member may write a later
-version or a delete of it, as for any record, and neither takes the proof back.
+writer, however many records say it. Whoever the space's grants let change
+it may write a later version or a delete of it, as for any record, and
+neither takes the proof back.
 The writer sets `retain`, so the first version is kept whole whatever comes
 after it.
 

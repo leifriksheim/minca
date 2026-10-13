@@ -121,7 +121,7 @@ A bot is the same program running as an account of its own
 writes as itself, is checked against its role like any member, and is
 mentioned by the name its account says, like anyone: the one it was made
 with, unless its account already says another. It runs the rules that name
-it in `by`, of members holding `std.rule/instruct` in a space. Where a space
+it in `by`, of members granted `/std.rule/instruct` in a space. Where a space
 keeps `std.profile`, it says it is a bot there with `bot: true`, as soon as
 the definition arrives, and where its role may add collections it adds
 `std.profile` itself. Apps list bots from that, so a space without it shows

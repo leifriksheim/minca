@@ -135,8 +135,9 @@ anything the runner's agent, or the bot, wrote itself, so an agent asked to
 act can't set itself off.
 
 Whatever a rule writes is written as its runner, so a rule can do nothing its
-runner couldn't do by hand. Only its maker, or someone with `moderate`, can
-delete one.
+runner couldn't do by hand. Who may change or delete one is the space's
+grants, as for any record: in `community`, its maker, the moderators and the
+admins.
 
 A bot answering mentions, from anyone holding a role, run by the bot:
 

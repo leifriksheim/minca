@@ -33,7 +33,7 @@ blueprint says, signed by whoever applies it. They need a grant of
 `/collection/define` in the space, and a note that grants it. It defines
 `std.blueprint` itself first when the space lacks it. Who may edit a
 blueprint is the space's grants: under the `community` template, only its
-proposer and moderators.
+proposer, moderators and admins.
 
 ```typescript
 import { proposeCollections, reviewBlueprint, applyBlueprint } from '@weaveprotocol/core/schemas';
@@ -125,7 +125,7 @@ _Source: `packages/core/src/schemas/blueprints.ts` (`supersededBlueprints`, `rev
 
 ## Guides
 
-A definition says what a record may hold and who may change it. It can't say
+A definition says what a record may hold and the rules it keeps. It can't say
 "to add an app with its own screen, write one of these, pointing at a
 blueprint". An app that has more to say about its collections writes a
 `std.guide`: a `name`, a `title`, the `text`, and the `collections` it is
@@ -179,7 +179,7 @@ every peer will enforce.
    first." (with `@author`); otherwise "… — anyone adding another replaces the
    first.", or with `final`, "… — the first one added holds it."
 3. `fixed`: "Once a poll is added, its “options” can't be changed."
-4. Each check, in its own words: "Every change is checked: “…”".
+4. Each contract (`check`), in its own words: "Every change is checked: “…”".
 5. One per declared link: "Each vote points at one thing: a poll (“about”)." or
    "A comment can point at anything in the space (“about”)."
 6. `history: "all"`: "Every earlier version of a … is kept."
@@ -199,8 +199,7 @@ _Source: `packages/core/src/records/describe.ts`. Tests: `packages/core/tests/re
 ## Compatible definitions
 
 An app decides it can open a space by finding a collection with the right
-**name**. Chat opens any `std.message`, whatever its fields and whoever its
-rules let edit it. And a space whose definition is a little older than the
+**name**. Chat opens any `std.message`, whatever its fields and rules. And a space whose definition is a little older than the
 app's (a `std.message` without the `shares` link) stays that way, because the
 library skips a collection the space already has. Whether an app can use a
 definition it did not write is a question for the app, not for peers: a peer
@@ -225,7 +224,7 @@ interface Compatibility {
 interface Break {
   path: string;
   message: string;
-} // 'rules.edit', "Anyone can edit anyone's messages here; this app assumes only their author"
+} // 'rules.onePer', "Anyone can react twice with one emoji here; this app assumes once"
 ```
 
 An app that only shows records needs `read` empty; one that writes needs both.
@@ -263,9 +262,9 @@ Anything the checker cannot decide is a break.
    the rules are no looser, a writer allowed to change the definition writes
    it at the next version without asking. (Adding `shares` to an older
    `std.message` is this case.)
-3. **Anything else asks a person.** The blueprint review shows the breaks ("lets
-   anyone edit messages; now only their author"), not only "changes who may do
-   what".
+3. **Anything else asks a person.** The blueprint review shows the breaks ("a poll's
+   options can now be changed after it is added"), not only "changes the
+   rules".
 
 An app should not define a `std.*` name that is not compatible with the
 standard library's. Peers don't refuse one on arrival (refusing depends on
@@ -319,7 +318,7 @@ loosen them past what an app relies on ("never looser", above).
 
 ## Planned: meaning-level hints
 
-A definition says what a record may hold and who may change it, not what it
+A definition says what a record may hold and the rules it keeps, not what it
 means to a screen. Views derived from definitions (the blueprint review, an
 app's collection views, made apps without a screen of their own) have to guess
 which field is the title or that votes are shown as counts. The plan adds

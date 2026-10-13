@@ -66,9 +66,9 @@ Examples:
 
 ## Who takes part
 
-Only **members**, accounts holding a role in the space, take part. A receiver
-must ignore `call.here`, `call.ring` and `call.signal` from an account that
-holds no role there (a view-only reader). The library caches the member list
+Only **members**, the space's founders and accounts holding a role there,
+take part. A receiver must ignore `call.here`, `call.ring` and `call.signal`
+from an account that is neither (a view-only reader). The library caches the member list
 for 10 s and asks once more for someone not in it.
 
 A device must not ring for more than 3 `call.ring`s from one account in any
