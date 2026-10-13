@@ -74,7 +74,7 @@ A reader judges a standing version's contract to one of four verdicts:
 | **passes**   | Every condition gives `true` and the line rule (§7) holds; or the collection has no contract | yes     |
 | **fails**    | A condition gives anything but `true`, a limit (§4.3) is passed, or the line rule is broken  | no      |
 | **pending**  | A version it cites, or the version before it, is not held yet                                | no      |
-| **unjudged** | The reader can't judge it (below)                                                            | below   |
+| **unjudged** | The reader can’t judge it (below)                                                            | no      |
 
 - A reader **MUST** count only versions that stand and pass, and treat a
   record as having its newest such version (02 §4.3). A version that fails
@@ -82,14 +82,14 @@ A reader judges a standing version's contract to one of four verdicts:
   record is absent.
 - A pending version is judged again when more arrives. Only passes and
   fails are final.
-- A version is **unjudged** in two cases:
-  1. The reader can't open its body, the version before it (when that is
-     kept whole) or a version it cites, because it is sealed with a key the
-     reader does not hold. The reader counts it on the rest, as a peer
-     without the key judges `onePer` (02 §7.3).
-  2. Its collection declares a line with a key the reader doesn't know
-     (§7.1), or it cites a version that is unjudged this way (§6.2). The
-     reader **MUST NOT** count it, and **MUST NOT** fail it; it says why.
+- A version is **unjudged** when the reader can't open its body, the
+  version before it (when that is kept whole) or a version it cites,
+  because it is sealed with a key the reader does not hold; when its
+  collection declares a line with a key the reader doesn't know (§7.1); or
+  when the version before it, or one it cites, is unjudged (§6.2). The reader
+  **MUST NOT** count it, and **MUST NOT** fail it; it says why, and judges it
+  again when it gets the key. Counting it on the rest would let a version
+  that cites something sealed pass on what the reader never read.
 
 A contract the reader can't parse (a newer function, say) fails every
 version under it, so an older reader hides that collection rather than count
@@ -100,7 +100,7 @@ what it can't judge.
 > collection uncounted and says so, as a peer stays out of a space with a
 > resolver it doesn't know (03 §1).
 
-_Source: `packages/core/src/node/space-runtime.ts` (`checksOf`, `counts`, `contractsFor`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-line.test.ts` ("a line declared with a key it doesn't know leaves the collection unjudged…")._
+_Source: `packages/core/src/node/space-runtime.ts` (`checksOf`, `counts`, `contractsFor`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-line.test.ts` ("a line declared with a key it doesn't know leaves the collection unjudged…", "a version sealed with a key the reader lacks is unjudged…")._
 
 ## 3. Format
 
@@ -357,7 +357,7 @@ not resolve decides:
    judged version is pending, if that is pending.
 6. Sealed with a key the reader does not hold, or in a collection whose
    line declaration the reader doesn't know: the judged version is
-   unjudged, in the same case of §2.
+   unjudged (§2).
 
 A cited version that fails rule 2, 3, 4 or 5 fails the judged version,
 whatever `&&` or `||` around it would decide. A version's id covers its

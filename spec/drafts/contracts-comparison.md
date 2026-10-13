@@ -445,7 +445,7 @@ host, not the program, notices what is missing.
 | Mutual credit | **Not fixed**: a later twin undoes a payment and its payees | Not fixed, the same way     | Not fixed, the same way       |
 
 Fixed-by-citation is the property contracts were designed around (docs
-`checks.md`, "a proof that a later change could undo is not a proof"). CEL
+`contracts.md`, "a proof that a later change could undo is not a proof"). CEL
 keeps it by construction, except where a host rule (forks) deliberately
 looks at more. Datalog keeps it only when the host restricts its input to
 what a claim cites or saw, at which point the program doesn't search
@@ -453,13 +453,13 @@ anything and is a longer way to write the CEL.
 
 ## 7. The evaluators, and what a second implementation must match
 
-| Side                | Size (code lines)                | Has                                                                                                                                     |
-| ------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| CEL subset (built)  | `cel.ts` 1,271 + `checks.ts` 204 | An upstream spec and conformance suite; an exact cost model (steps and work, left to right); the definition checks; used in production  |
-| UCAN policy (proto) | 104 + grants 54                  | An upstream spec; not checked here against any outside fixtures                                                                         |
-| Datalog (proto)     | 596                              | Parser, safety, stratification, semi-naive, negation, `count`/`sum`, a fact limit. No cost model, no indexes, no incremental evaluation |
+| Side                | Size (code lines)                   | Has                                                                                                                                     |
+| ------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| CEL subset (built)  | `cel.ts` 1,271 + `contracts.ts` 204 | An upstream spec and conformance suite; an exact cost model (steps and work, left to right); the definition checks; used in production  |
+| UCAN policy (proto) | 104 + grants 54                     | An upstream spec; not checked here against any outside fixtures                                                                         |
+| Datalog (proto)     | 596                                 | Parser, safety, stratification, semi-naive, negation, `count`/`sum`, a fact limit. No cost model, no indexes, no incremental evaluation |
 
-**A second CEL implementation** must match `checks.md`: the subset, the
+**A second CEL implementation** must match [spec 09](../09-contracts.md): the subset, the
 cost model, the number and string formats, and the Weave functions. Most of
 it is pinned down by CEL's own suite, which the reference already passes
 (`packages/core/tests/cel-conformance.test.ts`).

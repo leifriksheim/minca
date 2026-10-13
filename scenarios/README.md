@@ -45,6 +45,10 @@ CI whenever `spec/`, `packages/core/` or `scenarios/` change.
   (`host/cel-host.ts`: chains, pending, membership as of a version), since
   the co-op reads a count the subset doesn't have; its CEL and UCAN policies
   (`host/ucan-policy.ts`) are the real evaluators from `packages/core`.
+  A `memberCount()` beside `member(did)` would fit spec 09 (the members as of
+  the version's `seen`, one pass over that state's roles), but it is a new
+  protocol function, so it waits for a change of its own with its adversarial
+  review and the co-op moved onto a real node.
 - `parked-datalog/`: the chess club, co-op and company team in Datalog, from
   [the comparison](../spec/drafts/contracts-comparison.md). Datalog is parked
   as a possible library query layer, not protocol. It runs with `npm test`

@@ -293,6 +293,31 @@ describe('access replay: properties', () => {
   test('reductions: no change by an account past a removal’s cutoff, that the removal hadn’t seen, applies', () => {
     forHistories(({ events, place, saw }) => {
       const history = replayAccess(genesis, events);
+      // Applied reductions, leaving included, and which strike which: x strikes y when x
+      // reduces y's author, its cutoff doesn't cover y, and neither saw the other.
+      const strikes = (x: AccessEvent, y: AccessEvent) =>
+        'did' in x &&
+        x.did === y.root &&
+        (x.cutoff.get(y.root)?.get('sys.assign') ?? -1) < (place.get(y.id) ?? 0) &&
+        !saw.get(x.id)?.has(y.id) &&
+        !saw.get(y.id)?.has(x.id);
+      const reductions = events.filter(
+        (e) => (e.kind === 'remove' || (e.kind === 'assign' && !e.assigned)) && applied(history, e.id),
+      );
+      const reaches = (from: AccessEvent, to: AccessEvent): boolean => {
+        const seen = new Set<string>([from.id]);
+        const stack = [from];
+        while (stack.length > 0) {
+          const x = stack.pop()!;
+          if (x.id === to.id) return true;
+          for (const y of reductions)
+            if (!seen.has(y.id) && strikes(x, y)) {
+              seen.add(y.id);
+              stack.push(y);
+            }
+        }
+        return false;
+      };
       for (const removal of events) {
         if (removal.kind !== 'remove' || removal.root === removal.did) continue;
         if (!applied(history, removal.id)) continue;
@@ -300,13 +325,9 @@ describe('access replay: properties', () => {
         for (const event of events) {
           if (event.root !== removal.did || !applied(history, event.id)) continue;
           if (saw.get(removal.id)?.has(event.id) || saw.get(event.id)?.has(removal.id)) continue;
-          // A change by the removed account that itself reduces the remover strikes back:
-          // reductions that strike each other all stand (03 §4.3 step 4).
-          if (
-            (event.kind === 'remove' || (event.kind === 'assign' && !event.assigned)) &&
-            event.did === removal.root
-          )
-            continue;
+          // A reduction by the removed account that strikes back at the remover, directly or
+          // round a ring of reductions that strike each other, stands with it (03 §4.3 step 4).
+          if (reductions.some((r) => r.id === event.id) && reaches(event, removal)) continue;
           assert.ok(
             (place.get(event.id) ?? 0) <= cutoff,
             `${event.id} by ${event.root} applied past ${removal.id}'s cutoff`,

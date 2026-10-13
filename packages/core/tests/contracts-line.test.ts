@@ -334,4 +334,24 @@ describe('the line rule: deletes', () => {
     assert.equal(await c.verdict(e), 'fail');
     assert.match((await alice.node.records.contracts(c.space, e.key, e.id))?.reason ?? '', /ends its line/);
   });
+  test('a version sealed with a key the reader lacks is unjudged, and so is what cites it: neither counts', async () => {
+    const c = await communityNode(0, [
+      { name: 'app.note', schema: { type: 'object' }, rules: { check: [{ that: 'true', else: 'Never' }] } },
+      {
+        name: 'app.claim',
+        schema: { type: 'object' },
+        rules: { check: [{ that: 'versions(body.cites).size() == 1', else: 'Cite one' }] },
+      },
+    ]);
+    const alice = c.founder;
+    // A body sealed with a key this node never had.
+    const note = await c.sign(alice, {
+      collection: 'app.note',
+      body: { sealed: 'AAAA', keyId: 'elsewhere' },
+    });
+    const claim = await c.sign(alice, { collection: 'app.claim', body: { cites: [note.id] } });
+    await c.add(note, claim);
+    assert.deepEqual(await c.verdicts(note, claim), ['unjudged', 'unjudged']);
+    assert.equal(await alice.node.records.get(c.space, claim.key), null);
+  });
 });
