@@ -710,6 +710,17 @@ const targetArgs = (state: AccessState, invoker: string, target: string, role?: 
   roles: rolesOf(state, target),
 });
 
+/** Whether any member holds `/space/succeed`, once per state: a state never changes */
+const maySucceed = new WeakMap<AccessState, boolean>();
+function anyMaySucceed(state: AccessState): boolean {
+  let found = maySucceed.get(state);
+  if (found === undefined) {
+    found = [...readers(state)].some((did) => may(state, did, SPACE_SUCCEED, {}));
+    maySucceed.set(state, found);
+  }
+  return found;
+}
+
 /**
  * Why a change is not allowed in a state, or null when it is: its author
  * held a grant for its command with these arguments, or it is one of the
@@ -782,9 +793,7 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
     case 'succeed': {
       if (!isMember(state, root)) return 'Only a member may name a successor';
       if (may(state, root, SPACE_SUCCEED, {})) return null;
-      return [...readers(state)].some((did) => may(state, did, SPACE_SUCCEED, {}))
-        ? 'Its author may not name a successor'
-        : null;
+      return anyMaySucceed(state) ? 'Its author may not name a successor' : null;
     }
     // An account revokes its own keys: what a revoke takes away is only ever its own account's.
     case 'revoke':

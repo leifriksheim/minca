@@ -283,6 +283,8 @@ function deepFreeze(value: unknown): void {
 
 /** Decrypted bodies kept in memory per space, the oldest let go first */
 const MAX_OPENED = 100_000;
+/** Line heads whose `once` claims are kept: each set holds its whole chain's, so fewer */
+const MAX_ONCE_CLAIMED = 1024;
 
 /**
  * The key of a person's profile record in a space: one per identity, named by
@@ -450,7 +452,7 @@ type ChecksVerdict =
   | { readonly passes: false; readonly reason: string }
   /** No contract, or none this node can judge */
   | { readonly passes: null }
-  /** Its collection declares a line this library doesn't know: counted by no one here (spec 09 §7.1) */
+  /** Not judged here (spec 09 §2): a line key this library doesn't know, or something sealed. Not counted */
   | { readonly passes: null; readonly unjudged: string }
   /** A version it cites hasn't arrived */
   | { readonly pending: true };
@@ -458,7 +460,10 @@ const NO_CHECKS: ChecksVerdict = { passes: null };
 /** Records waiting on a cited version that are read again whenever anything arrives */
 const MAX_PENDING_REREAD = 256;
 /** Checks this node can't judge yet: what they read can't be opened here. Never cached. */
-const UNJUDGED: ChecksVerdict = Object.freeze({ passes: null });
+const UNJUDGED: ChecksVerdict = Object.freeze({
+  passes: null,
+  unjudged: 'Something it reads is sealed with a key this node doesn’t hold',
+});
 
 const storable = (standing: Standing): boolean => standing.ok || !!standing.withdrawn;
 
@@ -1401,7 +1406,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   // ─── Checks ────────────────────────────────────────────────────────
   //
-  // Conditions a collection's versions must meet (`records/checks.ts`). They
+  // Conditions a collection's versions must meet (`packages/core/src/records/contracts.ts`). They
   // read only what never changes: this version, the one before when it was
   // kept whole, and versions cited by id, kept whole and standing.
 
@@ -1447,13 +1452,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const passes = await checksOf(version, within);
     if ('pending' in passes) return { later: true };
     if (passes.passes === false) return { refused: `it cites ${id}, which fails its checks` };
+    if (passes === UNJUDGED) return { unreadable: true };
     if ('unjudged' in passes) return { unjudged: true };
     return checkedVersion(version, true);
   }
 
   /**
    * Whether a version passes its collection's checks: the library reads them,
-   * peers don't enforce them (packages/core/docs/checks.md). `passes: null`
+   * peers don’t enforce them (spec/09-contracts.md). `passes: null`
    * when there are none, or this node can't read what they need; `pending`
    * while a version it cites hasn't arrived. Judged as of what it saw, or, for
    * a version another cites, as of what that one saw (`within`).
@@ -1485,7 +1491,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       if (lineProblem !== null)
         return { passes: false, reason: `The line of ${version.collection} can't be read` };
       if (line !== undefined) lineCollections.add(version.collection);
-      // What this node can't open, it can't judge: it counts on the rest, as a peer without the key does.
+      // What this node can't open, it can't judge: unjudged, so not counted, until it can (spec 09 §2).
       if (!version.deleted) {
         const opened = await openBody(version);
         if (opened.body === null && opened.encrypted) return UNJUDGED;
@@ -1536,6 +1542,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
       if (version.deleted || checks === undefined || !Array.isArray(checks)) return NO_CHECKS;
       const outcome = await checkStanding(version, first, root, state, checks);
+      if (outcome === 'unreadable') return UNJUDGED;
       if (outcome === 'unjudged')
         return { passes: null, unjudged: 'It cites a version in a collection this library doesn’t judge' };
       if (outcome.ok) return { passes: true };
@@ -1606,20 +1613,33 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       return 'A double spend: another version of this line follows the same one';
     }
     if (once.length === 0 || version.deleted) return null;
-    const claimed = new Set<string>();
+    // Back to the nearest step whose claims are known, then forward: judging a line is linear.
+    const fields = once.join('\n');
+    const path: Version[] = [];
+    let known: ReadonlySet<string> | undefined;
     for (let step: Version | null = version; step;) {
-      if (!step.deleted) {
-        const opened = await openBody(step);
-        if (opened.body === null && opened.encrypted) return UNJUDGED;
-        for (const citation of onceCitations(opened.body, once)) {
-          if (claimed.has(citation)) return 'It claims something its line has already claimed';
-          claimed.add(citation);
-        }
-      }
+      known = onceClaimed.get(`${step.id}|${fields}`);
+      if (known) break;
+      path.push(step);
       step = step.seq > 0 && step.prev ? await storage.getVersion(step.prev) : null;
     }
+    const claimed = new Set(known);
+    for (const step of path.reverse()) {
+      if (step.deleted) continue;
+      const opened = await openBody(step);
+      if (opened.body === null && opened.encrypted) return UNJUDGED;
+      for (const citation of onceCitations(opened.body, once)) {
+        if (claimed.has(citation)) return 'It claims something its line has already claimed';
+        claimed.add(citation);
+      }
+    }
+    // An id names its content, and so its whole chain: what it claimed never changes.
+    onceClaimed.set(`${version.id}|${fields}`, claimed);
+    if (onceClaimed.size > MAX_ONCE_CLAIMED) onceClaimed.delete(onceClaimed.keys().next().value!);
     return null;
   }
+  /** What a line's `once` fields claimed along the chain ending at a version, by its id and the fields */
+  const onceClaimed = new Map<string, ReadonlySet<string>>();
 
   async function checkStanding(
     version: Version,
@@ -1627,13 +1647,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     root: string,
     state: AccessState,
     checks: ReadonlyArray<Contract>,
-  ): Promise<Standing | 'unjudged'> {
+  ): Promise<Standing | 'unjudged' | 'unreadable'> {
     const opened = await openBody(version);
-    // Without the key, a peer can't tell: it accepts on the other checks, as with onePer.
-    if (opened.body === null && opened.encrypted) return STANDS;
+    // Without the key, a peer can't tell: unjudged, as for a cited version it can't open.
+    if (opened.body === null && opened.encrypted) return 'unreadable';
     const previous = version.seq > 0 && version.prev ? await storage.getVersion(version.prev) : null;
     const prev = previous ? await checkedVersion(previous, !!previous.retain) : null;
-    if (prev && 'unreadable' in prev) return STANDS;
+    if (prev && 'unreadable' in prev) return 'unreadable';
     const outcome = await runContracts(checks, {
       values: {
         body: opened.body,
@@ -1652,7 +1672,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if ('later' in outcome)
       return { ok: false, reason: 'Versions it cites have not arrived yet', later: true };
     if ('unjudged' in outcome) return 'unjudged';
-    if ('unreadable' in outcome || outcome.passed) return STANDS;
+    if ('unreadable' in outcome) return 'unreadable';
+    if (outcome.passed) return STANDS;
     return { ok: false, reason: outcome.reason };
   }
 

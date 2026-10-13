@@ -220,7 +220,7 @@ anything, and only moderators and admins start the collections in
 
 **Proven outcomes.** A `std.decision` and a `std.goal-reached` are not
 declared by anyone: each cites the records that prove it, by version id, and
-every device checks the proof before it counts one ([checks.md](contracts.md)). Anyone in the space may write one, once, when the
+every device checks the proof before it counts one ([contracts.md](contracts.md)). Anyone in the space may write one, once, when the
 proof is there:
 
 - `std.decision` cites the proposal's first version (`proposal`) and ballots
