@@ -251,7 +251,7 @@ export interface WakeSpace {
 }
 
 /** At most this many tags a wake holds for one space; a `where` that names more values wakes on any record there */
-export const MAX_WAKE_TAGS = 16;
+const MAX_WAKE_TAGS = 16;
 
 /** An automation as a carrier holds it: no values, only tags */
 export interface Wake {
