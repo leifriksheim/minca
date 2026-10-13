@@ -134,7 +134,6 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
     <Frame>
       {byCode ? (
         <>
-          <AppShape id={request.audience ?? origin} />
           <h1 style={styles.title}>Connect “{request.name ?? 'a program'}”</h1>
           <p style={styles.subtitle}>
             A program you started with a code from {host} — on your computer or a server — wants to{' '}
@@ -145,7 +144,6 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
         </>
       ) : (
         <>
-          <AppShape id={origin} />
           <h1 style={styles.title}>Connect to {host}</h1>
           <p style={styles.subtitle}>
             {request.name ? <>It calls itself “{request.name}”. </> : null}It wants to{' '}
@@ -283,7 +281,6 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
 
   return (
     <Frame>
-      <AppShape id={origin} />
       <h1 style={styles.title}>Keep your spaces online</h1>
       <p style={styles.subtitle}>
         {request.name ? <>“{request.name}”</> : asker(origin)} wants to keep your spaces online while your
@@ -396,7 +393,6 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
 
   return (
     <Frame>
-      <AppShape id={origin} />
       <h1 style={styles.title}>Notify you when…</h1>
       <p style={styles.subtitle}>
         “{who}” suggests these for your account,{' '}
@@ -589,15 +585,6 @@ function Frame({ children }: { children: ReactNode }) {
         </div>
         {children}
       </div>
-    </div>
-  );
-}
-
-/** Who is asking, as its shape: the same one every time, picked by its address */
-function AppShape({ id }: { id: string }) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <Shape {...shapeFor(id)} size={48} />
     </div>
   );
 }

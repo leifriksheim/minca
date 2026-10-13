@@ -24,7 +24,10 @@ const HIDDEN_KEY = 'weave-community-upgrades-hidden';
 /** How long "Not now" keeps the upgrades out of the way */
 const NOT_NOW_MS = 30 * 24 * 3600 * 1000;
 /** How the CLI is run where this app is built, from the connect command (`VITE_WEAVE_CONNECT`) */
-const CLI = (import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @minca/cli connect').replace(/\s+connect$/, '');
+const CLI = (import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli connect').replace(
+  /\s+connect$/,
+  '',
+);
 
 /**
  * What whoever manages a community can add to it, at the top of its screen: two tiles,

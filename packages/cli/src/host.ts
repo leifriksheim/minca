@@ -216,17 +216,16 @@ function originOf(req: IncomingMessage, configured?: string): string {
 /** A page that says one thing: that a payment went through, or what a link in a reminder mail did */
 function noticeHtml(name: string, said: string): string {
   const escape = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-  // Minca's paper, navy ink and rainbow mark, inline so the page needs nothing from the apps.
-  const fonts =
-    'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Geist:wght@400;500&display=swap';
+  // Minca's paper, navy ink and rainbow mark, inline so the page needs nothing from the apps
+  // or anyone else: system faces, so no font request tells a third party who paid this host.
   const mark =
     '<svg width="32" height="17" viewBox="0 0 24 13" aria-hidden="true"><path d="M0.5 12.5A11.5 11.5 0 0 1 23.5 12.5H20.75A8.75 8.75 0 0 0 3.25 12.5Z" fill="#2340d6"/><path d="M3.25 12.5A8.75 8.75 0 0 1 20.75 12.5H18A6 6 0 0 0 6 12.5Z" fill="#ff6b4a"/><path d="M6 12.5A6 6 0 0 1 18 12.5H15.25A3.25 3.25 0 0 0 8.75 12.5Z" fill="#ffc46b"/><path d="M8.75 12.5A3.25 3.25 0 0 1 15.25 12.5Z" fill="#4e8f6c"/></svg>';
   const css =
-    'body{margin:0;background:#f6f3ee;color:#2a3352;font:15px/1.55 "Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}' +
+    'body{margin:0;background:#f6f3ee;color:#2a3352;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}' +
     'main{max-width:440px;margin:0 auto;padding:72px 20px}' +
-    'h1{margin:28px 0 12px;font:700 30px/1.1 "Bricolage Grotesque","Geist",-apple-system,sans-serif;letter-spacing:-0.04em;color:#13214a}' +
+    'h1{margin:28px 0 12px;font:700 30px/1.1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-0.04em;color:#13214a}' +
     'p{margin:0}';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(name)}</title><link rel="stylesheet" href="${fonts}"><style>${css}</style></head><body><main>${mark}<h1>${escape(name)}</h1><p>${escape(said)}</p></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(name)}</title><style>${css}</style></head><body><main>${mark}<h1>${escape(name)}</h1><p>${escape(said)}</p></main></body></html>`;
 }
 
 /** "$4 a month or $36 a year", from the wallet's prices */
@@ -648,7 +647,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
 
     const page = { 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
     if (url.pathname === '/host/paid' && method === 'GET') {
-      const said = 'Done. You can close this tab: your Weave app shows the new date when you go back to it.';
+      const said = 'Done. You can close this tab: your Minca app shows the new date when you go back to it.';
       return sendText(res, 'text/html; charset=utf-8', noticeHtml(name, said), page);
     }
     // The links in a reminder mail: whoever holds the mail holds the token.

@@ -13,7 +13,7 @@ import { styles, palette, variants } from '../styles';
 import { programRequest } from '../program-terms';
 
 /** What people run, before the code */
-const COMMAND = import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @minca/cli connect';
+const COMMAND = import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli connect';
 /** The relay the CLI meets on unless told otherwise (`packages/cli/src/agent.ts`) */
 const CLI_RELAY = 'wss://p2p-web-relay.fly.dev';
 
