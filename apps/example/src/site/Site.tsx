@@ -4,6 +4,16 @@ import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
 import { STAFF_COLLECTIONS } from '@weaveprotocol/core';
 import { CONCEPTS } from './concepts';
+
+/** How the concepts heading says its count, so it never goes stale */
+const NUMBER_WORDS: Readonly<Record<number, string>> = {
+  5: 'Five',
+  6: 'Six',
+  7: 'Seven',
+  8: 'Eight',
+  9: 'Nine',
+  10: 'Ten',
+};
 import { CONNECT, SCENARIOS, describePreset } from './walkthrough';
 import './site.css';
 
@@ -546,7 +556,7 @@ export function Developers() {
       <Band
         id="concepts"
         kicker="The concepts"
-        title="Six ideas, top to bottom."
+        title={`${NUMBER_WORDS[CONCEPTS.length] ?? CONCEPTS.length} ideas, top to bottom.`}
         intro={<p>Everything on Weave is built from these. Each one in a few lines.</p>}
       >
         <Concepts />
