@@ -744,7 +744,8 @@ describe('who first defined a collection', () => {
     )!;
     await letGo(bob.node, space);
     let removal: Version | undefined;
-    for (let i = 0; i < 200 && !removal; i++) {
+    // Each try beats her id with the chance her id is above; 200 failed about one run in 200.
+    for (let i = 0; i < 5000 && !removal; i++) {
       const tried = await forge(
         bob,
         space,
