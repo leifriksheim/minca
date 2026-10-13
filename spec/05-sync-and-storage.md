@@ -252,9 +252,9 @@ whose `type` is not a string. It MUST NOT answer it.
 
 > Rationale: 8 since a definition's contract left its `rules` for a
 > `contract` of its own ([02](02-records.md) §7.6), and carriers read wakes
-> ([03](03-spaces.md) §15). A reader of 7 would count versions under a
-> contract in `rules.check` that a reader of 8 leaves unjudged; they don't
-> sync instead. What either already stores keeps its rules (02 §7.5).
+> ([03](03-spaces.md) §15). A reader of 7 would count what a `contract`
+> fails, and a peer of 8 holds a definition with `rules.check` as invalid;
+> they don't sync instead.
 
 > Rationale: two versions that cannot reconcile should fail loudly, not leave
 > a quiet partial sync.

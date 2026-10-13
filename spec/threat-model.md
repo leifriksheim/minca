@@ -297,20 +297,6 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     know leaves that collection, and what cites it, unjudged by that reader:
     old and new readers' counts split until the old one updates, but never
     silently (09 §1, §2, §7.1).
-  - A definition that keeps its contract where libraries did before the
-    contract moved, in `rules.check` or as a top-level `line`, keeps
-    `onePer`, `fixed` and `final` at every peer, and leaves its versions
-    unjudged by every reader, then and after the collection is defined
-    again: nothing written under it counts as if it had no contract, and
-    neither does what follows a step of it that was not kept whole (02 §7.5,
-    09 §1; `packages/core/tests/contracts-shape.test.ts`). The cost falls on
-    honest history: every `std.decision` and `std.goal-reached` written
-    before the upgrade stops counting, and a `onePer` slot taken then stays
-    taken, so no later version there counts either: a community decides
-    again on a new proposal. A line is worse: its key is fixed per account
-    and collection, so whoever wrote in an old-format line never counts in
-    that collection again; only a collection of another name starts their
-    line over.
   - A grant of `/member/remove` or `/role/unassign` without a policy on
     `.roles` reaches everyone but the founders. The space chose that by
     writing the grant (03 §2.3).

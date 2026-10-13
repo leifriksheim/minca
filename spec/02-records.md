@@ -1260,27 +1260,13 @@ prevent that; telling the two apart, where it matters, is the app's.
 
 ### 7.5 Checking a definition's rules
 
-`rules` MUST be an object with no members other than `onePer`, `fixed`,
-`final` and `check`, the first three valid as above (`onePer` and `fixed`:
-non-empty lists of non-empty strings; `final`: `true`). A definition with
-anything else, `create`, `edit` and `delete` included, is invalid (§6.1).
+`rules` MUST be an object with no members other than `onePer`, `fixed` and
+`final`, each valid as above (`onePer` and `fixed`: non-empty lists of
+non-empty strings; `final`: `true`). A definition with anything else,
+`create`, `edit`, `delete` and `check` included, is invalid (§6.1). A
+contract is not a rule: it is the definition's `contract` (§7.6).
 
-`check` is where an older format kept a contract, as was a top-level `line`
-on the definition. Peers keep both and do not read them, so `onePer`, `fixed`
-and `final` beside them still hold. Readers do not judge them: they leave the
-collection's versions unjudged ([09](09-contracts.md) §1). An empty list in
-`rules.check` asks nothing and is read as if absent; any other value there is
-the older format. A writer MUST NOT
-put `check` in `rules`, nor `line` beside it; a contract is the definition's
-`contract` (§7.6).
-
-> Rationale: a definition with `check` in its rules was written by every
-> library before the contract moved, and stores keep definitions across an
-> upgrade. Were it invalid, its collection would lose its rules on every peer
-> at once, and its contract with them, and what was written meanwhile would
-> count.
-
-_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerSecret`, `onePerKey`, `changedFixedField`), `packages/core/src/node/space-runtime.ts` (`judgeStanding`, `invocationOf`, `needsOf`, `judgeContent`, `onePerKeying`, `derivedKey`, `rulesAt`, `mayNow`, `put`). Tests: `packages/core/tests/rules.test.ts` (all; "final: written once…"), `packages/core/tests/contracts-shape.test.ts` ("a contract is not a rule…"), `packages/core/tests/record-keys.test.ts` ("onePer keys"; "a onePer key that names its author…"; "a key in another collection"), `packages/core/tests/schemas.test.ts` ("a poll: one vote per person…")._
 
 ### 7.6 The contract
 
@@ -1302,7 +1288,7 @@ syncs, stores and judges every version's standing the same.
 > counts. They live apart so that what peers check (§7.5) never names
 > anything only readers judge.
 
-_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-shape.test.ts` ("a definition with its contract in rules keeps its rules, and leaves what is written under it unjudged…")._
+_Source: `packages/core/src/records/rules.ts` (`checkRules`), `packages/core/src/records/contracts.ts` (`CollectionContract`, `checkContractShape`), `packages/core/src/node/space-runtime.ts` (`judgeContent`, `checksOf`). Tests: `packages/core/tests/contracts.test.ts` ("a claim with too little evidence, signed anyway, reaches every peer and counts for no reader", "a decision without its quorum, signed anyway, reaches every peer and counts for no reader"), `packages/core/tests/contracts-shape.test.ts` ("the same condition under contract.check is judged…")._
 
 ---
 

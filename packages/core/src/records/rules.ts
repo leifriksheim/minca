@@ -43,9 +43,8 @@ export function checkRules(rules: unknown, at = 'rules'): string | null {
   for (const key of Object.keys(r)) {
     if (['create', 'edit', 'delete'].includes(key))
       return `${at}.${key} is gone: who may write is the space's grants (spec 02 §7)`;
-    // Where an older library kept a contract. Peers keep it unread, so onePer, fixed and final
-    // still hold; readers leave the collection unjudged until it is defined again (spec 02 §7.6).
-    if (key === 'check') continue;
+    if (key === 'check')
+      return `${at}.check is gone: a contract is the definition's contract.check (spec 09 §1)`;
     if (!['onePer', 'fixed', 'final'].includes(key))
       return `${at}.${key} is not a rule (use onePer, fixed, final)`;
   }
