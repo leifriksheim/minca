@@ -10,7 +10,7 @@ their data. What it must do, and what a client may count on, is
 ## Running it
 
 `signaling-server.mjs` wraps `createRelay` (from `relay.mjs`) in an HTTP
-server. Every always-on node (`weave serve`, `weave run`, and the host) runs
+server. Every always-on node (`weave run`, and `weave host`) runs
 the same relay on its own port, beside its `/peer` endpoint.
 
 ```bash

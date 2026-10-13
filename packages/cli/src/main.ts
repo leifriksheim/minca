@@ -3,7 +3,7 @@
  *
  *   weave init                         create an account (prints its recovery code once)
  *   weave whoami
- *   weave spaces list | create | invite | join | leave | status
+ *   weave spaces list | create | invite | join | leave | assign | step_down | succeed | status
  *   weave records list | get | put | update | delete
  *   weave run                          stay up: sync every space, serve sockets and a relay
  *   weave host                         a hosting service: carry many accounts' spaces, blind
@@ -97,6 +97,7 @@ Usage:
   weave init [--name NAME] [--passphrase] [--existing]
   weave whoami
   weave spaces  list | create | invite | join | leave | status   [--flags]
+  weave spaces  access | assign | remove_member | step_down | succeed
   weave records list | get | put | update | delete               [--flags]
   weave run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
   weave host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
@@ -487,12 +488,12 @@ const botWork = (name: string, did: string) =>
 async function joinFirstSpace(node: P2PNode, name: string, invite?: string): Promise<void> {
   if (!invite && (await node.spaces.list()).length > 0) return;
   if (!invite && !ask.interactive()) {
-    stderr(`${name} is in no spaces yet. Give it an invite an admin made: --invite '…'.`);
+    stderr(`${name} is in no spaces yet. Give it an invite for the role it should hold: --invite '…'.`);
     return;
   }
   if (!invite)
     ask.note(
-      'An admin of the space makes an invite for it, with the role it should hold:\nin the app, People & roles; or `weave spaces invite`.',
+      'Someone who may assign the role it should hold makes an invite for it:\nin the app, People & roles; or `weave spaces invite --role …`.',
       'Invite the bot',
     );
   const link =
