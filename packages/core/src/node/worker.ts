@@ -59,6 +59,9 @@ export interface WorkerLike {
 
 const TAG = 'weave-worker';
 
+/** The name of the error when a worker never said the node started: it failed to load, or took too long */
+export const WORKER_NOT_STARTED = 'WorkerNotStarted';
+
 /** The lock a tab holds while it uses a node, so the worker learns when the tab is gone */
 const tabLock = (tab: string) => `weave-node-tab:${tab}`;
 
@@ -121,7 +124,9 @@ export async function startNodeInWorker(
     const giveUp = () => {
       globalThis.clearTimeout(timer);
       nodes.port1.removeEventListener('message', onMessage);
-      reject(new Error('The node’s worker did not start.'));
+      const error = new Error('The node’s worker did not start.');
+      error.name = WORKER_NOT_STARTED;
+      reject(error);
     };
     const timer = globalThis.setTimeout(giveUp, startTimeoutMs);
     worker.addEventListener?.('error', giveUp);

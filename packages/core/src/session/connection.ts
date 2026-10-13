@@ -36,7 +36,7 @@ import {
   type Proposed,
 } from './connect.js';
 import type { NotifyProposal } from '../space/notify.js';
-import type { WorkerLike } from '../node/worker.js';
+import { WORKER_NOT_STARTED, type WorkerLike } from '../node/worker.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 
 export interface WeaveConnectionConfig {
@@ -144,8 +144,14 @@ export function createWeaveConnection(config: WeaveConnectionConfig): WeaveConne
         ...(config.stores ? { stores: config.stores(grant) } : {}),
         ...(worker ? { worker } : {}),
       });
-    // A browser whose workers can't run the node still gets one, in the page.
-    const node = config.worker ? await start(config.worker).catch(() => start()) : await start();
+    // A browser whose worker never starts still gets a node, in the page. A
+    // worker that started and refused says why instead.
+    const node = config.worker
+      ? await start(config.worker).catch((error: unknown) => {
+          if (error instanceof Error && error.name === WORKER_NOT_STARTED) return start();
+          throw error;
+        })
+      : await start();
     update({ status: 'ready', home: grant.home, grant, node, error: null });
 
     // The home disconnected this app: nothing it writes counts any more, so stop.

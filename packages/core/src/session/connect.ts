@@ -498,10 +498,11 @@ function openHome(homeUrl: URL): Window {
 }
 
 /**
- * Sends the request each time the home says hello, and waits for its answer,
- * which the caller checks. It listens before the request is ready: a phone may
- * hardly run this page while the home is in front, and a hello that arrives
- * meanwhile is answered once the request is made.
+ * Sends the request when the home says hello, and again every half second
+ * until it answers, only ever to the home's origin; then waits for the answer,
+ * which the caller checks. A phone may hardly run this page while the home is
+ * in front, so the hello can arrive before the request is made, or be missed:
+ * it listens from the start, and the repeats reach a home that has loaded.
  */
 function askHome<T>(
   popup: Window,
@@ -519,7 +520,17 @@ function askHome<T>(
       globalThis.clearTimeout(timer);
       finish();
     };
+    let made: ConnectRequest | ProposeRequest | null = null;
+    const send = () => {
+      if (made && !finished) popup.postMessage({ type: REQUEST, request: made }, homeOrigin);
+    };
     const ready = Promise.resolve(request);
+    ready.then(
+      (value) => {
+        made = value;
+      },
+      () => {},
+    );
     ready.catch((error: unknown) =>
       done(() => {
         popup.close();
@@ -531,11 +542,7 @@ function askHome<T>(
       if (event.source !== popup || event.origin !== homeOrigin) return;
       const data: unknown = event.data;
       if (!isObject(data)) return;
-      if (data.type === HELLO)
-        void ready.then(
-          (made) => finished || popup.postMessage({ type: REQUEST, request: made }, homeOrigin),
-          () => {},
-        );
+      if (data.type === HELLO) void ready.then(send, () => {});
       else if (data.type === GRANT && data.grant)
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant, checkCarryGrant and proposeToHome check it
         done(() => resolve(data.grant as T));
@@ -546,6 +553,8 @@ function askHome<T>(
     };
     const watch = globalThis.setInterval(() => {
       if (popup.closed) done(() => reject(new Error('The window was closed before access was given.')));
+      // Until the home answers; one that has its request already ignores the rest.
+      else send();
     }, 500);
     const timer = globalThis.setTimeout(
       () => done(() => reject(new Error('No answer from your account home.'))),
@@ -667,8 +676,8 @@ export interface IncomingRequest {
 
 /**
  * Waits for the app that opened this page to say what it wants. It says hello
- * again every half second until the app answers: on a phone the app's tab
- * behind this one may not run for a while, and may miss the first.
+ * once, and listens long: on a phone the app's tab behind this one may not run
+ * for a while, and its request (which it repeats) comes when it does.
  * @returns The request, or null when this page was not opened by an app, the app's window closed, or none came in time
  */
 export function receiveConnectRequest(timeoutMs = 10 * 60_000): Promise<IncomingRequest | null> {
@@ -680,7 +689,7 @@ export function receiveConnectRequest(timeoutMs = 10 * 60_000): Promise<Incoming
     const stop = () => {
       globalThis.removeEventListener('message', onMessage);
       globalThis.clearTimeout(timer);
-      globalThis.clearInterval(hello);
+      globalThis.clearInterval(watch);
     };
     const onMessage = (event: MessageEvent) => {
       if (event.source !== opener) return;
@@ -721,17 +730,16 @@ export function receiveConnectRequest(timeoutMs = 10 * 60_000): Promise<Incoming
       stop();
       resolve(null);
     }, timeoutMs);
-    // Nothing secret in a hello, so any origin may hear it; the request that
-    // answers it is what names the app.
-    const sayHello = () => {
-      if (opener.closed) {
-        stop();
-        resolve(null);
-      } else opener.postMessage({ type: HELLO }, '*');
-    };
-    const hello = globalThis.setInterval(sayHello, 500);
+    const watch = globalThis.setInterval(() => {
+      if (!opener.closed) return;
+      stop();
+      resolve(null);
+    }, 500);
     globalThis.addEventListener('message', onMessage);
-    sayHello();
+    // Nothing secret in a hello, so any origin may hear it; the request that
+    // answers it is what names the app. Said once: a page that takes over the
+    // app's tab later is not told where this home is.
+    opener.postMessage({ type: HELLO }, '*');
   });
 }
 

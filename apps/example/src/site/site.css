@@ -2053,6 +2053,7 @@
   font-size: clamp(40px, 7vw, 76px);
   font-weight: 700;
   letter-spacing: -0.05em;
+  line-height: 1;
 }
 .site .cta-mark {
   display: flex;
@@ -2123,13 +2124,6 @@
     font-size: 11.5px;
     line-height: 1.2;
   }
-  .site .ruled,
-  .site .travels {
-    grid-template-columns: 1fr;
-  }
-  .site .travels {
-    margin-bottom: 56px;
-  }
   .site .abundance-panel {
     padding: 40px 24px 32px;
   }
@@ -2172,42 +2166,6 @@
   }
 }
 
-/* Ruled grids: the hero's sheet of cells, for everything set side by side */
-.site .ruled,
-.site .points {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--rule);
-  border-left: 1px solid var(--rule);
-}
-.site .ruled > *,
-.site .points > * {
-  padding: 28px 24px;
-  border-right: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-}
-.site .tradition {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.site .tradition .shape {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 24px;
-}
-.site .steps-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.site .marked {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.site .marked .shape {
-  width: 30px;
-  height: 30px;
-  margin-bottom: 18px;
-}
 .site .points h3 {
   font-family: var(--display);
   font-size: 20px;
@@ -2225,18 +2183,172 @@
   border-color: var(--rule);
   border-radius: 0;
 }
-@media (max-width: 860px) {
-  .site .points {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-  .site .ruled > *,
-  .site .points > * {
-    padding: 22px 20px;
+
+/* Ruled grids, phone first: one column, each item its shape beside its words.
+   Wider screens set them side by side, the shape above. */
+.site .ruled,
+.site .points {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+  border-left: 1px solid var(--rule);
+}
+.site .ruled > *,
+.site .points > * {
+  padding: 20px 20px 22px;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.site .ruled > * {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 18px;
+  align-content: start;
+}
+.site .ruled > * > .shape,
+.site .ruled .step-num {
+  grid-row: span 2;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+}
+.site .ruled h3,
+.site .ruled p {
+  grid-column: 2;
+}
+.site .ruled h3 {
+  font-size: 19px;
+  line-height: 1.2;
+}
+.site .marked > * > .shape {
+  width: 30px;
+  height: 30px;
+  margin: 4px 0 0 7px;
+}
+.site .step-num b {
+  font-size: 17px;
+}
+.site .travels {
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 48px;
+}
+.site .travel {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  column-gap: 18px;
+  align-items: center;
+  padding: 26px 20px 22px;
+  text-align: left;
+}
+.site .travel .grown {
+  grid-row: span 3;
+  width: 72px;
+  height: 72px;
+  margin: 0;
+}
+.site .travel-tool {
+  font-size: 21px;
+}
+.site .nav .btn {
+  white-space: nowrap;
+}
+.site .hero {
+  padding-top: 112px;
+}
+@media (max-width: 400px) {
+  .site .nav-links a:not(.btn) {
+    display: none;
   }
 }
-@media (max-width: 860px) {
+.site .story-turn {
+  margin-top: 32px;
+  font-size: 18px;
+}
+.site .how-demo {
+  margin-top: 40px;
+}
+.site section.band {
+  padding: 52px 0;
+}
+.site .cta {
+  padding: 56px 0 80px;
+}
+
+@media (min-width: 720px) {
+  .site .ruled > *,
+  .site .points > * {
+    display: block;
+    padding: 28px 24px;
+  }
+  .site .points {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .site .tradition,
+  .site .steps-row,
+  .site .travels {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .site .marked {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .site .tradition > * > .shape {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 24px;
+  }
+  .site .marked > * > .shape {
+    margin: 0 0 18px;
+  }
+  .site .ruled .step-num {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 18px;
+  }
+  .site .ruled h3 {
+    font-size: 20px;
+  }
+  .site .step-num b {
+    font-size: 20px;
+  }
+  .site .travels {
+    margin-bottom: 72px;
+  }
+  .site .travel {
+    display: block;
+    padding: 36px 24px 28px;
+    text-align: center;
+  }
+  .site .travel .grown {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 20px;
+  }
+  .site .hero {
+    padding-top: 168px;
+  }
+  .site .travel-tool {
+    font-size: 26px;
+  }
   .site .story-turn {
-    font-size: 18px;
+    margin-top: 48px;
+    font-size: 21px;
+  }
+  .site .how-demo {
+    margin-top: 64px;
+  }
+  .site section.band {
+    padding: 96px 0;
+  }
+  .site .cta {
+    padding: 120px 0;
+  }
+}
+@media (min-width: 1000px) {
+  .site .marked {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

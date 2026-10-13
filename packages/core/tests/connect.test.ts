@@ -882,7 +882,7 @@ describe('an app showing its own notifications', () => {
 });
 
 describe('the app asking its home', () => {
-  test('a hello that arrives before the request is ready is still answered', async () => {
+  test('a hello that arrives before the request is ready is still answered, and the request repeats until answered', async () => {
     const { connectToHome } = await import('../src/session/connect.js');
     const key = await testAppKey('early-hello');
     const toHome: Array<{ message: unknown; origin: string }> = [];
@@ -923,8 +923,15 @@ describe('the app asking its home', () => {
       assert.equal(sent?.origin, 'https://home.test', 'only to the home');
       assert.ok(isRecord(sent?.message) && sent.message.type === 'weave:request');
       assert.ok(isRecord(sent.message.request) && sent.message.request.audience === key.did);
+      // The hello may be missed altogether: the request is sent again until the home answers, to it alone.
+      const before = toHome.length;
+      await until(() => toHome.length > before);
+      assert.ok(toHome.every((m) => m.origin === 'https://home.test'));
       fromHome({ type: 'weave:denied', reason: 'Not now' });
       await assert.rejects(asking, /Not now/);
+      const after = toHome.length;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      assert.equal(toHome.length, after, 'and stops once answered');
     } finally {
       Object.assign(g, saved);
     }
@@ -976,28 +983,26 @@ describe('the home receiving a request', () => {
 
   const isHello = (message: unknown) => isRecord(message) && message.type === 'weave:hello';
 
-  test('it says hello until the app answers, so an app that missed the first still gets asked', async () => {
+  test('it says hello once, and still takes a request that comes much later', async () => {
     const popup = popupWindow();
     try {
       const { receiveConnectRequest } = await import('../src/session/connect.js');
       const received = receiveConnectRequest(5000);
-      // A phone that paused the app's tab: the first hello went unheard.
+      // A phone that paused the app's tab: its request comes when the tab runs again.
       await new Promise((resolve) => setTimeout(resolve, 1200));
       const hellos = popup.sent.filter((m) => isHello(m.message));
-      assert.ok(hellos.length >= 3, `said hello ${hellos.length} times`);
-      assert.ok(
-        hellos.every((m) => m.origin === '*'),
-        'a hello carries nothing secret',
+      assert.equal(
+        hellos.length,
+        1,
+        'a page that takes over the app’s tab later is not told where the home is',
       );
+      assert.equal(hellos[0]?.origin, '*', 'a hello carries nothing secret');
       popup.send({
         type: 'weave:request',
         request: await asked({ v: 1, audience: 'did:key:zApp', access: 'write' }),
       });
       const incoming = await received;
       assert.equal(incoming?.origin, 'https://app.test');
-      const after = popup.sent.length;
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      assert.equal(popup.sent.length, after, 'and stops once asked');
     } finally {
       popup.restore();
     }
