@@ -3,7 +3,7 @@
  * command: Claude Code through its own `claude mcp add`, and every other agent
  * add-mcp knows (Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex, …)
  * through its config file. Only the ones installed are touched, and an
- * existing "minca" entry is replaced, nothing else.
+ * existing "minca" entry is replaced, nothing else; disconnecting takes it out.
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -96,6 +96,49 @@ export async function configureClients(server: ServerCommand): Promise<ReadonlyA
         : {
             client: agent.displayName,
             result: `could not add it to ${added.path}: ${added.error ?? 'unknown error'}`,
+            ok: false,
+          },
+    );
+  }
+  return done;
+}
+
+/**
+ * Takes the server out of every agent on this computer that connecting added
+ * it to, as `minca disconnect` does. Only an entry that starts `minca mcp` for
+ * this home goes: one added by hand, such as `minca mcp --account`, or one for
+ * another home, stays.
+ */
+export async function unconfigureClients(home: string): Promise<ReadonlyArray<Configured>> {
+  const { listInstalledServers, removeServer } = await import('add-mcp');
+  const done: Configured[] = [];
+
+  for (const found of await listInstalledServers({ global: true })) {
+    const entry = found.servers.find((server) => server.serverName === SERVER_NAME);
+    if (!entry || !JSON.stringify(entry.config).includes(JSON.stringify(home))) continue;
+    const client = found.displayName;
+
+    // Claude Code through its own CLI where it can, for the same reason as adding.
+    if (found.agentType === 'claude-code') {
+      try {
+        await run('claude', ['mcp', 'remove', SERVER_NAME, '--scope', 'user']);
+        done.push({ client, result: 'removed', ok: true });
+        continue;
+      } catch (error) {
+        if (errorCode(error) !== 'ENOENT') {
+          done.push({ client, result: `could not remove it: ${messageOf(error).split('\n')[0]}`, ok: false });
+          continue;
+        }
+      }
+    }
+
+    const removed = removeServer(found.agentType, SERVER_NAME);
+    done.push(
+      removed.success
+        ? { client, result: 'removed', ok: true }
+        : {
+            client,
+            result: `could not remove it from ${removed.path}: ${removed.error ?? 'unknown error'}`,
             ok: false,
           },
     );
