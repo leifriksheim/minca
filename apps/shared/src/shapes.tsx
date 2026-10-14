@@ -70,6 +70,60 @@ function wave(): string {
   return `M${left.join('L')}L${right.join('L')}Z`;
 }
 
+/*
+ * The pieces the shapes that mean something are built from: bands along an
+ * arc and pills, both with round ends, circles and rounded rectangles. Every
+ * piece winds clockwise, so overlapping pieces join into one; a hole winds
+ * the other way.
+ */
+const n = (v: number) => v.toFixed(2);
+const toward = (cx: number, cy: number, r: number, deg: number) => {
+  const a = (deg * Math.PI) / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const;
+};
+/** A band along an arc, its middle at radius `r`, from `from` to `to` degrees, clockwise from three o'clock */
+function arcBand(cx: number, cy: number, r: number, width: number, from: number, to: number): string {
+  const ro = r + width / 2;
+  const ri = r - width / 2;
+  const cap = width / 2;
+  const large = Math.abs(to - from) > 180 ? 1 : 0;
+  const [ox0, oy0] = toward(cx, cy, ro, from);
+  const [ox1, oy1] = toward(cx, cy, ro, to);
+  const [ix1, iy1] = toward(cx, cy, ri, to);
+  const [ix0, iy0] = toward(cx, cy, ri, from);
+  return (
+    `M${n(ox0)} ${n(oy0)}A${ro} ${ro} 0 ${large} 1 ${n(ox1)} ${n(oy1)}` +
+    `A${cap} ${cap} 0 0 1 ${n(ix1)} ${n(iy1)}A${ri} ${ri} 0 ${large} 0 ${n(ix0)} ${n(iy0)}` +
+    `A${cap} ${cap} 0 0 1 ${n(ox0)} ${n(oy0)}Z`
+  );
+}
+/** A pill from one point to another */
+function pill(x1: number, y1: number, x2: number, y2: number, width: number): string {
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  const nx = (-(y2 - y1) / len) * (width / 2);
+  const ny = ((x2 - x1) / len) * (width / 2);
+  const c = width / 2;
+  return (
+    `M${n(x1 - nx)} ${n(y1 - ny)}L${n(x2 - nx)} ${n(y2 - ny)}A${c} ${c} 0 0 1 ${n(x2 + nx)} ${n(y2 + ny)}` +
+    `L${n(x1 + nx)} ${n(y1 + ny)}A${c} ${c} 0 0 1 ${n(x1 - nx)} ${n(y1 - ny)}Z`
+  );
+}
+const circle = (cx: number, cy: number, r: number) =>
+  `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+const roundRect = (x: number, y: number, w: number, h: number, r: number) =>
+  `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}` +
+  `H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
+
+/** Nobody watching: a closed eye, its lid and three lashes */
+function eyeShut(): string {
+  const lashes = [55, 90, 125].map((deg) => {
+    const [x1, y1] = toward(50, 28, 46, deg);
+    const [x2, y2] = toward(50, 28, 60, deg);
+    return pill(x1, y1, x2, y2, 9);
+  });
+  return arcBand(50, 28, 40, 12, 20, 160) + lashes.join('');
+}
+
 const PATHS = {
   scallop: radial(ROUND.scallop),
   flower: radial(ROUND.flower),
@@ -91,6 +145,21 @@ const PATHS = {
   checker: 'M4 4h30v30H4zM66 4h30v30H66zM35 35h30v30H35zM4 66h30v30H4zM66 66h30v30H66z',
   /** Three dots in a row */
   dots: 'M4 50a15 15 0 1 0 30 0a15 15 0 1 0-30 0M35 50a15 15 0 1 0 30 0a15 15 0 1 0-30 0M66 50a15 15 0 1 0 30 0a15 15 0 1 0-30 0',
+  /** Nobody watching: a closed eye */
+  eyeShut: eyeShut(),
+  /** People deciding together: three heads over the dome of a group */
+  group: circle(24, 40, 11) + circle(50, 30, 12) + circle(76, 40, 11) + 'M10 88A40 40 0 0 1 90 88Z',
+  /** Kept private: a padlock, its keyhole cut out */
+  lock:
+    arcBand(50, 44, 21, 11, 180, 360) +
+    roundRect(16, 42, 68, 50, 14) +
+    'M54 68A8 8 0 1 0 46 68V76A4 4 0 0 0 54 76Z',
+  /** Carrying on without a connection: a dot, and arcs of signal with the outer one broken */
+  signal:
+    circle(50, 76, 8) +
+    arcBand(50, 78, 26, 11, 225, 315) +
+    arcBand(50, 78, 46, 11, 215, 245) +
+    arcBand(50, 78, 46, 11, 295, 325),
 } as const;
 
 export type ShapeKind = keyof typeof PATHS;

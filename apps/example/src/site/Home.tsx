@@ -5,7 +5,7 @@ import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
 import { Morph, Shape, type ShapeKind } from '@minca/app-shared/shapes';
 import type { ShapeColour } from '@minca/app-shared/tokens';
-import { Carpool, ChoreWheel, MADE, SchoolRun, SeedSwap, type CarpoolChange } from './demos';
+import { Carpool, SchoolRun, type CarpoolChange } from './demos';
 
 /**
  * The front page, for community builders: it sells the Minca app. A minca
@@ -22,18 +22,6 @@ import { Carpool, ChoreWheel, MADE, SchoolRun, SeedSwap, type CarpoolChange } fr
 /** The palette, one class per colour; shapes take turns with them */
 const COLOURS = ['cobalt', 'coral', 'peach', 'sage', 'lilac'] as const;
 const colour = (i: number) => `c-${COLOURS[i % COLOURS.length]}`;
-
-/** Shapes for the small things, in turn */
-const SMALL: readonly ShapeKind[] = [
-  'scallop',
-  'flower',
-  'star',
-  'clover',
-  'burst',
-  'half',
-  'daisy',
-  'squircle',
-];
 
 /** What a group asks to change about its carpool, and what stays as it was */
 const CHANGES: ReadonlyArray<{ id: CarpoolChange; ask: string; who: string }> = [
@@ -160,42 +148,25 @@ const REMIXES: ReadonlyArray<{ group: string; change: string; app: ReactNode }> 
   { group: 'Oak Primary parents', change: 'Turns it into a school run', app: <SchoolRun /> },
 ];
 
-/** What groups asked for, and what they got */
-const GALLERY: ReadonlyArray<{
-  ask: string;
-  tool: string;
-  group: string;
-  kind: ShapeKind;
-  colour: ShapeColour;
-  app: ReactNode;
-}> = [
-  ...MADE.map((m) => ({
-    ask: m.ask,
-    tool: m.tool,
-    group: m.group,
-    kind: m.kind,
-    colour: m.colour,
-    app: m.app(false),
-  })),
+/** What groups asked for, in their own words, and the tool each became */
+const ASKS: ReadonlyArray<{ ask: string; tool: string; kind: ShapeKind; colour: ShapeColour }> = [
+  { ask: 'Can we sort out lifts to away games?', tool: 'Carpool', kind: 'clover', colour: 'coral' },
   {
-    ask: 'Somewhere to swap the seeds we saved.',
-    tool: 'Seed swap',
-    group: 'Hillside Allotments',
-    kind: 'flower',
+    ask: 'Could we share tools instead of all buying drills?',
+    tool: 'Tool library',
+    kind: 'squircle',
     colour: 'sage',
-    app: <SeedSwap />,
   },
   {
-    ask: 'Whose turn is it to do the bins?',
-    tool: 'Chore wheel',
-    group: 'Flat 4B',
-    kind: 'burst',
-    colour: 'coral',
-    app: <ChoreWheel />,
+    ask: 'One list of everything the landlord hasn’t fixed.',
+    tool: 'Repairs',
+    kind: 'star',
+    colour: 'peach',
   },
+  { ask: 'Whose turn is it to do the bins?', tool: 'Chore wheel', kind: 'burst', colour: 'lilac' },
 ];
 
-/** The big shape in the gallery panel, melting from one to the next */
+/** The big shape in the panel, melting from one to the next */
 const ANYTHING = [
   { kind: 'flower', colour: 'peach' },
   { kind: 'squircle', colour: 'coral' },
@@ -206,13 +177,13 @@ const ANYTHING = [
   { kind: 'sparkle', colour: 'lilac' },
 ] as const;
 
-/** Short points side by side, each marked with a small shape */
-function Marked({ items }: { items: ReadonlyArray<{ title: string; body: string }> }) {
+/** Short points side by side, each marked with the shape that stands for it */
+function Marked({ items }: { items: ReadonlyArray<{ title: string; body: string; shape: ShapeKind }> }) {
   return (
     <div className="ruled marked">
       {items.map((item, i) => (
         <div key={item.title}>
-          <Shape kind={SMALL[i * 2] ?? 'scallop'} className={colour(i)} />
+          <Shape kind={item.shape} className={colour(i)} />
           <h3>{item.title}</h3>
           <p>{item.body}</p>
         </div>
@@ -324,19 +295,17 @@ export function Home() {
                 your group needs, and it’s there by tonight. No code, no servers, no bills.
               </p>
             </div>
-            <div className="gallery">
-              {GALLERY.map((item) => (
-                <figure key={item.tool} className="gallery-card">
-                  <blockquote>“{item.ask}”</blockquote>
-                  <div className="gallery-app">{item.app}</div>
-                  <figcaption>
+            <ul className="asks">
+              {ASKS.map((item) => (
+                <li key={item.tool}>
+                  <q>{item.ask}</q>
+                  <span className="asks-tool">
                     <Shape kind={item.kind} colour={item.colour} />
-                    <b>{item.tool}</b>
-                    <span>{item.group}</span>
-                  </figcaption>
-                </figure>
+                    {item.tool}
+                  </span>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
       </section>
@@ -355,10 +324,18 @@ export function Home() {
       >
         <Marked
           items={[
-            { title: 'No ads, no feed', body: 'Nobody’s watching, and nothing decides what you see.' },
-            { title: 'Your rules', body: 'Your group decides who can do what.' },
-            { title: 'Private', body: 'Private spaces are locked on your phone before anything leaves it.' },
-            { title: 'Works offline', body: 'On the bus, in the field, in the basement.' },
+            {
+              title: 'No ads, no feed',
+              body: 'Nobody’s watching, and nothing decides what you see.',
+              shape: 'eyeShut',
+            },
+            { title: 'Your rules', body: 'Your group decides who can do what.', shape: 'group' },
+            {
+              title: 'Private',
+              body: 'Private spaces are locked on your phone before anything leaves it.',
+              shape: 'lock',
+            },
+            { title: 'Works offline', body: 'On the bus, in the field, in the basement.', shape: 'signal' },
           ]}
         />
       </Band>

@@ -349,9 +349,9 @@
   margin-bottom: 20px;
 }
 .site .marked > * > .shape {
-  width: 30px;
-  height: 30px;
-  margin-bottom: 18px;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 20px;
 }
 .site .points code,
 .site .grid code {
@@ -1766,7 +1766,7 @@
   background: var(--card);
 }
 
-/* ─── Front page: the gallery, on cobalt ──────────────────────────── */
+/* ─── Front page: what groups asked for, on cobalt ────────────────── */
 
 .site .panel {
   position: relative;
@@ -1793,57 +1793,55 @@
   width: 220px;
   pointer-events: none;
 }
-.site .gallery {
+/* What groups asked for, one per line, and the tool each became */
+.site .asks {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-.site .gallery-card {
-  display: flex;
-  flex-direction: column;
   margin: 0;
-  padding: 22px;
-  border-radius: var(--r-lg);
-  background: var(--paper);
-  color: var(--body);
+  padding: 0;
+  list-style: none;
 }
-.site .gallery-card blockquote {
-  margin: 0 0 18px;
-  font-family: var(--display);
-  font-size: 19px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-.site .gallery-app {
-  flex: 1;
-  padding: 14px 14px 6px;
-  border: var(--hair);
-  border-radius: var(--r-md);
-  background: var(--card);
-}
-.site .gallery-app .app {
-  font-size: 12.5px;
-}
-.site .gallery-card figcaption {
+.site .asks li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  font-size: 13.5px;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
 }
-.site .gallery-card figcaption .shape {
-  width: 18px;
-  height: 18px;
-}
-.site .gallery-card figcaption b {
+.site .asks q {
+  font-family: var(--display);
+  font-size: clamp(20px, 2.6vw, 28px);
   font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  color: #fff;
+}
+.site .asks q::before {
+  content: '“';
+}
+.site .asks q::after {
+  content: '”';
+}
+.site .asks-tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 8px;
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 15px;
+  font-weight: 500;
   color: var(--ink);
 }
-.site .gallery-card figcaption span {
+.site .asks-tool::before {
+  content: '→';
+  margin: 0 2px 0 6px;
   color: var(--faint);
+}
+.site .asks-tool .shape {
+  width: 20px;
+  height: 20px;
 }
 
 /* ─── Closing call, and the footer ────────────────────────────────── */
@@ -1951,9 +1949,6 @@
   .site .mend {
     grid-template-columns: minmax(0, 1fr);
   }
-  .site .gallery {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 860px) {
@@ -2035,8 +2030,10 @@
     width: 96px;
     margin-bottom: 24px;
   }
-  .site .gallery {
-    grid-template-columns: minmax(0, 1fr);
+  .site .asks li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
   .site .cta-panel {
     padding: 64px 20px 220px;

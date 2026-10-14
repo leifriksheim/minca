@@ -83,6 +83,11 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
   made, a space) a round shape picked by its id, so it is always the same one.
 - A shape stands alone, flat, in one colour. No outlines, gradients, shadows or
   icons drawn inside it, except a number or a letter in its middle.
+- A few shapes mean something, built from the same pieces (pills, arcs,
+  dots, half circles), still flat and in one colour: `eyeShut` (nobody
+  watching), `group` (people deciding together), `lock` (private) and
+  `signal` (works without a connection). Use them beside the point they
+  stand for; add another the same way when a point needs one.
 - `Morph` melts one round shape into the next. Use it where the point is that
   something can become anything, and only once per screen.
 - Use shapes for identity (an app, a space), for empty states, and for marking
