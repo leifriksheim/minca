@@ -56,6 +56,8 @@ export function call(page: Page, name: string, ...args: unknown[]): unknown {
 export function setupHarness() {
   const windows: Win[] = [];
   const external: string[] = [];
+  /** What the system was asked to show */
+  const notified: Array<{ title: string; body: string }> = [];
   /** What the app's window said to its node */
   const toNode: unknown[] = [];
   /** Every envelope a page handed Electrobun's bridge */
@@ -184,6 +186,7 @@ export function setupHarness() {
         nodeUrl: node ? nodeUrl(origin, node) : null,
       }),
     openExternal: (url) => external.push(url),
+    notify: (shown) => notified.push(shown),
     open({ url, preload, popup, closed }) {
       const win: Win = {
         url,
@@ -227,5 +230,18 @@ export function setupHarness() {
     fromWindow: (message) => toNode.push(message),
   });
 
-  return { bridge, link, sockets, windows, external, envelopes, toNode, flush, openApp, makePage, clock };
+  return {
+    bridge,
+    link,
+    sockets,
+    windows,
+    external,
+    notified,
+    envelopes,
+    toNode,
+    flush,
+    openApp,
+    makePage,
+    clock,
+  };
 }

@@ -55,6 +55,8 @@ export interface Shell {
    * Only a window nothing opened says it: the app's own, not a popup.
    */
   account?(who: { readonly did: string; readonly name: string } | null): void;
+  /** A notification the app's own window shows, as the system's */
+  notify?(shown: { readonly title: string; readonly body: string }): void;
   /**
    * The preload for a window with this secret, at this origin. `node` is the
    * token the app's own window opens its node's socket with, and null for
@@ -86,6 +88,8 @@ interface Pane {
   /** When this window last opened a link in the browser, or brought a window to the front */
   lastExternal: number;
   lastFocus: number;
+  /** When this window's last notifications were shown, newest last */
+  readonly notified: number[];
   closed: boolean;
   /** For the shell's own side: what it hears, instead of a page */
   readonly hear?: (message: Record<string, unknown>) => void;
@@ -107,6 +111,8 @@ const MAX_REF = 64;
  */
 const MAX_CHILDREN = 8;
 const EXTERNAL_EVERY_MS = 1000;
+/** A page that floods the system with notifications shows this many in a minute, and no more */
+const NOTIFY_PER_MINUTE = 10;
 const POPUP_WIDTH = 460;
 const POPUP_HEIGHT = 720;
 
@@ -182,6 +188,7 @@ export function createBridge(shell: Shell): Bridge {
       children: new Map(),
       lastExternal: 0,
       lastFocus: 0,
+      notified: [],
       closed: false,
     };
     panes.set(secret, pane);
@@ -224,6 +231,7 @@ export function createBridge(shell: Shell): Bridge {
     else if (message.t === 'drag') drag(pane, message);
     else if (message.t === 'zoom') pane.host.zoom();
     else if (message.t === 'account' && pane.app) account(message.who);
+    else if (message.t === 'notify' && pane.app) notify(pane, message);
   }
 
   function openFrom(pane: Pane, message: Record<string, unknown>): void {
@@ -299,6 +307,16 @@ export function createBridge(shell: Shell): Bridge {
     shell.account?.({ did: who.did, name: who.name.slice(0, 80) });
   }
 
+  function notify(pane: Pane, message: Record<string, unknown>): void {
+    const { title, body } = message;
+    if (typeof title !== 'string' || typeof body !== 'string') return;
+    const now = Date.now();
+    while ((pane.notified[0] ?? now) <= now - 60_000) pane.notified.shift();
+    if (pane.notified.length >= NOTIFY_PER_MINUTE) return;
+    pane.notified.push(now);
+    shell.notify?.({ title: title.slice(0, 200), body: body.slice(0, 500) });
+  }
+
   function external(pane: Pane, raw: unknown): void {
     const url = webUrl(raw);
     const now = Date.now();
@@ -331,6 +349,7 @@ export function createBridge(shell: Shell): Bridge {
         children: new Map(),
         lastExternal: 0,
         lastFocus: 0,
+        notified: [],
         closed: false,
         hear: (message) => {
           if (message.t === 'message' && message.from === ref && typeof message.origin === 'string')

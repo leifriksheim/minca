@@ -13,7 +13,7 @@
  *   keeps their spaces online even once the app's connection has run out;
  * - puts Minca in the menu bar, where it stays when the window closes.
  */
-import Electrobun, { BrowserWindow, BuildConfig, PATHS, Tray, Utils } from 'electrobun/bun';
+import Electrobun, { ApplicationMenu, BrowserWindow, BuildConfig, PATHS, Tray, Utils } from 'electrobun/bun';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createBridge, type PaneHost } from './bridge';
@@ -85,6 +85,7 @@ const bridge = createBridge({
     }),
   openExternal: (url) => void Utils.openExternal(url),
   account: (who) => followApp(who),
+  notify: ({ title, body }) => Utils.showNotification({ title, body }),
   open({ url, preload, width, height, app: isApp, closed }) {
     const offset = 40 * (openCount++ % 6);
     const win = new BrowserWindow({
@@ -357,12 +358,51 @@ tray.on('tray-clicked', (event) => {
   if (action === 'renew') appNode.renew();
   if (action === 'pause') void carrier.pause();
   if (action === 'resume') carrier.resume();
-  if (action === 'quit') {
-    appNode.close();
-    carrier.close();
-    tray.remove();
-    Utils.quit();
-  }
+  if (action === 'quit') quit();
+});
+
+function quit() {
+  appNode.close();
+  carrier.close();
+  tray.remove();
+  Utils.quit();
+}
+
+// macOS sends ⌘C, ⌘V and the rest through the app's menu: without an Edit
+// menu, nothing can be copied or pasted in a window.
+ApplicationMenu.setApplicationMenu([
+  {
+    submenu: [
+      { role: 'about' },
+      { type: 'divider' },
+      { role: 'hide', accelerator: 'h' },
+      { role: 'hideOthers' },
+      { role: 'showAll' },
+      { type: 'divider' },
+      { label: 'Quit Minca', action: 'quit', accelerator: 'q' },
+    ],
+  },
+  {
+    label: 'Edit',
+    submenu: [
+      { role: 'undo', accelerator: 'z' },
+      { role: 'redo' },
+      { type: 'divider' },
+      { role: 'cut', accelerator: 'x' },
+      { role: 'copy', accelerator: 'c' },
+      { role: 'paste', accelerator: 'v' },
+      { role: 'pasteAndMatchStyle' },
+      { role: 'delete' },
+      { role: 'selectAll', accelerator: 'a' },
+    ],
+  },
+  {
+    label: 'Window',
+    submenu: [{ role: 'minimize', accelerator: 'm' }, { role: 'zoom' }, { role: 'close', accelerator: 'w' }],
+  },
+]);
+ApplicationMenu.on('application-menu-clicked', (event) => {
+  if (field(event, 'action') === 'quit') quit();
 });
 
 // The app brought to the front with no window (its dock icon, or a notification): its window again.

@@ -247,6 +247,39 @@ function page(options: PageOptions): void {
     true,
   );
 
+  // WebKit in this shell has notifications but no way to allow them, so a page
+  // would only ever find them blocked. The app's own window shows them through
+  // the shell instead, as the system's, allowed as the app is.
+  if (options.app && !options.popup) {
+    const ShellNotification = function (this: object, title: unknown, init?: unknown) {
+      const body: unknown = typeof init === 'object' && init !== null ? Reflect.get(init, 'body') : '';
+      const tag: unknown = typeof init === 'object' && init !== null ? Reflect.get(init, 'tag') : '';
+      const shown = {
+        title: String(title),
+        body: typeof body === 'string' ? body : '',
+        tag: typeof tag === 'string' ? tag : '',
+        onclick: null,
+        onclose: null,
+        onerror: null,
+        onshow: null,
+        close() {},
+        addEventListener() {},
+        removeEventListener() {},
+      };
+      send({ t: 'notify', title: shown.title, body: shown.body });
+      return shown;
+    };
+    defineProperty(ShellNotification, 'permission', { value: 'granted' });
+    defineProperty(ShellNotification, 'maxActions', { value: 0 });
+    defineProperty(ShellNotification, 'requestPermission', {
+      value: (done?: unknown) => {
+        if (typeof done === 'function') apply(done, null, ['granted']);
+        return Promise.resolve('granted');
+      },
+    });
+    defineProperty(window, 'Notification', { value: ShellNotification, configurable: true, writable: true });
+  }
+
   // The app's own window says which account it is connected as: the menu bar
   // keeps only that account's spaces online (apps/example/src/desktop.ts).
   if (options.app) {

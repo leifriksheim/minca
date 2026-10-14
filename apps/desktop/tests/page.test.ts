@@ -4,6 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { call, setupHarness } from './harness.ts';
 import { preloadFor } from '../src/bun/page.ts';
 
@@ -225,6 +226,38 @@ test('the app’s window can tell the menu bar its account; a popup has no way t
   flush();
   assert.equal(envelopes.length, before + 1);
   assert.ok(envelopes.at(-1)?.includes('did:key:zLeif'));
+});
+
+test('the app’s window shows notifications through the system; a popup has none to show', async () => {
+  const { windows, notified, flush, openApp } = setupHarness();
+  const app = openApp();
+  app.page.click();
+  call(app.page, 'open', HOME, 'minca-home', 'popup');
+  flush();
+  const home = windows[1];
+  assert.ok(home);
+  assert.equal(Reflect.get(home.page.context, 'Notification'), undefined);
+  const Shown: unknown = Reflect.get(app.page.context, 'Notification');
+  assert.ok(typeof Shown === 'function');
+  assert.equal(Reflect.get(Shown, 'permission'), 'granted');
+  const request: unknown = Reflect.get(Shown, 'requestPermission');
+  assert.ok(typeof request === 'function');
+  assert.equal(await Reflect.apply(request, Shown, []), 'granted');
+  vm.runInContext(`new Notification('New message', { body: 'In Garden', tag: 'k1' })`, app.page.context);
+  vm.runInContext(`new Notification('No body')`, app.page.context);
+  flush();
+  assert.deepEqual(notified, [
+    { title: 'New message', body: 'In Garden' },
+    { title: 'No body', body: '' },
+  ]);
+});
+
+test('a page that floods notifications shows ten a minute', () => {
+  const { notified, flush, openApp } = setupHarness();
+  const app = openApp();
+  vm.runInContext(`for (let i = 0; i < 50; i++) new Notification('n' + i)`, app.page.context);
+  flush();
+  assert.equal(notified.length, 10);
 });
 
 test('the app’s window talks to its node over its socket, both ways; a popup has no way to', () => {
