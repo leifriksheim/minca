@@ -527,9 +527,9 @@ export function Developers() {
       <section className="hero">
         <div className="wrap">
           <h1>
-            A backend that runs
+            A backend that
             <br />
-            everywhere, and nowhere.
+            runs nowhere.
           </h1>
           <p>
             A protocol for any kind of social space. Let your users be your infrastructure: their devices keep
