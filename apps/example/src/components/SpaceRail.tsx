@@ -58,17 +58,7 @@ export function SpaceRail({
             >
               {/* The pill on the edge says which one you are in. */}
               <span data-rail-pill style={{ ...pill, height: on ? 24 : 0, opacity: on ? 1 : 0 }} />
-              <span
-                style={{
-                  display: 'inline-flex',
-                  borderRadius: palette.radius.pill,
-                  boxShadow: on
-                    ? `0 0 0 3px ${palette.surface.sunken}, 0 0 0 4px ${palette.surface.rule}`
-                    : undefined,
-                }}
-              >
-                <SpaceMark space={space} size={40} />
-              </span>
+              <SpaceMark space={space} size={40} />
               <RailCount space={space} />
               {(calls.mine === space.id || calls.others.has(space.id)) && (
                 <span

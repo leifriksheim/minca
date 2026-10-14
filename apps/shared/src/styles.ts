@@ -42,6 +42,8 @@ export const baseCss = `
 
     input, textarea, select { font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease; }
     input::placeholder, textarea::placeholder { color: ${ink.faint}; }
+    /* WebKit (Safari, the desktop shell) draws its own select and ignores our border and fill, so every select draws its chevron. */
+    select:not([multiple]) { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235d6480' stroke-width='1.5'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 12px center !important; padding-right: 30px !important; cursor: pointer; }
     input:focus, textarea:focus, select:focus { border-color: ${accent.base} !important; box-shadow: 0 0 0 3px ${accent.soft}; outline: none; }
     [data-variant="quiet"], [data-variant="secondary"] { border: 1px solid ${surface.rule} !important; }
     tbody tr { transition: background-color .12s ease; }
@@ -60,8 +62,8 @@ export const baseCss = `
     @keyframes minca-fade { from { opacity: 0 } to { opacity: 1 } }
     @keyframes minca-slide { from { opacity: 0; transform: translateX(24px) } to { opacity: 1; transform: none } }
     [data-editable]:focus { border-color: ${surface.lineStrong} !important; background: ${surface.card} !important; box-shadow: none !important; }
-    .inline-field select, .inline-field input { height: 32px !important; border-color: transparent !important; background: none !important; margin-left: -8px; padding-left: 8px !important; width: calc(100% + 8px) !important; }
-    .inline-field select:focus, .inline-field input:focus { border-color: ${surface.lineStrong} !important; background: ${surface.card} !important; box-shadow: none !important; }
+    .inline-field select, .inline-field input { height: 32px !important; border-color: transparent !important; background-color: transparent !important; margin-left: -8px; padding-left: 8px !important; width: calc(100% + 8px) !important; }
+    .inline-field select:focus, .inline-field input:focus { border-color: ${surface.lineStrong} !important; background-color: ${surface.card} !important; box-shadow: none !important; }
     .space-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
     [data-tile] { transition: border-color .15s ease, background-color .15s ease; }
     @keyframes minca-rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
@@ -106,7 +108,7 @@ export const hoverCss = `
     [data-menu-item]:not(:disabled):hover { background-color: ${surface.sunken} !important; color: ${ink.strong} !important; }
     [data-row]:hover [data-row-action] { opacity: 1; }
     [data-editable]:hover { border-color: ${surface.line} !important; background: ${surface.sunken} !important; }
-    .inline-field select:hover, .inline-field input:hover { border-color: ${surface.line} !important; background: ${surface.sunken} !important; }
+    .inline-field select:hover, .inline-field input:hover { border-color: ${surface.line} !important; background-color: ${surface.sunken} !important; }
     [data-nav]:not([aria-current]):hover { background: ${surface.sunken} !important; }
     [data-tile]:hover { background-color: ${surface.sunken} !important; }
     [data-tile]:hover [data-row-action] { opacity: 1; }
