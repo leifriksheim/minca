@@ -19,6 +19,7 @@ import { RecordPanel } from './RecordPanel';
 import { SHAPE_CYCLE } from '@minca/app-shared/tokens';
 import { styles, palette, ui } from '../styles';
 import { Person } from './Person';
+import { Loader } from '@minca/app-shared/Loader';
 
 /** A dot on the map: a record, or — when people are shown — a person */
 interface Dot {
@@ -620,7 +621,12 @@ export function GraphView({
     setChosen(null);
   };
 
-  if (records === undefined) return <p style={{ fontSize: 13, color: palette.ink.faint }}>Loading…</p>;
+  if (records === undefined)
+    return (
+      <p style={{ fontSize: 13, color: palette.ink.faint }}>
+        <Loader label="Loading" showLabel />
+      </p>
+    );
 
   const header = (
     <header>
