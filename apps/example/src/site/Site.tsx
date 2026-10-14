@@ -569,7 +569,7 @@ export function Developers() {
       <Band
         id="walkthrough"
         kicker="How it fits together"
-        title="Five communities, one library."
+        title="For any kind of community."
         intro={
           <p>
             Every app on Minca does the same few things: start a space, describe its data, say who may do
