@@ -6,9 +6,11 @@ import { accent, display, font, ink, mono, radius, shadow, shapeColours, surface
  * One visual vocabulary for the example app, the account home and Liquid,
  * built from Minca's tokens (`tokens.ts`; DESIGN.md says how to use them).
  *
- * Warm paper, navy ink, cobalt for the thing to do. Surfaces have round
- * corners and hairlines; controls are pills; anything floating casts a soft
- * navy shadow. Colour beyond that comes from the shapes (`shapes.tsx`), never
+ * Warm paper, navy ink, cobalt for the thing to do. What stands on the page
+ * (a card, a frame, the nav, a secondary button) has round corners and the
+ * navy rule; hairlines only separate things inside a surface; controls are
+ * pills; only what floats casts a soft navy shadow. The landing page
+ * (`apps/example/src/site`) draws the same pieces. Colour beyond that comes from the shapes (`shapes.tsx`), never
  * from the chrome, so nothing competes with what people put in their spaces.
  *
  * Inline styles cannot express hover, focus or placeholders, so those live in
@@ -31,7 +33,7 @@ export const baseCss = `
       -moz-osx-font-smoothing: grayscale;
     }
     h1, h2, h3, p, ul, figure { margin: 0; }
-    h1, h2 { font-family: ${display}; font-weight: 700; letter-spacing: -0.035em; color: ${ink.strong}; }
+    h1, h2 { font-family: ${display}; font-weight: 700; letter-spacing: -0.04em; color: ${ink.strong}; }
     ul { padding: 0; }
 
     button { font-family: inherit; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
@@ -41,7 +43,7 @@ export const baseCss = `
     input, textarea, select { font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease; }
     input::placeholder, textarea::placeholder { color: ${ink.faint}; }
     input:focus, textarea:focus, select:focus { border-color: ${accent.base} !important; box-shadow: 0 0 0 3px ${accent.soft}; outline: none; }
-    [data-variant="quiet"], [data-variant="secondary"] { border: 1px solid ${surface.line} !important; }
+    [data-variant="quiet"], [data-variant="secondary"] { border: 1px solid ${surface.rule} !important; }
     tbody tr { transition: background-color .12s ease; }
 
     /* Visible only for keyboard users, so a mouse click stays quiet. */
@@ -61,13 +63,28 @@ export const baseCss = `
     .inline-field select, .inline-field input { height: 32px !important; border-color: transparent !important; background: none !important; margin-left: -8px; padding-left: 8px !important; width: calc(100% + 8px) !important; }
     .inline-field select:focus, .inline-field input:focus { border-color: ${surface.lineStrong} !important; background: ${surface.card} !important; box-shadow: none !important; }
     .space-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-    [data-tile] { transition: border-color .15s ease, box-shadow .15s ease; }
+    [data-tile] { transition: border-color .15s ease, background-color .15s ease; }
     @keyframes minca-rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
     /* A dialog taller than the window scrolls, and what is in it keeps its size rather than squashing. */
     .modal { max-height: calc(100dvh - 40px); overflow-y: auto; }
     .modal > * { flex-shrink: 0; }
 
     code { font-family: ${mono}; }
+
+    /* The page a screen sits on: a column in the middle, room above and below. */
+    .page { min-height: 100vh; min-height: 100dvh; display: flex; justify-content: center; align-items: flex-start; padding: 56px 20px 80px; }
+
+    /* A side column beside what it opens; one column on a narrow screen. */
+    .space-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
+    @media (max-width: 760px) { .space-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+
+    /* A list row is a target, not a card: its small actions show with the
+       hover, where there is a pointer that hovers. On touch they stay visible,
+       and keyboard users reach them by focus. */
+    @media (hover: hover) {
+      [data-row-action] { opacity: 0; }
+      [data-row-action]:focus-visible { opacity: 1; }
+    }
 `;
 
 /**
@@ -76,7 +93,7 @@ export const baseCss = `
  * leave a hover look stuck.
  */
 export const hoverCss = `
-    /* Primary actions lift slightly; quiet ones just warm up. */
+    /* Controls only change colour: nothing moves, nothing lifts. */
     [data-variant="primary"]:not(:disabled):hover { background-color: ${accent.hover} !important; border-color: ${accent.hover} !important; }
     [data-variant="quiet"]:not(:disabled):hover { background-color: ${surface.sunken} !important; color: ${ink.strong} !important; }
     [data-variant="ghost"]:not(:disabled):hover { color: ${ink.strong} !important; }
@@ -91,7 +108,7 @@ export const hoverCss = `
     [data-editable]:hover { border-color: ${surface.line} !important; background: ${surface.sunken} !important; }
     .inline-field select:hover, .inline-field input:hover { border-color: ${surface.line} !important; background: ${surface.sunken} !important; }
     [data-nav]:not([aria-current]):hover { background: ${surface.sunken} !important; }
-    [data-tile]:hover { border-color: ${surface.rule} !important; box-shadow: ${shadow.small}; }
+    [data-tile]:hover { background-color: ${surface.sunken} !important; }
     [data-tile]:hover [data-row-action] { opacity: 1; }
     [data-tile-new]:hover { border-color: ${ink.muted} !important; color: ${ink.strong} !important; background: ${surface.sunken} !important; }
     [data-rail-item]:not([aria-current]):hover [data-rail-pill] { height: 10px !important; opacity: 1 !important; }
@@ -131,16 +148,31 @@ export const styles = {
   hint: { fontSize: 14, color: ink.muted, marginBottom: 20, lineHeight: 1.6 },
 
   form: { display: 'flex', flexDirection: 'column', gap: 8 },
+  /** A field for one line: a pill, like every control. Many lines: {@link styles.textarea}. */
   input: {
     width: '100%',
     height: 40,
-    padding: '0 12px',
-    borderRadius: radius.md,
+    padding: '0 16px',
+    borderRadius: radius.pill,
     border: `1px solid ${surface.lineStrong}`,
     backgroundColor: surface.card,
     color: ink.strong,
     fontSize: 14,
     outline: 'none',
+  },
+  /** A field for many lines: the corner of a row, since a pill can't hold a paragraph */
+  textarea: {
+    width: '100%',
+    minHeight: 80,
+    padding: '10px 12px',
+    borderRadius: radius.md,
+    border: `1px solid ${surface.lineStrong}`,
+    backgroundColor: surface.card,
+    color: ink.strong,
+    fontSize: 14,
+    lineHeight: 1.5,
+    outline: 'none',
+    resize: 'vertical',
   },
   button,
 
@@ -152,9 +184,10 @@ export const styles = {
     backgroundColor: accent.dangerSoft,
     border: `1px solid ${accent.danger}`,
   },
-  /** A neutral aside: a square box set back from the page. For errors, use errorBox. */
+  /** A neutral aside, set back from the page. For errors, use errorBox. */
   note: {
     padding: '14px 16px',
+    borderRadius: radius.md,
     backgroundColor: surface.sunken,
     fontSize: 13,
     color: ink.body,
@@ -198,8 +231,8 @@ export const styles = {
   todoInput: {
     flex: 1,
     height: 40,
-    padding: '0 12px',
-    borderRadius: radius.md,
+    padding: '0 16px',
+    borderRadius: radius.pill,
     border: `1px solid ${surface.lineStrong}`,
     backgroundColor: surface.card,
     color: ink.strong,
@@ -207,14 +240,14 @@ export const styles = {
     outline: 'none',
   },
   addButton: { ...button, width: 'auto', whiteSpace: 'nowrap', alignSelf: 'flex-start' },
-  /** Secondary actions: white, hairline border, a little shorter */
+  /** Secondary actions: the card's white, the navy rule, a little shorter */
   smallButton: {
     height: 32,
     padding: '0 14px',
     borderRadius: radius.pill,
-    border: `1px solid ${surface.lineStrong}`,
+    border: `1px solid ${surface.rule}`,
     backgroundColor: surface.card,
-    color: ink.body,
+    color: ink.strong,
     fontSize: 13,
     fontWeight: 500,
     whiteSpace: 'nowrap',
@@ -258,8 +291,8 @@ export const styles = {
 
   panel: {
     marginTop: 16,
-    border: `1px solid ${surface.line}`,
-    borderRadius: radius.md,
+    border: `1px solid ${surface.rule}`,
+    borderRadius: radius.lg,
     backgroundColor: surface.card,
     overflow: 'hidden',
   },
@@ -292,7 +325,7 @@ export const styles = {
     fontSize: 15,
     fontWeight: 700,
     color: ink.strong,
-    letterSpacing: '-0.03em',
+    letterSpacing: '-0.04em',
   },
 
   chain: {
@@ -327,8 +360,8 @@ export const styles = {
     color: ink.muted,
     fontSize: 13,
     fontWeight: 500,
-    padding: '6px 8px',
-    borderRadius: radius.sm,
+    padding: '6px 10px',
+    borderRadius: radius.pill,
   },
 
   recoveryCode: {
@@ -350,7 +383,7 @@ export const styles = {
     textAlign: 'left',
     padding: '16px',
     borderRadius: radius.lg,
-    border: `1px solid ${surface.line}`,
+    border: `1px solid ${surface.rule}`,
     backgroundColor: surface.card,
     color: ink.strong,
     fontSize: 14,
@@ -359,11 +392,11 @@ export const styles = {
     gap: 3,
   },
 
+  /** A band set back from the page: no edge, the colour says it */
   inviteBanner: {
     padding: '16px 18px',
     borderRadius: radius.lg,
     backgroundColor: surface.sunken,
-    border: `1px solid ${surface.line}`,
     marginBottom: 16,
   },
 
@@ -460,23 +493,23 @@ export const styles = {
     fontFamily: display,
     fontSize: 20,
     fontWeight: 700,
-    letterSpacing: '-0.03em',
+    letterSpacing: '-0.04em',
     color: ink.strong,
   },
 
-  /** Two choices side by side, for a question with exactly two answers. */
+  /** Choices side by side: a sunken track, the chosen one a card in it with the rule (the site's toggle). */
   segmented: {
     display: 'flex',
-    padding: 3,
-    gap: 3,
+    padding: 4,
+    gap: 2,
     backgroundColor: surface.sunken,
     borderRadius: radius.pill,
   },
   segment: {
     flex: 1,
-    padding: '7px 10px',
+    padding: '6px 14px',
     borderRadius: radius.pill,
-    border: 'none',
+    border: '1px solid transparent',
     background: 'none',
     color: ink.muted,
     fontSize: 13,
@@ -484,13 +517,13 @@ export const styles = {
   },
   segmentActive: {
     flex: 1,
-    padding: '7px 10px',
+    padding: '6px 14px',
     borderRadius: radius.pill,
-    border: 'none',
-    backgroundColor: accent.base,
-    color: ink.inverse,
+    border: `1px solid ${surface.rule}`,
+    backgroundColor: surface.card,
+    color: ink.strong,
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 500,
   },
   fieldLabel: { fontSize: 12, fontWeight: 600, color: ink.muted, marginBottom: 6 },
 
@@ -512,9 +545,64 @@ export const styles = {
     color: ink.faint,
     fontSize: 15,
     lineHeight: 1,
-    padding: '4px 6px',
-    borderRadius: radius.sm,
+    padding: '4px 8px',
+    borderRadius: radius.pill,
     flexShrink: 0,
+  },
+
+  /**
+   * A card that stands on the page: the navy rule, the surface corner. What
+   * every list of spaces, apps, rules and settings is made of; spread it and
+   * add padding. A tile you can pick also gets `data-tile` for its hover.
+   */
+  tile: {
+    border: `1px solid ${surface.rule}`,
+    borderRadius: radius.lg,
+    backgroundColor: surface.card,
+  },
+  /** The big frame on a page (a canvas, a table, a preview): the rule, the frame corner */
+  frame: {
+    border: `1px solid ${surface.rule}`,
+    borderRadius: radius.xl,
+    backgroundColor: surface.card,
+    overflow: 'hidden',
+  },
+  /** A tag or a filter: a small pill with a hairline */
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 26,
+    padding: '0 10px',
+    borderRadius: radius.pill,
+    border: `1px solid ${surface.line}`,
+    backgroundColor: surface.card,
+    color: ink.body,
+    fontSize: 12,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+  /** A chip that is chosen: the rule, as a chosen segment has */
+  chipOn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 26,
+    padding: '0 10px',
+    borderRadius: radius.pill,
+    border: `1px solid ${surface.rule}`,
+    backgroundColor: surface.card,
+    color: ink.strong,
+    fontSize: 12,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+  /** Anything that floats over the page (a menu, a popover, a panel): the rule, a soft shadow */
+  float: {
+    border: `1px solid ${surface.rule}`,
+    borderRadius: radius.lg,
+    backgroundColor: surface.card,
+    boxShadow: shadow.float,
   },
 
   /** A panel that floats over the page rather than sitting in it. */

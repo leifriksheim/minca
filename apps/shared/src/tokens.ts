@@ -113,6 +113,9 @@ export const tokenCss = `
     --minca-good: ${accent.good};
     --minca-good-soft: ${accent.goodSoft};
     --minca-warn: ${accent.warn};
+    --minca-warn-soft: ${accent.warnSoft};
+    --minca-inverse: ${ink.inverse};
+    --minca-scrim: ${surface.scrim};
     --minca-cobalt: ${shapeColours.cobalt};
     --minca-coral: ${shapeColours.coral};
     --minca-peach: ${shapeColours.peach};
@@ -125,6 +128,7 @@ export const tokenCss = `
     --minca-radius-md: ${radius.md}px;
     --minca-radius-lg: ${radius.lg}px;
     --minca-radius-xl: ${radius.xl}px;
+    --minca-radius-pill: ${radius.pill}px;
     --minca-shadow: ${shadow.float};
     --minca-shadow-small: ${shadow.small};
   }

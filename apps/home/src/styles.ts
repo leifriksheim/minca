@@ -63,17 +63,8 @@ export function injectBaseStyles(): void {
     ${baseCss}
     ${authCss}
 
-    /* A list row is a target, not a card: it earns a background on hover
-       rather than carrying a border all the time. */
-    [data-row-action] { opacity: 0; }
-    /* Keyboard users never hover, so the action has to be reachable anyway. */
-    [data-row-action]:focus-visible { opacity: 1; }
-
     /* A choice that is ticked is drawn in navy, like a cell in a grid. */
     [data-choice]:has(input:checked) { border-color: ${surface.rule} !important; }
-
-    .space-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
-    @media (max-width: 760px) { .space-layout { grid-template-columns: 1fr; gap: 24px; } }
 
     @media (max-width: 520px) {
       [data-card] { padding: 28px 20px !important; }

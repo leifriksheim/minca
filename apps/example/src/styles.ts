@@ -32,12 +32,6 @@ export function injectBaseStyles(): void {
     /* Hover only where there is a pointer that hovers. On a touchscreen a
        tap would otherwise leave the hover look stuck on whatever was tapped. */
     @media (hover: hover) {
-      /* A list row is a target, not a card: it earns a background on hover
-         rather than carrying a border all the time, and its small actions
-         show up with it. Without hover (touch) they simply stay visible. */
-      [data-row-action] { opacity: 0; }
-      /* Keyboard users never hover, so the action has to be reachable anyway. */
-      [data-row-action]:focus-visible { opacity: 1; }
       ${hoverCss}
       .you-button:hover, .you-button[aria-expanded="true"] { background: ${surface.line}; }
     }
@@ -47,14 +41,7 @@ export function injectBaseStyles(): void {
        column" (760px). Touch is asked about separately, with pointer: coarse,
        since a small laptop window is not a phone and a tablet is not a mouse. */
 
-    .page {
-      min-height: 100vh;
-      min-height: 100dvh;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding: 56px 20px 80px;
-    }
+    /* .page and .space-layout come from baseCss: the home's screens sit on the same page. */
 
     /* In a space: the rail, the space's sidebar, and whatever is open, each
        the height of the window and scrolling on its own, the way chat apps are. */
@@ -147,7 +134,6 @@ export function injectBaseStyles(): void {
     .scroll-x > * { flex-shrink: 0; white-space: nowrap; }
 
     /* A space: its collections down the side, the chosen one beside them. */
-    .space-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
     .space-side { display: flex; flex-direction: column; gap: 28px; }
     .collection-nav { display: flex; flex-direction: column; gap: 2px; }
 
@@ -294,7 +280,6 @@ export function injectBaseStyles(): void {
     }
 
     @media (max-width: 760px) {
-      .space-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
       /* The side column comes apart: its collections become a row of
          tabs above the list, and who is here and the invite go below it,
          so the thing you opened the space for is on the first screen. */
