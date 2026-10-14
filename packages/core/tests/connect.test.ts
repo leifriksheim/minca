@@ -23,7 +23,7 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { team } from '../src/space/presets.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
-import { hold } from './helpers/hold.js';
+import { hold, letGo } from './helpers/hold.js';
 import { joined } from './helpers/joined.js';
 import { isRecord } from '../src/utils/guards.js';
 import { createNode } from '../src/node/node.js';
@@ -42,8 +42,11 @@ afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((close) => close()));
 });
 
-/** The account home: a signed-in flow on the hub */
-async function home(hub: FakeHub): Promise<MincaAuth> {
+/**
+ * The account home: a signed-in flow on the hub. Signing out waits only
+ * briefly for a peer to take its revokes in, unless a test is about that wait.
+ */
+async function home(hub: FakeHub, { signOutGraceMs = 300 } = {}): Promise<MincaAuth> {
   const accounts = createFolderAccountStore(createMemoryDirectory().handle);
   const stores = memoryStores();
   const values = new Map<string, string>([['minca.stay-signed-in', '"never"']]);
@@ -56,6 +59,7 @@ async function home(hub: FakeHub): Promise<MincaAuth> {
     },
     browser: { accounts: async () => accounts, stores: () => stores },
     network: { transports: (spaceId, sessionDid) => [hub.transport(sessionDid, spaceId)] },
+    signOutGraceMs,
   });
   await auth.start();
   await auth.createAccount('Ada');
@@ -412,7 +416,7 @@ describe('connecting an app to an account home', () => {
   test('signing out and disconnecting: the apps connected here are revoked before the home goes', async () => {
     // A network slow enough that a home which stopped at once would leave its revokes behind.
     const hub = createFakeHub({ latencyMs: 400 });
-    const auth = await home(hub);
+    const auth = await home(hub, { signOutGraceMs: 5000 });
     const { node: homeNode } = auth.getState().session!;
     const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
     const key = await appKey();
@@ -440,6 +444,44 @@ describe('connecting an app to an account home', () => {
         ),
       5000,
       'the revoke to reach the app, though the home has gone',
+    );
+  });
+
+  test('disconnecting in a space the home no longer holds: it opens it, and waits for the app to hear', async () => {
+    // Slow enough that a freshly opened space has met nobody by the time the revoke is written.
+    const hub = createFakeHub({ latencyMs: 100 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://todo.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
+      spaceIds: [shared.id],
+    });
+    const todo = await app(hub, grant, key);
+    await hold(todo, shared.id);
+    await hold(homeNode, shared.id);
+    const before = await todo.records.put(shared.id, 'app.todo.item', { text: 'before' });
+    await until(
+      async () => (await homeNode.records.get(shared.id, before.key)) !== null,
+      5000,
+      'the two to meet',
+    );
+    // Nothing on the home holds the space now: it has closed once this returns.
+    await letGo(homeNode, shared.id);
+
+    assert.equal(await auth.disconnect('https://todo.test', { waitMs: 5000 }), true, 'the app heard');
+    await auth.signOut();
+    // The home has stopped: whatever reaches the app now, it sent before stopping.
+    await until(
+      async () =>
+        todo.records.put(shared.id, 'app.todo.item', { text: 'after' }).then(
+          () => false,
+          (error: Error) => /revoked/.test(error.message),
+        ),
+      5000,
+      'the revoke at the app',
     );
   });
 

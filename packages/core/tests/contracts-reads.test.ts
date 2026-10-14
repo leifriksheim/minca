@@ -100,7 +100,7 @@ describe('probe: failing versions on read paths', () => {
       retain: true,
       version: { key: c.key, seq: 1, prev: c.version, genesis: c.version },
     });
-    await forge(bob, space, {
+    const last = await forge(bob, space, {
       author: '',
       collection: 'app.counter',
       body: { n: 101 },
@@ -109,10 +109,13 @@ describe('probe: failing versions on read paths', () => {
     });
     await hold(bob.node, space);
     await until(
-      async () => (await alice.node.records.get<{ n: number }>(space, c.key))?.body?.n !== 0,
+      async () => {
+        const held = new Set((await alice.node.records.history(space, c.key)).map((r) => r.version));
+        return held.has(bad.id) && held.has(last.id);
+      },
       3000,
-      'alice to update',
-    ).catch(() => {});
+      'the forged versions at alice',
+    );
     const got = await alice.node.records.get<{ n: number }>(space, c.key);
     assert.notEqual(got?.body?.n, 101, 'counter jumped 0 -> 101 by way of a failing 100');
   });
