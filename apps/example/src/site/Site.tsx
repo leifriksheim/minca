@@ -4,6 +4,8 @@ import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
 import { STAFF_COLLECTIONS } from '@minca/core';
 import { Mark } from '@minca/app-shared/Wordmark';
+import { Shape, type ShapeKind } from '@minca/app-shared/shapes';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 import { CONCEPTS } from './concepts';
 
 /** How the concepts heading says its count, so it never goes stale */
@@ -345,7 +347,13 @@ function tabTarget(key: string, index: number, last: number): number | null {
  * Tabs and the chosen one's panel: arrow keys, Home and End move between
  * them. The caller keeps which one is chosen.
  */
-function Tabs<T extends { readonly id: string; readonly name: string; readonly icon?: string }>({
+function Tabs<
+  T extends {
+    readonly id: string;
+    readonly name: string;
+    readonly shape?: { readonly kind: ShapeKind; readonly colour: ShapeColour };
+  },
+>({
   label,
   items,
   selected,
@@ -387,21 +395,7 @@ function Tabs<T extends { readonly id: string; readonly name: string; readonly i
             onClick={() => onSelect(item.id)}
             onKeyDown={(event) => onKey(event, i)}
           >
-            {item.icon && (
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d={item.icon} />
-              </svg>
-            )}
+            {item.shape && <Shape kind={item.shape.kind} colour={item.shape.colour} size={18} />}
             {item.name}
           </button>
         ))}
@@ -533,13 +527,14 @@ export function Developers() {
       <section className="hero">
         <div className="wrap">
           <h1>
-            Build apps on data
+            A backend that runs
             <br />
-            people own.
+            everywhere, and nowhere.
           </h1>
           <p>
-            Identity, storage, sync and encryption in one library. No backend to run, no database to host —
-            your users bring their data, and your app is a view on it.
+            A protocol for any kind of social space. Let your users be your infrastructure: their devices keep
+            the data, check the rules and sync with each other. No servers to run, and nothing in the middle
+            that can read it.
           </p>
           <div className="actions">
             <span className="install">

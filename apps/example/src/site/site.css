@@ -557,6 +557,9 @@
   display: none;
 }
 .site .tabs [role='tab'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex: 0 0 auto;
   padding: 8px 14px;
   border: 1px solid transparent;
@@ -580,10 +583,6 @@
   color: var(--ink);
   background: var(--card);
   border-color: var(--rule);
-}
-.site .tabs [role='tab'] svg {
-  vertical-align: -3px;
-  margin-right: 8px;
 }
 .site .tab-panel {
   padding-top: 32px;

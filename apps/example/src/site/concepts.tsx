@@ -3,13 +3,15 @@
  * line of code, and a small drawing in HTML and CSS.
  */
 import type { ReactNode } from 'react';
+import type { ShapeKind } from '@minca/app-shared/shapes';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 
 export interface Concept {
   /** Its tab's id */
   readonly id: string;
   readonly name: string;
-  /** Its tab's icon: a path on a 16 × 16 grid, drawn like the site's other icons */
-  readonly icon: string;
+  /** Its tab's mark: one of the shapes that mean something, in its own colour */
+  readonly shape: { readonly kind: ShapeKind; readonly colour: ShapeColour };
   readonly intro: ReactNode;
   readonly code?: string;
   readonly visual: ReactNode;
@@ -109,38 +111,25 @@ const APPS = (
 );
 
 const SPACES = (
-  <div className="viz" role="img" aria-label="A space: its constitution, and its members' devices in sync">
+  <div
+    className="viz"
+    role="img"
+    aria-label="A space: its founding rules, sealed by their hash, and its members' devices in sync"
+  >
     <div className="viz-space">
       <div className="viz-caption">space · Bike co-op</div>
-      <Box ink name="Constitution" sub="its founding rules" />
+      <Box ink name="Founding rules">
+        <small>top: no one, like a co-op</small>
+        <small>roles: steward, member</small>
+        <span className="viz-note">{LOCK} the space’s id is their hash</span>
+      </Box>
       <div className="viz-row">
         <Box name="Ann" sub="steward" />
         <Box name="Bea" sub="member" />
         <Box name="Cy" sub="member" />
       </div>
     </div>
-    <div className="viz-caption">⇄ synced between the members’ devices</div>
-  </div>
-);
-
-const CONSTITUTION = (
-  <div
-    className="viz"
-    role="img"
-    aria-label="A constitution, sealed by its hash, and a successor members may follow"
-  >
-    <div className="viz-flow">
-      <Box ink name="Constitution">
-        <small>top: founders · Alice</small>
-        <small>roles: admin, member</small>
-        <small>conflicts: strong-remove/1</small>
-        <span className="viz-note">{LOCK} its id is its hash</span>
-      </Box>
-      <Arrow label="members start" />
-      <Box name="Successor" sub="new founding rules">
-        <span className="viz-note">each member chooses</span>
-      </Box>
-    </div>
+    <div className="viz-caption">⇄ synced between the members’ devices, sealed before it leaves</div>
   </div>
 );
 
@@ -165,7 +154,7 @@ const RECORDS = (
   </div>
 );
 
-const ROLES = (
+const PERMISSIONS = (
   <div className="viz" role="img" aria-label="People hold roles, and roles hold grants">
     <div className="viz-flow">
       <Box name="Bea, Cy" sub="people" />
@@ -208,19 +197,25 @@ const CONTRACTS = (
   </div>
 );
 
-const SYNC = (
-  <div className="viz" role="img" aria-label="Devices sync directly and encrypted; a relay introduces them">
-    <div className="viz-flow">
-      <Box ink name="Ann’s laptop" />
-      <span className="viz-arrow">
-        <span aria-hidden>⇄</span>
-        <small className="viz-lock">{LOCK} end to end</small>
-      </span>
-      <Box ink name="Bea’s phone" />
+const NODES = (
+  <div
+    className="viz"
+    role="img"
+    aria-label="The same node in a tab, an extension and a terminal, syncing directly; a relay and a host off to the side"
+  >
+    <div className="viz-caption">one node, the same everywhere</div>
+    <div className="viz-row">
+      <Box ink name="Browser tab" sub="IndexedDB" />
+      <Box ink name="Extension" sub="keeps every space" />
+      <Box ink name="Terminal" sub="a folder on disk" />
     </div>
+    <span className="viz-arrow down">
+      <span aria-hidden>⇄</span>
+      <small className="viz-lock">{LOCK} directly, end to end</small>
+    </span>
     <div className="viz-row">
       <Box name="Relay" sub="introduces them, then steps aside" />
-      <Box name="Always-on node" sub="keeps it online, can’t read it" />
+      <Box name="Host" sub="keeps it online, can’t read it" />
     </div>
   </div>
 );
@@ -229,61 +224,43 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
   {
     id: 'identity',
     name: 'Identity',
-    icon: 'M8 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 14c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5',
+    shape: { kind: 'key', colour: 'cobalt' },
     intro:
       'A person has one account: a recovery code they keep, or a passkey. Each device and app gets a key of its own, with a note from the account saying what that key may do. There is no user table for you to keep.',
     code: 'const me = await manager.fromRecoveryCode(password);',
     visual: IDENTITY,
   },
   {
-    id: 'apps',
-    name: 'Apps',
-    icon: 'M2.5 2.5h4.5v4.5h-4.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5h-4.5zM9 9h4.5v4.5H9z',
-    intro:
-      'An app doesn’t get your account. It asks your account home for access, and you see what it wants: which spaces, read or write, for how long. Approve, and it gets a pass that says exactly that, which every device checks and you can take back anytime. It never sees your keys or password.',
-    code: "const connection = createMincaConnection({\n  home: 'https://weave-home.netlify.app/connect',\n  request: { name: 'Polls', access: 'write',\n    scope: 'spaces' },\n});",
-    visual: APPS,
-  },
-  {
     id: 'spaces',
     name: 'Spaces',
-    icon: 'M2.5 2.5h11v11h-11zM5 6h6M5 9.5h3',
+    shape: { kind: 'grid', colour: 'coral' },
     intro:
-      'A space is a group’s shared data: its members, their roles and their records, kept on each member’s devices and synced between them.',
-    code: "const space = await node.spaces.create(\n  { name: 'Club', visibility: 'private' });",
+      'A space is a group’s shared data: its members, their roles and their records, kept on each member’s devices and synced between them. It starts from a few founding rules: who’s at the top (founders, or no one, like a co-op) and the roles it begins with. Its id is their hash, so nobody can swap them.',
+    code: "const space = await node.spaces.create({\n  name: 'Bike co-op',\n  visibility: 'private',\n  ...rolePresets.coop, // no one at the top\n});",
     visual: SPACES,
-  },
-  {
-    id: 'constitution',
-    name: 'Constitution',
-    icon: 'M2 6l6-3.5L14 6zM3.5 6.5V12M6.5 6.5V12M9.5 6.5V12M12.5 6.5V12M2 13.5h12',
-    intro:
-      'Every space starts from its constitution, its founding rules: who’s at the top (founders, who can’t be pushed out but may step down, or no one, like a co-op), the roles it begins with, and how conflicts resolve. Its id is its hash, so it can never be swapped. To change the founding rules, members start a successor space, and each chooses whether to follow.',
-    code: "const space = await node.spaces.create({\n  name: 'Bike co-op',\n  visibility: 'private',\n  ...rolePresets.coop, // top: 'none'\n});",
-    visual: CONSTITUTION,
   },
   {
     id: 'records',
     name: 'Records',
-    icon: 'M4 1.5h5.5l3 3v10h-8.5zM9.5 1.5v3h3',
+    shape: { kind: 'stack', colour: 'peach' },
     intro:
       'Data is typed records in collections, whose schemas live in the space. A record is a chain of signed versions, and its key says whose it is.',
     code: "const Task = z.object({\n  title: z.string(), done: z.boolean() });\n\nconst tasks = collection({\n  name: 'app.task', schema: Task,\n  // links and rules are optional\n});\nawait node.collections.define(\n  space.id, tasks);\nawait node.records.put(space.id, tasks,\n  { title: 'Ship v1', done: false });",
     visual: RECORDS,
   },
   {
-    id: 'roles',
-    name: 'Roles & grants',
-    icon: 'M8 1.5l5.5 2v4c0 3.5-2.4 6-5.5 7-3.1-1-5.5-3.5-5.5-7v-4z',
+    id: 'permissions',
+    name: 'Permissions',
+    shape: { kind: 'shield', colour: 'sage' },
     intro:
-      'The group decides who may do what. Roles hold grants, and people hold roles. Every device checks each change against them, and refuses what breaks them.',
-    code: "await node.spaces.assign(space.id, halDid, 'hr');",
-    visual: ROLES,
+      'The group decides who may do what. A role holds grants, like “anything in app.hr”, and people hold roles. Nobody can hand out more than they may do themselves. Every device checks each change against them, and refuses what breaks them.',
+    code: "await node.spaces.defineRole(space.id, {\n  name: 'hr',\n  grants: [{ cmd: '/record',\n    pol: [['==', '.collection', 'app.hr']] }],\n});\nawait node.spaces.assign(space.id, halDid, 'hr');",
+    visual: PERMISSIONS,
   },
   {
     id: 'contracts',
     name: 'Contracts',
-    icon: 'M14.5 8a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0zM5.5 8l2 2 3.5-4',
+    shape: { kind: 'tick', colour: 'cobalt' },
     intro: (
       <>
         <p>
@@ -307,12 +284,21 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     visual: CONTRACTS,
   },
   {
-    id: 'sync',
-    name: 'Sync & privacy',
-    icon: 'M4 7.5h8v6.5H4zM5.5 7.5V5a2.5 2.5 0 0 1 5 0v2.5',
+    id: 'apps',
+    name: 'Apps',
+    shape: { kind: 'pass', colour: 'lilac' },
     intro:
-      'Devices sync directly, encrypted end to end, and an invite link carries the space’s key. Relays only introduce devices, and an always-on node can keep a space online without being able to read it.',
-    code: "await node.spaces.invite(space.id, { role: 'member' });",
-    visual: SYNC,
+      'An app doesn’t get your account. It asks your account home for access, and you see what it wants: which spaces, read or write, for how long. Approve, and it gets a pass that says exactly that, which every device checks and you can take back anytime. It never sees your keys or password.',
+    code: "const connection = createMincaConnection({\n  home: 'https://weave-home.netlify.app/connect',\n  request: { name: 'Polls', access: 'write',\n    scope: 'spaces' },\n});",
+    visual: APPS,
+  },
+  {
+    id: 'nodes',
+    name: 'Nodes',
+    shape: { kind: 'mesh', colour: 'coral' },
+    intro:
+      'A node is the whole engine in one object: identity, storage, sync and encryption. The same one runs in a browser tab, the Chrome extension, a terminal, a server or an agent, and they sync directly, encrypted end to end. Relays only introduce them, and a host keeps your spaces online while your devices sleep, without a key that could read them.',
+    code: "const node = await createNode({\n  signer, // your account, or a pass from it\n  stores: indexedDBStores('my-app'),\n  network: { relays: ['wss://…'] },\n});\n// the same node at a terminal: minca run\n// online for others, unread: minca host",
+    visual: NODES,
   },
 ];
