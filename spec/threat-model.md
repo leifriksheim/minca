@@ -718,7 +718,11 @@ raised but has no place above until a test confirms or rules it out.
   [#215](https://github.com/leifriksheim/minca/issues/215)).
 - **Protecting a device that is already compromised** while it runs. Keeping
   keys from being exported is up to each implementation (see
-  `packages/core/docs/node.md`).
+  `packages/core/docs/node.md`). The desktop app keeps its app's key and grant
+  at rest in a long-running process's folder, sealed under a key in the
+  system's keychain: a copy of the folder yields no key, grant or private
+  body, and shows what a carrier sees (§3.8). A program running as the person
+  can still ask the keychain, as it can read a browser profile.
 
 ## 5. Reviewing a change against this page
 

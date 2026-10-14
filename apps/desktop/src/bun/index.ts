@@ -1,20 +1,24 @@
 /**
- * Minca on the desktop. One Bun process does four things:
+ * Minca on the desktop. One Bun process does five things:
  *
- * - serves the example app's build at a fixed loopback origin, so its
- *   IndexedDB, its app key and the account home's grant survive restarts
- *   (a new port would be a new origin, and a new app);
+ * - serves the example app's build at a fixed loopback origin, so the
+ *   account home knows it as one app across restarts (a new port would be a
+ *   new origin, and a new app);
  * - shows it in a window with no title bar, and opens the windows it asks
  *   for, the account home among them (`bridge.ts`);
+ * - runs the app's node in a process of its own (`app-node.ts`), which the
+ *   window uses over a port and which keeps running when it closes;
  * - runs a carrier for the person's account beside it (`carrier.ts`), which
- *   keeps their spaces online while the window is closed, from a folder;
+ *   keeps their spaces online even once the app's connection has run out;
  * - puts Minca in the menu bar, where it stays when the window closes.
  */
 import Electrobun, { BrowserWindow, BuildConfig, PATHS, Tray, Utils } from 'electrobun/bun';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createBridge, type PaneHost } from './bridge';
+import { createAppNode, keychainKey } from './app-node';
 import { createCarrier, type CarrierState } from './carrier';
+import { connectionMenu, reminderAt, whenEnds } from './menu';
 import { createNotifier } from './notify';
 import { preloadFor } from './page';
 
@@ -61,6 +65,7 @@ const bridge = createBridge({
     preloadFor({ secret, origin, popup, app: isApp, dragInset: isApp ? DRAG_INSET : 0 }),
   openExternal: (url) => void Utils.openExternal(url),
   account: (who) => followApp(who),
+  node: (message) => appNode.fromWindow(message),
   open({ url, preload, width, height, app: isApp, closed }) {
     const offset = 40 * (openCount++ % 6);
     const win = new BrowserWindow({
@@ -85,6 +90,7 @@ const bridge = createBridge({
       // The app's window: the dock icon goes with it.
       if (isApp) {
         app = null;
+        appNode.detach();
         Utils.setDockIconVisible(false);
       }
     });
@@ -136,6 +142,14 @@ const chosen: unknown =
 const carrierFolder = typeof chosen === 'string' && chosen ? chosen : join(Utils.paths.userData, 'carrier');
 const { runtime } = await BuildConfig.get();
 const home = typeof runtime?.home === 'string' ? runtime.home : 'https://weave-home.netlify.app/connect';
+/** The relays, nodes and hosts the app was built with, so the node meets the same peers */
+const listed = (value: unknown) =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+const network = {
+  relays: listed(runtime?.relays),
+  nodes: listed(runtime?.nodes),
+  hosts: listed(runtime?.hosts),
+};
 
 // Minca's rainbow, in one colour: a template image, which macOS tints like the other icons in the bar (assets/tray.swift).
 const tray = new Tray({ image: 'views://tray.png', template: true, width: 22, height: 12 });
@@ -143,7 +157,10 @@ let carrierState: CarrierState = { state: 'starting' };
 // What the account asked to hear about, as the carrier sees it arrive: shown by the system, app open or not.
 const notifier = createNotifier({ show: ({ title, body }) => Utils.showNotification({ title, body }) });
 const carrier = createCarrier({
-  woke: (wake) => notifier.woke(wake),
+  // While the app's node runs, it says what arrived in words of its own; the carrier only knows where.
+  woke: (wake) => {
+    if (appNode.state().status !== 'ready') notifier.woke(wake);
+  },
   folder: carrierFolder,
   // The CLI, run by the Bun this app ships with. Quitting the app stops it.
   cli: [process.execPath, join(VIEWS_FOLDER, 'minca.js')],
@@ -157,6 +174,59 @@ const carrier = createCarrier({
       followApp(appAccount);
   },
 });
+
+// The app's node: the window's, and the menu bar's while the window is closed.
+const appNode = createAppNode({
+  cli: [process.execPath, join(VIEWS_FOLDER, 'minca.js')],
+  folder: join(Utils.paths.userData, 'app-node'),
+  origin: APP_URL,
+  home,
+  network,
+  sealKey: () => keychainKey(),
+  openHome: (url, origin, hear) => bridge.openFromShell(url, { width: 460, height: 720 }, { origin, hear }),
+  toWindow: (message) => bridge.toApp(message),
+  changed: (state) => {
+    const who = state.grant ? { did: state.grant.did, name: state.grant.name } : null;
+    if (state.status === 'ready' || state.status === 'expired') followApp(who);
+    else if (state.status === 'disconnected') followApp(null);
+    remindLater();
+    showMenu();
+  },
+  // With the window open, the app shows its own.
+  notify: ({ title, space }) => {
+    if (!app) Utils.showNotification({ title, body: space ? `In ${space}` : '' });
+  },
+  log: (line) => console.error(line),
+});
+
+// Once for each grant, a day before it ends: the one reminder, then the menu bar's dot.
+const remindedFile = join(Utils.paths.userData, 'reminded.json');
+let reminded: unknown = await readFile(remindedFile, 'utf8').then(
+  (text): unknown => JSON.parse(text),
+  () => null,
+);
+let reminder: ReturnType<typeof setTimeout> | null = null;
+function remindLater() {
+  if (reminder) clearTimeout(reminder);
+  reminder = null;
+  const state = appNode.state();
+  const at = reminderAt(state, Date.now());
+  const ends = state.grant?.expiresAt;
+  if (at === null || ends === undefined || reminded === ends) return;
+  reminder = setTimeout(
+    () => {
+      if (appNode.state().grant?.expiresAt !== ends) return;
+      reminded = ends;
+      void writeFile(remindedFile, JSON.stringify(ends), { mode: 0o600 }).catch(() => {});
+      Utils.showNotification({
+        title: 'Minca',
+        body: `Your connection ends ${whenEnds(ends * 1000, Date.now())}. Renew it from the menu bar.`,
+      });
+      showMenu();
+    },
+    Math.min(at - Date.now(), 2 ** 31 - 1),
+  );
+}
 
 // One account: the one the app is connected as. The menu bar keeps that one's
 // spaces online and no other, and asks to, once for each account, as soon as
@@ -198,6 +268,7 @@ function followApp(who: Account | null) {
   connectCarrier(who);
 }
 
+/** The carrier, under the connection: it keeps the spaces online, and goes on when the connection has run out */
 function carrierItems() {
   const said = (label: string) => ({ type: 'normal' as const, label, action: 'status', enabled: false });
   const offer = (account: Account) => ({
@@ -208,37 +279,43 @@ function carrierItems() {
   const state = carrierState;
   const account = appAccount;
   const problem = carrierProblem ? [said(carrierProblem)] : [];
-  if (!account)
-    return [
-      said(state.state === 'carrying' ? `Keeping ${state.name}’s spaces online` : 'Not connected'),
-      said('Open Minca to connect your account'),
-    ];
-  if (state.state === 'connecting') return [said(account.name), said('Waiting for your account home…')];
+  if (!account) return state.state === 'carrying' ? [said(`Keeping ${state.name}’s spaces online`)] : [];
+  if (state.state === 'connecting') return [said('Spaces online: waiting for your account home…')];
   if (carrying(account) && state.state === 'carrying')
     return [
-      said(account.name),
-      said(`Keeping ${state.spaces} ${state.spaces === 1 ? 'space' : 'spaces'} online`),
+      said(`${state.spaces} ${state.spaces === 1 ? 'space' : 'spaces'} online, always`),
       { type: 'normal' as const, label: 'Pause', action: 'pause' },
     ];
   if (state.state === 'paused')
     return [
-      said(account.name),
-      said('Paused: your account home still lists it'),
+      said('Spaces online: paused, and your account home still lists it'),
       { type: 'normal' as const, label: 'Resume', action: 'resume' },
     ];
   // Not carrying the app's account: carrying another's, stopped, or nothing yet.
   return [
-    said(account.name),
     ...(state.state === 'carrying' ? [said(`Keeping ${state.name}’s spaces online instead`)] : []),
     ...(state.state === 'stopped' ? [said(`Stopped: ${state.error}`)] : []),
     ...problem,
     offer(account),
   ];
 }
+/** The app's connection: until when, and a click to renew it near the end */
+function connectionItems() {
+  const menu = connectionMenu(appNode.state(), Date.now());
+  tray.setTitle(menu.attention ? '•' : '');
+  return menu.lines.map((line) => ({
+    type: 'normal' as const,
+    label: line.label,
+    action: line.action ?? 'status',
+    enabled: line.action !== undefined,
+  }));
+}
 function showMenu() {
   tray.setMenu([
     { type: 'normal', label: 'Open Minca', action: 'open' },
     { type: 'normal', label: 'Account settings…', action: 'settings' },
+    { type: 'divider' },
+    ...connectionItems(),
     { type: 'divider' },
     ...carrierItems(),
     { type: 'divider' },
@@ -250,9 +327,11 @@ tray.on('tray-clicked', (event) => {
   if (action === 'open') openApp();
   if (action === 'settings') openHome();
   if (action === 'connect' && appAccount) connectCarrier(appAccount);
+  if (action === 'renew') appNode.renew();
   if (action === 'pause') void carrier.pause();
   if (action === 'resume') carrier.resume();
   if (action === 'quit') {
+    appNode.close();
     carrier.close();
     tray.remove();
     Utils.quit();
@@ -263,4 +342,6 @@ tray.on('tray-clicked', (event) => {
 Electrobun.events.on('reopen', () => openApp());
 
 showMenu();
+// "Ends in 3 hours" stays true only if it is said again.
+setInterval(showMenu, 5 * 60_000);
 openApp();

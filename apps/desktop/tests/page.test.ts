@@ -224,3 +224,34 @@ test('the app’s window can tell the menu bar its account; a popup has no way t
   assert.equal(envelopes.length, before + 1);
   assert.ok(envelopes.at(-1)?.includes('did:key:zLeif'));
 });
+
+test('the app’s window talks to its node through the shell, both ways; a popup has no way to', () => {
+  const { bridge, windows, toNode, flush, openApp } = setupHarness();
+  const app = openApp();
+  app.page.click();
+  call(app.page, 'open', HOME, 'minca-home', 'popup');
+  flush();
+  const home = windows[1];
+  assert.ok(home);
+  const desktop: unknown = Reflect.get(app.page.context, 'mincaDesktop');
+  const node: unknown = Reflect.get(Object(desktop), 'node');
+  const send: unknown = Reflect.get(Object(node), 'send');
+  const listen: unknown = Reflect.get(Object(node), 'listen');
+  assert.ok(typeof send === 'function' && typeof listen === 'function');
+
+  const heard: unknown[] = [];
+  Reflect.apply(listen, node, [(data: unknown) => heard.push(data)]);
+  Reflect.apply(send, node, [{ kind: 'attach' }]);
+  flush();
+  assert.deepEqual(toNode, [{ kind: 'attach' }]);
+  bridge.toApp({ kind: 'state', state: { status: 'ready', session: 1 } });
+  // Made in the page's realm: compared as what crossed.
+  assert.deepEqual(JSON.parse(JSON.stringify(heard)), [
+    { kind: 'state', state: { status: 'ready', session: 1 } },
+  ]);
+
+  // The home's page hears nothing of it, and a forged delivery there reaches nobody.
+  assert.equal(Reflect.get(home.page.context, 'mincaDesktop'), undefined);
+  call(home.page, '__mincaReceive', { t: 'node', data: { kind: 'port' } });
+  assert.equal(heard.length, 1);
+});

@@ -20,10 +20,12 @@ function setup() {
   const external: string[] = [];
   const focused: string[] = [];
   const accounts: unknown[] = [];
+  const toNode: unknown[] = [];
   const shell: Shell = {
     preload: ({ secret, origin }) => `${secret} ${origin}`,
     openExternal: (url) => external.push(url),
     account: (who) => accounts.push(who),
+    node: (message) => toNode.push(message),
     open({ url, preload, popup, closed }) {
       const [secret = '', origin = ''] = preload.split(' ');
       const win: FakeWindow = {
@@ -55,7 +57,7 @@ function setup() {
   /** What a page sends, as its preload would */
   const send = (from: FakeWindow, message: object) =>
     bridge.receive({ s: from.secret, m: JSON.stringify(message) });
-  return { bridge, windows, external, focused, accounts, send };
+  return { bridge, windows, external, focused, accounts, toNode, send };
 }
 
 /** What the bridge delivered to a window, and the origin each delivery was guarded by */
@@ -293,4 +295,33 @@ test('a window the shell opens as no app — the account home, from the menu bar
   assert.ok(home);
   t.send(home, { t: 'account', who: { did: 'did:key:zLeif', name: 'Leif' } });
   assert.deepEqual(t.accounts, []);
+});
+
+test('only the app’s own window talks to its node: not a popup it opened, nor a window the menu bar opened', () => {
+  const t = withHome();
+  t.bridge.openWindow('https://home.example/', { width: 720, height: 820 }, { app: false });
+  const settings = t.windows[2];
+  assert.ok(settings);
+  t.send(t.home, { t: 'node', data: { kind: 'disconnect' } });
+  t.send(settings, { t: 'node', data: { kind: 'disconnect' } });
+  t.send(t.app, { t: 'node', data: { kind: 'attach' } });
+  assert.deepEqual(t.toNode, [{ kind: 'attach' }]);
+
+  // And only it hears the node, at the app's origin.
+  t.bridge.toApp({ kind: 'state', state: { status: 'ready' } });
+  assert.deepEqual(delivered(t.app).at(-1), {
+    guard: 'http://127.0.0.1:47830',
+    message: { t: 'node', data: { kind: 'state', state: { status: 'ready' } } },
+  });
+  for (const other of [t.home, settings])
+    assert.ok(!delivered(other).some(({ message }) => Reflect.get(Object(message), 't') === 'node'));
+});
+
+test('the app’s window may send its node more than a popup may send', () => {
+  const t = withHome();
+  const large = 'x'.repeat(2 << 20);
+  t.send(t.home, { t: 'post', to: null, origin: '*', data: JSON.stringify(large) });
+  assert.equal(delivered(t.app).length, 0);
+  t.send(t.app, { t: 'node', data: large });
+  assert.equal(t.toNode.length, 1);
 });

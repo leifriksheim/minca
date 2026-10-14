@@ -51,6 +51,11 @@ export interface Shell {
    * Only a window nothing opened says it: the app's own, not a popup.
    */
   account?(who: { readonly did: string; readonly name: string } | null): void;
+  /**
+   * What the app's window says to its node (`app-node.ts`): only the app's
+   * own window, which the shell opened, never a popup or another page.
+   */
+  node?(message: unknown): void;
   /** The preload for a window with this secret, at this origin */
   preload(params: {
     readonly secret: string;
@@ -89,6 +94,8 @@ export interface ShellWindow {
 
 /** Largest message passed on, as JSON */
 const MAX_MESSAGE = 1 << 20;
+/** Largest from the app's window, which talks to its node through here: a record can be large */
+const MAX_APP_MESSAGE = 16 << 20;
 const MAX_REF = 64;
 /**
  * The page asks for a click before it opens anything; these hold if a page
@@ -117,6 +124,8 @@ export interface Bridge {
   ): ShellWindow | null;
   /** A page's message, as Electrobun's `host-message` event carried it */
   receive(detail: unknown): void;
+  /** Says something to the app's own window, from its node */
+  toApp(message: unknown): void;
 }
 
 const NO_HOST: PaneHost = { run() {}, close() {}, activate() {}, drag() {}, zoom() {} };
@@ -193,7 +202,7 @@ export function createBridge(shell: Shell): Bridge {
   function receive(detail: unknown): void {
     if (!isRecord(detail) || typeof detail.s !== 'string' || typeof detail.m !== 'string') return;
     const pane = panes.get(detail.s);
-    if (!pane || pane.closed || detail.m.length > MAX_MESSAGE) return;
+    if (!pane || pane.closed || detail.m.length > (pane.app ? MAX_APP_MESSAGE : MAX_MESSAGE)) return;
     let message: unknown;
     try {
       message = JSON.parse(detail.m);
@@ -209,6 +218,7 @@ export function createBridge(shell: Shell): Bridge {
     else if (message.t === 'drag') drag(pane, message);
     else if (message.t === 'zoom') pane.host.zoom();
     else if (message.t === 'account' && pane.app) account(message.who);
+    else if (message.t === 'node' && pane.app && pane.opener === null) shell.node?.(message.data);
   }
 
   function openFrom(pane: Pane, message: Record<string, unknown>): void {
@@ -337,6 +347,10 @@ export function createBridge(shell: Shell): Bridge {
       return url ? open(url, size, null, null, '', options.app ?? true).host : null;
     },
     receive,
+    toApp(message) {
+      for (const pane of panes.values())
+        if (pane.app && pane.opener === null) deliver(pane, { t: 'node', data: message });
+    },
   };
 }
 

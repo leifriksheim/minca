@@ -119,6 +119,8 @@ function page(options: PageOptions): void {
   }
 
   const opened = new Map<string, Proxy>();
+  /** Who hears the app's node: the app's own window only */
+  let nodeListener: ((data: unknown) => void) | null = null;
   const opener = options.popup ? proxy(null) : null;
 
   defineProperty(window, 'open', {
@@ -185,6 +187,10 @@ function page(options: PageOptions): void {
       origin?: string;
       data?: unknown;
     }) => {
+      if (message.t === 'node') {
+        if (options.app && !options.popup && nodeListener) nodeListener(message.data);
+        return;
+      }
       if (message.t === 'closed') {
         const closed = message.ref === null ? opener : opened.get(message.ref ?? '');
         if (closed) closed.closed = true;
@@ -227,6 +233,16 @@ function page(options: PageOptions): void {
             who: typeof did === 'string' && typeof name === 'string' ? { did, name } : null,
           });
         },
+        // The app's node runs in the shell, and the window uses it over this (apps/example/src/desktop.ts).
+        node: Object.freeze({
+          send(data: unknown) {
+            send({ t: 'node', data });
+          },
+          listen(listener: unknown) {
+            nodeListener =
+              typeof listener === 'function' ? (data) => void apply(listener, null, [data]) : null;
+          },
+        }),
       }),
     });
   }

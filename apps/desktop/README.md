@@ -1,7 +1,10 @@
 # Minca for the desktop (prototype)
 
-The example app in a window of its own, with no title bar, and a carrier in
-the menu bar that keeps your spaces online when the window closes. Built on
+The example app in a window of its own, with no title bar. Its node runs in
+the shell, not the page, so it keeps running in the menu bar when the window
+closes: automations still notify, and the window opens onto a node that is
+already up to date. A carrier beside it keeps your spaces online even once
+the app's connection has run out. Built on
 [Electrobun](https://electrobun.dev) 1.18, whose main process is Bun.
 
 ```bash
@@ -18,7 +21,32 @@ this machine.
 ## What it does
 
 - Serves the example app at `http://127.0.0.1:47830`. The port is fixed: a new
-  port is a new origin, so a new IndexedDB, a new app key and a new grant.
+  port is a new origin, and the account home knows an app by its origin.
+- Runs the app's node in a process of its own (`src/bun/app-node.ts`): `minca
+app-node` from the CLI (`packages/cli/src/app-node.ts`), with the Bun
+  Electrobun ships. The window uses it over a port, as a page uses its
+  worker (`desktopConnection` in `apps/example/src/desktop.ts`), so the window
+  and the menu bar are one node with one key. Connecting opens the account
+  home in a window the shell is the opener of, at the app's origin, and asks
+  for a 30-day note. The window is shown who is connected, never the keys
+  the grant carries.
+- Seals that node's folder (`app-node/` in the app's data folder): its key,
+  its grant, and its stores' registry, under a key kept in the macOS keychain
+  (`Bun.secrets`, service `org.minca.desktop`) and handed to the node on
+  stdin. Copied without the keychain, the folder yields no key, grant or
+  private body, only what a carrier sees. Renewing keeps the key; leaving an
+  account (disconnecting, or the home answering as another account) forgets
+  it and that account's stores, with anything written there that no peer had
+  taken yet. A program
+  running as you can still ask the keychain, as it can read a browser profile.
+- Says in the menu bar how long the connection lasts: "Connected until Tue 21
+  Oct" while it is far off; in its last two days "Connection ends tomorrow",
+  "Renew connection…" and a dot beside the icon; once it has run out,
+  "Paused: automations are off until you reconnect" and "Reconnect…". One
+  notification a day before the end, then nothing more. With the window
+  closed, what the account's automations match shows as a notification in
+  the app's own words; the carrier's notifications (where, not what) show
+  only while the app's node isn't connected.
 - Shows it at `/app` in a window with no title bar (`titleBarStyle:
 'hiddenInset'`). An empty spot in the top 28 points drags the window, and a
   double click there zooms it. The page gets `data-desktop` on `<html>`, so
@@ -26,7 +54,8 @@ this machine.
   (`apps/example/src/styles.ts`).
 - Opens the windows the app asks for, the account home among them, through
   the popup bridge below. Links to new windows open in the person's browser.
-- Runs a carrier for your account beside it (`src/bun/carrier.ts`): `minca
+- Runs a carrier for your account beside it (`src/bun/carrier.ts`), which
+  keeps your spaces online after the app's connection has run out: `minca
 carry` from the CLI, with the Bun Electrobun ships. Like the Chrome extension
   it holds a pass for each space and nothing that reads or writes them, and it
   listens on no port. "Keep my spaces online…" in the menu bar connects it
@@ -135,6 +164,12 @@ Not yet:
 - **A real click on Connect, since the click check.** Clicks posted from a
   script don't reach the window without the Accessibility permission, so it
   needs trying by hand.
+- **The shared node, end to end in the window.** `minca app-node` is tested
+  over its lines, under Node and under the Bun the app ships, and the bridge
+  and preload in the harness; connecting from the window, renewing from the
+  menu bar and notifications with the window closed need trying by hand. A
+  grant the window kept from before the shared node is not carried over:
+  connect once more.
 - **A space carried, seen.** The test account had none; connecting the app to
   it needs a real click (above).
 - **The app's origin is fixed.** `http://127.0.0.1:47830` is the same app on
