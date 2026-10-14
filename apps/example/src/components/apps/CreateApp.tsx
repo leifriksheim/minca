@@ -1,28 +1,27 @@
 import { useEffect, useState } from 'react';
 import type { SpaceSummary } from '@minca/core';
 import { Modal } from '@minca/app-shared/Modal';
-import { ConnectAgent, useKnownAgent } from '../ConnectAgent';
-import { Icon } from '../Icon';
+import { Loader } from '@minca/app-shared/Loader';
+import { AgentStep, ConnectAgent, stepList, stepText, useKnownAgent } from '../ConnectAgent';
 import { useNode } from '@minca/core/react';
 import { useLauncherRecords } from './entries';
 import { prepareLauncher } from './launcher';
-import { styles, palette, ui, variants } from '../../styles';
+import { styles, palette } from '../../styles';
 
-/** Things a group might ask for, to start from */
+const TITLE = 'Add your own app';
+
+/** Things a group might ask for, to show how plainly it can be said */
 const IDEAS = [
-  { label: 'Potluck sign-up', text: 'a potluck sign-up, where everyone says what they bring' },
-  {
-    label: 'Reading list',
-    text: 'a reading list: what we are reading, when we meet, and a rating from each of us',
-  },
-  { label: 'Shopping list', text: 'a shared shopping list we can tick off in the shop' },
-  { label: 'Chore rota', text: 'a chore rota that takes turns, week by week' },
+  'a potluck sign-up, where everyone says what they bring',
+  'a reading list, with when we meet and a rating from each of us',
+  'a chore rota that takes turns, week by week',
 ] as const;
 
 /**
- * Making an app by describing it to an agent, which proposes it as the guide
- * the launcher writes in the space says: a blueprint, and a `launcher.app`
- * record to add.
+ * Making an app by asking an agent for it, step by step: connect one if this
+ * browser knows none, then ask it in your own words. It proposes the app as
+ * the guide the launcher writes in the space says, and the proposal shows
+ * here when it arrives.
  */
 export function CreateApp({
   space,
@@ -40,191 +39,156 @@ export function CreateApp({
 }) {
   const known = useKnownAgent();
   const node = useNode();
-  const apps = useLauncherRecords(space.id);
   // The guide the agent reads is in the space before it looks, when this person may write it.
   useEffect(() => {
     if (mayDefine) void prepareLauncher(node, space.id).catch(() => {});
   }, [node, space.id, mayDefine]);
-  const [idea, setIdea] = useState('');
   const [connecting, setConnecting] = useState(false);
-  // The apps there were when the prompt was copied; one not among them is the answer.
-  const [before, setBefore] = useState<ReadonlySet<string> | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
 
-  if (connecting) return <ConnectAgent onClose={() => setConnecting(false)} />;
+  const ask = (agent: string) => (
+    <AskForApp
+      space={space}
+      agent={agent}
+      mayDefine={mayDefine}
+      onReview={() => {
+        onClose();
+        onReview();
+      }}
+      {...(mayDefine && onBuildByHand
+        ? {
+            onBuildByHand: () => {
+              onClose();
+              onBuildByHand();
+            },
+          }
+        : {})}
+    />
+  );
 
-  const what = idea.trim().replace(/[.\s]+$/, '');
-  const prompt = `In my Minca space "${space.name}", make an app: ${what}. Use the standard collections where they fit, and propose it to the space the way the space's guide on launcher.app says (collections_list points at it), saying what is worth being notified about.`;
-  const agent = known ?? 'your agent';
-  const adds = mayDefine ? 'you add it' : 'someone who runs the space adds it';
-  const byHand = mayDefine ? onBuildByHand : undefined;
-
-  const copy = () => {
-    setBefore(new Set(apps.map((one) => one.key)));
-    const clipboard = globalThis.navigator.clipboard;
-    if (!clipboard) return setCopyFailed(true);
-    clipboard.writeText(prompt).then(
-      () => {
-        setCopyFailed(false);
-        setCopied(true);
-        globalThis.setTimeout(() => setCopied(false), 2000);
-      },
-      () => setCopyFailed(true),
+  if (connecting || !known)
+    return (
+      <ConnectAgent title={TITLE} onClose={onClose} then={{ title: 'Ask it for your app', body: ask }} />
     );
-  };
-  const proposed = before && apps.find((one) => !before.has(one.key) && one.body && !one.body.builtIn)?.body;
 
   return (
-    <Modal title="Create an app" onClose={onClose} width={560}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
-          What should {space.name} have?
-        </span>
-        <textarea
-          value={idea}
-          onChange={(event) => setIdea(event.target.value)}
-          placeholder="A place to plan our summer trip, with a packing list and who's driving"
-          rows={3}
-          style={styles.textarea}
+    <Modal title={TITLE} onClose={onClose} width={500}>
+      <ol style={stepList}>
+        <AgentStep
+          n={1}
+          title={`${known} is connected`}
+          at="done"
+          aside={
+            <button
+              type="button"
+              onClick={() => setConnecting(true)}
+              data-variant="ghost"
+              style={{ ...styles.linkButton, fontSize: 13, padding: 0 }}
+            >
+              Connect another
+            </button>
+          }
         />
-      </label>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {IDEAS.map((one) => (
-          <button
-            key={one.label}
-            type="button"
-            onClick={() => setIdea(one.text)}
-            data-variant="quiet"
-            style={chip}
-          >
-            {one.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button
-          onClick={copy}
-          disabled={!what}
-          data-variant="primary"
-          style={{ ...styles.button, ...action }}
-        >
-          {copied ? (
-            '✓ Copied'
-          ) : (
-            <>
-              <Icon name="sparkle" size={14} /> Copy prompt for {agent}
-            </>
-          )}
-        </button>
-        {!known && (
-          <button
-            type="button"
-            onClick={() => setConnecting(true)}
-            data-variant="quiet"
-            style={{ ...variants.quiet, ...action }}
-          >
-            <Icon name="terminal" size={14} /> Connect an agent
-          </button>
-        )}
-      </div>
-      {copyFailed && <p style={promptBox}>{prompt}</p>}
-
-      {proposed && (
-        <div style={note}>
-          <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
-            <span style={{ color: palette.accent.good }}>✓</span> {known ?? 'Your agent'} proposed “
-            {proposed.title}”
-          </p>
-          <p style={{ fontSize: 13, color: palette.ink.body }}>
-            Nothing changes in {space.name} until {adds}.{' '}
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onReview();
-              }}
-              data-variant="ghost"
-              style={{ ...styles.linkButton, fontSize: 13, padding: 0 }}
-            >
-              Review it
-            </button>
-          </p>
-        </div>
-      )}
-
-      {(known || byHand) && (
-        <div style={footer}>
-          {known && (
-            <span>
-              <span style={{ color: palette.accent.good }}>✓</span> {known} connected ·{' '}
-              <button
-                type="button"
-                onClick={() => setConnecting(true)}
-                data-variant="ghost"
-                style={{ ...styles.linkButton, fontSize: 13, padding: 0 }}
-              >
-                Change
-              </button>
-            </span>
-          )}
-          {byHand && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                byHand();
-              }}
-              data-variant="ghost"
-              style={{ ...styles.linkButton, fontSize: 13, padding: 0 }}
-            >
-              Build one by hand
-            </button>
-          )}
-        </div>
-      )}
+        <AgentStep n={2} title="Ask it for your app" at="now" last>
+          {ask(known)}
+        </AgentStep>
+      </ol>
     </Modal>
   );
 }
 
-const note = {
-  ...styles.note,
+/** The last step: what to say to the agent, and the app it proposes once it has */
+function AskForApp({
+  space,
+  agent,
+  mayDefine,
+  onReview,
+  onBuildByHand,
+}: {
+  space: SpaceSummary;
+  agent: string;
+  mayDefine: boolean;
+  onReview: () => void;
+  onBuildByHand?: () => void;
+}) {
+  const apps = useLauncherRecords(space.id);
+  // A proposal made since this opened is the answer. The creator's clock only shows the way; it decides nothing.
+  const [since] = useState(() => new Date(Date.now() - 60_000).toISOString());
+  const proposed = apps.find((one) => one.createdAt >= since && one.body && !one.body.builtIn)?.body;
+  const adds = mayDefine ? 'you add it' : 'someone who runs the space adds it';
+
+  return (
+    <>
+      <p style={stepText}>
+        Start a new chat in {agent} and say what {space.name} should have, in your own words. For example:
+      </p>
+      <ul style={ideas}>
+        {IDEAS.map((idea) => (
+          <li key={idea} style={{ display: 'flex', gap: 8 }}>
+            <span aria-hidden style={{ color: palette.ink.faint }}>
+              “
+            </span>
+            <span>
+              In Minca, make {space.name} {idea}.
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {proposed ? (
+        <div
+          style={{ ...styles.note, display: 'flex', flexDirection: 'column', gap: 4, padding: '12px 14px' }}
+        >
+          <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
+            <span style={{ color: palette.accent.good }}>✓</span> {agent} proposed “{proposed.title}”
+          </p>
+          <p style={{ fontSize: 13, color: palette.ink.body }}>
+            Nothing changes in {space.name} until {adds}.
+          </p>
+          <button
+            type="button"
+            onClick={onReview}
+            data-variant="primary"
+            style={{
+              ...styles.button,
+              alignSelf: 'flex-start',
+              width: 'auto',
+              padding: '0 18px',
+              marginTop: 6,
+            }}
+          >
+            Review it
+          </button>
+        </div>
+      ) : (
+        <p style={{ ...stepText, color: palette.ink.muted, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Loader size={10} decorative /> Its proposal shows here. Nothing changes in {space.name} until{' '}
+          {adds}.
+        </p>
+      )}
+
+      {onBuildByHand && (
+        <button
+          type="button"
+          onClick={onBuildByHand}
+          data-variant="ghost"
+          style={{ ...styles.linkButton, fontSize: 13, padding: 0, alignSelf: 'flex-start' }}
+        >
+          Or build one by hand
+        </button>
+      )}
+    </>
+  );
+}
+
+const ideas = {
+  listStyle: 'none',
   display: 'flex',
   flexDirection: 'column',
-  gap: 4,
+  gap: 6,
   padding: '12px 14px',
-} as const;
-
-const chip = { ...ui.chip, fontWeight: 400 };
-
-const action = {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-  padding: '0 14px',
-} as const;
-
-const footer = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: 8,
-  paddingTop: 12,
-  borderTop: `1px solid ${palette.surface.line}`,
-  fontSize: 13,
-  color: palette.ink.muted,
-} as const;
-
-const promptBox = {
-  padding: '10px 12px',
   borderRadius: palette.radius.md,
   background: palette.surface.sunken,
-  fontSize: 13,
+  fontSize: 13.5,
   lineHeight: 1.5,
-  color: palette.ink.body,
-  userSelect: 'all',
+  color: palette.ink.strong,
 } as const;

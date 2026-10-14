@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { connectToHome, offerConnectCode, type CodeAsking, type ConnectCodeStage } from '@minca/core/session';
 import { useAccount, useConnection } from '@minca/core/react';
 import { Choice, Modal } from '@minca/app-shared/Modal';
@@ -28,8 +28,26 @@ type Step =
   | { readonly kind: 'connected'; readonly agent: CodeAsking }
   | { readonly kind: 'failed'; readonly reason: string };
 
-/** Connects an agent on this computer: one command to paste, then the account home signs its note */
-export function ConnectAgent({ onClose }: { onClose: () => void }) {
+/** The step after connecting, when the agent is connected for something */
+export interface AfterConnecting {
+  readonly title: string;
+  readonly body: (agent: string) => ReactNode;
+}
+
+/**
+ * Connects an agent on this computer, as numbered steps: one command to paste,
+ * then allowing it here, where the account home signs its note. A `then` step
+ * says what to do with it next; without one, it is starting a new session.
+ */
+export function ConnectAgent({
+  onClose,
+  title = 'Connect an agent',
+  then,
+}: {
+  onClose: () => void;
+  title?: string;
+  then?: AfterConnecting;
+}) {
   const { state } = useConnection();
   const { did } = useAccount();
   const [days, setDays] = useState<Lasts>('30');
@@ -100,96 +118,110 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
       await stage.allow(grant);
     });
 
+  const pasting = step.kind === 'starting' || step.kind === 'waiting' || step.kind === 'failed';
+  const agent = step.kind === 'asking' ? step.stage.asking.name : connectedName;
+
   return (
-    <Modal title="Connect an agent" onClose={onClose}>
+    <Modal title={title} onClose={onClose} width={500}>
       <p style={{ ...styles.hint, marginBottom: 0 }}>
-        Lets Claude Code, Claude Desktop, Cursor, VS Code and other agents work in your spaces — even with
-        this tab closed. What it writes shows “via agent”. It can propose apps; adding one is always yours.
+        Works with Claude Code, Claude Desktop, Cursor, VS Code and other agents. It takes about a minute.
       </p>
 
-      {step.kind === 'connected' ? (
-        <Connected agent={step.agent} onClose={onClose} />
-      ) : step.kind === 'failed' ? (
-        <>
-          <p style={{ ...styles.errorHint, color: palette.accent.danger }}>{step.reason}</p>
-          <button
-            onClick={() => {
-              setStep({ kind: 'starting' });
-              setCode(null);
-              setAttempt((n) => n + 1);
-            }}
-            data-variant="primary"
-            style={styles.button}
-          >
-            Make a new code
-          </button>
-        </>
-      ) : step.kind === 'asking' ? (
-        <>
-          <div style={note}>
-            <p style={styles.todoText}>“{step.stage.asking.name}” wants to connect</p>
-            <p style={styles.errorHint}>
-              It may read every space in your account and write records in them, for{' '}
-              {LASTS.find((option) => option.value === days)!.label}. It can't add apps or collections, change
-              who may do what, or open your contact requests. Your account home opens to confirm.
-            </p>
-          </div>
-          <Choice label="How long it may work" value={days} options={LASTS} onChange={setDays} />
-          {error && <p style={{ ...styles.errorHint, color: palette.accent.danger }}>{error}</p>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => step.stage.deny()}
-              disabled={busy}
-              data-variant="quiet"
-              style={variants.quiet}
-            >
-              Don't allow
-            </button>
-            <button
-              onClick={() => void allow(step.stage)}
-              disabled={busy}
-              data-variant="primary"
-              style={styles.button}
-            >
-              {busy ? 'Waiting for your account home…' : 'Allow'}
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div>
-            <p style={styles.fieldLabel}>Run this in a terminal</p>
-            <div style={commandBox}>
-              <code
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  overflowWrap: 'anywhere',
-                  fontSize: 12.5,
-                  lineHeight: 1.5,
-                  color: palette.ink.strong,
-                }}
-              >
-                {command || <Loader size={10} label="Making a code" showLabel />}
-              </code>
+      <ol style={stepList}>
+        <AgentStep
+          n={1}
+          title={pasting ? 'Paste this in a terminal' : 'Pasted in a terminal'}
+          at={pasting ? 'now' : 'done'}
+        >
+          {step.kind === 'failed' ? (
+            <>
+              <p style={{ ...styles.errorHint, color: palette.accent.danger }}>{step.reason}</p>
               <button
-                onClick={() => copy(command)}
-                disabled={!code}
-                data-variant="quiet"
-                style={{ ...variants.quiet, width: 'auto', height: 30, padding: '0 10px', fontSize: 13 }}
+                onClick={() => {
+                  setStep({ kind: 'starting' });
+                  setCode(null);
+                  setAttempt((n) => n + 1);
+                }}
+                data-variant="primary"
+                style={{ ...styles.button, alignSelf: 'flex-start', width: 'auto', padding: '0 16px' }}
               >
-                {copied ? 'Copied' : 'Copy'}
+                Make a new code
               </button>
-            </div>
-          </div>
-          <Choice label="How long it may work" value={days} options={LASTS} onChange={setDays} />
-          <p
-            style={{ ...styles.footerHint, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}
-          >
-            <Loader size={10} decorative /> Waiting for your terminal. Keep this open until it's connected.
-          </p>
-        </>
-      )}
+            </>
+          ) : (
+            <>
+              <p style={stepText}>
+                On the computer your agent runs on: Terminal on a Mac, PowerShell on Windows. It finds the
+                agents installed there.
+              </p>
+              <div style={commandBox}>
+                <code style={commandText}>
+                  {command || <Loader size={10} label="Making a code" showLabel />}
+                </code>
+                <button
+                  onClick={() => copy(command)}
+                  disabled={!code}
+                  data-variant="primary"
+                  style={{ ...styles.button, width: 'auto', height: 32, padding: '0 14px', fontSize: 13 }}
+                >
+                  {copied ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+              <p style={{ ...stepText, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Loader size={10} decorative /> Waiting for your terminal…
+              </p>
+            </>
+          )}
+        </AgentStep>
+
+        <AgentStep
+          n={2}
+          title={
+            step.kind === 'connected' ? `${agent} is connected` : agent ? `Allow ${agent}` : 'Allow it here'
+          }
+          at={step.kind === 'asking' ? 'now' : step.kind === 'connected' ? 'done' : 'later'}
+        >
+          {step.kind === 'asking' && (
+            <>
+              <p style={stepText}>
+                It may read the spaces in your account and write records in them, marked “via agent”. It can't
+                add apps, change who may do what, or open your contact requests. Your account home opens to
+                confirm.
+              </p>
+              <Choice label="For how long" value={days} options={LASTS} onChange={setDays} />
+              {error && <p style={{ ...styles.errorHint, color: palette.accent.danger }}>{error}</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => step.stage.deny()}
+                  disabled={busy}
+                  data-variant="quiet"
+                  style={variants.quiet}
+                >
+                  Don't allow
+                </button>
+                <button
+                  onClick={() => void allow(step.stage)}
+                  disabled={busy}
+                  data-variant="primary"
+                  style={styles.button}
+                >
+                  {busy ? 'Waiting for your account home…' : 'Allow'}
+                </button>
+              </div>
+            </>
+          )}
+        </AgentStep>
+
+        <AgentStep
+          n={3}
+          title={then?.title ?? 'Start a new session'}
+          at={step.kind === 'connected' ? 'now' : 'later'}
+          last
+        >
+          {step.kind === 'connected' &&
+            (then ? then.body(step.agent.name) : <Connected agent={step.agent} onClose={onClose} />)}
+        </AgentStep>
+      </ol>
     </Modal>
   );
 }
@@ -197,38 +229,122 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
 function Connected({ agent, onClose }: { agent: CodeAsking; onClose: () => void }) {
   return (
     <>
-      <div style={note}>
-        <p style={{ ...styles.todoText, color: palette.accent.good }}>✓ Connected: {agent.name}</p>
-        <p style={styles.errorHint}>
-          It was added to the agents installed on that computer — start a new session there, or restart the
-          app, to use it. You can disconnect it any time in your account settings.
-        </p>
-        <p style={styles.errorHint}>
-          To keep it running your automations while this computer is off, connect it on a server the same way
-          and run <code>minca agent --no-chat</code> there.
-        </p>
-      </div>
-      <button onClick={onClose} data-variant="primary" style={styles.button}>
+      <p style={stepText}>
+        Start a new session in {agent.name}, or restart it, and it can work in your spaces, even with this tab
+        closed. You can disconnect it any time in your account settings.
+      </p>
+      <p style={stepText}>
+        To keep it running your automations while this computer is off, connect it on a server the same way
+        and run <code>minca agent --no-chat</code> there.
+      </p>
+      <button
+        onClick={onClose}
+        data-variant="primary"
+        style={{ ...styles.button, alignSelf: 'flex-start', width: 'auto', padding: '0 20px' }}
+      >
         Done
       </button>
     </>
   );
 }
 
-const note = {
-  padding: '12px 14px',
-  borderRadius: palette.radius.md,
-  background: palette.surface.sunken,
+/**
+ * One numbered step of a guide: done ones are ticked and short, the one to do
+ * now is open, and those after it wait greyed out.
+ */
+export function AgentStep({
+  n,
+  title,
+  at,
+  last,
+  aside,
+  children,
+}: {
+  n: number;
+  title: string;
+  at: 'done' | 'now' | 'later';
+  last?: boolean;
+  /** Beside the title, such as a way to do a done step again */
+  aside?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <li style={{ display: 'flex', gap: 14 }} aria-current={at === 'now' ? 'step' : undefined}>
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+        <span style={marker[at]}>{at === 'done' ? '✓' : n}</span>
+        {!last && <span style={{ flex: 1, width: 1.5, minHeight: 16, background: palette.surface.line }} />}
+      </span>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          paddingBottom: last ? 0 : 22,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <p
+            style={{
+              fontSize: 15,
+              lineHeight: '28px',
+              fontWeight: 600,
+              color: at === 'later' ? palette.ink.faint : palette.ink.strong,
+            }}
+          >
+            {title}
+          </p>
+          {aside}
+        </div>
+        {at === 'now' && children}
+      </div>
+    </li>
+  );
+}
+
+/** A list of steps, for `AgentStep` */
+export const stepList = {
+  listStyle: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  marginTop: 6,
+} as const;
+export const stepText = { fontSize: 13.5, lineHeight: 1.55, color: palette.ink.body } as const;
+
+const circle = {
+  width: 28,
+  height: 28,
+  borderRadius: palette.radius.pill,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 13,
+  fontWeight: 600,
+  flexShrink: 0,
+} as const;
+const marker = {
+  done: { ...circle, background: palette.accent.goodSoft, color: palette.accent.good },
+  now: { ...circle, background: palette.accent.base, color: palette.ink.inverse },
+  later: { ...circle, border: `1.5px solid ${palette.surface.line}`, color: palette.ink.faint },
 } as const;
 
 const commandBox = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
-  padding: '10px 10px 10px 12px',
+  padding: '8px 8px 8px 14px',
   borderRadius: palette.radius.md,
   background: palette.surface.sunken,
   fontFamily: palette.mono,
+} as const;
+const commandText = {
+  flex: 1,
+  minWidth: 0,
+  overflowWrap: 'anywhere',
+  fontSize: 12.5,
+  lineHeight: 1.5,
+  color: palette.ink.strong,
 } as const;
 
 /** The agent last connected from this browser, by name, until its note runs out: only a hint */

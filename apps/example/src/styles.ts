@@ -74,8 +74,8 @@ export function injectBaseStyles(): void {
     .space-content { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 64px; }
     .space-inner { max-width: 1040px; margin: 0 auto; }
     .space-inner[data-wide] { max-width: none; }
-    /* An app that is a conversation, or a screen of its own, gets every pixel. */
-    .space-content[data-fill] { display: flex; flex-direction: column; overflow: hidden; padding: 16px 24px 20px; }
+    /* An app that is a conversation, or a screen of its own, gets every pixel, edge to edge. */
+    .space-content[data-fill] { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
     .space-content[data-fill] > .space-inner { flex: 1; min-height: 0; width: 100%; max-width: none; display: flex; flex-direction: column; }
     .phone-only { display: none !important; }
 
@@ -332,7 +332,7 @@ export function injectBaseStyles(): void {
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
       .space-shell[data-app-open] .space-main { display: flex; height: 100dvh; }
       .space-shell[data-app-open] .space-bar { position: static; }
-      .space-content[data-fill] { padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); }
+      .space-content[data-fill] { padding: 0 0 env(safe-area-inset-bottom); }
 
       .tabbar {
         position: fixed;

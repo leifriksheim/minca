@@ -2,19 +2,18 @@ import { useState } from 'react';
 import { useAction } from '@minca/app-shared/action';
 import type { NodeCollection, SpaceSummary } from '@minca/core';
 import { useNode } from '@minca/core/react';
-import { has, type MincaApp } from './index';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
-import { addBuiltIn, moveApp, removeApp } from './launcher';
+import { moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { styles, palette, variants } from '../../styles';
 import { ask } from '@minca/app-shared/Ask';
 
 /**
- * A space's apps like a phone's home screen: those added, then proposals and
- * built-ins to add. Someone who may add collections can arrange them: move
+ * A space's apps like a phone's home screen: those added, then proposals.
+ * Ready-made ones to add are under New app (`NewApp`). Someone who may add collections can arrange them: move
  * them, or take them off. Taking one off keeps everything it holds.
  */
 export function AppsView({
@@ -35,18 +34,9 @@ export function AppsView({
   onCreate: () => void;
 }) {
   const node = useNode();
-  const [adding, setAdding] = useState<MincaApp | null>(null);
   const [arranging, setArranging] = useState(false);
-  const { run, busy, error } = useAction();
   const arrange = useAction();
 
-  const add = (app: MincaApp) => {
-    setAdding(app);
-    void run(async () => {
-      await addBuiltIn(node, space.id, app, apps.placed);
-      onOpenApp(app.id);
-    });
-  };
   const move = (app: AppEntry, by: number) => {
     const at = apps.placed.findIndex((record) => record.key === app.record.key);
     void arrange.run(() => moveApp(node, space.id, apps.placed, app.record.key, at + by));
@@ -89,7 +79,7 @@ export function AppsView({
                 className="hide-on-phone"
                 style={{ ...styles.button, ...inlineButton }}
               >
-                <Icon name="sparkle" size={14} /> Create an app
+                <Icon name="plus" size={14} /> New app
               </button>
             )}
           </div>
@@ -129,9 +119,9 @@ export function AppsView({
                 <Icon name="plus" size={20} />
               </span>
               <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <strong style={cardTitle}>Create an app</strong>
+                <strong style={cardTitle}>New app</strong>
                 <span className="app-card-text" style={cardText}>
-                  Describe it, and an agent builds it for this space
+                  Add a ready-made one, or have an agent build your own
                 </span>
               </span>
             </button>
@@ -140,7 +130,7 @@ export function AppsView({
         {arrange.error && <p style={styles.error}>{arrange.error}</p>}
         {apps.ready.length === 0 && (
           <p style={{ fontSize: 13, color: palette.ink.muted }}>
-            No apps here yet. Add a ready-made one below, or create your own.
+            No apps here yet. Add a ready-made one, or have an agent build your own.
           </p>
         )}
       </section>
@@ -154,59 +144,11 @@ export function AppsView({
         onAdded={(key) => onOpenApp(`made:${key}`)}
       />
 
-      {apps.addable.length > 0 && (
-        <section aria-label="More apps" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <h2 style={styles.sectionTitle}>More apps</h2>
-            <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
-              {mayDefine
-                ? 'Ready-made. Adding one adds every collection it uses, which hold ordinary records.'
-                : 'Someone whose role lets them add collections can add these.'}
-            </p>
-          </div>
-          <div className="app-list">
-            {apps.addable.map((app) => (
-              <div key={app.id} style={addRow}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <AppIcon id={app.id} size={40} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong style={cardTitle}>{app.title}</strong>
-                    <p style={cardText}>{app.description}</p>
-                  </div>
-                  {mayDefine && (
-                    <button
-                      onClick={() => add(app)}
-                      disabled={busy}
-                      aria-label={`Add ${app.title}`}
-                      data-variant="quiet"
-                      style={{ ...styles.smallButton, flexShrink: 0 }}
-                    >
-                      {busy && adding?.id === app.id ? 'Adding…' : 'Add'}
-                    </button>
-                  )}
-                </div>
-                <details style={{ marginTop: 6 }}>
-                  <summary style={{ fontSize: 12, color: palette.ink.faint, paddingLeft: 52 }}>
-                    What it stores
-                  </summary>
-                  <SchemaList app={app} collections={collections} />
-                </details>
-              </div>
-            ))}
-          </div>
-          {error && (
-            <p style={styles.error}>
-              Could not add {adding?.title}: {error}
-            </p>
-          )}
-        </section>
-      )}
-
       {/* On a phone the button in the heading gives way to one under the thumb, once
           there are apps; before that the tile in the grid is the way. */}
       {space.writable && apps.ready.length > 0 && (
         <button onClick={onCreate} data-variant="primary" className="fab">
-          <Icon name="sparkle" size={16} /> Create an app
+          <Icon name="plus" size={16} /> New app
         </button>
       )}
     </div>
@@ -295,50 +237,6 @@ function ArrangeCard({
   );
 }
 
-/** What an app reads and writes, and whether this space has each yet */
-function SchemaList({ app, collections }: { app: MincaApp; collections: ReadonlyArray<NodeCollection> }) {
-  const rows = [
-    ...app.needs.map((s) => ({ s, optional: false })),
-    ...(app.uses ?? []).map((s) => ({ s, optional: true })),
-  ];
-  return (
-    <ul
-      style={{
-        listStyle: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
-        marginTop: 8,
-        paddingTop: 8,
-        borderTop: `1px solid ${palette.surface.line}`,
-      }}
-    >
-      {rows.map(({ s, optional }) => {
-        const here = has(collections, s.name);
-        return (
-          <li
-            key={s.name}
-            style={{
-              display: 'flex',
-              alignItems: 'baseline',
-              justifyContent: 'space-between',
-              gap: 8,
-              fontSize: 12,
-            }}
-          >
-            <span style={{ color: palette.ink.body }}>
-              {s.title} <code style={{ fontSize: 11, color: palette.ink.faint }}>{s.name}</code>
-            </span>
-            <span style={{ color: here ? palette.accent.good : palette.ink.faint, whiteSpace: 'nowrap' }}>
-              {here ? 'in this space' : optional ? 'will be added, for when it is used' : 'will be added'}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 const iconBox = {
   width: 44,
   height: 44,
@@ -367,7 +265,6 @@ const createCard = {
 } as const;
 const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
 const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
-const addRow = { ...styles.tile, padding: 12 } as const;
 const inlineButton = {
   width: 'auto',
   height: 36,

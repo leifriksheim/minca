@@ -412,10 +412,19 @@ export function MadeAppScreen({
   return (
     <section
       aria-label={body.title}
-      style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0, flex: 1, minHeight: 0 }}
+      style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}
     >
       {(screen || others.length > 0) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+            padding: '8px 16px',
+            borderBottom: `1px solid ${palette.surface.line}`,
+          }}
+        >
           {screen && (
             <button
               onClick={() => setPlain((was) => !was)}
@@ -438,7 +447,10 @@ export function MadeAppScreen({
           title={body.title ?? 'An app'}
         />
       ) : (
-        <AppBoard space={space} names={names} collections={collections} onOpen={onOpen} />
+        // The app fills the window edge to edge, so the lists bring their own margin and scroll.
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
+          <AppBoard space={space} names={names} collections={collections} onOpen={onOpen} />
+        </div>
       )}
     </section>
   );

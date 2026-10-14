@@ -18,6 +18,7 @@ import { CommunitySetup } from '@minca/app-shared/CommunitySetup';
 import { AppsView } from './apps/AppsView';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
+import { NewApp } from './apps/NewApp';
 import { MadeAppScreen } from './apps/MadeApps';
 import { NotifyButton } from './apps/NotifyButton';
 import { AutomationsView } from './automations/AutomationsView';
@@ -81,6 +82,7 @@ const SECTIONS = [
 /** What the main area shows: the apps, one of them open, the people, or a view under the hood */
 type View =
   | { readonly kind: 'apps' }
+  | { readonly kind: 'new' }
   | { readonly kind: 'app'; readonly id: string; readonly since: string }
   | { readonly kind: 'people' }
   | { readonly kind: 'hosting' }
@@ -199,13 +201,15 @@ export function SpaceView({
     open?.title ??
     (view.kind === 'people'
       ? 'People'
-      : view.kind === 'automations'
-        ? 'Automations'
-        : view.kind === 'more'
-          ? 'More'
-          : view.kind === 'hood'
-            ? HOOD.find((h) => h.id === view.hood)!.label
-            : space.name);
+      : view.kind === 'new'
+        ? 'New app'
+        : view.kind === 'automations'
+          ? 'Automations'
+          : view.kind === 'more'
+            ? 'More'
+            : view.kind === 'hood'
+              ? HOOD.find((h) => h.id === view.hood)!.label
+              : space.name);
 
   return (
     <PersonScopeProvider
@@ -298,9 +302,10 @@ export function SpaceView({
               {space.writable && (
                 <SideItem
                   icon={<Icon name="plus" size={16} />}
-                  label="Create an app"
+                  label="New app"
                   quiet
-                  onClick={() => setCreating(true)}
+                  on={view.kind === 'new'}
+                  onClick={() => setView({ kind: 'new' })}
                 />
               )}
               <SideHeading>Space</SideHeading>
@@ -471,7 +476,17 @@ export function SpaceView({
                   unread={unread}
                   mayDefine={mayDefine}
                   onOpenApp={openApp}
-                  onCreate={() => setCreating(true)}
+                  onCreate={() => setView({ kind: 'new' })}
+                />
+              )}
+              {view.kind === 'new' && (
+                <NewApp
+                  space={space}
+                  collections={collections}
+                  apps={apps}
+                  mayDefine={mayDefine}
+                  onOpenApp={openApp}
+                  onOwn={() => setCreating(true)}
                 />
               )}
               {open && view.kind === 'app' && (
@@ -538,7 +553,9 @@ export function SpaceView({
           </button>
           <button
             onClick={() => setView({ kind: 'apps' })}
-            aria-current={view.kind === 'apps' || view.kind === 'app' ? 'page' : undefined}
+            aria-current={
+              view.kind === 'apps' || view.kind === 'app' || view.kind === 'new' ? 'page' : undefined
+            }
           >
             <span style={{ position: 'relative', display: 'inline-flex' }}>
               <Icon name="apps" size={20} />
@@ -558,7 +575,9 @@ export function SpaceView({
           <button
             onClick={() => setView({ kind: 'more' })}
             aria-current={
-              view.kind !== 'apps' && view.kind !== 'app' && view.kind !== 'people' ? 'page' : undefined
+              view.kind !== 'apps' && view.kind !== 'app' && view.kind !== 'new' && view.kind !== 'people'
+                ? 'page'
+                : undefined
             }
           >
             <Icon name="menu" size={20} />

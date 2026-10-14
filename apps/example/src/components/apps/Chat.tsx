@@ -107,8 +107,6 @@ export function Chat(props: AppProps) {
         display: listed ? undefined : 'flex',
         flex: 1,
         minHeight: 0,
-        border: `1px solid ${palette.surface.rule}`,
-        borderRadius: palette.radius.lg,
         overflow: 'hidden',
       }}
     >

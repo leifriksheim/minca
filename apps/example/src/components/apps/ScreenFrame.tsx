@@ -104,7 +104,7 @@ export function ScreenFrame({
       <div
         style={{
           ...styles.note,
-          marginTop: 16,
+          margin: 16,
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
@@ -135,6 +135,7 @@ export function ScreenFrame({
       <div
         style={{
           ...styles.errorBox,
+          margin: 16,
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
@@ -158,10 +159,11 @@ export function ScreenFrame({
   const hosts = network.map((origin) => origin.replace(/^[a-z]+:\/\//, '')).join(', ');
   // It takes whatever height it is given: the app is the whole window (`.space-content[data-fill]`).
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {origins && (
         <p
           style={{
+            padding: '6px 16px',
             fontSize: 12,
             color: palette.ink.muted,
             display: 'flex',
@@ -193,8 +195,7 @@ export function ScreenFrame({
           width: '100%',
           flex: 1,
           minHeight: 420,
-          border: `1px solid ${palette.surface.rule}`,
-          borderRadius: palette.radius.lg,
+          border: 'none',
           background: palette.surface.card,
         }}
       />
