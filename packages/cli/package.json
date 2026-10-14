@@ -1,6 +1,6 @@
 {
   "name": "@minca/cli",
-  "version": "0.5.0",
+  "version": "0.1.0",
   "description": "The Minca protocol from a terminal: manage spaces, run an always-on node, serve MCP to agents",
   "type": "module",
   "bin": {

@@ -1,6 +1,6 @@
 {
   "name": "@minca/relay",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Signaling relay for Minca: introduces peers, never sees their data.",

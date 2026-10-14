@@ -1,6 +1,6 @@
 {
   "name": "@minca/scenarios",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Minca's scenario suite: kinds of community, written as tests. Not published.",
