@@ -12,6 +12,8 @@ concurrency:
 
 jobs:
   # The tests and the static checks run side by side, each on its own runner.
+  # Core's tests take as long as the rest together, so they get a runner of
+  # their own. More runners than this costs minutes: each job bills a whole one.
   check:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -20,8 +22,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: test core
+            run: npm test -w packages/core
+          # Every other workspace, by folder: a new app is picked up, a new package must be added.
           - name: test
-            run: npm test
+            run: npm test --if-present -w packages/cli -w packages/relay -w apps -w scenarios
           # Format, lint, typecheck and fallow: seconds each, so one runner.
           - name: check
             run: npm run check

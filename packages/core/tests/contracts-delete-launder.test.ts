@@ -48,7 +48,7 @@ test('a failing first version, then a delete, is laundered by the version after'
     retain: false,
     version: { key: k1, seq: 1, prev: bad.id, genesis: bad.id },
   });
-  await forge(bob, space, {
+  const last = await forge(bob, space, {
     author: '',
     collection: 'app.claim',
     body: { n: 100 },
@@ -56,8 +56,10 @@ test('a failing first version, then a delete, is laundered by the version after'
     version: { key: k1, seq: 2, prev: gone.id, genesis: bad.id },
   });
   await hold(bob.node, space);
-  await until(async () => (await alice.node.records.history(space, k1)).length >= 3, 6000, 'sync').catch(
-    () => {},
+  await until(
+    async () => (await alice.node.records.history(space, k1)).some((r) => r.version === last.id),
+    6000,
+    'sync',
   );
   await settle(300);
   const got = await alice.node.records.get<{ n: number }>(space, k1);

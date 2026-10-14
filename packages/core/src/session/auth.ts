@@ -104,6 +104,8 @@ export interface MincaAuthConfig {
   readonly storageKey?: string;
   /** The page a phone-pairing QR opens. Default: this page. */
   readonly pairingLink?: string;
+  /** How long signing out waits, at most, for a peer to take its revokes in. Default 5 s. */
+  readonly signOutGraceMs?: number;
   /**
    * Accounts kept in this browser, and their data. Defaults to IndexedDB;
    * swap both for tests or for a host with no IndexedDB.
@@ -496,12 +498,13 @@ async function addAutomations(
 
 /** How often a signed-in device looks for app connections whose chosen time has passed */
 const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
-/** How long signing out waits for its revokes to reach the peers here, at most: offline, they wait until next time */
+/** How long signing out waits for its revokes to reach the peers here, at most, unless configured: offline, they wait until next time */
 const SIGN_OUT_GRACE_MS = 5000;
 
 /** Creates the sign-in flow for this page. */
 export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   const rpId = config.rpId ?? globalThis.location?.hostname ?? 'localhost';
+  const signOutGraceMs = config.signOutGraceMs ?? SIGN_OUT_GRACE_MS;
   const appName = config.appName ?? 'Minca';
   const prefix = config.storageKey ?? 'minca';
   const storage = defaultStorage(config.storage);
@@ -1586,7 +1589,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       // Every app and the programs connected through it; carriers stay, holding nothing that writes.
       // The node stops next and sends nothing after, so it waits for a peer to take each revoke in.
       const disconnected = options.disconnect
-        ? await disconnectWhere((known) => known.access !== 'carry', SIGN_OUT_GRACE_MS).catch(() => null)
+        ? await disconnectWhere((known) => known.access !== 'carry', signOutGraceMs).catch(() => null)
         : null;
       // Before going: let apps whose time has passed go, and revoke this device's
       // session key, so a key left behind here can't write for the account again.
@@ -1594,7 +1597,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       await letExpiredGo().catch(() => {});
       await Promise.all([
         disconnected?.delivered,
-        leaving?.revokeSelf({ waitMs: SIGN_OUT_GRACE_MS }).catch(() => {}),
+        leaving?.revokeSelf({ waitMs: signOutGraceMs }).catch(() => {}),
       ]);
       update({
         stage: 'starting',
