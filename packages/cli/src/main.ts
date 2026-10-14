@@ -72,7 +72,7 @@ import {
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
 import { capEachOf, runAutomations } from './bot-runner.js';
 import { chooseModel, isLoopback, isPlain, thinker, type ModelChoice } from './model.js';
-import { configSnippet, configureClients, serverCommand } from './clients.js';
+import { configSnippet, configureClients, serverCommand, unconfigureClients } from './clients.js';
 import { addRule, defineStandard, loadModelSetting, setUpModel } from './guide.js';
 import * as ask from './ask.js';
 import { commaList, isRecord, messageOf } from './json.js';
@@ -840,7 +840,9 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   }
 
   if (command === 'disconnect') {
-    await forgetAgent(homePath(globals.home));
+    const home = homePath(globals.home);
+    await forgetAgent(home);
+    for (const { client, result } of await unconfigureClients(home)) stderr(`  ${client}: ${result}`);
     stderr(
       "This computer's agent is forgotten here. To stop its note working everywhere, disconnect it in your account home.",
     );

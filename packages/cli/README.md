@@ -267,8 +267,9 @@ under a records-only note, which the example app shows as "via agent". It
 isn't offered what needs a person (making, joining or leaving spaces, invites,
 roles, defining collections), and its note doesn't let it: it proposes
 collections with `collections_propose`, and you add them. `minca disconnect`
-forgets it on this computer; disconnecting it in your account home stops its
-note working everywhere.
+forgets it on this computer and takes `minca` out of the agents connecting
+added it to (an entry you added by hand stays); disconnecting it in your
+account home stops its note working everywhere.
 
 `minca mcp --account` serves the unlocked account instead, as you:
 
