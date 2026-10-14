@@ -4266,12 +4266,41 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       });
     },
 
-    async revoke(key: string) {
-      const cutoff = await cutoffFor(deps.rootDid, key);
-      await upsert(REVOKE_COLLECTION, await revokeKey(key, deps.rootDid), {
-        key,
-        ...(Object.keys(cutoff).length ? { cutoff } : {}),
-      });
+    /**
+     * Revokes a key of this account's. With `waitMs`, it then waits up to that
+     * long for a peer to say it has the revoke: a device about to stop sends
+     * nothing after, so true means it left. Without, true once written.
+     */
+    async revoke(key: string, options: { readonly waitMs?: number } = {}): Promise<boolean> {
+      const waitMs = options.waitMs ?? 0;
+      const taken = new Set<string>();
+      let wanted: string | null = null;
+      let found: () => void = () => {};
+      const onStored = (_peer: string, ids: ReadonlyArray<string>) => {
+        for (const id of ids) taken.add(id);
+        if (wanted !== null && taken.has(wanted)) found();
+      };
+      // Listening before writing: a peer can answer before the write returns.
+      if (waitMs > 0) sync.on('stored', onStored);
+      try {
+        const cutoff = await cutoffFor(deps.rootDid, key);
+        wanted = (
+          await upsert(REVOKE_COLLECTION, await revokeKey(key, deps.rootDid), {
+            key,
+            ...(Object.keys(cutoff).length ? { cutoff } : {}),
+          })
+        ).version;
+        if (waitMs <= 0 || taken.has(wanted)) return true;
+        return await new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => resolve(false), waitMs);
+          found = () => {
+            clearTimeout(timer);
+            resolve(true);
+          };
+        });
+      } finally {
+        if (waitMs > 0) sync.off('stored', onStored);
+      }
     },
 
     async isRevoked(key: string) {

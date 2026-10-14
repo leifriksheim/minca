@@ -572,8 +572,11 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   with at most one more queued.
 - `node.account` — `profile()`, `setName(name)` (writes `sys.profile`, key
   `profile`, in the account registry, then republishes the profile in every
-  open space), `revoke(key)` (one of the account's keys, by DID, in the account registry). All need the account
+  open space), `revoke(key, { waitMs? })` (one of the account's keys, by DID, in the account registry). All need the account
   key.
+- `spaces.revoke(space, key, { waitMs? })` and `account.revoke` resolve once the revoke is written; with
+  `waitMs`, once a peer says it has taken it in, or that long has passed (`true` when one did). A node about
+  to stop waits like that: it sends nothing afterwards.
 - `node.contacts` — [contacts.md](contacts.md). `ask` and `accept` make or join a space
   for two, so they need a note granting `/account/write` over the whole
   account (whole-account access).

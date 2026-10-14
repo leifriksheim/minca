@@ -47,11 +47,28 @@ export function Settings() {
       }),
     );
   };
-  // A program connected by code is its own key; an app takes the programs that connected through it along.
-  const disconnect = (app: Connection) =>
-    leave(connectionId(app), app.name ?? app.origin, () =>
-      auth.disconnect(app.origin, app.via === 'code' ? { audience: app.audience } : {}),
-    );
+  // What disconnecting could not do yet: heard of nowhere else, or a read-only note that runs out on its own.
+  const [notYet, setNotYet] = useState<string | null>(null);
+  // A program connected by code is its own key, and so is a carrier; an app takes the programs that connected through it along.
+  // It waits a moment for one of the account's devices or apps to take the revoke in, since only that stops it.
+  const disconnect = (app: Connection) => {
+    const what = app.name ?? new URL(app.origin).host;
+    setNotYet(null);
+    leave(connectionId(app), what, async () => {
+      const heard = await auth.disconnect(app.origin, {
+        ...(app.via === 'code' || app.access === 'carry' ? { audience: app.audience } : {}),
+        waitMs: HEARD_WITHIN_MS,
+      });
+      if (app.access === 'read')
+        setNotYet(
+          `${what} only reads, so there is no key to take back: it keeps reading until its access runs out.`,
+        );
+      else if (!heard)
+        setNotYet(
+          `${what} is disconnected here, but none of your other devices or apps is reachable to hear of it yet. It keeps working until one is: keep this open a moment, or it happens the next time you open your account home while one is online.`,
+        );
+    });
+  };
 
   // Carriers are in the account registry, so every device lists them — not
   // only the home that connected one, which is all `connections()` knows.
@@ -167,6 +184,7 @@ export function Settings() {
           </Row>
         ))}
         {disconnectError && <p style={styles.error}>{disconnectError}</p>}
+        {notYet && <p style={styles.errorHint}>{notYet}</p>}
         {anyAway && (
           <p style={styles.errorHint}>
             An extension that is not online either has Chrome closed, or is keeping a different account online
@@ -320,15 +338,87 @@ export function Settings() {
 
       <Section
         title="Sign out of this device"
-        description="Signs this account home out on this device. Apps you connected stay connected — disconnect them under Connected apps. Your account and your data stay where they are."
+        description="Signs this account home out on this device. Your account and your data stay where they are."
       >
-        <div>
-          <button onClick={() => void auth.signOut()} data-variant="quiet" style={styles.smallButton}>
-            Sign out
-          </button>
-        </div>
+        <SignOut />
       </Section>
     </>
+  );
+}
+
+/**
+ * Signing out, and what becomes of the apps connected from here: an app's
+ * note doesn't need the home signed in, so they would keep working. Asked
+ * each time, ticked to disconnect them; carriers stay, as they hold nothing
+ * that writes.
+ */
+function SignOut() {
+  const { auth } = useAuth();
+  const [asking, setAsking] = useState(false);
+  const [disconnect, setDisconnect] = useState(true);
+  const { run, busy, error } = useAction();
+  const apps = auth.connections().filter((app) => app.access !== 'carry');
+  // A read-only note has no key to revoke: it runs until its time does.
+  const readOnly = apps.filter((app) => app.access !== 'write');
+  const signOut = (options: { disconnect?: boolean } = {}) => void run(() => auth.signOut(options));
+
+  if (!asking || apps.length === 0)
+    return (
+      <div>
+        <button
+          onClick={() => (apps.length === 0 ? signOut() : setAsking(true))}
+          disabled={busy}
+          data-variant="quiet"
+          style={styles.smallButton}
+        >
+          {busy ? 'Signing out…' : 'Sign out'}
+        </button>
+        {error && <p style={styles.error}>{error}</p>}
+      </div>
+    );
+  return (
+    <div>
+      <label data-choice style={{ ...styles.choice, alignItems: 'flex-start' }}>
+        <input
+          type="checkbox"
+          checked={disconnect}
+          onChange={() => setDisconnect((was) => !was)}
+          style={{ ...styles.checkbox, marginTop: 2 }}
+        />
+        <span style={{ flex: 1 }}>
+          Also disconnect {apps.length === 1 ? 'the app' : `the ${apps.length} apps`} connected here
+          <span style={{ ...styles.errorHint, display: 'block', marginTop: 4 }}>
+            {apps.map((app) => app.name ?? new URL(app.origin).host).join(', ')}.{' '}
+            {disconnect
+              ? `They stop working, with the automations they suggested, and ask you to connect again${
+                  readOnly.length > 0
+                    ? `; ${readOnly.length === 1 ? 'one only reads, and keeps reading' : `${readOnly.length} only read, and keep reading`} until ${readOnly.length === 1 ? 'its' : 'their'} access runs out`
+                    : ''
+                }. If none of your devices or apps is reachable now, they hear of it when you next sign in here.`
+              : 'They keep working until their access runs out, signed out here or not.'}
+          </span>
+        </span>
+      </label>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button
+          onClick={() => signOut({ disconnect })}
+          disabled={busy}
+          data-variant="primary"
+          style={styles.smallButton}
+        >
+          {busy ? 'Signing out…' : 'Sign out'}
+        </button>
+        <button
+          onClick={() => setAsking(false)}
+          disabled={busy}
+          data-variant="quiet"
+          style={styles.smallButton}
+        >
+          Cancel
+        </button>
+      </div>
+      {error && <p style={styles.error}>{error}</p>}
+    </div>
   );
 }
 
@@ -536,7 +626,11 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
 }
 
 /** Programs connect by code through an app's origin, several to one, so each is named by its key */
-const connectionId = (app: Connection) => (app.via === 'code' ? app.audience : app.origin);
+/** How long disconnecting waits for one of the account's devices or apps to take the revoke in */
+const HEARD_WITHIN_MS = 5000;
+
+const connectionId = (app: Connection) =>
+  app.via === 'code' || app.access === 'carry' ? app.audience : app.origin;
 
 /** The account's DID, short, with a way to copy it whole — what a host's `--allow` takes */
 function CopyDid({ did }: { did: string }) {

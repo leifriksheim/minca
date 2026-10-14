@@ -353,6 +353,115 @@ describe('connecting an app to an account home', () => {
     await until(async () => told.includes(shared.id), 3000, 'the app to hear it was revoked');
   });
 
+  test('disconnecting says whether a peer took the revoke in: only then can the app hear of it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const connect = async (origin: string) => {
+      const key = await appKey();
+      const grant = await auth.grant({
+        origin,
+        request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
+        spaceIds: [shared.id],
+      });
+      return { key, grant };
+    };
+
+    // Nobody else is there: it is disconnected here, and nowhere else yet.
+    await connect('https://alone.test');
+    assert.equal(await auth.disconnect('https://alone.test', { waitMs: 300 }), false);
+
+    // The app is connected: it takes the revoke in, and says so.
+    const { key, grant } = await connect('https://todo.test');
+    const todo = await app(hub, grant, key);
+    const before = await todo.records.put(shared.id, 'app.todo.item', { text: 'before' });
+    await hold(homeNode, shared.id);
+    await until(
+      async () => (await homeNode.records.get(shared.id, before.key)) !== null,
+      3000,
+      'the two to meet',
+    );
+    assert.equal(await auth.disconnect('https://todo.test', { waitMs: 3000 }), true);
+  });
+
+  test('a space the account has left has nothing to revoke: disconnecting still says the app heard', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const other = await homeNode.spaces.create({ name: 'Other', ...team, visibility: 'private' });
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://todo.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
+      spaceIds: [shared.id, other.id],
+    });
+    const todo = await app(hub, grant, key);
+    const before = await todo.records.put(shared.id, 'app.todo.item', { text: 'before' });
+    await hold(homeNode, shared.id);
+    await until(
+      async () => (await homeNode.records.get(shared.id, before.key)) !== null,
+      3000,
+      'the two to meet',
+    );
+    await homeNode.spaces.leave(other.id);
+    assert.equal(await auth.disconnect('https://todo.test', { waitMs: 3000 }), true);
+  });
+
+  test('signing out and disconnecting: the apps connected here are revoked before the home goes', async () => {
+    // A network slow enough that a home which stopped at once would leave its revokes behind.
+    const hub = createFakeHub({ latencyMs: 400 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://todo.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
+      spaceIds: [shared.id],
+    });
+    const todo = await app(hub, grant, key);
+    await hold(homeNode, shared.id);
+    const before = await todo.records.put(shared.id, 'app.todo.item', { text: 'before' });
+    await until(
+      async () => (await homeNode.records.get(shared.id, before.key)) !== null,
+      15_000,
+      'the two to meet',
+    );
+
+    await auth.signOut({ disconnect: true });
+    // The home has stopped: whatever reaches the app now, it sent before stopping.
+    await until(
+      async () =>
+        todo.records.put(shared.id, 'app.todo.item', { text: 'after' }).then(
+          () => false,
+          (error: Error) => /revoked/.test(error.message),
+        ),
+      5000,
+      'the revoke to reach the app, though the home has gone',
+    );
+  });
+
+  test('signing out alone: the apps connected here keep their notes', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://todo.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
+      spaceIds: [shared.id],
+    });
+    const todo = await app(hub, grant, key);
+    await hold(homeNode, shared.id);
+
+    await auth.signOut();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await todo.records.put(shared.id, 'app.todo.item', { text: 'still mine' });
+  });
+
   test('disconnecting a whole-account app revokes it in the account registry too: it can no longer rename the account', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
@@ -554,9 +663,73 @@ describe('connecting a carrier to an account home', () => {
       /grantCarry/,
     );
 
+    // A carrier is disconnected by its own key: by origin alone is the app there, and no carrier.
     await auth.disconnect('chrome-extension://abcdef');
+    assert.equal(auth.connections().length, 1);
+    await auth.disconnect('chrome-extension://abcdef', { audience: key.did });
     assert.deepEqual(await node.carriers.list(), []);
     assert.deepEqual(auth.connections(), []);
+  });
+
+  test('a carrier and an app at one origin are two connections: connecting either again replaces only its own', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node } = auth.getState().session!;
+    const origin = 'http://127.0.0.1:47830';
+    const kinds = () => auth.connections().map((connection) => `${connection.access}:${connection.audience}`);
+    const carriers = async () => (await node.carriers.list()).map((carrier) => carrier.did);
+    const connectApp = async (key: AppKey) =>
+      auth.grant({
+        origin,
+        request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
+        spaceIds: [],
+      });
+    const connectCarrier = async (key: AppKey) =>
+      auth.grantCarry({ origin, request: await asked({ v: 1, audience: key.did, access: 'carry' }, key) });
+
+    const app = await appKey();
+    const carrier = await appKey();
+    await connectApp(app);
+    await connectCarrier(carrier);
+    assert.deepEqual(kinds().sort(), [`carry:${carrier.did}`, `write:${app.did}`].sort(), 'the app stays');
+
+    const appAgain = await appKey();
+    await connectApp(appAgain);
+    assert.deepEqual(
+      kinds().sort(),
+      [`carry:${carrier.did}`, `write:${appAgain.did}`].sort(),
+      'the carrier stays',
+    );
+    assert.deepEqual(await carriers(), [carrier.did], 'and is still carrying');
+
+    const carrierAgain = await appKey();
+    await connectCarrier(carrierAgain);
+    assert.deepEqual(kinds().sort(), [`carry:${carrierAgain.did}`, `write:${appAgain.did}`].sort());
+    assert.deepEqual(await carriers(), [carrierAgain.did], 'the earlier carrier is removed');
+
+    // One key is one connection: the app's key can't be a carrier too, nor the carrier's an app.
+    await assert.rejects(connectCarrier(appAgain), /already connected/);
+    await assert.rejects(connectApp(carrierAgain), /already connected/);
+
+    // Disconnecting the carrier leaves the app, and what the app proposed.
+    const kept = notifyOn('Mentioned', 'app.chat.message', { mentions: { $contains: '$me' } });
+    await auth.propose({ origin, request: { v: 2, kind: 'propose', automations: [kept] } });
+    const automations = async () => (await node.automations.list()).length;
+    assert.equal(await automations(), 1);
+    const other = await appKey();
+    await connectCarrier(other);
+    await auth.disconnect(origin, { audience: other.did });
+    assert.deepEqual(kinds(), [`write:${appAgain.did}`]);
+    assert.equal(await automations(), 1, 'the app keeps its automations');
+    await connectCarrier(carrierAgain);
+
+    // Disconnecting the app leaves the carrier; the carrier goes by its own key.
+    await auth.disconnect(origin);
+    assert.deepEqual(kinds(), [`carry:${carrierAgain.did}`]);
+    assert.deepEqual(await carriers(), [carrierAgain.did]);
+    await auth.disconnect(origin, { audience: carrierAgain.did });
+    assert.deepEqual(auth.connections(), []);
+    assert.deepEqual(await carriers(), []);
   });
 });
 

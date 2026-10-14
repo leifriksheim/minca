@@ -357,6 +357,11 @@ export interface ListOptions {
 /** How a space reaches its peers. `refused`: another node with the same session key holds every relay, until it stops */
 export type ConnectionState = 'offline' | 'connecting' | 'connected' | 'error' | 'refused';
 
+/** How long a revoke waits for a peer to take it in: for a device about to stop, which sends nothing after */
+export interface RevokeOptions {
+  readonly waitMs?: number;
+}
+
 export interface SpaceStatus {
   readonly space: string;
   readonly connection: ConnectionState;
@@ -483,8 +488,11 @@ export interface NodeSpaces {
   setRelays(spaceId: string, relays: ReadonlyArray<string>): Promise<void>;
   /** Names the nodes that keep the space whole (at most 16), and how many a write should reach. Needs `/space/keepers` */
   setKeepers(spaceId: string, keepers: ReadonlyArray<Keeper>, copies?: number | null): Promise<void>;
-  /** Revokes one of this account's keys (a session's, an app's, by DID): nothing it writes counts from then on, except what was seen */
-  revoke(spaceId: string, key: string): Promise<void>;
+  /**
+   * Revokes one of this account's keys (a session's, an app's, by DID): nothing it writes counts from then on, except what was seen.
+   * With `waitMs`, waits up to that long for a peer to take the revoke in: true when one did, or with no wait.
+   */
+  revoke(spaceId: string, key: string, options?: RevokeOptions): Promise<boolean>;
   /** Keeps a space syncing until the function it returns is called; it stops once nothing holds it */
   hold(spaceId: string): Promise<() => Promise<void>>;
   /** A live message to the peers connected now, kept nowhere, at most 64 KB; `to` an account or a session DID. Arrives as a `message` event */
@@ -730,8 +738,8 @@ export interface NodeAccount {
   profile(): Promise<AccountProfileView | null>;
   /** Renames the account on every device and app that opens it. Needs an account key. */
   setName(name: string): Promise<AccountProfileView>;
-  /** Revokes one of this account's keys, by DID, in the account registry. Needs an account key */
-  revoke(key: string): Promise<void>;
+  /** Revokes one of this account's keys, by DID, in the account registry. Needs an account key. `waitMs` as for a space's */
+  revoke(key: string, options?: RevokeOptions): Promise<boolean>;
 }
 
 /** Someone in the account's contact list */
@@ -931,6 +939,6 @@ export interface P2PNode {
    * with a cutoff at what it wrote; a lasting key is forgotten at once, so the
    * next session signs with a new one. For signing out.
    */
-  revokeSelf(): Promise<void>;
+  revokeSelf(options?: RevokeOptions): Promise<void>;
   close(): Promise<void>;
 }

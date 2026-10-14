@@ -122,7 +122,11 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   const recordsOnly = request.recordsOnly === true;
   const previous = auth
     .connections()
-    .find((known) => (byCode ? known.audience === request.audience : known.origin === origin && !known.via));
+    .find((known) =>
+      byCode
+        ? known.audience === request.audience
+        : known.origin === origin && !known.via && known.access !== 'carry',
+    );
 
   const spaces = useSpaces(true);
   const [chosen, setChosen] = useState<ReadonlySet<string>>(
@@ -166,6 +170,8 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           </p>
         </>
       )}
+
+      <WhichAccount label={byCode ? 'The account it will work in' : 'The account it will use'} busy={busy} />
 
       {byCode && !recordsOnly && (
         <Note title="More than records" warn>
@@ -297,25 +303,18 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
     <Frame>
       <h1 style={styles.title}>Keep your spaces online</h1>
       <p style={styles.subtitle}>
-        {request.name ? <>“{request.name}”</> : asker(origin)} wants to keep your spaces online while your
-        browser is open — even with no app open.
+        {/* Where it asks from, always: a name is only what the asker calls itself (spec 06 §2.3). */}
+        {request.name ? (
+          <>
+            “{request.name}” (<strong>{asker(origin)}</strong>)
+          </>
+        ) : (
+          asker(origin)
+        )}{' '}
+        wants to keep your spaces online, even with no app open.
       </p>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <Avatar did={session.did} size={32} />
-        <div style={{ flex: 1 }}>
-          <p style={{ ...styles.todoText, margin: 0 }}>{session.account.name}</p>
-          <p style={{ ...styles.errorHint, margin: 0 }}>The account it will keep online</p>
-        </div>
-        <button
-          onClick={() => void auth.signOut()}
-          disabled={busy}
-          data-variant="ghost"
-          style={{ ...styles.linkButton, fontSize: 13 }}
-        >
-          Use another account
-        </button>
-      </div>
+      <WhichAccount label="The account it will keep online" busy={busy} />
 
       {elsewhere.length > 0 && (
         <div style={{ ...styles.errorBox, marginTop: 0, marginBottom: 12 }}>
@@ -486,6 +485,32 @@ function useSpaces(hold: boolean): ReadonlyArray<SpaceSummary> {
 }
 
 /** A boxed explanation: what something may do, or may not */
+/**
+ * Who is signed in here, and a way to answer as someone else: the request
+ * waits while the person signs in to another account, and is answered from it.
+ */
+function WhichAccount({ label, busy }: { label: string; busy: boolean }) {
+  const { auth } = useAuth();
+  const session = useSession();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      <Avatar did={session.did} size={32} />
+      <div style={{ flex: 1 }}>
+        <p style={{ ...styles.todoText, margin: 0 }}>{session.account.name}</p>
+        <p style={{ ...styles.errorHint, margin: 0 }}>{label}</p>
+      </div>
+      <button
+        onClick={() => void auth.signOut()}
+        disabled={busy}
+        data-variant="ghost"
+        style={{ ...styles.linkButton, fontSize: 13 }}
+      >
+        Use another account
+      </button>
+    </div>
+  );
+}
+
 function Note({
   title,
   below = 20,
