@@ -14,6 +14,7 @@ import { useAction, useCopy } from '@minca/app-shared/action';
 import { useDuties } from './duties';
 import { palette } from './styles';
 import { CommunitySetup } from '@minca/app-shared/CommunitySetup';
+import { Loader } from '@minca/app-shared/Loader';
 
 type Tab = 'proposals' | 'trust' | 'people';
 
@@ -146,7 +147,9 @@ function AssemblyBody({ space, a }: { space: SpaceSummary; a: Assembly }) {
       {space.joining ? (
         <Waiting />
       ) : !a.ready ? (
-        <p className="lq-faint lq-fade">Loading…</p>
+        <p className="lq-faint lq-fade">
+          <Loader label="Opening the assembly" showLabel />
+        </p>
       ) : (
         <>
           {!space.writable && (

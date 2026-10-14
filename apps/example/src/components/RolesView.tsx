@@ -17,6 +17,7 @@ import { RingButton } from './calls/Calls';
 import { createInviteLink } from '../spaces';
 import { styles, palette, variants } from '../styles';
 import { Person } from './Person';
+import { Loader } from '@minca/app-shared/Loader';
 
 /** Your own name, renamed in place on the account, so every space you are in gets it */
 function MyName({ name }: { name: string }) {
@@ -141,7 +142,12 @@ export function RolesView({
   const account = useAccount();
   const people = peopleFrom(useProfiles(space.id));
   const powers = usePowers(space.id, account.did);
-  if (!access) return <p style={{ fontSize: 13, color: palette.ink.faint }}>Loading who's who…</p>;
+  if (!access)
+    return (
+      <p style={{ fontSize: 13, color: palette.ink.faint }}>
+        <Loader label="Loading who's who" showLabel />
+      </p>
+    );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
       <Members space={space} access={access} me={account.did} people={people} powers={powers} />

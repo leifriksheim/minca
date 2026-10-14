@@ -18,6 +18,7 @@ import {
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
 import { ago } from '../../derive/time';
 import { styles, palette, ui } from '../../styles';
+import { Loader } from '@minca/app-shared/Loader';
 
 /**
  * An added app drawn from its definitions alone: unlinked records are the list, what links to them
@@ -57,7 +58,12 @@ export function AppBoard({
     );
   const main = held.filter((c) => !pointsIntoApp(c));
 
-  if (!records) return <p style={styles.emptyState}>Opening…</p>;
+  if (!records)
+    return (
+      <p style={styles.emptyState}>
+        <Loader label="Opening" showLabel />
+      </p>
+    );
   const byName = new Map(held.map((c, i) => [c.name, records[i] ?? []]));
 
   return (

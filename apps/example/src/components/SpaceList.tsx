@@ -10,6 +10,7 @@ import { useMyName } from '@minca/core/react';
 import { NameField } from './NameField';
 import { styles, palette } from '../styles';
 import { useSpaceUnread } from '../seen';
+import { Loader } from '@minca/app-shared/Loader';
 
 /** How a space is described once it exists: who can read it, and what you are in it. */
 function spaceBadges(space: Pick<SpaceSummary, 'visibility' | 'role' | 'joining'>): string {
@@ -86,7 +87,11 @@ export function SpaceList({
 
   return (
     <>
-      {loading && spaces.length === 0 && <p style={styles.emptyState}>Loading…</p>}
+      {loading && spaces.length === 0 && (
+        <p style={styles.emptyState}>
+          <Loader label="Opening your spaces" showLabel />
+        </p>
+      )}
 
       {!(loading && spaces.length === 0) && (
         <div className="space-grid">

@@ -13,6 +13,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { Shape, shapeFor } from '@minca/app-shared/shapes';
 import { useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
+import { Loader } from '@minca/app-shared/Loader';
 
 /**
  * An app opened this in a popup to ask for access to the account: sign in,
@@ -31,7 +32,9 @@ export function ConnectPage() {
   if (incoming === undefined)
     return (
       <Frame>
-        <p style={styles.hint}>Waiting for the app…</p>
+        <p style={styles.hint}>
+          <Loader label="Waiting for the app" showLabel />
+        </p>
         <SlowApp />
       </Frame>
     );

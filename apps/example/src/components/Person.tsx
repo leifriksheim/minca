@@ -7,6 +7,7 @@ import { takeBack, useContacts, useStanding } from '../contacts';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
+import { Loader } from '@minca/app-shared/Loader';
 
 /** What a name in a space needs to open its card: the space, who is in it, and where a space for two opens */
 interface PersonScope {
@@ -137,7 +138,9 @@ function PersonCard({ did, scope, onClose }: { did: string; scope: PersonScope; 
           </button>
         </>
       ) : contacts === undefined ? (
-        <p style={styles.hint}>Loading your contacts…</p>
+        <p style={styles.hint}>
+          <Loader label="Loading your contacts" showLabel />
+        </p>
       ) : contact?.blocked ? (
         <p style={styles.hint}>You blocked {name}. Unblock them from Contacts to hear from them again.</p>
       ) : contact ? (
@@ -179,7 +182,12 @@ function Standing({
   const { space, me, openSpace } = scope;
   const called = contact.name !== name && contact.name !== contact.did ? ` as ${contact.name}` : '';
 
-  if (standing === undefined) return <p style={styles.hint}>Loading…</p>;
+  if (standing === undefined)
+    return (
+      <p style={styles.hint}>
+        <Loader label="Loading" showLabel />
+      </p>
+    );
   if (standing === 'gone') {
     return (
       <>

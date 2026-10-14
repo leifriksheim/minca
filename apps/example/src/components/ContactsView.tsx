@@ -16,6 +16,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { styles, palette } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
+import { Loader } from '@minca/app-shared/Loader';
 
 /** How often to look in the doors' mailboxes: knocks wait on relays, which tell nobody */
 const KNOCK_POLL_MS = 30_000;
@@ -204,7 +205,9 @@ export function ContactsView({
       <section style={{ display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Contacts">
         <h2 style={styles.sectionTitle}>Contacts{listed.length > 0 ? ` (${listed.length})` : ''}</h2>
         {contacts === undefined ? (
-          <p style={styles.todoMeta}>Loading…</p>
+          <p style={styles.todoMeta}>
+            <Loader label="Loading" showLabel />
+          </p>
         ) : listed.length === 0 ? (
           <div style={styles.emptyState}>
             No contacts yet. Add someone from a space you share — their name under People — or give them a

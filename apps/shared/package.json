@@ -15,6 +15,7 @@
     "./HostAddress": "./src/HostAddress.tsx",
     "./HostOffer": "./src/HostOffer.tsx",
     "./Modal": "./src/Modal.tsx",
+    "./Loader": "./src/Loader.tsx",
     "./Wordmark": "./src/Wordmark.tsx",
     "./mark": "./src/mark.ts",
     "./useDismiss": "./src/useDismiss.ts",
