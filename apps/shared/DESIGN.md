@@ -86,7 +86,10 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
 - A few shapes mean something, built from the same pieces (pills, arcs,
   dots, half circles), still flat and in one colour: `eyeShut` (nobody
   watching), `group` (people deciding together), `lock` (private) and
-  `signal` (works without a connection). Use them beside the point they
+  `signal` (works without a connection); and for the protocol's ideas, `key`
+  (an account), `grid` (a space), `stack` (signed versions), `shield` (who
+  may do what), `tick` (checked everywhere), `pass` (an app's access) and
+  `mesh` (nodes). Use them beside the point they
   stand for; add another the same way when a point needs one.
 - `Morph` melts one round shape into the next. Use it where the point is that
   something can become anything, and only once per screen.

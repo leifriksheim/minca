@@ -4,6 +4,8 @@
  * real library API; each tab's steps run in order as one program.
  */
 import { rolePresets, STAFF_COLLECTIONS, type RolePreset, type Statement } from '@minca/core';
+import type { ShapeKind } from '@minca/app-shared/shapes';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 
 /** The constitution templates a step can spread */
 type PresetName = keyof typeof rolePresets;
@@ -22,7 +24,11 @@ export interface Scenario {
   /** Its URL hash: `#coop` */
   readonly id: string;
   readonly name: string;
+  /** Its tab's mark */
+  readonly shape: { readonly kind: ShapeKind; readonly colour: ShapeColour };
   readonly summary: string;
+  /** The scenario that runs these steps as a test, in `scenarios/communities/` */
+  readonly test: string;
   readonly steps: ReadonlyArray<WalkStep>;
 }
 
@@ -46,11 +52,14 @@ export const SCENARIOS: ReadonlyArray<Scenario> = [
   {
     id: 'team',
     name: 'Team workspace',
-    summary: 'A company team: founders at the top, editors who change anything, and teams of their own.',
+    shape: { kind: 'briefcase', colour: 'cobalt' },
+    summary:
+      'A company team. You and a cofounder at the top for good, editors who can change anything, and corners of its own, like HR.',
+    test: 'company.ts',
     steps: [
       {
         label: 'Start the space',
-        text: 'Its first record is its constitution: you and a cofounder at the top, for good, with the team preset’s roles below.',
+        text: 'The first record in a space is its founding rules. Here: you and Sam at the top, for good, and the team preset’s roles below you.',
         file: 'space.ts',
         code: `
 const space = await node.spaces.create({
@@ -63,7 +72,7 @@ const space = await node.spaces.create({
       },
       {
         label: 'Describe the data',
-        text: 'A collection names a kind of record and its schema. The definition is stored in the space, so any app or agent can read it.',
+        text: 'A collection is a kind of record and its schema. The definition lives in the space, so any app or agent that opens it knows what it holds.',
         file: 'tasks.ts',
         code: `
 const tasks = collection({
@@ -75,7 +84,7 @@ await node.collections.define(space.id, tasks);
       },
       {
         label: 'Say who may do what',
-        text: 'Editors may change any record and invite more editors. A team of your own is a role with grants: HR writes in app.hr, and nowhere else.',
+        text: 'Editors can change any record and invite more editors. A team of your own is just a role: HR writes in app.hr, and nowhere else.',
         file: 'roles.ts',
         code: `
 await node.spaces.defineRole(space.id, {
@@ -87,7 +96,7 @@ await node.spaces.assign(space.id, halDid, 'hr');
       },
       {
         label: 'Use it',
-        text: 'Invite a colleague as an editor, and write. Records are signed and saved on the device, then synced to everyone in the space.',
+        text: 'Invite a colleague and start writing. Each record is signed, saved on the device first, then synced to everyone in the space.',
         file: 'use.ts',
         code: `
 // A colleague calls node.spaces.join(invite)
@@ -98,7 +107,7 @@ await node.records.put(space.id, tasks, { title: 'Ship v1', done: false });
       },
       {
         label: 'What it shows',
-        text: 'Queries are plain JSON, typed from the schema. Use watch instead of query to run again whenever a change arrives.',
+        text: 'Queries are plain JSON, typed from the schema. Swap query for watch and it reruns whenever a change arrives.',
         file: 'open.ts',
         code: `
 const { records } = await node.records.query(space.id, {
@@ -113,12 +122,14 @@ const { records } = await node.records.query(space.id, {
   {
     id: 'club',
     name: 'Club',
+    shape: { kind: 'pawn', colour: 'coral' },
     summary:
-      'A chess club: admins and moderators run it, members play, and a referee of the club’s own making.',
+      'A chess club. Admins and moderators run it, members play, and the club makes up a referee of its own.',
+    test: 'chess.ts',
     steps: [
       {
         label: 'Start the space',
-        text: 'The community preset: you found it, admins run it, moderators keep order, members change only what they made.',
+        text: 'The community preset: you found it, admins run it, moderators keep order, and members change only what they made.',
         file: 'space.ts',
         code: `
 const space = await node.spaces.create({
@@ -130,7 +141,7 @@ const space = await node.spaces.create({
       },
       {
         label: 'Describe the data',
-        text: 'Games, and moves that link to their game. A link is declared, so every app knows what it points at.',
+        text: 'Games, and moves that link to their game. Links are declared, so every app knows what points at what.',
         file: 'chess.ts',
         code: `
 const games = collection({
@@ -148,7 +159,7 @@ await node.collections.define(space.id, moves);
       },
       {
         label: 'Say who may do what',
-        text: 'There are no built-in ranks. A referee is a role the club defines: it may delete any move, where a member may delete only their own.',
+        text: 'There are no built-in ranks. A referee is a role the club invents: it can delete any move, where members delete only their own.',
         file: 'referee.ts',
         code: `
 await node.spaces.defineRole(space.id, {
@@ -162,7 +173,7 @@ await node.spaces.assign(space.id, daveDid, 'referee');
       },
       {
         label: 'Use it',
-        text: 'An invite makes a member. Members start games and move; every device checks each move against the roles as it arrives.',
+        text: 'An invite link makes a member. Members start games and move, and every device checks each move against the roles as it arrives.',
         file: 'play.ts',
         code: `
 const invite = await node.spaces.invite(space.id, { role: 'member' });
@@ -175,7 +186,7 @@ const move = await node.records.put(space.id, moves, { san: 'e4', ply: 0 },
       },
       {
         label: 'What it shows',
-        text: 'The game so far, in order. Ask whether you may delete a move, and hide the button rather than show an error.',
+        text: 'The game so far, in order. Ask whether you may delete a move, and hide the button instead of showing an error.',
         file: 'board.ts',
         code: `
 const { records } = await node.records.query(space.id, {
@@ -191,11 +202,13 @@ const mayDelete = await node.records.can(space.id, 'delete', move.key);
   {
     id: 'coop',
     name: 'Co-op',
-    summary: 'A bike co-op: no one at the top. Stewards run it, and any of them can be removed.',
+    shape: { kind: 'group', colour: 'sage' },
+    summary: 'A bike co-op with no one at the top. Stewards run it, and any one of them can be removed.',
+    test: 'coop.ts',
     steps: [
       {
         label: 'Start the space',
-        text: 'With top: none there are no founders. The constitution makes you a steward, and that is all the power you start with.',
+        text: 'With top: none there are no founders. You start as a steward, and that is all the power you get.',
         file: 'space.ts',
         code: `
 const space = await node.spaces.create({
@@ -208,7 +221,7 @@ space.founders; // []: nobody is permanent
       },
       {
         label: 'Describe the data',
-        text: 'What the co-op keeps track of: the bikes in for repair.',
+        text: 'What the co-op keeps track of: bikes in for repair.',
         file: 'repairs.ts',
         code: `
 const repairs = collection({
@@ -220,7 +233,7 @@ await node.collections.define(space.id, repairs);
       },
       {
         label: 'Say who may do what',
-        text: 'Stewards manage members and other stewards. Nobody may redefine steward: changing the founding roles takes a successor space.',
+        text: 'Stewards manage members and each other. Nobody can redefine steward: new founding rules take a successor space.',
         file: 'stewards.ts',
         code: `
 await node.spaces.assign(space.id, beaDid, 'steward');
@@ -232,7 +245,7 @@ await node.spaces.removeMember(space.id, beaDid);
       },
       {
         label: 'Use it',
-        text: 'Members write and change their own records, and may name a successor space if the co-op wants new founding rules.',
+        text: 'Members write and change their own records, and can name a successor space when the co-op wants new founding rules.',
         file: 'use.ts',
         code: `
 const invite = await node.spaces.invite(space.id, { role: 'member' });
@@ -245,11 +258,14 @@ await node.records.put(space.id, repairs, { bike: 'Blue cargo', fixed: false });
   {
     id: 'fame',
     name: 'Hall of fame',
-    summary: 'Any community space: a comment enters the hall of fame when five different people react 🙂.',
+    shape: { kind: 'star', colour: 'peach' },
+    summary:
+      'A comment makes the hall of fame once five different people react 🙂, and every device agrees it did.',
+    test: 'fame.ts',
     steps: [
       {
         label: 'Describe the data',
-        text: 'Comments, and reactions that point at one. Start the space as in the club.',
+        text: 'Comments, and reactions that point at one. The space starts as in the club.',
         file: 'comments.ts',
         code: `
 const Reaction = z.object({ emoji: z.string() });
@@ -264,7 +280,7 @@ const reactions = collection({
       },
       {
         label: 'Say what counts',
-        text: 'A claim of fame cites the reactions, and its contract, typed from the schemas, says what they must prove. A wrong field is a type error.',
+        text: 'A claim of fame cites the reactions, and its contract says what they must prove. It is typed from the schemas, so a wrong field is a compile error.',
         file: 'fame.ts',
         code: `
 const Fame = z.object({ reactions: z.array(z.string()) });
@@ -293,7 +309,7 @@ await node.records.put(space.id, reactions, { emoji: '🙂' }, { links: on });
       },
       {
         label: 'What it proves',
-        text: 'Anyone who sees five writes the claim, citing them. Every device runs the same contract and reaches the same verdict, with no server and no blockchain.',
+        text: 'Whoever sees the fifth writes the claim, citing all five. Every device runs the same contract and reaches the same verdict. No server, no blockchain.',
         file: 'claim.ts',
         code: `
 const smiles = await node.records.linked(space.id, post.key,
@@ -310,11 +326,14 @@ await node.records.contracts(space.id, claim.key);
   {
     id: 'credit',
     name: 'Mutual credit',
-    summary: 'Members pay each other in a currency of their own, and nobody goes below −100.',
+    shape: { kind: 'coin', colour: 'lilac' },
+    summary:
+      'Members pay each other in a currency of their own. Nobody goes below −100, and nobody spends twice.',
+    test: 'credit.ts',
     steps: [
       {
         label: 'Describe the data',
-        text: 'A payment carries the payer’s running balance, and claims the payments made to them. Start the space as in the club.',
+        text: 'A payment carries the payer’s running balance, and claims the payments made to them. The space starts as in the club.',
         file: 'payment.ts',
         code: `
 const Payment = z.object({
@@ -327,7 +346,7 @@ const Payment = z.object({
       },
       {
         label: 'Say what counts',
-        text: 'Each account’s payments form one line, each after the one before. Two payments after the same one are a double spend, and neither counts.',
+        text: 'Each account’s payments form one line, each after the last. Two payments after the same one are a double spend, and neither counts.',
         file: 'pay.ts',
         code: `
 const pay = collection({
@@ -347,7 +366,7 @@ const pay = collection({
       },
       {
         label: 'Use it',
-        text: 'Your payments are versions of one record, your line, at a key that comes from your account.',
+        text: 'Your payments are versions of one record, your line, at a key only your account can write.',
         file: 'send.ts',
         code: `
 await node.collections.define(space.id, pay);
@@ -365,7 +384,7 @@ await node.records.update(space.id, first.key,
       },
       {
         label: 'What it shows',
-        text: 'A balance is the newest payment on someone’s line that counts. Every device works it out the same way.',
+        text: 'A balance is the newest payment on someone’s line that counts, and every device works it out the same way.',
         file: 'balance.ts',
         code: `
 const head = await node.records.get<{ balance: number }>(space.id,

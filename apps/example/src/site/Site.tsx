@@ -4,6 +4,8 @@ import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
 import { STAFF_COLLECTIONS } from '@minca/core';
 import { Mark } from '@minca/app-shared/Wordmark';
+import { Shape, type ShapeKind } from '@minca/app-shared/shapes';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 import { CONCEPTS } from './concepts';
 
 /** How the concepts heading says its count, so it never goes stale */
@@ -345,7 +347,13 @@ function tabTarget(key: string, index: number, last: number): number | null {
  * Tabs and the chosen one's panel: arrow keys, Home and End move between
  * them. The caller keeps which one is chosen.
  */
-function Tabs<T extends { readonly id: string; readonly name: string; readonly icon?: string }>({
+function Tabs<
+  T extends {
+    readonly id: string;
+    readonly name: string;
+    readonly shape?: { readonly kind: ShapeKind; readonly colour: ShapeColour };
+  },
+>({
   label,
   items,
   selected,
@@ -387,21 +395,7 @@ function Tabs<T extends { readonly id: string; readonly name: string; readonly i
             onClick={() => onSelect(item.id)}
             onKeyDown={(event) => onKey(event, i)}
           >
-            {item.icon && (
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d={item.icon} />
-              </svg>
-            )}
+            {item.shape && <Shape kind={item.shape.kind} colour={item.shape.colour} size={18} />}
             {item.name}
           </button>
         ))}
@@ -496,9 +490,9 @@ function Walkthrough() {
           <div className="step-label">First</div>
           <h3>Connect</h3>
           <p>
-            A node is the whole stack: give it something that signs for the user, somewhere to store things,
-            and relays to meet peers. It handles keys, encryption, checking and sync. Every tab below starts
-            here.
+            Every app starts the same way. Give a node something that signs for the user, somewhere to keep
+            things, and relays to meet peers. Keys, encryption, checks and sync are its job from there. Each
+            community below picks up here.
           </p>
         </div>
         <Code file="node.ts">{CONNECT}</Code>
@@ -506,7 +500,16 @@ function Walkthrough() {
       <Tabs label="Scenarios" items={SCENARIOS} selected={selected} onSelect={choose}>
         {(scenario) => (
           <>
-            <p className="tab-summary">{scenario.summary}</p>
+            <div className="scenario-head">
+              <Shape kind={scenario.shape.kind} colour={scenario.shape.colour} size={48} />
+              <div>
+                <h3>{scenario.name}</h3>
+                <p>{scenario.summary}</p>
+                <a href={`${GITHUB}/blob/main/scenarios/communities/${scenario.test}`} {...EXTERNAL}>
+                  Runs as a test: scenarios/communities/{scenario.test} →
+                </a>
+              </div>
+            </div>
             {scenario.steps.map((step) => (
               <div key={step.label} className="split walk-step">
                 <div>
@@ -533,13 +536,14 @@ export function Developers() {
       <section className="hero">
         <div className="wrap">
           <h1>
-            Build apps on data
+            A backend that
             <br />
-            people own.
+            runs nowhere.
           </h1>
           <p>
-            Identity, storage, sync and encryption in one library. No backend to run, no database to host —
-            your users bring their data, and your app is a view on it.
+            A protocol for any kind of social space. Let your users be your infrastructure: their devices keep
+            the data, check the rules and sync with each other. No servers to run, and nothing in the middle
+            that can read it.
           </p>
           <div className="actions">
             <span className="install">
@@ -565,12 +569,12 @@ export function Developers() {
       <Band
         id="walkthrough"
         kicker="How it fits together"
-        title="One space, start to finish."
+        title="Five communities, one library."
         intro={
           <p>
-            Every app on Minca does the same five things: start a space, describe its data, say who may do
-            what, use it, and read what it shows or proves. Pick a community to see them in its terms; each
-            one runs as a test in the repository.
+            Every app on Minca does the same few things: start a space, describe its data, say who may do
+            what, use it, and read what it shows or proves. Pick a community to see them in its terms. Each
+            one runs, step by step, as a test in the repository.
           </p>
         }
       >
