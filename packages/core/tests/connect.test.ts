@@ -468,9 +468,8 @@ describe('connecting an app to an account home', () => {
       5000,
       'the two to meet',
     );
-    // Nothing on the home holds the space now: it closes.
+    // Nothing on the home holds the space now: it has closed once this returns.
     await letGo(homeNode, shared.id);
-    await new Promise((resolve) => setTimeout(resolve, 200));
 
     assert.equal(await auth.disconnect('https://todo.test', { waitMs: 5000 }), true, 'the app heard');
     await auth.signOut();

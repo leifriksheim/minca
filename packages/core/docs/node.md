@@ -575,8 +575,8 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   open space), `revoke(key, { waitMs? })` (one of the account's keys, by DID, in the account registry). All need the account
   key.
 - `spaces.revoke(space, key, { waitMs? })` and `account.revoke` resolve once the revoke is written; with
-  `waitMs`, once a peer says it has taken it in, or that long has passed (`true` when one did). A space
-  with no network can't send it anywhere, so that is `false` at once. A node about
+  `waitMs`, once a peer says it has taken it in, or that long has passed (`true` when one did). A node
+  with no network configured can't send it anywhere, so that is `false` at once. A node about
   to stop waits like that: it sends nothing afterwards.
 - `node.contacts` — [contacts.md](contacts.md). `ask` and `accept` make or join a space
   for two, so they need a note granting `/account/write` over the whole
