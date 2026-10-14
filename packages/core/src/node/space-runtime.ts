@@ -4269,7 +4269,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     /**
      * Revokes a key of this account's. With `waitMs`, it then waits up to that
      * long for a peer to say it has the revoke: a device about to stop sends
-     * nothing after, so true means it left. Without, true once written.
+     * nothing after, so true means it left. A space with no network can't
+     * send it anywhere, so false at once. Without, true once written.
      */
     async revoke(key: string, options: { readonly waitMs?: number } = {}): Promise<boolean> {
       const waitMs = options.waitMs ?? 0;
@@ -4291,6 +4292,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           })
         ).version;
         if (waitMs <= 0 || taken.has(wanted)) return true;
+        // A peer may still be on its way through a network just joined; with none, nobody can come.
+        if (networks.length === 0) return false;
         return await new Promise<boolean>((resolve) => {
           const timer = setTimeout(() => resolve(false), waitMs);
           found = () => {

@@ -114,7 +114,10 @@ describe('createMincaAuth', () => {
 
     const space = await auth.getState().session!.node.spaces.create({ name: 'Notes', visibility: 'private' });
 
+    // With no network there is nobody to wait for: signing out doesn't sit out its grace.
+    const signingOut = Date.now();
     await auth.signOut();
+    assert.ok(Date.now() - signingOut < 4000, 'waited for a peer with no network to bring one');
     assert.equal(auth.getState().session, null);
     assert.equal(auth.getState().stage, 'signIn');
     assert.equal(auth.getState().entry?.hasPassword, true);

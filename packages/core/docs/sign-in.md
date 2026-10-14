@@ -301,9 +301,10 @@ app's note doesn't need the home signed in, so the apps connected from here
 keep working until it runs out. `auth.signOut({ disconnect: true })`
 disconnects them first, and the programs connected through them, with the
 automations they proposed; carriers stay. The node sends nothing once it has
-stopped, so it waits, up to 5 s for them all, for a peer to take in each
-revoke (`spaces.revoke` with `waitMs`), its own session key's among them. With
-nobody reachable, they leave the next time the account signs in here. A read-only app has no key to revoke: it loses
+stopped, so it waits, up to 5 s for them all (`signOutGraceMs` in
+`createMincaAuth`'s config), for a peer to take in each revoke (`spaces.revoke`
+with `waitMs`), its own session key's among them. A node with no network
+doesn't wait. With nobody reachable, they leave the next time the account signs in here. A read-only app has no key to revoke: it loses
 access when its time runs out. The account home asks each time, with
 disconnecting ticked, and is not ready to grant anything from the moment
 signing out starts. "Use another account" on the connect page signs out
