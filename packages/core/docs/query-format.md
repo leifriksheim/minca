@@ -5,8 +5,8 @@ produced by an agent. It runs against the records one node holds of one space.
 
 > Not protocol: peers never exchange queries, so another implementation may
 > offer any query language, and a better one later is not a protocol change.
-> Open, in [#28](https://github.com/leifriksheim/minca/issues/28): the
-> interface another query language plugs into, which reports the collections
+> Ideas for later, from
+> [#28](https://github.com/leifriksheim/minca/issues/28): the interface another query language plugs into, which reports the collections
 > it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them; and the
 > small filter a screen's `minca.list(collection, { where })` takes (field
 > equality and `link:<rel>`, `apps/example/src/components/apps/screens.ts`), which

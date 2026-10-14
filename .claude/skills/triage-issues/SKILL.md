@@ -55,16 +55,22 @@ at the plan.
 
 ## 4. Apply
 
-In this order, so no link points nowhere:
+A closed issue still opens, so a link to one is stale, not broken. Order the
+steps around the cap instead: the hook refuses a new P2 umbrella while the
+backlog is at 40 or more.
 
-1. Create any missing labels (`idea`, `accepted`) and the umbrella issues,
-   with the `file-issue` body format. Each umbrella lists its cases as a
-   checklist with the original numbers.
-2. Update the links in `spec/` and `packages/core/docs/` from folded issues to
+1. Rewrite the existing umbrellas: title, body (the `file-issue` format, with
+   the cases as a checklist by original number) and labels.
+2. Close what folds into an existing umbrella, what is parked, accepted or
+   done, each with a comment saying where it went.
+3. Create the new umbrellas, now under the cap, and close what folds into
+   them.
+4. Update the links in `spec/` and `packages/core/docs/` from closed issues to
    their umbrella, and add the threat model or Known defect text for
    accepted issues. That is a change to `spec/`: it goes on a branch and
-   through a PR, like any other.
-3. Close the issues, each with its comment.
-4. Edit the titles, bodies and labels of kept issues.
+   through a PR, with its adversarial review, like any other.
+
+Loop over issue numbers one per command, or in a bash script: zsh, the
+default shell on macOS, doesn't split `$var` into words.
 
 Report the final counts, and anything you weren't sure enough to change.

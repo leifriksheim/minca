@@ -1024,7 +1024,7 @@ found for the stub, which was judged without its body.
 > since they derive those ids (§13.1). A peer without the account key, such as
 > a carrier, a host or a mirror reader, may not be able to tell those spaces
 > from any other, and then lets stand a version the account's devices refuse.
-> Tracked in [#90](https://github.com/leifriksheim/minca/issues/90).
+> Tracked in [#10](https://github.com/leifriksheim/minca/issues/10).
 
 An access record stands when its event's status is `applied`.
 
@@ -1401,7 +1401,7 @@ Example: `K = ff fe … e0` → id `bgk-m-Kq-gEGgJCOOEYNYw`.
 Envelopes take a random 96-bit nonce, which keeps AES-GCM safe for about 2³²
 seals under one key, and a space's seal key lasts until a member is removed
 (§9); a space that would write more under one key needs to change it first
-([#182](https://github.com/leifriksheim/minca/issues/182)).
+([#170](https://github.com/leifriksheim/minca/issues/170)).
 
 ### 8.2 What is encrypted
 
@@ -1553,7 +1553,7 @@ publish it again when it differs from what is published.
 > an app's included, or one granted records only, can publish a member key of its own, and
 > it wins as the newest. The next space key is then boxed to it
 > ([01](01-identity.md) §8 asks for more only on access collections).
-> Tracked in [#169](https://github.com/leifriksheim/minca/issues/169).
+> Tracked in [#165](https://github.com/leifriksheim/minca/issues/165).
 
 > Rationale: one per space, so an account home can hand an app the member keys
 > of exactly the spaces it grants.
@@ -1563,7 +1563,7 @@ publish it again when it differs from what is published.
 `keyDue` (§4.4) is true while some applied event that took reading from
 someone (removed, left, or unassigned from their last role) was not seen by the current key's
 event. A key change made at the same time as a removal, not having seen it,
-leaves the key change due ([#173](https://github.com/leifriksheim/minca/issues/173)).
+leaves the key change due ([#170](https://github.com/leifriksheim/minca/issues/170)).
 
 A **former member** is an account named by an applied `assign` or `remove`
 event that is not a reader now: removed, left, or holding no role. Peers

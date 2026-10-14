@@ -208,7 +208,7 @@ keeps its code working.
 > knock on an existing door. A fix budgets IPv6 at /64, /56 and /48 together,
 > and keeps the reserve for topics that existed before the mailbox filled.
 > Other implementations SHOULD NOT copy these limits. Tracked in
-> [#23](https://github.com/leifriksheim/minca/issues/23).
+> [#162](https://github.com/leifriksheim/minca/issues/162).
 
 A relay need not keep its mailbox across a restart (the reference relay keeps
 it in memory), which is one reason a knock goes to every relay a door names.

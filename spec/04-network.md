@@ -109,7 +109,7 @@ fixes the socket's DID for the life of the socket.
 > its own one-link note signed by the account (through the home, or the
 > root signer), since a key can't pass its note on ([01](01-identity.md)
 > §7.5); the library doesn't ask for one yet. Tracked in
-> [#55](https://github.com/leifriksheim/minca/issues/55).
+> [#162](https://github.com/leifriksheim/minca/issues/162).
 
 _Source: `packages/relay/relay.mjs` (`handleMessage`, `isDid`, `CLOSE_DID_TAKEN`). Tests: `packages/core/tests/relay-refusal.test.ts` ("one DID per room")._
 
@@ -337,7 +337,7 @@ a receiver recognises one (§7.3).
 > started (`packages/core/src/network/rtc-transport.ts`, `handleOffer`; `packages/core/src/network/mesh.ts`).
 > Found by reading the code, not reproduced. A fix will drop a duplicate offer.
 > Other implementations SHOULD NOT copy this.
-> Tracked in [#18](https://github.com/leifriksheim/minca/issues/18).
+> Tracked in [#162](https://github.com/leifriksheim/minca/issues/162).
 
 _Source: `packages/core/src/network/multi-signaling.ts`. Tests: `packages/core/tests/introductions.test.ts` ("several relays at once"), `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair…")._
 

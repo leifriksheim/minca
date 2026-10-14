@@ -71,11 +71,11 @@ reference implementation, or any implementation, honestly.
 - **Does not hold yet.**
   - A leaked view-only invite carries the space key, can't be closed, and
     never causes a key change, so whoever holds it reads everything new
-    ([#172](https://github.com/leifriksheim/minca/issues/172)).
-  - A leaked role invite lets it join, as often as it likes ([#161](https://github.com/leifriksheim/minca/issues/161)).
+    ([#170](https://github.com/leifriksheim/minca/issues/170)).
+  - A leaked role invite lets it join, as often as it likes ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - What it sends must be checked, stored or refused, with few limits
     ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks on doors and contact requests (07),
-    whose mailbox can be flooded ([#23](https://github.com/leifriksheim/minca/issues/23)).
+    whose mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - A page that takes over an app's tab while the account home waits for the
     app's request (up to 10 minutes in the reference home) can send its own
@@ -205,7 +205,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/minca/issues/33)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
-    peer's keys, or the order it runs checks in ([#163](https://github.com/leifriksheim/minca/issues/163)).
+    peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - A removal or unassignment signed offline can arrive at any time and withdraw
     what its cutoff doesn't cover: peers converge, but no verdict is final
     until members witness each other's heads
@@ -230,7 +230,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     outlives its opener’s demotion…";
     [#170](https://github.com/leifriksheim/minca/issues/170)).
   - Only three kinds of misconduct earn a warrant, and a peer that
-    can't read the rules flags no one. More kinds are planned ([#148](https://github.com/leifriksheim/minca/issues/148)).
+    can't read the rules flags no one. More kinds are planned after v1 ([#148](https://github.com/leifriksheim/minca/issues/148)).
   - A warrant is withdrawn like any record: an accused who may remove every
     witness removes them with a cutoff below their warrants, and a writer can withdraw their own
     by revoking its key or forking their line in the warrants' collection,
@@ -246,7 +246,7 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     Leaving a role, or the space, is a reduction of its own account too: it
     strikes everything its other devices did concurrently that its cutoff
     doesn't cover, so an account can disown what its devices did while apart
-    ([#168](https://github.com/leifriksheim/minca/issues/168); `roles.test.ts`,
+    ([#166](https://github.com/leifriksheim/minca/issues/166); `roles.test.ts`,
     "it strikes what needed the role, and so does leaving the role on one’s
     own (#168)").
   - At a shared key (a `onePer` that doesn't name `@author`, such as one
@@ -406,7 +406,7 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
   - A version it backdates is withdrawn, but a colluding member can still cite
     it as evidence in a version under a contract, and readers count it,
     since they judge a cited version as of what the citer saw
-    ([#184](https://github.com/leifriksheim/minca/issues/184), 09 §6.2).
+    ([#170](https://github.com/leifriksheim/minca/issues/170), 09 §6.2).
     This is a gap in what readers count, not in what peers store.
   - It can rejoin through any open role invite it saw: removal closes none
     ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
@@ -415,15 +415,17 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
     ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - Hosts and carriers can't read the member list, so they keep syncing with
     it until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_. A peer that never says who it is
-    is never let go ([#173](https://github.com/leifriksheim/minca/issues/173)).
+    is never let go ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - A key change made at the same moment as its removal is boxed to it. The
     change stays due, so the next key leaves it out, but until then it reads
-    ([#173](https://github.com/leifriksheim/minca/issues/173)).
+    ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - It can keep adding to the history every peer must store and replay
-    ([#161](https://github.com/leifriksheim/minca/issues/161)).
+    ([#170](https://github.com/leifriksheim/minca/issues/170)).
   - Its removal withdraws what it wrote before that the removal's cutoff
     doesn't cover: the remover's node covers only the lines it holds unbroken,
-    in the collections it holds, up to 1024 places (03 §6.3) ([#166](https://github.com/leifriksheim/minca/issues/166)).
+    in the collections it holds, up to 1024 places (03 §6.3). Peers don't
+    check how a cutoff was built, so a remover may leave the removed account's lines out
+    ([#166](https://github.com/leifriksheim/minca/issues/166)).
   - It keeps a private space's first key, from which `onePer` keys are
     derived, so it can test guesses of who voted on what in envelopes that
     reach it later (02 §7.3, 03 §8.6).
@@ -491,7 +493,7 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
     writes a revoke of the session key, delivered when that device next
     syncs, but a device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
-    keys ([#165](https://github.com/leifriksheim/minca/issues/165)). A revocation does not reach spaces created after it
+    keys. A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/minca/issues/165)).
 
 _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/writer-logs.test.ts`, `packages/core/tests/space-access.test.ts` ("a revoked note…", "a key cannot pass its note on: a two-link proof counts for no peer"), `packages/core/tests/validation.test.ts` ("a note is one link…"), `packages/core/tests/roles.test.ts` ("a revoked key: what it signed stands up to the cutoff"), `packages/core/tests/access-attacks.test.ts` ("a revoke or a fork proof undoes a thief’s change to who may do what…")._
@@ -558,10 +560,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
 - **Does not hold yet.**
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
-    keys sealed to itself _(traced)_ ([#169](https://github.com/leifriksheim/minca/issues/169)).
+    keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/minca/issues/165)).
   - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
-    its grant expires ([#165](https://github.com/leifriksheim/minca/issues/165), [#169](https://github.com/leifriksheim/minca/issues/169)).
+    its grant expires ([#165](https://github.com/leifriksheim/minca/issues/165)).
   - A key whose note grants everything about the account (`/`, no policy),
     an app granted write to every space included, can pose as the account's
     node to a client that pinned the account, and a pin checks no revoke. A
@@ -571,6 +573,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     the home that granted it revokes it, while signed in there (06 §2.9,
     [#165](https://github.com/leifriksheim/minca/issues/165)).
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/minca/issues/165)).
+  - A version it writes in one of the account's own spaces (the registry,
+    contacts, carry spaces) without `/account/write` is refused by the
+    account's devices, but a carrier, host or mirror reader that can't tell
+    the space is the account's own lets it stand, so they disagree (03 §5.2,
+    [#10](https://github.com/leifriksheim/minca/issues/10)) _(traced)_.
   - An account's chosen key is the same in every collection, so with a
     records grant it can write a record at a chosen name another app of the
     account's uses in another collection, and that app can't write its record
@@ -601,12 +608,12 @@ _Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §15; 02 §4.1. Tests: `packages/c
 - **Does not hold yet.**
   - That it can't answer in peers' place: they talk over DTLS channels whose
     fingerprints both sign in the mesh proof (04 §5.1, §6.2), so a relay that
-    answers for one should fail the proof. No test shows it ([#181](https://github.com/leifriksheim/minca/issues/181)).
+    answers for one should fail the proof. No test shows it ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It learns who meets whom: IP addresses, session DIDs and rooms together
     ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - Joiners don't prove they hold their DID's key, so anyone can take a
     victim's place in a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
-  - Its door mailbox can be flooded ([#23](https://github.com/leifriksheim/minca/issues/23)).
+  - Its door mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It can fill the 32 exchanges an app offering a code runs before the right
     program arrives, with peers that say hello, so the program is never
     answered. Denial of service only: none of them holds the code, so none
@@ -636,9 +643,9 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     space id, so a guessed value can be checked against it (02 §8.2).
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
-    plaintext ([#171](https://github.com/leifriksheim/minca/issues/171)) _(traced)_.
+    plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space
-    key ([#171](https://github.com/leifriksheim/minca/issues/171)) _(traced)_.
+    key ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - A bot acts with its own role's grants on what members ask, so someone
     who may instruct it can reach past their own grants through it. The
     library narrows this: the dialog that adds a bot offers only roles whose
@@ -650,20 +657,16 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     someone holding every grant of its roles"). Neither is protocol: a bot run
     by other code, or a role redefined after the bot was added, can still act
     for someone with more than they hold, and an automation's own words are
-    its maker's ([#171](https://github.com/leifriksheim/minca/issues/171)).
-  - A removed carrier keeps proving read until the key changes ([#171](https://github.com/leifriksheim/minca/issues/171)) _(traced)_.
+    its maker's ([#170](https://github.com/leifriksheim/minca/issues/170)).
+  - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
     (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)).
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
-    collections ([#176](https://github.com/leifriksheim/minca/issues/176)) _(traced)_.
-  - Where it can write the account's data folder (a pod in a synced drive,
-    say), it can put back an older sealed registry entry, such as a space key
-    from before a key change, or delete one: sealing at rest binds an entry's
-    name, not its version (05 §15, [#215](https://github.com/leifriksheim/minca/issues/215)).
+    collections ([#166](https://github.com/leifriksheim/minca/issues/166)) _(traced)_.
 
-_Source: 03 §8; 02 §3, §7.3; 06 §4; 05 §15. Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)"), `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
+_Source: 03 §8; 02 §3, §7.3; 06 §4. Tests: `packages/core/tests/record-keys.test.ts` ("in a private space, nobody without its key can compute or test one (#87)"), `packages/core/tests/carrier.test.ts`, `packages/core/tests/caches.test.ts`, `packages/core/tests/sync.test.ts`._
 
 ### 3.9 Network attacker
 
@@ -681,8 +684,10 @@ _Source: 03 §8; 02 §3, §7.3; 06 §4; 05 §15. Tests: `packages/core/tests/rec
   - An unpinned connection to a node accepts whichever node answers, and an
     account pin accepts any key whose note grants everything about the
     account, and checks no revoke ([#165](https://github.com/leifriksheim/minca/issues/165)) _(traced)_.
-  - Group keys give no forward secrecy: whoever later obtains a space key
-    reads everything sealed under it and every earlier key ([#182](https://github.com/leifriksheim/minca/issues/182)).
+  - Whoever later obtains a space key reads everything sealed under it and
+    every earlier key it carries. Keys change when a reader leaves, or when a
+    member granted `/key/change` changes them; never on a schedule, and not
+    at all in a space where nobody holds `/key/change` ([#170](https://github.com/leifriksheim/minca/issues/170)).
 
 _Source: 04 §5, §6.1; 01 §15.2. Tests: `packages/core/tests/ws-transport.test.ts` ("only a note for everything about the account pins…"), `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open")._
 
@@ -703,6 +708,14 @@ raised but has no place above until a test confirms or rules it out.
 - **Anonymity** toward relays and the network.
 - **Availability against every peer colluding.** A node that syncs only with
   peers that withhold from it cannot learn what they hold back.
+- **Per-message forward secrecy.** A space key opens everything sealed under
+  it. Changing keys bounds what a later key opens; ratcheting group keys (MLS,
+  say) are not a goal before v1.
+- **Rollback of a data folder** by whoever can write it (a pod in a synced
+  drive, say). Sealing at rest binds an entry's name, not its version, so an
+  older sealed registry entry, such as a space key from before a key change,
+  still opens, and an entry can be deleted (05 §15,
+  [#215](https://github.com/leifriksheim/minca/issues/215)).
 - **Protecting a device that is already compromised** while it runs. Keeping
   keys from being exported is up to each implementation (see
   `packages/core/docs/node.md`).

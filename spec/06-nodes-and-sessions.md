@@ -158,7 +158,7 @@ every tab shares, and read from the storage they share.
 > with its own one-link note signed by the account through the home: the
 > app's key can't pass its note on ([01](01-identity.md) §7.5). See
 > [04](04-network.md) §1.2 and
-> [#55](https://github.com/leifriksheim/minca/issues/55).
+> [#162](https://github.com/leifriksheim/minca/issues/162).
 
 ### 2.2 The home's address
 

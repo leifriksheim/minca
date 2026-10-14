@@ -403,7 +403,7 @@ count Bob's vote.
 > would go back on itself. The cost: a writer chooses its `seen`, and can
 > leave a removal out of it to count a removed member's earlier versions, and
 > nothing tells those from versions the removed member backdated after its
-> removal ([#184](https://github.com/leifriksheim/minca/issues/184)). It must
+> removal ([#170](https://github.com/leifriksheim/minca/issues/170)). It must
 > itself hold a role as of what it claims to have seen.
 
 _Source: `packages/core/src/records/contracts.ts` (`runContracts`, `CitedVersion`), `packages/core/src/node/space-runtime.ts` (`cited`, `checkedVersion`). Tests: `packages/core/tests/contracts.test.ts` ("a proof stays a proof…"), `packages/core/tests/contracts-pending-squat.test.ts`, `scenarios/tests/fame.test.ts` (all)._
@@ -528,7 +528,7 @@ _Source: `packages/core/src/records/contracts.ts` (`checkContracts`, `checkLine`
 
 ## 9. Planned: asking for what a version cites
 
-Issue: [#79](https://github.com/leifriksheim/minca/issues/79). A version
+Issue: [#138](https://github.com/leifriksheim/minca/issues/138). A version
 pending on a version it cites doesn't ask for it: a node that holds the whole
 space gets it in the next round anyway, but a node holding only some
 collections (05, What a node holds) may never fetch a cited version from a

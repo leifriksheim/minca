@@ -924,7 +924,7 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > (§6.1), so that peer would enforce none of its rules. Either the publishing
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
-> Tracked in [#163](https://github.com/leifriksheim/minca/issues/163).
+> Tracked in [#10](https://github.com/leifriksheim/minca/issues/10).
 
 ### 6.3 A definition's version number
 
