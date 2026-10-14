@@ -188,6 +188,12 @@ const PATHS = {
     disc(50, 20, 15) +
     disc(20, 76, 15) +
     disc(80, 76, 15),
+  /** A team at work: a briefcase and its handle */
+  briefcase: arcBand(50, 30, 14, 10, 180, 360) + roundRect(6, 30, 88, 60, 14),
+  /** A club that plays: a pawn, its head, collar and base */
+  pawn: disc(50, 24, 16) + pill(32, 46, 68, 46, 12) + 'M40 46H60L66 78H34Z' + roundRect(20, 76, 60, 18, 9),
+  /** Money of a group's own: a coin, a groove round its face */
+  coin: disc(50, 50, 46) + circle(50, 50, 35) + disc(50, 50, 28),
 } as const;
 
 export type ShapeKind = keyof typeof PATHS;

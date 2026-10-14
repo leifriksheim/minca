@@ -490,9 +490,9 @@ function Walkthrough() {
           <div className="step-label">First</div>
           <h3>Connect</h3>
           <p>
-            A node is the whole stack: give it something that signs for the user, somewhere to store things,
-            and relays to meet peers. It handles keys, encryption, checking and sync. Every tab below starts
-            here.
+            Every app starts the same way. Give a node something that signs for the user, somewhere to keep
+            things, and relays to meet peers. Keys, encryption, checks and sync are its job from there. Each
+            community below picks up here.
           </p>
         </div>
         <Code file="node.ts">{CONNECT}</Code>
@@ -500,7 +500,16 @@ function Walkthrough() {
       <Tabs label="Scenarios" items={SCENARIOS} selected={selected} onSelect={choose}>
         {(scenario) => (
           <>
-            <p className="tab-summary">{scenario.summary}</p>
+            <div className="scenario-head">
+              <Shape kind={scenario.shape.kind} colour={scenario.shape.colour} size={48} />
+              <div>
+                <h3>{scenario.name}</h3>
+                <p>{scenario.summary}</p>
+                <a href={`${GITHUB}/blob/main/scenarios/communities/${scenario.test}`} {...EXTERNAL}>
+                  Runs as a test: scenarios/communities/{scenario.test} →
+                </a>
+              </div>
+            </div>
             {scenario.steps.map((step) => (
               <div key={step.label} className="split walk-step">
                 <div>
@@ -560,12 +569,12 @@ export function Developers() {
       <Band
         id="walkthrough"
         kicker="How it fits together"
-        title="One space, start to finish."
+        title="Five communities, one library."
         intro={
           <p>
-            Every app on Minca does the same five things: start a space, describe its data, say who may do
-            what, use it, and read what it shows or proves. Pick a community to see them in its terms; each
-            one runs as a test in the repository.
+            Every app on Minca does the same few things: start a space, describe its data, say who may do
+            what, use it, and read what it shows or proves. Pick a community to see them in its terms. Each
+            one runs, step by step, as a test in the repository.
           </p>
         }
       >
