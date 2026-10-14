@@ -1,0 +1,21 @@
+{
+  "name": "@minca/desktop",
+  "private": true,
+  "type": "module",
+  "description": "Minca on the desktop: the example app in a window of its own, and a carrier in the menu bar that keeps your spaces online",
+  "scripts": {
+    "parts": "npm run parts:app && npm run parts:node",
+    "parts:app": "cd ../example && vite build --outDir ../desktop/parts/app --emptyOutDir",
+    "parts:node": "bun build ../../packages/cli/src/main.ts --target=bun --conditions=@minca/source --external=node-datachannel --outfile=parts/minca.js",
+    "dev": "npm run parts && electrobun dev",
+    "build": "npm run parts && electrobun build --env=stable",
+    "typecheck": "tsc --noEmit",
+    "test": "node --conditions=@minca/source --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@minca/core": "*"
+  },
+  "devDependencies": {
+    "electrobun": "1.18.1"
+  }
+}

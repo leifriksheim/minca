@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "customConditions": ["@minca/source"]
+  },
+  "include": ["src/bun/bridge.ts", "src/bun/page.ts", "src/bun/carrier.ts", "tests"]
+}

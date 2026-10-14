@@ -1,0 +1,259 @@
+/**
+ * Minca on the desktop. One Bun process does four things:
+ *
+ * - serves the example app's build at a fixed loopback origin, so its
+ *   IndexedDB, its app key and the account home's grant survive restarts
+ *   (a new port would be a new origin, and a new app);
+ * - shows it in a window with no title bar, and opens the windows it asks
+ *   for, the account home among them (`bridge.ts`);
+ * - runs a carrier for the person's account beside it (`carrier.ts`), which
+ *   keeps their spaces online while the window is closed, from a folder;
+ * - puts Minca in the menu bar, where it stays when the window closes.
+ */
+import Electrobun, { BrowserWindow, BuildConfig, PATHS, Tray, Utils } from 'electrobun/bun';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createBridge, type PaneHost } from './bridge';
+import { createCarrier, type CarrierState } from './carrier';
+import { preloadFor } from './page';
+
+const APP_PORT = 47830;
+const APP_URL = `http://127.0.0.1:${APP_PORT}`;
+const { VIEWS_FOLDER } = PATHS;
+/** How tall the app window's title bar would be: the strip that drags it */
+const DRAG_INSET = 28;
+
+/** Electrobun's events carry their payload in `data`; one field of it */
+function field(event: unknown, name: string): unknown {
+  const data: unknown =
+    typeof event === 'object' && event !== null && 'data' in event ? event.data : undefined;
+  return typeof data === 'object' && data !== null && name in data ? Reflect.get(data, name) : undefined;
+}
+
+// The app: static files, and index.html for any path the app routes itself. The
+// site's headers are a file for its host (\`_headers\`); here they are headers.
+const appFolder = join(VIEWS_FOLDER, 'app');
+const headers = {
+  'content-security-policy': "frame-ancestors 'self'",
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+};
+Bun.serve({
+  hostname: '127.0.0.1',
+  port: APP_PORT,
+  async fetch(request) {
+    const { pathname } = new URL(request.url);
+    const file = Bun.file(join(appFolder, pathname));
+    const served =
+      !pathname.includes('..') && !/^\/_(headers|redirects)$/.test(pathname) && (await file.exists());
+    return new Response(served ? file : Bun.file(join(appFolder, 'index.html')), { headers });
+  },
+});
+
+let app: PaneHost | null = null;
+
+// Windows. Every one is sandboxed: Electrobun lets a page that isn't, and any
+// frame in it, run scripts in every other window, the account home's too.
+let openCount = 0;
+const bridge = createBridge({
+  preload: ({ secret, origin, popup, app: isApp }) =>
+    preloadFor({ secret, origin, popup, app: isApp, dragInset: isApp ? DRAG_INSET : 0 }),
+  openExternal: (url) => void Utils.openExternal(url),
+  account: (who) => followApp(who),
+  open({ url, preload, width, height, app: isApp, closed }) {
+    const offset = 40 * (openCount++ % 6);
+    const win = new BrowserWindow({
+      // Any window but the app's has its address for a title: there is no address bar to show where it is.
+      title: isApp ? 'Minca' : new URL(url).host,
+      url,
+      preload,
+      sandbox: true,
+      // It stays at the origin it was opened for, and its own about: and blob: pages.
+      navigationRules: JSON.stringify([
+        '^*',
+        `${new URL(url).origin}/*`,
+        'about:*',
+        `blob:${new URL(url).origin}/*`,
+      ]),
+      frame: isApp ? { x: 120, y: 80, width, height } : { x: 360 + offset, y: 120 + offset, width, height },
+      ...(isApp ? { titleBarStyle: 'hiddenInset' as const, trafficLightOffset: { x: 6, y: 6 } } : {}),
+    });
+    win.on('close', () => {
+      closed();
+      if (host === homeWindow) homeWindow = null;
+      // The app's window: the dock icon goes with it.
+      if (isApp) {
+        app = null;
+        Utils.setDockIconVisible(false);
+      }
+    });
+    let start = { x: 0, y: 0, frameX: 0, frameY: 0 };
+    const host: PaneHost = {
+      run: (js) => win.webview.executeJavascript(js),
+      close: () => win.close(),
+      activate: () => win.activate(),
+      drag(phase, x, y) {
+        if (phase === 'start') {
+          const frame = win.getFrame();
+          start = { x, y, frameX: frame.x, frameY: frame.y };
+        } else win.setPosition(start.frameX + x - start.x, start.frameY + y - start.y);
+      },
+      zoom: () => (win.isMaximized() ? win.unmaximize() : win.maximize()),
+    };
+    return host;
+  },
+});
+// Messages from pages, from any window: the bridge knows them by their secret, not by where they say they're from.
+// Out of the event's own callback: closing a window from inside one crashes Bun.
+Electrobun.events.on('host-message', (event: unknown) => {
+  const detail = field(event, 'detail');
+  setTimeout(() => bridge.receive(detail), 0);
+});
+
+// The account home, from the menu bar: its settings, in a window of its own (not the app's, and no popup).
+let homeWindow: PaneHost | null = null;
+function openHome() {
+  if (homeWindow) return homeWindow.activate();
+  homeWindow = bridge.openWindow(new URL('/', home).href, { width: 720, height: 820 }, { app: false });
+}
+
+// The app's window: made when asked for, gone when closed. The dock icon shows only while it is open.
+function openApp() {
+  if (app) return app.activate();
+  Utils.setDockIconVisible(true);
+  app = bridge.openWindow(`${APP_URL}/app`, { width: 1200, height: 820 });
+}
+
+// The carrier. Its folder is a setting (`settings.json`, `carrierFolder`), in the
+// app's own data folder until someone picks another.
+const settings: unknown = await readFile(join(Utils.paths.userData, 'settings.json'), 'utf8').then(
+  (text): unknown => JSON.parse(text),
+  () => ({}),
+);
+const chosen: unknown =
+  typeof settings === 'object' && settings !== null ? Reflect.get(settings, 'carrierFolder') : null;
+const carrierFolder = typeof chosen === 'string' && chosen ? chosen : join(Utils.paths.userData, 'carrier');
+const { runtime } = await BuildConfig.get();
+const home = typeof runtime?.home === 'string' ? runtime.home : 'https://weave-home.netlify.app/connect';
+
+// Minca's rainbow, in one colour: a template image, which macOS tints like the other icons in the bar (assets/tray.swift).
+const tray = new Tray({ image: 'views://tray.png', template: true, width: 22, height: 12 });
+let carrierState: CarrierState = { state: 'starting' };
+const carrier = createCarrier({
+  folder: carrierFolder,
+  // The CLI, run by the Bun this app ships with. Quitting the app stops it.
+  cli: [process.execPath, join(VIEWS_FOLDER, 'minca.js')],
+  home,
+  openHome: (url, origin, hear) => bridge.openFromShell(url, { width: 460, height: 720 }, { origin, hear }),
+  changed: (state) => {
+    carrierState = state;
+    showMenu();
+    // It knows now what it carries: the app's account may still want asking.
+    if (state.state !== 'starting' && state.state !== 'connecting' && appAccount && !carrying(appAccount))
+      followApp(appAccount);
+  },
+});
+
+// One account: the one the app is connected as. The menu bar keeps that one's
+// spaces online and no other, and asks to, once for each account, as soon as
+// the app connects as one it isn't carrying yet.
+type Account = { readonly did: string; readonly name: string };
+let appAccount: Account | null = null;
+let carrierProblem: string | null = null;
+const askedFile = join(Utils.paths.userData, 'carrier-asked.json');
+const asked = new Set<string>(
+  await readFile(askedFile, 'utf8').then(
+    (text): string[] => {
+      const list: unknown = JSON.parse(text);
+      return Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : [];
+    },
+    () => [],
+  ),
+);
+
+function carrying(account: Account | null): boolean {
+  return carrierState.state === 'carrying' && account !== null && carrierState.account === account.did;
+}
+
+function connectCarrier(account: Account) {
+  carrierProblem = null;
+  void carrier.connect(account).catch((error: unknown) => {
+    carrierProblem = error instanceof Error ? error.message : String(error);
+    showMenu();
+  });
+}
+
+function followApp(who: Account | null) {
+  appAccount = who;
+  showMenu();
+  if (!who || carrying(who) || asked.has(who.did)) return;
+  // Not while it is still finding out what it carries: it may be this one already.
+  if (carrierState.state === 'starting' || carrierState.state === 'connecting') return;
+  asked.add(who.did);
+  void writeFile(askedFile, JSON.stringify([...asked]), { mode: 0o600 }).catch(() => {});
+  connectCarrier(who);
+}
+
+function carrierItems() {
+  const said = (label: string) => ({ type: 'normal' as const, label, action: 'status', enabled: false });
+  const offer = (account: Account) => ({
+    type: 'normal' as const,
+    label: `Keep ${account.name}’s spaces online…`,
+    action: 'connect',
+  });
+  const state = carrierState;
+  const account = appAccount;
+  const problem = carrierProblem ? [said(carrierProblem)] : [];
+  if (!account)
+    return [
+      said(state.state === 'carrying' ? `Keeping ${state.name}’s spaces online` : 'Not connected'),
+      said('Open Minca to connect your account'),
+    ];
+  if (state.state === 'connecting') return [said(account.name), said('Waiting for your account home…')];
+  if (carrying(account) && state.state === 'carrying')
+    return [
+      said(account.name),
+      said(`Keeping ${state.spaces} ${state.spaces === 1 ? 'space' : 'spaces'} online`),
+      { type: 'normal' as const, label: 'Pause', action: 'pause' },
+    ];
+  if (state.state === 'paused')
+    return [
+      said(account.name),
+      said('Paused: your account home still lists it'),
+      { type: 'normal' as const, label: 'Resume', action: 'resume' },
+    ];
+  // Not carrying the app's account: carrying another's, stopped, or nothing yet.
+  return [
+    said(account.name),
+    ...(state.state === 'carrying' ? [said(`Keeping ${state.name}’s spaces online instead`)] : []),
+    ...(state.state === 'stopped' ? [said(`Stopped: ${state.error}`)] : []),
+    ...problem,
+    offer(account),
+  ];
+}
+function showMenu() {
+  tray.setMenu([
+    { type: 'normal', label: 'Open Minca', action: 'open' },
+    { type: 'normal', label: 'Account settings…', action: 'settings' },
+    { type: 'divider' },
+    ...carrierItems(),
+    { type: 'divider' },
+    { type: 'normal', label: 'Quit Minca', action: 'quit' },
+  ]);
+}
+tray.on('tray-clicked', (event) => {
+  const action = field(event, 'action');
+  if (action === 'open') openApp();
+  if (action === 'settings') openHome();
+  if (action === 'connect' && appAccount) connectCarrier(appAccount);
+  if (action === 'pause') void carrier.pause();
+  if (action === 'resume') carrier.resume();
+  if (action === 'quit') {
+    carrier.close();
+    tray.remove();
+    Utils.quit();
+  }
+});
+
+showMenu();
+openApp();

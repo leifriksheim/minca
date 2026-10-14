@@ -135,6 +135,8 @@ export function injectBaseStyles(): void {
       background: ${surface.sunken};
       border-right: 1px solid ${surface.line};
     }
+    /* In the desktop app's window (apps/desktop), which has no title bar: room for its buttons. */
+    :root[data-desktop] .rail { padding-top: 44px; }
     .rail-list { display: flex; flex-direction: column; align-items: center; gap: 8px; overflow-y: auto; flex: 0 1 auto; width: 100%; }
     .rail-divider { flex-shrink: 0; width: 28px; height: 1px; margin: 4px 0; background: ${surface.line}; }
     .rail-slot { position: relative; flex-shrink: 0; width: 100%; display: flex; justify-content: center; padding: 2px 0; border: none; background: none; }
