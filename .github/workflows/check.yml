@@ -24,7 +24,7 @@ jobs:
         include:
           - name: test core
             run: npm test -w packages/core
-          # Every other workspace, by folder, so a new app is tested without a change here.
+          # Every other workspace, by folder: a new app is picked up, a new package must be added.
           - name: test
             run: npm test --if-present -w packages/cli -w packages/relay -w apps -w scenarios
           # Format, lint, typecheck and fallow: seconds each, so one runner.

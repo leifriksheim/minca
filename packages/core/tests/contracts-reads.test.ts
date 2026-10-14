@@ -109,7 +109,10 @@ describe('probe: failing versions on read paths', () => {
     });
     await hold(bob.node, space);
     await until(
-      async () => (await alice.node.records.history(space, c.key)).some((r) => r.version === last.id),
+      async () => {
+        const held = new Set((await alice.node.records.history(space, c.key)).map((r) => r.version));
+        return held.has(bad.id) && held.has(last.id);
+      },
       3000,
       'the forged versions at alice',
     );
