@@ -593,7 +593,7 @@ function KnockDialog({
           onChange={(event) => setNote(event.target.value)}
           maxLength={500}
           rows={3}
-          style={{ ...styles.input, height: 'auto', padding: 10 }}
+          style={styles.textarea}
         />
         <p style={styles.todoMeta}>
           This makes a private space for the two of you and leaves its invite at their door. They see your

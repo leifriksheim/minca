@@ -83,7 +83,8 @@ export function injectAppStyles(): void {
     @media (hover: hover) {
       .lq-card[data-interactive]:hover { background: ${surface.sunken}; }
       .lq-card[data-interactive]:hover .shape { transform: rotate(18deg) scale(1.06); }
-      .lq-btn:not([data-variant]):not(:disabled):hover { background: ${accent.hover}; border-color: ${accent.hover}; transform: translateY(-1px); }
+      .lq-btn:not([data-variant]):not(:disabled):hover { background: ${accent.hover}; border-color: ${accent.hover}; }
+      .lq-btn[data-variant="quiet"]:not(:disabled):hover { background: ${surface.sunken}; }
       .lq-icon-btn:not(:disabled):hover { border-color: ${surface.rule}; color: ${ink.strong}; }
       .lq-upvote:not([aria-pressed="true"]):not(:disabled):hover { border-color: ${surface.rule}; color: ${ink.strong}; }
       .lq-vote:not([aria-pressed="true"]):not(:disabled):hover { background: ${surface.sunken}; }
@@ -94,14 +95,14 @@ export function injectAppStyles(): void {
       .lq-tile-new:hover { color: ${ink.strong}; }
     }
 
-    .lq-tabbar { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid ${surface.line}; margin-bottom: 24px; }
+    .lq-tabbar { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid ${surface.rule}; margin-bottom: 24px; }
 
     .lq-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
     /* Paper, not frosted glass: nothing blurs */
     .lq-header {
       position: sticky; top: 0; z-index: 20;
       background: ${surface.page};
-      border-bottom: 1px solid ${surface.line};
+      border-bottom: 1px solid ${surface.rule};
     }
     .lq-header-inner { max-width: 820px; margin: 0 auto; padding: 0 24px; }
     .lq-bar { display: flex; align-items: center; gap: 12px; height: 60px; }
@@ -125,37 +126,37 @@ export function injectAppStyles(): void {
       font-size: 11px; font-weight: 600; color: ${ink.muted}; font-variant-numeric: tabular-nums;
     }
 
-    /* Controls are pills: cobalt for the thing to do, navy under the pointer */
+    /* Controls are pills, as the shared buttons: cobalt for the thing to do, navy under the pointer, the rule for the rest */
     .lq-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      height: 36px; padding: 0 16px; border-radius: ${radius.pill}px; border: 1px solid ${accent.base};
+      height: 40px; padding: 0 16px; border-radius: ${radius.pill}px; border: 1px solid ${accent.base};
       font-size: 14px; font-weight: 500; white-space: nowrap;
-      background: ${accent.base}; color: ${surface.card};
-      transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s cubic-bezier(.3, 1.6, .5, 1);
+      background: ${accent.base}; color: ${ink.inverse};
+      transition: background-color .15s ease, border-color .15s ease, color .15s ease;
     }
-    .lq-btn:active:not(:disabled) { transform: scale(.98); }
-    .lq-btn[data-variant="quiet"] { background: ${surface.card}; color: ${ink.body}; }
+    .lq-btn[data-variant="quiet"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
     .lq-btn[data-variant="ghost"] { background: none; border-color: transparent; color: ${ink.muted}; padding: 0 10px; }
-    .lq-btn[data-variant="danger"] { background: ${surface.card}; color: ${accent.danger}; border-color: ${surface.line}; }
-    .lq-btn[data-size="sm"] { height: 30px; padding: 0 12px; font-size: 13px; }
-    .lq-btn[data-size="lg"] { height: 46px; padding: 0 24px; font-size: 15px; }
+    .lq-btn[data-variant="danger"] { background: ${surface.card}; color: ${accent.danger}; border-color: ${surface.rule}; }
+    .lq-btn[data-size="sm"] { height: 32px; padding: 0 14px; font-size: 13px; }
+    .lq-btn[data-size="lg"] { height: 50px; padding: 0 26px; font-size: 15px; }
     .lq-icon-btn {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 34px; height: 34px; border-radius: ${radius.pill}px; border: 1px solid ${surface.lineStrong};
+      width: 34px; height: 34px; border-radius: ${radius.pill}px; border: 1px solid ${surface.rule};
       background: ${surface.card}; color: ${ink.muted}; font-size: 15px; font-weight: 600;
     }
 
+    /* One line is a pill, like every control; many lines keep the corner of a row */
     .lq-input, .lq-textarea {
-      width: 100%; padding: 0 12px; border-radius: ${radius.md}px; border: 1px solid ${surface.lineStrong};
+      width: 100%; border: 1px solid ${surface.lineStrong};
       background: ${surface.card}; color: ${ink.strong}; font-size: 14px; outline: none;
     }
-    .lq-input { height: 40px; }
-    .lq-textarea { padding: 10px 12px; min-height: 120px; resize: vertical; line-height: 1.55; }
+    .lq-input { height: 40px; padding: 0 16px; border-radius: ${radius.pill}px; }
+    .lq-textarea { padding: 10px 12px; border-radius: ${radius.md}px; min-height: 120px; resize: vertical; line-height: 1.55; }
     .lq-label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: ${ink.muted}; }
 
-    /* Surfaces are square, with hairlines */
+    /* A card stands on the page: the navy rule, the surface corner */
     .lq-card {
-      border: 1px solid ${surface.line}; border-radius: ${radius.lg}px; background: ${surface.card};
+      border: 1px solid ${surface.rule}; border-radius: ${radius.lg}px; background: ${surface.card};
       transition: border-color .15s ease, background-color .15s ease;
     }
     .lq-card[data-interactive] { cursor: pointer; }
@@ -166,22 +167,19 @@ export function injectAppStyles(): void {
     .lq-proposal { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 14px; padding: 16px 18px 16px 14px; }
     .lq-upvote {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-      width: 48px; height: 56px; border-radius: ${radius.pill}px; border: 1px solid ${surface.lineStrong};
+      width: 48px; height: 56px; border-radius: ${radius.pill}px; border: 1px solid ${surface.rule};
       background: ${surface.card}; color: ${ink.muted}; font-size: 13px; font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
-    .lq-upvote svg { transition: transform .15s ease; }
-    .lq-upvote[aria-pressed="true"] { background: ${accent.base}; border-color: ${accent.base}; color: ${surface.card}; }
-    .lq-upvote[aria-pressed="true"] svg { transform: translateY(-1px); }
+    .lq-upvote[aria-pressed="true"] { background: ${accent.base}; border-color: ${accent.base}; color: ${ink.inverse}; }
 
     .lq-chip {
-      display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px;
+      display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
       border-radius: ${radius.pill}px; border: 1px solid ${surface.line}; background: ${surface.card};
       font-size: 12px; font-weight: 500; color: ${ink.body}; white-space: nowrap;
     }
     .lq-chip[data-filter] { height: 30px; padding: 0 12px; font-size: 13px; color: ${ink.muted}; }
-    .lq-chip[data-filter][aria-pressed="true"] { background: ${ink.strong}; border-color: ${ink.strong}; color: ${surface.card}; }
-    .lq-chip[data-filter][data-outline][aria-pressed="true"] { background: ${surface.card}; color: ${ink.strong}; }
+    .lq-chip[data-filter][aria-pressed="true"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
     .lq-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
     .lq-meter { display: flex; height: 6px; border-radius: ${radius.sm}px; overflow: hidden; background: ${tone.track}; }
@@ -189,16 +187,16 @@ export function injectAppStyles(): void {
     .lq-meter[data-size="lg"] { height: 10px; }
 
     /* The three answers side by side, sharing navy rules */
-    .lq-votes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid ${surface.rule}; }
+    .lq-votes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid ${surface.rule}; border-radius: ${radius.lg}px; overflow: hidden; }
     .lq-vote {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-      height: 76px; border: none; border-radius: 0; background: ${surface.card};
+      height: 76px; border: none; border-radius: ${radius.none}; background: ${surface.card};
       font-size: 14px; font-weight: 600; color: ${ink.body};
       transition: background-color .15s ease, color .15s ease;
     }
     .lq-vote + .lq-vote { border-left: 1px solid ${surface.rule}; }
     .lq-vote:active:not(:disabled) { background: ${surface.sunken}; }
-    .lq-vote[aria-pressed="true"] { color: ${surface.card}; }
+    .lq-vote[aria-pressed="true"] { color: ${ink.inverse}; }
     .lq-vote[data-choice="for"][aria-pressed="true"] { background: ${tone.for}; }
     .lq-vote[data-choice="against"][aria-pressed="true"] { background: ${tone.against}; }
     .lq-vote[data-choice="abstain"][aria-pressed="true"] { background: ${ink.body}; }
@@ -208,15 +206,15 @@ export function injectAppStyles(): void {
     .lq-row + .lq-row { border-top: 1px solid ${surface.line}; }
     .lq-pick {
       display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 10px;
-      border: none; border-radius: 0; background: none; text-align: left; font-size: 14px; color: ${ink.body};
+      border: none; border-radius: ${radius.md}px; background: none; text-align: left; font-size: 14px; color: ${ink.body};
     }
     .lq-pick[aria-pressed="true"] { background: ${surface.sunken}; box-shadow: inset 0 0 0 1px ${surface.rule}; }
 
     .lq-stack { display: flex; }
-    .lq-stack > * { box-shadow: 0 0 0 2px ${surface.card}; border-radius: 6px; }
+    .lq-stack > * { box-shadow: 0 0 0 2px ${surface.card}; border-radius: ${radius.sm}px; }
     .lq-stack > * + * { margin-left: -6px; }
 
-    .lq-section-title { font-size: 13px; font-weight: 600; color: ${ink.strong}; letter-spacing: -0.01em; }
+    .lq-section-title { font-family: ${display}; font-size: 15px; font-weight: 700; color: ${ink.strong}; letter-spacing: -0.04em; }
     .lq-muted { color: ${ink.muted}; }
     .lq-faint { color: ${ink.faint}; }
     .lq-num { font-variant-numeric: tabular-nums; }
@@ -227,16 +225,24 @@ export function injectAppStyles(): void {
       padding: 48px 24px; border: 1px dashed ${surface.lineStrong}; border-radius: ${radius.lg}px; color: ${ink.muted};
     }
     .lq-note {
-      display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: ${radius.lg}px;
-      background: ${surface.sunken}; border: 1px solid ${surface.line}; font-size: 13px; line-height: 1.55; color: ${ink.body};
+      display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: ${radius.md}px;
+      background: ${surface.sunken}; border: 1px solid transparent; font-size: 13px; line-height: 1.55; color: ${ink.body};
     }
-    .lq-note[data-tone="warn"] { border-color: ${accent.warn}; }
+    .lq-note[data-tone="warn"] { background: ${accent.warnSoft}; border-color: ${accent.warn}; }
     .lq-note[data-tone="bad"] { background: ${accent.dangerSoft}; border-color: ${accent.danger}; }
     .lq-note[data-tone="good"] { background: ${accent.goodSoft}; border-color: ${accent.good}; }
 
-    /* Cells set side by side share navy rules, with no gaps, however many fit in a row */
-    .lq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); padding: 1px 0 0 1px; }
-    .lq-grid > * { margin: -1px 0 0 -1px; border: 1px solid ${surface.rule}; }
+    /* Cells set side by side share navy rules inside one rounded frame, with no gaps, however
+       many fit in a row: each cell draws its right and bottom rule, and the frame clips the
+       ones along its own edge. */
+    .lq-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      border: 1px solid ${surface.rule}; border-radius: ${radius.xl}px; background: ${surface.card}; overflow: hidden;
+    }
+    .lq-grid > * {
+      margin: 0 -1px -1px 0; border: none !important; border-radius: ${radius.none} !important;
+      border-right: 1px solid ${surface.rule} !important; border-bottom: 1px solid ${surface.rule} !important;
+    }
     .lq-tile { position: relative; display: flex; flex-direction: column; gap: 14px; padding: 18px; min-height: 160px; text-align: left; font: inherit; color: inherit; }
     .lq-tile-new { align-items: center; justify-content: center; gap: 8px; color: ${ink.muted}; background: none; }
     .lq-cell-num { font-size: 13px; font-style: italic; color: ${ink.strong}; }
@@ -259,7 +265,7 @@ export function injectAppStyles(): void {
 
     @media (prefers-reduced-motion: reduce) {
       .lq-rise, .lq-fade { animation: none; }
-      .lq-card .shape, .lq-btn, .lq-meter > span { transition: none; }
+      .lq-card .shape, .lq-meter > span { transition: none; }
     }
     @media (max-width: 760px) {
       .lq-two { grid-template-columns: minmax(0, 1fr); }

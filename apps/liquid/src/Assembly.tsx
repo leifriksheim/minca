@@ -53,7 +53,6 @@ export function AssemblyView({ space, onBack }: { space: SpaceSummary; onBack: (
               minWidth: 0,
               flex: 1,
               fontSize: 19,
-              letterSpacing: '-0.035em',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -194,10 +193,7 @@ function TabButton({
 function Waiting() {
   return (
     <div className="lq-empty lq-fade">
-      <Shape kind="sparkle" colour="peach" size={40} />
-      <p className="lq-display" style={{ fontSize: 18 }}>
-        Joining…
-      </p>
+      <Loader label="Joining" showLabel />
       <p style={{ fontSize: 13.5, maxWidth: 380, lineHeight: 1.55 }}>
         Your invite is on its way to the assembly. It opens as soon as someone who is already in it comes
         online.
@@ -412,7 +408,7 @@ function HowItWorks({ onClose }: { onClose: () => void }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p className="lq-display" style={{ fontSize: 17, letterSpacing: '-0.03em' }}>
+      <p className="lq-display" style={{ fontSize: 17 }}>
         {title}
       </p>
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</ul>

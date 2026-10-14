@@ -63,6 +63,22 @@ interface Todo {
 }
 
 describe('a node across a port', () => {
+  test('revoking itself carries how long to wait: a home signing out waits for it to leave', async () => {
+    const manager = createIdentityManager();
+    const me = await manager.fromSeed(generateSeed());
+    const signer = createLocalRootSigner(me, manager.getProvider());
+    const node = await createNode({ signer, stores: memoryStores(), watchIntervalMs: 0 });
+    cleanup.push(() => node.close());
+    const asked: unknown[] = [];
+    const watched: P2PNode = { ...node, revokeSelf: async (options) => void asked.push(options) };
+    const { port1, port2 } = channel();
+    const stop = serveNode(watched, port1);
+    cleanup.push(stop);
+    const remote = await remoteNode(port2);
+    await remote.revokeSelf({ waitMs: 5000 });
+    assert.deepEqual(asked, [{ waitMs: 5000 }]);
+  });
+
   test('answers as the node it stands for', async () => {
     const { node, remote } = await served();
     assert.equal(remote.did, node.did);

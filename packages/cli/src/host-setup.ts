@@ -31,9 +31,9 @@ export function defaultHostData(): string {
  * user alone: a new key would be a new host, and every account would have to
  * hand its spaces over again.
  */
-export async function hostKey(data: string): Promise<CryptoKeyPair> {
+export async function hostKey(data: string, name = 'host-key'): Promise<CryptoKeyPair> {
   await mkdir(data, { recursive: true, mode: 0o700 });
-  const file = path.join(data, 'host-key');
+  const file = path.join(data, name);
   let seed: Uint8Array;
   try {
     seed = new Uint8Array(Buffer.from((await readFile(file, 'utf8')).trim(), 'base64url'));

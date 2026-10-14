@@ -3,6 +3,7 @@ import { matches, type Filter, type NodeCollection, type NodeRecord, type SpaceS
 import { useAccount, useNode } from '@minca/core/react';
 import { ME } from '@minca/core/schemas';
 import { Modal } from '@minca/app-shared/Modal';
+import { Loader } from '@minca/app-shared/Loader';
 import { clauseFields, clausesWords, whereOf, type Clause } from '../../derive/conditions';
 import { collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { nameOf } from '../../derive/people';
@@ -219,7 +220,7 @@ export function WatchBuilder({
       {chosen && (
         <div style={previewBox} aria-live="polite">
           {preview === null ? (
-            <span style={{ color: palette.ink.faint }}>Looking at what's here…</span>
+            <Loader label="Looking at what's here" showLabel />
           ) : preview.matched.length === 0 ? (
             <span style={{ color: palette.ink.muted }}>
               None of the last {preview.looked || 'few'} {thing.toLowerCase()}s here match. You'll hear about

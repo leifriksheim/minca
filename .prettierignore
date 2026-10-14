@@ -3,3 +3,6 @@ dist
 .minca-dev
 package-lock.json
 packages/cli/pay/dist
+# The desktop app's build, and the parts it is built from
+apps/desktop/build
+apps/desktop/parts

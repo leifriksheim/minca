@@ -358,7 +358,7 @@ function ScreenNote({ screen, network }: { screen: string; network: ReadonlyArra
             lineHeight: 1.45,
             background: palette.surface.card,
             border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.lg,
+            borderRadius: palette.radius.md,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
           }}
@@ -485,13 +485,11 @@ function CopyTo({
 
 /** A proposal, as a card in the list of them */
 const tile = {
+  ...styles.tile,
   display: 'flex',
   flexDirection: 'column' as const,
   gap: 8,
   padding: 14,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
   font: 'inherit',
   color: 'inherit',
 };

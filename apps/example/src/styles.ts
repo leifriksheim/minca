@@ -32,12 +32,6 @@ export function injectBaseStyles(): void {
     /* Hover only where there is a pointer that hovers. On a touchscreen a
        tap would otherwise leave the hover look stuck on whatever was tapped. */
     @media (hover: hover) {
-      /* A list row is a target, not a card: it earns a background on hover
-         rather than carrying a border all the time, and its small actions
-         show up with it. Without hover (touch) they simply stay visible. */
-      [data-row-action] { opacity: 0; }
-      /* Keyboard users never hover, so the action has to be reachable anyway. */
-      [data-row-action]:focus-visible { opacity: 1; }
       ${hoverCss}
       .you-button:hover, .you-button[aria-expanded="true"] { background: ${surface.line}; }
     }
@@ -47,14 +41,7 @@ export function injectBaseStyles(): void {
        column" (760px). Touch is asked about separately, with pointer: coarse,
        since a small laptop window is not a phone and a tablet is not a mouse. */
 
-    .page {
-      min-height: 100vh;
-      min-height: 100dvh;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      padding: 56px 20px 80px;
-    }
+    /* .page and .space-layout come from baseCss: the home's screens sit on the same page. */
 
     /* In a space: the rail, the space's sidebar, and whatever is open, each
        the height of the window and scrolling on its own, the way chat apps are. */
@@ -62,7 +49,7 @@ export function injectBaseStyles(): void {
     .space-shell { display: grid; grid-template-columns: ${SIDEBAR_WIDTH}px minmax(0, 1fr); height: 100vh; height: 100dvh; }
     .space-sidebar {
       display: flex; flex-direction: column; min-height: 0;
-      background: ${surface.sunken}; border-right: 1px solid ${surface.line};
+      background: ${surface.sunken}; border-right: 1px solid ${surface.rule};
     }
     .space-sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 16px 10px 16px; }
     /* You, at the foot of the sidebar; its menus open upward from it. */
@@ -82,7 +69,7 @@ export function injectBaseStyles(): void {
     .space-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .space-bar {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px;
-      border-bottom: 1px solid ${surface.line}; background: ${surface.page};
+      border-bottom: 1px solid ${surface.rule}; background: ${surface.page};
     }
     .space-content { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 64px; }
     .space-inner { max-width: 1040px; margin: 0 auto; }
@@ -133,8 +120,10 @@ export function injectBaseStyles(): void {
       gap: 8px;
       padding: 16px 0;
       background: ${surface.sunken};
-      border-right: 1px solid ${surface.line};
+      border-right: 1px solid ${surface.rule};
     }
+    /* In the desktop app's window (apps/desktop), which has no title bar: room for its buttons. */
+    :root[data-desktop] .rail { padding-top: 44px; }
     .rail-list { display: flex; flex-direction: column; align-items: center; gap: 8px; overflow-y: auto; flex: 0 1 auto; width: 100%; }
     .rail-divider { flex-shrink: 0; width: 28px; height: 1px; margin: 4px 0; background: ${surface.line}; }
     .rail-slot { position: relative; flex-shrink: 0; width: 100%; display: flex; justify-content: center; padding: 2px 0; border: none; background: none; }
@@ -145,7 +134,6 @@ export function injectBaseStyles(): void {
     .scroll-x > * { flex-shrink: 0; white-space: nowrap; }
 
     /* A space: its collections down the side, the chosen one beside them. */
-    .space-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; }
     .space-side { display: flex; flex-direction: column; gap: 28px; }
     .collection-nav { display: flex; flex-direction: column; gap: 2px; }
 
@@ -155,12 +143,13 @@ export function injectBaseStyles(): void {
     .app-list { display: flex; flex-direction: column; gap: 8px; }
 
     /* Views that sit side by side under one heading, like Under the hood's. */
-    .segmented { display: flex; gap: 2px; align-self: flex-start; max-width: 100%; padding: 3px; border-radius: ${radius.pill}px; background: ${surface.sunken}; border: 1px solid ${surface.line}; }
+    .segmented { display: flex; gap: 2px; align-self: flex-start; max-width: 100%; padding: 4px; border-radius: ${radius.pill}px; background: ${surface.sunken}; }
     .segmented > button {
-      display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
-      border: none; border-radius: ${radius.pill}px; background: none; color: ${ink.muted}; font-size: 13px; font-weight: 500;
+      display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px;
+      border: 1px solid transparent; border-radius: ${radius.pill}px; background: none; color: ${ink.muted}; font-size: 13px; font-weight: 500;
     }
-    .segmented > button[aria-selected="true"] { background: ${ink.strong}; color: ${surface.card}; }
+    .segmented > button:hover { color: ${ink.strong}; }
+    .segmented > button[aria-selected="true"] { background: ${surface.card}; border-color: ${surface.rule}; color: ${ink.strong}; }
 
     /* A space's sections along the bottom, and the button that makes an
        app: phones only. */
@@ -189,14 +178,14 @@ export function injectBaseStyles(): void {
     .call-tiles[data-large]:is([data-count="3"], [data-count="4"]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .call-tiles[data-large]:is([data-count="5"], [data-count="6"]) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .call-tile {
-      position: relative; margin: 0; aspect-ratio: 4 / 3; overflow: hidden; border-radius: ${radius.none}px;
+      position: relative; margin: 0; aspect-ratio: 4 / 3; overflow: hidden; border-radius: ${radius.md}px;
       display: flex; align-items: center; justify-content: center; background: ${ink.body};
     }
     .call-stage .call-tile { aspect-ratio: auto; min-height: 120px; }
     .call-name {
       position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px;
       max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      padding: 2px 6px; border-radius: ${radius.sm}px; font-size: 12px; color: ${surface.card}; background: ${navyWash(60)};
+      padding: 2px 8px; border-radius: ${radius.pill}px; font-size: 12px; color: ${surface.card}; background: ${navyWash(60)};
     }
     .call-pip { display: flex; height: 100vh; padding: 6px; box-sizing: border-box; }
     .call-pip .call-tiles { flex: 1; }
@@ -213,7 +202,7 @@ export function injectBaseStyles(): void {
     .call-overlay {
       position: fixed; z-index: 40; inset: 0; padding: 16px;
       display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center;
-      background: ${navyWash(35)};
+      background: ${surface.scrim};
     }
     .call-incoming { width: min(340px, 100%); align-items: center; text-align: center; gap: 16px; padding: 24px; }
     .call-ringing { display: inline-flex; border-radius: 50%; animation: call-ring 1.2s ease-out infinite; }
@@ -261,10 +250,11 @@ export function injectBaseStyles(): void {
     /* Marketplace: square pictures in a grid, prices first (components/apps/Marketplace.tsx). */
     .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 24px 16px; }
     .mk-tools { display: flex; gap: 8px; }
-    .mk-photo { transition: transform .2s ease, box-shadow .2s ease; }
+    .mk-photo { transition: filter .2s ease; }
     .mk-detail { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; align-items: start; }
     @media (hover: hover) {
-      .mk-card:hover .mk-photo { transform: translate(-1px, -1px); box-shadow: ${shadow.small}; }
+      /* Nothing moves: the picture only darkens a little. */
+      .mk-card:hover .mk-photo { filter: brightness(.96); }
       .ev-chip:hover { filter: brightness(.96); }
       .ev-day:not([data-picked]):hover { background: ${surface.sunken}; }
     }
@@ -292,7 +282,6 @@ export function injectBaseStyles(): void {
     }
 
     @media (max-width: 760px) {
-      .space-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
       /* The side column comes apart: its collections become a row of
          tabs above the list, and who is here and the invite go below it,
          so the thing you opened the space for is on the first screen. */
@@ -458,8 +447,8 @@ export function injectBaseStyles(): void {
 const quietButton: CSSProperties = {
   ...styles.button,
   backgroundColor: surface.card,
-  borderColor: surface.lineStrong,
-  color: ink.body,
+  borderColor: surface.rule,
+  color: ink.strong,
 };
 
 /** Quieter alternatives, for actions that should not compete with the main one. */
@@ -470,26 +459,31 @@ export const variants = {
 
 const line = `1px solid ${surface.line}`;
 
-/** Pieces many views share: a pill, a table's cells, a bordered card, a clipped line, a column. */
+/**
+ * Pieces many views share: a pill, a table's cells, a bordered card, a
+ * clipped line, a column. The chip and the card are the shared ones
+ * (`styles.chip`, `styles.tile`); the chip is spelled in longhands here so a
+ * chip that is on can change its colour alone.
+ */
 export const ui = {
   chip: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
-    height: 28,
-    padding: '0 10px',
-    borderRadius: radius.pill,
-    // Longhands, so a chip that is on can change the colour alone.
+    gap: styles.chip.gap,
+    height: styles.chip.height,
+    padding: styles.chip.padding,
+    borderRadius: styles.chip.borderRadius,
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: surface.line,
-    background: surface.card,
-    color: ink.body,
-    fontSize: 12.5,
-    fontWeight: 500,
+    background: styles.chip.backgroundColor,
+    color: styles.chip.color,
+    fontSize: styles.chip.fontSize,
+    fontWeight: styles.chip.fontWeight,
     whiteSpace: 'nowrap',
   },
-  chipOn: { background: ink.strong, color: surface.card, borderColor: ink.strong },
+  /** On: the rule, as a chosen segment has (`styles.chipOn`) */
+  chipOn: { borderColor: surface.rule, color: ink.strong },
   th: {
     textAlign: 'left',
     padding: '10px 14px',
@@ -500,7 +494,7 @@ export const ui = {
     background: surface.sunken,
   },
   td: { padding: '10px 14px', borderBottom: line, color: ink.body },
-  card: { border: line, borderRadius: radius.lg, background: surface.card },
+  card: styles.tile,
   ellipsis: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   stack: { display: 'flex', flexDirection: 'column' },
 } satisfies Record<string, CSSProperties>;

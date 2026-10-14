@@ -8,6 +8,7 @@ import { Protocol } from './site/Protocol';
 import { Extension } from './site/Extension';
 import { MincaProvider } from '@minca/core/react';
 import { connection } from './minca';
+import { tellDesktop } from './desktop';
 
 /** The site's pages, and the app at `/app`; a link with an invite, door or pairing code in its fragment still opens the app */
 const path = globalThis.location.pathname.replace(/\/+$/, '') || '/';
@@ -32,6 +33,8 @@ if (page === 'app') {
   // The node's operations as WebMCP tools, from the start — agents and
   // extensions read the list on load. They act for whoever signs in.
   exposeToAgents();
+  // In the desktop app, its menu bar follows the account this app is connected as.
+  tellDesktop(connection);
 }
 
 const root = document.getElementById('root');

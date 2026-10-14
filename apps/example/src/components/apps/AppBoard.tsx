@@ -332,13 +332,11 @@ function AddForm({
 }
 
 const card = {
+  ...styles.tile,
   display: 'flex',
   flexDirection: 'column' as const,
   gap: 10,
   padding: 14,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
 };
 const cardTitle = {
   border: 'none',

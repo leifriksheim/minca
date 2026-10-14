@@ -228,3 +228,11 @@ Elsewhere:
   for a wallet to scan when paying a host. QR encoding (ISO 18004) is a spec
   with a long tail; this one has no dependencies, has been released since
   2014, and is used very widely. Apps only, never `packages/core`.
+- `electrobun` 1.18, a dev dependency of `apps/desktop`, which it builds and
+  runs (`apps/desktop/src/bun/index.ts`): native windows, a menu bar icon and
+  a Bun main process, on the system's WebKit. Writing that is a native
+  wrapper per platform. It falls short of the bar on two counts, which is
+  why the desktop app is a prototype: 2.x moved to its own toolchain, so
+  1.18 is the last of its kind (mid-rewrite), and its main module pulls in
+  `three` and `@babylonjs/core`. The desktop app also ships `node-datachannel`
+  (above) beside the CLI, for the carrier's WebRTC.

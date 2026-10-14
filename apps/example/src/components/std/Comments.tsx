@@ -74,7 +74,7 @@ export function Comments({
           onPick={mention.pick}
           style={{
             border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.lg,
+            borderRadius: palette.radius.md,
             overflow: 'hidden',
           }}
         />

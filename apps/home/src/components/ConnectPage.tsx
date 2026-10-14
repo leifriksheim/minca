@@ -102,7 +102,7 @@ function Asking({ incoming }: { incoming: IncomingRequest }) {
         marginBottom: 24,
         padding: '10px 12px',
         background: palette.surface.sunken,
-        borderRadius: palette.radius.none,
+        borderRadius: palette.radius.md,
       }}
     >
       <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>{' '}
@@ -125,7 +125,11 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   const recordsOnly = request.recordsOnly === true;
   const previous = auth
     .connections()
-    .find((known) => (byCode ? known.audience === request.audience : known.origin === origin && !known.via));
+    .find((known) =>
+      byCode
+        ? known.audience === request.audience
+        : known.origin === origin && !known.via && known.access !== 'carry',
+    );
 
   const spaces = useSpaces(true);
   const [chosen, setChosen] = useState<ReadonlySet<string>>(
@@ -169,6 +173,8 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           </p>
         </>
       )}
+
+      <WhichAccount label={byCode ? 'The account it will work in' : 'The account it will use'} busy={busy} />
 
       {byCode && !recordsOnly && (
         <Note title="More than records" warn>
@@ -300,25 +306,18 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
     <Frame>
       <h1 style={styles.title}>Keep your spaces online</h1>
       <p style={styles.subtitle}>
-        {request.name ? <>“{request.name}”</> : asker(origin)} wants to keep your spaces online while your
-        browser is open — even with no app open.
+        {/* Where it asks from, always: a name is only what the asker calls itself (spec 06 §2.3). */}
+        {request.name ? (
+          <>
+            “{request.name}” (<strong>{asker(origin)}</strong>)
+          </>
+        ) : (
+          asker(origin)
+        )}{' '}
+        wants to keep your spaces online, even with no app open.
       </p>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <Avatar did={session.did} size={32} />
-        <div style={{ flex: 1 }}>
-          <p style={{ ...styles.todoText, margin: 0 }}>{session.account.name}</p>
-          <p style={{ ...styles.errorHint, margin: 0 }}>The account it will keep online</p>
-        </div>
-        <button
-          onClick={() => void auth.signOut()}
-          disabled={busy}
-          data-variant="ghost"
-          style={{ ...styles.linkButton, fontSize: 13 }}
-        >
-          Use another account
-        </button>
-      </div>
+      <WhichAccount label="The account it will keep online" busy={busy} />
 
       {elsewhere.length > 0 && (
         <div style={{ ...styles.errorBox, marginTop: 0, marginBottom: 12 }}>
@@ -489,6 +488,32 @@ function useSpaces(hold: boolean): ReadonlyArray<SpaceSummary> {
 }
 
 /** A boxed explanation: what something may do, or may not */
+/**
+ * Who is signed in here, and a way to answer as someone else: the request
+ * waits while the person signs in to another account, and is answered from it.
+ */
+function WhichAccount({ label, busy }: { label: string; busy: boolean }) {
+  const { auth } = useAuth();
+  const session = useSession();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      <Avatar did={session.did} size={32} />
+      <div style={{ flex: 1 }}>
+        <p style={{ ...styles.todoText, margin: 0 }}>{session.account.name}</p>
+        <p style={{ ...styles.errorHint, margin: 0 }}>{label}</p>
+      </div>
+      <button
+        onClick={() => void auth.signOut()}
+        disabled={busy}
+        data-variant="ghost"
+        style={{ ...styles.linkButton, fontSize: 13 }}
+      >
+        Use another account
+      </button>
+    </div>
+  );
+}
+
 function Note({
   title,
   below = 20,
@@ -506,7 +531,9 @@ function Note({
       style={{
         ...styles.note,
         marginBottom: below,
-        ...(warn ? { borderColor: palette.accent.danger, background: palette.accent.dangerSoft } : {}),
+        ...(warn
+          ? { border: `1px solid ${palette.accent.danger}`, background: palette.accent.dangerSoft }
+          : {}),
       }}
     >
       <p style={{ ...styles.todoText, ...(warn ? { color: palette.accent.danger } : {}) }}>{title}</p>
@@ -549,11 +576,12 @@ function Answer({
           onClick={onDeny}
           disabled={busy}
           data-variant="quiet"
+          // The secondary of the two: the card's white and the navy rule, at the primary's size.
           style={{
             ...styles.button,
             background: palette.surface.card,
-            color: palette.ink.body,
-            borderColor: palette.surface.lineStrong,
+            color: palette.ink.strong,
+            borderColor: palette.surface.rule,
           }}
         >
           {denyLabel}
@@ -595,7 +623,7 @@ function lasts(days: number): string {
 /** The page around it, under Minca's mark; the sign-in element's own is hidden in the home's styles */
 function Frame({ children }: { children: ReactNode }) {
   return (
-    <div style={{ ...styles.container, paddingTop: 32 }}>
+    <div className="page" style={{ paddingTop: 32 }}>
       <div style={{ ...styles.card, paddingTop: 0 }}>
         <div style={{ marginBottom: 32 }}>
           <Wordmark compact />

@@ -161,6 +161,7 @@ import type {
   NodeRecords,
   NodeSpaces,
   P2PNode,
+  RevokeOptions,
   SpaceSummary,
 } from './types.js';
 
@@ -987,7 +988,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       await (await runtime(spaceId)).closeInvite(key);
     },
 
-    revoke: perSpace((rt, key: string) => rt.revoke(key)),
+    revoke: perSpace((rt, key: string, options?: RevokeOptions) => rt.revoke(key, options)),
     changeKey: perSpace((rt) => rt.rotateKey()),
     setRelays: perSpace((rt, relays: ReadonlyArray<string>) => rt.setRelays(relays)),
     setKeepers: perSpace((rt, keepers: ReadonlyArray<Keeper>, copies?: number | null) =>
@@ -2312,7 +2313,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       await publishProfileToOpenSpaces();
       return { name: trimmed, updatedAt: written.updatedAt };
     },
-    revoke: async (key) => (await requireAccount('Revoking in the account registry')).revoke(key),
+    revoke: async (key, options) =>
+      (await requireAccount('Revoking in the account registry')).revoke(key, options),
   });
 
   /** The records namespace, writing as `as` when given: an agent's key and note */
@@ -2514,7 +2516,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     subscribe: events.subscribe,
 
-    async revokeSelf() {
+    async revokeSelf(options: RevokeOptions = {}) {
       const key = sessionDid;
       // Every space it may write in: the listed ones, its carry spaces and the contacts space.
       const ids = new Set([
@@ -2523,8 +2525,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         ...(contactsSpaceId ? [contactsSpaceId] : []),
       ]);
       // Each its own store: one that can't be done must not keep the rest from happening.
-      await Promise.all([...ids].map((spaceId) => spaces.revoke(spaceId, key).catch(() => {})));
-      await node.account.revoke(key).catch(() => {});
+      await Promise.all([
+        ...[...ids].map((spaceId) => spaces.revoke(spaceId, key, options).catch(() => false)),
+        node.account.revoke(key, options).catch(() => false),
+      ]);
       // Forgotten now, not at close: a crash before closing must not leave a revoked key to be claimed again.
       await claimed?.forget().catch(() => {});
     },

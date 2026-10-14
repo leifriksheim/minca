@@ -386,7 +386,7 @@ export interface MincaAuth {
   /** Apps this account is connected to from this home, newest first */
   connections(): ReadonlyArray<Connection>;
   /**
-   * Other accounts in this place that `origin` is connected to from this home.
+   * Other accounts in this place that a carrier at `origin` is connected to from this home.
    * One browser extension carries one account, so connecting it here moves it
    * off theirs — worth saying before it happens.
    */
@@ -400,18 +400,34 @@ export interface MincaAuth {
    *
    * Disconnecting an app disconnects the programs connected by code through
    * it too. `{ byCode: true }` disconnects only those programs; `{ audience }`
-   * only the one with that key.
+   * only the one with that key. A carrier at the app's origin is not the app:
+   * it stays, and goes only by `{ audience }`, its own key.
+   *
+   * The app hears of it when the revokes reach it: from this node, or a
+   * device that has them. `{ waitMs }` waits up to that long for a peer to
+   * take them in, and the answer says whether one did. False means they are
+   * still only here: the app keeps working until this home is next online
+   * with another of the account's devices or apps.
    */
   disconnect(
     origin: string,
-    options?: { readonly byCode?: boolean; readonly audience?: string },
-  ): Promise<void>;
+    options?: { readonly byCode?: boolean; readonly audience?: string; readonly waitMs?: number },
+  ): Promise<boolean>;
   readonly staySignedIn: {
     choice(): StaySignedIn;
     setChoice(choice: StaySignedIn): Promise<void>;
     until(): Date | null;
   };
-  signOut(): Promise<void>;
+  /**
+   * Signs this home out on this device: it forgets the unlocked account, lets
+   * apps whose time has passed go, and revokes its own session key. The apps
+   * connected from here keep their notes until they run out, as apps stay
+   * signed in when you sign out of where you signed in to them.
+   * `{ disconnect: true }` disconnects them first, and the programs connected
+   * through them: their keys are revoked, and each sees it and asks to connect
+   * again. Carriers stay: they hold nothing that writes.
+   */
+  signOut(options?: { readonly disconnect?: boolean }): Promise<void>;
 }
 
 /** Files a new account at a place, with no wraps yet: the passkey or password comes after the recovery code. */
@@ -480,6 +496,8 @@ async function addAutomations(
 
 /** How often a signed-in device looks for app connections whose chosen time has passed */
 const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
+/** How long signing out waits for its revokes to reach the peers here, at most: offline, they wait until next time */
+const SIGN_OUT_GRACE_MS = 5000;
 
 /** Creates the sign-in flow for this page. */
 export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
@@ -609,33 +627,81 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     if (!(await checkKeyProof(request.audience, request.proof, requestTerms(request, origin))))
       return 'The app did not show it holds the key it named, for what it asked.';
     if (request.audience === state.session?.node.sessionDid) return 'That key is this home’s own.';
+    // One key is one connection: an app's and a carrier's are never the same key, even from one origin.
     const elsewhere = auth
       .connections()
       .some(
         (known) =>
-          known.audience === request.audience && (known.origin !== origin || known.via !== request.via),
+          known.audience === request.audience &&
+          (known.origin !== origin ||
+            known.via !== request.via ||
+            (known.access === 'carry') !== (request.access === 'carry')),
       );
     return elsewhere ? 'That key is already connected for something else.' : null;
   }
 
-  /** Revokes the key a connection was given, where it could write; never this node's own */
-  async function revokeConnection(node: P2PNode, connection: Connection): Promise<void> {
-    if (connection.access !== 'write') return;
-    if (connection.audience === node.sessionDid) return;
+  /**
+   * Disconnects the connections `goes` picks: a carrier's carry space goes, a
+   * key that could write is revoked, and the automations an app proposed go
+   * with it. With `waitMs`, every revoke is written first, and `delivered`
+   * settles once a peer has taken them in, or that long has passed: they wait
+   * together.
+   */
+  async function disconnectWhere(
+    goes: (known: Connection) => boolean,
+    waitMs = 0,
+  ): Promise<{ readonly delivered: Promise<boolean> }> {
+    const going = auth.connections().filter(goes);
+    const node = state.session?.node;
+    const revoked: Array<Promise<boolean>> = [];
+    for (const connection of going) {
+      // One that can't be done must not keep the rest from happening.
+      if (connection.carrySpace && node) await node.carriers.remove(connection.carrySpace).catch(() => {});
+      if (node) revoked.push(revokeConnection(node, connection, waitMs).catch(() => false));
+      // The automations it proposed go with it. So does any its own key wrote, whichever app that one names.
+      if (!connection.via && node) {
+        for (const own of await node.automations.list()) {
+          const wrote = (await node.automations.versions([own.id])).some(
+            (version) => version.author === connection.audience,
+          );
+          // A carrier proposes none: the app's at its origin are the app's, and stay.
+          const proposed = own.app?.origin === connection.origin && connection.access !== 'carry';
+          if (proposed || wrote) await node.automations.remove(own.id).catch(() => {});
+        }
+      }
+    }
+    writeConnections(auth.connections().filter((known) => !goes(known)));
+    return { delivered: Promise.all(revoked).then((taken) => taken.every(Boolean)) };
+  }
+
+  /**
+   * Revokes the key a connection was given, where it could write; never this node's own.
+   * With `waitMs`, until a peer has each revoke or that time has passed (they wait together).
+   */
+  async function revokeConnection(node: P2PNode, connection: Connection, waitMs = 0): Promise<boolean> {
+    if (connection.access !== 'write') return true;
+    if (connection.audience === node.sessionDid) return true;
     const contactsSpace = await node.contacts.space();
+    const writable = (await node.spaces.list()).filter((space) => space.writable).map((space) => space.id);
+    // A space the account has left, or no longer writes in, has nothing to revoke, and nobody to tell.
     const covered =
       connection.scope === 'account'
-        ? [
-            ...(await node.spaces.list()).filter((space) => space.writable).map((space) => space.id),
-            ...(contactsSpace ? [contactsSpace] : []),
-          ]
-        : connection.spaces.map((space) => space.id);
+        ? [...writable, ...(contactsSpace ? [contactsSpace] : [])]
+        : connection.spaces
+            .map((space) => space.id)
+            .filter((id) => writable.includes(id) || id === contactsSpace);
     // Every space at once: each is its own store. A space that is gone, or
     // that this account no longer writes in, has nothing to revoke.
     const key = connection.audience;
-    await Promise.all(covered.map((spaceId) => node.spaces.revoke(spaceId, key).catch(() => {})));
-    // A whole-account app could also add spaces to the account's list, and rename it.
-    if (connection.scope === 'account') await node.account.revoke(key).catch(() => {});
+    const options = { waitMs };
+    // One that can't be written (a space gone, or no longer the account's to write in) has
+    // nothing to send: it isn't one that went unheard.
+    const taken = await Promise.all([
+      ...covered.map((spaceId) => node.spaces.revoke(spaceId, key, options).catch(() => true)),
+      // A whole-account app could also add spaces to the account's list, and rename it.
+      ...(connection.scope === 'account' ? [node.account.revoke(key, options).catch(() => true)] : []),
+    ]);
+    return taken.every(Boolean);
   }
 
   /** Disconnects every app connected here whose chosen time has passed */
@@ -1364,8 +1430,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         ...(recordsOnly ? { recordsOnly: true as const } : {}),
       };
       // Connecting again replaces the old note. A program connected by code is its own key: connecting one replaces only that one.
+      // A carrier at the same origin is not the app, and stays (§2.10).
       const replaced = (known: Connection) =>
-        byCode ? known.audience === request.audience : known.origin === choice.origin && !known.via;
+        byCode
+          ? known.audience === request.audience
+          : known.origin === choice.origin && !known.via && known.access !== 'carry';
       // A note it replaces stops too: no time ends it, so revoking does (unless it is the same key, still in use).
       for (const known of auth.connections().filter(replaced))
         if (known.audience !== connection.audience) await revokeConnection(node, known);
@@ -1434,8 +1503,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const { node } = session;
       const problem = await audienceProblem(request, origin);
       if (problem) throw new Error(problem);
-      // Connecting again replaces the old one: one carrier per origin.
-      const previous = auth.connections().find((known) => known.origin === origin);
+      // Connecting again replaces the old one: one carrier per origin. An app at the same origin is not it, and stays (§2.10).
+      const carrierHere = (known: Connection) => known.origin === origin && known.access === 'carry';
+      const previous = auth.connections().find(carrierHere);
       if (previous?.carrySpace) await node.carriers.remove(previous.carrySpace).catch(() => {});
 
       const name = request.name?.slice(0, 80) || 'Browser extension';
@@ -1452,7 +1522,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         expiresAt: 0,
         carrySpace: carry.space,
       };
-      writeConnections([connection, ...auth.connections().filter((known) => known.origin !== origin)]);
+      writeConnections([connection, ...auth.connections().filter((known) => !carrierHere(known))]);
 
       const place = state.place;
       return {
@@ -1479,35 +1549,27 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const current = state.session?.account.id;
       return state.accounts
         .filter((account) => account.id !== current)
-        .filter((account) => readConnections(account.id).some((connection) => connection.origin === origin))
+        .filter((account) =>
+          readConnections(account.id).some(
+            (connection) => connection.origin === origin && connection.access === 'carry',
+          ),
+        )
         .map((account) => ({ id: account.id, name: account.name }));
     },
 
     async disconnect(origin, options = {}) {
       // The app goes with the programs connected through it by code; such a program can go alone.
-      const goes = (known: Connection) =>
-        options.audience !== undefined
-          ? known.audience === options.audience
-          : known.origin === origin && (!options.byCode || known.via === 'code');
-      const going = auth.connections().filter(goes);
-      const node = state.session?.node;
-      for (const connection of going) {
-        // Like a revoke below: one that can't be done must not keep the rest from happening.
-        if (connection.carrySpace && node) await node.carriers.remove(connection.carrySpace).catch(() => {});
-        if (node) await revokeConnection(node, connection);
-        // The automations it proposed go with it, and a carrier's: what they look for is theirs to know.
-        // So does any its own key wrote, whichever app that one names.
-        if (!connection.via && node) {
-          for (const own of await node.automations.list()) {
-            const wrote = (await node.automations.versions([own.id])).some(
-              (version) => version.author === connection.audience,
-            );
-            if (own.app?.origin === connection.origin || wrote)
-              await node.automations.remove(own.id).catch(() => {});
-          }
-        }
-      }
-      writeConnections(auth.connections().filter((known) => !goes(known)));
+      // A carrier at the same origin is not the app, and goes only by its own key (§2.10).
+      const { delivered } = await disconnectWhere(
+        (known) =>
+          options.audience !== undefined
+            ? known.audience === options.audience
+            : known.origin === origin &&
+              known.access !== 'carry' &&
+              (!options.byCode || known.via === 'code'),
+        options.waitMs ?? 0,
+      );
+      return delivered;
     },
 
     staySignedIn: {
@@ -1516,13 +1578,24 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       until: () => stay.until(),
     },
 
-    async signOut() {
+    async signOut(options = {}) {
+      // Not ready from now on: nothing may be granted from this account while it goes.
+      update({ stage: 'starting' });
       await stay.forget();
       const leaving = state.session?.node;
+      // Every app and the programs connected through it; carriers stay, holding nothing that writes.
+      // The node stops next and sends nothing after, so it waits for a peer to take each revoke in.
+      const disconnected = options.disconnect
+        ? await disconnectWhere((known) => known.access !== 'carry', SIGN_OUT_GRACE_MS).catch(() => null)
+        : null;
       // Before going: let apps whose time has passed go, and revoke this device's
       // session key, so a key left behind here can't write for the account again.
+      // Its revokes and the apps' wait together, up to the one grace.
       await letExpiredGo().catch(() => {});
-      await leaving?.revokeSelf().catch(() => {});
+      await Promise.all([
+        disconnected?.delivered,
+        leaving?.revokeSelf({ waitMs: SIGN_OUT_GRACE_MS }).catch(() => {}),
+      ]);
       update({
         stage: 'starting',
         session: null,

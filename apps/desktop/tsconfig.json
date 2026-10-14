@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "customConditions": ["@minca/source"]
+  },
+  "include": [
+    "src/bun/bridge.ts",
+    "src/bun/page.ts",
+    "src/bun/carrier.ts",
+    "src/bun/notify.ts",
+    "src/bun/app-node.ts",
+    "src/bun/menu.ts",
+    "tests"
+  ]
+}

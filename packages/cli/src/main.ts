@@ -7,6 +7,8 @@
  *   minca records list | get | put | update | delete
  *   minca run                          stay up: sync every space, serve sockets and a relay
  *   minca host                         a hosting service: carry many accounts' spaces, blind
+ *   minca carry --data DIR             carry one account's spaces from a folder, as the extension does
+ *   minca app-node --data DIR          an app's node for the desktop shell, spoken to on stdin and stdout
  *   minca connect <code>               connect this computer's agent, with the code from an app
  *   minca mcp                          serve the same operations to an agent over MCP (stdio)
  *   minca agent                        the connected agent on its own, with your Anthropic API key
@@ -21,6 +23,8 @@
  * --code-file / --passphrase-file, or a prompt.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { runCarrier } from './carry.js';
+import { runAppNode, stdinLines } from './app-node.js';
 import path from 'node:path';
 import { createInterface as createPromiseInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
@@ -95,6 +99,8 @@ Usage:
   minca records list | get | put | update | delete               [--flags]
   minca run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
   minca host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
+  minca carry --data DIR                     one account's spaces, from a folder the desktop app connected
+  minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
   minca connect <code> [--name NAME] [--relay wss://…] [--no-configure]
   minca disconnect
   minca mcp [--account]
@@ -735,6 +741,35 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       log: logLine,
     });
     return untilStopped(daemon);
+  }
+
+  if (command === 'carry') {
+    const { values } = parseArgs({ args, options: { data: { type: 'string' } } });
+    if (!values.data) throw new Error('minca carry needs --data DIR: the folder it carries from.');
+    const running = await runCarrier({
+      data: path.resolve(values.data),
+      // For whatever started it: one line per change. Taken off by the account, it is done.
+      status: (status) => {
+        process.stdout.write(`${JSON.stringify(status)}\n`);
+        if (status.state === 'removed') process.exit(0);
+      },
+      log: logLine,
+    });
+    if (!running) return 0;
+    return untilStopped(running);
+  }
+
+  if (command === 'app-node') {
+    const { values } = parseArgs({ args, options: { data: { type: 'string' } } });
+    if (!values.data) throw new Error('minca app-node needs --data DIR: the folder the app’s node keeps.');
+    // For the desktop shell: it says init first, on stdin, and reads one JSON line per message.
+    await runAppNode({
+      data: path.resolve(values.data),
+      lines: stdinLines(),
+      send: (message) => process.stdout.write(`${JSON.stringify(message)}\n`),
+      log: logLine,
+    });
+    return 0;
   }
 
   if (command === 'host') {

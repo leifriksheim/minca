@@ -305,20 +305,20 @@ export function AutomationsView({
 }
 
 const ruleCard = {
+  ...styles.tile,
   display: 'flex',
   flexDirection: 'column',
   gap: 10,
   padding: 14,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
 } as const;
 const ideaTile = {
   display: 'flex',
   alignItems: 'flex-start',
   gap: 10,
   padding: '12px 14px',
+  // A suggestion to pick, as the site draws one: a softer edge than a card that is yours.
   borderRadius: palette.radius.lg,
-  border: `1px solid ${palette.surface.line}`,
+  border: `1px solid ${palette.surface.lineStrong}`,
   background: palette.surface.card,
   color: palette.ink.muted,
   textAlign: 'left',

@@ -107,13 +107,7 @@ export function CreateApp({
           onChange={(event) => setIdea(event.target.value)}
           placeholder="A place to plan our summer trip, with a packing list and who's driving"
           rows={3}
-          style={{
-            ...styles.input,
-            height: 'auto',
-            padding: '10px 12px',
-            lineHeight: 1.5,
-            resize: 'vertical',
-          }}
+          style={styles.textarea}
         />
       </label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -305,13 +299,11 @@ function DesignPicker({ value, onChange }: { value: Design; onChange: (design: D
 }
 
 const note = {
+  ...styles.note,
   display: 'flex',
   flexDirection: 'column',
   gap: 4,
   padding: '12px 14px',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.sunken,
 } as const;
 
 const chip = { ...ui.chip, fontWeight: 400 };
@@ -339,8 +331,7 @@ const footer = {
 
 const promptBox = {
   padding: '10px 12px',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
+  borderRadius: palette.radius.md,
   background: palette.surface.sunken,
   fontSize: 13,
   lineHeight: 1.5,

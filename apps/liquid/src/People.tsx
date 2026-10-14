@@ -193,7 +193,7 @@ function PartyCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <PartyMark party={p} size={40} />
         <div style={{ minWidth: 0, flex: 1 }}>
-          <p className="lq-display" style={{ fontSize: 18, letterSpacing: '-0.03em' }}>
+          <p className="lq-display" style={{ fontSize: 18 }}>
             {p.name}
           </p>
           <p className="lq-faint lq-num" style={{ fontSize: 12.5 }}>

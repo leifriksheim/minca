@@ -228,7 +228,7 @@ export function SpaceView({
                     fontFamily: palette.display,
                     fontSize: 16,
                     fontWeight: 700,
-                    letterSpacing: '-0.03em',
+                    letterSpacing: '-0.04em',
                     color: palette.ink.strong,
                   }}
                 >
@@ -643,11 +643,9 @@ function SideHeading({ children }: { children: ReactNode }) {
     <span
       style={{
         padding: '16px 8px 4px',
-        fontSize: 11.5,
-        fontWeight: 600,
-        color: palette.ink.faint,
-        textTransform: 'uppercase',
-        letterSpacing: '.05em',
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: palette.ink.muted,
       }}
     >
       {children}

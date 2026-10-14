@@ -205,11 +205,9 @@ export function DataView({
 }
 
 const sideHeading = {
-  fontSize: 12,
+  fontSize: 12.5,
   fontWeight: 500,
-  color: palette.ink.faint,
-  textTransform: 'uppercase' as const,
-  letterSpacing: '.05em',
+  color: palette.ink.muted,
   padding: '0 10px 6px',
 };
 const groupHeading = {

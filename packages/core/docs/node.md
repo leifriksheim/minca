@@ -572,8 +572,11 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   with at most one more queued.
 - `node.account` — `profile()`, `setName(name)` (writes `sys.profile`, key
   `profile`, in the account registry, then republishes the profile in every
-  open space), `revoke(key)` (one of the account's keys, by DID, in the account registry). All need the account
+  open space), `revoke(key, { waitMs? })` (one of the account's keys, by DID, in the account registry). All need the account
   key.
+- `spaces.revoke(space, key, { waitMs? })` and `account.revoke` resolve once the revoke is written; with
+  `waitMs`, once a peer says it has taken it in, or that long has passed (`true` when one did). A node about
+  to stop waits like that: it sends nothing afterwards.
 - `node.contacts` — [contacts.md](contacts.md). `ask` and `accept` make or join a space
   for two, so they need a note granting `/account/write` over the whole
   account (whole-account access).
@@ -695,6 +698,35 @@ protocol ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-
 and keeps it, non-extractable, in the IndexedDB database `minca-app-key`,
 object store `keys`, under `name`. `forgetAppKey` deletes it; the next
 connection makes a new one.
+
+**An app's node outside the page.** The desktop app (`apps/desktop`) runs its
+app's node in a process of its own, `minca app-node`, so it keeps running with
+the window closed; the window uses it over a port, as a page uses its worker.
+That process holds the key, so the window and the menu bar are one node: two
+signing with one key would fork its lines, and a lock on the folder keeps a
+second from starting. Its key and grant can't stay in a page there, so they
+rest in its folder, sealed under a key the shell keeps in the system's
+keychain and hands to it on stdin: `key.sealed` and `grant.sealed` as
+`sealValue` envelopes (labels `minca/desktop-app-key/v1` and
+`minca/desktop-grant/v1`, each bound to `{ file }`), and the stores with their
+registry sealed as an account's is (spec 05 §15), one folder of stores per
+account: connecting as another account deletes the last one's, so its
+spaces never reach the new one's registry. Copied without the keychain, the
+folder yields no key, grant or private body, only what a carrier sees; a
+program running as the person can ask the keychain, as it can read a
+browser profile. Renewing keeps the key, as a page's app does: a new one would have the home
+revoke the last, withdrawing what the app wrote that the home hadn't seen.
+The key changes only when the app leaves an account: disconnecting, from the
+app or at the home, forgets it (`forgetAppKey` in a page), so a revoked key
+stays revoked. A home that answers as another account than the one connected
+is not used: the app leaves the last account, dropping what it wrote there
+that no peer had taken yet, and asks to be connected again with a new key,
+so one key never holds two accounts' notes. A folder that doesn't open with the keychain's
+key is moved aside, and the node starts again unconnected. The window is shown the grant
+without its account, contact or member keys. It asks the home for a 30-day
+note, where a page asks for the home's default.
+
+_Source: `packages/cli/src/app-node.ts` (`runAppNode`), `apps/desktop/src/bun/app-node.ts` (`createAppNode`, `keychainKey`), `apps/example/src/desktop.ts` (`desktopConnection`). Tests: `packages/cli/tests/app-node.test.ts`, `apps/desktop/tests/app-node.test.ts`, `apps/desktop/tests/bridge.test.ts` ("only the app’s own window talks to its node…")._
 
 **The home's address.** `homeAddress(input)` turns what a person typed into the
 home's connect page:

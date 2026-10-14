@@ -27,7 +27,6 @@ export function AgentCard() {
         marginTop: 28,
         padding: 16,
         borderRadius: palette.radius.lg,
-        border: `1px solid ${palette.surface.line}`,
         background: palette.surface.sunken,
       }}
     >

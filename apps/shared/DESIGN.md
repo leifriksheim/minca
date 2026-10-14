@@ -22,6 +22,15 @@ React UIs import the tokens and styles. Stylesheets use the custom
 properties: `baseCss` puts them on `:root`, and a page without it injects
 `tokenCss` itself. Never copy a hex value into a UI; add a token instead.
 
+Reach for the pieces in `styles.ts` before writing your own, so the same
+thing looks the same everywhere: `tile` (a card on the page), `frame` (a big
+frame), `float` (a menu, popover or panel over the page), `chip` and
+`chipOn`, `input` (one line, a pill) and `textarea` (many), `note`,
+`smallButton` (secondary), `button` and `darkSmall` (the one thing to do),
+`segmented`, `row`, `modal`. `baseCss` gives every page `.page` and
+`.space-layout`. A component that needs something none of these is adds it
+there, not beside itself.
+
 ## Colour
 
 - **Page** is paper (`surface.page`), never white. Cards and inputs sit on it in

@@ -394,7 +394,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
       ),
       delegation: () => state().delegation,
       iceServers: () => ask<ReadonlyArray<RTCIceServer>>(handle, 'iceServers', []),
-      revokeSelf: () => ask(handle, 'revokeSelf', []),
+      revokeSelf: (options) => ask(handle, 'revokeSelf', options ? [options] : []),
       async asAgent(agent) {
         const started = await ask<{ handle: number; state: NodeState }>(handle, 'asAgent', [agent]);
         return build(started.handle, started.state);

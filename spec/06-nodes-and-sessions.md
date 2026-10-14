@@ -461,7 +461,13 @@ the old connection record).
 The home remembers each connection it grants: the app's origin, audience,
 access, scope and the spaces granted. Connecting the same origin again replaces
 its connection; a connection with `via: code` is kept by its audience, apart
-from the app's own, and connecting the same key again replaces it.
+from the app's own, and connecting the same key again replaces it. A carrier
+(§4.3) is kept apart too: an app connecting replaces no carrier, and a carrier
+connecting replaces only an earlier carrier from its origin, never the app's
+connection. Disconnecting is the same: disconnecting an app leaves a carrier
+at its origin, and a carrier is disconnected by its key. The home MUST refuse
+a request for a key already connected as the other kind, so one key is never
+both.
 
 **Disconnecting** an app, or a program connected by code, revokes the key of each connection removed
 that has `access: write` (never the home's own session key), and connecting
@@ -482,7 +488,7 @@ already seen of it. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
 key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
-_Source: `packages/core/src/session/auth.ts` (`disconnect`, `connections`), `packages/core/src/node/node.ts` (`checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …")._
+_Source: `packages/core/src/session/auth.ts` (`disconnect`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "a carrier and an app at one origin are two connections…")._
 
 ### 2.11 Proposing automations
 
@@ -868,10 +874,12 @@ runs (§2.11).
 
 Each device holding the account key copies each into every carry space as a
 wake ([03](03-spaces.md) §15), and a carrier matches arriving versions
-against the wakes there, from their outside alone. No carrier acts on a
-match today: the wakes are there for waking an app that is closed (below).
+against the wakes there, from their outside alone. A carrier on one of the
+account's own devices may show a match there itself, saying no more than it
+sees: which space, which kind of record, and the wake's `open`. None sends a
+match to another device yet: that is what the wakes are for (below).
 
-_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
+_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/cli/src/carry.ts` (`runCarrier`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). The account's own

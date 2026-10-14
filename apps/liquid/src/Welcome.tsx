@@ -10,10 +10,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
       <Shape {...shapeFor('liquid')} size={compact ? 32 : 24} />
       {!compact && (
-        <span
-          className="lq-display"
-          style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1 }}
-        >
+        <span className="lq-display" style={{ fontSize: 21, lineHeight: 1 }}>
           Liquid
         </span>
       )}
@@ -69,7 +66,6 @@ export function Welcome() {
             style={{
               fontSize: 'clamp(38px, 7.4vw, 64px)',
               lineHeight: 0.98,
-              letterSpacing: '-0.05em',
               maxWidth: 660,
             }}
           >
@@ -169,7 +165,7 @@ export function Welcome() {
           ].map(([title, text], i) => (
             <div key={title} className="lq-card lq-tile" style={{ minHeight: 0, gap: 8 }}>
               <span className="lq-cell-num">{String(i + 1).padStart(2, '0')}</span>
-              <p className="lq-display" style={{ fontSize: 19, letterSpacing: '-0.03em', marginTop: 10 }}>
+              <p className="lq-display" style={{ fontSize: 19, marginTop: 10 }}>
                 {title}
               </p>
               <p className="lq-muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>

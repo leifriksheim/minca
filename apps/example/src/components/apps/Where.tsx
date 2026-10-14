@@ -217,9 +217,9 @@ export function PlaceField({
           alignItems: 'center',
           gap: 10,
           minHeight: 40,
-          padding: '6px 6px 6px 12px',
+          padding: '4px 4px 4px 16px',
           border: `1px solid ${palette.surface.lineStrong}`,
-          borderRadius: palette.radius.md,
+          borderRadius: palette.radius.pill,
         }}
       >
         <span aria-hidden>📍</span>
@@ -454,7 +454,7 @@ export function PlaceMap({ place, height = 200 }: { place: Place | undefined; he
         style={{
           width: '100%',
           height,
-          border: `1px solid ${palette.surface.line}`,
+          border: `1px solid ${palette.surface.rule}`,
           borderRadius: palette.radius.lg,
         }}
       />
@@ -486,9 +486,6 @@ const list: CSSProperties = {
   margin: 0,
   padding: '4px 0 0',
   listStyle: 'none',
-  background: palette.surface.card,
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.lg,
-  boxShadow: palette.shadow.float,
+  ...styles.float,
   overflow: 'hidden',
 };

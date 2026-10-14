@@ -79,7 +79,7 @@ export function LinkPicker({
         gap: 10,
         padding: 14,
         border: `1px solid ${palette.surface.line}`,
-        borderRadius: palette.radius.lg,
+        borderRadius: palette.radius.md,
       }}
     >
       <h3 style={styles.sectionTitle}>{rel ? `${humanize(rel)}…` : 'Link to…'}</h3>
@@ -180,7 +180,7 @@ const pickRow = {
   gap: 10,
   padding: '8px 6px',
   border: 'none',
-  borderRadius: palette.radius.sm,
+  borderRadius: palette.radius.md,
   background: 'none',
   textAlign: 'left' as const,
   fontSize: 14,

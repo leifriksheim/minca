@@ -216,10 +216,7 @@ const menu = {
   zIndex: 20,
   width: 280,
   padding: '0 0 6px',
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
-  boxShadow: palette.shadow.float,
+  ...styles.float,
 } as const;
 
 const row = {

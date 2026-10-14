@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { connectToHome, offerConnectCode, type CodeAsking, type ConnectCodeStage } from '@minca/core/session';
 import { useAccount, useConnection } from '@minca/core/react';
 import { Choice, Modal } from '@minca/app-shared/Modal';
 import { relayUrls } from '@minca/app-shared/relay';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
+import { Loader } from '@minca/app-shared/Loader';
 import { styles, palette, variants } from '../styles';
 import { programRequest } from '../program-terms';
 
@@ -169,7 +170,7 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
                   color: palette.ink.strong,
                 }}
               >
-                {command || 'Making a code…'}
+                {command || <Loader size={10} label="Making a code" showLabel />}
               </code>
               <button
                 onClick={() => copy(command)}
@@ -185,7 +186,7 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
           <p
             style={{ ...styles.footerHint, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            <Pulse /> Waiting for your terminal. Keep this open until it's connected.
+            <Loader size={10} decorative /> Waiting for your terminal. Keep this open until it's connected.
           </p>
         </>
       )}
@@ -214,34 +215,9 @@ function Connected({ agent, onClose }: { agent: CodeAsking; onClose: () => void 
   );
 }
 
-/** A small dot that breathes while waiting */
-function Pulse() {
-  const dot = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    const animation = dot.current?.animate([{ opacity: 1 }, { opacity: 0.25 }, { opacity: 1 }], {
-      duration: 1400,
-      iterations: Infinity,
-    });
-    return () => animation?.cancel();
-  }, []);
-  return (
-    <span
-      ref={dot}
-      style={{
-        width: 7,
-        height: 7,
-        borderRadius: palette.radius.pill,
-        background: palette.ink.muted,
-        flexShrink: 0,
-      }}
-    />
-  );
-}
-
 const note = {
   padding: '12px 14px',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
+  borderRadius: palette.radius.md,
   background: palette.surface.sunken,
 } as const;
 
@@ -250,8 +226,7 @@ const commandBox = {
   alignItems: 'center',
   gap: 10,
   padding: '10px 10px 10px 12px',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
+  borderRadius: palette.radius.md,
   background: palette.surface.sunken,
   fontFamily: palette.mono,
 } as const;

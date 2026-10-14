@@ -357,7 +357,6 @@ function RoleEditor({
         padding: 16,
         borderRadius: palette.radius.md,
         background: palette.surface.sunken,
-        border: `1px solid ${palette.surface.line}`,
       }}
     >
       {!existing && <strong style={{ color: palette.ink.strong }}>New role</strong>}
@@ -703,7 +702,6 @@ function Invite({
         padding: 16,
         borderRadius: palette.radius.md,
         background: palette.surface.sunken,
-        border: `1px solid ${palette.surface.line}`,
       }}
     >
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -765,8 +763,6 @@ const list: CSSProperties = { listStyle: 'none', display: 'flex', flexDirection:
 const item: CSSProperties = { fontSize: 13, lineHeight: 1.6 };
 const card: CSSProperties = {
   padding: 14,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.md,
-  background: palette.surface.card,
+  ...styles.tile,
 };
 const chip: CSSProperties = { ...styles.badge, color: palette.ink.body, background: palette.surface.sunken };

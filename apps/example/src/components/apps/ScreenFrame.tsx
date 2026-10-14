@@ -103,12 +103,11 @@ export function ScreenFrame({
     return (
       <div
         style={{
-          ...styles.errorBox,
+          ...styles.note,
+          marginTop: 16,
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
-          background: palette.surface.sunken,
-          borderColor: palette.surface.line,
         }}
       >
         <p style={{ fontSize: 14, color: palette.ink.strong, lineHeight: 1.5 }}>
@@ -194,7 +193,7 @@ export function ScreenFrame({
           width: '100%',
           flex: 1,
           minHeight: 420,
-          border: `1px solid ${palette.surface.line}`,
+          border: `1px solid ${palette.surface.rule}`,
           borderRadius: palette.radius.lg,
           background: palette.surface.card,
         }}

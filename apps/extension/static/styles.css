@@ -49,9 +49,9 @@ body.popup {
   gap: 8px;
   margin-bottom: 40px;
   font-family: var(--minca-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 22px;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
   color: var(--minca-ink);
 }
 .mark svg {
@@ -112,18 +112,24 @@ strong {
   font-weight: 600;
 }
 
-/* Sections are cells of one ruled grid: stacked, they share a navy rule. */
+/* Sections are cells of one ruled grid: stacked, they share a navy rule, in
+   one frame rounded at its outer corners. */
 section {
   background: var(--minca-card);
   border: 1px solid var(--minca-rule);
+  border-radius: var(--minca-radius-lg);
   padding: 16px;
   margin-bottom: 16px;
 }
 section:has(+ section) {
   margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 section + section {
   border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 .popup section {
   padding: 12px;
@@ -143,11 +149,11 @@ label {
 input {
   width: 100%;
   height: 40px;
-  padding: 0 12px;
+  padding: 0 16px;
   font: inherit;
   color: var(--minca-ink);
   border: 1px solid var(--minca-line-strong);
-  border-radius: 0;
+  border-radius: var(--minca-radius-pill);
   background: var(--minca-card);
 }
 input:focus {
@@ -156,7 +162,7 @@ input:focus {
   box-shadow: 0 0 0 3px var(--minca-accent-soft);
 }
 
-/* Controls are pills; cobalt is the one colour for actions. */
+/* Controls are pills; cobalt is the one colour for actions. They only change colour: nothing moves. */
 button {
   display: inline-flex;
   align-items: center;
@@ -165,23 +171,19 @@ button {
   padding: 0 18px;
   font: inherit;
   font-weight: 500;
-  border-radius: 999px;
+  border-radius: var(--minca-radius-pill);
   cursor: pointer;
   background: var(--minca-accent);
-  color: var(--minca-card);
+  color: var(--minca-inverse);
   border: 1px solid var(--minca-accent);
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
-    transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1);
+    color 0.15s ease;
 }
 button:hover:not(:disabled) {
   background: var(--minca-accent-hover);
   border-color: var(--minca-accent-hover);
-  transform: translateY(-1px);
-}
-button:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
 }
 button:focus-visible {
   outline: 2px solid var(--minca-accent);
@@ -203,7 +205,7 @@ button.quiet:hover:not(:disabled) {
 button.danger {
   background: transparent;
   color: var(--minca-danger);
-  border-color: var(--minca-line-strong);
+  border-color: var(--minca-rule);
 }
 button.danger:hover:not(:disabled) {
   background: var(--minca-danger-soft);
@@ -217,10 +219,6 @@ button.small {
 @media (prefers-reduced-motion: reduce) {
   button {
     transition: none;
-  }
-  button:hover:not(:disabled),
-  button:active:not(:disabled) {
-    transform: none;
   }
 }
 
@@ -304,6 +302,7 @@ button.small {
 }
 .note {
   background: var(--minca-sunken);
+  border-radius: var(--minca-radius-md);
   padding: 12px;
   font-size: 13px;
   color: var(--minca-body);

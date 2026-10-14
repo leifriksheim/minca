@@ -4,7 +4,7 @@ import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { reaction } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { respondingTo } from '../../derive/people';
-import { palette } from '../../styles';
+import { palette, styles } from '../../styles';
 
 const QUICK = ['👍', '❤️', '🎉', '😂', '👀', '🙏'];
 
@@ -103,13 +103,10 @@ export function Reactions({
             position: 'absolute',
             ...(compact ? { top: '100%', right: 0 } : { top: 34, left: 0 }),
             zIndex: 5,
+            ...styles.float,
             display: 'flex',
             gap: 2,
             padding: 4,
-            background: palette.surface.card,
-            border: `1px solid ${palette.surface.rule}`,
-            borderRadius: palette.radius.lg,
-            boxShadow: palette.shadow.small,
           }}
         >
           {QUICK.map((emoji) => (
@@ -122,8 +119,8 @@ export function Reactions({
                 border: 'none',
                 background: 'none',
                 fontSize: 18,
-                padding: '4px 6px',
-                borderRadius: palette.radius.sm,
+                padding: '4px 8px',
+                borderRadius: palette.radius.pill,
               }}
             >
               {emoji}

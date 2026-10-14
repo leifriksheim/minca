@@ -37,8 +37,7 @@ export function CollectionsOverview({
       ) : (
         <div
           style={{
-            border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.lg,
+            ...styles.tile,
             overflowX: 'auto',
           }}
         >

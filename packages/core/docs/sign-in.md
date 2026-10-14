@@ -276,13 +276,38 @@ shape, is dropped when read, not read in part: its app or program connects
 again.
 Connecting the same origin again replaces its connection; a connection with `via: 'code'` (a
 program connected by code through the app) is keyed by its audience instead,
-so each such program is its own. `auth.connections()` lists them.
+so each such program is its own. A carrier is kept apart from the app at its
+origin: connecting either replaces only its own kind, and one key is never
+both. `auth.connections()` lists them.
 
 **Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
 the app's connections (by default the app and every program connected through
 it by code; `byCode: true` only those programs; `audience` only that key),
 revokes the keys of those with `access: write`, and, unless only programs
-connected by code go, removes the automations the app proposed.
+connected by code go, removes the automations the app proposed. A carrier at
+that origin stays: it goes by its key alone (`audience`), and takes nothing of
+the app's with it. The app hears of it when the revokes reach it,
+from this home or a device that has them: `waitMs` waits up to that long for
+a peer to take them in, and `disconnect` answers whether one did (without
+`waitMs`, true only means written; a read-only app or a carrier has no key to
+revoke, so true there too). False means
+they are still only here, and the app keeps working until this home is next
+online with another of the account's devices or apps. The account home waits
+5 s, and says so when nobody took them in.
+
+**Signing out.** `auth.signOut()` forgets the unlocked account on this device,
+lets apps whose time has passed go and revokes the home's own session key. An
+app's note doesn't need the home signed in, so the apps connected from here
+keep working until it runs out. `auth.signOut({ disconnect: true })`
+disconnects them first, and the programs connected through them, with the
+automations they proposed; carriers stay. The node sends nothing once it has
+stopped, so it waits, up to 5 s for them all, for a peer to take in each
+revoke (`spaces.revoke` with `waitMs`), its own session key's among them. With
+nobody reachable, they leave the next time the account signs in here. A read-only app has no key to revoke: it loses
+access when its time runs out. The account home asks each time, with
+disconnecting ticked, and is not ready to grant anything from the moment
+signing out starts. "Use another account" on the connect page signs out
+without disconnecting: switching accounts disconnects nothing.
 
 **Proposals.** `auth.propose({ origin, request, kept? })` adds the
 automations the person kept as the account's own: `kept` is the indices kept,
@@ -290,9 +315,9 @@ default all. The home lists the account's own automations by app, and the
 person pauses or removes them there.
 
 **Carriers.** `auth.grantCarry({ origin, request })` replaces any earlier
-carrier from the same origin, adds the carrier with `node.carriers.add`
+carrier from the same origin (never an app there), adds the carrier with `node.carriers.add`
 ([carriers and hosting](node.md#carriers-hosting-and-notifications)) and
 returns the `CarryGrant`. Its connection is kept with `expiresAt: 0`, since a
 carry connection never expires.
 
-_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`, `isConnection`), `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home"), `packages/core/tests/records-only.test.ts` ("a connection kept in an older shape is dropped, not read as the app’s own")._
+_Source: `packages/core/src/session/auth.ts` (`grant`, `grantCarry`, `propose`, `connections`, `disconnect`, `signOut`, `isConnection`), `packages/core/src/session/connect.ts` (`receiveConnectRequest`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "connecting an app to an account home", "disconnecting …", "connecting a carrier to an account home", "signing out and disconnecting…", "signing out alone…"), `packages/core/tests/records-only.test.ts` ("a connection kept in an older shape is dropped, not read as the app’s own")._
