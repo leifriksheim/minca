@@ -15,6 +15,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createBridge, type PaneHost } from './bridge';
 import { createCarrier, type CarrierState } from './carrier';
+import { createNotifier } from './notify';
 import { preloadFor } from './page';
 
 const APP_PORT = 47830;
@@ -139,7 +140,10 @@ const home = typeof runtime?.home === 'string' ? runtime.home : 'https://weave-h
 // Minca's rainbow, in one colour: a template image, which macOS tints like the other icons in the bar (assets/tray.swift).
 const tray = new Tray({ image: 'views://tray.png', template: true, width: 22, height: 12 });
 let carrierState: CarrierState = { state: 'starting' };
+// What the account asked to hear about, as the carrier sees it arrive: shown by the system, app open or not.
+const notifier = createNotifier({ show: ({ title, body }) => Utils.showNotification({ title, body }) });
 const carrier = createCarrier({
+  woke: (wake) => notifier.woke(wake),
   folder: carrierFolder,
   // The CLI, run by the Bun this app ships with. Quitting the app stops it.
   cli: [process.execPath, join(VIEWS_FOLDER, 'minca.js')],
@@ -254,6 +258,9 @@ tray.on('tray-clicked', (event) => {
     Utils.quit();
   }
 });
+
+// The app brought to the front with no window (its dock icon, or a notification): its window again.
+Electrobun.events.on('reopen', () => openApp());
 
 showMenu();
 openApp();

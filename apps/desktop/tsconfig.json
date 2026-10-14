@@ -6,5 +6,5 @@
     "noEmit": true,
     "customConditions": ["@minca/source"]
   },
-  "include": ["src/bun/bridge.ts", "src/bun/page.ts", "src/bun/carrier.ts", "tests"]
+  "include": ["src/bun/bridge.ts", "src/bun/page.ts", "src/bun/carrier.ts", "src/bun/notify.ts", "tests"]
 }

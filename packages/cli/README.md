@@ -136,8 +136,11 @@ and what it carries (`store/`). The grant comes from something with a window
 for the home: the desktop app (`apps/desktop`) connects it and writes the
 file. With no grant it prints `{"state":"not-connected"}` and exits. Otherwise
 it prints one JSON line on stdout whenever what it carries changes, for
-whatever started it. When the account takes the carrier off, it deletes the
-grant and what it carried.
+whatever started it. When a record arrives that one of the account's wakes
+(its own automations) asks about, it says so too: `{"state":"wake","space":…,
+"collection":…,"at":…,"open"?:…}`, which space and what kind of record, never
+what it says. The desktop app shows these as notifications. When the account
+takes the carrier off, it deletes the grant and what it carried.
 
 ## Hosting other people's spaces
 

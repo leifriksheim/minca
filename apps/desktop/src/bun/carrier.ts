@@ -20,6 +20,7 @@ import { isAbsolute, join } from 'node:path';
 import { createP256Provider, didOf } from '@minca/core';
 import { connectCarrier, type CarryGrant } from '@minca/core/session';
 import type { ShellWindow } from './bridge';
+import type { Woke } from './notify';
 
 export type CarrierState =
   | { readonly state: 'starting' }
@@ -147,6 +148,23 @@ export function connectThroughShell(params: {
   }
 }
 
+/** A wake the CLI reported, or null for any other line */
+function wokeFrom(line: string): Woke | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Reflect.get(parsed, 'state') !== 'wake') return null;
+  const space: unknown = Reflect.get(parsed, 'space');
+  const collection: unknown = Reflect.get(parsed, 'collection');
+  const at: unknown = Reflect.get(parsed, 'at');
+  const open: unknown = Reflect.get(parsed, 'open');
+  if (typeof space !== 'string' || typeof collection !== 'string' || typeof at !== 'string') return null;
+  return { space, collection, at, ...(typeof open === 'string' ? { open } : {}) };
+}
+
 function carryStatus(line: string): CarrierState | null {
   let parsed: unknown;
   try {
@@ -181,6 +199,8 @@ export function createCarrier(options: {
   readonly home: string;
   readonly openHome: OpenHome;
   readonly changed: (state: CarrierState) => void;
+  /** A record arrived that one of the account's wakes asks about */
+  readonly woke?: (wake: Woke) => void;
 }): Carrier {
   const { folder } = options;
   let child: ReturnType<typeof Bun.spawn> | null = null;
@@ -212,8 +232,11 @@ export function createCarrier(options: {
           const lines = buffered.split('\n');
           buffered = lines.pop() ?? '';
           for (const line of lines) {
-            const next = carryStatus(line);
-            if (next && child === running) set(next);
+            if (child !== running) continue;
+            const wake = wokeFrom(line);
+            if (wake) options.woke?.(wake);
+            const next = wake ? null : carryStatus(line);
+            if (next) set(next);
           }
         }
       })();

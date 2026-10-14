@@ -30,7 +30,19 @@ export type CarryStatus =
   | { readonly state: 'not-connected' }
   | { readonly state: 'carrying'; readonly account: string; readonly name: string; readonly spaces: number }
   | { readonly state: 'removed' }
-  | { readonly state: 'error'; readonly error: string };
+  | { readonly state: 'error'; readonly error: string }
+  /**
+   * A record arrived that one of the account's wakes asks about, as far as a
+   * carrier can tell from outside: which space, which kind of record, and
+   * where to open it. Not what it says. For whatever started it to show.
+   */
+  | {
+      readonly state: 'wake';
+      readonly space: string;
+      readonly collection: string;
+      readonly at: string;
+      readonly open?: string;
+    };
 
 function isCarryGrant(value: unknown): value is CarryGrant {
   if (typeof value !== 'object' || value === null) return false;
@@ -89,6 +101,16 @@ export async function runCarrier(options: {
   };
   let soon: ReturnType<typeof setTimeout> | null = null;
   node.subscribe((event) => {
+    if (event.type === 'wake') {
+      status({
+        state: 'wake',
+        space: event.space.name,
+        collection: event.record.collection,
+        at: event.record.createdAt,
+        ...(event.wake.open ? { open: event.wake.open } : {}),
+      });
+      return;
+    }
     if (event.type === 'closed') {
       // The account took this carrier off: what it carried is no longer its to keep.
       log('the account removed this carrier');

@@ -874,10 +874,12 @@ runs (§2.11).
 
 Each device holding the account key copies each into every carry space as a
 wake ([03](03-spaces.md) §15), and a carrier matches arriving versions
-against the wakes there, from their outside alone. No carrier acts on a
-match today: the wakes are there for waking an app that is closed (below).
+against the wakes there, from their outside alone. A carrier on one of the
+account's own devices may show a match there itself, saying no more than it
+sees: which space, which kind of record, and the wake's `open`. None sends a
+match to another device yet: that is what the wakes are for (below).
 
-_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
+_Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/cli/src/carry.ts` (`runCarrier`), `apps/desktop/src/bun/notify.ts`. Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `apps/desktop/tests/notify.test.ts`._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). The account's own
