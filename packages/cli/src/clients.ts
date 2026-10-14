@@ -41,8 +41,26 @@ export function serverCommand(home: string): ServerCommand {
   const tsx = script.endsWith('.ts') ? import.meta.resolve('tsx') : null;
   return {
     command: process.execPath,
-    args: [...(tsx ? ['--import', tsx] : []), path.resolve(script), ...tail],
+    args: [...keptFlags(process.execArgv), ...(tsx ? ['--import', tsx] : []), path.resolve(script), ...tail],
   };
+}
+
+/**
+ * The Node flags this process was started with that the server needs too:
+ * without `--conditions=@minca/source` the repo's CLI loads core's built
+ * `dist/`, which may be stale or missing. Paths are made absolute.
+ */
+function keptFlags(execArgv: ReadonlyArray<string>): string[] {
+  const kept: string[] = [];
+  for (let i = 0; i < execArgv.length; i++) {
+    const flag = execArgv[i] ?? '';
+    const [name = '', inline] = flag.split(/=(.*)/s);
+    if (name !== '--conditions' && name !== '-C' && name !== '--env-file') continue;
+    const value = inline ?? execArgv[++i];
+    if (value === undefined) continue;
+    kept.push(`${name}=${name === '--env-file' ? path.resolve(value) : value}`);
+  }
+  return kept;
 }
 
 export interface Configured {
