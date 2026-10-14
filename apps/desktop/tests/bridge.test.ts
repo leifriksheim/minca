@@ -13,6 +13,8 @@ interface FakeWindow {
   closed: boolean;
   close(): void;
   readonly drags: Array<[string, number, number]>;
+  /** The token the app's own window opens its node's socket with: '' for any other */
+  readonly node: string;
 }
 
 function setup() {
@@ -20,18 +22,17 @@ function setup() {
   const external: string[] = [];
   const focused: string[] = [];
   const accounts: unknown[] = [];
-  const toNode: unknown[] = [];
   const shell: Shell = {
-    preload: ({ secret, origin }) => `${secret} ${origin}`,
+    preload: ({ secret, origin, node }) => `${secret} ${origin} ${node ?? ''}`,
     openExternal: (url) => external.push(url),
     account: (who) => accounts.push(who),
-    node: (message) => toNode.push(message),
     open({ url, preload, popup, closed }) {
-      const [secret = '', origin = ''] = preload.split(' ');
+      const [secret = '', origin = '', node = ''] = preload.split(' ');
       const win: FakeWindow = {
         url,
         secret,
         origin,
+        node,
         popup,
         runs: [],
         closed: false,
@@ -57,7 +58,7 @@ function setup() {
   /** What a page sends, as its preload would */
   const send = (from: FakeWindow, message: object) =>
     bridge.receive({ s: from.secret, m: JSON.stringify(message) });
-  return { bridge, windows, external, focused, accounts, toNode, send };
+  return { bridge, windows, external, focused, accounts, send };
 }
 
 /** What the bridge delivered to a window, and the origin each delivery was guarded by */
@@ -226,6 +227,7 @@ test('the preload is a script that carries its options', () => {
     popup: true,
     app: false,
     dragInset: 0,
+    nodeUrl: null,
   });
   // eslint-disable-next-line no-implied-eval -- parses the preload, as the window would, without running it
   assert.doesNotThrow(() => new Function(source));
@@ -297,31 +299,34 @@ test('a window the shell opens as no app — the account home, from the menu bar
   assert.deepEqual(t.accounts, []);
 });
 
-test('only the app’s own window talks to its node: not a popup it opened, nor a window the menu bar opened', () => {
+test('only the app’s own window gets a node token: not a popup it opened, nor a window the menu bar opened', () => {
   const t = withHome();
   t.bridge.openWindow('https://home.example/', { width: 720, height: 820 }, { app: false });
   const settings = t.windows[2];
   assert.ok(settings);
-  t.send(t.home, { t: 'node', data: { kind: 'disconnect' } });
-  t.send(settings, { t: 'node', data: { kind: 'disconnect' } });
-  t.send(t.app, { t: 'node', data: { kind: 'attach' } });
-  assert.deepEqual(t.toNode, [{ kind: 'attach' }]);
-
-  // And only it hears the node, at the app's origin.
-  t.bridge.toApp({ kind: 'state', state: { status: 'ready' } });
-  assert.deepEqual(delivered(t.app).at(-1), {
-    guard: 'http://127.0.0.1:47830',
-    message: { t: 'node', data: { kind: 'state', state: { status: 'ready' } } },
-  });
-  for (const other of [t.home, settings])
-    assert.ok(!delivered(other).some(({ message }) => Reflect.get(Object(message), 't') === 'node'));
+  assert.match(t.app.node, /^[0-9a-f]{64}$/);
+  assert.equal(t.home.node, '');
+  assert.equal(settings.node, '');
+  assert.ok(t.bridge.isNodeToken(t.app.node));
+  for (const token of ['', t.app.secret, t.home.secret, settings.secret])
+    assert.ok(!t.bridge.isNodeToken(token));
 });
 
-test('the app’s window may send its node more than a popup may send', () => {
+test('a node token stops counting once its window closes', () => {
   const t = withHome();
-  const large = 'x'.repeat(2 << 20);
-  t.send(t.home, { t: 'post', to: null, origin: '*', data: JSON.stringify(large) });
-  assert.equal(delivered(t.app).length, 0);
-  t.send(t.app, { t: 'node', data: large });
-  assert.equal(t.toNode.length, 1);
+  const { node } = t.app;
+  t.app.close();
+  assert.ok(!t.bridge.isNodeToken(node));
+  // The app's window opened again has a token of its own.
+  t.bridge.openWindow('http://127.0.0.1:47830/app', { width: 1200, height: 820 });
+  const again = t.windows.at(-1);
+  assert.ok(again && again.node !== node && t.bridge.isNodeToken(again.node));
+});
+
+test('node messages through Electrobun’s bridge go nowhere: the node has a socket of its own', () => {
+  const t = withHome();
+  t.send(t.app, { t: 'node', data: { kind: 'disconnect' } });
+  t.send(t.home, { t: 'node', data: { kind: 'disconnect' } });
+  assert.deepEqual(t.app.runs, []);
+  assert.deepEqual(t.home.runs, []);
 });

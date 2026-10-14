@@ -7,7 +7,8 @@
  * - shows it in a window with no title bar, and opens the windows it asks
  *   for, the account home among them (`bridge.ts`);
  * - runs the app's node in a process of its own (`app-node.ts`), which the
- *   window uses over a port and which keeps running when it closes;
+ *   window uses over a socket to the same server (`node-link.ts`) and which
+ *   keeps running when it closes;
  * - runs a carrier for the person's account beside it (`carrier.ts`), which
  *   keeps their spaces online even once the app's connection has run out;
  * - puts Minca in the menu bar, where it stays when the window closes.
@@ -18,6 +19,7 @@ import { join } from 'node:path';
 import { createBridge, type PaneHost } from './bridge';
 import { createAppNode, keychainKey } from './app-node';
 import { createCarrier, type CarrierState } from './carrier';
+import { createNodeLink, MAX_NODE_MESSAGE, nodeUrl, type LinkSocket } from './node-link';
 import { connectionMenu, reminderAt, whenEnds } from './menu';
 import { createNotifier } from './notify';
 import { preloadFor } from './page';
@@ -43,15 +45,26 @@ const headers = {
   'referrer-policy': 'no-referrer',
   'x-content-type-options': 'nosniff',
 };
-Bun.serve({
+Bun.serve<LinkSocket['data']>({
   hostname: '127.0.0.1',
   port: APP_PORT,
-  async fetch(request) {
+  async fetch(request, server) {
+    const token = link.accept(request);
+    if (token !== null)
+      return server.upgrade(request, { data: { token } }) ? undefined : new Response(null, { status: 400 });
     const { pathname } = new URL(request.url);
     const file = Bun.file(join(appFolder, pathname));
     const served =
       !pathname.includes('..') && !/^\/_(headers|redirects)$/.test(pathname) && (await file.exists());
     return new Response(served ? file : Bun.file(join(appFolder, 'index.html')), { headers });
+  },
+  websocket: {
+    maxPayloadLength: MAX_NODE_MESSAGE,
+    // A sync can send the window a lot at once; above this, Bun would drop what it sends.
+    backpressureLimit: 64 << 20,
+    open: (socket) => link.opened(socket),
+    message: (socket, data) => link.message(socket, data),
+    close: (socket) => link.closed(socket),
   },
 });
 
@@ -61,11 +74,17 @@ let app: PaneHost | null = null;
 // frame in it, run scripts in every other window, the account home's too.
 let openCount = 0;
 const bridge = createBridge({
-  preload: ({ secret, origin, popup, app: isApp }) =>
-    preloadFor({ secret, origin, popup, app: isApp, dragInset: isApp ? DRAG_INSET : 0 }),
+  preload: ({ secret, origin, popup, app: isApp, node }) =>
+    preloadFor({
+      secret,
+      origin,
+      popup,
+      app: isApp,
+      dragInset: isApp ? DRAG_INSET : 0,
+      nodeUrl: node ? nodeUrl(origin, node) : null,
+    }),
   openExternal: (url) => void Utils.openExternal(url),
   account: (who) => followApp(who),
-  node: (message) => appNode.fromWindow(message),
   open({ url, preload, width, height, app: isApp, closed }) {
     const offset = 40 * (openCount++ % 6);
     const win = new BrowserWindow({
@@ -90,6 +109,7 @@ const bridge = createBridge({
       // The app's window: the dock icon goes with it.
       if (isApp) {
         app = null;
+        link.close();
         appNode.detach();
         Utils.setDockIconVisible(false);
       }
@@ -110,6 +130,13 @@ const bridge = createBridge({
     return host;
   },
 });
+// The app's window and its node: only from the app's origin, with its window's token.
+const link = createNodeLink({
+  origin: APP_URL,
+  isToken: (token) => bridge.isNodeToken(token),
+  fromWindow: (message) => appNode.fromWindow(message),
+});
+
 // Messages from pages, from any window: the bridge knows them by their secret, not by where they say they're from.
 // Out of the event's own callback: closing a window from inside one crashes Bun.
 Electrobun.events.on('host-message', (event: unknown) => {
@@ -184,7 +211,7 @@ const appNode = createAppNode({
   network,
   sealKey: () => keychainKey(),
   openHome: (url, origin, hear) => bridge.openFromShell(url, { width: 460, height: 720 }, { origin, hear }),
-  toWindow: (message) => bridge.toApp(message),
+  toWindow: (message) => link.toWindow(message),
   changed: (state) => {
     const who = state.grant ? { did: state.grant.did, name: state.grant.name } : null;
     if (state.status === 'ready' || state.status === 'expired') followApp(who);
