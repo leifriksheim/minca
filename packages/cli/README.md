@@ -119,6 +119,26 @@ gates as any peer. It is an **anchor, not a host** — uptime, no authority.
 For a server, `bun build.ts` makes single-file binaries for this machine,
 `linux-x64` and `linux-arm64`; `minca-node.service` is a systemd unit.
 
+## Carrying your spaces from a folder
+
+```bash
+minca carry --data DIR
+```
+
+A carrier, as the Chrome extension is one: it keeps one account's spaces
+online with a pass for each, and nothing that reads or writes them
+(`createCarrierNode`). It needs no account unlocked and listens on no port. It
+meets the account's devices through the relays, over WebRTC.
+
+The folder holds its key (`carrier-key`, made on first start, readable by you
+alone), the carry grant an account home gave that key (`carry-grant.json`),
+and what it carries (`store/`). The grant comes from something with a window
+for the home: the desktop app (`apps/desktop`) connects it and writes the
+file. With no grant it prints `{"state":"not-connected"}` and exits. Otherwise
+it prints one JSON line on stdout whenever what it carries changes, for
+whatever started it. When the account takes the carrier off, it deletes the
+grant and what it carried.
+
 ## Hosting other people's spaces
 
 `minca host` is a hosting service in one process. It carries every paying
