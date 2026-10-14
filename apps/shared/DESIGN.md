@@ -14,6 +14,7 @@ screen.** Retro in the shapes and the type, clean everywhere else.
 | ------------------ | ------------------------------------------------------------------------------------------------ |
 | `src/tokens.ts`    | Every colour, face, corner and shadow, as values and as `--minca-*` CSS custom properties        |
 | `src/shapes.tsx`   | The shapes (`Shape`), the morph between them (`Morph`), and which shape each app has             |
+| `src/Loader.tsx`   | The loader: five shapes hopping in turn, for anything on its way                                 |
 | `src/Wordmark.tsx` | The mark (a four-band rainbow) and the wordmark; `src/mark.ts` has its bands for non-React pages |
 | `src/styles.ts`    | Inline styles and base CSS for React UIs, built from the tokens                                  |
 
@@ -44,16 +45,33 @@ properties: `baseCss` puts them on `:root`, and a page without it injects
 
 ## Shape and line
 
-- **Surfaces have square corners**: cards, panels, dialogs, menus, frames.
-  `radius.sm` (3px) is only for small things like tags and code chips.
-- **Controls are pills**: buttons, segmented controls, chips, the nav.
-- **Hairlines** (`surface.line`) separate things inside dense UI. **The navy
-  rule** (`surface.rule`) is for what should read as drawn: grids of cells,
-  the frame of a dialog or a menu.
+- **Every corner is round, on one scale** (`radius`): `sm` for tags and code
+  chips, `md` for rows, inputs and cards inside a surface, `lg` for surfaces
+  (cards, panels, menus, dialogs), `xl` for the big frames on a page. Nothing
+  is square, and nothing picks a size off the scale.
+- **Controls are pills**: buttons, inputs that ask for one line, segmented
+  controls, chips, the nav.
+- **One line for edges.** The navy rule (`surface.rule`), one pixel, draws the
+  edge of anything that stands on the page: a card, a frame, the nav, a
+  secondary button, the footer. **Hairlines** (`surface.line`) only separate
+  things _inside_ a surface, like rows in a list.
 - **Ruled grids** set things side by side: cells share navy rules, with no
-  gaps and no rounding. A cell may carry a small italic number (`01`, `v2`).
-- **Nothing blurs.** Anything that floats (a menu, a dialog, a popover) has a
-  navy frame and a flat, offset shadow (`shadow.float`, `shadow.small`).
+  gaps, inside one rounded frame. A cell may carry a small italic number
+  (`01`, `v2`).
+- **Shadows are soft and rare.** Only what floats over the page (a menu, a
+  dialog, a popover) has one (`shadow.float`, `shadow.small`). Nothing blurs
+  what is behind it.
+
+## Pattern
+
+The look is 70s print, kept clean: flat colour on paper, and room around it.
+
+- **Grid paper**: a faint `surface.line` grid behind a hero or a frame, fading
+  out at its edges. Never behind text that has to be read at length.
+- **The rainbow**: the mark's four bands, as big arcs rising from the edge of
+  a panel. Once per page.
+- Patterns sit behind content, never inside a card, and never more than one
+  per screen.
 
 ## Shapes
 
@@ -72,8 +90,14 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
 
 ## Motion
 
-Small and springy: a shape turns a little on hover, a button lifts a pixel.
-Everything that moves on its own stops under `prefers-reduced-motion`.
+- **Loading is five shapes hopping in turn** (`Loader`), never a spinner and
+  never "Loading…" alone. Give it a `label` that says what is on its way;
+  `showLabel` puts the words beside the shapes. Where nothing is loading,
+  `decorative` keeps the row as ornament, as the site's closing call does.
+
+Small and calm. Shapes may turn a little on hover; controls only change
+colour, they don't move. Demos play on their own, and stop under
+`prefers-reduced-motion`, where they show their final state.
 
 ## Words
 

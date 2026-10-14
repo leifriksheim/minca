@@ -5,8 +5,8 @@
  * properties in {@link tokenCss}. DESIGN.md beside this file says how to use
  * them.
  *
- * Paper, navy ink and thin navy rules; colour comes from the shapes. Surfaces
- * have square corners, controls are pills.
+ * Paper, navy ink and thin navy rules; colour comes from the shapes. Every
+ * corner is round, on one scale: controls are pills, surfaces take `md` to `xl`.
  */
 
 export const ink = {
@@ -69,8 +69,12 @@ export type ShapeColour = keyof typeof shapeColours;
 /** The five that take turns, in order */
 export const SHAPE_CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
 
-/** Square surfaces, pill controls; `sm` is for the little things, like a tag or a code chip */
-export const radius = { none: 0, sm: 3, md: 3, lg: 0, pill: 999 } as const;
+/**
+ * One scale of round corners. `sm` for the little things (a tag, a code chip),
+ * `md` for rows, inputs and cards inside a surface, `lg` for surfaces (cards,
+ * panels, menus, dialogs), `xl` for the big frames on a page. Controls are pills.
+ */
+export const radius = { none: 0, sm: 6, md: 10, lg: 16, xl: 28, pill: 999 } as const;
 
 /** Bricolage Grotesque for headings and the wordmark, Geist for everything else */
 export const font =
@@ -82,10 +86,10 @@ export const mono = '"Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menl
 export const FONTS_HREF =
   'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap';
 
-/** Floating things (menus, dialogs) cast a hard, flat shadow, not a blur */
+/** Floating things (menus, dialogs) cast a soft navy shadow; nothing that sits in the page has one */
 export const shadow = {
-  float: `4px 4px 0 ${surface.rule}`,
-  small: `2px 2px 0 ${surface.rule}`,
+  float: '0 1px 2px rgba(19, 33, 74, .06), 0 16px 40px -12px rgba(19, 33, 74, .22)',
+  small: '0 1px 2px rgba(19, 33, 74, .06), 0 6px 16px -6px rgba(19, 33, 74, .16)',
 } as const;
 
 /** The tokens as CSS custom properties, for stylesheets: `var(--minca-ink)` and so on */
@@ -117,6 +121,10 @@ export const tokenCss = `
     --minca-font: ${font};
     --minca-display: ${display};
     --minca-mono: ${mono};
+    --minca-radius-sm: ${radius.sm}px;
+    --minca-radius-md: ${radius.md}px;
+    --minca-radius-lg: ${radius.lg}px;
+    --minca-radius-xl: ${radius.xl}px;
     --minca-shadow: ${shadow.float};
     --minca-shadow-small: ${shadow.small};
   }

@@ -31,6 +31,7 @@ import { styles, palette, ui } from '../styles';
 import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
+import { Loader } from '@minca/app-shared/Loader';
 
 /** Standard collections with a place of their own on every record, so not offered as "+ Add …" */
 const ANNOTATIONS = new Set<string>([reaction.name, comment.name, tag.name]);
@@ -160,7 +161,9 @@ export function RecordPanel({
         </header>
 
         {!data ? (
-          <p style={{ ...styles.emptyState, margin: 20 }}>Opening…</p>
+          <p style={{ ...styles.emptyState, margin: 20 }}>
+            <Loader label="Opening" showLabel />
+          </p>
         ) : !record ? (
           <p style={{ ...styles.emptyState, margin: 20 }}>This record is gone — deleted, or not here yet.</p>
         ) : (

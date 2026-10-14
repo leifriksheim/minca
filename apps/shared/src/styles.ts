@@ -6,8 +6,8 @@ import { accent, display, font, ink, mono, radius, shadow, shapeColours, surface
  * One visual vocabulary for the example app, the account home and Liquid,
  * built from Minca's tokens (`tokens.ts`; DESIGN.md says how to use them).
  *
- * Warm paper, navy ink, cobalt for the thing to do. Surfaces have square
- * corners and hairlines; controls are pills; anything floating casts a flat
+ * Warm paper, navy ink, cobalt for the thing to do. Surfaces have round
+ * corners and hairlines; controls are pills; anything floating casts a soft
  * navy shadow. Colour beyond that comes from the shapes (`shapes.tsx`), never
  * from the chrome, so nothing competes with what people put in their spaces.
  *

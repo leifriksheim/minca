@@ -1,348 +1,365 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Shape, type RoundKind } from '@minca/app-shared/shapes';
+import { shapeColours, type ShapeColour } from '@minca/app-shared/tokens';
 
 /**
- * Under the front page's headline: a group's space, and one tool arriving in
- * it the way tools do in Minca. A member asks their AI, the proposal shows
- * what it would allow, someone whose role allows it adds it, and then people
- * use it. Four groups take turns, each with a tool drawn as a tiny working app.
+ * The front page's hero: many hands making one small app. A handful of
+ * people, each a shape, share a canvas; one asks for a carpool and it appears,
+ * the others use it at once, and when it fills up someone asks for a
+ * waitlist and gets that too. Asking, using and changing, in one picture.
+ *
+ * The cursors find what they point at by `data-target`, measured on the
+ * page, so they land on the right thing at any width.
  */
 
-type Phase = 'ask' | 'proposal' | 'added' | 'open' | 'used';
+type Who = 'maya' | 'joe' | 'anna' | 'sam' | 'lea';
 
-const PHASES: ReadonlyArray<readonly [Phase, number]> = [
-  ['ask', 2800],
-  ['proposal', 2400],
-  ['added', 1100],
-  ['open', 1500],
-  ['used', 2600],
-];
+type Spot = readonly [number, number];
 
-interface Scene {
-  readonly group: string;
-  readonly people: string;
-  /** The tools the group already made, beside chat and polls */
-  readonly has: readonly string[];
-  readonly tool: string;
-  readonly who: string;
-  readonly ask: string;
-  readonly admin: string;
-  readonly allows: readonly [string, string, string];
-  /** What happens once it's in use, for the caption */
-  readonly use: string;
-  readonly app: (used: boolean) => ReactNode;
+/** Where each cursor rests, as fractions of the canvas: around the app, or below it on a narrow one */
+const PEOPLE: Readonly<
+  Record<
+    Who,
+    { name: string; kind: RoundKind; colour: ShapeColour; inkLabel?: boolean; home: Spot; narrowHome: Spot }
+  >
+> = {
+  maya: { name: 'Maya', kind: 'scallop', colour: 'cobalt', home: [0.12, 0.7], narrowHome: [0.08, 0.76] },
+  joe: { name: 'Joe', kind: 'flower', colour: 'coral', home: [0.84, 0.18], narrowHome: [0.62, 0.74] },
+  anna: { name: 'Anna', kind: 'clover', colour: 'sage', home: [0.88, 0.66], narrowHome: [0.7, 0.9] },
+  sam: {
+    name: 'Sam',
+    kind: 'star',
+    colour: 'peach',
+    inkLabel: true,
+    home: [0.16, 0.22],
+    narrowHome: [0.3, 0.88],
+  },
+  lea: {
+    name: 'Lea',
+    kind: 'burst',
+    colour: 'lilac',
+    inkLabel: true,
+    home: [0.76, 0.86],
+    narrowHome: [0.42, 0.74],
+  },
+};
+/** Below this width the app spans the canvas, and cursors rest under it */
+const NARROW = 640;
+const WHO: readonly Who[] = ['maya', 'joe', 'anna', 'sam', 'lea'];
+
+type Seats = readonly [string, string, string];
+
+interface Step {
+  readonly ms: number;
+  readonly say: string;
+  /** What the ask box holds, and whether it is being typed right now */
+  readonly prompt: string;
+  readonly typing?: boolean;
+  readonly app: 'none' | 'empty' | 'ride';
+  readonly seats: Seats;
+  readonly waitlist: 'none' | 'open' | 'joined';
+  /** Where each cursor points, by `data-target`; anyone missing rests at home */
+  readonly at: Partial<Record<Who, string>>;
+  readonly click?: readonly Who[];
 }
 
-function Initial({ name, dim }: { name: string; dim?: boolean }) {
-  return <span className={dim ? 'demo-initial dim' : 'demo-initial'}>{name[0]}</span>;
-}
+const NONE: Seats = ['', '', ''];
+const TWO: Seats = ['Anna', 'Sam', ''];
+const FULL: Seats = ['Anna', 'Sam', 'Maya'];
+const ASK = 'A carpool for away games';
+const CHANGE = 'Add a waitlist';
+const ASKING = 'Maya asks for a carpool.';
+const SEATS = 'Anna and Sam grab seats.';
+const LAST_SEAT = 'Maya takes the last one.';
+const MENDING = 'Full already. Lea asks for a waitlist.';
+const MENDED = 'Anyone can change it, and everyone gets the change.';
 
-const SCENES: readonly Scene[] = [
+const STEPS: readonly Step[] = [
+  { ms: 900, say: ASKING, prompt: '', app: 'none', seats: NONE, waitlist: 'none', at: { maya: 'prompt' } },
   {
-    group: 'Riverside FC',
-    people: '34 members',
-    has: ['Kit rota'],
-    tool: 'Carpool',
-    who: 'Maya',
-    ask: 'Can we sort out lifts to away games?',
-    admin: 'Anna',
-    allows: [
-      'Any member can offer a ride',
-      'Only the driver changes their ride',
-      'One seat per person on each ride',
-    ],
-    use: 'Sam takes the last seat in Joe’s car.',
-    app: (used) => (
-      <div className="demo-app">
-        <div className="demo-app-head">
-          Saturday · away at Northside<span>2 rides</span>
-        </div>
-        {[
-          { driver: 'Anna', seats: ['Maya', 'Leo', ''] },
-          { driver: 'Joe', seats: ['Kai', 'Ola', used ? 'Sam' : ''] },
-        ].map((ride) => (
-          <div key={ride.driver} className="demo-row">
-            <span>
-              <b>{ride.driver}</b> is driving
-            </span>
-            <span className="demo-seats">
-              {ride.seats.map((name, i) =>
-                name ? <Initial key={i} name={name} /> : <span key={i} className="demo-seat" />,
-              )}
-            </span>
-          </div>
-        ))}
-      </div>
-    ),
+    ms: 1900,
+    say: ASKING,
+    prompt: ASK,
+    typing: true,
+    app: 'none',
+    seats: NONE,
+    waitlist: 'none',
+    at: { maya: 'prompt' },
   },
   {
-    group: 'Elm Street',
-    people: '61 neighbours',
-    has: ['Bin rota'],
-    tool: 'Tool library',
-    who: 'Priya',
-    ask: 'Could we lend each other tools instead of all buying drills?',
-    admin: 'Tom',
-    allows: ['Anyone on the street can list a tool', 'Only its owner edits it', 'One borrower at a time'],
-    use: 'Ben borrows Ali’s ladder.',
-    app: (used) => (
-      <div className="demo-app">
-        <div className="demo-app-head">
-          Tools on the street<span>3 listed</span>
-        </div>
-        {[
-          { tool: 'Drill', owner: 'Tom', borrower: 'Lena' },
-          { tool: 'Ladder', owner: 'Ali', borrower: used ? 'Ben' : '' },
-          { tool: 'Pressure washer', owner: 'Priya', borrower: '' },
-        ].map((item) => (
-          <div key={item.tool} className="demo-row">
-            <span>
-              <b>{item.tool}</b> · {item.owner}
-            </span>
-            {item.borrower ? (
-              <span className="demo-pill">With {item.borrower}</span>
-            ) : (
-              <span className="demo-pill free">Borrow</span>
-            )}
-          </div>
-        ))}
-      </div>
-    ),
+    ms: 800,
+    say: ASKING,
+    prompt: ASK,
+    app: 'none',
+    seats: NONE,
+    waitlist: 'none',
+    at: { maya: 'send' },
+    click: ['maya'],
   },
   {
-    group: 'Maple Court Tenants',
-    people: '80 households',
-    has: ['Meetings'],
-    tool: 'Repairs',
-    who: 'Dev',
-    ask: 'We need one list of everything the landlord hasn’t fixed.',
-    admin: 'Rosa',
-    allows: [
-      'Any household can report a repair',
-      'One “us too” per household',
-      'Only the committee changes the status',
-    ],
-    use: 'Another household adds “us too”.',
-    app: (used) => (
-      <div className="demo-app">
-        <div className="demo-app-head">
-          Open repairs<span>3 open</span>
-        </div>
-        {[
-          { issue: 'Lift out of order', count: used ? 15 : 14, status: 'Sent to landlord' },
-          { issue: 'Damp in stairwell B', count: 9, status: 'Reported' },
-          { issue: 'Broken entry buzzer', count: 6, status: 'Reported' },
-        ].map((item) => (
-          <div key={item.issue} className="demo-row">
-            <span>
-              <b>{item.issue}</b>
-              <small>{item.status}</small>
-            </span>
-            <span className={used && item.count === 15 ? 'demo-pill bump' : 'demo-pill'}>
-              {item.count} households
-            </span>
-          </div>
-        ))}
-      </div>
-    ),
+    ms: 1500,
+    say: 'It’s there for everyone, straight away.',
+    prompt: '',
+    app: 'empty',
+    seats: NONE,
+    waitlist: 'none',
+    at: { joe: 'offer' },
   },
   {
-    group: 'Northside Food Bank',
-    people: '25 volunteers',
-    has: ['Stock count'],
-    tool: 'Volunteer rota',
-    who: 'Kofi',
-    ask: 'A rota where people can grab a shift themselves?',
-    admin: 'Iris',
-    allows: ['Anyone can take an empty shift', 'One person per shift', 'Only you can drop your shift'],
-    use: 'Ruth takes Thursday afternoon.',
-    app: (used) => (
-      <div className="demo-app">
-        <div className="demo-app-head">
-          This week<span>{used ? 'All covered' : '1 shift open'}</span>
-        </div>
-        <div className="demo-rota">
-          <span />
-          <span className="demo-rota-label">Morning</span>
-          <span className="demo-rota-label">Afternoon</span>
-          {[
-            ['Mon', 'Kofi', 'Iris'],
-            ['Wed', 'Ben', 'Ola'],
-            ['Thu', 'Sam', used ? 'Ruth' : ''],
-          ].map(([day, morning, afternoon]) => (
-            <Rota key={day} day={day ?? ''} slots={[morning ?? '', afternoon ?? '']} />
-          ))}
-        </div>
-      </div>
-    ),
+    ms: 1300,
+    say: 'Joe offers a ride.',
+    prompt: '',
+    app: 'ride',
+    seats: NONE,
+    waitlist: 'none',
+    at: { joe: 'offer' },
+    click: ['joe'],
+  },
+  {
+    ms: 1100,
+    say: SEATS,
+    prompt: '',
+    app: 'ride',
+    seats: NONE,
+    waitlist: 'none',
+    at: { anna: 'seat-0', sam: 'seat-1' },
+  },
+  {
+    ms: 1100,
+    say: SEATS,
+    prompt: '',
+    app: 'ride',
+    seats: TWO,
+    waitlist: 'none',
+    at: { anna: 'seat-0', sam: 'seat-1' },
+    click: ['anna', 'sam'],
+  },
+  { ms: 900, say: LAST_SEAT, prompt: '', app: 'ride', seats: TWO, waitlist: 'none', at: { maya: 'seat-2' } },
+  {
+    ms: 1300,
+    say: LAST_SEAT,
+    prompt: '',
+    app: 'ride',
+    seats: FULL,
+    waitlist: 'none',
+    at: { maya: 'seat-2' },
+    click: ['maya'],
+  },
+  { ms: 900, say: MENDING, prompt: '', app: 'ride', seats: FULL, waitlist: 'none', at: { lea: 'prompt' } },
+  {
+    ms: 1500,
+    say: MENDING,
+    prompt: CHANGE,
+    typing: true,
+    app: 'ride',
+    seats: FULL,
+    waitlist: 'none',
+    at: { lea: 'prompt' },
+  },
+  {
+    ms: 800,
+    say: MENDING,
+    prompt: CHANGE,
+    app: 'ride',
+    seats: FULL,
+    waitlist: 'none',
+    at: { lea: 'send' },
+    click: ['lea'],
+  },
+  { ms: 1100, say: MENDED, prompt: '', app: 'ride', seats: FULL, waitlist: 'open', at: { lea: 'join' } },
+  {
+    ms: 3200,
+    say: MENDED,
+    prompt: '',
+    app: 'ride',
+    seats: FULL,
+    waitlist: 'joined',
+    at: { lea: 'join' },
+    click: ['lea'],
   },
 ];
+const LAST = STEPS.length - 1;
 
-function Rota({ day, slots }: { day: string; slots: readonly string[] }) {
+/** The ask, typed out letter by letter; remounted each time, so it starts from nothing */
+function Typed({ text }: { text: string }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setCount((n) => Math.min(n + 1, text.length)), 45);
+    return () => clearInterval(timer);
+  }, [text]);
   return (
     <>
-      <span className="demo-rota-label">{day}</span>
-      {slots.map((name, i) =>
-        name ? (
-          <span key={i} className="demo-shift">
-            <Initial name={name} /> {name}
-          </span>
-        ) : (
-          <span key={i} className="demo-shift open">
-            Take it
-          </span>
-        ),
-      )}
+      {text.slice(0, count)}
+      <i className="caret" />
     </>
   );
 }
 
-const CHAT = 'M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z';
-const POLL = 'M3 13V8M8 13V3M13 13V6';
-
-function AppIcon({ name }: { name: string }) {
-  const d = name === 'Chat' ? CHAT : name === 'Polls' ? POLL : null;
-  return d ? (
-    <svg
-      className="demo-icon"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
+/** Someone in a seat, in the colour of their cursor; it keeps the seat's target, so the cursor stays put */
+function Initial({ who, target }: { who: Who; target: string }) {
+  const person = PEOPLE[who];
+  return (
+    <span
+      data-target={target}
+      className="app-initial"
+      style={{ background: shapeColours[person.colour], color: person.inkLabel ? 'var(--ink)' : '#fff' }}
     >
-      <path d={d} />
-    </svg>
-  ) : (
-    <span className="demo-icon letter">{name[0]}</span>
+      {person.name[0]}
+    </span>
   );
 }
 
-function caption(scene: Scene, phase: Phase): ReactNode {
-  switch (phase) {
-    case 'ask':
-      return (
-        <>
-          <b>{scene.who}</b> asks an AI for a {scene.tool.toLowerCase()}.
-        </>
-      );
-    case 'proposal':
-      return <>It arrives as a proposal. Everyone can see what it would allow.</>;
-    case 'added':
-      return (
-        <>
-          <b>{scene.admin}</b>, an admin, adds it.
-        </>
-      );
-    default:
-      return (
-        <>
-          Everyone in {scene.group} has it now. {phase === 'used' ? scene.use : ''}
-        </>
-      );
-  }
+const SEATED: Readonly<Record<string, Who>> = { Anna: 'anna', Sam: 'sam', Maya: 'maya' };
+
+/** Each person is one of the brand's shapes, with their name beside it, the way a shared canvas shows who is where */
+function Pointer({ who }: { who: Who }) {
+  const person = PEOPLE[who];
+  const fill = shapeColours[person.colour];
+  return (
+    <>
+      <Shape kind={person.kind} colour={person.colour} className="cursor-shape" />
+      <span
+        className="cursor-name"
+        style={{ background: fill, color: person.inkLabel ? 'var(--ink)' : '#fff' }}
+      >
+        {person.name}
+      </span>
+    </>
+  );
 }
 
 export function HeroSpace() {
   const still = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-  const [at, setAt] = useState({ scene: 0, phase: still ? PHASES.length - 1 : 0 });
+  const [at, setAt] = useState({ step: still ? LAST : 0, round: 0 });
+  const canvas = useRef<HTMLDivElement>(null);
+  const cursors = useRef<Partial<Record<Who, HTMLDivElement | null>>>({});
 
   useEffect(() => {
     if (still) return;
     const timer = setTimeout(
       () =>
-        setAt(({ scene, phase }) =>
-          phase + 1 < PHASES.length
-            ? { scene, phase: phase + 1 }
-            : { scene: (scene + 1) % SCENES.length, phase: 0 },
-        ),
-      PHASES[at.phase]?.[1] ?? 2000,
+        setAt(({ step, round }) => (step < LAST ? { step: step + 1, round } : { step: 0, round: round + 1 })),
+      STEPS[at.step]?.ms ?? 1000,
     );
     return () => clearTimeout(timer);
   }, [at, still]);
 
-  const scene = SCENES[at.scene] ?? SCENES[0]!;
-  const phase = PHASES[at.phase]?.[0] ?? 'used';
-  const inSpace = phase === 'open' || phase === 'used';
-  const apps = [
-    'Chat',
-    'Polls',
-    ...scene.has,
-    ...(phase === 'ask' || phase === 'proposal' ? [] : [scene.tool]),
-  ];
+  const step = STEPS[at.step] ?? STEPS[LAST]!;
+
+  // Move each cursor onto what it points at, or home; again whenever the canvas changes size
+  useEffect(() => {
+    const frame = canvas.current;
+    if (!frame) return;
+    const place = () => {
+      const box = frame.getBoundingClientRect();
+      for (const who of WHO) {
+        const el = cursors.current[who];
+        if (!el) continue;
+        const name = step.at[who];
+        const target = name ? frame.querySelector(`[data-target="${name}"]`) : null;
+        const home = box.width < NARROW ? PEOPLE[who].narrowHome : PEOPLE[who].home;
+        let x = box.width * home[0];
+        let y = box.height * home[1];
+        if (target) {
+          const r = target.getBoundingClientRect();
+          x = r.left - box.left + Math.min(r.width * 0.55, r.width - 6);
+          y = r.top - box.top + r.height * 0.55;
+        }
+        el.style.transform = `translate(${x}px, ${y}px)`;
+      }
+    };
+    place();
+    const watch = new ResizeObserver(place);
+    watch.observe(frame);
+    return () => watch.disconnect();
+  }, [step]);
+
+  const full = step.seats.every(Boolean);
+  const sending = Boolean(step.click?.length && step.prompt);
 
   return (
-    <div className="demo" aria-hidden>
-      <div className="demo-side">
-        <div className="demo-group">
-          <b>{scene.group}</b>
-          <span>{scene.people}</span>
-        </div>
-        <div className="demo-apps">
-          {apps.map((name) => (
-            <div
-              key={`${scene.group}-${name}`}
-              className={[
-                'demo-app-link',
-                name === scene.tool ? 'new' : '',
-                name === scene.tool && inSpace ? 'current' : '',
-              ].join(' ')}
-            >
-              <AppIcon name={name} />
-              {name}
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="canvas-wrap" aria-hidden>
+      <div className="canvas" ref={canvas}>
+        <div className="canvas-stack">
+          <div className="ask" data-target="prompt">
+            <span className="ask-text">
+              {step.typing ? (
+                <Typed key={`${at.round}-${at.step}`} text={step.prompt} />
+              ) : (
+                step.prompt || <span className="ask-hint">Ask for anything your group needs</span>
+              )}
+            </span>
+            <span className={sending ? 'ask-send pressed' : 'ask-send'} data-target="send">
+              Ask
+            </span>
+          </div>
 
-      <div className="demo-main">
-        <div
-          className="demo-stage"
-          key={`stage-${at.scene}-${inSpace ? 'app' : phase === 'ask' ? 'ask' : 'proposal'}`}
-        >
-          {phase === 'ask' ? (
-            <div className="demo-assistant">
-              <div className="demo-assistant-head">{scene.who}’s AI assistant</div>
-              <div className="demo-bubble me">{scene.ask}</div>
-              <div className="demo-bubble ai">
-                I’ve proposed <b>{scene.tool}</b> to {scene.group}. Someone who can add apps there will see
-                it.
+          {step.app === 'none' ? null : (
+            <div className="canvas-app" key={`app-${at.round}`}>
+              <div className="app">
+                <div className="app-head">
+                  Carpool · Saturday away
+                  <span>{step.app === 'empty' ? 'No rides yet' : full ? 'Full' : '1 ride'}</span>
+                </div>
+                {step.app === 'ride' ? (
+                  <div className="app-row">
+                    <span>
+                      <b>Joe</b> is driving
+                    </span>
+                    <span className="app-seats">
+                      {step.seats.map((name, i) => {
+                        const who = SEATED[name];
+                        return who ? (
+                          <Initial key={i} who={who} target={`seat-${i}`} />
+                        ) : (
+                          <span key={i} className="app-seat" data-target={`seat-${i}`} />
+                        );
+                      })}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="app-row">
+                    <span>Driving on Saturday?</span>
+                    <span className="app-pill free" data-target="offer">
+                      Offer a ride
+                    </span>
+                  </div>
+                )}
+                {step.waitlist === 'none' ? null : (
+                  <div className="app-row is-new">
+                    <span>
+                      <b>Waitlist</b>
+                      <small>First in line gets a seat that opens</small>
+                    </span>
+                    {step.waitlist === 'joined' ? (
+                      <Initial who="lea" target="join" />
+                    ) : (
+                      <span className="app-pill free" data-target="join">
+                        Join
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          ) : !inSpace ? (
-            <div className="proposal">
-              <div className="proposal-head">
-                <b>{scene.tool}</b>
-                <span className="tag">{phase === 'added' ? 'Added' : 'Proposal'}</span>
-              </div>
-              <div className="by">{scene.who} · via AI</div>
-              <div className="allows">What it allows</div>
-              <ul>
-                {scene.allows.map((rule) => (
-                  <li key={rule}>{rule}</li>
-                ))}
-              </ul>
-              <div className="proposal-actions">
-                <span className={phase === 'added' ? 'mini-btn primary pressed' : 'mini-btn primary'}>
-                  {phase === 'added' ? `Added by ${scene.admin}` : 'Add to space'}
-                </span>
-                <span className="mini-btn">Read the code</span>
-              </div>
-            </div>
-          ) : (
-            <div className="demo-app-frame">
-              <div className="demo-app-title">{scene.tool}</div>
-              {scene.app(phase === 'used')}
             </div>
           )}
         </div>
-        <div className="demo-caption" key={`caption-${at.scene}-${phase}`}>
-          {caption(scene, phase)}
-        </div>
+
+        {WHO.map((who) => (
+          <div
+            key={who}
+            className={step.click?.includes(who) ? 'cursor clicking' : 'cursor'}
+            ref={(el) => {
+              cursors.current[who] = el;
+            }}
+          >
+            <Pointer who={who} />
+          </div>
+        ))}
       </div>
+      <p className="canvas-say" key={step.say}>
+        {step.say}
+      </p>
     </div>
   );
 }
