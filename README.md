@@ -1,4 +1,4 @@
-# @weaveprotocol/core
+# @minca/core
 
 A peer-to-peer data protocol for the browser. You own your identity as a
 written-down code, keep your data in signed records that sync directly between
@@ -6,7 +6,7 @@ devices, and every app is a view onto that data rather than its owner.
 
 > **Building an app?** Short guides — sign-in, collections and rules, automations,
 > queries, blueprints, agents — are in [packages/core/docs](packages/core/docs/README.md),
-> and ship in the package as `node_modules/@weaveprotocol/core/docs/`, so a
+> and ship in the package as `node_modules/@minca/core/docs/`, so a
 > coding agent finds the ones that match the installed version.
 >
 > **Building a client, or an agent that needs the architecture?** The
@@ -65,7 +65,7 @@ import {
   createIndexedDBAdapter,
   createStorageProvider,
   createSpaceManager,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 
 // 1. An account is a 16-byte seed. Show the code once; the user keeps it.
 const seed = generateSeed();
@@ -117,7 +117,7 @@ import {
   createLocalRootSigner,
   indexedDBStores,
   rolePresets,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 
 const manager = createIdentityManager();
 const me = await manager.fromRecoveryCode(code);
@@ -145,7 +145,7 @@ await node.spaces.closeInvite(space.id, invite); // nobody else joins with that 
 | Topic                                                                                                                        | Library (how to call it)                                                                                                                                                                                                                                                             | Protocol (what peers agree on)                                                           |
 | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | The node: records and versions, live messages, holding spaces, actions                                                       | [node](packages/core/docs/node.md), [records and queries](packages/core/docs/records-and-queries.md), [actions](packages/core/docs/actions.md)                                                                                                                                       | [02 Records](spec/02-records.md), [06 Nodes and sessions](spec/06-nodes-and-sessions.md) |
-| Signing in, `<weave-auth>`, React hooks                                                                                      | [building an app](packages/core/docs/building-an-app.md), [sign-in](packages/core/docs/sign-in.md)                                                                                                                                                                                   | [01 Identity](spec/01-identity.md)                                                       |
+| Signing in, `<minca-auth>`, React hooks                                                                                      | [building an app](packages/core/docs/building-an-app.md), [sign-in](packages/core/docs/sign-in.md)                                                                                                                                                                                   | [01 Identity](spec/01-identity.md)                                                       |
 | The account home, app grants, keepers, topic tags, notifications                                                             | [building an app](packages/core/docs/building-an-app.md), [node](packages/core/docs/node.md), [apps/home](apps/home/README.md)                                                                                                                                                       | [06 Nodes and sessions](spec/06-nodes-and-sessions.md), [03 Spaces](spec/03-spaces.md)   |
 | Identity: the seed, recovery code, wraps, passkeys, UCAN, root signers                                                       | [sign-in](packages/core/docs/sign-in.md), [node](packages/core/docs/node.md#root-signers-and-notes)                                                                                                                                                                                  | [01 Identity](spec/01-identity.md)                                                       |
 | Spaces: the constitution, founders, roles and their grants, invites, successors, key changes, profiles, the account registry | [spaces](packages/core/docs/spaces.md)                                                                                                                                                                                                                                               | [03 Spaces](spec/03-spaces.md)                                                           |
@@ -171,8 +171,8 @@ That starts everything, with coloured output per part, and Ctrl-C stops it all:
 | app    | http://localhost:5173 | The example app                                                                                                              |
 | liquid | http://localhost:5190 | Liquid, a standalone app for one job: liquid democracy                                                                       |
 | home   | http://localhost:5174 | The account home it connects to                                                                                              |
-| node   | port 8787             | An always-on node that is also the relay; a throwaway identity on first run (`packages/cli/.env.dev`, data in `.weave-dev/`) |
-| host   | http://localhost:8788 | `weave host`, what "Keep my spaces online" uses and what spaces chip in for; settings in `packages/cli/.env.host.dev`        |
+| node   | port 8787             | An always-on node that is also the relay; a throwaway identity on first run (`packages/cli/.env.dev`, data in `.minca-dev/`) |
+| host   | http://localhost:8788 | `minca host`, what "Keep my spaces online" uses and what spaces chip in for; settings in `packages/cli/.env.host.dev`        |
 | stripe | —                     | Only when you add a Stripe test key: forwards Stripe's webhooks to the host                                                  |
 
 `npm run signal` runs the relay alone. Trying it all out, payments included,
@@ -182,28 +182,28 @@ is in [apps/example](apps/example/README.md).
 
 One npm workspace, installed once at the root (`npm install`):
 
-| Folder           | Package                           |                                                                             |
-| ---------------- | --------------------------------- | --------------------------------------------------------------------------- |
-| `packages/core`  | `@weaveprotocol/core` (published) | The protocol library, and its tests                                         |
-| `packages/cli`   | `@weaveprotocol/cli` (published)  | `weave`: the always-on node, hosting, agents, MCP                           |
-| `packages/relay` | `@weaveprotocol/relay` (private)  | The signaling relay and its mailbox, run alone on Fly and inside every node |
-| `apps/home`      | —                                 | The account home                                                            |
-| `apps/example`   | —                                 | The website and the example app                                             |
-| `apps/liquid`    | —                                 | Liquid, a standalone example app: liquid democracy                          |
-| `apps/extension` | —                                 | The Chrome extension                                                        |
-| `apps/shared`    | `@weave/app-shared` (private)     | Styles, relay settings and components the home and the website share        |
-| `spec`           | —                                 | The protocol specification                                                  |
+| Folder           | Package                       |                                                                             |
+| ---------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| `packages/core`  | `@minca/core` (published)     | The protocol library, and its tests                                         |
+| `packages/cli`   | `@minca/cli` (published)      | `minca`: the always-on node, hosting, agents, MCP                           |
+| `packages/relay` | `@minca/relay` (private)      | The signaling relay and its mailbox, run alone on Fly and inside every node |
+| `apps/home`      | —                             | The account home                                                            |
+| `apps/example`   | —                             | The website and the example app                                             |
+| `apps/liquid`    | —                             | Liquid, a standalone example app: liquid democracy                          |
+| `apps/extension` | —                             | The Chrome extension                                                        |
+| `apps/shared`    | `@minca/app-shared` (private) | Styles, relay settings and components the home and the website share        |
+| `spec`           | —                             | The protocol specification                                                  |
 
-Everything imports the protocol by name, `@weaveprotocol/core`, and only
-through what it exports. Inside the workspace, the `@weaveprotocol/source`
+Everything imports the protocol by name, `@minca/core`, and only
+through what it exports. Inside the workspace, the `@minca/source`
 export condition resolves those imports to `packages/core/src`, so the apps,
 the CLI and the tests run on the source with no build step; published copies
 use `dist`. The CLI bundles the protocol and the relay into one file, so
-`npx @weaveprotocol/cli` and the single-file binaries need nothing else.
+`npx @minca/cli` and the single-file binaries need nothing else.
 
 ## Releasing
 
-`@weaveprotocol/core` (`packages/core/`) and `@weaveprotocol/cli`
+`@minca/core` (`packages/core/`) and `@minca/cli`
 (`packages/cli/`) are released together, always with the same version:
 
 ```bash

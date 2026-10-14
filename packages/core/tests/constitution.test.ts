@@ -52,7 +52,7 @@ import { until } from './helpers/until.js';
 import { stored } from './helpers/stored.js';
 import type { Space, SpaceRole, Version } from '../src/types.js';
 
-const CREATOR = 'did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg';
+const CREATOR = 'did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd';
 const EDITOR: SpaceRole = {
   name: 'editor',
   title: 'Editor',
@@ -64,7 +64,7 @@ const EDITOR: SpaceRole = {
 };
 
 const CHESS: Constitution = {
-  weave: CONSTITUTION,
+  minca: CONSTITUTION,
   name: 'Chess club',
   visibility: 'public',
   resolver: 'strong-remove/1',
@@ -78,9 +78,9 @@ describe('the constitution examples (03 §1.2)', () => {
   test('public, with one founder', async () => {
     assert.equal(
       canonicalize(constitutionOf(CHESS)),
-      '{"createdAt":"2026-01-01T00:00:00.000Z","name":"Chess club","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"top":{"founders":["did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg"]},"visibility":"public","weave":"constitution/1"}',
+      '{"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Chess club","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/record","pol":[]},{"cmd":"/collection/define","pol":[]},{"cmd":"/role/assign","pol":[["==",".role","editor"]]}],"name":"editor","title":"Editor"}],"top":{"founders":["did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd"]},"visibility":"public"}',
     );
-    assert.equal(await spaceIdOf(CHESS), 'bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra');
+    assert.equal(await spaceIdOf(CHESS), 'blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq');
     assert.equal(constitutionProblem(CHESS), null);
   });
 
@@ -91,28 +91,28 @@ describe('the constitution examples (03 §1.2)', () => {
     );
     const readKey = (await deriveReadKey(key, createP256Provider())).did;
     const constitution: Constitution = { ...CHESS, visibility: 'private', readKey, encryptionKeyId: key.id };
-    assert.equal(key.id, 'aLhvw5pkV65_lcQHEcUOug');
-    assert.equal(await spaceIdOf(constitution), 'bsm42rv73g4colmj3ozemoklaew2hpmoemcuxqhifc7733hyxftvq');
+    assert.equal(key.id, 'bgk-m-Kq-gEGgJCOOEYNYw');
+    assert.equal(await spaceIdOf(constitution), 'bvvz7u7w4jvlzzbkkaqs4em7ahvxmhnsrjqnupq475wlslsl7uqfa');
   });
 
   test('no one at the top, a steward assigned, succeeding the chess club', async () => {
     const coopSpace: Constitution = {
-      weave: CONSTITUTION,
+      minca: CONSTITUTION,
       name: 'Bike co-op',
       visibility: 'public',
       resolver: 'strong-remove/1',
       top: 'none',
       roles: [{ name: 'steward', grants: [{ cmd: '/', pol: [] }] }],
       assigned: { [CREATOR]: ['steward'] },
-      succeeds: 'bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra',
+      succeeds: 'blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq',
       createdAt: '2026-01-01T00:00:00.000Z',
       nonce: 'AAECAwQFBgcICQoL',
     };
     assert.equal(
       canonicalize(constitutionOf(coopSpace)),
-      '{"assigned":{"did:key:zDnaeZLoH5izvFBqsJ62j3zJ2DYJWASAB7QFmkYR6aeAzhCLg":["steward"]},"createdAt":"2026-01-01T00:00:00.000Z","name":"Bike co-op","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/","pol":[]}],"name":"steward"}],"succeeds":"bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra","top":"none","visibility":"public","weave":"constitution/1"}',
+      '{"assigned":{"did:key:zDnaed8DYZ8Hx21hjLc7fE9TXMkDUV65S3ys8HtLrnPC1piwd":["steward"]},"createdAt":"2026-01-01T00:00:00.000Z","minca":"constitution/1","name":"Bike co-op","nonce":"AAECAwQFBgcICQoL","resolver":"strong-remove/1","roles":[{"grants":[{"cmd":"/","pol":[]}],"name":"steward"}],"succeeds":"blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq","top":"none","visibility":"public"}',
     );
-    assert.equal(await spaceIdOf(coopSpace), 'bfr56qir3ofkfn6rawax6zkp7uqvwigxqoybta7mrey7u45red3ra');
+    assert.equal(await spaceIdOf(coopSpace), 'brsvdnrzmurfdbm6inw6sv6shuw7lheubbibawsqljsckuxrrsena');
   });
 });
 
@@ -165,8 +165,8 @@ describe('what a constitution may say', () => {
     assert.match(String(problem({ nonce: 'n' })), /16 base64url/);
     assert.match(String(problem({ nonce: 'AAECAwQFBgcICQo=' })), /16 base64url/);
     const key = {
-      readKey: 'did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf',
-      encryptionKeyId: 'aLhvw5pkV65_lcQHEcUOug',
+      readKey: 'did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt',
+      encryptionKeyId: 'bgk-m-Kq-gEGgJCOOEYNYw',
     };
     assert.equal(problem({ visibility: 'private', ...key }), null);
     for (const bad of [
@@ -226,7 +226,7 @@ describe('a constitution a peer does not know is not judged (03 §1.2)', () => {
   });
 
   test('an unknown format or field is refused the same way', async () => {
-    const later = { ...CHESS, weave: 'constitution/2' };
+    const later = { ...CHESS, minca: 'constitution/2' };
     assert.match(String(await checkSpace({ id: await spaceIdOf(CHESS), ...later })), /not a constitution\/1/);
     const clauses = { ...CHESS, clauses: {} };
     assert.match(String(await checkSpace({ id: 'x', ...clauses })), /field this peer doesn.t know, clauses/);
@@ -245,12 +245,12 @@ describe('a constitution a peer does not know is not judged (03 §1.2)', () => {
 
 describe('access record keys (03 §3.1)', () => {
   test('an assignment names the account and the role; a removal, a stepping down, the account', async () => {
-    assert.equal(await assignKey(CREATOR, 'editor'), 'assign:0ce7d5918bd19e9cbf36c04809fd02ff2b61e3af');
-    assert.equal(await removalKey(CREATOR), 'remove:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab');
-    assert.equal(await stepDownKey(CREATOR), 'stepdown:4ac5085b5ad9c944bd682566b17bbfd1da9c5dab');
+    assert.equal(await assignKey(CREATOR, 'editor'), 'assign:ccb96616c9f3e392394ad3a7332f2d061a9bedd3');
+    assert.equal(await removalKey(CREATOR), 'remove:6f84748d0060d75ec4767c101275af7b2e7c4ab1');
+    assert.equal(await stepDownKey(CREATOR), 'stepdown:6f84748d0060d75ec4767c101275af7b2e7c4ab1');
     assert.equal(
-      await succeedKey('bnh2nnn6pz44e565k6nqd757fduqngajepmca3cgys357agshsgra'),
-      'succeed:1f15c8f3f09a977a46d6db200f2bd93a33a724f3',
+      await succeedKey('blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq'),
+      'succeed:e97c86b71857105804aba53feb034af8c419f9bb',
     );
   });
 });

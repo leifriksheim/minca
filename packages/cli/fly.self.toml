@@ -1,20 +1,20 @@
-# Your own host on Fly: `weave host` for you (and your family), and nobody else.
+# Your own host on Fly: `minca host` for you (and your family), and nobody else.
 # It keeps your spaces online and restores them to a new device, and can't read
 # them, like any host. It holds no recovery code and no account key.
 #
 # Your account's DID is in the account home, under Settings, with a Copy button.
 # Change `app` to a name of your own, then, from the repository root:
 #
-#   fly launch --no-deploy --copy-config --config packages/cli/fly.self.toml --name my-weave
+#   fly launch --no-deploy --copy-config --config packages/cli/fly.self.toml --name my-minca
 #   fly volumes create host_data --size 1 --region ams --config packages/cli/fly.self.toml
-#   fly secrets set --config packages/cli/fly.self.toml WEAVE_HOST_ALLOW=did:key:zDnae…
+#   fly secrets set --config packages/cli/fly.self.toml MINCA_HOST_ALLOW=did:key:zDnae…
 #   fly deploy . --config packages/cli/fly.self.toml
 #
 # Then in the account home: Settings, Keep my spaces online, Use another host,
-# and paste https://my-weave.fly.dev. Every device of yours reaches it from then on.
-# WEAVE_HOST_ALLOW takes several DIDs, comma separated.
+# and paste https://my-minca.fly.dev. Every device of yours reaches it from then on.
+# MINCA_HOST_ALLOW takes several DIDs, comma separated.
 
-app = "my-weave"
+app = "my-minca"
 primary_region = "ams"
 kill_timeout = 30
 
@@ -22,9 +22,9 @@ kill_timeout = 30
   dockerfile = "Dockerfile"
 
 [env]
-  WEAVE_HOST_NAME = "My Weave host"
-  # Nothing to pay: every subscription of the accounts in WEAVE_HOST_ALLOW counts as paid.
-  WEAVE_HOST_FREE = "1"
+  MINCA_HOST_NAME = "My Minca host"
+  # Nothing to pay: every subscription of the accounts in MINCA_HOST_ALLOW counts as paid.
+  MINCA_HOST_FREE = "1"
 
 # The host's key and what it carries. Lose it and your devices hand everything over again.
 [mounts]

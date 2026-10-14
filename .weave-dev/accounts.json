@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "accounts": [
+    {
+      "id": "iphgxlo5s0",
+      "name": "Node",
+      "did": "did:key:zDnaeTU8NWRP2LmGyjWEVCgyyV74gGzpaL1bqqLBkg6x7RTWx",
+      "createdAt": "2026-10-13T16:22:32.829Z",
+      "dataPath": "accounts/iphgxlo5s0/stores"
+    }
+  ]
+}

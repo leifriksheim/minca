@@ -44,7 +44,7 @@ only people ranked below you, and never set a rank above your own.
 
 **For:** generic, and familiar from Discord and Matrix. **Against:** numbers
 invite ties and arbitrary orderings, which cost Matrix years of bugs and, in
-2025, a retreat to creators with "infinite" power. It is what Weave has
+2025, a retreat to creators with "infinite" power. It is what Minca has
 today, with ranks.
 
 ## 3. An authority graph (Keyhive's "Keyline" design)
@@ -84,7 +84,7 @@ that acts with enough signatures.
 - **Co-op.** The root is the Board group, 3 of 5. It grants everything else,
   and can take any of it back, founders' included. Works.
 
-**For:** close to what Weave already does for devices and apps (notes), so one
+**For:** close to what Minca already does for devices and apps (notes), so one
 model for both; easier to explain than a graph ("you can take back what came
 through you"); no numbers. **Against:** "who granted what" must be tracked
 and replayed; removing someone with two grants from different branches takes
@@ -105,6 +105,6 @@ both; a group root still needs fixed seats, as in 3.
 
 1 is simplest but fixes roles. 2 is today, and its numbers are its weakness.
 3 is the most general and the least proven. 4 may be the sweet spot: generic,
-explainable, and built on grants Weave already has. Worth a closer look:
+explainable, and built on grants Minca already has. Worth a closer look:
 whether 4's "take back what came through you" settles the concurrent cases as
 cleanly as 3, and how much of today's replay it can reuse.

@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { useAction } from '@weave/app-shared/action';
-import type { NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useNode } from '@weaveprotocol/core/react';
-import { has, type WeaveApp } from './index';
+import { useAction } from '@minca/app-shared/action';
+import type { NodeCollection, SpaceSummary } from '@minca/core';
+import { useNode } from '@minca/core/react';
+import { has, type MincaApp } from './index';
 import type { AppEntry, useSpaceApps } from './entries';
 import { AppIcon, Count } from './AppIcon';
 import { Proposals } from './MadeApps';
 import { addBuiltIn, moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
-import { styles, palette } from '../../styles';
+import { styles, palette, variants } from '../../styles';
 
 /**
  * A space's apps like a phone's home screen: those added, then proposals and
@@ -34,12 +34,12 @@ export function AppsView({
   onCreate: () => void;
 }) {
   const node = useNode();
-  const [adding, setAdding] = useState<WeaveApp | null>(null);
+  const [adding, setAdding] = useState<MincaApp | null>(null);
   const [arranging, setArranging] = useState(false);
   const { run, busy, error } = useAction();
   const arrange = useAction();
 
-  const add = (app: WeaveApp) => {
+  const add = (app: MincaApp) => {
     setAdding(app);
     void run(async () => {
       await addBuiltIn(node, space.id, app, apps.placed);
@@ -75,7 +75,7 @@ export function AppsView({
                 onClick={() => setArranging((was) => !was)}
                 aria-pressed={arranging}
                 data-variant={arranging ? 'primary' : 'quiet'}
-                style={{ ...styles.button, ...inlineButton }}
+                style={{ ...(arranging ? styles.button : variants.quiet), ...inlineButton }}
               >
                 {arranging ? 'Done' : 'Arrange'}
               </button>
@@ -166,7 +166,7 @@ export function AppsView({
             {apps.addable.map((app) => (
               <div key={app.id} style={addRow}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <AppIcon icon={app.icon} hue={app.hue} size={40} />
+                  <AppIcon id={app.id} size={40} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <strong style={cardTitle}>{app.title}</strong>
                     <p style={cardText}>{app.description}</p>
@@ -200,8 +200,9 @@ export function AppsView({
         </section>
       )}
 
-      {/* On a phone the button in the heading gives way to one under the thumb. */}
-      {space.writable && (
+      {/* On a phone the button in the heading gives way to one under the thumb, once
+          there are apps; before that the tile in the grid is the way. */}
+      {space.writable && apps.ready.length > 0 && (
         <button onClick={onCreate} data-variant="primary" className="fab">
           <Icon name="sparkle" size={16} /> Create an app
         </button>
@@ -221,7 +222,7 @@ function AppCard({ app, unread, onClick }: { app: AppEntry; unread: Unread; onCl
       style={card}
     >
       <span style={{ position: 'relative', display: 'inline-flex' }}>
-        <AppIcon icon={app.icon} hue={app.hue} size={44} className="app-card-icon" />
+        <AppIcon id={app.id} size={44} className="app-card-icon" />
         <span className="app-card-count">
           <Count unread={unread} />
         </span>
@@ -256,7 +257,7 @@ function ArrangeCard({
 }) {
   return (
     <div className="app-card" data-arranging style={{ ...card, alignItems: 'center' }}>
-      <AppIcon icon={app.icon} hue={app.hue} size={44} className="app-card-icon" />
+      <AppIcon id={app.id} size={44} className="app-card-icon" />
       <strong style={{ ...cardTitle, flex: 1, minWidth: 0 }}>{app.title}</strong>
       <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         <button
@@ -293,7 +294,7 @@ function ArrangeCard({
 }
 
 /** What an app reads and writes, and whether this space has each yet */
-function SchemaList({ app, collections }: { app: WeaveApp; collections: ReadonlyArray<NodeCollection> }) {
+function SchemaList({ app, collections }: { app: MincaApp; collections: ReadonlyArray<NodeCollection> }) {
   const rows = [
     ...app.needs.map((s) => ({ s, optional: false })),
     ...(app.uses ?? []).map((s) => ({ s, optional: true })),
@@ -343,7 +344,7 @@ const iconBox = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
 } as const;
 
 const card = {
@@ -352,7 +353,7 @@ const card = {
   gap: 12,
   padding: 14,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
   font: 'inherit',
   color: 'inherit',
@@ -369,7 +370,7 @@ const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
 const addRow = {
   padding: 12,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
 } as const;
 const inlineButton = {

@@ -1,9 +1,9 @@
 /**
  * A host under load: what it costs to carry many spaces, to price hosting by.
  *
- *   node --conditions=@weaveprotocol/source --import tsx tests/bench/host-load.ts [spaces] [accounts] [records]
+ *   node --conditions=@minca/source --import tsx tests/bench/host-load.ts [spaces] [accounts] [records]
  *
- * Defaults: 1,000 spaces over 20 accounts, 20 records each. `weave host
+ * Defaults: 1,000 spaces over 20 accounts, 20 records each. `minca host
  * --free` runs in a child process on a data folder of its own, so its memory
  * is measured apart from the accounts' nodes, which run here and reach it at
  * the socket its description names. Reports, for the host process: how long
@@ -46,8 +46,8 @@ async function waitFor(what: string, ok: () => Promise<boolean>, ms = 600_000): 
 function startHostProcess(data: string): ChildProcess {
   const child = spawn(
     process.execPath,
-    ['--conditions=@weaveprotocol/source', '--import', 'tsx', cli, 'host', '--free', '--port', String(PORT)],
-    { env: { ...process.env, WEAVE_HOST_DATA: data }, stdio: ['ignore', 'ignore', 'inherit'] },
+    ['--conditions=@minca/source', '--import', 'tsx', cli, 'host', '--free', '--port', String(PORT)],
+    { env: { ...process.env, MINCA_HOST_DATA: data }, stdio: ['ignore', 'ignore', 'inherit'] },
   );
   return child;
 }
@@ -81,7 +81,7 @@ async function account(): Promise<P2PNode> {
   });
 }
 
-const data = await mkdtemp(path.join(os.tmpdir(), 'weave-host-load-'));
+const data = await mkdtemp(path.join(os.tmpdir(), 'minca-host-load-'));
 let host = startHostProcess(data);
 const nodes: P2PNode[] = [];
 try {

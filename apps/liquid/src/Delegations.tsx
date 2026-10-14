@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { useNode } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
+import { useNode } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
 import type { Assembly, MyDelegation, TopicView } from './model';
 import { EVERYTHING, delegation } from './schema';
 import { follow, type DelegationEdge, type Next } from './tally';
 import { PartyChip, PartyMark, PathView, Problem, TopicChip, Who, decidesText } from './ui';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
+import { styles } from '@minca/app-shared/styles';
 import { palette } from './styles';
 
 /** Where someone's vote would go on a topic if nobody voted: the chain of trust alone */
@@ -46,7 +47,7 @@ export function Delegations({ a, writable }: { a: Assembly; writable: boolean })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
       <section className="lq-rise" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.04em', color: palette.ink.strong }}>
+        <h2 className="lq-display" style={{ fontSize: 26 }}>
           Who votes when you don’t
         </h2>
         <p className="lq-muted" style={{ fontSize: 14.5, lineHeight: 1.55, maxWidth: 600 }}>
@@ -111,7 +112,7 @@ function TrustRow({
         ) : (
           <span
             className="lq-chip"
-            style={{ fontWeight: 600, borderColor: palette.ink.strong, color: palette.ink.strong }}
+            style={{ fontWeight: 600, borderColor: palette.surface.rule, color: palette.ink.strong }}
           >
             Everything
           </span>
@@ -303,27 +304,14 @@ function Picker({
 
   return (
     <Modal title={`Who do you trust with ${label}?`} onClose={onClose} width={480}>
-      <div
-        role="tablist"
-        style={{ display: 'flex', padding: 3, gap: 3, background: palette.surface.sunken, borderRadius: 8 }}
-      >
+      <div role="tablist" style={styles.segmented}>
         {(['person', 'party'] as const).map((k) => (
           <button
             key={k}
             role="tab"
             aria-selected={kind === k}
             onClick={() => setKind(k)}
-            style={{
-              flex: 1,
-              padding: '7px 10px',
-              borderRadius: 6,
-              border: 'none',
-              fontSize: 13,
-              fontWeight: kind === k ? 600 : 500,
-              background: kind === k ? palette.surface.card : 'none',
-              color: kind === k ? palette.ink.strong : palette.ink.muted,
-              boxShadow: kind === k ? '0 1px 2px rgba(15,17,21,.08)' : 'none',
-            }}
+            style={kind === k ? styles.segmentActive : styles.segment}
           >
             {k === 'person' ? `A person (${a.members.length - 1})` : `A party (${a.parties.length})`}
           </button>

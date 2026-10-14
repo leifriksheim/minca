@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  matches,
-  type Filter,
-  type NodeCollection,
-  type NodeRecord,
-  type SpaceSummary,
-} from '@weaveprotocol/core';
-import { useAccount, useNode } from '@weaveprotocol/core/react';
-import { ME } from '@weaveprotocol/core/schemas';
-import { Modal } from '@weave/app-shared/Modal';
+import { matches, type Filter, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
+import { useAccount, useNode } from '@minca/core/react';
+import { ME } from '@minca/core/schemas';
+import { Modal } from '@minca/app-shared/Modal';
 import { clauseFields, clausesWords, whereOf, type Clause } from '../../derive/conditions';
 import { collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { nameOf } from '../../derive/people';

@@ -133,7 +133,7 @@ describe('reminders by email', () => {
     assert.equal(mailerFromEnv({}), null);
     let sent: { url: string; body: unknown; auth: string | null } | null = null;
     const mailer = mailerFromEnv(
-      { WEAVE_MAIL_API_KEY: 're_test', WEAVE_MAIL_FROM: 'Host <host@example.com>' },
+      { MINCA_MAIL_API_KEY: 're_test', MINCA_MAIL_FROM: 'Host <host@example.com>' },
       async (input, init) => {
         sent = {
           url: urlOf(input),

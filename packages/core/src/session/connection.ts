@@ -1,11 +1,11 @@
 /**
  * @module session/connection
  * An app's side of an account home, as one object any UI can draw — the twin
- * of `createWeaveAuth`, for apps that never sign anyone in themselves.
+ * of `createMincaAuth`, for apps that never sign anyone in themselves.
  *
  * ```ts
- * const connection = createWeaveConnection({
- *   home: 'https://weave-home.example/connect',   // a default; people can bring their own
+ * const connection = createMincaConnection({
+ *   home: 'https://minca-home.example/connect',   // a default; people can bring their own
  *   request: { name: 'Todo', access: 'write', scope: 'account' },
  *   network: { relays },
  * });
@@ -18,7 +18,7 @@
  * the home disconnects the app, it forgets the grant and says so.
  *
  * The home is the person's, not the app's: `home` is only a default.
- * `connect('weave.example.com')` uses theirs, and it is remembered — for
+ * `connect('minca.example.com')` uses theirs, and it is remembered — for
  * reconnecting, and for linking to their account settings.
  */
 import type { NodeNetworkConfig, P2PNode } from '../node/types.js';
@@ -36,10 +36,10 @@ import {
   type Proposed,
 } from './connect.js';
 import type { AutomationProposal } from '../space/own-automations.js';
-import type { WorkerLike } from '../node/worker.js';
+import { WORKER_NOT_STARTED, type WorkerLike } from '../node/worker.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 
-export interface WeaveConnectionConfig {
+export interface MincaConnectionConfig {
   /** The account home to suggest — the person can use their own instead */
   readonly home: string;
   /** What to ask for */
@@ -52,7 +52,7 @@ export interface WeaveConnectionConfig {
   readonly stores?: (grant: Grant) => StoreFactory;
   /**
    * Runs the node in a worker, off the page's main thread
-   * (`@weaveprotocol/core/node-worker`). Called each time the node starts;
+   * (`@minca/core/node-worker`). Called each time the node starts;
    * the worker ends when it closes. Not with `stores`.
    */
   readonly worker?: () => WorkerLike;
@@ -67,7 +67,7 @@ export interface WeaveConnectionConfig {
  */
 export type ConnectionStatus = 'starting' | 'disconnected' | 'connecting' | 'ready' | 'expired';
 
-export interface WeaveConnectionState {
+export interface MincaConnectionState {
   readonly status: ConnectionStatus;
   /** The home this app connects to: the person's own, once they chose one, else the default */
   readonly home: string;
@@ -76,14 +76,14 @@ export interface WeaveConnectionState {
   readonly error: string | null;
 }
 
-export interface WeaveConnection {
-  getState(): WeaveConnectionState;
-  subscribe(listener: (state: WeaveConnectionState) => void): () => void;
+export interface MincaConnection {
+  getState(): MincaConnectionState;
+  subscribe(listener: (state: MincaConnectionState) => void): () => void;
   /** Picks up a grant from an earlier visit. Safe to call more than once. */
   start(): Promise<void>;
   /**
    * Opens the home and asks. Call it from a click.
-   * @param home The person's own home — `weave.example.com` is enough. Default: the one in `state.home`.
+   * @param home The person's own home — `minca.example.com` is enough. Default: the one in `state.home`.
    */
   connect(home?: string): Promise<void>;
   /** Forgets the grant and this app's key, and stops the node. The account is untouched. */
@@ -96,22 +96,22 @@ export interface WeaveConnection {
   propose(automations: ReadonlyArray<AutomationProposal>): Promise<Proposed>;
 }
 
-export function createWeaveConnection(config: WeaveConnectionConfig): WeaveConnection {
+export function createMincaConnection(config: MincaConnectionConfig): MincaConnection {
   const storage = defaultStorage(config.storage);
   const grants = grantStore(storage);
   const kept = guardedStorage(storage);
-  const HOME = 'weave.home';
+  const HOME = 'minca.home';
   const rememberedHome = kept.get(HOME);
 
-  let state: WeaveConnectionState = Object.freeze({
+  let state: MincaConnectionState = Object.freeze({
     status: 'starting',
     home: rememberedHome ?? homeAddress(config.home),
     grant: null,
     node: null,
     error: null,
   });
-  const listeners = new Set<(state: WeaveConnectionState) => void>();
-  const update = (patch: Partial<WeaveConnectionState>) => {
+  const listeners = new Set<(state: MincaConnectionState) => void>();
+  const update = (patch: Partial<MincaConnectionState>) => {
     state = Object.freeze({ ...state, ...patch });
     for (const listener of listeners) listener(state);
   };
@@ -135,13 +135,23 @@ export function createWeaveConnection(config: WeaveConnectionConfig): WeaveConne
   async function open(grant: Grant): Promise<void> {
     unwatch?.();
     await state.node?.close();
-    const node = await startConnectedNode({
-      grant,
-      key: await appKey(),
-      ...(config.network ? { network: config.network } : {}),
-      ...(config.stores ? { stores: config.stores(grant) } : {}),
-      ...(config.worker ? { worker: config.worker } : {}),
-    });
+    const key = await appKey();
+    const start = (worker?: () => WorkerLike) =>
+      startConnectedNode({
+        grant,
+        key,
+        ...(config.network ? { network: config.network } : {}),
+        ...(config.stores ? { stores: config.stores(grant) } : {}),
+        ...(worker ? { worker } : {}),
+      });
+    // A browser whose worker never starts still gets a node, in the page. A
+    // worker that started and refused says why instead.
+    const node = config.worker
+      ? await start(config.worker).catch((error: unknown) => {
+          if (error instanceof Error && error.name === WORKER_NOT_STARTED) return start();
+          throw error;
+        })
+      : await start();
     update({ status: 'ready', home: grant.home, grant, node, error: null });
 
     // The home disconnected this app: nothing it writes counts any more, so stop.
@@ -156,7 +166,7 @@ export function createWeaveConnection(config: WeaveConnectionConfig): WeaveConne
     expiry = globalThis.setTimeout(() => update({ status: 'expired' }), Math.min(left, 2 ** 31 - 1));
   }
 
-  const connection: WeaveConnection = {
+  const connection: MincaConnection = {
     getState: () => state,
 
     subscribe(listener) {

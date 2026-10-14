@@ -1,16 +1,19 @@
 /**
  * Looks to ask an agent for when it makes an app. Every one keeps what makes
- * a screen at home in Weave (hairlines, whitespace, restraint, light and
- * dark), and then leans a way of its own. The words go into the prompt
+ * a screen at home in Minca (warm paper, navy ink, hairlines, whitespace,
+ * restraint), and then leans a way of its own. The words go into the prompt
  * `CreateApp` copies; a screen can load no fonts or images (`SCREEN_GUIDE`),
  * so everything here is CSS the agent can write inline.
  */
 
-/** What every look shares, so a new app sits well beside Weave's own */
+import { accent, display, ink, surface } from '@minca/app-shared/tokens';
+
+/** What every look shares, so a new app sits well beside Minca's own */
 const BASE =
-  'Make its screen look at home in the Weave app it opens in: a white page (near-black in dark mode, with prefers-color-scheme), ' +
-  'near-black text, one grey for anything secondary, 1px hairline borders (#eaeaea, or #2a2a2a in dark) instead of heavy shadows, ' +
-  'the system font stack (-apple-system, "Segoe UI", system-ui, sans-serif), 14px body text, spacing on a 4px grid, and plenty of room. ' +
+  `Make its screen look at home in the Minca app it opens in: a warm paper page (${surface.page}, never white), ` +
+  `navy text (${ink.strong} for headings, ${ink.body} for body, ${ink.muted} for anything secondary), ` +
+  `1px hairline borders (${surface.line}) instead of shadows, and nothing blurred: no soft drop shadows or gradients. ` +
+  'Use the system font stack (-apple-system, "Segoe UI", system-ui, sans-serif), 14px body text, spacing on a 4px grid, and plenty of room. ' +
   'Buttons and inputs are real elements, at least 36px tall, with a visible focus ring. Only one accent colour, used for the main action and what is selected.';
 
 export interface Design {
@@ -33,9 +36,14 @@ export const DESIGNS: ReadonlyArray<Design> = [
   {
     id: 'neutral',
     label: 'Neutral',
-    blurb: 'Like Weave itself',
-    swatch: { accent: '#000000', radius: 6, font: 'inherit', weight: 600 },
-    ask: 'Keep it neutral, like Weave itself: black is the accent, corners are 6–8px, and there is no decoration at all.',
+    blurb: 'Like Minca itself',
+    swatch: { accent: accent.base, radius: 0, font: display, weight: 700 },
+    ask:
+      `Keep it like Minca itself: cobalt (${accent.base}) is the accent, for the main action and what is selected, and turns navy (${accent.hover}) on hover. ` +
+      `Cards and panels have square corners, sit on the page in ${surface.card} and are separated by hairlines; ` +
+      'buttons, chips and toggles are pills (border-radius: 999px). ' +
+      `Headings are bold (700) with tight letter spacing (-0.04em) in "Bricolage Grotesque", falling back to the system sans, in ${ink.strong}. ` +
+      'No decoration beyond that.',
   },
   {
     id: 'friendly',

@@ -134,11 +134,11 @@ from the account to a key of its own, signed at the person's **account home**.
 ```
  app page                                   account home (popup)
     │  opens the home in a popup                  │
-    │ ◀──────────── { type: 'weave:hello' } ──────│  posted to '*'
-    │── { type: 'weave:request', request } ─────▶ │  to the home's origin
+    │ ◀──────────── { type: 'minca:hello' } ──────│  posted to '*'
+    │── { type: 'minca:request', request } ─────▶ │  to the home's origin
     │                                             │  person unlocks, approves
-    │ ◀──── { type: 'weave:grant', grant } ───────│  to the app's origin only
-    │    or { type: 'weave:denied', reason }      │  then closes
+    │ ◀──── { type: 'minca:grant', grant } ───────│  to the app's origin only
+    │    or { type: 'minca:denied', reason }      │  then closes
 ```
 
 ### 2.1 The app's key
@@ -158,13 +158,13 @@ every tab shares, and read from the storage they share.
 > with its own one-link note signed by the account through the home: the
 > app's key can't pass its note on ([01](01-identity.md) §7.5). See
 > [04](04-network.md) §1.2 and
-> [#55](https://github.com/leifriksheim/weave/issues/55).
+> [#55](https://github.com/leifriksheim/minca/issues/55).
 
 ### 2.2 The home's address
 
 A home is found by its bare domain: an app given only an origin opens
 `<origin>/connect`, so a home serves its connect page there. Example:
-`weave.example.com` → `https://weave.example.com/connect`. How the reference
+`minca.example.com` → `https://minca.example.com/connect`. How the reference
 client reads what a person typed is in
 [the app-side client](../packages/core/docs/node.md#the-app-side-client).
 
@@ -173,35 +173,43 @@ client reads what a person typed is in
 The app:
 
 1. MUST open the home in a popup from a user gesture, before awaiting anything.
-2. Listens for `message` events and MUST ignore any whose `source` is not the
-   popup it opened or whose `origin` is not the home's origin.
-3. On `{ type: "weave:hello" }`, posts `{ type: "weave:request", request }` to
-   the popup with `targetOrigin` = the home's origin.
-4. On `{ type: "weave:grant", grant }`, checks the grant (§2.6) and resolves
+2. Listens for `message` events from the moment the popup opens, and MUST
+   ignore any whose `source` is not the popup it opened or whose `origin` is
+   not the home's origin.
+3. Posts `{ type: "minca:request", request }` to the popup with
+   `targetOrigin` = the home's origin on each `{ type: "minca:hello" }` once
+   the request is ready, and MAY post it again at intervals until the home
+   answers: a phone may not run the app's tab while the home is in front, so
+   the hello can go unheard. It MUST NOT post it with any other
+   `targetOrigin`.
+4. On `{ type: "minca:grant", grant }`, checks the grant (§2.6) and resolves
    (for a proposal, §2.11, `grant` is the `Proposed` answer instead). On
-   `{ type: "weave:denied", reason? }`, fails with `reason`.
+   `{ type: "minca:denied", reason? }`, fails with `reason`.
 5. Fails if the popup is closed first, or after a timeout.
 
 The home:
 
 1. Does nothing unless `window.opener` is set.
-2. Posts `{ type: "weave:hello" }` to the opener with `targetOrigin` `*`. The
-   hello carries nothing secret.
+2. Posts `{ type: "minca:hello" }` to the opener once, with `targetOrigin`
+   `*`. The hello carries nothing secret. Whatever page is in the opener's
+   tab while the home waits can send a request without one; the defence is
+   step 3, the home showing that page's origin.
 3. Takes the first `message` whose `source` is the opener and whose `type` is
-   `weave:request`. The **origin of that event**, as the browser reports it, is
+   `minca:request`. The **origin of that event**, as the browser reports it, is
    the app's identity; the home MUST NOT trust any name the request gives
    instead, and MUST show the origin to the person.
-4. If the request is malformed (§2.4), answers `weave:denied` with a reason
+4. If the request is malformed (§2.4), answers `minca:denied` with a reason
    saying it did not understand, to that origin, and closes.
-5. Otherwise waits for the person, then posts exactly one of `weave:grant` or
-   `weave:denied` to that origin only, and closes itself.
-6. Gives up silently if no request arrives within the timeout.
+5. Otherwise waits for the person, then posts exactly one of `minca:grant` or
+   `minca:denied` to that origin only, and closes itself.
+6. Gives up silently if no request arrives within the timeout, or once the
+   opener is closed.
 
 The reference timings (popup size, polling, timeouts) are in
 [the app-side client](../packages/core/docs/node.md#the-app-side-client) and
 [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
-_Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `receiveConnectRequest`, `homeAddress`). Tests: `packages/core/tests/connect.test.ts` ("the home receiving a request", "an account home typed by a person")._
+_Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `receiveConnectRequest`, `homeAddress`). Tests: `packages/core/tests/connect.test.ts` ("the app asking its home", "the home receiving a request", "an account home typed by a person")._
 
 ### 2.4 The request
 
@@ -211,7 +219,7 @@ _Source: `packages/core/src/session/connect.ts` (`connectToHome`, `askHome`, `re
 | -------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `v`            | `1`                             |                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `audience`     | string                          | The app's key, `did:key:…`, or with `via: code` the program's (§3). The note is made out to it.                                                                                                                                                                                                                                                                                                                          |
-| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"audience":<audience>,"proof":"weave/connect-key/v1","recordsOnly":<recordsOnly>,"via":<via>}`, where `recordsOnly` is the request's (`false` when absent) and `via` is `"code"` with `via: code` and `"popup"` otherwise; with `via: code` it also has `"origin":<origin>`, the origin of the app it went through (below). |
+| `proof`        | string                          | base64url ES256 signature by the `audience` key over the UTF-8 bytes of the canonical JSON `{"audience":<audience>,"proof":"minca/connect-key/v1","recordsOnly":<recordsOnly>,"via":<via>}`, where `recordsOnly` is the request's (`false` when absent) and `via` is `"code"` with `via: code` and `"popup"` otherwise; with `via: code` it also has `"origin":<origin>`, the origin of the app it went through (below). |
 | `name`         | string, ≤ 80, optional          | What the app calls itself. Shown, never trusted.                                                                                                                                                                                                                                                                                                                                                                         |
 | `access`       | `read` \| `write` \| `carry`    | `write` to change the spaces given, `read` only to look, `carry` for a carrier (§4.3).                                                                                                                                                                                                                                                                                                                                   |
 | `scope`        | `spaces` \| `account`, optional | `spaces` (default): the spaces the person picks and any made for the app. `account`: every space, the account's list, making and joining spaces.                                                                                                                                                                                                                                                                         |
@@ -237,7 +245,7 @@ Example:
 
 ```json
 {
-  "type": "weave:request",
+  "type": "minca:request",
   "request": {
     "v": 1,
     "audience": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
@@ -254,14 +262,14 @@ Example:
 The bytes a key signs for `proof`, for an app's request with the key above:
 
 ```
-{"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","proof":"weave/connect-key/v1","recordsOnly":false,"via":"popup"}
+{"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","proof":"minca/connect-key/v1","recordsOnly":false,"via":"popup"}
 ```
 
 With `via: code`, for a program's key reached through the app at
 `https://app.example`:
 
 ```
-{"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","origin":"https://app.example","proof":"weave/connect-key/v1","recordsOnly":true,"via":"code"}
+{"audience":"did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy","origin":"https://app.example","proof":"minca/connect-key/v1","recordsOnly":true,"via":"code"}
 ```
 
 Binding `via` and `recordsOnly` means a program's proof, which it hands to
@@ -336,28 +344,28 @@ Example (shortened):
 
 ```json
 {
-  "type": "weave:grant",
+  "type": "minca:grant",
   "grant": {
     "v": 2,
-    "did": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
+    "did": "did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E",
     "name": "Leif",
     "note": {
       "payload": {
         "aud": "did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy",
         "cmd": "/",
         "exp": 1792614901,
-        "iss": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
+        "iss": "did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E",
         "nbf": 1790022901,
         "nonce": "pr0q7Vm5c2T8xkWa",
         "pol": [],
-        "sub": "space:bafk…"
+        "sub": "space:blm7z6…"
       },
       "sig": "…",
-      "type": "weave/ucan/dlg@1"
+      "type": "minca/ucan/dlg@1"
     },
     "access": "write",
     "scope": "spaces",
-    "spaces": [{ "id": "bafk…", "name": "Todos", "invite": "…", "memberKey": "q0v…" }],
+    "spaces": [{ "id": "blm7z6…", "name": "Todos", "invite": "…", "memberKey": "q0v…" }],
     "relays": ["wss://p2p-web-relay.fly.dev"],
     "expiresAt": 1792614901
   }
@@ -446,7 +454,7 @@ the old connection record).
 > **Known defect:** connections are kept in the browser that granted them,
 > so only that home revokes an app whose time has passed, and only while it
 > is signed in. Until it does, the app's records still count. Tracked in
-> [#165](https://github.com/leifriksheim/weave/issues/165).
+> [#165](https://github.com/leifriksheim/minca/issues/165).
 
 ### 2.10 Connections and revocation
 
@@ -533,7 +541,7 @@ When the person approves some or all of the proposals, the home:
    `<origin>/`; `app` is `{ origin, name? }` with `name` the connection's,
    else the request's, cut to 80. One the same origin already has that asks
    for the same thing is not added again.
-5. Answers `weave:grant` with `Proposed`:
+5. Answers `minca:grant` with `Proposed`:
    `{ v: 2, kind: "proposed", automations: { id, name }[], versions? }`, the
    automations added or found; empty when the person kept none. For an app
    with `scope: account` that kept at least one, `versions` MUST hold every
@@ -555,7 +563,7 @@ Example:
 
 ```json
 {
-  "type": "weave:request",
+  "type": "minca:request",
   "request": {
     "v": 2,
     "kind": "propose",
@@ -564,7 +572,7 @@ Example:
       {
         "name": "New message in Club",
         "when": { "query": { "collection": "std.message" }, "others": true },
-        "spaces": ["bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"]
+        "spaces": ["blm7z6wkumdjs43sxki3lv27z5x6qtwa345vmlzjco2mxxau3jmhq"]
       }
     ]
   }
@@ -575,7 +583,7 @@ answered with
 
 ```json
 {
-  "type": "weave:grant",
+  "type": "minca:grant",
   "grant": {
     "v": 2,
     "kind": "proposed",
@@ -611,33 +619,33 @@ _Source: `packages/core/src/session/connect.ts` (`ProposeRequest`, `Proposed`, `
 
 A program with no browser of its own (a command in a terminal, a server)
 connects to an account through an app the person has open. The app shows a
-one-time code; the program is given it (`weave connect wv_…`); the two meet on
+one-time code; the program is given it (`minca connect mc_…`); the two meet on
 the code's channel, the app says where it lives, the program says which key
 it holds and what it asks for, and the app asks the account home (§2) for a
 note made out to that key. The protocol does not care what the program is.
 What it asks for is only a request: the app chooses the terms, the person
 allows them at the home, and the program gets that or nothing.
 
-**The code.** `wv_` followed by 24 bytes in base64url (32 characters): a
+**The code.** `mc_` followed by 24 bytes in base64url (32 characters): a
 16-byte secret, then the **account fingerprint**, the first 8 bytes of
-`SHA-256(UTF-8("weave/code-account/v1") ‖ UTF-8(account DID))` for the
+`SHA-256(UTF-8("minca/code-account/v1") ‖ UTF-8(account DID))` for the
 account the app is signed in to. The app MUST make the secret with a CSPRNG
 for each offer. A reader MUST accept the code anywhere in pasted text: the
-first match of `wv_([A-Za-z0-9_-]{32})` not followed by another base64url
+first match of `mc_([A-Za-z0-9_-]{32})` not followed by another base64url
 character, decoding to 24 bytes.
 
 For the secret `eYV4XGMvhkky6OWpPfqfRQ` (base64url) and the account
 `did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy`, the fingerprint
-is `a4f5ba1f73ede9ce` (hex) and the code is `wv_eYV4XGMvhkky6OWpPfqfRaT1uh9z7enO`.
+is `390c0fe099b996c6` (hex) and the code is `mc_eYV4XGMvhkky6OWpPfqfRTkMD-CZuZbG`.
 
 **The channel.** The 16-byte secret is the secret of a channel of kind _connect by
-code_ ([01](01-identity.md) §15.2): room `CID(UTF-8("weave/code-room/v1") ‖ secret)`,
-keys under `weave/code-key/v1`, sealed messages under `weave/code/v1` bound to
+code_ ([01](01-identity.md) §15.2): room `CID(UTF-8("minca/code-room/v1") ‖ secret)`,
+keys under `minca/code-key/v1`, sealed messages under `minca/code/v1` bound to
 `{ type, seq }`. The app is the offering side, the program the joining side.
 Both join that room on a shared relay ([04](04-network.md); introductions off)
 under a throwaway `did:key`, and talk over the resulting peer connection.
 
-For the code above, the room is `bodq6nylbhebwd57ve5zifkt7gqnltkzfn2dpclw4wlwewc5j66ya`.
+For the code above, the room is `bihn55ne2az53tlealtmk3ervpyk6xa6364ii25ogc7xv54zkjszq`.
 
 **Messages.** Network messages `{ type, from, payload }`. The first two carry
 a point in the clear; the rest are sealed (`payload` is the base64url
@@ -655,7 +663,7 @@ envelope of the UTF-8 JSON body).
 
 ```
 App                                                   Program
-  shows wv_…, joins room                              joins room
+  shows mc_…, joins room                              joins room
             ◀─────────────── peer connected ───────────────▶
                           ◀── code:hello   { key: J }
   code:key { key: O } ──▶
@@ -834,7 +842,7 @@ earlier carrier from the same origin, adds the carrier (§4.2) with
   "did": "<account>",
   "name": "Leif",
   "carry": { "space": "<carry space id>", "invite": "<view-only invite>" },
-  "pod": { "dataPath": "accounts/k3j2h4g5f6d7/stores", "folder": "Weave" },
+  "pod": { "dataPath": "accounts/k3j2h4g5f6d7/stores", "folder": "Minca" },
   "relays": ["wss://…"]
 }
 ```
@@ -866,7 +874,7 @@ match today: the wakes are there for waking an app that is closed (below).
 _Source: `packages/core/src/space/own-automations.ts`, `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("notifications through a carrier")._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
-> [#60](https://github.com/leifriksheim/weave/issues/60). The account's own
+> [#60](https://github.com/leifriksheim/minca/issues/60). The account's own
 > automations are the account's and apps propose them (above); which device shows a match is
 > not modeled yet. Today only an app that is running shows a match (§2.11),
 > so nothing reaches a device where it is closed, and an app with

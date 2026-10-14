@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { COLLECTION_DEFINE, KEY_CHANGE, RECORD_WRITE, describeHost } from '@weaveprotocol/core';
-import type { FundOffer, SpaceHostingView } from '@weaveprotocol/core';
-import { useAccess, useCollections, useNode } from '@weaveprotocol/core/react';
+import { COLLECTION_DEFINE, KEY_CHANGE, RECORD_WRITE, describeHost } from '@minca/core';
+import type { FundOffer, SpaceHostingView } from '@minca/core';
+import { useAccess, useCollections, useNode } from '@minca/core/react';
 import { useMay } from './may';
-import { host as hostSchema } from '@weaveprotocol/core/schemas';
+import { host as hostSchema } from '@minca/core/schemas';
 import { DEFAULT_HOST } from './relay';
 import { Modal } from './Modal';
 import { useWanted, type Wanted } from './HostAddress';
@@ -343,7 +343,7 @@ export function KeepOnline({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {hero && !stopping && (
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <FeatureIcon kind="online" glyph="cloud" size={44} />
+          <FeatureIcon kind="online" size={44} />
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
               {host ? host.name : 'Around the clock'}
@@ -502,7 +502,7 @@ export function FundPaysFor({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#eef8f0',
+          background: palette.accent.goodSoft,
           color: palette.accent.good,
         }}
       >

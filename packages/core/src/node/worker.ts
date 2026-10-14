@@ -4,7 +4,7 @@
  * signatures, decrypting and syncing never make the page stutter.
  *
  * The page calls {@link startNodeInWorker} and gets a node with the usual API.
- * The worker runs {@link runNodeWorker} (the `@weaveprotocol/core/node-worker`
+ * The worker runs {@link runNodeWorker} (the `@minca/core/node-worker`
  * entry does it) and holds the node itself. Two things stay on the page: the
  * root signer, since a passkey needs a document and a key in a tab should stay
  * there, and WebRTC, since not every browser has it in workers. The worker
@@ -53,12 +53,17 @@ export interface WorkerLike {
   postMessage(message: unknown, transfer: Transferable[]): void;
   /** A dedicated worker ends with the node it holds */
   terminate?(): void;
+  /** Where a worker that fails to load says so (a `Worker`, or a `SharedWorker` beside its port) */
+  addEventListener?(type: 'error', listener: () => void): void;
 }
 
-const TAG = 'weave-worker';
+const TAG = 'minca-worker';
+
+/** The name of the error when a worker never said the node started: it failed to load, or took too long */
+export const WORKER_NOT_STARTED = 'WorkerNotStarted';
 
 /** The lock a tab holds while it uses a node, so the worker learns when the tab is gone */
-const tabLock = (tab: string) => `weave-node-tab:${tab}`;
+const tabLock = (tab: string) => `minca-node-tab:${tab}`;
 
 /** Web Locks, where this runtime has them */
 function locks(): LockManager | null {
@@ -72,13 +77,15 @@ function locks(): LockManager | null {
  * here stop, a dedicated worker ends, and a shared node closes once no tab
  * uses it.
  *
- * @param worker Running `runNodeWorker`, as `@weaveprotocol/core/node-worker` does
+ * @param worker Running `runNodeWorker`, as `@minca/core/node-worker` does
  * @param config.signer Who the node acts for; its key stays on this side
- * @throws When the worker could not start the node, with its reason
+ * @param startTimeoutMs How long to wait for the worker to say the node started. Default 30 s.
+ * @throws When the worker could not start the node, with its reason, or said nothing in time
  */
 export async function startNodeInWorker(
   worker: WorkerLike,
   config: WorkerNodeConfig & { readonly signer: RootSigner },
+  startTimeoutMs = 30_000,
 ): Promise<P2PNode> {
   const { signer, ...sent } = config;
   const tab = globalThis.crypto.randomUUID();
@@ -113,10 +120,21 @@ export async function startNodeInWorker(
   };
 
   const started = new Promise<void>((resolve, reject) => {
+    // A worker that never loads says nothing at all, so the page would wait forever.
+    const giveUp = () => {
+      globalThis.clearTimeout(timer);
+      nodes.port1.removeEventListener('message', onMessage);
+      const error = new Error('The node’s worker did not start.');
+      error.name = WORKER_NOT_STARTED;
+      reject(error);
+    };
+    const timer = globalThis.setTimeout(giveUp, startTimeoutMs);
+    worker.addEventListener?.('error', giveUp);
     const onMessage = (event: MessageEvent) => {
       const message: unknown = event.data;
       if (!isRecord(message) || message[TAG] !== true) return;
       nodes.port1.removeEventListener('message', onMessage);
+      globalThis.clearTimeout(timer);
       if (message.ok === true) resolve();
       else reject(new Error(typeof message.error === 'string' ? message.error : 'The node could not start'));
     };

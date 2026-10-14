@@ -7,7 +7,7 @@ makes who holds power in a space something the space decides for itself.
 ## The idea
 
 A space is a group of people. Every group has rules: who is in, who decides,
-what counts. Today Weave builds one answer into every peer: roles with
+what counts. Today Minca builds one answer into every peer: roles with
 numeric ranks, and per-collection rules and checks, all enforced at the
 door. This note splits that in two.
 
@@ -131,8 +131,8 @@ rules: it can part ways and keep its shared past.
 ## Why evidence, and why not Wasm (yet)
 
 Ethereum runs programs over shared state in one global order, kept by
-consensus. Weave has no order, no clock and no consensus, and should not
-grow them. What fits Weave is proof: a change brings its evidence, and every
+consensus. Minca has no order, no clock and no consensus, and should not
+grow them. What fits Minca is proof: a change brings its evidence, and every
 peer checks it. That is already how checks work; the constitution applies it
 to authority.
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAccount, useNode } from '@weaveprotocol/core/react';
+import { useAccount, useNode } from '@minca/core/react';
 import { createScreenBridge, screenDocument, type ScreenBridge } from './screens';
 import { isObject } from '../../derive/schema-ui';
 import { styles, palette } from '../../styles';
@@ -33,7 +33,7 @@ export function ScreenFrame({
   // Compared by value, so a new array with the same names changes nothing.
   const names = collections.join('|');
   const allowed = network.join(' ');
-  const consentKey = `weave.screen-network:${node.did}:${spaceId}:${appKey}`;
+  const consentKey = `minca.screen-network:${node.did}:${spaceId}:${appKey}`;
   const [answer, setAnswer] = useState<'yes' | 'no' | null>(() =>
     origins ? readConsent(consentKey, origins) : 'no',
   );
@@ -64,7 +64,7 @@ export function ScreenFrame({
     let handedOver = false;
     const onMessage = (event: MessageEvent) => {
       const target = frame.current?.contentWindow;
-      if (!target || event.source !== target || !isObject(event.data) || event.data.weave !== 'ready') return;
+      if (!target || event.source !== target || !isObject(event.data) || event.data.minca !== 'ready') return;
       if (handedOver) {
         // Only the page we loaded says ready, and only once. Anything after that navigated the frame.
         bridge?.close();
@@ -82,7 +82,7 @@ export function ScreenFrame({
       });
       target.postMessage(
         {
-          weave: 'load',
+          minca: 'load',
           document: screenDocument(screen, answer === 'yes' && allowed ? allowed.split(' ') : []),
           me: { did: node.did, name: account.name },
           collections: list,
@@ -195,7 +195,7 @@ export function ScreenFrame({
           flex: 1,
           minHeight: 420,
           border: `1px solid ${palette.surface.line}`,
-          borderRadius: 12,
+          borderRadius: palette.radius.lg,
           background: palette.surface.card,
         }}
       />

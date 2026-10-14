@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useAccount, useCan, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import type { IncludedOf, QueryRecord } from '@weaveprotocol/core';
-import { poll, vote, type Poll } from '@weaveprotocol/core/schemas';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useAccount, useCan, useLive, useNode, useProfiles } from '@minca/core/react';
+import type { IncludedOf, QueryRecord } from '@minca/core';
+import { poll, vote, type Poll } from '@minca/core/schemas';
 import { nameOf, peopleFrom, respondingTo } from '../../derive/people';
 import { styles, palette, ui } from '../../styles';
 import type { AppProps } from './index';
@@ -43,7 +44,18 @@ export function Polls({ space, onOpen }: AppProps) {
           </button>
         ))}
       {polls?.length === 0 && !asking && (
-        <div style={styles.emptyState}>No polls yet.{mayAsk ? ' Ask the space something.' : ''}</div>
+        <div
+          style={{
+            ...styles.emptyState,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <Shape {...shapeFor('polls')} size={40} />
+          No polls yet.{mayAsk ? ' Ask the space something.' : ''}
+        </div>
       )}
       {polls?.map((p) => (
         <PollView key={p.key} space={space} record={p} onOpen={onOpen} />

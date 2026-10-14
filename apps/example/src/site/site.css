@@ -1496,60 +1496,7 @@
   border-left: 1px dashed #b5b5b5;
 }
 
-.site .ideas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.site .ideas span {
-  padding: 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 15px;
-  color: var(--ink);
-  background: #fff;
-}
-
-.site .doors {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-.site .door {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 28px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  text-decoration: none;
-  transition: border-color 0.15s ease;
-}
-.site .door:hover {
-  border-color: var(--ink);
-}
-.site .door h3 {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-.site .door p {
-  flex: 1;
-  font-size: 15px;
-  color: var(--muted);
-}
-.site .door span {
-  margin-top: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
-}
-
 @media (max-width: 860px) {
-  .site .doors {
-    grid-template-columns: 1fr;
-  }
   .site .demo {
     grid-template-columns: 1fr;
     margin-top: 40px;
@@ -1645,5 +1592,763 @@
   }
   .site .nav-links a.hide-sm {
     display: none;
+  }
+}
+
+/* Minca: paper, thin navy rules and flat shapes. A space is a ruled grid and
+   every tool in it is a shape; colour comes in shapes and nowhere else, so the
+   page stays quiet around them. The values are the design system's tokens
+   (apps/shared/src/tokens.ts, here as its --minca-* properties). */
+.site {
+  --ink: var(--minca-ink);
+  --body: var(--minca-body);
+  --muted: var(--minca-muted);
+  --faint: var(--minca-faint);
+  --line: var(--minca-line);
+  --line-strong: var(--minca-line-strong);
+  --rule: var(--minca-rule);
+  --sunken: var(--minca-sunken);
+  --paper: var(--minca-page);
+  --cobalt: var(--minca-cobalt);
+  --coral: var(--minca-coral);
+  --peach: var(--minca-peach);
+  --sage: var(--minca-sage);
+  --lilac: var(--minca-lilac);
+  --display: var(--minca-display);
+  background: var(--paper);
+}
+.site .c-cobalt {
+  --c: var(--cobalt);
+}
+.site .c-coral {
+  --c: var(--coral);
+}
+.site .c-peach {
+  --c: var(--peach);
+}
+.site .c-sage {
+  --c: var(--sage);
+}
+.site .c-lilac {
+  --c: var(--lilac);
+}
+.site .c-paper {
+  --c: var(--paper);
+}
+.site .shape {
+  display: block;
+  fill: var(--c, var(--ink));
+  overflow: visible;
+}
+.site .fill {
+  fill: var(--c);
+}
+
+.site h1,
+.site h2,
+.site .brand,
+.site .split h3,
+.site .cta h2 {
+  font-family: var(--display);
+  color: var(--ink);
+}
+.site section.band {
+  border-bottom: none;
+}
+
+/* Nav: a pill floating over the page */
+.site .nav {
+  padding: 12px 16px 0;
+  background: none;
+  border-bottom: none;
+  backdrop-filter: none;
+}
+.site .nav .wrap {
+  max-width: 860px;
+  height: 56px;
+  padding: 0 8px 0 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(246, 243, 238, 0.85);
+  backdrop-filter: saturate(160%) blur(10px);
+}
+.site .brand {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  gap: 8px;
+}
+.site .nav-links a.btn {
+  border-radius: 999px;
+}
+.site .nav .btn {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+/* Buttons: cobalt, round, with a little bounce */
+.site .btn {
+  border-radius: 999px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.site .btn:hover {
+  transform: translateY(-1px);
+}
+.site .btn:active {
+  transform: translateY(0) scale(0.98);
+}
+/* The nav's links are grey; its button is not one of them. */
+.site .btn-primary,
+.site .nav-links a.btn-primary {
+  background: var(--cobalt);
+  border-color: var(--cobalt);
+  color: #fff;
+}
+.site .btn-primary:hover,
+.site .nav-links a.btn-primary:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.site .btn-secondary {
+  background: transparent;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.site .btn-secondary:hover {
+  border-color: var(--ink);
+  background: #fff;
+}
+.site .btn-lg {
+  height: 50px;
+  padding: 0 26px;
+  font-size: 16px;
+}
+
+/* Section labels in the display face, cobalt */
+.site .section-head .kicker,
+.site .kicker-inline {
+  margin-bottom: 12px;
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  color: var(--cobalt);
+}
+.site .section-head h2 {
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+.site footer {
+  border-top-color: var(--line);
+}
+.site footer .footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Hero */
+.site .hero {
+  margin-top: -68px;
+  padding: 168px 0 96px;
+  border-bottom: none;
+  background: var(--paper);
+}
+.site .hero h1 {
+  font-size: clamp(46px, 8.4vw, 96px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 0.96;
+}
+
+/* A space as a sheet of shapes */
+.site .space-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  max-width: 880px;
+  margin: 72px auto 0;
+  border-top: 1px solid var(--rule);
+  border-left: 1px solid var(--rule);
+  text-align: center;
+}
+.site .cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  aspect-ratio: 1;
+  padding: 28px 12px 18px;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.site .cell .shape {
+  width: 50%;
+  transition: transform 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.site .cell:hover .shape {
+  transform: rotate(24deg) scale(1.08);
+}
+.site .cell-num {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink);
+}
+.site .cell-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.site .cell-new {
+  background: rgba(255, 255, 255, 0.7);
+}
+.site .cell-new .cell-name {
+  animation: rise 0.4s ease;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.site .ruled h3 {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.site .ruled p {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.site .story,
+.site .shared {
+  background: var(--sunken);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.site .story-turn {
+  max-width: 640px;
+  margin-top: 48px;
+  font-size: 21px;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  color: var(--body);
+}
+.site .story-turn b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Abundance: a cobalt panel with the ideas drifting through it */
+.site .abundance-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 64px 56px 48px;
+  background: var(--cobalt);
+  color: #fff;
+}
+.site .abundance-panel .section-head {
+  position: relative;
+  max-width: 720px;
+}
+.site .abundance-panel .section-head .kicker {
+  color: var(--peach);
+}
+.site .abundance-panel h2 {
+  color: #fff;
+  font-size: clamp(32px, 5vw, 56px);
+  line-height: 1.02;
+}
+.site .abundance-panel .accent {
+  color: var(--peach);
+}
+.site .abundance-panel .section-head p {
+  color: rgba(255, 255, 255, 0.78);
+}
+.site .abundance-line {
+  position: relative;
+  font-family: var(--display);
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.78);
+}
+.site .abundance-line b {
+  color: #fff;
+  font-weight: 700;
+}
+.site .drifts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 48px -56px 0;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.site .drift {
+  display: flex;
+  overflow: hidden;
+}
+.site .drift-track {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  padding-right: 12px;
+  animation: drift 60s linear infinite;
+}
+.site .drift.reverse .drift-track {
+  animation-direction: reverse;
+  animation-duration: 70s;
+}
+.site .drifts:hover .drift-track {
+  animation-play-state: paused;
+}
+@keyframes drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.site .chip-idea {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 10px 18px 10px 12px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.site .chip-idea .shape {
+  width: 18px;
+  height: 18px;
+}
+.site .chip-idea .c-cobalt {
+  --c: var(--ink);
+}
+
+/* A space that grows */
+
+/* Make your own */
+.site .step-num {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 18px;
+}
+.site .step-num .shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.site .step-num b {
+  position: relative;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+.site .steps-row li:nth-child(3) .step-num b {
+  color: var(--ink);
+}
+.site .steps-row p {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.site .how-demo {
+  margin-top: 64px;
+}
+.site .how-demo .demo {
+  margin: 0 auto;
+  border-radius: 0;
+  border-color: var(--rule);
+  box-shadow: none;
+}
+.site .demo-initial {
+  background: var(--cobalt);
+  color: #fff;
+}
+.site .demo-app-link.new .demo-icon.letter {
+  background: var(--coral);
+  color: #fff;
+}
+
+/* Shared, not sold */
+
+.site .travels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 72px;
+  border-top: 1px solid var(--rule);
+  border-left: 1px solid var(--rule);
+  text-align: center;
+}
+.site .travel {
+  position: relative;
+  padding: 36px 24px 28px;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.site .grown {
+  display: block;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 20px;
+  overflow: visible;
+}
+.site .travel-tool {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+.site .travel-group {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .travel p {
+  margin-top: 2px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.site .marked p {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+/* Bits the other bands share */
+
+/* Closing call */
+.site .cta {
+  padding: 120px 0;
+}
+.site .cta h2 {
+  font-size: clamp(40px, 7vw, 76px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+.site .cta-mark {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+.site .cta-mark .shape {
+  width: 34px;
+  height: 34px;
+  animation: hop 2.4s ease-in-out infinite;
+}
+.site .cta-mark .shape:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.site .cta-mark .shape:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.site .cta-mark .shape:nth-child(4) {
+  animation-delay: 0.36s;
+}
+.site .cta-mark .shape:nth-child(5) {
+  animation-delay: 0.48s;
+}
+@keyframes hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  30% {
+    transform: translateY(-12px) rotate(20deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site .cta-mark .shape,
+  .site .drift {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 860px) {
+  .site .nav {
+    padding: 8px 8px 0;
+  }
+  .site .nav .wrap {
+    padding: 0 6px 0 16px;
+  }
+  .site .hero {
+    padding: 128px 0 72px;
+  }
+  .site .space-grid {
+    margin-top: 48px;
+  }
+  .site .cell {
+    gap: 8px;
+    padding: 22px 4px 10px;
+  }
+  .site .cell .shape {
+    width: 46%;
+  }
+  .site .cell-num {
+    top: 6px;
+    left: 7px;
+    font-size: 10px;
+  }
+  .site .cell-name {
+    font-size: 11.5px;
+    line-height: 1.2;
+  }
+  .site .abundance-panel {
+    padding: 40px 24px 32px;
+  }
+  .site .drifts {
+    margin: 36px -24px 0;
+  }
+  .site .chip-idea {
+    font-size: 15px;
+  }
+}
+
+/* Shapes that melt into each other (Morph in shapes.tsx) */
+.site .morph {
+  transition: fill 0.9s ease;
+}
+.site .cell .morph {
+  width: 50%;
+}
+.site .panel-morph {
+  position: absolute;
+  top: 56px;
+  right: 56px;
+  width: 260px;
+  pointer-events: none;
+}
+.site .abundance-panel .section-head,
+.site .abundance-line {
+  max-width: 600px;
+}
+@media (max-width: 860px) {
+  .site .panel-morph {
+    position: relative;
+    top: 0;
+    right: 0;
+    width: 120px;
+    margin-bottom: 24px;
+  }
+  .site .cell .morph {
+    width: 46%;
+  }
+}
+
+.site .points h3 {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+}
+.site .mock-card {
+  border: 1px solid var(--rule);
+  border-radius: 0;
+}
+.site .mock {
+  border-top: none;
+  border-radius: 0;
+}
+.site .proposal {
+  border-color: var(--rule);
+  border-radius: 0;
+}
+
+/* Ruled grids, phone first: one column, each item its shape beside its words.
+   Wider screens set them side by side, the shape above. */
+.site .ruled,
+.site .points {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+  border-left: 1px solid var(--rule);
+}
+.site .ruled > *,
+.site .points > * {
+  padding: 20px 20px 22px;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.site .ruled > * {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 18px;
+  align-content: start;
+}
+.site .ruled > * > .shape,
+.site .ruled .step-num {
+  grid-row: span 2;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+}
+.site .ruled h3,
+.site .ruled p {
+  grid-column: 2;
+}
+.site .ruled h3 {
+  font-size: 19px;
+  line-height: 1.2;
+}
+.site .marked > * > .shape {
+  width: 30px;
+  height: 30px;
+  margin: 4px 0 0 7px;
+}
+.site .step-num b {
+  font-size: 17px;
+}
+.site .travels {
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 48px;
+}
+.site .travel {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  column-gap: 18px;
+  align-items: center;
+  padding: 26px 20px 22px;
+  text-align: left;
+}
+.site .travel .grown {
+  grid-row: span 3;
+  width: 72px;
+  height: 72px;
+  margin: 0;
+}
+.site .travel-tool {
+  font-size: 21px;
+}
+.site .nav .btn {
+  white-space: nowrap;
+}
+.site .hero {
+  padding-top: 112px;
+}
+@media (max-width: 400px) {
+  .site .nav-links a:not(.btn) {
+    display: none;
+  }
+}
+.site .story-turn {
+  margin-top: 32px;
+  font-size: 18px;
+}
+.site .how-demo {
+  margin-top: 40px;
+}
+.site section.band {
+  padding: 52px 0;
+}
+.site .cta {
+  padding: 56px 0 80px;
+}
+
+@media (min-width: 720px) {
+  .site .ruled > *,
+  .site .points > * {
+    display: block;
+    padding: 28px 24px;
+  }
+  .site .points {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .site .tradition,
+  .site .steps-row,
+  .site .travels {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .site .marked {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .site .tradition > * > .shape {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 24px;
+  }
+  .site .marked > * > .shape {
+    margin: 0 0 18px;
+  }
+  .site .ruled .step-num {
+    width: 52px;
+    height: 52px;
+    margin-bottom: 18px;
+  }
+  .site .ruled h3 {
+    font-size: 20px;
+  }
+  .site .step-num b {
+    font-size: 20px;
+  }
+  .site .travels {
+    margin-bottom: 72px;
+  }
+  .site .travel {
+    display: block;
+    padding: 36px 24px 28px;
+    text-align: center;
+  }
+  .site .travel .grown {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 20px;
+  }
+  .site .hero {
+    padding-top: 168px;
+  }
+  .site .travel-tool {
+    font-size: 26px;
+  }
+  .site .story-turn {
+    margin-top: 48px;
+    font-size: 21px;
+  }
+  .site .how-demo {
+    margin-top: 64px;
+  }
+  .site section.band {
+    padding: 96px 0;
+  }
+  .site .cta {
+    padding: 120px 0;
+  }
+}
+@media (min-width: 1000px) {
+  .site .marked {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

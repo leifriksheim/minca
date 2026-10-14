@@ -1,7 +1,7 @@
 # Draft: SQL on SQLite for contracts and queries
 
 Status: evidence for a decision, October 2026. Not normative. It asks
-whether Weave's contracts ([spec 09](../09-contracts.md)), and the local
+whether Minca's contracts ([spec 09](../09-contracts.md)), and the local
 query language ([query format](../../packages/core/docs/query-format.md)),
 should be **SQL on SQLite** instead of CEL, as
 [the CEL against Datalog comparison](contracts-comparison.md) asked of
@@ -25,19 +25,19 @@ The reasons are in §8.
 
 ## 1. What was built
 
-Everything is in [`scenarios/sql/`](https://github.com/leifriksheim/weave/tree/sql-contracts-prototype/scenarios/sql/), a private workspace, typechecked, linted
-and tested with the rest (`npm run sql -w @weaveprotocol/scenarios`, and
+Everything is in [`scenarios/sql/`](https://github.com/leifriksheim/minca/tree/sql-contracts-prototype/scenarios/sql/), a private workspace, typechecked, linted
+and tested with the rest (`npm run sql -w @minca/scenarios`, and
 `npm test`). `@sqlite.org/sqlite-wasm` 3.53.4 and `kysely` are dev
 dependencies of the scenarios workspace only.
 
 | File                                                                                                                                          | What                                                                                                                       | Lines |
 | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----- |
-| [`sql/engine.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/engine.ts)                                 | The locked-down engine: authorizer, function allowlist, progress-handler step limit, `sqlite3_limit`s, a fresh `:memory:`  | 230   |
-| [`sql/host.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/host.ts)                                     | A stand-in host: chains, pending, membership as of `seen`, cited versions, the line rule built in or left to SQL; `SCHEMA` | 223   |
-| [`sql/contracts.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/contracts.ts)                           | The contracts in SQL                                                                                                       | 128   |
-| [`sql/kysely-sketch.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/kysely-sketch.ts)                   | The hall of fame written with Kysely (§2.6)                                                                                | 68    |
-| [`sql/tests/scenarios.test.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/tests/scenarios.test.ts)     | Chess, co-op, hall of fame, mutual credit twice (line built in, line in SQL), Kysely: 34 tests                             | 376   |
-| [`sql/tests/determinism.test.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/tests/determinism.test.ts) | The lockdown refusing 12 kinds of query, the step limit, and the probes of §4: 23 tests                                    | 153   |
+| [`sql/engine.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/engine.ts)                                 | The locked-down engine: authorizer, function allowlist, progress-handler step limit, `sqlite3_limit`s, a fresh `:memory:`  | 230   |
+| [`sql/host.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/host.ts)                                     | A stand-in host: chains, pending, membership as of `seen`, cited versions, the line rule built in or left to SQL; `SCHEMA` | 223   |
+| [`sql/contracts.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/contracts.ts)                           | The contracts in SQL                                                                                                       | 128   |
+| [`sql/kysely-sketch.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/kysely-sketch.ts)                   | The hall of fame written with Kysely (§2.6)                                                                                | 68    |
+| [`sql/tests/scenarios.test.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/tests/scenarios.test.ts)     | Chess, co-op, hall of fame, mutual credit twice (line built in, line in SQL), Kysely: 34 tests                             | 376   |
+| [`sql/tests/determinism.test.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/tests/determinism.test.ts) | The lockdown refusing 12 kinds of query, the step limit, and the probes of §4: 23 tests                                    | 153   |
 
 **The engine.** The official wasm build exposes the C API, and both hooks
 this needs are reachable and typed: `sqlite3_set_authorizer` and
@@ -53,7 +53,7 @@ SQL length (4,000), expression depth (64), value length (1 MB), compound
 selects and `LIKE` patterns; then the authorizer, which allows only
 `SQLITE_SELECT`, `SQLITE_RECURSIVE`, reads of the host's tables and of
 `json_each`/`json_tree`, and functions on the allowlist (`FUNCTIONS` in
-[`sql/engine.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/engine.ts)): core scalars, `count`/`sum`/`total`/`avg`, and the JSON
+[`sql/engine.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/engine.ts)): core scalars, `count`/`sum`/`total`/`avg`, and the JSON
 functions. Left out: `random`, the date functions, `changes`,
 `last_insert_rowid`, `sqlite_version`, `printf`/`format`, `group_concat`,
 `json_group_array`, window functions, and the math functions (libm). A
@@ -61,7 +61,7 @@ contract is one `SELECT` giving one row of one column; it passes when that
 is the integer 1. All of a version's conditions share one database and one
 step budget.
 
-**What a contract sees** (`SCHEMA` in [`sql/host.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/host.ts)). Bodies are JSON text.
+**What a contract sees** (`SCHEMA` in [`sql/host.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/host.ts)). Bodies are JSON text.
 
 | Table     | Rows                                                                                                |
 | --------- | --------------------------------------------------------------------------------------------------- |
@@ -83,7 +83,7 @@ every declared citation is now resolved, where CEL resolves only those an
 ## 2. The contracts side by side
 
 Each CEL block is as in `scenarios/communities/`; each SQL block is from
-[`scenarios/sql/contracts.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/contracts.ts). `LINK_ON(x)` stands for
+[`scenarios/sql/contracts.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/contracts.ts). `LINK_ON(x)` stands for
 `(SELECT target FROM link WHERE id = x AND rel = 'on' ORDER BY ord LIMIT 1)`,
 CEL's `link('on')`, which `contracts.ts` writes out with a template.
 
@@ -223,7 +223,7 @@ Characters with white space collapsed; CEL's are as stored.
 
 SQL is about twice as long, mostly `FROM this t`, `->> '$.'` and the type
 and `NULL` guards. A Kysely version of the hall of fame
-([`sql/kysely-sketch.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/kysely-sketch.ts), about 30 lines of types and query) checks field names
+([`sql/kysely-sketch.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/kysely-sketch.ts), about 30 lines of types and query) checks field names
 against the body types (`.key('emojii')` is a type error), and compiles to
 SQL that gives the same verdicts (test "a contract written with Kysely").
 Two frictions: Kysely compiles to `?` placeholders and parameters, so a
@@ -269,7 +269,7 @@ subqueries need the outer table in scope, which reads less well than SQL.
 **Can the built-in line rule go?** It can be _written_ in SQL: the three
 conditions of §2.5 give the same verdicts on all 11 credit cases, double
 spends, deletes as twins, a delete ending a line, griefing and second lines
-included ([`scenarios/sql/tests/scenarios.test.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/tests/scenarios.test.ts), "line in SQL"). It can't
+included ([`scenarios/sql/tests/scenarios.test.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/tests/scenarios.test.ts), "line in SQL"). It can't
 be _removed from the protocol_:
 
 1. Its input is the one thing in a contract not fixed by citation: every
@@ -292,7 +292,7 @@ into each definition and keeps everything hard in the spec. Keep it built in.
 
 Measured on three builds: `@sqlite.org/sqlite-wasm` 3.53.4 (the bundled
 one), 3.46.1, and Node's `node:sqlite` 3.51.2. The tests in
-[`sql/tests/determinism.test.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/tests/determinism.test.ts) assert what 3.53.4 gives; the cross-version
+[`sql/tests/determinism.test.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/tests/determinism.test.ts) assert what 3.53.4 gives; the cross-version
 runs were a scratch script, summarised here.
 
 | Probe                                      | Result                                                                                                      | Same across versions?                                   |
@@ -414,7 +414,7 @@ leak into the next.
    measured, and row order is the planner's. The spec would have to name a
    SQLite build and its options as normative (§4), so upgrading SQLite
    becomes a protocol version, and no other implementation can exist. CEL
-   has a spec, a conformance suite Weave passes, and an exact cost model.
+   has a spec, a conformance suite Minca passes, and an exact cost model.
 2. **SQL fails open where CEL fails closed.** `NULL` and loose comparisons
    let a careless contract pass a version it meant to refuse (§3); every
    contract here needed `typeof`, `IS NOT` or `json_type` guards to match
@@ -437,8 +437,8 @@ than it looks: a contract verifies cited evidence and a query searches what
 a node holds, so they read different inputs whichever language they share.
 
 (B) would be worth reopening if a single pinned SQLite build were
-acceptable as part of the protocol for good, with Weave writing its own
+acceptable as part of the protocol for good, with Minca writing its own
 conformance suite for it; or if contracts came to need joins over large
 cited sets, where SQL's plans beat CEL's macros.
 
-_Source: [`scenarios/sql/engine.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/engine.ts) (`engineOn`, `FUNCTIONS`), [`scenarios/sql/host.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/host.ts) (`judgeSql`, `SCHEMA`), [`scenarios/sql/contracts.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/contracts.ts), [`scenarios/sql/kysely-sketch.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/kysely-sketch.ts). Tests: [`scenarios/sql/tests/scenarios.test.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/tests/scenarios.test.ts), [`scenarios/sql/tests/determinism.test.ts`](https://github.com/leifriksheim/weave/blob/sql-contracts-prototype/scenarios/sql/tests/determinism.test.ts); the CEL side is `scenarios/communities/` and `scenarios/tests/`, with `packages/core/src/records/contracts.ts` (`runContracts`)._
+_Source: [`scenarios/sql/engine.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/engine.ts) (`engineOn`, `FUNCTIONS`), [`scenarios/sql/host.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/host.ts) (`judgeSql`, `SCHEMA`), [`scenarios/sql/contracts.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/contracts.ts), [`scenarios/sql/kysely-sketch.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/kysely-sketch.ts). Tests: [`scenarios/sql/tests/scenarios.test.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/tests/scenarios.test.ts), [`scenarios/sql/tests/determinism.test.ts`](https://github.com/leifriksheim/minca/blob/sql-contracts-prototype/scenarios/sql/tests/determinism.test.ts); the CEL side is `scenarios/communities/` and `scenarios/tests/`, with `packages/core/src/records/contracts.ts` (`runContracts`)._

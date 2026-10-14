@@ -1,29 +1,29 @@
 /**
- * @module elements/weave-auth
- * `<weave-auth>`: the whole sign-in flow as one element.
+ * @module elements/minca-auth
+ * `<minca-auth>`: the whole sign-in flow as one element.
  *
  * ```html
- * <weave-auth app-name="Todo" relays="wss://relay.example"></weave-auth>
+ * <minca-auth app-name="Todo" relays="wss://relay.example"></minca-auth>
  * <script type="module">
- *   import '@weaveprotocol/core/elements';
- *   document.querySelector('weave-auth').addEventListener('weave-session', (event) => {
+ *   import '@minca/core/elements';
+ *   document.querySelector('minca-auth').addEventListener('minca-session', (event) => {
  *     const session = event.detail.session;   // null when signed out
  *     if (session) start(session.node);
  *   });
  * </script>
  * ```
  *
- * Or hand it a flow you made yourself: `element.auth = createWeaveAuth({ … })`.
+ * Or hand it a flow you made yourself: `element.auth = createMincaAuth({ … })`.
  * It draws into its light DOM, not a shadow root, because password managers
  * fill forms there far more reliably; its styles are scoped to the element.
  */
 import {
-  createWeaveAuth,
+  createMincaAuth,
   MIN_PASSWORD_LENGTH,
   type AuthError,
   type AuthState,
-  type WeaveAuth,
-  type WeaveSession,
+  type MincaAuth,
+  type MincaSession,
 } from '../session/auth.js';
 import { accountCredentialName, offerToSave, recoveryKit } from '../session/credentials.js';
 import type { PairingStage } from '../session/pairing.js';
@@ -31,9 +31,9 @@ import type { AccountSummary } from '../identity/account-store.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
 import { AUTH_CSS } from './auth-styles.js';
 
-/** What `weave-session` carries */
-export interface WeaveSessionEventDetail {
-  readonly session: WeaveSession | null;
+/** What `minca-session` carries */
+export interface MincaSessionEventDetail {
+  readonly session: MincaSession | null;
 }
 
 // Where there is no DOM the module still loads; the element is only ever made where there is one.
@@ -45,9 +45,9 @@ function wordmark(): HTMLElement {
     'div',
     { class: 'wa-wordmark' },
     svg(
-      '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M2 5 L7 15 L10 8 L13 15 L18 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>',
+      '<svg width="24" height="13" viewBox="0 0 24 13" aria-hidden="true"><path fill="#2340d6" d="M0.5 12.5A11.5 11.5 0 0 1 23.5 12.5H20.75A8.75 8.75 0 0 0 3.25 12.5Z"/><path fill="#ff6b4a" d="M3.25 12.5A8.75 8.75 0 0 1 20.75 12.5H18A6 6 0 0 0 6 12.5Z"/><path fill="#ffc46b" d="M6 12.5A6 6 0 0 1 18 12.5H15.25A3.25 3.25 0 0 0 8.75 12.5Z"/><path fill="#4e8f6c" d="M8.75 12.5A3.25 3.25 0 0 1 15.25 12.5Z"/></svg>',
     ),
-    'Weave',
+    'minca',
   );
 }
 
@@ -216,10 +216,10 @@ function describePairing(stage: PairingStage): string {
   }
 }
 
-export class WeaveAuthElement extends Base {
-  #auth: WeaveAuth | null = null;
+export class MincaAuthElement extends Base {
+  #auth: MincaAuth | null = null;
   #unsubscribe: (() => void) | null = null;
-  #announced: WeaveSession | null | undefined = undefined;
+  #announced: MincaSession | null | undefined = undefined;
 
   // What only this element cares about: which fold is open, what is typed.
   #drafts = new Map<string, string>();
@@ -233,8 +233,8 @@ export class WeaveAuthElement extends Base {
   #lastStage: string | null = null;
 
   /** The flow this element draws. Set it to share one with the rest of the page; otherwise one is made from the attributes. */
-  get auth(): WeaveAuth {
-    this.#auth ??= createWeaveAuth({
+  get auth(): MincaAuth {
+    this.#auth ??= createMincaAuth({
       ...(this.getAttribute('app-name') ? { appName: this.getAttribute('app-name')! } : {}),
       network: {
         relays: (this.getAttribute('relays') ?? '')
@@ -250,14 +250,14 @@ export class WeaveAuthElement extends Base {
     return this.#auth;
   }
 
-  set auth(auth: WeaveAuth) {
+  set auth(auth: MincaAuth) {
     if (auth === this.#auth) return;
     this.#auth = auth;
     if (this.isConnected) this.#follow();
   }
 
   connectedCallback(): void {
-    adoptStyles('weave-auth', AUTH_CSS);
+    adoptStyles('minca-auth', AUTH_CSS);
     if (this.#auth) {
       this.#follow();
       return;
@@ -295,7 +295,7 @@ export class WeaveAuthElement extends Base {
     if (session !== this.#announced) {
       this.#announced = session;
       this.dispatchEvent(
-        new CustomEvent<WeaveSessionEventDetail>('weave-session', {
+        new CustomEvent<MincaSessionEventDetail>('minca-session', {
           detail: { session },
           bubbles: true,
           composed: true,
@@ -386,8 +386,8 @@ export class WeaveAuthElement extends Base {
   #welcome(state: AuthState): HTMLElement {
     const auth = this.auth;
     return card(
-      'Welcome to Weave',
-      subtitle('One account for every Weave app. Your data stays with you, not on a server.'),
+      'Welcome to Minca',
+      subtitle('One account for every Minca app. Your data stays with you, not on a server.'),
       h(
         'div',
         { class: 'wa-options' },
@@ -425,7 +425,7 @@ export class WeaveAuthElement extends Base {
         state.folderAvailable
           ? option(
               'Open your pod',
-              'The folder your Weave data lives in. Its accounts are listed next, ready to unlock with your passkey or password.',
+              'The folder your Minca data lives in. Its accounts are listed next, ready to unlock with your passkey or password.',
               () => void auth.choosePod(),
               state.busy,
             )
@@ -913,7 +913,7 @@ export class WeaveAuthElement extends Base {
       h(
         'p',
         { class: 'wa-hint' },
-        'A pod is a folder on your computer that holds your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Weave app you point at it opens the same account.',
+        'A pod is a folder on your computer that holds your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Minca app you point at it opens the same account.',
       ),
       h(
         'div',
@@ -995,19 +995,19 @@ export class WeaveAuthElement extends Base {
   }
 }
 
-/** Registers `<weave-auth>`, once. Importing this module does it for you. */
-export function defineWeaveAuth(tag = 'weave-auth'): void {
+/** Registers `<minca-auth>`, once. Importing this module does it for you. */
+export function defineMincaAuth(tag = 'minca-auth'): void {
   const registry = globalThis.customElements;
-  if (registry && !registry.get(tag)) registry.define(tag, WeaveAuthElement);
+  if (registry && !registry.get(tag)) registry.define(tag, MincaAuthElement);
 }
 
-defineWeaveAuth();
+defineMincaAuth();
 
 declare global {
   interface HTMLElementTagNameMap {
-    'weave-auth': WeaveAuthElement;
+    'minca-auth': MincaAuthElement;
   }
   interface HTMLElementEventMap {
-    'weave-session': CustomEvent<WeaveSessionEventDetail>;
+    'minca-session': CustomEvent<MincaSessionEventDetail>;
   }
 }

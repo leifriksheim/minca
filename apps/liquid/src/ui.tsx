@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
 import type { Choice, PartyRule } from './schema';
 import type { Assembly, PartyFull, TopicView } from './model';
 import { PARTY_SHARE, type Step, type Tally } from './tally';
-import { hue, tone } from './styles';
+import { markOf, onShape, palette, partyMarkOf, tone } from './styles';
 
 export const CHOICE_LABEL: Readonly<Record<Choice, string>> = {
   for: 'For',
@@ -39,11 +40,15 @@ export function ago(iso: string, now = Date.now()): string {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
+/** A topic's mark: a small shape, the same one wherever the topic shows */
+function TopicMark({ topic, size = 11 }: { topic: { name: string; hue: number }; size?: number }) {
+  return <Shape {...markOf(topic.name, topic.hue)} size={size} />;
+}
+
 export function TopicChip({ topic }: { topic: TopicView }) {
-  const c = hue(topic.hue);
   return (
-    <span className="lq-chip" style={{ background: c.soft, borderColor: c.line, color: c.strong }}>
-      <span className="lq-dot" style={{ background: c.strong }} />
+    <span className="lq-chip">
+      <TopicMark topic={topic} />
       {topic.name}
     </span>
   );
@@ -61,60 +66,61 @@ export function TopicPicker<T extends { name: string; hue: number }>({
   onToggle: (topic: T) => void;
   solid?: boolean;
 }) {
-  return topics.map((t) => {
-    const c = hue(t.hue);
-    const picked = on(t);
-    const style = solid
-      ? { background: c.strong, borderColor: c.strong }
-      : { background: c.soft, borderColor: c.strong, color: c.strong };
-    return (
-      <button
-        key={'key' in t && typeof t.key === 'string' ? t.key : t.name}
-        type="button"
-        className="lq-chip"
-        data-filter
-        aria-pressed={picked}
-        onClick={() => onToggle(t)}
-        style={picked ? style : undefined}
-      >
-        <span className="lq-dot" style={{ background: picked && solid ? '#fff' : c.strong }} />
-        {t.name}
-      </button>
-    );
-  });
+  return topics.map((t) => (
+    <button
+      key={'key' in t && typeof t.key === 'string' ? t.key : t.name}
+      type="button"
+      className="lq-chip"
+      data-filter
+      data-outline={solid ? undefined : ''}
+      aria-pressed={on(t)}
+      onClick={() => onToggle(t)}
+    >
+      <TopicMark topic={t} size={12} />
+      {t.name}
+    </button>
+  ));
 }
 
-/** A party's mark: its initial on its colour */
+/** A party's mark: its shape in its colour, with its initial in the middle when there is room */
 export function PartyMark({ party, size = 28 }: { party: Pick<PartyFull, 'name' | 'hue'>; size?: number }) {
-  const c = hue(party.hue);
+  const mark = partyMarkOf(party.name || '?', party.hue);
   return (
     <span
       aria-hidden
       style={{
+        position: 'relative',
         width: size,
         height: size,
         flexShrink: 0,
-        borderRadius: size / 3.5,
-        background: c.strong,
-        color: '#fff',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: size * 0.46,
-        fontWeight: 700,
-        letterSpacing: '-0.02em',
       }}
     >
-      {party.name.trim().charAt(0).toUpperCase() || '?'}
+      <Shape {...mark} size={size} style={{ position: 'absolute', inset: 0 }} />
+      {size >= 24 && (
+        <span
+          style={{
+            position: 'relative',
+            fontFamily: palette.display,
+            fontSize: size * 0.42,
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            color: onShape(mark.colour),
+          }}
+        >
+          {party.name.trim().charAt(0).toUpperCase() || '?'}
+        </span>
+      )}
     </span>
   );
 }
 
 export function PartyChip({ party }: { party: PartyFull }) {
-  const c = hue(party.hue);
   return (
-    <span className="lq-chip" style={{ background: c.soft, borderColor: c.line, color: c.strong }}>
-      <PartyMark party={party} size={14} />
+    <span className="lq-chip">
+      <PartyMark party={party} size={13} />
       {party.name}
     </span>
   );
@@ -225,7 +231,10 @@ export function Problem({ children }: { children: ReactNode }) {
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="lq-empty lq-fade">
-      <p style={{ fontSize: 15, fontWeight: 600, color: 'inherit' }}>{title}</p>
+      <Shape {...shapeFor(title)} size={40} />
+      <p className="lq-display" style={{ fontSize: 18 }}>
+        {title}
+      </p>
       {children}
     </div>
   );

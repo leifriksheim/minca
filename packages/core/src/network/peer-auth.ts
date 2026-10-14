@@ -195,9 +195,9 @@ export function peerNonce(): string {
 }
 
 const helloLabel = (spaceId: string, clientDid: string, nodeDid: string, nonce: string) =>
-  utf8Encode(`weave-peer/v3|client|${spaceId}|${clientDid}|${nodeDid}|${nonce}`);
+  utf8Encode(`minca-peer/v3|client|${spaceId}|${clientDid}|${nodeDid}|${nonce}`);
 const welcomeLabel = (spaceId: string, nodeDid: string, nonce: string) =>
-  utf8Encode(`weave-peer/v3|server|${spaceId}|${nodeDid}|${nonce}`);
+  utf8Encode(`minca-peer/v3|server|${spaceId}|${nodeDid}|${nonce}`);
 
 async function verifyBy(
   provider: CryptoProvider,
@@ -307,7 +307,7 @@ const meshLabel = (
   nonce: string,
   proverCert: string,
   verifierCert: string,
-) => utf8Encode(`weave-mesh/v1|${spaceId}|${prover}|${verifier}|${nonce}|${proverCert}|${verifierCert}`);
+) => utf8Encode(`minca-mesh/v1|${spaceId}|${prover}|${verifier}|${nonce}|${proverCert}|${verifierCert}`);
 
 /** One side of the handshake between peers; `read` is, in a private space, the read key to prove with and the public half to check others against. */
 export function createMeshAuth(

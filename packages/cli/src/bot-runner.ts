@@ -1,17 +1,17 @@
 /**
- * Running a node's automations (`std.automation`): what `weave agent --no-chat` does at a
+ * Running a node's automations (`std.automation`): what `minca agent --no-chat` does at a
  * terminal, and what a host does for each bot it runs. Automations that ask the
  * agent start a fresh conversation each time, one at a time, with nobody
  * there to allow deleting or overwriting, so those are refused. What someone
  * set off is counted against them, so nobody can spend the day for everyone.
  */
-import { PEER_CONTENT_NOTE, type P2PNode } from '@weaveprotocol/core';
+import { PEER_CONTENT_NOTE, type P2PNode } from '@minca/core';
 import {
   setActivity,
   startAutomations,
   type ActivityState,
   type AutomationTrigger,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import { createAgentChat, spendFor, type Price, type Spend, type Think } from './agent-chat.js';
 import { openTrigger, ruleContext, triggerPrompt, writerInstructs } from './agent-automations.js';
 import { messageOf } from './json.js';

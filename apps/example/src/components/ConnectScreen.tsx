@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useConnection } from '@weaveprotocol/core/react';
-import { Wordmark } from '@weave/app-shared/Wordmark';
+import { useConnection } from '@minca/core/react';
+import { Wordmark } from '@minca/app-shared/Wordmark';
 import { styles, palette } from '../styles';
 
 /** Before the app is connected: one button that opens the account home, where the person signs in */
@@ -21,7 +21,7 @@ export function ConnectScreen() {
         <p style={styles.subtitle}>
           {expired
             ? `This app's access to ${state.grant?.name ?? 'your account'} ran out. Your account home will ask you to allow it again.`
-            : 'Connect your Weave account. You sign in at your account home, and choose what this app may use.'}
+            : 'Connect your Minca account. You sign in at your account home, and choose what this app may use.'}
         </p>
 
         {own === null ? (
@@ -32,10 +32,10 @@ export function ConnectScreen() {
               data-variant="primary"
               style={styles.button}
             >
-              {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect with Weave'}
+              {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect with Minca'}
             </button>
             <p style={{ ...styles.errorHint, marginTop: 16 }}>
-              Opens <strong style={{ color: palette.ink.strong }}>{home}</strong> in a small window. This app
+              Opens <strong style={{ color: palette.ink.strong }}>{home}</strong>, where you sign in. This app
               gets a note signed by your account for its own key — never your password.
             </p>
             <div style={styles.linkRow}>
@@ -76,7 +76,7 @@ export function ConnectScreen() {
               {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect'}
             </button>
             <p style={{ ...styles.errorHint, marginTop: 8 }}>
-              The address of the Weave home you run yourself. This app remembers it.
+              The address of the Minca home you run yourself. This app remembers it.
             </p>
             <div style={styles.linkRow}>
               <button

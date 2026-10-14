@@ -1,7 +1,7 @@
 /**
- * `weave agent`: the connected agent, thinking for itself.
+ * `minca agent`: the connected agent, thinking for itself.
  *
- * `weave mcp` lends the node's tools to a chat client someone has open.
+ * `minca mcp` lends the node's tools to a chat client someone has open.
  * This runs the model loop here instead, with the person's own API key, at
  * Anthropic or any server that speaks OpenAI's Chat Completions
  * (`agent-openai.ts`): the same tools (`NODE_ACTIONS` less what needs a person), the same
@@ -22,7 +22,7 @@ import type {
   BetaToolResultBlockParam,
   MessageCreateParamsBase,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages';
-import { callAction, offeredActions, type P2PNode } from '@weaveprotocol/core';
+import { callAction, offeredActions, type P2PNode } from '@minca/core';
 import { toolDescription, toolInstructions } from './mcp.js';
 import { errorCode, isRecord } from './json.js';
 

@@ -1,10 +1,10 @@
 /**
- * Automations that ask an agent: what `weave agent` tells the model when one is set
+ * Automations that ask an agent: what `minca agent` tells the model when one is set
  * off. Which automations it runs, what sets them off and what never does is
- * `startAutomations` in `@weaveprotocol/core/schemas`; this is only the words.
+ * `startAutomations` in `@minca/core/schemas`; this is only the words.
  */
-import { runAction, type P2PNode } from '@weaveprotocol/core';
-import { INSTRUCT, type AutomationTrigger } from '@weaveprotocol/core/schemas';
+import { runAction, type P2PNode } from '@minca/core';
+import { INSTRUCT, type AutomationTrigger } from '@minca/core/schemas';
 
 /**
  * What the model is told when an automation asks it: the automation's own words, which are

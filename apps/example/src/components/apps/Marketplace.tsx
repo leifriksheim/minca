@@ -1,9 +1,10 @@
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
-import { useAccount, useCan, useLive, useNode } from '@weaveprotocol/core/react';
-import type { IncludedOf, QueryRecord } from '@weaveprotocol/core';
-import { comment, listing, order, orderUpdate, type Listing, type Money } from '@weaveprotocol/core/schemas';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useAccount, useCan, useLive, useNode } from '@minca/core/react';
+import type { IncludedOf, QueryRecord } from '@minca/core';
+import { comment, listing, order, orderUpdate, type Listing, type Money } from '@minca/core/schemas';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
 import { respondingTo } from '../../derive/people';
 import { ago } from '../../derive/time';
 import { styles, palette, ui } from '../../styles';
@@ -256,9 +257,7 @@ export function Marketplace({ space }: AppProps) {
           <div
             style={{ ...styles.emptyState, ...ui.stack, gap: 12, alignItems: 'center', padding: '48px 16px' }}
           >
-            <span aria-hidden style={{ fontSize: 36 }}>
-              🛍️
-            </span>
+            <Shape {...shapeFor('marketplace')} size={40} />
             <span>
               {words || category || freeOnly
                 ? 'Nothing matches.'
@@ -310,7 +309,7 @@ function ListingCard({ record, onOpen }: { record: ListingRecord; onOpen: () => 
         style={{
           aspectRatio: '1 / 1',
           width: '100%',
-          borderRadius: 12,
+          borderRadius: palette.radius.lg,
           opacity: body.status === 'sold' ? 0.55 : 1,
         }}
       >
@@ -326,8 +325,8 @@ function ListingCard({ record, onOpen }: { record: ListingRecord; onOpen: () => 
               position: 'absolute',
               top: 10,
               right: 10,
-              background: palette.ink.strong,
-              color: '#fff',
+              background: palette.accent.base,
+              color: palette.surface.card,
             }}
           >
             {mineWaiting} {mineWaiting === 1 ? 'request' : 'requests'}
@@ -338,7 +337,7 @@ function ListingCard({ record, onOpen }: { record: ListingRecord; onOpen: () => 
         <strong
           style={{
             fontSize: 16,
-            fontWeight: 650,
+            fontWeight: 600,
             color: isFree(body.price) ? palette.accent.good : palette.ink.strong,
           }}
         >
@@ -400,15 +399,16 @@ function ListingPage({
           kind={cat}
           seed={record.key}
           size={140}
-          style={{ aspectRatio: '4 / 3', width: '100%', borderRadius: 16 }}
+          style={{ aspectRatio: '4 / 3', width: '100%', borderRadius: palette.radius.lg }}
         />
         <div style={{ ...ui.stack, gap: 18, minWidth: 0 }}>
           <header style={{ ...ui.stack, gap: 6 }}>
             <h1
               style={{
                 fontSize: 26,
-                fontWeight: 650,
-                letterSpacing: '-0.03em',
+                fontFamily: palette.display,
+                fontWeight: 700,
+                letterSpacing: '-0.04em',
                 lineHeight: 1.2,
                 color: palette.ink.strong,
                 wordBreak: 'break-word',
@@ -419,7 +419,7 @@ function ListingPage({
             <strong
               style={{
                 fontSize: 22,
-                fontWeight: 650,
+                fontWeight: 600,
                 color: isFree(body.price) ? palette.accent.good : palette.ink.strong,
               }}
             >
@@ -533,9 +533,9 @@ function Ask({ space, record }: { space: AppProps['space']; record: ListingRecor
     const seller = <Person did={record.createdBy} style={{ fontWeight: 600, color: palette.ink.strong }} />;
     const tone: Record<Answer, string> = {
       waiting: palette.surface.sunken,
-      accepted: '#ecf8ef',
+      accepted: palette.accent.goodSoft,
       declined: palette.accent.dangerSoft,
-      done: '#ecf8ef',
+      done: palette.accent.goodSoft,
     };
     const said: Record<Answer, { title: ReactNode; text: ReactNode }> = {
       waiting: { title: 'Request sent', text: <>{seller} will answer here.</> },
@@ -554,7 +554,15 @@ function Ask({ space, record }: { space: AppProps['space']; record: ListingRecor
         { links: [{ rel: 'about', to: mine.key }] },
       );
     return (
-      <div style={{ ...ui.stack, gap: 10, padding: 16, borderRadius: 12, background: tone[state] }}>
+      <div
+        style={{
+          ...ui.stack,
+          gap: 10,
+          padding: 16,
+          borderRadius: palette.radius.lg,
+          background: tone[state],
+        }}
+      >
         {state !== 'declined' && <Steps at={state === 'waiting' ? 0 : state === 'accepted' ? 1 : 2} />}
         <strong style={{ fontSize: 15, color: palette.ink.strong }}>{said[state].title}</strong>
         <span style={{ fontSize: 13, lineHeight: 1.5, color: palette.ink.muted }}>{said[state].text}</span>
@@ -628,7 +636,7 @@ function Ask({ space, record }: { space: AppProps['space']; record: ListingRecor
         ...ui.stack,
         gap: 8,
         padding: 14,
-        borderRadius: 12,
+        borderRadius: palette.radius.lg,
         border: `1px solid ${palette.surface.line}`,
       }}
     >
@@ -793,7 +801,7 @@ function SellerCard({ did }: { did: string | null }) {
         alignItems: 'center',
         gap: 12,
         padding: 14,
-        borderRadius: 12,
+        borderRadius: palette.radius.lg,
         border: `1px solid ${palette.surface.line}`,
       }}
     >
@@ -1051,14 +1059,14 @@ const sortOf = (value: string): Sort =>
 /** The currency this person last priced something in, so they don't pick it every time */
 function lastCurrency(): string {
   try {
-    return globalThis.localStorage.getItem('weave:market-currency') ?? 'EUR';
+    return globalThis.localStorage.getItem('minca:market-currency') ?? 'EUR';
   } catch {
     return 'EUR';
   }
 }
 function rememberCurrency(currency: string) {
   try {
-    globalThis.localStorage.setItem('weave:market-currency', currency);
+    globalThis.localStorage.setItem('minca:market-currency', currency);
   } catch {
     // Private windows can refuse; picking it again is all that costs.
   }
@@ -1079,10 +1087,10 @@ const backLink: CSSProperties = {
 };
 const pill: CSSProperties = {
   padding: '3px 9px',
-  borderRadius: 999,
-  background: 'rgba(255, 255, 255, .92)',
+  borderRadius: palette.radius.pill,
+  background: palette.surface.card,
+  border: `1px solid ${palette.surface.rule}`,
   color: palette.ink.strong,
   fontSize: 12,
   fontWeight: 600,
-  boxShadow: '0 2px 8px -4px rgba(0, 0, 0, .3)',
 };

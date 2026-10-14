@@ -209,7 +209,7 @@ export type SpaceTop = { readonly founders: ReadonlyArray<string> } | 'none';
 export interface Space {
   readonly id: string; // hash of the space's constitution
   /** The constitution's format: `constitution/1` */
-  readonly weave: 'constitution/1';
+  readonly minca: 'constitution/1';
   readonly name: string;
   readonly visibility: SpaceVisibility; // 'private' means the bodies are encrypted
   /** How changes made apart resolve: `strong-remove/1` */

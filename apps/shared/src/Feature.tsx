@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { Shape } from './shapes';
 import { palette } from './styles';
 
 /** Line glyphs on a 16-unit grid, drawn with the current colour, like the example's icons */
@@ -39,46 +40,24 @@ export function Glyph({ name, size = 16, style }: { name: GlyphName; size?: numb
   );
 }
 
-/** The two things a host sells, each with its own colour, as the example's app tiles have */
-const HUES = { online: [205, 185], bot: [268, 300] } as const;
+/** The two things a host sells, each with its own shape */
+const FEATURES = {
+  online: { kind: 'clover', colour: 'cobalt' },
+  bot: { kind: 'sparkle', colour: 'coral' },
+} as const;
 
-/** A rounded tile with a gradient and a white glyph: what an upgrade looks like at a glance */
-export function FeatureIcon({
-  kind,
-  glyph,
-  size = 40,
-}: {
-  kind: keyof typeof HUES;
-  glyph: GlyphName;
-  size?: number;
-}) {
-  const [from, to] = HUES[kind];
-  return (
-    <span
-      aria-hidden
-      style={{
-        width: size,
-        height: size,
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: Math.round(size * 0.28),
-        background: `linear-gradient(145deg, hsl(${from} 85% 60%), hsl(${to} 75% 45%))`,
-        color: '#fff',
-      }}
-    >
-      <Glyph name={glyph} size={Math.round(size / 2)} style={{ strokeWidth: 1.6 }} />
-    </span>
-  );
+/** What an upgrade looks like at a glance: its shape, flat, as DESIGN.md has it */
+export function FeatureIcon({ kind, size = 40 }: { kind: keyof typeof FEATURES; size?: number }) {
+  return <Shape {...FEATURES[kind]} size={size} />;
 }
 
 export type Tone = 'good' | 'warn' | 'bad' | 'neutral';
+const { accent, ink, surface } = palette;
 const TONES: Record<Tone, { dot: string; text: string; background: string }> = {
-  good: { dot: '#1a7f37', text: '#136c2e', background: '#eef8f0' },
-  warn: { dot: '#c27a00', text: '#8a5a00', background: '#fdf6e7' },
-  bad: { dot: '#e5484d', text: '#c62a2f', background: '#fff0f0' },
-  neutral: { dot: '#8f8f8f', text: '#555', background: '#f4f4f4' },
+  good: { dot: accent.good, text: accent.good, background: accent.goodSoft },
+  warn: { dot: accent.warn, text: accent.warn, background: accent.warnSoft },
+  bad: { dot: accent.danger, text: accent.danger, background: accent.dangerSoft },
+  neutral: { dot: ink.faint, text: ink.muted, background: surface.sunken },
 };
 
 /** A short state, as a coloured pill with a dot: Online, Runs out in 5 days, Needs payment */

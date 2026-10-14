@@ -54,7 +54,7 @@ export type Message = BodyOf<typeof message>;
 
 /**
  * A call worth remembering, in the space it happened in. Calls themselves are
- * live and kept nowhere (`weave-protocol/calls`); this is only the history —
+ * live and kept nowhere (`minca-protocol/calls`); this is only the history —
  * a ring nobody answered, or a call that ended and who was in it.
  */
 export const call = define({

@@ -1,8 +1,8 @@
 /**
- * Adding `weave mcp` to the agents on this computer, so connecting is one
+ * Adding `minca mcp` to the agents on this computer, so connecting is one
  * command: Claude Code (through its own `claude mcp add`), Claude Desktop and
  * Cursor (their config files). Only the ones installed are touched, and an
- * existing "weave" entry is replaced, nothing else.
+ * existing "minca" entry is replaced, nothing else.
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { errorCode, isRecord, messageOf } from './json.js';
 const run = promisify(execFile);
 
 /** The name the server is added under */
-const SERVER_NAME = 'weave';
+const SERVER_NAME = 'minca';
 
 export interface ServerCommand {
   readonly command: string;
@@ -23,8 +23,8 @@ export interface ServerCommand {
 }
 
 /**
- * How to start `weave mcp` the way this process was started — from npx, a
- * linked `weave`, the repo, or a compiled binary — with absolute paths, since
+ * How to start `minca mcp` the way this process was started — from npx, a
+ * linked `minca`, the repo, or a compiled binary — with absolute paths, since
  * an agent starts it from anywhere, and a desktop app without the shell's PATH.
  */
 export function serverCommand(home: string): ServerCommand {
@@ -36,7 +36,7 @@ export function serverCommand(home: string): ServerCommand {
   // Run from npx: its cache is temporary, so ask npx again.
   if (script.includes(`${path.sep}_npx${path.sep}`)) {
     const npx = path.join(path.dirname(process.execPath), process.platform === 'win32' ? 'npx.cmd' : 'npx');
-    return { command: existsSync(npx) ? npx : 'npx', args: ['-y', '@weaveprotocol/cli', ...tail] };
+    return { command: existsSync(npx) ? npx : 'npx', args: ['-y', '@minca/cli', ...tail] };
   }
   // From the sources: Node needs tsx, found from here rather than from wherever the agent starts.
   const tsx = script.endsWith('.ts') ? import.meta.resolve('tsx') : null;

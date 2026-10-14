@@ -9,14 +9,14 @@ import {
   type RefObject,
   type SyntheticEvent,
 } from 'react';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { nameOf, type People } from '../../derive/people';
 import { palette } from '../../styles';
 import { Person } from '../Person';
 
 /** How a mention stands out, in a message and in the box it is written in */
-const MENTION_BG = '#e8f0fe';
-const MENTION_INK = '#1a56c4';
+const MENTION_BG = palette.accent.soft;
+const MENTION_INK = palette.accent.base;
 
 /** A run of text, and whom it mentions when it is an "@Name" */
 interface Segment {
@@ -203,7 +203,7 @@ export function MentionText({
         style={{
           color: MENTION_INK,
           background: MENTION_BG,
-          borderRadius: 4,
+          borderRadius: palette.radius.sm,
           padding: '0 2px',
           fontWeight: 500,
           textDecoration: 'none',
@@ -240,7 +240,7 @@ export function MentionField({
         position: 'relative',
         flex: 1,
         minWidth: 0,
-        borderRadius: 6,
+        borderRadius: palette.radius.lg,
         background: palette.surface.card,
       }}
     >
@@ -268,7 +268,7 @@ export function MentionField({
               style={{
                 color: 'transparent',
                 background: MENTION_BG,
-                borderRadius: 3,
+                borderRadius: palette.radius.sm,
                 boxShadow: `0 0 0 2px ${MENTION_BG}`,
               }}
             >

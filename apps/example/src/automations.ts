@@ -1,7 +1,7 @@
 /** Automations picked from the space's collections, kept with what was picked so they can be shown in words; run by `startAutomations` while this app is open. */
 import { useEffect } from 'react';
-import { useAccount, useNode } from '@weaveprotocol/core/react';
-import type { Filter, NodeCollection, QueryRecord } from '@weaveprotocol/core';
+import { useAccount, useNode } from '@minca/core/react';
+import type { Filter, NodeCollection, QueryRecord } from '@minca/core';
 import {
   IT,
   ME,
@@ -10,7 +10,7 @@ import {
   type Automation,
   type AutomationAction,
   type AutomationWhen,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import { attachable, isObject, quickAddBody } from './derive/schema-ui';
 import { clausesWords, clauseFields, whereOf, type Clause, type ClauseField } from './derive/conditions';
 import { collectionLabel } from './derive/schema-ui';
@@ -330,7 +330,7 @@ function notify(title: string, text: string, record?: QueryRecord): boolean {
   return true;
 }
 
-/** Runs this account's automations in every space while the app is open; those that ask an agent or run on a timer are `weave agent`'s */
+/** Runs this account's automations in every space while the app is open; those that ask an agent or run on a timer are `minca agent`'s */
 export function useRunAutomations(): void {
   const node = useNode();
   const { did } = useAccount();

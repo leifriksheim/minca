@@ -27,7 +27,7 @@ async function ensureOffscreen(): Promise<void> {
       url: OFFSCREEN,
       reasons: [chrome.offscreen.Reason.WEB_RTC],
       justification:
-        'Runs a peer that keeps your Weave spaces synced with your other devices over WebRTC while the browser is open.',
+        'Runs a peer that keeps your Minca spaces synced with your other devices over WebRTC while the browser is open.',
     })
     .finally(() => {
       creating = null;
@@ -39,23 +39,23 @@ function showBadge(status: CarrierStatus): void {
   const podNeedsYou = status.pod.state === 'not-picked' || status.pod.state === 'needs-permission';
   let text = '';
   let color = '#000000';
-  let title = 'Weave';
+  let title = 'Minca';
   if (status.state === 'not-connected') {
-    title = status.removed ? 'Weave — disconnected by your account' : 'Weave — not connected yet';
+    title = status.removed ? 'Minca — disconnected by your account' : 'Minca — not connected yet';
   } else if (status.state === 'error') {
     text = '!';
     color = '#e5484d';
-    title = `Weave — ${status.error ?? 'something went wrong'}`;
+    title = `Minca — ${status.error ?? 'something went wrong'}`;
   } else if (podNeedsYou) {
     text = '!';
     color = '#b45309';
-    title = 'Weave — your pod needs a click to keep syncing';
+    title = 'Minca — your pod needs a click to keep syncing';
   } else if (status.state === 'running') {
     // A small green mark: carrying.
     text = ' ';
     color = '#1a7f37';
     const carried = status.spaces.filter((space) => !space.carry).length;
-    title = `Weave — keeping ${carried} space${carried === 1 ? '' : 's'} online`;
+    title = `Minca — keeping ${carried} space${carried === 1 ? '' : 's'} online`;
   }
   void chrome.action.setBadgeText({ text });
   void chrome.action.setBadgeBackgroundColor({ color });

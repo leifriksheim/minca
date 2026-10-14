@@ -19,8 +19,8 @@ const docs = join(root, 'docs');
 const guides = readdirSync(docs).filter((name) => name.endsWith('.md'));
 const read = (name: string) => readFileSync(join(docs, name), 'utf8');
 
-/** `import { a, type B, c } from '@weaveprotocol/core/x'`, across lines */
-const IMPORT = /import\s*\{([^}]*)\}\s*from\s*'(@weaveprotocol\/core(?:\/[a-z]+)?)'/g;
+/** `import { a, type B, c } from '@minca/core/x'`, across lines */
+const IMPORT = /import\s*\{([^}]*)\}\s*from\s*'(@minca\/core(?:\/[a-z]+)?)'/g;
 
 const sourceOf = (specifier: string) => {
   const entry = specifier.split('/')[2];

@@ -12,24 +12,24 @@ import { openEnvelope, sealEnvelope } from '../identity/envelope.js';
 import { isRecord } from '../utils/guards.js';
 
 const SPACE_KEY_BYTES = 32;
-const SEAL_INFO = utf8Encode('weave/space-seal/v1');
-const KEY_ID_INFO = utf8Encode('weave/space-key-id/v1');
+const SEAL_INFO = utf8Encode('minca/space-seal/v1');
+const KEY_ID_INFO = utf8Encode('minca/space-key-id/v1');
 const KEY_ID_BYTES = 16;
 
 /** The envelope label of a record body; bound to `{ space, collection, key, keyId }` */
-const RECORD_BODY_LABEL = 'weave/record-body/v1';
+const RECORD_BODY_LABEL = 'minca/record-body/v1';
 /** The envelope label of the earlier keys a `sys.key` carries; bound to `{ space, keyId }` */
-export const EARLIER_KEYS_LABEL = 'weave/earlier-keys/v1';
+export const EARLIER_KEYS_LABEL = 'minca/earlier-keys/v1';
 /** The envelope label of a reader's note, sealed for a connection; bound to `{ space }` */
-export const MEMBERSHIP_LABEL = 'weave/membership/v1';
+export const MEMBERSHIP_LABEL = 'minca/membership/v1';
 
 /** A key of a private space */
 export interface SpaceKey {
-  /** `base64url(HKDF(K, "weave/space-key-id/v1", 16))`: names the key without giving it away */
+  /** `base64url(HKDF(K, "minca/space-key-id/v1", 16))`: names the key without giving it away */
   readonly id: string;
   /** K, the 32 random bytes. Only ever key material for HKDF, never a key itself. */
   readonly raw: Uint8Array;
-  /** `HKDF(K, "weave/space-seal/v1")`: the AES-256-GCM key every envelope under this space key uses */
+  /** `HKDF(K, "minca/space-seal/v1")`: the AES-256-GCM key every envelope under this space key uses */
   readonly seal: CryptoKey;
   readonly createdAt: string;
   readonly version: number;

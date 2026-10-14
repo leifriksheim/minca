@@ -5,7 +5,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createWeaveAuth, type WeaveAuth } from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import {
   homeAddress,
   startConnectedNode,
@@ -43,11 +43,11 @@ afterEach(async () => {
 });
 
 /** The account home: a signed-in flow on the hub */
-async function home(hub: FakeHub): Promise<WeaveAuth> {
+async function home(hub: FakeHub): Promise<MincaAuth> {
   const accounts = createFolderAccountStore(createMemoryDirectory().handle);
   const stores = memoryStores();
-  const values = new Map<string, string>([['weave.stay-signed-in', '"never"']]);
-  const auth = createWeaveAuth({
+  const values = new Map<string, string>([['minca.stay-signed-in', '"never"']]);
+  const auth = createMincaAuth({
     rpId: 'home.test',
     storage: {
       getItem: (k) => values.get(k) ?? null,
@@ -475,14 +475,14 @@ describe('giving an app the contacts', () => {
 
 describe('an account home typed by a person', () => {
   test('a bare address becomes its https connect page', () => {
-    assert.equal(homeAddress('weave.example.com'), 'https://weave.example.com/connect');
-    assert.equal(homeAddress(' https://weave.example.com/ '), 'https://weave.example.com/connect');
-    assert.equal(homeAddress('https://me.example/weave/connect#x'), 'https://me.example/weave/connect');
+    assert.equal(homeAddress('minca.example.com'), 'https://minca.example.com/connect');
+    assert.equal(homeAddress(' https://minca.example.com/ '), 'https://minca.example.com/connect');
+    assert.equal(homeAddress('https://me.example/minca/connect#x'), 'https://me.example/minca/connect');
   });
 
   test('plain http only for this machine', () => {
     assert.equal(homeAddress('localhost:5174'), 'http://localhost:5174/connect');
-    assert.throws(() => homeAddress('http://weave.example.com'), /https/);
+    assert.throws(() => homeAddress('http://minca.example.com'), /https/);
   });
 
   test('something that is not an address says so', () => {
@@ -494,8 +494,8 @@ describe('an account home typed by a person', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const accounts = createFolderAccountStore(createMemoryDirectory().handle);
     const stores = memoryStores();
-    const values = new Map<string, string>([['weave.stay-signed-in', '"never"']]);
-    const auth = createWeaveAuth({
+    const values = new Map<string, string>([['minca.stay-signed-in', '"never"']]);
+    const auth = createMincaAuth({
       rpId: 'home.test',
       storage: {
         getItem: (k) => values.get(k) ?? null,
@@ -530,7 +530,7 @@ describe('connecting a carrier to an account home', () => {
     const key = await appKey();
 
     const request: ConnectRequest = await asked(
-      { v: 1, audience: key.did, name: 'Weave for Chrome', access: 'carry' },
+      { v: 1, audience: key.did, name: 'Minca for Chrome', access: 'carry' },
       key,
     );
     const grant = await auth.grantCarry({ origin: 'chrome-extension://abcdef', request });
@@ -719,7 +719,7 @@ describe('an app proposing automations', () => {
       request: await asked({
         v: 1,
         audience: (await appKey()).did,
-        name: 'Weave for Chrome',
+        name: 'Minca for Chrome',
         access: 'carry',
       }),
     });
@@ -917,11 +917,68 @@ describe('an app showing its own notifications', () => {
   });
 });
 
+describe('the app asking its home', () => {
+  test('a hello that arrives before the request is ready is still answered, and the request repeats until answered', async () => {
+    const { connectToHome } = await import('../src/session/connect.js');
+    const key = await testAppKey('early-hello');
+    const toHome: Array<{ message: unknown; origin: string }> = [];
+    const popup = {
+      closed: false,
+      close() {},
+      postMessage: (message: unknown, origin: string) => toHome.push({ message, origin }),
+    };
+    type Heard = { source: unknown; origin: string; data: unknown };
+    const listeners = new Set<(event: Heard) => void>();
+    const g: {
+      open?: unknown;
+      location?: unknown;
+      addEventListener?: unknown;
+      removeEventListener?: unknown;
+    } = globalThis;
+    const saved = {
+      open: g.open,
+      location: g.location,
+      addEventListener: g.addEventListener,
+      removeEventListener: g.removeEventListener,
+    };
+    Object.assign(g, {
+      open: () => popup,
+      location: { href: 'https://app.test/' },
+      addEventListener: (_type: string, listener: (event: Heard) => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: (event: Heard) => void) => listeners.delete(listener),
+    });
+    const fromHome = (data: unknown) => {
+      for (const listener of [...listeners]) listener({ source: popup, origin: 'https://home.test', data });
+    };
+    try {
+      const asking = connectToHome({ home: 'https://home.test/connect', key, request: { access: 'write' } });
+      // The home loaded and said hello while the app was still making its proof.
+      fromHome({ type: 'minca:hello' });
+      await until(() => toHome.length > 0);
+      const [sent] = toHome;
+      assert.equal(sent?.origin, 'https://home.test', 'only to the home');
+      assert.ok(isRecord(sent?.message) && sent.message.type === 'minca:request');
+      assert.ok(isRecord(sent.message.request) && sent.message.request.audience === key.did);
+      // The hello may be missed altogether: the request is sent again until the home answers, to it alone.
+      const before = toHome.length;
+      await until(() => toHome.length > before);
+      assert.ok(toHome.every((m) => m.origin === 'https://home.test'));
+      fromHome({ type: 'minca:denied', reason: 'Not now' });
+      await assert.rejects(asking, /Not now/);
+      const after = toHome.length;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      assert.equal(toHome.length, after, 'and stops once answered');
+    } finally {
+      Object.assign(g, saved);
+    }
+  });
+});
+
 describe('the home receiving a request', () => {
   /** The fields of a message event the home reads */
   type PageMessage = { source: unknown; data: unknown; origin: string };
 
-  const isDenied = (message: unknown) => isRecord(message) && message.type === 'weave:denied';
+  const isDenied = (message: unknown) => isRecord(message) && message.type === 'minca:denied';
 
   /** Stands in for the popup's window: an opener, and the page's message events. */
   function popupWindow() {
@@ -960,13 +1017,53 @@ describe('the home receiving a request', () => {
     };
   }
 
+  const isHello = (message: unknown) => isRecord(message) && message.type === 'minca:hello';
+
+  test('it says hello once, and still takes a request that comes much later', async () => {
+    const popup = popupWindow();
+    try {
+      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const received = receiveConnectRequest(5000);
+      // A phone that paused the app's tab: its request comes when the tab runs again.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const hellos = popup.sent.filter((m) => isHello(m.message));
+      assert.equal(
+        hellos.length,
+        1,
+        'a page that takes over the app’s tab later is not told where the home is',
+      );
+      assert.equal(hellos[0]?.origin, '*', 'a hello carries nothing secret');
+      popup.send({
+        type: 'minca:request',
+        request: await asked({ v: 1, audience: 'did:key:zApp', access: 'write' }),
+      });
+      const incoming = await received;
+      assert.equal(incoming?.origin, 'https://app.test');
+    } finally {
+      popup.restore();
+    }
+  });
+
+  test('it stops waiting when the app that opened it is gone', async () => {
+    const popup = popupWindow();
+    try {
+      const { receiveConnectRequest } = await import('../src/session/connect.js');
+      const received = receiveConnectRequest(60_000);
+      const g: { opener?: unknown } = globalThis;
+      if (isRecord(g.opener)) g.opener.closed = true;
+      assert.equal(await received, null);
+    } finally {
+      popup.restore();
+    }
+  });
+
   test('a request it cannot read is refused out loud, not left waiting', async () => {
     const popup = popupWindow();
     try {
       const { receiveConnectRequest } = await import('../src/session/connect.js');
       const received = receiveConnectRequest(1000);
       popup.send({
-        type: 'weave:request',
+        type: 'minca:request',
         request: await asked({ v: 1, audience: 'did:key:zApp', access: 'something-new' }),
       });
       assert.equal(await received, null);
@@ -1013,7 +1110,7 @@ describe('the home receiving a request', () => {
       const popup = popupWindow();
       try {
         const received = receiveConnectRequest(1000);
-        popup.send({ type: 'weave:request', request });
+        popup.send({ type: 'minca:request', request });
         assert.equal(await received, null);
         assert.ok(popup.sent.some((m) => isDenied(m.message)));
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -1037,7 +1134,7 @@ describe('the home receiving a request', () => {
       const popup = popupWindow();
       try {
         const received = receiveConnectRequest(1000);
-        popup.send({ type: 'weave:request', request });
+        popup.send({ type: 'minca:request', request });
         assert.equal(await received, null);
         assert.ok(popup.sent.some((m) => isDenied(m.message)));
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -1049,7 +1146,7 @@ describe('the home receiving a request', () => {
     try {
       const received = receiveConnectRequest(1000);
       popup.send({
-        type: 'weave:request',
+        type: 'minca:request',
         request: {
           v: 2,
           kind: 'propose',
@@ -1070,12 +1167,12 @@ describe('the home receiving a request', () => {
       const received = receiveConnectRequest(1000);
       popup.send(
         {
-          type: 'weave:request',
+          type: 'minca:request',
           request: await asked({
             v: 1,
             audience: 'did:key:zCarrier',
             access: 'carry',
-            name: 'Weave for Chrome',
+            name: 'Minca for Chrome',
           }),
         },
         'chrome-extension://abc',
@@ -1100,7 +1197,7 @@ describe('the home receiving a request', () => {
       const popup = popupWindow();
       try {
         const received = receiveConnectRequest(1000);
-        popup.send({ type: 'weave:request', request }, origin);
+        popup.send({ type: 'minca:request', request }, origin);
         assert.equal(await received, null);
         assert.ok(popup.sent.some((m) => isDenied(m.message)));
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -1113,7 +1210,7 @@ describe('the home receiving a request', () => {
       const received = receiveConnectRequest(1000);
       popup.send(
         {
-          type: 'weave:request',
+          type: 'minca:request',
           request: {
             v: 2,
             kind: 'propose',

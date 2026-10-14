@@ -39,7 +39,7 @@ import {
   type Blueprint,
   type DraftCollection,
 } from '../src/schemas/index.js';
-import { createWeaveAuth, type WeaveAuth } from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import { grantSigner, type Grant } from '../src/session/connect.js';
 import { connectWithCode, offerConnectCode } from '../src/session/connect-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
@@ -775,11 +775,11 @@ describe('what a collection allows, in words', () => {
 describe('a program connected by code, through the account home', () => {
   async function home(
     hub: FakeHub,
-    values = new Map<string, string>([['weave.stay-signed-in', '"never"']]),
-  ): Promise<WeaveAuth> {
+    values = new Map<string, string>([['minca.stay-signed-in', '"never"']]),
+  ): Promise<MincaAuth> {
     const accounts = createFolderAccountStore(createMemoryDirectory().handle);
     const stores = memoryStores();
-    const auth = createWeaveAuth({
+    const auth = createMincaAuth({
       rpId: 'home.test',
       storage: {
         getItem: (k) => values.get(k) ?? null,
@@ -858,11 +858,11 @@ describe('a program connected by code, through the account home', () => {
   });
 
   test('a connection kept in an older shape is dropped, not read as the app’s own', async () => {
-    const values = new Map<string, string>([['weave.stay-signed-in', '"never"']]);
+    const values = new Map<string, string>([['minca.stay-signed-in', '"never"']]);
     const auth = await home(createFakeHub({ latencyMs: 1 }), values);
     const origin = 'https://app.test';
     const program = await testAppKey('did:key:zOldAgent');
-    const key = `weave.connections:${auth.getState().session!.account.id}`;
+    const key = `minca.connections:${auth.getState().session!.account.id}`;
     const kept = {
       origin,
       name: 'Agent',
@@ -1047,7 +1047,7 @@ describe('a program connected by code, through the account home', () => {
 });
 
 describe('an agent running a node of its own', () => {
-  /** What `weave connect` ends up with: its own key, and the home's grant for the whole account */
+  /** What `minca connect` ends up with: its own key, and the home's grant for the whole account */
   async function agentNode(
     who: { me: Person['me']; manager: Person['manager']; seed: Uint8Array },
     hub: FakeHub,

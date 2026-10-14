@@ -79,7 +79,7 @@ export function deriveAccountRegistry(
   owner: string,
   provider: CryptoProvider = createP256Provider(),
 ): Promise<SpaceRecord> {
-  return deriveAccountSpace(accountKey, owner, 'weave/account-registry', 'Account registry', provider);
+  return deriveAccountSpace(accountKey, owner, 'minca/account-registry', 'Account registry', provider);
 }
 
 /**
@@ -92,7 +92,7 @@ export function deriveContactsSpace(
   owner: string,
   provider: CryptoProvider = createP256Provider(),
 ): Promise<SpaceRecord> {
-  return deriveAccountSpace(accountKey, owner, 'weave/contacts', 'Contacts', provider);
+  return deriveAccountSpace(accountKey, owner, 'minca/contacts', 'Contacts', provider);
 }
 
 /** A private space only the account can find: its key and nonce derived from the account key under `label`. */
@@ -107,7 +107,7 @@ async function deriveAccountSpace(
   const createdAt = new Date(0).toISOString(); // fixed, so every device derives the same record
   const key = await spaceKeyFromRaw(await expandSecret(accountKey, `${label}/key/v1`), createdAt);
   const fixed: Constitution = {
-    weave: CONSTITUTION,
+    minca: CONSTITUTION,
     name,
     visibility: 'private',
     resolver: STRONG_REMOVE,

@@ -1,8 +1,8 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { useMayDefine } from '@weave/app-shared/may';
-import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useAccount, useCollections, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { useAction } from '@weave/app-shared/action';
+import { useMayDefine } from '@minca/app-shared/may';
+import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@minca/core';
+import { useAccount, useCollections, useNode, useProfiles } from '@minca/core/react';
+import { useAction } from '@minca/app-shared/action';
 import { nameOf, peopleFrom } from '../derive/people';
 import { collectionLabel, humanize, isObject } from '../derive/schema-ui';
 import {
@@ -756,7 +756,7 @@ const fieldCard: CSSProperties = {
   gap: 10,
   padding: 8,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
 };
 const nudge: CSSProperties = {
@@ -773,7 +773,7 @@ const typeButton: CSSProperties = {
   gap: 8,
   height: 36,
   padding: '0 10px 0 4px',
-  borderRadius: 8,
+  borderRadius: palette.radius.md,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.sunken,
   color: palette.ink.body,
@@ -788,7 +788,7 @@ const mark: CSSProperties = {
   justifyContent: 'center',
   width: 28,
   height: 28,
-  borderRadius: 6,
+  borderRadius: palette.radius.sm,
   background: palette.surface.card,
   border: `1px solid ${palette.surface.line}`,
   fontSize: 12,
@@ -801,7 +801,7 @@ const typeGrid: CSSProperties = {
   gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
   gap: 6,
   padding: 6,
-  borderRadius: 8,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
 };
 const typeTile: CSSProperties = {
@@ -809,7 +809,7 @@ const typeTile: CSSProperties = {
   alignItems: 'center',
   gap: 10,
   padding: 8,
-  borderRadius: 8,
+  borderRadius: palette.radius.md,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.card,
   textAlign: 'left',
@@ -829,7 +829,7 @@ const optionChip: CSSProperties = {
   gap: 6,
   height: 26,
   padding: '0 8px 0 10px',
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   background: palette.surface.sunken,
   border: `1px solid ${palette.surface.line}`,
   fontSize: 13,
@@ -837,7 +837,7 @@ const optionChip: CSSProperties = {
 };
 const addField_: CSSProperties = {
   height: 40,
-  borderRadius: 10,
+  borderRadius: palette.radius.pill,
   border: `1px dashed ${palette.surface.lineStrong}`,
   background: 'none',
   color: palette.ink.muted,
@@ -848,7 +848,7 @@ const preview: CSSProperties = {
   position: 'sticky',
   top: 0,
   padding: 16,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.sunken,
 };

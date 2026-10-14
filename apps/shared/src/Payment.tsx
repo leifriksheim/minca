@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { message, useAction, useCopy } from './action';
 import qrcode from 'qrcode-generator';
-import type { FundOffer, FundPayment, HostPlan, PayAnswer } from '@weaveprotocol/core';
+import type { FundOffer, FundPayment, HostPlan, PayAnswer } from '@minca/core';
 import { Glyph } from './Feature';
 import { styles, palette } from './styles';
 
@@ -172,7 +172,7 @@ function PayingSteps({ paying, onDone }: { paying: ReturnType<typeof usePaying>;
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: '#eef8f0',
+            background: palette.accent.goodSoft,
             color: palette.accent.good,
           }}
         >
@@ -312,7 +312,7 @@ export function ChipIn({
                 gap: 6,
                 background: method === known ? palette.surface.card : 'transparent',
                 color: method === known ? palette.ink.strong : palette.ink.muted,
-                boxShadow: method === known ? '0 1px 2px rgba(0,0,0,.08)' : 'none',
+                boxShadow: method === known ? palette.shadow.small : 'none',
               }}
             >
               <Glyph name={known === 'checkout' ? 'card' : 'wallet'} size={14} />
@@ -403,7 +403,7 @@ function Pulse() {
         height: 10,
         borderRadius: 5,
         background: palette.accent.good,
-        animation: 'weave-fade 0.9s ease-in-out infinite alternate',
+        animation: 'minca-fade 0.9s ease-in-out infinite alternate',
       }}
     />
   );
@@ -492,9 +492,8 @@ function PaymentRequest({ request, onBack }: { request: Request; onBack: () => v
         <div
           style={{
             padding: 8,
-            borderRadius: 12,
-            border: `1px solid ${palette.surface.line}`,
-            background: '#fff',
+            border: `1px solid ${palette.surface.rule}`,
+            background: palette.ink.inverse,
             lineHeight: 0,
           }}
         >
@@ -587,8 +586,9 @@ function QrCode({ text }: { text: string }) {
       role="img"
       aria-label="QR code for the payment"
     >
-      <rect width={side} height={side} fill="#fff" />
-      <path d={path} fill="#000" shapeRendering="crispEdges" />
+      {/* A wallet's camera wants the strongest contrast there is: white and navy. */}
+      <rect width={side} height={side} fill={palette.ink.inverse} />
+      <path d={path} fill={palette.ink.strong} shapeRendering="crispEdges" />
     </svg>
   );
 }

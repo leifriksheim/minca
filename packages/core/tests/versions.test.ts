@@ -30,7 +30,7 @@ import { stored } from './helpers/stored.js';
 
 /** A key for a store, which keeps versions whatever their key: whose it is is a peer's check, not a store's */
 const newRecordKey = () => base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)));
-const ownedFreshKey = () => ownedFreshKeyOf('did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ');
+const ownedFreshKey = () => ownedFreshKeyOf('did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E');
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
@@ -263,7 +263,7 @@ describe('a record’s chain', () => {
   test('the example in 02 §3.4 has the body hash and id the spec gives', async () => {
     const manager = createIdentityManager();
     const me = await manager.fromSeed(new Uint8Array(16).fill(7));
-    assert.equal(me.did, 'did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ');
+    assert.equal(me.did, 'did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E');
     const example = await createSigner(manager.getProvider()).sign(
       createVersion({
         author: me.did,
@@ -271,7 +271,7 @@ describe('a record’s chain', () => {
         body: { text: 'Buy milk', done: false },
         createdAt: '2026-09-26T12:00:00.000Z',
         space: 'bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a',
-        version: { key: 'iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa', seq: 0 },
+        version: { key: 'akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa', seq: 0 },
         seen: ['b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq'],
         links: [{ rel: 'about', to: 'list.groceries' }],
         log: { n: 0 },
@@ -279,7 +279,14 @@ describe('a record’s chain', () => {
       me.privateKey,
     );
     assert.equal(example.bodyHash, 'b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq');
-    assert.equal(example.id, 'bmzr56gi5ydwuqsqjs7jsprjcn474nxscmjjljbipkkhcp5nvh37a');
+    assert.equal(example.id, 'bvtkn4kg5z6qhfqvovhxypxvm767aqz6llyd67wztupdwixpfl7xa');
+    // The signature the spec shows checks against the author (a fresh one differs: ECDSA is randomized).
+    const shown = {
+      ...example,
+      signature: '6F_VmcmIYOMpViiFd3Wfn3j3MVll9hZ3GIP8si1sZrwz4QrwTOo8lREtoOvoqZjPrOzQppD58IskU5qvGcKyoQ',
+    };
+    const publicKey = await manager.getProvider().importPublicKey(didToPublicKey(me.did).publicKeyBytes);
+    assert.equal(await createSigner(manager.getProvider()).verify(shown, publicKey), true, example.signature);
   });
 
   test('the body is signed through its hash: a stub checks alone, another body does not', async () => {

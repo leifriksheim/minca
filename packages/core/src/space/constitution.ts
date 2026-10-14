@@ -36,7 +36,7 @@ const MAX_NAME = 100;
 export type Constitution = Omit<Space, 'id'>;
 
 const FIELDS: ReadonlySet<string> = new Set([
-  'weave',
+  'minca',
   'name',
   'visibility',
   'resolver',
@@ -53,7 +53,7 @@ const FIELDS: ReadonlySet<string> = new Set([
 /** A space's constitution: the space without its id, each optional field only when present */
 export function constitutionOf(space: Constitution): Constitution {
   return {
-    weave: space.weave,
+    minca: space.minca,
     name: space.name,
     visibility: space.visibility,
     resolver: space.resolver,
@@ -161,7 +161,7 @@ function assignedProblem(assigned: unknown, roles: ReadonlySet<string>): string 
  */
 export function constitutionProblem(constitution: unknown): string | null {
   if (!isRecord(constitution)) return 'A constitution is an object';
-  if (constitution.weave !== CONSTITUTION)
+  if (constitution.minca !== CONSTITUTION)
     return `It is not a ${CONSTITUTION} this peer knows, so it can't judge the space`;
   if (typeof constitution.resolver !== 'string' || !RESOLVERS.has(constitution.resolver))
     return 'It names a resolver this peer doesn’t know, so it can’t judge the space';

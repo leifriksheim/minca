@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { NewSpace, SpaceSummary } from '@weaveprotocol/core';
+import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
   CallsProvider,
   inviteFromLink,
@@ -7,7 +7,7 @@ import {
   useConnection,
   useNode,
   useSpaces,
-} from '@weaveprotocol/core/react';
+} from '@minca/core/react';
 import { AccountMenu } from './components/AccountMenu';
 import { AgentCard } from './components/AgentCard';
 import { useShowNotifications } from './notifications';
@@ -22,7 +22,7 @@ import { SpaceList } from './components/SpaceList';
 import { SpaceRail } from './components/SpaceRail';
 import { SpaceView } from './components/SpaceView';
 import { CallLayer } from './components/calls/Calls';
-import { Wordmark } from '@weave/app-shared/Wordmark';
+import { Wordmark } from '@minca/app-shared/Wordmark';
 
 import { readDoorFromUrl, takeBack } from './contacts';
 import { styles, palette } from './styles';

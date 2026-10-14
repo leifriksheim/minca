@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useAccount, useCan, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import type { IncludedOf, P2PNode, QueryRecord } from '@weaveprotocol/core';
-import { ballot, decision, proposal, type Proposal } from '@weaveprotocol/core/schemas';
-import { useAction } from '@weave/app-shared/action';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useAccount, useCan, useLive, useNode, useProfiles } from '@minca/core/react';
+import type { IncludedOf, P2PNode, QueryRecord } from '@minca/core';
+import { ballot, decision, proposal, type Proposal } from '@minca/core/schemas';
+import { useAction } from '@minca/app-shared/action';
 import { nameOf, peopleFrom, respondingTo } from '../../derive/people';
 import { styles, palette, ui } from '../../styles';
 import type { AppProps } from './index';
@@ -44,7 +45,16 @@ export function Decisions({ space, onOpen }: AppProps) {
           </button>
         ))}
       {proposals?.length === 0 && !proposing && (
-        <div style={styles.emptyState}>
+        <div
+          style={{
+            ...styles.emptyState,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <Shape {...shapeFor('decisions')} size={40} />
           Nothing to decide yet.{mayPropose ? ' Put something to the space.' : ''}
         </div>
       )}

@@ -260,7 +260,7 @@ describe('the daemon', () => {
     t.after(() => browser.close());
     const space = await browser.spaces.create({ name: 'Made in a browser', visibility: 'private' });
 
-    // `weave init --existing`, then `weave run`, on a laptop.
+    // `minca init --existing`, then `minca run`, on a laptop.
     const home = await openHome(await tempDir());
     await createAccount(home, { name: 'Leif', code });
     const laptop = await startDaemon({
@@ -378,7 +378,7 @@ describe('the daemon', () => {
 });
 
 describe('MCP', () => {
-  const info = { name: 'weave', version: 'test' };
+  const info = { name: 'minca', version: 'test' };
 
   test('initialises, lists the node actions as tools, and calls them', async () => {
     const node = await aNode(3);
@@ -468,41 +468,41 @@ describe('MCP', () => {
   });
 });
 
-describe('the weave command', () => {
+describe('the minca command', () => {
   test('init, create and list from a real process', async () => {
     const main = fileURLToPath(new URL('../src/main.ts', import.meta.url));
-    const env = { ...process.env, WEAVE_HOME: await tempDir(), WEAVE_PASSPHRASE: 'pw' };
-    const weave = (...args: string[]) =>
-      run(process.execPath, ['--conditions=@weaveprotocol/source', '--import', 'tsx', main, ...args], {
+    const env = { ...process.env, MINCA_HOME: await tempDir(), MINCA_PASSPHRASE: 'pw' };
+    const minca = (...args: string[]) =>
+      run(process.execPath, ['--conditions=@minca/source', '--import', 'tsx', main, ...args], {
         env,
       });
 
-    const { stderr } = await weave('init', '--name', 'Leif', '--passphrase');
+    const { stderr } = await minca('init', '--name', 'Leif', '--passphrase');
     assert.match(stderr, /Recovery code: [0-9A-Z-]+/);
 
     const created: unknown = JSON.parse(
-      (await weave('spaces', 'create', '--name', 'Notes', '--visibility', 'private')).stdout,
+      (await minca('spaces', 'create', '--name', 'Notes', '--visibility', 'private')).stdout,
     );
     const space = at(created, 'id');
     assert.ok(typeof space === 'string');
-    await weave('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"hi"}');
-    const listed: unknown = JSON.parse((await weave('records', 'list', '--space', space)).stdout);
+    await minca('records', 'put', '--space', space, '--collection', 'app.note', '--body', '{"text":"hi"}');
+    const listed: unknown = JSON.parse((await minca('records', 'list', '--space', space)).stdout);
     assert.equal(at(listed, 0, 'body', 'text'), 'hi');
 
-    await assert.rejects(weave('records', 'put', '--space', space, '--nonsense', 'x'), /has no --nonsense/);
+    await assert.rejects(minca('records', 'put', '--space', space, '--nonsense', 'x'), /has no --nonsense/);
   });
 
   test('an unknown command says so, without asking for an account first', async () => {
     const main = fileURLToPath(new URL('../src/main.ts', import.meta.url));
-    const env = { ...process.env, WEAVE_HOME: await tempDir() };
+    const env = { ...process.env, MINCA_HOME: await tempDir() };
     await assert.rejects(
-      run(process.execPath, ['--conditions=@weaveprotocol/source', '--import', 'tsx', main, 'agnet'], {
+      run(process.execPath, ['--conditions=@minca/source', '--import', 'tsx', main, 'agnet'], {
         env,
       }),
       (error: unknown) => {
         const said = String(at(error, 'stderr'));
         assert.match(said, /Unknown command "agnet"/);
-        assert.doesNotMatch(said, /weave init/);
+        assert.doesNotMatch(said, /minca init/);
         return true;
       },
     );
@@ -510,25 +510,25 @@ describe('the weave command', () => {
 
   test('with no terminal nothing is asked: a missing value fails at once, naming its flag', async () => {
     const main = fileURLToPath(new URL('../src/main.ts', import.meta.url));
-    const env = { ...process.env, WEAVE_HOME: await tempDir(), WEAVE_PASSPHRASE: 'pw' };
+    const env = { ...process.env, MINCA_HOME: await tempDir(), MINCA_PASSPHRASE: 'pw' };
     // execFile gives no terminal, as an agent's shell or CI would.
-    const weave = (...args: string[]) =>
-      run(process.execPath, ['--conditions=@weaveprotocol/source', '--import', 'tsx', main, ...args], {
+    const minca = (...args: string[]) =>
+      run(process.execPath, ['--conditions=@minca/source', '--import', 'tsx', main, ...args], {
         env,
         timeout: 30_000,
       });
     const refused = async (args: string[], pattern: RegExp) =>
-      assert.rejects(weave(...args), (error: unknown) => {
+      assert.rejects(minca(...args), (error: unknown) => {
         assert.match(String(at(error, 'stderr')), pattern);
         return true;
       });
 
-    await weave('init', '--name', 'Leif', '--passphrase');
-    await refused(['spaces', 'invite'], /Missing --space\. Its id is in `weave spaces list`/);
+    await minca('init', '--name', 'Leif', '--passphrase');
+    await refused(['spaces', 'invite'], /Missing --space\. Its id is in `minca spaces list`/);
     await refused(['spaces', 'create', '--name', 'Club'], /Missing --visibility/);
 
     const space = at(
-      JSON.parse((await weave('spaces', 'create', '--name', 'Club', '--visibility', 'private')).stdout),
+      JSON.parse((await minca('spaces', 'create', '--name', 'Club', '--visibility', 'private')).stdout),
       'id',
     );
     assert.ok(typeof space === 'string');
@@ -536,7 +536,7 @@ describe('the weave command', () => {
 
     // A standard collection by its name, and an automation by flags alone.
     const defined: unknown = JSON.parse(
-      (await weave('collections', 'define', '--standard', 'std.automation', '--space', space)).stdout,
+      (await minca('collections', 'define', '--standard', 'std.automation', '--space', space)).stdout,
     );
     assert.equal(at(defined, 'name'), 'std.automation');
     await refused(
@@ -545,7 +545,7 @@ describe('the weave command', () => {
     );
     const mentions: unknown = JSON.parse(
       (
-        await weave(
+        await minca(
           'automation',
           'add',
           '--space',
@@ -570,7 +570,7 @@ describe('the weave command', () => {
     assert.deepEqual(at(mentions, 'then'), { kind: 'ask', text: 'Answer them briefly' });
     const scheduled: unknown = JSON.parse(
       (
-        await weave(
+        await minca(
           'automation',
           'add',
           '--space',
@@ -595,11 +595,11 @@ describe('the weave command', () => {
     );
 
     // Something that can't be undone still runs without asking, as it always has: the agent or script said so.
-    const listed: unknown = JSON.parse((await weave('records', 'list', '--space', space)).stdout);
+    const listed: unknown = JSON.parse((await minca('records', 'list', '--space', space)).stdout);
     assert.ok(Array.isArray(listed));
     const key = at(listed, 0, 'key');
     assert.ok(typeof key === 'string');
-    await weave('records', 'delete', '--space', space, '--key', key);
+    await minca('records', 'delete', '--space', space, '--key', key);
   });
 
   test('what agent setup kept is read back, and anything unreadable is as if never kept', async () => {

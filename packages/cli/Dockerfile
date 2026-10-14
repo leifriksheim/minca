@@ -1,4 +1,4 @@
-# `weave host` as an image. Built from the repository root, because the CLI
+# `minca host` as an image. Built from the repository root, because the CLI
 # bundles the protocol and the relay from the workspace (packages/core,
 # packages/relay):
 #
@@ -18,24 +18,24 @@ COPY packages/cli/package.json packages/cli/
 COPY apps/home/package.json apps/home/
 COPY apps/example/package.json apps/example/
 COPY apps/extension/package.json apps/extension/
-RUN npm ci --ignore-scripts --workspace @weaveprotocol/cli
+RUN npm ci --ignore-scripts --workspace @minca/cli
 COPY packages/core packages/core
 COPY packages/relay packages/relay
 COPY packages/cli packages/cli
-RUN npm run bundle -w @weaveprotocol/cli
+RUN npm run bundle -w @minca/cli
 
 # The runtime: Node, `ws` (the bundle's one outside dependency the host uses;
-# node-datachannel is only for `weave connect`), and the bundle.
+# node-datachannel is only for `minca connect`), and the bundle.
 FROM node:22-alpine
 RUN apk add --no-cache su-exec
 WORKDIR /app
 COPY --from=build /repo/node_modules/ws node_modules/ws
-COPY --from=build /repo/packages/cli/dist/weave.mjs dist/weave.mjs
+COPY --from=build /repo/packages/cli/dist/minca.mjs dist/minca.mjs
 
 ENV PORT=8080
-ENV WEAVE_HOST_DATA=/data
+ENV MINCA_HOST_DATA=/data
 EXPOSE 8080
 
 # The data folder is a mounted volume, owned by root when it arrives, so the
 # host starts as root only to hand it to the `node` user, then runs as that.
-CMD ["sh", "-c", "mkdir -p \"$WEAVE_HOST_DATA\" && chown -R node:node \"$WEAVE_HOST_DATA\" && exec su-exec node node dist/weave.mjs host --host 0.0.0.0"]
+CMD ["sh", "-c", "mkdir -p \"$MINCA_HOST_DATA\" && chown -R node:node \"$MINCA_HOST_DATA\" && exec su-exec node node dist/minca.mjs host --host 0.0.0.0"]

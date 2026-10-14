@@ -14,23 +14,23 @@
  * The offscreen page may only use `chrome.runtime`, so everything it keeps is
  * in IndexedDB, which every page of the extension shares.
  */
-import type { CarriedSpace } from '@weaveprotocol/core/node';
-import type { CarryGrant } from '@weaveprotocol/core/session';
+import type { CarriedSpace } from '@minca/core/node';
+import type { CarryGrant } from '@minca/core/session';
 
-declare const __WEAVE_HOME__: string;
-declare const __WEAVE_RELAYS__: string;
+declare const __MINCA_HOME__: string;
+declare const __MINCA_RELAYS__: string;
 
 /** The account home offered first; people can type their own */
-export const DEFAULT_HOME = __WEAVE_HOME__;
+export const DEFAULT_HOME = __MINCA_HOME__;
 
 /** Relays built in; the home's own arrive with the grant */
-export const BUILT_IN_RELAYS: ReadonlyArray<string> = __WEAVE_RELAYS__
+export const BUILT_IN_RELAYS: ReadonlyArray<string> = __MINCA_RELAYS__
   .split(',')
   .map((url) => url.trim())
   .filter(Boolean);
 
 /** What the extension calls itself to the home */
-export const EXTENSION_NAME = 'Weave for Chrome';
+export const EXTENSION_NAME = 'Minca for Chrome';
 
 /** The name its key is kept under (`appKey`) */
 export const KEY_NAME = 'carrier';
@@ -86,7 +86,7 @@ export async function ask(request: Request): Promise<CarrierStatus> {
 
 // ─── The grant, kept in IndexedDB ───────────────────────────────────────
 
-const DB = 'weave-extension';
+const DB = 'minca-extension';
 const STORE = 'kv';
 
 function openDb(): Promise<IDBDatabase> {
@@ -124,4 +124,4 @@ export const setRemoved = (removed: boolean) =>
   kv<void>('readwrite', (store) => store.put(removed, 'removed'));
 
 /** The databases the carrier keeps its copy in, for one account */
-export const storePrefix = (did: string) => `weave-carrier:${did}`;
+export const storePrefix = (did: string) => `minca-carrier:${did}`;

@@ -1,18 +1,20 @@
-/* The home's look: white page, near-black text, one grey, hairlines, black as the only accent. */
-:root {
-  --ink-strong: #000;
-  --ink-body: #171717;
-  --ink-muted: #666;
-  --ink-faint: #8f8f8f;
-  --surface: #fff;
-  --sunken: #fafafa;
-  --line: #eaeaea;
-  --line-strong: #d4d4d4;
-  --danger: #e5484d;
-  --good: #1a7f37;
-  --warn: #b45309;
-  --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+/* Minca's look (apps/shared/DESIGN.md): paper, navy ink, navy rules, cobalt
+   pills. The colours are the shared tokens, which the build writes to
+   tokens.css as --minca-* properties. */
+
+/* The faces ship with the extension rather than coming from Google Fonts, so
+   opening the popup asks nothing of anyone. Latin subsets; see fonts/OFL.txt. */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('fonts/bricolage-grotesque.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/geist.woff2') format('woff2');
 }
 
 * {
@@ -21,16 +23,16 @@
 }
 
 body {
-  font-family: var(--font);
-  color: var(--ink-body);
-  background: var(--surface);
+  font-family: var(--minca-font);
+  color: var(--minca-body);
+  background: var(--minca-page);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 body.page {
-  padding: 48px 16px;
+  padding: 56px 16px;
 }
 .card {
   max-width: 480px;
@@ -45,60 +47,97 @@ body.popup {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 32px;
-  font-weight: 600;
-  font-size: 16px;
-  letter-spacing: -0.03em;
-  color: var(--ink-strong);
+  margin-bottom: 40px;
+  font-family: var(--minca-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.05em;
+  color: var(--minca-ink);
+}
+.mark svg {
+  width: 26px;
+  height: auto;
+  display: block;
+}
+.mark .band-1 {
+  fill: var(--minca-cobalt);
+}
+.mark .band-2 {
+  fill: var(--minca-coral);
+}
+.mark .band-3 {
+  fill: var(--minca-peach);
+}
+.mark .band-4 {
+  fill: var(--minca-sage);
 }
 .popup .mark {
+  font-size: 19px;
   margin-bottom: 16px;
 }
+.popup .mark svg {
+  width: 22px;
+}
 
+h1,
+h2 {
+  font-family: var(--minca-display);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--minca-ink);
+}
 h1 {
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  color: var(--ink-strong);
-  margin-bottom: 8px;
+  font-size: 32px;
+  line-height: 1.1;
+  margin-bottom: 12px;
 }
 h2 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink-strong);
-  margin-bottom: 4px;
+  font-size: 17px;
+  line-height: 1.3;
+  margin-bottom: 6px;
 }
 p {
-  color: var(--ink-muted);
+  color: var(--minca-muted);
 }
 p + p {
   margin-top: 8px;
 }
 .lead {
   font-size: 15px;
-  margin-bottom: 24px;
+  color: var(--minca-body);
+  margin-bottom: 28px;
 }
 strong {
-  color: var(--ink-strong);
+  color: var(--minca-ink);
   font-weight: 600;
 }
 
+/* Sections are cells of one ruled grid: stacked, they share a navy rule. */
 section {
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: var(--minca-card);
+  border: 1px solid var(--minca-rule);
   padding: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+}
+section:has(+ section) {
+  margin-bottom: 0;
+}
+section + section {
+  border-top: none;
 }
 .popup section {
   padding: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+.popup section:has(+ section) {
+  margin-bottom: 0;
 }
 
 label {
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: var(--ink-body);
+  color: var(--minca-body);
   margin-bottom: 6px;
 }
 input {
@@ -106,56 +145,85 @@ input {
   height: 40px;
   padding: 0 12px;
   font: inherit;
-  color: var(--ink-body);
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: var(--surface);
+  color: var(--minca-ink);
+  border: 1px solid var(--minca-line-strong);
+  border-radius: 0;
+  background: var(--minca-card);
 }
 input:focus {
   outline: none;
-  border-color: var(--ink-strong);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+  border-color: var(--minca-accent);
+  box-shadow: 0 0 0 3px var(--minca-accent-soft);
 }
 
+/* Controls are pills; cobalt is the one colour for actions. */
 button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 40px;
-  padding: 0 16px;
+  padding: 0 18px;
   font: inherit;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 999px;
   cursor: pointer;
-  background: var(--ink-strong);
-  color: #fff;
-  border: 1px solid var(--ink-strong);
+  background: var(--minca-accent);
+  color: var(--minca-card);
+  border: 1px solid var(--minca-accent);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
-button:hover {
-  background: #333;
+button:hover:not(:disabled) {
+  background: var(--minca-accent-hover);
+  border-color: var(--minca-accent-hover);
+  transform: translateY(-1px);
+}
+button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+button:focus-visible {
+  outline: 2px solid var(--minca-accent);
+  outline-offset: 2px;
 }
 button:disabled {
   opacity: 0.5;
   cursor: default;
 }
 button.quiet {
-  background: var(--surface);
-  color: var(--ink-body);
-  border-color: var(--line-strong);
+  background: transparent;
+  color: var(--minca-ink);
+  border-color: var(--minca-rule);
 }
-button.quiet:hover {
-  background: var(--sunken);
+button.quiet:hover:not(:disabled) {
+  background: var(--minca-card);
+  border-color: var(--minca-rule);
 }
 button.danger {
-  background: var(--surface);
-  color: var(--danger);
-  border-color: var(--line-strong);
+  background: transparent;
+  color: var(--minca-danger);
+  border-color: var(--minca-line-strong);
+}
+button.danger:hover:not(:disabled) {
+  background: var(--minca-danger-soft);
+  border-color: var(--minca-danger);
 }
 button.small {
   height: 32px;
-  padding: 0 12px;
+  padding: 0 14px;
   font-size: 13px;
 }
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+  button:hover:not(:disabled),
+  button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 .wide {
   width: 100%;
 }
@@ -179,25 +247,26 @@ button.small {
 .spaces {
   list-style: none;
   padding: 0;
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 .spaces li {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  padding: 6px 0;
   font-size: 13px;
+  border-top: 1px solid var(--minca-line);
 }
 .spaces .name {
-  color: var(--ink-body);
+  color: var(--minca-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .spaces .meta {
-  color: var(--ink-faint);
+  color: var(--minca-faint);
   white-space: nowrap;
 }
 
@@ -206,46 +275,48 @@ button.small {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--ink-faint);
+  background: var(--minca-faint);
   margin-right: 6px;
   vertical-align: 1px;
 }
 .dot.good {
-  background: var(--good);
+  background: var(--minca-good);
 }
 .dot.warn {
-  background: var(--warn);
+  background: var(--minca-warn);
 }
 .dot.bad {
-  background: var(--danger);
+  background: var(--minca-danger);
 }
 
 .hint {
   font-size: 13px;
-  color: var(--ink-muted);
+  color: var(--minca-muted);
 }
 .faint {
-  color: var(--ink-faint);
+  color: var(--minca-faint);
   font-size: 12px;
 }
 .error {
-  color: var(--danger);
+  color: var(--minca-danger);
   font-size: 13px;
   margin-top: 8px;
 }
 .note {
-  background: var(--sunken);
-  border-radius: 8px;
+  background: var(--minca-sunken);
   padding: 12px;
   font-size: 13px;
-  color: var(--ink-muted);
-  margin-bottom: 12px;
+  color: var(--minca-body);
+  margin-bottom: 16px;
 }
 a {
-  color: var(--ink-strong);
+  color: var(--minca-accent);
+}
+a:hover {
+  color: var(--minca-accent-hover);
 }
 code {
-  font-family: var(--mono);
+  font-family: var(--minca-mono);
   font-size: 12px;
 }
 
@@ -279,7 +350,7 @@ code {
   gap: 10px;
   font-size: 13px;
   font-weight: 400;
-  color: var(--ink-body);
+  color: var(--minca-body);
   margin: 0;
   padding: 6px 0;
   cursor: pointer;
@@ -289,9 +360,10 @@ code {
   height: auto;
   margin: 0;
   box-shadow: none;
+  accent-color: var(--minca-accent);
 }
 .choice .meta {
   margin-left: auto;
-  color: var(--ink-faint);
+  color: var(--minca-faint);
   white-space: nowrap;
 }

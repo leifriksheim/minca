@@ -1,11 +1,11 @@
 /**
- * `weave host`: a hosting service in one process.
+ * `minca host`: a hosting service in one process.
  *
  * A host node (`packages/core/src/node/host.ts`) carrying every subscription's spaces, served
- * the way `weave run` serves: sockets at `/peer?space=`, the relay on every
+ * the way `minca run` serves: sockets at `/peer?space=`, the relay on every
  * other path. Plus what a home and a person need (spec/06-nodes-and-sessions.md, Hosts):
  *
- *   GET    /.well-known/weave-host                who the host is: key, name, plans, where it takes peers
+ *   GET    /.well-known/minca-host                who the host is: key, name, plans, where it takes peers
  *   GET    /host/subscriptions/:id                its status, signed by the host
  *   PUT    /host/subscriptions/:id/carry          { account, invite } — the account's carry space
  *   DELETE /host/subscriptions/:id/carry
@@ -49,7 +49,7 @@ import {
   type HostStatus,
   type PayAnswer,
   type StoreFactory,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 import { isRecord, messageOf } from './json.js';
 import { createInboundPeers, serve, type Served } from './serve.js';
 import type { WalletPayments } from './wallet.js';
@@ -90,7 +90,7 @@ export interface HostOptions {
   readonly stores: StoreFactory;
   readonly port: number;
   readonly host?: string;
-  /** What it calls itself; default "Weave host" */
+  /** What it calls itself; default "Minca host" */
   readonly name?: string;
   /** Its price, for people ("$4 a month or $36 a year"); default from the wallet prices */
   readonly price?: string;
@@ -216,7 +216,16 @@ function originOf(req: IncomingMessage, configured?: string): string {
 /** A page that says one thing: that a payment went through, or what a link in a reminder mail did */
 function noticeHtml(name: string, said: string): string {
   const escape = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(name)}</title><style>:root{color-scheme:light dark}body{margin:0;font:15px/1.5 system-ui,sans-serif}main{max-width:480px;margin:0 auto;padding:48px 16px}h1{font-size:22px;margin:0 0 12px}</style></head><body><main><h1>${escape(name)}</h1><p>${escape(said)}</p></main></body></html>`;
+  // Minca's paper, navy ink and rainbow mark, inline so the page needs nothing from the apps
+  // or anyone else: system faces, so no font request tells a third party who paid this host.
+  const mark =
+    '<svg width="32" height="17" viewBox="0 0 24 13" aria-hidden="true"><path d="M0.5 12.5A11.5 11.5 0 0 1 23.5 12.5H20.75A8.75 8.75 0 0 0 3.25 12.5Z" fill="#2340d6"/><path d="M3.25 12.5A8.75 8.75 0 0 1 20.75 12.5H18A6 6 0 0 0 6 12.5Z" fill="#ff6b4a"/><path d="M6 12.5A6 6 0 0 1 18 12.5H15.25A3.25 3.25 0 0 0 8.75 12.5Z" fill="#ffc46b"/><path d="M8.75 12.5A3.25 3.25 0 0 1 15.25 12.5Z" fill="#4e8f6c"/></svg>';
+  const css =
+    'body{margin:0;background:#f6f3ee;color:#2a3352;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}' +
+    'main{max-width:440px;margin:0 auto;padding:72px 20px}' +
+    'h1{margin:28px 0 12px;font:700 30px/1.1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-0.04em;color:#13214a}' +
+    'p{margin:0}';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(name)}</title><style>${css}</style></head><body><main>${mark}<h1>${escape(name)}</h1><p>${escape(said)}</p></main></body></html>`;
 }
 
 /** "$4 a month or $36 a year", from the wallet's prices */
@@ -234,7 +243,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   const wallet = options.wallet ?? null;
   const reminders = options.reminders && options.publicUrl ? options.reminders : null;
   if (options.reminders && !options.publicUrl)
-    throw new Error('Reminders by email need the host’s public address (WEAVE_HOST_URL) for their links');
+    throw new Error('Reminders by email need the host’s public address (MINCA_HOST_URL) for their links');
   // The transactions already counted, so none pays twice — on disk, and in the bucket when there is one.
   const spentStore = wallet || billing ? await options.stores('host-wallet') : null;
   const isSpent = async (tx: string) =>
@@ -350,7 +359,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   const signedStatusOf = async (id: string) =>
     signStatus(await statusOf(id), options.key.privateKey, provider);
 
-  const name = options.name?.trim() || 'Weave host';
+  const name = options.name?.trim() || 'Minca host';
   // Card prices as people read them, asked of the provider once; its plan names without them.
   const labels: Record<string, string> = (await billing?.labels?.().catch(() => ({}))) ?? {};
   const period = (id: string) => (id === 'yearly' ? 'a year' : 'a month');
@@ -392,7 +401,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     mirror: options.mirror ?? null,
   });
   const description: HostDescription = {
-    weave: 'host/1',
+    minca: 'host/1',
     did: node.did,
     name,
     free: !!options.free,
@@ -638,7 +647,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
 
     const page = { 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
     if (url.pathname === '/host/paid' && method === 'GET') {
-      const said = 'Done. You can close this tab: your Weave app shows the new date when you go back to it.';
+      const said = 'Done. You can close this tab: your Minca app shows the new date when you go back to it.';
       return sendText(res, 'text/html; charset=utf-8', noticeHtml(name, said), page);
     }
     // The links in a reminder mail: whoever holds the mail holds the token.

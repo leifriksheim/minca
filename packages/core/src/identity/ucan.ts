@@ -1,6 +1,6 @@
 /**
  * @module identity/ucan
- * Delegations in Weave's JSON profile of UCAN 1.0 (spec 01 §7).
+ * Delegations in Minca's JSON profile of UCAN 1.0 (spec 01 §7).
  *
  * UCAN 1.0's fields, command paths, policy language and attenuation, written
  * as canonical JSON and signed with ES256 over those bytes, in place of
@@ -20,7 +20,7 @@ import { didToPublicKey, publicKeyToDid, P256_MULTICODEC } from './did.js';
 import { evaluatePolicy, isJson, policyProblem, type Policy } from './policy.js';
 
 /** The type tag: which profile, and which kind of token */
-export const DELEGATION_TYPE = 'weave/ucan/dlg@1';
+export const DELEGATION_TYPE = 'minca/ucan/dlg@1';
 
 /** What a delegation says */
 export interface DelegationPayload {

@@ -1,9 +1,12 @@
 import type { CSSProperties } from 'react';
-import { baseCss, hoverCss, palette, styles } from '@weave/app-shared/styles';
+import { baseCss, hoverCss, palette, styles } from '@minca/app-shared/styles';
 
 export { palette, styles };
 
-const { ink, surface, accent, radius } = palette;
+const { ink, surface, accent, radius, shadow } = palette;
+
+/** A navy wash over what is behind it, for overlays and labels on video */
+const navyWash = (percent: number) => `color-mix(in srgb, ${ink.strong} ${percent}%, transparent)`;
 
 /** How wide the column of spaces is, down the left edge while one is open. */
 const RAIL_WIDTH = 68;
@@ -19,10 +22,10 @@ const SIDEBAR_WIDTH = 248;
  * instead of an inline style. The rest of the layout stays inline.
  */
 export function injectBaseStyles(): void {
-  if (globalThis.document.getElementById('weave-base-styles')) return;
+  if (globalThis.document.getElementById('minca-base-styles')) return;
 
   const style = globalThis.document.createElement('style');
-  style.id = 'weave-base-styles';
+  style.id = 'minca-base-styles';
   style.textContent = `
     ${baseCss}
 
@@ -36,7 +39,7 @@ export function injectBaseStyles(): void {
       /* Keyboard users never hover, so the action has to be reachable anyway. */
       [data-row-action]:focus-visible { opacity: 1; }
       ${hoverCss}
-      .you-button:hover, .you-button[aria-expanded="true"] { background: rgba(0, 0, 0, .05); }
+      .you-button:hover, .you-button[aria-expanded="true"] { background: ${surface.line}; }
     }
 
     /* ── Layout that follows the screen ──────────────────────────────────
@@ -69,13 +72,13 @@ export function injectBaseStyles(): void {
     }
     .you-button {
       width: 100%; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px;
-      border: none; border-radius: 8px; background: none; text-align: left;
+      border: none; border-radius: ${radius.pill}px; background: none; text-align: left;
     }
     .side-item {
-      display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px;
-      border: none; border-radius: 7px; background: none; font-size: 14px; text-align: left;
+      display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px;
+      border: none; border-radius: ${radius.pill}px; background: none; font-size: 14px; text-align: left;
     }
-    .side-item[aria-current] { background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.line}; }
+    .side-item[aria-current] { background: ${surface.card}; box-shadow: 0 0 0 1px ${surface.rule}; }
     .space-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .space-bar {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 24px;
@@ -100,8 +103,8 @@ export function injectBaseStyles(): void {
     /* How many new things there are: on an icon's corner, or at the end of a row. */
     .count {
       display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-      background: ${accent.danger}; color: #fff; font-size: 11px; font-weight: 600; line-height: 1;
+      min-width: 18px; height: 18px; padding: 0 5px; border-radius: ${radius.pill}px;
+      background: ${accent.danger}; color: ${surface.card}; font-size: 11px; font-weight: 600; line-height: 1;
     }
     /* Only new, nothing for you: there, but not calling. */
     .count[data-quiet] { background: ${ink.muted}; }
@@ -152,12 +155,12 @@ export function injectBaseStyles(): void {
     .app-list { display: flex; flex-direction: column; gap: 8px; }
 
     /* Views that sit side by side under one heading, like Under the hood's. */
-    .segmented { display: flex; gap: 2px; align-self: flex-start; max-width: 100%; padding: 3px; border-radius: 10px; background: ${surface.sunken}; border: 1px solid ${surface.line}; }
+    .segmented { display: flex; gap: 2px; align-self: flex-start; max-width: 100%; padding: 3px; border-radius: ${radius.pill}px; background: ${surface.sunken}; border: 1px solid ${surface.line}; }
     .segmented > button {
       display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
-      border: none; border-radius: 7px; background: none; color: ${ink.muted}; font-size: 13px; font-weight: 500;
+      border: none; border-radius: ${radius.pill}px; background: none; color: ${ink.muted}; font-size: 13px; font-weight: 500;
     }
-    .segmented > button[aria-selected="true"] { background: ${surface.card}; color: ${ink.strong}; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 0 0 1px ${surface.line}; }
+    .segmented > button[aria-selected="true"] { background: ${ink.strong}; color: ${surface.card}; }
 
     /* A space's sections along the bottom, and the button that makes an
        app: phones only. */
@@ -171,12 +174,13 @@ export function injectBaseStyles(): void {
     .call-panel {
       position: fixed; z-index: 30; right: 20px; bottom: 20px; width: 340px;
       display: flex; flex-direction: column; gap: 12px; padding: 14px;
-      background: ${surface.card}; border: 1px solid ${surface.lineStrong}; border-radius: 12px;
-      box-shadow: 0 8px 30px rgba(0,0,0,.12);
+      background: ${surface.card}; border: 1px solid ${surface.rule}; border-radius: ${radius.lg}px;
+      box-shadow: ${shadow.float};
     }
+    /* The stage is dark so faces stand out: the navy ink, not black. */
     .call-stage {
       top: 20px; left: ${RAIL_WIDTH + 20}px; width: auto;
-      background: #0a0a0a; border-color: #222; color: #eee;
+      background: ${ink.strong}; border-color: ${ink.strong}; color: ${surface.page};
     }
     .call-stage .call-tiles { flex: 1; }
     .call-tiles { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 0; }
@@ -185,14 +189,14 @@ export function injectBaseStyles(): void {
     .call-tiles[data-large]:is([data-count="3"], [data-count="4"]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .call-tiles[data-large]:is([data-count="5"], [data-count="6"]) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .call-tile {
-      position: relative; margin: 0; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center; background: #161616;
+      position: relative; margin: 0; aspect-ratio: 4 / 3; overflow: hidden; border-radius: ${radius.none}px;
+      display: flex; align-items: center; justify-content: center; background: ${ink.body};
     }
     .call-stage .call-tile { aspect-ratio: auto; min-height: 120px; }
     .call-name {
       position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px;
       max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #fff; background: rgba(0,0,0,.55);
+      padding: 2px 6px; border-radius: ${radius.sm}px; font-size: 12px; color: ${surface.card}; background: ${navyWash(60)};
     }
     .call-pip { display: flex; height: 100vh; padding: 6px; box-sizing: border-box; }
     .call-pip .call-tiles { flex: 1; }
@@ -203,17 +207,17 @@ export function injectBaseStyles(): void {
     }
     .call-card {
       pointer-events: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px;
-      background: ${surface.card}; border: 1px solid ${surface.lineStrong}; border-radius: 12px;
-      box-shadow: 0 8px 30px rgba(0,0,0,.12); font-size: 14px;
+      background: ${surface.card}; border: 1px solid ${surface.rule}; border-radius: ${radius.lg}px;
+      box-shadow: ${shadow.float}; font-size: 14px;
     }
     .call-overlay {
       position: fixed; z-index: 40; inset: 0; padding: 16px;
       display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center;
-      background: rgba(0,0,0,.35);
+      background: ${navyWash(35)};
     }
     .call-incoming { width: min(340px, 100%); align-items: center; text-align: center; gap: 16px; padding: 24px; }
     .call-ringing { display: inline-flex; border-radius: 50%; animation: call-ring 1.2s ease-out infinite; }
-    @keyframes call-ring { 0% { box-shadow: 0 0 0 0 rgba(26,127,55,.45); } 100% { box-shadow: 0 0 0 12px rgba(26,127,55,0); } }
+    @keyframes call-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, ${accent.good} 45%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
     @media (prefers-reduced-motion: reduce) { .call-ringing { animation: none; } }
 
     /* Chat: its channels and conversations down the left, the one open beside them. */
@@ -222,11 +226,11 @@ export function injectBaseStyles(): void {
       display: flex; flex-direction: column; min-height: 0; overflow-y: auto;
       padding: 4px 8px 12px; border-right: 1px solid ${surface.line}; background: ${surface.sunken};
     }
-    .chat-places [data-nav]:not([aria-current]):hover { background: rgba(0,0,0,.04) !important; }
+    .chat-places [data-nav]:not([aria-current]):hover { background: ${surface.line} !important; }
 
     /* Events: covers in a grid, the next one large, a month to look across (components/apps/Events.tsx). */
     .ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-    .ev-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); overflow: hidden; border-radius: 14px !important; }
+    .ev-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); overflow: hidden; border-radius: ${radius.lg}px !important; }
     .ev-hero > button { display: block; width: 100%; }
     .ev-hero-cover { height: 100%; min-height: 260px; }
     .ev-banner { height: 240px; }
@@ -234,25 +238,25 @@ export function injectBaseStyles(): void {
     .ev-form-row { display: flex; gap: 10px; }
     .ev-month {
       display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
-      border: 1px solid ${surface.line}; border-radius: 12px; overflow: hidden; background: ${surface.line}; gap: 1px;
+      border: 1px solid ${surface.rule}; border-radius: ${radius.lg}px; overflow: hidden; background: ${surface.rule}; gap: 1px;
     }
     .ev-weekday { padding: 8px 10px; background: ${surface.sunken}; color: ${ink.muted}; font-size: 12px; font-weight: 500; }
     .ev-day { min-height: 108px; padding: 6px; display: flex; flex-direction: column; gap: 3px; background: ${surface.card}; cursor: pointer; min-width: 0; }
     .ev-day[data-other] { background: ${surface.sunken}; }
     .ev-day[data-other] .ev-day-number { color: ${ink.faint}; }
-    .ev-day[data-picked] { box-shadow: inset 0 0 0 2px ${ink.strong}; }
+    .ev-day[data-picked] { box-shadow: inset 0 0 0 2px ${accent.base}; }
     .ev-day-number {
       align-self: flex-start; display: inline-flex; align-items: center; justify-content: center;
-      min-width: 24px; height: 24px; padding: 0 4px; border-radius: 12px; font-size: 12px; font-weight: 500; color: ${ink.body};
+      min-width: 24px; height: 24px; padding: 0 4px; border-radius: ${radius.pill}px; font-size: 12px; font-weight: 500; color: ${ink.body};
     }
-    .ev-day-number[data-today] { background: ${accent.danger}; color: #fff; font-weight: 600; }
+    .ev-day-number[data-today] { background: ${accent.base}; color: ${surface.card}; font-weight: 600; }
     .ev-chip {
-      display: block; width: 100%; border: none; border-radius: 5px; padding: 2px 6px; text-align: left;
+      display: block; width: 100%; border: none; border-radius: ${radius.sm}px; padding: 2px 6px; text-align: left;
       font-size: 11.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .ev-more { font-size: 11px; color: ${ink.faint}; padding-left: 6px; }
     .ev-dots { display: none; gap: 3px; justify-content: center; }
-    .ev-dots > i { width: 6px; height: 6px; border-radius: 3px; }
+    .ev-dots > i { width: 6px; height: 6px; border-radius: ${radius.pill}px; }
 
     /* Marketplace: square pictures in a grid, prices first (components/apps/Marketplace.tsx). */
     .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 24px 16px; }
@@ -260,7 +264,7 @@ export function injectBaseStyles(): void {
     .mk-photo { transition: transform .2s ease, box-shadow .2s ease; }
     .mk-detail { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; align-items: start; }
     @media (hover: hover) {
-      .mk-card:hover .mk-photo { transform: translateY(-2px); box-shadow: 0 12px 24px -16px rgba(15, 17, 21, .45); }
+      .mk-card:hover .mk-photo { transform: translate(-1px, -1px); box-shadow: ${shadow.small}; }
       .ev-chip:hover { filter: brightness(.96); }
       .ev-day:not([data-picked]):hover { background: ${surface.sunken}; }
     }
@@ -328,9 +332,7 @@ export function injectBaseStyles(): void {
       .space-bar {
         position: sticky; top: 0; z-index: 8; height: auto; min-height: 56px; gap: 8px;
         padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
-        background: rgba(255, 255, 255, .92);
-        -webkit-backdrop-filter: saturate(180%) blur(12px);
-        backdrop-filter: saturate(180%) blur(12px);
+        background: ${surface.page};
       }
       .space-content {
         overflow: visible;
@@ -351,10 +353,8 @@ export function injectBaseStyles(): void {
         bottom: 0;
         display: flex;
         padding: 6px max(4px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
-        background: rgba(255, 255, 255, .92);
-        -webkit-backdrop-filter: saturate(180%) blur(12px);
-        backdrop-filter: saturate(180%) blur(12px);
-        border-top: 1px solid ${surface.line};
+        background: ${surface.page};
+        border-top: 1px solid ${surface.rule};
       }
       .tabbar > button {
         flex: 1 1 0;
@@ -371,7 +371,7 @@ export function injectBaseStyles(): void {
         font-weight: 500;
         white-space: nowrap;
       }
-      .tabbar > button[aria-current] { color: ${ink.strong}; }
+      .tabbar > button[aria-current] { color: ${accent.base}; }
 
       .fab {
         position: fixed;
@@ -383,20 +383,19 @@ export function injectBaseStyles(): void {
         gap: 8px;
         height: 48px;
         padding: 0 18px;
-        border: none;
+        border: 1px solid ${surface.rule};
         border-radius: ${radius.pill}px;
-        background: ${ink.strong};
-        color: #fff;
+        background: ${accent.base};
+        color: ${surface.card};
         font-size: 15px;
         font-weight: 600;
-        box-shadow: 0 8px 24px -6px rgba(0, 0, 0, .35);
+        box-shadow: ${shadow.small};
       }
 
       /* Three icons to a row, named underneath, the way a phone lays out apps. */
       .app-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 8px; }
       .app-card { flex-direction: column !important; align-items: center !important; gap: 8px !important; padding: 4px 0 !important; border: none !important; background: none !important; text-align: center !important; box-shadow: none !important; }
-      .app-card .app-card-icon { width: 60px !important; height: 60px !important; border-radius: 16px !important; }
-      .app-card .app-card-icon svg { width: 28px; height: 28px; }
+      .app-card .app-card-icon { width: 56px !important; height: 56px !important; }
       .app-card strong { font-size: 13px !important; font-weight: 500 !important; }
       .app-card-text { display: none; }
 
@@ -417,9 +416,9 @@ export function injectBaseStyles(): void {
       .modal {
         max-width: none !important;
         max-height: 92dvh;
-        border-radius: 14px 14px 0 0 !important;
+        border-radius: ${radius.lg}px !important;
         padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
-        animation: weave-sheet .2s ease !important;
+        animation: minca-sheet .2s ease !important;
       }
 
       /* Floating panels are anchored to what opened them, which on a phone
@@ -451,7 +450,7 @@ export function injectBaseStyles(): void {
       .code-layer, .mention-layer { font-size: 16px !important; }
     }
 
-    @keyframes weave-sheet { from { transform: translateY(100%) } to { transform: none } }
+    @keyframes minca-sheet { from { transform: translateY(100%) } to { transform: none } }
   `;
   globalThis.document.head.appendChild(style);
 }
@@ -490,7 +489,7 @@ export const ui = {
     fontWeight: 500,
     whiteSpace: 'nowrap',
   },
-  chipOn: { background: ink.strong, color: '#fff', borderColor: ink.strong },
+  chipOn: { background: ink.strong, color: surface.card, borderColor: ink.strong },
   th: {
     textAlign: 'left',
     padding: '10px 14px',
@@ -501,7 +500,7 @@ export const ui = {
     background: surface.sunken,
   },
   td: { padding: '10px 14px', borderBottom: line, color: ink.body },
-  card: { border: line, borderRadius: 10, background: surface.card },
+  card: { border: line, borderRadius: radius.lg, background: surface.card },
   ellipsis: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   stack: { display: 'flex', flexDirection: 'column' },
 } satisfies Record<string, CSSProperties>;

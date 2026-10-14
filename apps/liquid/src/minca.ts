@@ -1,5 +1,5 @@
 /**
- * This app's Weave setup.
+ * This app's Minca setup.
  *
  * Liquid never signs anyone in and never holds a seed. It connects to the
  * person's account home, which asks what the app may use and hands back a
@@ -10,20 +10,20 @@
  * connecting. It shows only the spaces that are assemblies (`useSpaces` with
  * `having`).
  */
-import { createWeaveConnection } from '@weaveprotocol/core/session';
-import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@weave/app-shared/relay';
+import { createMincaConnection } from '@minca/core/session';
+import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 
-const HOME = import.meta.env.VITE_WEAVE_HOME ?? 'https://weave-home.netlify.app/connect';
+const HOME = import.meta.env.VITE_MINCA_HOME ?? 'https://weave-home.netlify.app/connect';
 
-export const connection = createWeaveConnection({
+export const connection = createMincaConnection({
   home: HOME,
   request: { name: 'Liquid', access: 'write', scope: 'account' },
   network: { relays: relayUrls(), nodes: CONFIGURED_NODES, hosts: CONFIGURED_HOSTS },
   worker: () =>
     typeof SharedWorker === 'function'
-      ? new SharedWorker(new URL('./weave-worker.ts', import.meta.url), {
+      ? new SharedWorker(new URL('./minca-worker.ts', import.meta.url), {
           type: 'module',
           name: 'liquid-node',
         }).port
-      : new Worker(new URL('./weave-worker.ts', import.meta.url), { type: 'module' }),
+      : new Worker(new URL('./minca-worker.ts', import.meta.url), { type: 'module' }),
 });

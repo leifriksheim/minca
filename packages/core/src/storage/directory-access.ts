@@ -33,7 +33,7 @@ interface DirectoryPickerOptions {
   readonly startIn?: string;
 }
 
-const HANDLE_DB = 'weave-folder';
+const HANDLE_DB = 'minca-folder';
 const HANDLE_STORE = 'handles';
 const HANDLE_KEY = 'data-folder';
 
@@ -84,7 +84,7 @@ export async function pickDataFolder(options?: { id?: string }): Promise<Directo
   }
 
   return scope.showDirectoryPicker({
-    id: options?.id ?? 'weave-pod',
+    id: options?.id ?? 'minca-pod',
     mode: 'readwrite',
     startIn: 'documents',
   });

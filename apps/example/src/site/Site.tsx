@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import { parse, render } from 'sugar-high/core';
 import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
-import { STAFF_COLLECTIONS } from '@weaveprotocol/core';
+import { STAFF_COLLECTIONS } from '@minca/core';
+import { Mark } from '@minca/app-shared/Wordmark';
 import { CONCEPTS } from './concepts';
 
 /** How the concepts heading says its count, so it never goes stale */
@@ -21,25 +22,10 @@ import './site.css';
 const LANGUAGES = { typescript: { ...typescript, typescript: true }, shell } as const;
 
 /** The site's pages (`/`, `/developers`, `/protocol`, `/extension`), sharing the example app's fonts and deploy */
-export const GITHUB = 'https://github.com/leifriksheim/weave';
+export const GITHUB = 'https://github.com/leifriksheim/minca';
 export const SPEC = `${GITHUB}/tree/main/spec`;
 /** Links off the site open in a tab of their own */
 export const EXTERNAL = { target: '_blank', rel: 'noreferrer' } as const;
-
-function Mark({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden>
-      <path
-        d="M2 5 L7 15 L10 8 L13 15 L18 5"
-        fill="none"
-        stroke="#000"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 type PageName = 'home' | 'developers' | 'protocol' | 'extension';
 
@@ -49,23 +35,20 @@ function Nav({ page }: { page: PageName }) {
       <div className="wrap">
         <a href="/" className="brand">
           <Mark />
-          Weave
+          minca
         </a>
         <nav className="nav-links">
+          <a href="/#inside" className="hide-sm">
+            What’s inside
+          </a>
+          <a href="/#minca" className="hide-sm">
+            Why “minca”
+          </a>
           <a href="/developers" aria-current={page === 'developers' ? 'page' : undefined}>
             Developers
           </a>
-          <a href="/protocol" aria-current={page === 'protocol' ? 'page' : undefined}>
-            Protocol
-          </a>
-          <a href="/extension" aria-current={page === 'extension' ? 'page' : undefined} className="hide-sm">
-            Extension
-          </a>
-          <a href={GITHUB} {...EXTERNAL} className="hide-sm">
-            GitHub
-          </a>
-          <a href="/app" className="btn btn-primary" style={{ color: '#fff', marginLeft: 8 }}>
-            Open app
+          <a href="/app" className="btn btn-primary" style={{ marginLeft: 8 }}>
+            Open Minca
           </a>
         </nav>
       </div>
@@ -77,7 +60,10 @@ function Footer() {
   return (
     <footer>
       <div className="wrap">
-        <span>Weave — the internet, owned by its people.</span>
+        <span className="footer-brand">
+          <Mark size={18} />
+          Many hands, one minca.
+        </span>
         <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <a href="/">Communities</a>
           <a href="/developers">Developers</a>
@@ -89,7 +75,7 @@ function Footer() {
           <a href={GITHUB} {...EXTERNAL}>
             GitHub
           </a>
-          <a href="/app">Open app</a>
+          <a href="/app">Open Minca</a>
         </span>
       </div>
     </footer>
@@ -127,7 +113,7 @@ function Icon({ d }: { d: string }) {
   );
 }
 
-/** A band of a page: a kicker, a heading and a line or two on what it is about, then the band itself */
+/** A band of a page: a kicker if it needs one, a heading and a line or two on what it is about, then the band itself */
 export function Band({
   id,
   kicker,
@@ -136,7 +122,7 @@ export function Band({
   children,
 }: {
   id?: string;
-  kicker: ReactNode;
+  kicker?: ReactNode;
   title: ReactNode;
   intro?: ReactNode;
   children?: ReactNode;
@@ -145,7 +131,7 @@ export function Band({
     <section className="band" id={id}>
       <div className="wrap">
         <div className="section-head">
-          <div className="kicker">{kicker}</div>
+          {kicker ? <div className="kicker">{kicker}</div> : null}
           <h2>{title}</h2>
           {intro}
         </div>
@@ -230,7 +216,7 @@ function Code({
 const SCHEMAS = `
 import {
   poll, vote, reaction, useSchemas,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 
 // A poll ships ready-made, as std.poll and std.vote
 await useSchemas(node, space.id, [poll, vote, reaction]);
@@ -248,21 +234,21 @@ await node.records.put(space.id, reaction.name, { emoji: '🍕' }, {
 
 const AGENTS = `
 # Every node operation, from a terminal
-weave spaces list
-weave records query --space <id> \\
+minca spaces list
+minca records query --space <id> \\
   --collection app.poll \\
   --where '{"question":{"$contains":"may"}}'
 
 # An always-on node: keeps your spaces
 # available, and relays for your devices
-weave run
+minca run
 
 # Connect an agent (Claude Code, Claude Desktop, Cursor) with the
 # code from "Connect an agent" in an app; it then serves MCP by itself
-weave connect wv_…
+minca connect mc_…
 `;
 
-const PROTOCOLS = ['Weave', 'AT Protocol (Bluesky)', 'Nostr', 'Solid'] as const;
+const PROTOCOLS = ['Minca', 'AT Protocol (Bluesky)', 'Nostr', 'Solid'] as const;
 
 /** One row per question: the question, then an answer for each protocol, in order */
 const COMPARISON: ReadonlyArray<readonly [string, string, string, string, string]> = [
@@ -548,7 +534,7 @@ export function Developers() {
           <div className="actions">
             <span className="install">
               <span>$</span>
-              <code>npm install @weaveprotocol/core</code>
+              <code>npm install @minca/core</code>
             </span>
             <a href="/app" className="btn btn-secondary">
               See the example app
@@ -561,7 +547,7 @@ export function Developers() {
         id="concepts"
         kicker="The concepts"
         title={`${NUMBER_WORDS[CONCEPTS.length] ?? CONCEPTS.length} ideas, top to bottom.`}
-        intro={<p>Everything on Weave is built from these. Each one in a few lines.</p>}
+        intro={<p>Everything on Minca is built from these. Each one in a few lines.</p>}
       >
         <Concepts />
       </Band>
@@ -572,7 +558,7 @@ export function Developers() {
         title="One space, start to finish."
         intro={
           <p>
-            Every app on Weave does the same five things: start a space, describe its data, say who may do
+            Every app on Minca does the same five things: start a space, describe its data, say who may do
             what, use it, and read what it shows or proves. Pick a community to see them in its terms; each
             one runs as a test in the repository.
           </p>
@@ -629,10 +615,10 @@ export function Developers() {
 
       <Band
         kicker="Compared"
-        title="Where Weave fits."
+        title="Where Minca fits."
         intro={
           <p>
-            Other open protocols give people their data back too. They make different bets. Weave is for apps
+            Other open protocols give people their data back too. They make different bets. Minca is for apps
             where data is private, shared between a few people, and works offline.
           </p>
         }
@@ -667,7 +653,7 @@ export function Developers() {
         <div className="wrap">
           <h2>Start with the example.</h2>
           <p>
-            A general app for any Weave data — every screen worked out from what a space says about itself.
+            A general app for any Minca data — every screen worked out from what a space says about itself.
           </p>
           <div className="actions">
             <a href="/app" className="btn btn-primary">

@@ -1,8 +1,8 @@
-import { matches, type NodeCollection, type NodeRecord, type SpaceSummary } from '@weaveprotocol/core';
-import { useAccess, useLive } from '@weaveprotocol/core/react';
-import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@weaveprotocol/core/schemas';
-import { hash } from '@weave/app-shared/hash';
-import { APPS, type WeaveApp } from './index';
+import { matches, type NodeCollection, type NodeRecord, type SpaceSummary } from '@minca/core';
+import { useAccess, useLive } from '@minca/core/react';
+import { asRunner, namesTheRunner, notifyOn, type AppAutomation } from '@minca/core/schemas';
+import { hash } from '@minca/app-shared/hash';
+import { APPS, type MincaApp } from './index';
 import { launcherApp, sortLauncher, type LauncherApp } from './launcher';
 import type { Glyph } from '../Icon';
 
@@ -22,7 +22,7 @@ export interface AppEntry {
   readonly icon: Glyph;
   readonly hue: number;
   readonly notify: ReadonlyArray<AppAutomation>;
-  readonly builtIn?: WeaveApp;
+  readonly builtIn?: MincaApp;
   /** A made app's launcher record, which is the app */
   readonly made?: NodeRecord<LauncherApp>;
 }
@@ -54,7 +54,7 @@ export function namesMe(
   });
 }
 
-const builtInEntry = (app: WeaveApp, record: NodeRecord<LauncherApp>): AppEntry => ({
+const builtInEntry = (app: MincaApp, record: NodeRecord<LauncherApp>): AppEntry => ({
   id: app.id,
   record,
   title: app.title,

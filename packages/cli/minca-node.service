@@ -1,0 +1,33 @@
+# systemd unit for an always-on minca node.
+#
+#   sudo useradd --system --home /var/lib/minca minca
+#   sudo install -m 755 dist/minca-linux-x64 /usr/local/bin/minca
+#   sudo -u minca MINCA_HOME=/var/lib/minca minca init --existing --passphrase
+#   echo 'MINCA_PASSPHRASE=…' | sudo tee /etc/minca.env && sudo chmod 600 /etc/minca.env
+#   sudo cp minca-node.service /etc/systemd/system/ && sudo systemctl enable --now minca-node
+#
+# The passphrase lives in a root-only file, never on the command line.
+#
+# The node listens on 127.0.0.1: put a TLS proxy in front of it (browsers need
+# wss://), e.g. Caddy with `reverse_proxy 127.0.0.1:8787`.
+
+[Unit]
+Description=Minca always-on node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=minca
+Environment=MINCA_HOME=/var/lib/minca
+EnvironmentFile=/etc/minca.env
+ExecStart=/usr/local/bin/minca run --port 8787
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/minca
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

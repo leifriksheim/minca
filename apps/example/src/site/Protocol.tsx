@@ -3,7 +3,7 @@ import { Band, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
 
 /**
  * How it works, for people who want the design before the code: one section
- * per part of the spec, then what Weave gives up. Every claim here comes from
+ * per part of the spec, then what Minca gives up. Every claim here comes from
  * `spec/`; when the two disagree, the spec wins and this page is the bug.
  */
 
@@ -404,7 +404,7 @@ const LIMITS: ReadonlyArray<Point> = [
   },
   {
     title: 'Not for global feeds',
-    body: 'Weave is for data that’s private, shared by a few people, and works offline. Public feeds at the scale of a social network are what other protocols are for.',
+    body: 'Minca is for data that’s private, shared by a few people, and works offline. Public feeds at the scale of a social network are what other protocols are for.',
   },
   {
     title: 'The bugs are written down',
@@ -490,7 +490,7 @@ export function Protocol() {
 
       <Band
         kicker="Tradeoffs"
-        title="What Weave doesn’t do."
+        title="What Minca doesn’t do."
         intro={<p>No server means some things are harder, and some aren’t finished. Here they are.</p>}
       >
         <Points points={LIMITS} />

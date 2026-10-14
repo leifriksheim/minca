@@ -246,7 +246,7 @@ relying on details):
 What carries over:
 
 - **Boundaries by hash, not by signer.** Coordination-free compaction needs
-  no trust. Weave's stubs are content-free, though: bundling them shrinks the
+  no trust. Minca's stubs are content-free, though: bundling them shrinks the
   item count and the round trips, but not the signatures a newcomer must
   check, because a stub's only content is what proves the link. Dropping
   needs trust; bundling does not. §7.2 sketches bundling as an alternative
@@ -285,7 +285,7 @@ collection's line instead of a chain.
 
 ### 7.1 Fix the chain walk first (no protocol change beyond 05 §6.3)
 
-Tracked in [#138](https://github.com/leifriksheim/weave/issues/138).
+Tracked in [#138](https://github.com/leifriksheim/minca/issues/138).
 
 Most of today's cost is per link, not per version. Two library changes,
 each small:

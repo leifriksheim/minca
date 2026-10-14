@@ -22,8 +22,8 @@
  *
  * ```
  * code   = base64url(JSON { v: 1, key, sign, relays, name? })
- * topic  = base64url(SHA-256("weave/door-topic/v1|" + sign))
- * knock  = sealTo(key, "weave/knock/v1", { door: key }, JSON { body, sig })   // HPKE
+ * topic  = base64url(SHA-256("minca/door-topic/v1|" + sign))
+ * knock  = sealTo(key, "minca/knock/v1", { door: key }, JSON { body, sig })   // HPKE
  * body   = { v: 2, door: key, from, name, invite, note?, at, session, proof }
  * sig    = session key signs canonical(body)
  * ```
@@ -184,7 +184,7 @@ export function checkDoorCode(value: unknown): string | null {
  * whose door it is, and can check that whoever clears it holds that key.
  */
 export async function doorTopic(sign: string): Promise<string> {
-  return base64UrlEncode(await sha256(utf8Encode(`weave/door-topic/v1|${sign}`)));
+  return base64UrlEncode(await sha256(utf8Encode(`minca/door-topic/v1|${sign}`)));
 }
 
 /**
@@ -192,7 +192,7 @@ export async function doorTopic(sign: string): Promise<string> {
  * the relay's one-time challenge, and which knocks (`*` for all of them).
  */
 export const purgeMessage = (topic: string, nonce: string, ids: ReadonlyArray<string> | null) =>
-  utf8Encode(`weave/door-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`);
+  utf8Encode(`minca/door-purge/v1|${topic}|${nonce}|${ids ? [...ids].sort().join(',') : '*'}`);
 
 /** Signs a relay's purge challenge with the door's signing key */
 export function signPurge(
@@ -211,7 +211,7 @@ export function signPurge(
  * for the person behind the door.
  */
 const answerMessage = (pairSpace: string, did: string) =>
-  utf8Encode(`weave/knock-answer/v1|${pairSpace}|${did}`);
+  utf8Encode(`minca/knock-answer/v1|${pairSpace}|${did}`);
 
 export function signAnswer(signKey: Uint8Array, pairSpace: string, did: string): Promise<string> {
   return signWithScalar(signKey, answerMessage(pairSpace, did));
@@ -232,7 +232,7 @@ export async function knockId(blob: string): Promise<string> {
 }
 
 /** The HPKE label a knock is sealed under; bound to `{ door }`, the door key */
-const KNOCK_LABEL = 'weave/knock/v1';
+const KNOCK_LABEL = 'minca/knock/v1';
 
 /**
  * Makes a knock: the body, signed by the session key, sealed to the door key.

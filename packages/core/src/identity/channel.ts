@@ -36,16 +36,16 @@ export interface ChannelKind {
 
 /** Handing an account to a phone (`identity/pairing.ts`) */
 export const PAIRING_CHANNEL: ChannelKind = Object.freeze({
-  room: 'weave/pairing-room/v1',
-  key: 'weave/pairing-key/v1',
-  message: 'weave/pairing/v1',
+  room: 'minca/pairing-room/v1',
+  key: 'minca/pairing-key/v1',
+  message: 'minca/pairing/v1',
 });
 
 /** Connecting a program by a pasted code (`session/connect-code.ts`) */
 export const CODE_CHANNEL: ChannelKind = Object.freeze({
-  room: 'weave/code-room/v1',
-  key: 'weave/code-key/v1',
-  message: 'weave/code/v1',
+  room: 'minca/code-room/v1',
+  key: 'minca/code-key/v1',
+  message: 'minca/code/v1',
 });
 
 /** Which side: the one that made the secret and shows it, or the one that joins with it */

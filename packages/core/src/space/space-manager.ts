@@ -258,7 +258,7 @@ export function createSpaceManager(
       const assigned =
         params.assigned && Object.keys(params.assigned).length > 0 ? params.assigned : undefined;
       const fixed: Constitution = {
-        weave: CONSTITUTION,
+        minca: CONSTITUTION,
         name: params.name,
         visibility: params.visibility,
         resolver: STRONG_REMOVE,

@@ -12,7 +12,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { DirectoryHandleLike, FileHandleLike, WritableFileLike } from '@weaveprotocol/core';
+import type { DirectoryHandleLike, FileHandleLike, WritableFileLike } from '@minca/core';
 
 function notFound(name: string): Error {
   const error = new Error(`${name} was not found`);

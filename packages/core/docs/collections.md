@@ -6,7 +6,7 @@ and know what its data means without your code.
 
 ```typescript
 import * as z from 'zod'; // or Valibot, ArkType, or plain JSON Schema
-import { collection } from '@weaveprotocol/core';
+import { collection } from '@minca/core';
 
 const Poll = z.object({
   question: z.string().min(1).max(500),
@@ -74,7 +74,7 @@ under a strict CSP.
 A record that doesn't fit the schema is still kept and synced, and comes back
 with `conforms: false` and the issues. Shape is checked when you write, not
 enforced on arrival, because two peers may have seen different versions of a
-definition ([spec 02 §9.6](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+definition ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 Rules, below, are enforced everywhere.
 
 _Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-runtime.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
@@ -114,7 +114,7 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`), `packages/core/src
 A definition says what its records must keep to, not who may write them:
 who may create, change and delete records is the space's grants, held by its
 roles ([roles](#roles)). Its rules are about the records alone
-([spec 02 §7](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)):
+([spec 02 §7](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)):
 
 | Rule     | Means                                                  | Default |
 | -------- | ------------------------------------------------------ | ------- |
@@ -209,7 +209,7 @@ Language that Kubernetes, Firebase and Envoy use for policies. It reads `body`,
 operators, `has()`, the macros `all` `exists` `exists_one` `filter` `map`,
 `size`, `contains` `startsWith` `endsWith`, the conversions `int` `uint`
 `double` `string` `bool`, and from CEL's extensions `distinct()`,
-`math.greatest` and `math.least`. Weave adds `sum(list)`, `hash(x)`,
+`math.greatest` and `math.least`. Minca adds `sum(list)`, `hash(x)`,
 `link("rel")` and `v.link("rel")`, and two that ask the space:
 `versions(ids)` (read cited versions by id) and `member(did)`.
 
@@ -291,11 +291,11 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 
 Who may write lives in the space, not in your code, and not in a
 definition. A role holds grants: a command and a UCAN policy over its
-arguments ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+arguments ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 "Members change only their own polls, hosts delete any" is:
 
 ```typescript
-import { RECORD_DELETE, RECORD_WRITE } from '@weaveprotocol/core';
+import { RECORD_DELETE, RECORD_WRITE } from '@minca/core';
 
 await node.spaces.defineRole(space.id, {
   name: 'host',
@@ -343,7 +343,7 @@ higher than the one in force, or not below 2^53; peers don't check it. One in
 force at 2^53 or more, which nothing could follow, is followed by 1. Records don't name the
 version they were written under: each is judged by the definition in force
 as of the access changes it saw
-([spec 03 §5](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+([spec 03 §5](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 A change to the rules is not retroactive: it binds what saw it. A record that
 names an older point counts if its writer could have written it then, since
 nobody can tell it from one written offline. To stop someone at once, take
@@ -363,14 +363,14 @@ granted `/collection/define` may change it. Until one does, the
 collection has a definition only if the rivals say the same thing; if they
 differ, `collections.list` leaves it out and its records are judged by no
 rules
-([spec 02 §6.3](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+([spec 02 §6.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 
 _Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts`, `packages/core/tests/rules.test.ts` ("grants: changing them")._
 
 ## The standard library
 
 ```typescript
-import { reaction, comment, poll, vote, useSchemas } from '@weaveprotocol/core/schemas';
+import { reaction, comment, poll, vote, useSchemas } from '@minca/core/schemas';
 
 await useSchemas(node, space.id, [poll, vote, reaction, comment]); // defines only what the space is missing
 ```

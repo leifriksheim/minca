@@ -25,14 +25,14 @@
       // only way out, and it is kept on this window: a page the frame
       // navigates to later starts without it.
       addEventListener('message', function load(event) {
-        if (event.source !== parent || !event.data || event.data.weave !== 'load' || !event.ports[0]) return;
+        if (event.source !== parent || !event.data || event.data.minca !== 'load' || !event.ports[0]) return;
         removeEventListener('message', load);
-        window.__weave = { port: event.ports[0], me: event.data.me, collections: event.data.collections };
+        window.__minca = { port: event.ports[0], me: event.data.me, collections: event.data.collections };
         document.open();
         document.write(event.data.document);
         document.close();
       });
-      parent.postMessage({ weave: 'ready' }, '*');
+      parent.postMessage({ minca: 'ready' }, '*');
     </script>
   </body>
 </html>

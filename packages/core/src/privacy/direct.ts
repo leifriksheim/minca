@@ -34,9 +34,9 @@ export function directRecipients(from: string, to: ReadonlyArray<string>): Reado
 }
 
 /** The envelope label of a direct message's text */
-const TEXT_LABEL = 'weave/direct-text/v1';
+const TEXT_LABEL = 'minca/direct-text/v1';
 /** The HPKE label of one reader's box */
-const BOX_LABEL = 'weave/direct-box/v1';
+const BOX_LABEL = 'minca/direct-box/v1';
 
 /** What the text is bound to: the space, who wrote it, and who it is for, sorted and joined by commas */
 export function directBound(spaceId: string, from: string, to: ReadonlyArray<string>) {

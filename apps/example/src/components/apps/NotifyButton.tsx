@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import type { NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useDismiss } from '@weave/app-shared/useDismiss';
+import type { NodeCollection, SpaceSummary } from '@minca/core';
+import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useNotifyFor } from '../../notifications';
 import { Icon } from '../Icon';
 import { styles, palette } from '../../styles';
@@ -216,10 +216,10 @@ const menu = {
   zIndex: 20,
   width: 280,
   padding: '0 0 6px',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  border: `1px solid ${palette.surface.rule}`,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
-  boxShadow: '0 4px 12px rgba(0, 0, 0, .06), 0 16px 32px -12px rgba(0, 0, 0, .12)',
+  boxShadow: palette.shadow.float,
 } as const;
 
 const row = {

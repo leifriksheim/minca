@@ -16,7 +16,7 @@
     "**/dist/**",
     "**/*.d.ts",
     "**/*.d.mts",
-    ".weave-dev/**",
+    ".minca-dev/**",
     ".claude/**"
   ],
   "rules": {

@@ -6,7 +6,7 @@ import { Band, EXTERNAL, Feature, GITHUB, Page } from './Site';
  * (`netlify.toml`), so it always matches what is deployed.
  */
 
-const DOWNLOAD = '/weave-chrome.zip';
+const DOWNLOAD = '/minca-chrome.zip';
 const SOURCE = `${GITHUB}/tree/main/apps/extension`;
 
 export function Extension() {
@@ -20,7 +20,7 @@ export function Extension() {
             while Chrome is.
           </h1>
           <p>
-            The Weave extension keeps your spaces moving with every app closed, and tells you when something
+            The Minca extension keeps your spaces moving with every app closed, and tells you when something
             you care about happens. It can’t read a word of them.
           </p>
           <div className="actions">
@@ -39,7 +39,7 @@ export function Extension() {
         title="Without it, your data only moves while an app is open."
         intro={
           <p>
-            Weave has no server holding your spaces. Write something and close the tab, and it waits until one
+            Minca has no server holding your spaces. Write something and close the tab, and it waits until one
             of your devices and the app are online together. With the extension, Chrome is always there to
             pass it on.
           </p>
@@ -67,7 +67,7 @@ export function Extension() {
             websites.
           </Feature>
           <Feature icon="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4" title="Open source">
-            Every line is in the Weave repository, and it checks every record the same way every other device
+            Every line is in the Minca repository, and it checks every record the same way every other device
             does.
           </Feature>
         </div>
@@ -116,7 +116,7 @@ export function Extension() {
           <div>
             <p>
               An extension loaded this way doesn’t update itself. To get a newer one, download the zip again,
-              unzip it over the same folder, and press the reload button on Weave’s card in{' '}
+              unzip it over the same folder, and press the reload button on Minca’s card in{' '}
               <code>chrome://extensions</code>. Keep the folder where it is, and you stay connected.
             </p>
             <p>

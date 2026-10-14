@@ -37,7 +37,7 @@ import {
   type RootSigner,
   type StoreFactory,
   type WriterKeySource,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
 import { fileWriterKeys } from './writer-keys.js';
 
@@ -47,9 +47,9 @@ export interface Home {
   readonly accounts: AccountStore;
 }
 
-/** `--home`, then `$WEAVE_HOME`, then `~/.weave`. */
+/** `--home`, then `$MINCA_HOME`, then `~/.minca`. */
 export function homePath(flag?: string): string {
-  return path.resolve(flag ?? process.env.WEAVE_HOME ?? path.join(os.homedir(), '.weave'));
+  return path.resolve(flag ?? process.env.MINCA_HOME ?? path.join(os.homedir(), '.minca'));
 }
 
 export async function openHome(flag?: string): Promise<Home> {
@@ -95,13 +95,13 @@ export async function createAccount(
   return { account, code: options.code ? null : seedToRecoveryCode(seed) };
 }
 
-/** Picks an account by id, name or DID (`--account`, then `$WEAVE_ACCOUNT`); the only one when there is exactly one. */
+/** Picks an account by id, name or DID (`--account`, then `$MINCA_ACCOUNT`); the only one when there is exactly one. */
 export async function chooseAccount(home: Home, flag?: string): Promise<AccountSummary> {
-  const which = flag ?? process.env.WEAVE_ACCOUNT;
+  const which = flag ?? process.env.MINCA_ACCOUNT;
   const accounts = await home.accounts.list();
   if (accounts.length === 0)
     throw new Error(
-      `No account in ${home.path}. Run "weave init" first. (Connecting an agent needs no account here: "weave connect <code>".)`,
+      `No account in ${home.path}. Run "minca init" first. (Connecting an agent needs no account here: "minca connect <code>".)`,
     );
   if (which) {
     const found = accounts.find(
@@ -159,7 +159,7 @@ export async function unlock(
     if (!seed) throw new Error('That passphrase does not open this account');
   } else {
     throw new Error(
-      'Unlocking needs the recovery code (WEAVE_RECOVERY_CODE) or a passphrase (WEAVE_PASSPHRASE)',
+      'Unlocking needs the recovery code (MINCA_RECOVERY_CODE) or a passphrase (MINCA_PASSPHRASE)',
     );
   }
 

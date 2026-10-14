@@ -1,9 +1,9 @@
 {
-  "name": "@weaveprotocol/relay",
+  "name": "@minca/relay",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Signaling relay for Weave: introduces peers, never sees their data.",
+  "description": "Signaling relay for Minca: introduces peers, never sees their data.",
   "exports": {
     ".": {
       "types": "./relay.d.mts",

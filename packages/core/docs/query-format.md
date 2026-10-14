@@ -5,10 +5,10 @@ produced by an agent. It runs against the records one node holds of one space.
 
 > Not protocol: peers never exchange queries, so another implementation may
 > offer any query language, and a better one later is not a protocol change.
-> Open, in [#28](https://github.com/leifriksheim/weave/issues/28): the
+> Open, in [#28](https://github.com/leifriksheim/minca/issues/28): the
 > interface another query language plugs into, which reports the collections
 > it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them; and the
-> small filter a screen's `weave.list(collection, { where })` takes (field
+> small filter a screen's `minca.list(collection, { where })` takes (field
 > equality and `link:<rel>`, `apps/example/src/components/apps/screens.ts`), which
 > apps that run [screens](blueprints-and-guides.md#apps-with-a-screen-of-their-own) have to agree on.
 > An [automation](automations.md) keeps a query in a record, so everything that runs automations
@@ -71,17 +71,17 @@ as `collection` or `from`; it is replaced by its `name` before the query runs.
 ## Candidates
 
 A query considers the **current, non-deleted** version of every record in
-`collection` that stands ([spec 02 §9.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)) and whose body this node can read. Records it
+`collection` that stands ([spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)) and whose body this node can read. Records it
 cannot open are left out — here and in every include — so a result's `body` is
 never `null`.
 
 > **Planned: leaving out records that do not conform.** Records whose body or
-> links do not fit the definition are kept and flagged ([spec 02 §9.6](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), but queries,
+> links do not fit the definition are kept and flagged ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), but queries,
 > includes and counts use them like any other, so a tally can count a record
 > the definition says is malformed. The plan: queries and includes leave out
 > records with `conforms: false` unless the query asks for them (a new
 > optional member, e.g. `"nonconforming": true`). Rules are already enforced
-> on arrival ([spec 02 §9.4](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), so this is about shape, not about who wrote it.
+> on arrival ([spec 02 §9.4](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), so this is about shape, not about who wrote it.
 
 ## Field values
 
@@ -122,7 +122,7 @@ means deep equality: same JSON type; objects with the same member names
 > for it. Not designed. _Open:_ whether the index is a node's local business
 > (specified here only as query syntax and result order) or something peers
 > share; and, for private spaces, that the index holds plaintext and must be
-> kept like the bodies it came from ([05](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
+> kept like the bodies it came from ([05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 
 `$and`, `$or` and `$not` nest at most 16 deep.
 
@@ -152,7 +152,7 @@ subfilter does not hold.
 > **Known defect:** when the cursor's key is gone, the reference starts again
 > from the first record (`packages/core/src/query/engine.ts`), so a caller paging through
 > sees records twice. A fix will resume after the cursor's position.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 ## Include
 
@@ -179,7 +179,7 @@ includes.
 
 `complete` is false only on a node that holds part of a space while a
 collection the query needs is still arriving
-([05 — Sync and storage](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)). The shape of each record
-object is the node's record view ([06 — Nodes, sessions and apps](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([05 — Sync and storage](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)). The shape of each record
+object is the node's record view ([06 — Nodes, sessions and apps](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/query/types.ts`, `packages/core/src/query/filter.ts` (`checkQuery`, `matches`, `fieldValue`, `MAX_INCLUDE_DEPTH`), `packages/core/src/query/engine.ts` (`runQuery`, `sortRecords`, `expand`). Tests: `packages/core/tests/query.test.ts` (all; "link:<rel> is where the first link…" for link fields), `packages/core/tests/typed-query.test.ts`._

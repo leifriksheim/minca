@@ -3,7 +3,7 @@
  * terms of each community in `scenarios/communities/`. Every snippet is the
  * real library API; each tab's steps run in order as one program.
  */
-import { rolePresets, STAFF_COLLECTIONS, type RolePreset, type Statement } from '@weaveprotocol/core';
+import { rolePresets, STAFF_COLLECTIONS, type RolePreset, type Statement } from '@minca/core';
 
 /** The constitution templates a step can spread */
 type PresetName = keyof typeof rolePresets;
@@ -31,7 +31,7 @@ import * as z from 'zod'; // or Valibot, ArkType, plain JSON Schema
 import {
   createNode, createIdentityManager, createLocalRootSigner,
   indexedDBStores, rolePresets, collection, contract, lineKey,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 
 const manager = createIdentityManager();
 const me = await manager.fromRecoveryCode(password);

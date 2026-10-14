@@ -33,10 +33,10 @@ import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signe
 import { isObject } from '../utils/guards.js';
 
 /** Messages between an app and the home it opened */
-const HELLO = 'weave:hello';
-const REQUEST = 'weave:request';
-const GRANT = 'weave:grant';
-const DENIED = 'weave:denied';
+const HELLO = 'minca:hello';
+const REQUEST = 'minca:request';
+const GRANT = 'minca:grant';
+const DENIED = 'minca:denied';
 
 /** What an app asks a home for */
 export interface ConnectRequest {
@@ -212,7 +212,7 @@ export interface CarryGrant {
 
 /**
  * Turns what a person typed into a home's connect page:
- * `weave.example.com` → `https://weave.example.com/connect`. Plain `http` only
+ * `minca.example.com` → `https://minca.example.com/connect`. Plain `http` only
  * for this machine, where development happens.
  * @throws When it is not a web address
  */
@@ -261,7 +261,7 @@ export function grantTerms(
 // ─── The app's side ──────────────────────────────────────────────────
 
 /** What a key signs to show it is the one a connect request names */
-const KEY_PROOF = 'weave/connect-key/v1';
+const KEY_PROOF = 'minca/connect-key/v1';
 
 /**
  * What a key agrees to in a connect request: how it reached the app, how much
@@ -324,7 +324,7 @@ export interface AppKey {
   readonly did: string;
 }
 
-const KEY_DB = 'weave-app-key';
+const KEY_DB = 'minca-app-key';
 
 /**
  * This app's key: made once, kept in this site's IndexedDB, and never
@@ -352,7 +352,7 @@ export async function forgetAppKey(name = 'default'): Promise<void> {
 }
 
 export interface ConnectOptions {
-  /** The home's connect page, e.g. `https://weave.example/connect` */
+  /** The home's connect page, e.g. `https://minca.example/connect` */
   readonly home: string;
   /** What to ask for; `audience`, `proof` and `via` are filled in */
   readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof' | 'via'>;
@@ -382,24 +382,26 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   // Opened before anything is awaited, so it still counts as the click's.
   const popup = openHome(homeUrl);
-  let audience: string;
-  let proof: string;
-  const byCode = options.audience !== undefined;
-  if (options.audience !== undefined) {
-    if (!options.audienceProof) throw new Error('Asking for another key needs its proof (keyProof).');
-    audience = options.audience;
-    proof = options.audienceProof;
-  } else {
-    const key = options.key ?? (await appKey(options.keyName));
-    audience = key.did;
-    proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
+  if (options.audience !== undefined && !options.audienceProof) {
+    popup.close();
+    throw new Error('Asking for another key needs its proof (keyProof).');
   }
-  const grant = await askHome<Grant>(
-    popup,
-    homeUrl.origin,
-    { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) },
-    options.timeoutMs,
-  );
+  const byCode = options.audience !== undefined;
+  const request = (async (): Promise<ConnectRequest> => {
+    let audience: string;
+    let proof: string;
+    if (options.audience !== undefined && options.audienceProof) {
+      audience = options.audience;
+      proof = options.audienceProof;
+    } else {
+      const key = options.key ?? (await appKey(options.keyName));
+      audience = key.did;
+      proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
+    }
+    return { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) };
+  })();
+  const grant = await askHome<Grant>(popup, homeUrl.origin, request, options.timeoutMs);
+  const { audience } = await request;
   await checkGrant(grant, audience, { recordsOnly: options.request.recordsOnly === true });
   return { ...grant, home: homeUrl.href };
 }
@@ -421,13 +423,13 @@ export async function connectCarrier(options: {
 }): Promise<CarryGrant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   const popup = openHome(homeUrl);
-  const request: ConnectRequest = {
+  const request = keyProof(options.key).then((proof): ConnectRequest => ({
     v: 1,
     audience: options.key.did,
-    proof: await keyProof(options.key),
+    proof,
     access: 'carry',
     ...(options.name ? { name: options.name } : {}),
-  };
+  }));
   const grant = await askHome<CarryGrant>(popup, homeUrl.origin, request, options.timeoutMs);
   checkCarryGrant(grant);
   return { ...grant, home: homeUrl.href };
@@ -490,31 +492,57 @@ function checkCarryGrant(grant: CarryGrant): void {
 }
 
 function openHome(homeUrl: URL): Window {
-  const popup = globalThis.open(homeUrl.href, 'weave-home', 'popup,width=460,height=720');
+  const popup = globalThis.open(homeUrl.href, 'minca-home', 'popup,width=460,height=720');
   if (!popup) throw new Error('The browser blocked the window. Allow pop-ups for this site and try again.');
   return popup;
 }
 
-/** Sends the request once the home says hello, and waits for its answer, which the caller checks. */
+/**
+ * Sends the request when the home says hello, and again every half second
+ * until it answers, only ever to the home's origin; then waits for the answer,
+ * which the caller checks. A phone may hardly run this page while the home is
+ * in front, so the hello can arrive before the request is made, or be missed:
+ * it listens from the start, and the repeats reach a home that has loaded.
+ */
 function askHome<T>(
   popup: Window,
   homeOrigin: string,
-  request: ConnectRequest | ProposeRequest,
+  request: Promise<ConnectRequest | ProposeRequest> | ConnectRequest | ProposeRequest,
   timeoutMs = 10 * 60_000,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    let finished = false;
     const done = (finish: () => void) => {
+      if (finished) return;
+      finished = true;
       globalThis.removeEventListener('message', onMessage);
       globalThis.clearInterval(watch);
       globalThis.clearTimeout(timer);
       finish();
     };
+    let made: ConnectRequest | ProposeRequest | null = null;
+    const send = () => {
+      if (made && !finished) popup.postMessage({ type: REQUEST, request: made }, homeOrigin);
+    };
+    const ready = Promise.resolve(request);
+    ready.then(
+      (value) => {
+        made = value;
+      },
+      () => {},
+    );
+    ready.catch((error: unknown) =>
+      done(() => {
+        popup.close();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }),
+    );
     const onMessage = (event: MessageEvent) => {
       // Only the popup we opened, at the address we opened it on.
       if (event.source !== popup || event.origin !== homeOrigin) return;
       const data: unknown = event.data;
       if (!isObject(data)) return;
-      if (data.type === HELLO) popup.postMessage({ type: REQUEST, request }, homeOrigin);
+      if (data.type === HELLO) void ready.then(send, () => {});
       else if (data.type === GRANT && data.grant)
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant, checkCarryGrant and proposeToHome check it
         done(() => resolve(data.grant as T));
@@ -525,6 +553,8 @@ function askHome<T>(
     };
     const watch = globalThis.setInterval(() => {
       if (popup.closed) done(() => reject(new Error('The window was closed before access was given.')));
+      // Until the home answers; one that has its request already ignores the rest.
+      else send();
     }, 500);
     const timer = globalThis.setTimeout(
       () => done(() => reject(new Error('No answer from your account home.'))),
@@ -595,7 +625,7 @@ export async function startConnectedNode(params: {
     {
       signer: grantSigner(params.grant),
       sessionKey: key.keys,
-      stores: { indexedDB: `weave-app:${params.grant.did}` },
+      stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),
       ...(params.grant.accountKey ? { accountKey: base64UrlDecode(params.grant.accountKey) } : {}),
@@ -616,7 +646,7 @@ export async function startConnectedNode(params: {
 }
 
 /** Where an app keeps its grant between visits */
-export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'weave.grant') {
+export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'minca.grant') {
   const kept = guardedStorage(storage);
   return {
     load(): Grant | null {
@@ -645,21 +675,27 @@ export interface IncomingRequest {
 }
 
 /**
- * Waits for the app that opened this page to say what it wants.
- * @returns The request, or null when this page was not opened by an app
+ * Waits for the app that opened this page to say what it wants. It says hello
+ * once, and listens long: on a phone the app's tab behind this one may not run
+ * for a while, and its request (which it repeats) comes when it does.
+ * @returns The request, or null when this page was not opened by an app, the app's window closed, or none came in time
  */
-export function receiveConnectRequest(timeoutMs = 10_000): Promise<IncomingRequest | null> {
+export function receiveConnectRequest(timeoutMs = 10 * 60_000): Promise<IncomingRequest | null> {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- lib.dom has it as any, and an opener on another origin is no instanceof Window here
   const opener = globalThis.opener as Window | null;
   if (!opener) return Promise.resolve(null);
 
   return new Promise((resolve) => {
+    const stop = () => {
+      globalThis.removeEventListener('message', onMessage);
+      globalThis.clearTimeout(timer);
+      globalThis.clearInterval(watch);
+    };
     const onMessage = (event: MessageEvent) => {
       if (event.source !== opener) return;
       const data: unknown = event.data;
       if (!isObject(data) || data.type !== REQUEST) return;
-      globalThis.removeEventListener('message', onMessage);
-      globalThis.clearTimeout(timer);
+      stop();
 
       // A request this home cannot read — often an app newer than the home —
       // is answered, not ignored: otherwise both sides wait with nothing said.
@@ -691,12 +727,18 @@ export function receiveConnectRequest(timeoutMs = 10_000): Promise<IncomingReque
       });
     };
     const timer = globalThis.setTimeout(() => {
-      globalThis.removeEventListener('message', onMessage);
+      stop();
       resolve(null);
     }, timeoutMs);
+    const watch = globalThis.setInterval(() => {
+      if (!opener.closed) return;
+      stop();
+      resolve(null);
+    }, 500);
     globalThis.addEventListener('message', onMessage);
     // Nothing secret in a hello, so any origin may hear it; the request that
-    // answers it is what names the app.
+    // answers it is what names the app. Said once: a page that takes over the
+    // app's tab later is not told where this home is.
     opener.postMessage({ type: HELLO }, '*');
   });
 }

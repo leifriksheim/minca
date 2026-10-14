@@ -1,5 +1,7 @@
 /** What this app's notifications matched lately, for the bell and the dot on the tab's icon; kept in this browser only. */
 import { useEffect, useSyncExternalStore } from 'react';
+import { MARK_BANDS } from '@minca/app-shared/mark';
+import { accent, surface } from '@minca/app-shared/tokens';
 
 export interface Alert {
   /** The record it is about */
@@ -20,7 +22,7 @@ interface Kept {
 const KEEP = 50;
 const EMPTY: Kept = { items: [], readAt: '' };
 
-const keyOf = (did: string) => `weave.alerts:${did}`;
+const keyOf = (did: string) => `minca.alerts:${did}`;
 const cache = new Map<string, Kept>();
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((listener) => listener());
@@ -84,8 +86,8 @@ export function markRead(did: string) {
 
 // Another tab of this app adds or reads them too.
 globalThis.addEventListener?.('storage', (event) => {
-  if (!event.key?.startsWith('weave.alerts:')) return;
-  cache.delete(event.key.slice('weave.alerts:'.length));
+  if (!event.key?.startsWith('minca.alerts:')) return;
+  cache.delete(event.key.slice('minca.alerts:'.length));
   changed();
 });
 
@@ -100,12 +102,11 @@ export function useAlerts(did: string): { items: ReadonlyArray<Alert>; unread: n
   return { items: kept.items, unread: kept.items.filter((item) => item.at > kept.readAt).length };
 }
 
-/** The Weave mark, as the tab's icon */
-const MARK =
-  '<rect width="32" height="32" rx="8" fill="#000"/><path d="M5 10 L12 23 L16 14 L20 23 L27 10" fill="none" stroke="#fff" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>';
-const DOT = '<circle cx="26" cy="6" r="6" fill="#e5484d" stroke="#fff" stroke-width="2"/>';
+/** Minca's mark, as the tab's icon: the rainbow (`@minca/app-shared/mark`), lowered to sit in a square */
+const MARK = `<g transform="translate(0 5.5)">${MARK_BANDS.map(({ d, fill }) => `<path fill="${fill}" d="${d}"/>`).join('')}</g>`;
+const DOT = `<circle cx="20" cy="5" r="4.5" fill="${accent.danger}" stroke="${surface.page}" stroke-width="1.5"/>`;
 const icon = (dot: boolean) =>
-  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">${MARK}${dot ? DOT : ''}</svg>`)}`;
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${MARK}${dot ? DOT : ''}</svg>`)}`;
 
 /** The tab's icon, with a red dot while something matched hasn't been looked at */
 export function useTabDot(dot: boolean) {

@@ -24,8 +24,8 @@ import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.
 import { bufferSource } from '../utils/guards.js';
 import { didOf, didToPublicKey } from '../identity/did.js';
 
-const READ_INFO = 'weave/space-read/v1';
-const INVITE_INFO = 'weave/space-invite/v1';
+const READ_INFO = 'minca/space-read/v1';
+const INVITE_INFO = 'minca/space-invite/v1';
 
 /** A key pair belonging to a space, and its public half as a did:key */
 export interface SpaceKeyPair {
@@ -136,7 +136,7 @@ export const SPACE_KEY_RECORD = 'key:space';
 /** The key of a sealed copy of a space key: one per key, recipient and sender */
 export const boxKey = (keyId: string, to: string, from: string) => hashedKey('box', `${keyId}|${to}|${from}`);
 /** The HPKE label a box is sealed under (spec 01 §9.3; spec 03 §9.4) */
-export const BOX_LABEL = 'weave/space-key-box/v1';
+export const BOX_LABEL = 'minca/space-key-box/v1';
 /** What a box is bound to, so one moved to another space, key or person doesn't open */
 export const boxBound = (space: string, keyId: string, to: string) => ({ space, keyId, to });
 

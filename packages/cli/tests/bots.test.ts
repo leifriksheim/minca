@@ -1,5 +1,5 @@
 /**
- * Where `weave agent --bot` keeps its bots: each in a folder of its own under
+ * Where `minca agent --bot` keeps its bots: each in a folder of its own under
  * the home's `bots/`, never the account the home itself holds.
  */
 import { test, describe } from 'node:test';
@@ -11,7 +11,7 @@ import { findBot, listBots, newBotFolder } from '../src/bots.js';
 import { createAccount, openHome } from '../src/home.js';
 import { tempDir } from './helpers/nodes.js';
 
-const tempHome = () => tempDir('weave-bots-');
+const tempHome = () => tempDir('minca-bots-');
 
 async function makeBot(home: string, name: string) {
   const folder = await newBotFolder(home, name);

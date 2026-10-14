@@ -184,10 +184,10 @@ describe('private space versions', () => {
 
   test('the example body of spec 03 §8.3 opens', async () => {
     const key = await spaceKeyFromRaw(new Uint8Array(32).map((_, i) => 255 - i));
-    assert.equal(key.id, 'aLhvw5pkV65_lcQHEcUOug');
+    assert.equal(key.id, 'bgk-m-Kq-gEGgJCOOEYNYw');
     const body = {
-      sealed: 'AaChoqOkpaanqKmqq0Fx-eCwOhnoZnLVU8hJnQsqWTBRgYQ5jezwBbEdvJDeKm5_wX3j',
-      keyId: 'aLhvw5pkV65_lcQHEcUOug',
+      sealed: 'AaChoqOkpaanqKmqq07DZlJUgYUf0LLiscCoiOZyTpmIYbOrOnd01S8p1FoAP4mxJDJ7',
+      keyId: 'bgk-m-Kq-gEGgJCOOEYNYw',
     };
     const place = { space: 'bexample', collection: 'app.note', key: 'k1' };
     assert.deepEqual(await openBody(body, key, place), { body: { text: 'hi' } });

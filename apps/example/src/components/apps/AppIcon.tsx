@@ -1,36 +1,13 @@
-import { Icon, type Glyph } from '../Icon';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
 import type { Unread } from '../../seen';
 
-/** An app's glyph on its own tint, the same wherever the app appears */
-export function AppIcon({
-  icon,
-  hue,
-  size,
-  className,
-}: {
-  icon: Glyph;
-  hue: number;
-  size: number;
-  className?: string;
-}) {
+/**
+ * An app as its shape, the same wherever it appears: a built-in app's own,
+ * and any other a round one picked by its id.
+ */
+export function AppIcon({ id, size, className }: { id: string; size: number; className?: string }) {
   return (
-    <span
-      aria-hidden
-      className={className}
-      style={{
-        width: size,
-        height: size,
-        flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: Math.round(size * 0.28),
-        background: `linear-gradient(145deg, hsl(${hue} 80% 62%), hsl(${(hue + 25) % 360} 70% 46%))`,
-        color: '#fff',
-      }}
-    >
-      <Icon name={icon} size={Math.round(size * 0.52)} />
-    </span>
+    <Shape {...shapeFor(id)} size={size} className={className ? `app-shape ${className}` : 'app-shape'} />
   );
 }
 

@@ -145,14 +145,14 @@ describe('wrapping a seed', () => {
   test('the example passphrase wrap of spec 01 §11.2 opens to the seed of §3.3', async () => {
     const wrap = {
       kind: 'passphrase' as const,
-      id: '3FhYYIDMZJI',
+      id: 'w09cUHjZC7k',
       label: 'Passphrase',
-      addedAt: '2026-10-11T10:15:34.694Z',
-      salt: '9ae06Gjd9kltZrGo6jupLQ',
+      addedAt: '2026-10-13T19:44:45.107Z',
+      salt: 'uSTGCMafmVGh1iPTcEQ2RA',
       iterations: 600000,
-      sealed: 'AWFF7dAydbB7LQNVyPYX5ohUGrCi-n3UnxgyuWup2zlu1qBLRwtVYQft-BBr',
+      sealed: 'ASKGZ7foaMlbiCtMDmgwKfGzVX8nQwaEGmMnIZ6IoIObeD1jqU_MmXEvZdau',
     };
-    const did = 'did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr';
+    const did = 'did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT';
     const seed = await unwrapSeedWithPassphrase(wrap, 'hunter2 hunter2', did);
     assert.equal(bytesToHex(seed), '00112233445566778899aabbccddeeff');
   });
@@ -435,7 +435,7 @@ describe('encryption at rest', () => {
       false,
       ['encrypt', 'decrypt'],
     );
-    const derived = await hkdfAesKey(accountKey, utf8Encode('weave/local-key/v1'));
+    const derived = await hkdfAesKey(accountKey, utf8Encode('minca/local-key/v1'));
     for (const key of [asIs, derived])
       await assert.rejects(() => createEncryptedAdapter(inner, key).get('space:x'));
   });
@@ -444,27 +444,27 @@ describe('encryption at rest', () => {
     const seed = hexToBytes('00112233445566778899aabbccddeeff');
     assert.equal(
       bytesToHex(await deriveAccountKey(seed)),
-      'f9b921c105dcc1f1f13b4d643cfe961701b733d3be473c1d0e416db233c5d598',
+      '9d1e01f2d4be2c948e921ac2604087a0b1448422b20d64f88e60f63238e87c9b',
     );
     assert.equal(
       bytesToHex(await deriveMemberKeyBytes(await deriveAccountKey(seed), 'bexample')),
-      'd6e2d8fba5a6ad5e3e1484236c85c0313a01414bf9bc95fd44e4664946fb8a48',
+      '692597e89fbbfd804d1b090c1a02219cc869a4151860a427c724b5e397c1121a',
     );
     // The local key never leaves Web Crypto; its bytes are HKDF under its own label.
     assert.equal(
-      bytesToHex(await hkdf(seed, utf8Encode('weave/local-key/v1'), 32)),
-      '26e6f39b9eeff4676d4efac5cfc6d075fb3becb6ceb13f9e03f6bc3d11d34fa9',
+      bytesToHex(await hkdf(seed, utf8Encode('minca/local-key/v1'), 32)),
+      '4b41df023aa99109c19c859f1228674a607d3d5cdfc10f2d748d582636ab9a3d',
     );
     await assert.rejects(globalThis.crypto.subtle.exportKey('raw', await deriveLocalKey(seed)));
 
     const other = new Uint8Array(16).map((_, i) => i + 1);
     const did = (await manager.fromSeed(other)).did;
     const registry = await deriveAccountRegistry(await deriveAccountKey(other), did);
-    assert.equal(registry.space.id, 'bedvg3woledl6e5w4kj3okq2yxdmz77s4adfmegkj2n3kjavydfia');
-    assert.equal(registry.space.nonce, 'Jx8Oo78z30WwKl1X');
+    assert.equal(registry.space.id, 'b42wsegs2enqkhuzz4ba2hwaqgzvdcziz7bkn23ue7qoekuzv5usq');
+    assert.equal(registry.space.nonce, '75Pq-CByGn9iQXOe');
     assert.equal(
       (await deriveContactsSpace(await deriveAccountKey(other), did)).space.id,
-      'b43ypkcbueug6yc6fnoumjtzit53yphcv5l5o42l2mqlce7fgnpfa',
+      'b4ha5cfxach7u4z2i3so43ftysegxr5jg2x6ji53zc5yfy3scsnga',
     );
   });
 

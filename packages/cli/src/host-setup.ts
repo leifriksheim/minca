@@ -1,5 +1,5 @@
 /**
- * What `weave host` starts from: a data folder, the host's key in it, and a
+ * What `minca host` starts from: a data folder, the host's key in it, and a
  * payment provider from the environment.
  */
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -11,7 +11,7 @@ import {
   folderStores,
   type BlobStore,
   type StoreFactory,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
 import type { Billing } from './host.js';
 import { createStripeBilling } from './stripe.js';
@@ -20,9 +20,9 @@ import { chooseModel, isLoopback, isPlain, thinker } from './model.js';
 import { commaList } from './json.js';
 import type { BotModel } from './hosted-bots.js';
 
-/** Where a host keeps its data unless told: `~/.weave-host` */
+/** Where a host keeps its data unless told: `~/.minca-host` */
 export function defaultHostData(): string {
-  return path.join(os.homedir(), '.weave-host');
+  return path.join(os.homedir(), '.minca-host');
 }
 
 /**
@@ -68,14 +68,14 @@ export function spaceSize(data: string): (spaceId: string) => Promise<number> {
 }
 
 /**
- * How much a subscription's spaces may take, from WEAVE_HOST_QUOTA_GB: 10 on
+ * How much a subscription's spaces may take, from MINCA_HOST_QUOTA_GB: 10 on
  * a host that takes payments, none on a free one unless set. 0 is none.
  */
 export function quotaFromEnv(env: NodeJS.ProcessEnv, free: boolean): number | undefined {
-  const text = env.WEAVE_HOST_QUOTA_GB?.trim();
+  const text = env.MINCA_HOST_QUOTA_GB?.trim();
   const gb = text ? Number(text) : free ? 0 : 10;
   if (!Number.isFinite(gb) || gb < 0)
-    throw new Error(`WEAVE_HOST_QUOTA_GB must be a number of gigabytes, not "${text}"`);
+    throw new Error(`MINCA_HOST_QUOTA_GB must be a number of gigabytes, not "${text}"`);
   return gb > 0 ? Math.round(gb * 1e9) : undefined;
 }
 
@@ -91,34 +91,34 @@ export function billingFromEnv(env: NodeJS.ProcessEnv): Billing | null {
 }
 
 /**
- * Wallet payments, when WEAVE_WALLET_ADDRESS is set: USDC to that address, at
- * WEAVE_WALLET_MONTHLY and/or WEAVE_WALLET_YEARLY dollars, on
- * WEAVE_WALLET_NETWORK (base, or base-sepolia to try it; default base), read
- * through WEAVE_WALLET_RPC (default: the network's public node). None otherwise.
+ * Wallet payments, when MINCA_WALLET_ADDRESS is set: USDC to that address, at
+ * MINCA_WALLET_MONTHLY and/or MINCA_WALLET_YEARLY dollars, on
+ * MINCA_WALLET_NETWORK (base, or base-sepolia to try it; default base), read
+ * through MINCA_WALLET_RPC (default: the network's public node). None otherwise.
  */
 export function walletFromEnv(env: NodeJS.ProcessEnv): WalletPayments | null {
-  if (!env.WEAVE_WALLET_ADDRESS) return null;
-  const network = env.WEAVE_WALLET_NETWORK ?? 'base';
+  if (!env.MINCA_WALLET_ADDRESS) return null;
+  const network = env.MINCA_WALLET_NETWORK ?? 'base';
   if (!isNetworkName(network))
-    throw new Error(`WEAVE_WALLET_NETWORK must be ${Object.keys(NETWORKS).join(' or ')}, not "${network}"`);
-  if (!env.WEAVE_WALLET_MONTHLY && !env.WEAVE_WALLET_YEARLY) {
+    throw new Error(`MINCA_WALLET_NETWORK must be ${Object.keys(NETWORKS).join(' or ')}, not "${network}"`);
+  if (!env.MINCA_WALLET_MONTHLY && !env.MINCA_WALLET_YEARLY) {
     throw new Error(
-      'Wallet payments need a price: WEAVE_WALLET_MONTHLY, WEAVE_WALLET_YEARLY, or both, in dollars (like 4 and 36)',
+      'Wallet payments need a price: MINCA_WALLET_MONTHLY, MINCA_WALLET_YEARLY, or both, in dollars (like 4 and 36)',
     );
   }
   return createWalletPayments({
     network,
-    to: env.WEAVE_WALLET_ADDRESS,
-    ...(env.WEAVE_WALLET_MONTHLY ? { monthly: env.WEAVE_WALLET_MONTHLY } : {}),
-    ...(env.WEAVE_WALLET_YEARLY ? { yearly: env.WEAVE_WALLET_YEARLY } : {}),
-    ...(env.WEAVE_WALLET_RPC ? { rpcUrl: env.WEAVE_WALLET_RPC } : {}),
+    to: env.MINCA_WALLET_ADDRESS,
+    ...(env.MINCA_WALLET_MONTHLY ? { monthly: env.MINCA_WALLET_MONTHLY } : {}),
+    ...(env.MINCA_WALLET_YEARLY ? { yearly: env.MINCA_WALLET_YEARLY } : {}),
+    ...(env.MINCA_WALLET_RPC ? { rpcUrl: env.MINCA_WALLET_RPC } : {}),
   });
 }
 
 /**
- * How the host presents itself, from WEAVE_HOST_NAME, WEAVE_HOST_PRICE (text
- * for people; default from the wallet prices), WEAVE_HOST_TERMS (an address),
- * and WEAVE_HOST_URL (its public https:// address, where Stripe sends people
+ * How the host presents itself, from MINCA_HOST_NAME, MINCA_HOST_PRICE (text
+ * for people; default from the wallet prices), MINCA_HOST_TERMS (an address),
+ * and MINCA_HOST_URL (its public https:// address, where Stripe sends people
  * back to and reminder mails link to; default from each request).
  */
 export function presentationFromEnv(env: NodeJS.ProcessEnv): {
@@ -127,46 +127,46 @@ export function presentationFromEnv(env: NodeJS.ProcessEnv): {
   terms?: string;
   publicUrl?: string;
 } {
-  const url = env.WEAVE_HOST_URL?.trim();
+  const url = env.MINCA_HOST_URL?.trim();
   if (url && !/^https?:\/\/[^/]+\/?$/.test(url))
-    throw new Error(`WEAVE_HOST_URL must be an address like https://host.example, not "${url}"`);
+    throw new Error(`MINCA_HOST_URL must be an address like https://host.example, not "${url}"`);
   return {
-    ...(env.WEAVE_HOST_NAME ? { name: env.WEAVE_HOST_NAME } : {}),
-    ...(env.WEAVE_HOST_PRICE ? { price: env.WEAVE_HOST_PRICE } : {}),
-    ...(env.WEAVE_HOST_TERMS ? { terms: env.WEAVE_HOST_TERMS } : {}),
+    ...(env.MINCA_HOST_NAME ? { name: env.MINCA_HOST_NAME } : {}),
+    ...(env.MINCA_HOST_PRICE ? { price: env.MINCA_HOST_PRICE } : {}),
+    ...(env.MINCA_HOST_TERMS ? { terms: env.MINCA_HOST_TERMS } : {}),
     ...(url ? { publicUrl: url.replace(/\/$/, '') } : {}),
   };
 }
 
 /**
- * The host's bucket, from WEAVE_S3_ENDPOINT, WEAVE_S3_BUCKET,
- * WEAVE_S3_ACCESS_KEY_ID and WEAVE_S3_SECRET_ACCESS_KEY (WEAVE_S3_REGION and
- * WEAVE_S3_PREFIX optional) — Cloudflare R2, or any S3-compatible store.
+ * The host's bucket, from MINCA_S3_ENDPOINT, MINCA_S3_BUCKET,
+ * MINCA_S3_ACCESS_KEY_ID and MINCA_S3_SECRET_ACCESS_KEY (MINCA_S3_REGION and
+ * MINCA_S3_PREFIX optional) — Cloudflare R2, or any S3-compatible store.
  * None when they are not set: the host keeps everything on its own disk.
  */
 export function mirrorFromEnv(env: NodeJS.ProcessEnv): BlobStore | null {
-  const { WEAVE_S3_ENDPOINT, WEAVE_S3_BUCKET, WEAVE_S3_ACCESS_KEY_ID, WEAVE_S3_SECRET_ACCESS_KEY } = env;
-  if (!WEAVE_S3_ENDPOINT || !WEAVE_S3_BUCKET || !WEAVE_S3_ACCESS_KEY_ID || !WEAVE_S3_SECRET_ACCESS_KEY)
+  const { MINCA_S3_ENDPOINT, MINCA_S3_BUCKET, MINCA_S3_ACCESS_KEY_ID, MINCA_S3_SECRET_ACCESS_KEY } = env;
+  if (!MINCA_S3_ENDPOINT || !MINCA_S3_BUCKET || !MINCA_S3_ACCESS_KEY_ID || !MINCA_S3_SECRET_ACCESS_KEY)
     return null;
   return createS3BlobStore({
-    endpoint: WEAVE_S3_ENDPOINT,
-    bucket: WEAVE_S3_BUCKET,
-    accessKeyId: WEAVE_S3_ACCESS_KEY_ID,
-    secretAccessKey: WEAVE_S3_SECRET_ACCESS_KEY,
-    ...(env.WEAVE_S3_REGION ? { region: env.WEAVE_S3_REGION } : {}),
-    ...(env.WEAVE_S3_PREFIX ? { prefix: env.WEAVE_S3_PREFIX } : {}),
+    endpoint: MINCA_S3_ENDPOINT,
+    bucket: MINCA_S3_BUCKET,
+    accessKeyId: MINCA_S3_ACCESS_KEY_ID,
+    secretAccessKey: MINCA_S3_SECRET_ACCESS_KEY,
+    ...(env.MINCA_S3_REGION ? { region: env.MINCA_S3_REGION } : {}),
+    ...(env.MINCA_S3_PREFIX ? { prefix: env.MINCA_S3_PREFIX } : {}),
   });
 }
 
 /**
- * The accounts a host carries for, from `--allow` and WEAVE_HOST_ALLOW
+ * The accounts a host carries for, from `--allow` and MINCA_HOST_ALLOW
  * (comma separated): account DIDs, as the home shows them. None: any.
  */
 export function allowList(
   flags: ReadonlyArray<string> | undefined,
   env: NodeJS.ProcessEnv,
 ): ReadonlyArray<string> | null {
-  const named = [...(flags ?? []), ...commaList(env.WEAVE_HOST_ALLOW)];
+  const named = [...(flags ?? []), ...commaList(env.MINCA_HOST_ALLOW)];
   if (named.length === 0) return null;
   const wrong = named.find((did) => !/^did:key:z[1-9A-HJ-NP-Za-km-z]{1,120}$/.test(did));
   if (wrong)
@@ -188,16 +188,16 @@ export function checkExposure(options: {
 }): void {
   if (!options.free || options.allow || isLoopback(options.host)) return;
   throw new Error(
-    `A free host on ${options.host} would carry spaces for anyone who finds it. Name the accounts it is for with --allow did:key:… (or WEAVE_HOST_ALLOW), or keep it on this machine.`,
+    `A free host on ${options.host} would carry spaces for anyone who finds it. Name the accounts it is for with --allow did:key:… (or MINCA_HOST_ALLOW), or keep it on this machine.`,
   );
 }
 
 /**
- * Bots the host runs for the spaces it carries, when WEAVE_HOST_BOTS=1: they
- * think with the host's own key, each spends WEAVE_BOT_DAILY_CAP dollars a
+ * Bots the host runs for the spaces it carries, when MINCA_HOST_BOTS=1: they
+ * think with the host's own key, each spends MINCA_BOT_DAILY_CAP dollars a
  * day at most (default 1), taken from their community's fund (`fundFromEnv`).
- * WEAVE_BOT_PROVIDER, WEAVE_BOT_MODEL, WEAVE_BOT_BASE_URL and WEAVE_BOT_PRICE
- * choose the model as `weave agent`'s flags do (`chooseModel`), with
+ * MINCA_BOT_PROVIDER, MINCA_BOT_MODEL, MINCA_BOT_BASE_URL and MINCA_BOT_PRICE
+ * choose the model as `minca agent`'s flags do (`chooseModel`), with
  * claude-sonnet-5-5 by default. None otherwise.
  */
 export async function botsFromEnv(
@@ -205,28 +205,28 @@ export async function botsFromEnv(
   data: string,
   fetch: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<{ folder: string; model: BotModel } | null> {
-  if (env.WEAVE_HOST_BOTS !== '1') return null;
+  if (env.MINCA_HOST_BOTS !== '1') return null;
   const model = chooseModel(
     {
-      provider: env.WEAVE_BOT_PROVIDER,
-      model: env.WEAVE_BOT_MODEL,
-      price: env.WEAVE_BOT_PRICE,
-      baseUrl: env.WEAVE_BOT_BASE_URL,
+      provider: env.MINCA_BOT_PROVIDER,
+      model: env.MINCA_BOT_MODEL,
+      price: env.MINCA_BOT_PRICE,
+      baseUrl: env.MINCA_BOT_BASE_URL,
     },
     'claude-sonnet-5-5',
-    { provider: 'WEAVE_BOT_PROVIDER', model: 'WEAVE_BOT_MODEL', price: 'WEAVE_BOT_PRICE' },
+    { provider: 'MINCA_BOT_PROVIDER', model: 'MINCA_BOT_MODEL', price: 'MINCA_BOT_PRICE' },
   );
-  const dailyCap = Number(env.WEAVE_BOT_DAILY_CAP ?? '1');
+  const dailyCap = Number(env.MINCA_BOT_DAILY_CAP ?? '1');
   if (!Number.isFinite(dailyCap) || dailyCap <= 0)
-    throw new Error(`WEAVE_BOT_DAILY_CAP must be dollars a day, like 1, not "${env.WEAVE_BOT_DAILY_CAP}"`);
+    throw new Error(`MINCA_BOT_DAILY_CAP must be dollars a day, like 1, not "${env.MINCA_BOT_DAILY_CAP}"`);
   const openai = model.provider === 'openai';
   const apiKey = (openai ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY)?.trim();
   // A server on this machine may ask for no key; OpenAI's and Anthropic's always do.
   if (!apiKey && !(openai && model.baseUrl && isLoopback(model.baseUrl)))
     throw new Error(
       openai
-        ? `WEAVE_BOT_PROVIDER=openai needs OPENAI_API_KEY for ${model.baseUrl ?? 'https://api.openai.com/v1'}`
-        : 'WEAVE_HOST_BOTS needs ANTHROPIC_API_KEY: the bots think with the host’s key',
+        ? `MINCA_BOT_PROVIDER=openai needs OPENAI_API_KEY for ${model.baseUrl ?? 'https://api.openai.com/v1'}`
+        : 'MINCA_HOST_BOTS needs ANTHROPIC_API_KEY: the bots think with the host’s key',
     );
   const think = await thinker(model, apiKey ?? null, fetch);
   return {
@@ -242,9 +242,9 @@ export async function botsFromEnv(
 }
 
 /**
- * Community funds: what keeping one online takes a month (WEAVE_FUND_MONTHLY,
+ * Community funds: what keeping one online takes a month (MINCA_FUND_MONTHLY,
  * dollars, default the wallet's monthly price or 4), what a bot's AI use
- * costs as a multiple of what the host pays (WEAVE_BOT_MARKUP, default 1.5),
+ * costs as a multiple of what the host pays (MINCA_BOT_MARKUP, default 1.5),
  * and where someone who adds every month by card stops it
  * (STRIPE_PORTAL_LINK, Stripe's no-code customer portal link).
  */
@@ -253,12 +253,12 @@ export function fundFromEnv(env: NodeJS.ProcessEnv): {
   botMarkup?: number;
   manageFunds?: string;
 } {
-  const monthly = (env.WEAVE_FUND_MONTHLY ?? env.WEAVE_WALLET_MONTHLY)?.trim();
+  const monthly = (env.MINCA_FUND_MONTHLY ?? env.MINCA_WALLET_MONTHLY)?.trim();
   if (monthly && !/^\d{1,5}(\.\d{1,2})?$/.test(monthly))
-    throw new Error(`WEAVE_FUND_MONTHLY must be dollars a month, like 4, not "${monthly}"`);
-  const markup = env.WEAVE_BOT_MARKUP ? Number(env.WEAVE_BOT_MARKUP) : undefined;
+    throw new Error(`MINCA_FUND_MONTHLY must be dollars a month, like 4, not "${monthly}"`);
+  const markup = env.MINCA_BOT_MARKUP ? Number(env.MINCA_BOT_MARKUP) : undefined;
   if (markup !== undefined && (!Number.isFinite(markup) || markup < 1))
-    throw new Error(`WEAVE_BOT_MARKUP must be 1 or more, not "${env.WEAVE_BOT_MARKUP}"`);
+    throw new Error(`MINCA_BOT_MARKUP must be 1 or more, not "${env.MINCA_BOT_MARKUP}"`);
   const portal = env.STRIPE_PORTAL_LINK?.trim();
   return {
     ...(monthly ? { fundMonthly: monthly } : {}),

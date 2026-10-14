@@ -19,12 +19,12 @@ import {
   type ClaimedWriter,
   type HeadStore,
   type WriterKeySource,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 import { errorCode, isRecord } from './json.js';
 
 const MAX_SLOTS = 32;
 /** The envelope label of a writer key on disk; bound to `{ did, slot }` */
-const WRITER_KEY_LABEL = 'weave/writer-key/v1';
+const WRITER_KEY_LABEL = 'minca/writer-key/v1';
 const algorithm = { name: 'ECDSA', namedCurve: 'P-256' };
 
 /** Whether a process is still running */
@@ -138,7 +138,7 @@ function headStore(dir: string): HeadStore {
 
 /**
  * Lasting writer keys in a directory of slots.
- * @param dir One account's slots, e.g. `~/.weave/writers/<account id>`
+ * @param dir One account's slots, e.g. `~/.minca/writers/<account id>`
  * @param localKey The account's local key (`deriveLocalKey`), which seals each key at rest
  * @param did The account's DID, which each sealed key is bound to
  */

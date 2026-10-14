@@ -4,9 +4,9 @@
  * they all agree, and the count (`tally.ts`) runs on what they show.
  */
 import { useMemo } from 'react';
-import { useAccess, useAccount, useCan, useLive, useNames, useQuery } from '@weaveprotocol/core/react';
-import { profile, type Profile } from '@weaveprotocol/core/schemas';
-import { ROLE_ASSIGN } from '@weaveprotocol/core';
+import { useAccess, useAccount, useCan, useLive, useNames, useQuery } from '@minca/core/react';
+import { profile, type Profile } from '@minca/core/schemas';
+import { ROLE_ASSIGN } from '@minca/core';
 import {
   conflict,
   decision,

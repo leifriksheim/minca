@@ -53,7 +53,7 @@ function folderPlace(directory: DirectoryHandleLike): Place {
  * what should happen to their data first. Must be called from a click.
  */
 export async function pickPod(): Promise<Place> {
-  return folderPlace(await pickDataFolder({ id: 'weave-pod' }));
+  return folderPlace(await pickDataFolder({ id: 'minca-pod' }));
 }
 
 /** Remembers a pod as the one this site opens next time. */
@@ -126,12 +126,12 @@ export function describeStores(
 ): WorkerStores {
   return folder
     ? { directory: folder.directory, basePath: account.dataPath, localKey: folder.localKey }
-    : { indexedDB: `weave:${account.dataPath.replace(/\//g, ':')}` };
+    : { indexedDB: `minca:${account.dataPath.replace(/\//g, ':')}` };
 }
 
 /** Deletes the IndexedDB databases an account kept in this browser, or every one whose name starts with a prefix. */
 export async function deleteBrowserData(account: AccountSummary | string): Promise<void> {
-  const prefix = typeof account === 'string' ? account : `weave:${account.dataPath.replace(/\//g, ':')}`;
+  const prefix = typeof account === 'string' ? account : `minca:${account.dataPath.replace(/\//g, ':')}`;
   const databases = (await globalThis.indexedDB.databases?.()) ?? [];
   await Promise.all(
     databases

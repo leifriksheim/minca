@@ -693,7 +693,7 @@ export interface StartAutomationsOptions extends RunAutomationsOptions {
 /**
  * Runs the automations `account` runs, in every space it follows, until stopped:
  * once at the start, after each change in a space, and at the times automations
- * name. The one loop every runner uses, an app, `weave agent` or a bot.
+ * name. The one loop every runner uses, an app, `minca agent` or a bot.
  */
 export function startAutomations(node: P2PNode, options: StartAutomationsOptions): () => void {
   const { account } = options;

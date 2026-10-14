@@ -1,11 +1,11 @@
 {
-  "name": "@weaveprotocol/core",
+  "name": "@minca/core",
   "version": "0.5.0",
   "type": "module",
   "description": "Self-sovereign P2P protocol for the browser — identity, schemas, storage, networking, and gossip sync",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/leifriksheim/weave.git",
+    "url": "git+https://github.com/leifriksheim/minca.git",
     "directory": "packages/core"
   },
   "files": [
@@ -17,52 +17,52 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "@weaveprotocol/source": "./src/index.ts",
+      "@minca/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./storage": {
-      "@weaveprotocol/source": "./src/storage/index.ts",
+      "@minca/source": "./src/storage/index.ts",
       "types": "./dist/storage/index.d.ts",
       "import": "./dist/storage/index.js"
     },
     "./node-worker": {
-      "@weaveprotocol/source": "./src/node-worker.ts",
+      "@minca/source": "./src/node-worker.ts",
       "types": "./dist/node-worker.d.ts",
       "import": "./dist/node-worker.js"
     },
     "./node": {
-      "@weaveprotocol/source": "./src/node/index.ts",
+      "@minca/source": "./src/node/index.ts",
       "types": "./dist/node/index.d.ts",
       "import": "./dist/node/index.js"
     },
     "./schemas": {
-      "@weaveprotocol/source": "./src/schemas/index.ts",
+      "@minca/source": "./src/schemas/index.ts",
       "types": "./dist/schemas/index.d.ts",
       "import": "./dist/schemas/index.js"
     },
     "./session": {
-      "@weaveprotocol/source": "./src/session/index.ts",
+      "@minca/source": "./src/session/index.ts",
       "types": "./dist/session/index.d.ts",
       "import": "./dist/session/index.js"
     },
     "./elements": {
-      "@weaveprotocol/source": "./src/elements/index.ts",
+      "@minca/source": "./src/elements/index.ts",
       "types": "./dist/elements/index.d.ts",
       "import": "./dist/elements/index.js"
     },
     "./react": {
-      "@weaveprotocol/source": "./src/react/index.ts",
+      "@minca/source": "./src/react/index.ts",
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
     },
     "./calls": {
-      "@weaveprotocol/source": "./src/calls/index.ts",
+      "@minca/source": "./src/calls/index.ts",
       "types": "./dist/calls/index.d.ts",
       "import": "./dist/calls/index.js"
     },
     "./doors": {
-      "@weaveprotocol/source": "./src/doors/index.ts",
+      "@minca/source": "./src/doors/index.ts",
       "types": "./dist/doors/index.d.ts",
       "import": "./dist/doors/index.js"
     }

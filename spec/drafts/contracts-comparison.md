@@ -5,7 +5,7 @@ Status: evidence for a decision, October 2026. Not normative. It tests step
 two languages instead of one: the five examples, written in both, run by a
 small evaluator for each, with tests.
 
-- **(A)** CEL contracts (Weave's existing subset, `packages/core/src/records/cel.ts`)
+- **(A)** CEL contracts (Minca's existing subset, `packages/core/src/records/cel.ts`)
   with grants as UCAN 1.0 delegations and UCAN policies.
 - **(B)** Datalog for contracts only.
 - **(C)** Datalog for grants and contracts both.
@@ -13,7 +13,7 @@ small evaluator for each, with tests.
 **Recommendation: (A)**, with four additions the examples showed it needs
 (§9). Datalog wrote the grants better, and wrote about the same contracts,
 but the parts that are hard are hard in both, and Datalog's strength,
-deriving over everything a node holds, is what Weave's contracts must not
+deriving over everything a node holds, is what Minca's contracts must not
 do. The reasons are in §8.
 
 ## 1. What was built
@@ -21,7 +21,7 @@ do. The reasons are in §8.
 Everything is in `scenarios/`, a private workspace that is typechecked,
 linted and tested with the rest (`npm test`, `npm run check`). It was
 `prototypes/contracts/`; after the decision (§8) the five examples became
-Weave's scenario suite, and the Datalog side moved to
+Minca's scenario suite, and the Datalog side moved to
 `scenarios/parked-datalog/`. The file names below are as they were when this
 was written; the table after it says where each is now.
 
@@ -460,7 +460,7 @@ anything and is a longer way to write the CEL.
 | Datalog (proto)     | 596                                 | Parser, safety, stratification, semi-naive, negation, `count`/`sum`, a fact limit. No cost model, no indexes, no incremental evaluation |
 
 **A second CEL implementation** must match [spec 09](../09-contracts.md): the subset, the
-cost model, the number and string formats, and the Weave functions. Most of
+cost model, the number and string formats, and the Minca functions. Most of
 it is pinned down by CEL's own suite, which the reference already passes
 (`packages/core/tests/cel-conformance.test.ts`).
 
@@ -504,7 +504,7 @@ suite to check against (Biscuit's has no negation or aggregates):
    (chains, pending, standing as of `seen`), which is the larger part to
    specify.
 3. **Exact agreement is cheaper in CEL.** It has an upstream spec, a
-   conformance suite, and an exact cost model; Weave already has a tested
+   conformance suite, and an exact cost model; Minca already has a tested
    implementation. Datalog with negation and aggregates is a new spec with
    no outside suite, and its time limit can't be made exact without fixing
    the evaluation strategy (§7.5).

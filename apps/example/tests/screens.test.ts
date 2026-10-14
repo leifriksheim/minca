@@ -26,21 +26,21 @@ function runScreenClient(window: unknown, addEventListener: unknown, document: u
 }
 
 describe('screens', () => {
-  test('the script in front of a screen sets up weave, with me readable both ways', () => {
+  test('the script in front of a screen sets up minca, with me readable both ways', () => {
     const port: { postMessage: () => void; onmessage: unknown } = { postMessage: () => {}, onmessage: null };
     const window: Record<string, unknown> = {
-      __weave: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: ['app.chess.game'] },
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: ['app.chess.game'] },
     };
     runScreenClient(window, () => {}, {});
-    const weave = window.weave;
-    assert.ok(isRecord(weave));
-    const { me } = weave;
+    const minca = window.minca;
+    assert.ok(isRecord(minca));
+    const { me } = minca;
     assert.ok(typeof me === 'function' && 'did' in me);
-    assert.equal(window.__weave, undefined, 'the port is not left lying around');
+    assert.equal(window.__minca, undefined, 'the port is not left lying around');
     assert.equal(me.did, 'did:key:zMe');
     assert.equal(me.name, 'Anna');
     assert.deepEqual(Reflect.apply(me, undefined, []), { did: 'did:key:zMe', name: 'Anna' });
-    assert.deepEqual(weave.collections, ['app.chess.game']);
+    assert.deepEqual(minca.collections, ['app.chess.game']);
   });
 
   test("the script in front of a screen shows the screen's own errors, not those of a browser extension in its frame", () => {
@@ -60,7 +60,7 @@ describe('screens', () => {
       body: { appendChild: () => {} },
     };
     const window: Record<string, unknown> = {
-      __weave: { port: { postMessage: () => {} }, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [] },
+      __minca: { port: { postMessage: () => {} }, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [] },
     };
     runScreenClient(
       window,
@@ -208,7 +208,7 @@ describe('screens', () => {
       assert.equal(open[0]!.id, open[0]!.key);
       assert.equal(open[0]!.data.status, 'open');
       const wrong = await call('list', 42);
-      assert.match(wrong.error!, /Name the collection as text, like weave\.list\("app\.chess\.game"\)/);
+      assert.match(wrong.error!, /Name the collection as text, like minca\.list\("app\.chess\.game"\)/);
     } finally {
       bridge.close();
       channel.port2.close();

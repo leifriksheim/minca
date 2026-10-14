@@ -2,7 +2,7 @@
  * @module space/grants
  * What a role may do in a space: its grants (spec 03 §2).
  *
- * A grant is a delegation to a role, in Weave's JSON profile of UCAN 1.0
+ * A grant is a delegation to a role, in Minca's JSON profile of UCAN 1.0
  * (spec 01 §7): a command path, and a policy over the command's arguments.
  * Only the constitution (`space/constitution.ts`) and a role's definition issue
  * grants, and only to roles. An account holds power only through the roles

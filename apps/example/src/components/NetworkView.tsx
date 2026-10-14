@@ -1,9 +1,9 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import { checkRelays, MAX_RELAYS, SPACE_RELAYS } from '@weaveprotocol/core';
-import { useMay } from '@weave/app-shared/may';
-import type { CarrierSummary, MeshStatus, RelayStatus, SpaceStatus, SpaceSummary } from '@weaveprotocol/core';
-import { useAccess, useAccount, useNetwork, useNode } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { checkRelays, MAX_RELAYS, SPACE_RELAYS } from '@minca/core';
+import { useMay } from '@minca/app-shared/may';
+import type { CarrierSummary, MeshStatus, RelayStatus, SpaceStatus, SpaceSummary } from '@minca/core';
+import { useAccess, useAccount, useNetwork, useNode } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
 import {
   duration,
   healthOf,
@@ -17,7 +17,7 @@ import {
 import { styles, palette, variants } from '../styles';
 import { Person } from './Person';
 import { DocsNote } from './DocsNote';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 
 /** The time now, a second at a time, for countdowns and "for 4 min" */
 export function useNow(): number {
@@ -33,14 +33,14 @@ export function useNow(): number {
 export const HEALTH_COLOR: Record<Health, string> = {
   syncing: palette.accent.good,
   alone: palette.ink.faint,
-  connecting: '#d08700',
-  elsewhere: '#d08700',
+  connecting: palette.accent.warn,
+  elsewhere: palette.accent.warn,
   offline: palette.accent.danger,
 };
 
 const RELAY_COLOR: Record<RelayStatus['state'], string> = {
   open: palette.accent.good,
-  connecting: '#d08700',
+  connecting: palette.accent.warn,
   waiting: palette.accent.danger,
   stopped: palette.ink.faint,
 };

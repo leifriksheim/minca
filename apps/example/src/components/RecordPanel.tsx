@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useNode, useLive, useProfiles, useCan } from '@weaveprotocol/core/react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { reaction, comment, tag } from '@weaveprotocol/core/schemas';
+import { useNode, useLive, useProfiles, useCan } from '@minca/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { reaction, comment, tag } from '@minca/core/schemas';
 import {
   belonging,
   bodyOf,
@@ -22,13 +22,13 @@ import { nameOf, peopleFrom, writerOf } from '../derive/people';
 import { ago } from '../derive/time';
 import { SchemaForm, FieldInput } from './SchemaForm';
 import { Value } from './Value';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { Reactions } from './std/Reactions';
 import { Tags } from './std/Tags';
 import { Comments } from './std/Comments';
 import { LinkPicker } from './LinkPicker';
 import { styles, palette, ui } from '../styles';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
 
@@ -365,7 +365,7 @@ export function RecordPanel({
                           <span
                             style={{
                               height: 6,
-                              borderRadius: 3,
+                              borderRadius: palette.radius.pill,
                               background: palette.surface.sunken,
                               overflow: 'hidden',
                             }}
@@ -375,7 +375,7 @@ export function RecordPanel({
                                 display: 'block',
                                 height: '100%',
                                 width: `${(count / Math.max(1, records.length)) * 100}%`,
-                                background: '#000',
+                                background: palette.accent.base,
                               }}
                             />
                           </span>
@@ -588,7 +588,7 @@ function FieldEditor({
         <button
           onClick={() => void onSave(draft).then(() => setEditing(false))}
           data-variant="primary"
-          style={{ ...styles.smallButton, background: '#000', color: '#fff', borderColor: '#000' }}
+          style={styles.darkSmall}
         >
           Save
         </button>
@@ -664,9 +664,9 @@ function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<stri
 const scrimStyle = {
   position: 'fixed' as const,
   inset: 0,
-  background: 'rgba(0,0,0,.18)',
+  background: `color-mix(in srgb, ${palette.ink.strong} 18%, transparent)`,
   zIndex: 30,
-  animation: 'weave-fade .12s ease',
+  animation: 'minca-fade .12s ease',
 };
 const panel = {
   position: 'fixed' as const,
@@ -675,17 +675,17 @@ const panel = {
   bottom: 0,
   width: 'min(560px, 100vw)',
   background: palette.surface.card,
-  borderLeft: `1px solid ${palette.surface.line}`,
-  boxShadow: '-24px 0 48px -32px rgba(0,0,0,.35)',
+  borderLeft: `1px solid ${palette.surface.rule}`,
   zIndex: 31,
   display: 'flex',
   flexDirection: 'column' as const,
-  animation: 'weave-slide .16s ease',
+  animation: 'minca-slide .16s ease',
 };
 const bigTitle = {
+  fontFamily: palette.display,
   fontSize: 22,
-  fontWeight: 600,
-  letterSpacing: '-0.03em',
+  fontWeight: 700,
+  letterSpacing: '-0.04em',
   color: palette.ink.strong,
   lineHeight: 1.3,
 };
@@ -695,7 +695,7 @@ const iconButton = {
   color: palette.ink.muted,
   fontSize: 14,
   padding: 6,
-  borderRadius: 6,
+  borderRadius: palette.radius.pill,
 };
 const linkish = {
   border: 'none',
@@ -712,7 +712,7 @@ const miniRow = {
   gap: 10,
   padding: '8px 6px',
   border: 'none',
-  borderRadius: 6,
+  borderRadius: palette.radius.sm,
   background: 'none',
   textAlign: 'left' as const,
   fontSize: 14,
@@ -720,7 +720,7 @@ const miniRow = {
 };
 const editable_ = {
   border: '1px solid transparent',
-  borderRadius: 6,
+  borderRadius: palette.radius.md,
   background: 'none',
   padding: '5px 8px',
   margin: '0 -8px',

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { useAccount, useLive, useNode } from '@weaveprotocol/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { useAccount, useLive, useNode } from '@minca/core/react';
 import { nameOf } from '../../derive/people';
 import { ago } from '../../derive/time';
 import {
@@ -8,15 +8,15 @@ import {
   automationOf,
   automationRun as runCollection,
   type AutomationRun,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import { ideas, ruleWords, type PickedRule } from '../../automations';
 import { Person, usePeopleHere } from '../Person';
 import { Icon } from '../Icon';
 import { styles, palette } from '../../styles';
 import { AutomationBuilder } from './AutomationBuilder';
 import { Empty, SectionHead, iconDot, list, section } from './parts';
-import { SpaceBots } from '@weave/app-shared/CommunitySetup';
-import { useAction } from '@weave/app-shared/action';
+import { SpaceBots } from '@minca/app-shared/CommunitySetup';
+import { useAction } from '@minca/app-shared/action';
 import { useActivityOff } from '../../activity';
 
 type Open = {
@@ -96,7 +96,7 @@ export function AutomationsView({
             alignItems: 'center',
             gap: 8,
             padding: '10px 12px',
-            borderRadius: 10,
+            borderRadius: palette.radius.lg,
             background: palette.surface.sunken,
             fontSize: 13,
             color: palette.ink.muted,
@@ -146,8 +146,8 @@ export function AutomationsView({
                     <span
                       style={{
                         ...iconDot,
-                        background: off ? palette.surface.sunken : palette.ink.strong,
-                        color: off ? palette.ink.muted : '#fff',
+                        background: off ? palette.surface.sunken : palette.accent.base,
+                        color: off ? palette.ink.muted : palette.surface.card,
                       }}
                     >
                       <Icon name="bolt" size={14} />
@@ -165,7 +165,7 @@ export function AutomationsView({
                             run by <Person did={automation.by} />
                           </>
                         ) : agentOnly ? (
-                          `runs while ${mine ? 'your' : 'their'} agent does (weave agent)`
+                          `runs while ${mine ? 'your' : 'their'} agent does (minca agent)`
                         ) : mine ? (
                           'runs while this app is open on one of your devices'
                         ) : (
@@ -310,14 +310,14 @@ const ruleCard = {
   gap: 10,
   padding: 14,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
 } as const;
 const ideaTile = {
   display: 'flex',
   alignItems: 'flex-start',
   gap: 10,
   padding: '12px 14px',
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.card,
   color: palette.ink.muted,

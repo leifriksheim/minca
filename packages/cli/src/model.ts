@@ -1,5 +1,5 @@
 /**
- * Which model thinks, where, and at what price: from `weave agent`'s flags
+ * Which model thinks, where, and at what price: from `minca agent`'s flags
  * and what setup kept, or from a host's environment for the bots it runs.
  */
 import { parsePrice, priceOf, streamingThink, type Price, type Think } from './agent-chat.js';
@@ -31,7 +31,7 @@ export function isLoopback(address?: string): boolean {
 /**
  * Checks what was given and fills in the rest: Anthropic and `defaultModel`
  * unless told, and the price of a model known here.
- * @param names What the person gave each value as, to name in a refusal: `--model` or `WEAVE_BOT_MODEL`
+ * @param names What the person gave each value as, to name in a refusal: `--model` or `MINCA_BOT_MODEL`
  */
 export function chooseModel(
   given: {

@@ -4,7 +4,7 @@
  * An admin asks for one from the app with a name and an invite for the role
  * it should hold. The host makes the bot an account of its own, in a folder
  * of its own under `bots/`, and joins with the invite; the bot then says its
- * name and that it is a bot in the space, as `weave agent --bot` does. It
+ * name and that it is a bot in the space, as `minca agent --bot` does. It
  * reaches the space through the host's own socket, since the host carries it:
  * no relays, no WebRTC.
  *
@@ -21,7 +21,7 @@
  */
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { parseSpaceInvite, type P2PNode, type StorageAdapter } from '@weaveprotocol/core';
+import { parseSpaceInvite, type P2PNode, type StorageAdapter } from '@minca/core';
 import { createAccount, openHome, unlock } from './home.js';
 import { startBotNode } from './agent.js';
 import { fileSpend, type Price, type Think } from './agent-chat.js';

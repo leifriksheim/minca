@@ -8,7 +8,7 @@ conveniences.
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md).
+> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
 
 ## Configuration
 
@@ -16,20 +16,20 @@ conveniences.
 
 | Field               | Type                        | Meaning                                                                                                                                                                                                                                                                                                               |
 | ------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signer`            | `RootSigner`                | Who the node acts for. Asked only for session notes ([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                                                  |
-| `accountKey`        | bytes, optional             | The account key (`deriveAccountKey(seed)`). Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
+| `signer`            | `RootSigner`                | Who the node acts for. Asked only for session notes ([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                                                                  |
+| `accountKey`        | bytes, optional             | The account key (`deriveAccountKey(seed)`). Enables the account registry and the contacts space ([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
 | `contactKey`        | bytes, optional             | The contact key's secret. Opens contact requests; published on profiles.                                                                                                                                                                                                                                              |
-| `contactsSpace`     | string, optional            | The contacts space's id, for a node given it without the account key (an app granted `contacts`, [spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
+| `contactsSpace`     | string, optional            | The contacts space's id, for a node given it without the account key (an app granted `contacts`, [spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).                                                                                                                      |
 | `stores`            | `StoreFactory`              | Where the registry and each space's store live ([stores](#stores)).                                                                                                                                                                                                                                                   |
 | `provider`          | `CryptoProvider`, optional  | Default: P-256 over WebCrypto.                                                                                                                                                                                                                                                                                        |
-| `collections`       | `CollectionDef[]`, optional | Schemas the node knows, used when a space does not describe a collection itself. Writes are checked against them; reads are flagged `conforms`. Nothing is refused on arrival for its shape ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).                                               |
+| `collections`       | `CollectionDef[]`, optional | Schemas the node knows, used when a space does not describe a collection itself. Writes are checked against them; reads are flagged `conforms`. Nothing is refused on arrival for its shape ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).                                               |
 | `network`           | optional                    | `relays` (WebRTC signaling, browsers), `nodes` (always-on nodes to dial, `wss://host/peer#<DID>`; the fragment pins the node, spec 04 §5.2; `ws://` only on this machine), `iceServers`, `transports` (extra transports per space). Omitted: offline.                                                                 |
 | `sessionTtlSeconds` | number, optional            | Lifetime of each session note. Default `3600`.                                                                                                                                                                                                                                                                        |
-| `sessionKey`        | `CryptoKeyPair`, optional   | Sign with this key instead of a fresh one. Used when the signer's note names a specific key (an app's key, an agent's key, [spec 06 §2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md), [spec 06 §3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). |
+| `sessionKey`        | `CryptoKeyPair`, optional   | Sign with this key instead of a fresh one. Used when the signer's note names a specific key (an app's key, an agent's key, [spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md), [spec 06 §3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). |
 | `writerKey`         | `WriterKeySource`, optional | Keep a signing key across runs, so this device keeps one log in each space ([writer keys](#writer-keys)). Ignored with `sessionKey`.                                                                                                                                                                                  |
 | `watchIntervalMs`   | number, optional            | How often to look for writes another process made to a folder store. `0` disables. Default `2000`. _Implementation detail._                                                                                                                                                                                           |
 | `cache`             | `CacheConfig`, optional     | Hold only the collections used, in spaces that name a keeper ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                                   |
-| `mailbox`           | `MailboxClient`, optional   | How doors reach relays' mailboxes ([07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)). Default: a WebSocket to each relay.                                                                                                                                                                       |
+| `mailbox`           | `MailboxClient`, optional   | How doors reach relays' mailboxes ([07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)). Default: a WebSocket to each relay.                                                                                                                                                                       |
 
 _Source: `packages/core/src/node/types.ts` (`NodeConfig`, `NodeNetworkConfig`, `CacheConfig`). Tests: `packages/core/tests/node.test.ts`, `packages/core/tests/caches.test.ts`._
 
@@ -40,12 +40,12 @@ Starting a node does the following, in order:
 1. Uses `config.sessionKey`; else claims a lasting key from `config.writerKey`
    ([writer keys](#writer-keys)); else generates a fresh P-256 key pair for this
    run. Its DID (`did:key`, P-256 multicodec) is `sessionDid`.
-2. Asks `config.signer.delegate` for a session note ([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)) and waits for it.
+2. Asks `config.signer.delegate` for a session note ([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)) and waits for it.
    If the signer refuses, `createNode` fails.
 3. Schedules renewal of the note ([renewing the session note](#renewing-the-session-note)).
 4. Opens the `registry` store, sealed ([stores](#stores)).
 5. With an account key: derives the account registry space and the contacts
-   space ([03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)). The contacts space is added to the node's own
+   space ([03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)). The contacts space is added to the node's own
    registry like a joined space (so it can be granted to an app like any other
    space), and both are _hidden_ from `spaces.list` ([following the account](#following-the-account)).
 6. With an account key: opens the account registry space and reconciles
@@ -58,7 +58,7 @@ another node.
 `revokeSelf()` revokes the node's session key in every space it writes in,
 its carry spaces, the contacts space and the account registry, each with a
 cutoff at what it wrote, and forgets a lasting key at once; the account
-home's sign-out calls it ([spec 01 §7.4](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+home's sign-out calls it ([spec 01 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
 A record is judged with no time, so this, not the note running out, is what
 ends what a key can write. An agent's view refuses it.
 
@@ -74,7 +74,7 @@ _Source: `packages/core/src/node/node.ts` (`createNode`, `close`). Tests: `packa
 A node never holds the root key. It is given a **root signer** (`RootSigner`),
 which hides where the key lives and is asked only for notes. This is an
 in-process interface, not a wire format; what a note must be is
-[spec 01 §7](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
+[spec 01 §7](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
 
 | Member                                                         | Type                    | Meaning                                                                                          |
 | -------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
@@ -88,7 +88,7 @@ in-process interface, not a wire format; what a note must be is
 - The **grant** signer an app uses returns the one note the account home
   already issued to the app's key, unchanged, and refuses once the grant's
   `expiresAt` has passed. It cannot mint new notes
-  ([spec 06 §2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+  ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 The **session note** a node asks for when it starts:
 
@@ -103,7 +103,7 @@ nbf = now − 300               (issueDelegation's default)
 
 Its proof is that token. Peers check only that the note grants what each
 record needs, so the command is this node's choice, not a rule. The note is renewed before it runs out
-([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 **Issuing.** `issueDelegation` defaults `exp` to now + 3600, `nbf` to now − 300
 (`UCAN_CLOCK_SKEW_SECONDS`, so a peer whose clock is a little behind still
@@ -111,7 +111,7 @@ accepts it), `nonce` to 12 random bytes in base64url, `subject` to the
 issuer's own DID and `policy` to `[]`; it signs in the low-S form only.
 Only the account's root signer issues notes peers accept: a note is one
 token from the account, never passed on
-([spec 01 §7.5](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+([spec 01 §7.5](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
 A key that needs another key (a helper, a key per tab) asks the account,
 through its home or root signer, for a note of its own.
 
@@ -122,14 +122,14 @@ whole account, or one space as the subject, or several named by a policy on
 back, for showing which spaces a note reaches, and reaches no space for a
 policy statement it can't read that way, so it never offers more than the
 note grants; peers judge each use against the note itself
-([spec 06 §2.5](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyNote`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
 
 ## Renewing the session note
 
 The note format, and that every record carries it, are protocol
-([spec 06 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). When to renew it is the node's own:
+([spec 06 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). When to renew it is the node's own:
 
 - The first renewal is asked for at `0.75 × ttl` seconds after start (2700 s
   with the default TTL), and each successful renewal schedules the next
@@ -144,7 +144,7 @@ A signer need not be able to sign. `grantSigner(grant)` answers every
 `delegate` call with the one note an account home granted, unchanged, and
 refuses once `grant.expiresAt` has passed. A node started from a grant
 therefore never gets a fresh note: its "renewal" returns the same note, and when
-it runs out the app must connect again ([spec 06 §2.9](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+it runs out the app must connect again ([spec 06 §2.9](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 `node.delegation()` returns the note the session key writes under now.
 
@@ -170,7 +170,7 @@ What a path means is the factory's choice:
   when one is given.
 
 Every version a node signs in a space takes the next place in its key's line
-for that collection there ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+for that collection there ([spec 02 §4.10](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 Writes by one key in one space go one at a time, and the place is remembered
 before the version leaves the node. Where the places are kept depends on the key:
 
@@ -182,7 +182,7 @@ before the version leaves the node. Where the places are kept depends on the key
   keeps them in the `writers` store, and a restart carries on where it left off.
   Such a key may be signing in several nodes at once: every tab of an app
   signs with the app's key. So each place is taken under a Web Lock
-  (`weave-writer:lines/<did>/<space>`) every tab and worker of the origin
+  (`minca-writer:lines/<did>/<space>`) every tab and worker of the origin
   shares, and read afresh from the store inside it, never from a copy in
   memory. Nodes that share a key must share that store too, as tabs of one
   origin share IndexedDB; two nodes signing with one key from separate stores,
@@ -210,9 +210,9 @@ node makes a key for this run as it would without a source.
   whether its stores are in IndexedDB or a data folder, so signing out
   (`deleteBrowserData`) deletes the keys too. The key never goes in the data
   folder, which other apps and devices share.
-- The CLI keeps them in `~/.weave/writers/<account id>/slot-<n>/`: the key as
+- The CLI keeps them in `~/.minca/writers/<account id>/slot-<n>/`: the key as
   JWK in an envelope (spec 01 §9.1) under the account's local key, with label
-  `weave/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
+  `minca/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
   (`key.sealed`, mode 600), so a copy of the files can't sign, and a key file
   moved to another slot or account is refused rather than used; its places in
   `heads/`; and a `lock` file naming the process that holds it, taken over
@@ -221,12 +221,12 @@ node makes a key for this run as it would without a source.
 _Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts` ("a key file moved to another slot, or to another account, does not open")._
 
 Sign-in ([sign-in](sign-in.md)) uses `storesFor(account)`: IndexedDB with prefix
-`weave:<dataPath with : for />` in the browser, or `folderStores(pod,
+`minca:<dataPath with : for />` in the browser, or `folderStores(pod,
 { basePath: account.dataPath, localKey })` in a pod, where `dataPath` is
-`accounts/<id>/stores`. A connected app uses `indexedDBStores('weave-app:<account DID>')`
+`accounts/<id>/stores`. A connected app uses `indexedDBStores('minca-app:<account DID>')`
 by default. These names are _implementation details_ ([sync and storage](storage.md#indexeddb));
 a pod's layout is in
-[05](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md).
+[05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 A node also opens `mirrors/<spaceId>/<n>` for a mirror's writer state
 ([mirrors](storage.md#mirrors)), and a host `host` for its subscriptions.
 
@@ -237,14 +237,14 @@ version goes through the same ordering rule as sync, so copying into a store
 that holds some of it already is safe, and copying twice changes nothing.
 
 Copied versions are meant to pass the same checks as versions arriving by
-sync ([02 — Records](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md), validation) before they are stored.
+sync ([02 — Records](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md), validation) before they are stored.
 
 > **Known defect:** `copyAccountData` stores each version with
 > `addVersion` directly, without running it through the validation
 > pipeline (`packages/core/src/node/copy.ts`). A pod or data folder that another origin
 > wrote to can bring versions this node would have refused from a peer. A fix
 > will validate on copy, as sync does.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 _Source: `packages/core/src/node/stores.ts`, `packages/core/src/node/copy.ts`, `packages/core/src/session/places.ts` (`storesFor`). Tests: `packages/core/tests/account.test.ts`, `packages/core/tests/folder-adapter.test.ts`._
 
@@ -255,7 +255,7 @@ time anything asks for it — a read, a write, a status — and stays open until
 it is released or the node closes. Opening a space also: publishes the
 account's profile in it ([following the account](#following-the-account)), checks whether the session note was revoked
 there ([events](#events), `revoked`), and names the account's carriers as keepers if the
-account manages it ([spec 06 §4.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+account manages it ([spec 06 §4.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 `spaces.hold(id)` keeps a space open until released. It returns a function
 that lets go of that one hold:
@@ -275,7 +275,7 @@ _Source: `packages/core/src/node/node.ts` (`runtime`, `hold`, `closeRuntime`). T
 ## Leaving a space
 
 `spaces.leave(id)` first gives up the account's place in the space
-([spec 03 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)):
+([spec 03 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)):
 it writes the account's own removal, `sys.remove` naming itself, so the
 others stop counting it a reader and a private space's key changes. Leaving
 needs no grant. A founder who leaves is a founder no more, for good; to stay
@@ -303,10 +303,10 @@ _Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forge
 ## Holding part of a space
 
 With `config.cache`, and once a space names at least one keeper
-([03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md), `sys.keepers`), the node holds only the collections it
+([03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md), `sys.keepers`), the node holds only the collections it
 uses, besides the space's own `sys.*` collections. Everything about this is the
 node's own choice; how it tells peers what it holds is in
-[05](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md). As implemented:
+[05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md). As implemented:
 
 - Collections listed in `cache.collections` are held from the start and never
   dropped.
@@ -315,7 +315,7 @@ node's own choice; how it tells peers what it holds is in
   until, for every collection it reads, the node has once been level with a
   node holding the whole space, **and** it lacks nothing a writer's line in
   that collection names
-  ([spec 02 §4.10](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+  ([spec 02 §4.10](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
   A version naming one not here adds it to `missing` and asks every peer for
   it by id; when it arrives it comes off. They are asked again whenever the
   collection is level with a peer.
@@ -334,7 +334,7 @@ cache.copies ?? 0))` of the space's named keepers have them. A collection
 
 A keeper confirms a write the way the spec says: by `stored`, or by being
 level with the writer on its collection. Only a peer named in `sys.keepers`
-counts ([spec 05 §9](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
+counts ([spec 05 §9](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 
 This state is kept in the space's own store (`spaces/<spaceId>`):
 
@@ -357,7 +357,7 @@ _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space")
 
 > **Planned.** None of it changes what other nodes see. Fetching linked
 > records by key, and holding less than a collection, need new messages and
-> are planned in [spec 05 §9.1](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md).
+> are planned in [spec 05 §9.1](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 
 - **Widening.** A node holding part of a space starts holding all of it when
   too few keepers are online (Holochain's arcs: nodes grow their share when
@@ -373,7 +373,7 @@ _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space")
 
 What counts in the account's list of spaces, and what a device with the
 account key must keep current for carriers, is protocol
-([spec 06 §1.3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). How the reference node does it:
+([spec 06 §1.3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). How the reference node does it:
 
 The node's `registry` store ([stores](#stores)) lists every space it holds,
 with its key(s), its invite secret while one is waiting to be used, its place
@@ -404,7 +404,7 @@ records change in the account registry, one run at a time. It:
    registry has never heard of (joined before the registry existed, or on a
    node without the account key);
 5. brings every carrier's passes and wakes up to date
-   ([spec 06 §4.2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md));
+   ([spec 06 §4.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md));
 6. names the account's carriers as keepers of the open spaces it manages
    (also whenever a space opens);
 7. asks every host the account uses how it stands, handing it the spaces if it
@@ -420,7 +420,7 @@ from the account registry's `sys.profile` record and `contactKey` only when
 the node holds the contact key. It does this only in spaces other than the
 account registry and the contacts space, only with an account name to publish,
 and never under a note that lacks `/account/write`, such as an agent's. The profile record format is in
-[03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md).
+[03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md).
 
 **Joining.** `spaces.join(invite)` accepts a bare invite or any link carrying
 `#invite=…`, `?invite=…` or `&invite=…`. It stores the space (and its key, for
@@ -455,7 +455,7 @@ _Source: `packages/core/src/node/types.ts` (`NodeEvent`), `packages/core/src/nod
 ### Versions that wait or are refused
 
 A version from a peer stands, waits or is refused
-([spec 02 §9.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+([spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 What the node does with each is its own:
 
 - A batch from a peer is admitted `sys.collection` versions first, then by
@@ -468,7 +468,7 @@ What the node does with each is its own:
 - A withdrawn version (allowed when written, then taken away by a removal or
   a revoke it had not seen) is stored and passed on like one that stands,
   emits no `rejected` event, and never shows as a record: `records.get` and queries skip
-  it. It is there for proofs that cite it ([spec 09 §6](https://github.com/leifriksheim/weave/blob/main/spec/09-contracts.md)).
+  it. It is there for proofs that cite it ([spec 09 §6](https://github.com/leifriksheim/minca/blob/main/spec/09-contracts.md)).
 - A version that fails its collection's contract stands: it is stored and
   passed on, emits no `rejected` event, and `records.get` and queries skip
   it ([contracts](contracts.md)).
@@ -495,7 +495,7 @@ emitted. An agent's node
 refuses `send` ([acting as an agent](#a-node-acting-as-an-agent)). The wire
 format, the per-peer allowance (a burst of 60, then 20 per second) and how the
 sender's account is established are in
-[spec 04 §9](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md).
+[spec 04 §9](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md).
 
 A received live message is emitted as a `message` event,
 `{ type: "message", space, from, peer, recordsOnly, message }`:
@@ -504,14 +504,14 @@ A received live message is emitted as a `message` event,
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `from`        | The account behind the sending device, proven by the note it showed, made out to the key the connection proved. `null` for a peer that showed no note (a carrier, a node serving sockets).                                                                  |
 | `peer`        | The sending device's session DID — also where a reply to that device goes.                                                                                                                                                                                  |
-| `recordsOnly` | `true` when the sender's note grants writing records in this space and nothing more (`/record`): it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)). `false` for a note that only reads. |
+| `recordsOnly` | `true` when the sender's note grants writing records in this space and nothing more (`/record`): it can't define collections there ([spec 01 §8](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)). `false` for a note that only reads. |
 | `message`     | The value sent.                                                                                                                                                                                                                                             |
 
 `spaces.status(id)` returns `SpaceStatus`:
 
 | Field         | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `connection`  | `offline` (no network), `connecting`, `connected` (while any one transport is connected: a relay socket open, or a peer), `error` (the first connect failed and nothing has connected since), `refused` (nothing connected, and every relay refused this node's DID with `4009` because another node with the same key holds it, [spec 04 §1.2](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)). A space whose relays all drop and whose peers leave is `connecting` again, not `connected`. |
+| `connection`  | `offline` (no network), `connecting`, `connected` (while any one transport is connected: a relay socket open, or a peer), `error` (the first connect failed and nothing has connected since), `refused` (nothing connected, and every relay refused this node's DID with `4009` because another node with the same key holds it, [spec 04 §1.2](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)). A space whose relays all drop and whose peers leave is `connecting` again, not `connected`. |
 | `peers`       | Session DIDs connected in the space.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `own`         | Of `peers`, the account's own other devices and apps: those also connected in the account registry, minus carriers. Empty without an account key.                                                                                                                                                                                                                                                                                                                                                                 |
 | `carriers`    | Of `peers`, the account's carriers, by the keys `sys.carrier` records name.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -537,8 +537,8 @@ same calls can be exposed over a command line, MCP and WebMCP
   `holdsRole`, `defineRole`, `assign`, `unassign`, `removeMember`, `stepDown`,
   `succeed`, `closeInvite`,
   `changeKey`, `setRelays`, `setKeepers`, `revoke`, `profiles`,
-  `authenticator` ([03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md),
-  [04](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)). Default invite role: `member` when
+  `authenticator` ([03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md),
+  [04](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)). Default invite role: `member` when
   the inviter may assign it, else the first role by name it may assign; with
   none, a view-only invite ([spaces](spaces.md#invites)).
   - `access(id)` answers `{ roles, members, invites, founder, top, headless,
@@ -550,7 +550,7 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
     `mine` say what this account is here.
   - `may(id, cmd, args?, account?)` asks whether this account, or another,
     may invoke a command with these arguments now, as the replay judges it
-    ([spec 03 §2](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+    ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
     Apps use it to show what someone can do; peers judge each version on
     its own.
   - `holdsRole(id, role, account?)` asks whether this account, or another,
@@ -558,7 +558,7 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
     command covers it, and every statement of its policy is among the
     role's. Only the words are compared, so it can say no where the
     policies would allow, never yes where they wouldn't. Apps use it before
-    giving a bot a role, and `weave agent` before taking instructions.
+    giving a bot a role, and `minca agent` before taking instructions.
   - `defineRole(id, { name, title?, grants, nests? })` writes the role's
     definition, each grant a delegation from this account to the role. It
     holds only what this account could invoke itself.
@@ -566,8 +566,8 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
     role; taking your own needs no grant. `removeMember(id, did)` removes an
     account with every role it holds; removing yourself is leaving. Taking
     power away writes a cutoff of what this node holds of theirs
-    ([spec 03 §6.3](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
-- `node.records`, `node.collections` — [02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md). `records.watch`
+    ([spec 03 §6.3](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
+- `node.records`, `node.collections` — [02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md). `records.watch`
   re-runs a query after every `records` event for its space, one run at a time,
   with at most one more queued.
 - `node.account` — `profile()`, `setName(name)` (writes `sys.profile`, key
@@ -579,15 +579,15 @@ successors, mine, heads, key, relays, keepers, copies, forks, flagged }`
   account (whole-account access).
 - `node.direct` — [direct-messages.md](direct-messages.md): `reachable`, `send`
   and `list`. Needs the account's member key for the space.
-- `node.doors` — [doors.md](doors.md), [07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md). Needs the contact key; knocking and
+- `node.doors` — [doors.md](doors.md), [07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md). Needs the contact key; knocking and
   accepting also need whole-account access.
-- `node.carriers`, `node.hosting`, `node.notifications` — [carriers and hosting](#carriers-hosting-and-notifications), [spec 06 §4](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md).
+- `node.carriers`, `node.hosting`, `node.notifications` — [carriers and hosting](#carriers-hosting-and-notifications), [spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 - `node.iceServers()` — the configured ICE servers plus TURN servers a relay
   offers ([the network](#the-network)); what [calls](calls.md#connections) use.
 - `node.network` — `status()`: each relay's state (open, or waiting to redial,
   when and why), the connections open and those still being made, and whether
   a relay offered TURN; `reconnect()` redials a waiting relay now
-  ([the network](#the-network), [spec 04 §2](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)). A `network` event follows every change.
+  ([the network](#the-network), [spec 04 §2](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)). A `network` event follows every change.
   Local only: nothing here goes over the wire.
 - `node.asAgent({ keys, note })` — [acting as an agent](#a-node-acting-as-an-agent).
 
@@ -596,7 +596,7 @@ _Source: `packages/core/src/node/types.ts`, `packages/core/src/node/node.ts` (`s
 ## The network
 
 How the node uses relays, always-on nodes and WebRTC, where
-[spec 04](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)
+[spec 04](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)
 leaves it the choice. Another implementation may pick other values and still
 meet this one.
 
@@ -678,7 +678,7 @@ Closing the agent leaves the underlying node running.
 
 An agent granted `scope: account` gets a records-only note for every space
 (`/record`, about the whole account) and the account key in its
-grant ([spec 06 §2.8](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home never
+grant ([spec 06 §2.8](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)), so the contact list is within its note to read. A home never
 gives a records-only key the contact key: with it, it could open contact
 requests and knocks on the account's doors ([doors.md](doors.md)).
 
@@ -689,10 +689,10 @@ _Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/a
 ## The app-side client
 
 What an app and an account home send each other, and what each checks, is
-protocol ([spec 06 §2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). The reference app side:
+protocol ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). The reference app side:
 
 **The app's key.** `appKey(name = 'default')` makes the app's P-256 key once
-and keeps it, non-extractable, in the IndexedDB database `weave-app-key`,
+and keeps it, non-extractable, in the IndexedDB database `minca-app-key`,
 object store `keys`, under `name`. `forgetAppKey` deletes it; the next
 connection makes a new one.
 
@@ -705,11 +705,13 @@ home's connect page:
 - the scheme must be `https:`, or `http:` on loopback;
 - a path of `/` or empty becomes `/connect`; query and fragment are dropped.
 
-Example: `weave.example.com` → `https://weave.example.com/connect`.
+Example: `minca.example.com` → `https://minca.example.com/connect`.
 
 **Asking the home.** `connectToHome` (and `proposeToHome`, for a proposal)
-opens the home in a popup named `weave-home` with features
-`popup,width=460,height=720`, polls every 500 ms to see whether the person
+opens the home in a popup named `minca-home` with features
+`popup,width=460,height=720`, listens from that moment, answers a hello once its
+request is made and sends the request again every 500 ms, to the home's origin
+only, until the home answers, polls every 500 ms to see whether the person
 closed it, and gives up after 10 minutes by default.
 
 **Starting the node.** `startConnectedNode({ grant, key?, network?, stores?, cache? })`
@@ -718,23 +720,26 @@ starts a node with:
 - `signer = grantSigner(grant)` ([renewing the session note](#renewing-the-session-note)):
   `did` = `grant.did`, `custody: "remote"`;
 - `sessionKey` = the app's key;
-- stores `indexedDBStores('weave-app:<grant.did>')` unless given;
+- stores `indexedDBStores('minca-app:<grant.did>')` unless given;
 - `cache: {}` unless `cache: false` ([holding part of a space](#holding-part-of-a-space));
 - `accountKey`, `contactKey`, `contactsSpace` from the grant when present;
 - relays = the app's relays ∪ `grant.relays`.
 
 It then joins each granted space it does not hold yet, passing its `memberKey`.
 
-**The connection.** `createWeaveConnection({ home, request, network?, storage?, stores? })`
+**The connection.** `createMincaConnection({ home, request, network?, storage?, stores? })`
 is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
-`connecting`, `ready`, `expired`. It keeps the grant in `localStorage` under
-`weave.grant` and the person's chosen home under `weave.home` (`home` in the
+`connecting`, `ready`, `expired`. With `worker`, it runs the node there
+(`startNodeInWorker`); a worker that reports a load error, or does not say the
+node started within 30 s (`WorkerNotStarted`), is given up on and the node
+runs in the page. A worker that started and refused passes its reason on. It keeps the grant in `localStorage` under
+`minca.grant` and the person's chosen home under `minca.home` (`home` in the
 config is only a default). It switches to `expired` at `expiresAt` and does not
 load an expired grant from storage, nor one of another format (`v` other
 than `GRANT_VERSION`, 2): the person connects again. When the node sees its own note revoked in
 a space it emits `revoked` ([events](#events)), and the connection forgets the
 grant and the app key. `propose(automations)` sends a proposal to the grant's home
-([spec 06 §2.11](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([spec 06 §2.11](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 **Showing notifications.** The app shows its own notifications.
 `watchNotifications(node, { origin?, onNotify })` needs the account key (an
@@ -754,7 +759,7 @@ _Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `home
 ## Carriers, hosting and notifications
 
 What goes into a carry space, what a carrier checks and the host's HTTP API
-are protocol ([spec 06 §4](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). The reference node's side:
+are protocol ([spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). The reference node's side:
 
 **Carriers.** `node.carriers.add({ did, name })` (needs the account key) makes
 the carry space, named `Carried by <name>` (name trimmed to 80, default
@@ -787,12 +792,12 @@ holds. Nothing shows these yet, the browser extension included.
 | `stop(url)`                                                                            | Sends `DELETE …/carry` (ignoring failure), removes the carrier and deletes the `sys.hosting` record.                                                                                                                                                                               |
 | `space(id)`                                                                            | The hosts a space names in `std.host`, each asked how the space's own subscription stands, with its plans for spaces (below).                                                                                                                                                      |
 | `payForSpace(id, url, { amount, method, monthly? })`, `remindForSpace(id, url, email)` | Adds to a space's fund at a host it names (dollars, by `checkout` or `request`, monthly by card), and asks for reminders before it runs out. Anyone in it may. `space(id)` gives each host's `fund` offer, and in its status the `balance`, `daily` spend and `bots`.              |
-| `startBot(id, url, { name, role? })`                                                   | Asks a host the space names to run a bot there ([spec 08 §3](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)): makes an invite for `role` (by default as `spaces.invite` picks one) and hands it over. The host holds the bot's keys, so an app says so first. |
+| `startBot(id, url, { name, role? })`                                                   | Asks a host the space names to run a bot there ([spec 08 §3](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)): makes an invite for `role` (by default as `spaces.invite` picks one) and hands it over. The host holds the bot's keys, so an app says so first. |
 | `stopForSpace(id, url)`                                                                | Stops a space using a host it names: deletes its `std.host` record, removes the host's bots and changes the key (below).                                                                                                                                                           |
 
 Every device runs `list()` after each reconciliation ([following the account](#following-the-account)).
 A device reaches a host at the socket its description names (`peer`,
-[spec 08 §1](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)): every
+[spec 08 §1](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)): every
 open space holds one to each host in `sys.hosting`, and to each host the space
 names in `std.host`, and follows as those change. `network.hosts` names hosts
 to look for the account registry at before the account says which it uses, so
@@ -806,11 +811,11 @@ takes another limit). `list()` and `space(id)` do not throw it: they return
 that host's view with `error` set, so one host that is down does not hide the
 others, and an app can say so and offer to ask again or to stop using it.
 
-The reference host (`weave host`, `packages/cli/src/host.ts`) keeps a lapsed
+The reference host (`minca host`, `packages/cli/src/host.ts`) keeps a lapsed
 subscription for `graceDays` (default 30) after `paidUntil`, and drops lapsed
 ones in a sweep every hour (`sweepMs`). It measures each carried space's
 folder at most every ten minutes, and each status gives the sum as `bytes`,
-with `quotaBytes` as `quota` (`WEAVE_HOST_QUOTA_GB`: 10 on a paying host, none
+with `quotaBytes` as `quota` (`MINCA_HOST_QUOTA_GB`: 10 on a paying host, none
 on a free one). At its quota, an account's carry space takes no new space
 (`full`, in `createCarryCore`): what it carries stays and keeps syncing, and a
 space that waited is taken once a later measure finds room. All of this is the
@@ -825,7 +830,7 @@ which only members granted it may write: the `community` template leaves
 `std.host` to admins and moderators (`STAFF_COLLECTIONS`). The host keeps the
 space for the space itself: its own subscription, `space:<id>`, with a fund
 anyone adds to, which pays for keeping it online and for its bots
-([spec 08 §2](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)).
+([spec 08 §2](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)).
 
 Every device holding the space's key (not one whose note lacks
 `/account/write`, such as an agent's, nor a carrier) looks at the hosts its space names when it takes a role there and
@@ -856,13 +861,13 @@ either, only the record goes, and the answer is `{ bots: [], newKey: false }`. A
 handed the space costs no key change. No call asks the host to drop what it
 has, so it keeps that, unreadable, for as long as the space's subscription is
 paid, and what is in the fund stays there
-([#128](https://github.com/leifriksheim/weave/issues/128)).
+([#128](https://github.com/leifriksheim/minca/issues/128)).
 
 _Source: `packages/core/src/node/node.ts` (`keepSpaceHosts`, `askSpaceHost`, `hosting.space`), `packages/core/src/session/hosting.ts` (`describeHost`, `HostError`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself", "an address that is not a host, or one that is down", "bots a host runs": the two on stopping a space's host)._
 
 ## Doors
 
-`node.doors` ([doors.md](doors.md), [spec 07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)):
+`node.doors` ([doors.md](doors.md), [spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)):
 
 | Call                               | Does                                                                                                                                                                                                                                                                                                               |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -871,7 +876,7 @@ _Source: `packages/core/src/node/node.ts` (`keepSpaceHosts`, `askSpaceHost`, `ho
 | `close(id)`                        | Deletes the `std.door`                                                                                                                                                                                                                                                                                             |
 | `clear(id)`                        | Purges every knock at the door, from every relay it names                                                                                                                                                                                                                                                          |
 | `knock(code, { note? })`           | [the exchange](doors.md#the-exchange), returns `{ space }`                                                                                                                                                                                                                                                         |
-| `knocks()`                         | Fetches every open door's topic from every relay it names, opens and checks ([spec 07 §6](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md); opened results are cached by id), settles sent knocks and writes owed answers; returns `{ id, door, from, name, note?, pairSpace, at }`, newest first |
+| `knocks()`                         | Fetches every open door's topic from every relay it names, opens and checks ([spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md); opened results are cached by id), settles sent knocks and writes owed answers; returns `{ id, door, from, name, note?, pairSpace, at }`, newest first |
 | `sent()`                           | Your unanswered knocks: `{ space, name, at }`                                                                                                                                                                                                                                                                      |
 | `accept(id)`                       | [the exchange](doors.md#the-exchange), returns the new `ContactView`                                                                                                                                                                                                                                               |
 | `dismiss(id)`                      | Purges one knock                                                                                                                                                                                                                                                                                                   |
@@ -881,18 +886,18 @@ _Source: `packages/core/src/node/node.ts` (`keepSpaceHosts`, `askSpaceHost`, `ho
 These are not protocol; another client may draw sign-in and [calls](calls.md) however it
 likes.
 
-- **`<weave-auth>`** draws the flow of [sign-in](sign-in.md) into its own light DOM (so password
+- **`<minca-auth>`** draws the flow of [sign-in](sign-in.md) into its own light DOM (so password
   managers find its forms). Attributes: `app-name`, `relays` and `nodes`
-  (comma-separated). It fires `weave-session` (`detail: { session }`, `null` when
+  (comma-separated). It fires `minca-session` (`detail: { session }`, `null` when
   signed out), bubbling and composed. A page can hand it its own flow with
-  `element.auth = createWeaveAuth(…)`. It sizes to its container, so it fits a
+  `element.auth = createMincaAuth(…)`. It sizes to its container, so it fits a
   page, a modal or a side panel, and draws nothing once someone is in. Colours,
-  font and radius are custom properties (`--weave-accent`, `--weave-font`, …).
-- **React** (`@weaveprotocol/core/react`): `WeaveProvider`, `useWeave`,
+  font and radius are custom properties (`--minca-accent`, `--minca-font`, …).
+- **React** (`@minca/core/react`): `MincaProvider`, `useMinca`,
   `useAuth`, `useSession`, `useConnection`, `useAccount`, `useNode`,
-  `<WeaveAuth>`, `useQuery`, `useLive`, `useSpaces`,
+  `<MincaAuth>`, `useQuery`, `useLive`, `useSpaces`,
   `useHoldSpace` (holds a space while mounted, releasing it a few seconds late),
   `useRecord`, `useLinked`, `useCollections`, `useProfiles`, `useAccess`,
   `useSpaceStatus`, `useCan`, `CallsProvider`, `useCalls`.
 
-_Source: `packages/core/src/elements/weave-auth.ts`, `packages/core/src/react/`. Tests: none._
+_Source: `packages/core/src/elements/minca-auth.ts`, `packages/core/src/react/`. Tests: none._

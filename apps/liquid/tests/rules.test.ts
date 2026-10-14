@@ -4,8 +4,8 @@
  */
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { useSchemas } from '@weaveprotocol/core/schemas';
-import type { P2PNode } from '@weaveprotocol/core';
+import { useSchemas } from '@minca/core/schemas';
+import type { P2PNode } from '@minca/core';
 import { createNode } from '../../../packages/core/src/node/node.js';
 import { createIdentityManager } from '../../../packages/core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../../packages/core/src/identity/root-signer.js';

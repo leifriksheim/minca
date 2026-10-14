@@ -1,8 +1,9 @@
-import { useAccount, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { call as callSchema, type Call } from '@weaveprotocol/core/schemas';
+import { useAccount, useLive, useNode, useProfiles } from '@minca/core/react';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { call as callSchema, type Call } from '@minca/core/schemas';
 import { nameOf, peopleFrom, type People } from '../../derive/people';
 import { ago } from '../../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { CallButton } from '../calls/Calls';
 import { styles, palette } from '../../styles';
 import type { AppProps } from './index';
@@ -35,7 +36,19 @@ export function CallHistory({ space }: AppProps) {
         </p>
       </div>
       {history && history.length === 0 && (
-        <div style={{ ...styles.emptyState, padding: '28px 16px' }}>No calls yet.</div>
+        <div
+          style={{
+            ...styles.emptyState,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+            padding: '28px 16px',
+          }}
+        >
+          <Shape {...shapeFor('calls')} size={40} />
+          No calls yet.
+        </div>
       )}
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column' }}>
         {(history ?? []).map(

@@ -1,5 +1,5 @@
 /** Conditions picked from a collection's schema, for filters, notifications and rules: kept as picked, turned into a filter when used. */
-import type { Filter, NodeCollection } from '@weaveprotocol/core';
+import type { Filter, NodeCollection } from '@minca/core';
 import { choicesOf, fieldsOf, type Choice } from './schema-ui';
 import { fieldTypeOf, type FieldTypeName } from './field-types';
 

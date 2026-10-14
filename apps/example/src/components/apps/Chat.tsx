@@ -8,19 +8,19 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { useAction } from '@weave/app-shared/action';
-import { useAccess, useAccount, useCan, useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { useMayDefine } from '@weave/app-shared/may';
-import type { DirectMessage, NodeRecord, ResultOf } from '@weaveprotocol/core';
-import { channel, message, poll, positionBetween, reaction, vote } from '@weaveprotocol/core/schemas';
-import type { Channel } from '@weaveprotocol/core/schemas';
+import { useAction } from '@minca/app-shared/action';
+import { useAccess, useAccount, useCan, useLive, useNode, useProfiles } from '@minca/core/react';
+import { useMayDefine } from '@minca/app-shared/may';
+import type { DirectMessage, NodeRecord, ResultOf } from '@minca/core';
+import { channel, message, poll, positionBetween, reaction, vote } from '@minca/core/schemas';
+import type { Channel } from '@minca/core/schemas';
 import { nameOf, peopleFrom, writerOf, type People } from '../../derive/people';
 import { useActivity, type AtWork } from '../../activity';
 import { Icon } from '../Icon';
 import { ago } from '../../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { createPortal } from 'react-dom';
-import { Modal } from '@weave/app-shared/Modal';
+import { Modal } from '@minca/app-shared/Modal';
 import { Reactions } from '../std/Reactions';
 import { useBots } from '../../bots';
 import { MentionField, MentionList, MentionText, useMentions } from '../std/Mentions';
@@ -28,9 +28,9 @@ import { styles, palette, ui } from '../../styles';
 import type { AppProps } from './index';
 import { Ask, PollView, withVotes } from './Polls';
 
-/** A message that mentions you, or replies to you: a warm tint, and an edge down its left */
-const FOR_ME = '#fff8e6';
-const FOR_ME_EDGE = '#f0b429';
+/** A message that mentions you, or replies to you: a cobalt tint, and an edge down its left */
+const FOR_ME = palette.accent.soft;
+const FOR_ME_EDGE = palette.accent.base;
 
 /** Messages from one person this close together share one name line */
 const RUN_MS = 5 * 60 * 1000;
@@ -108,7 +108,7 @@ export function Chat(props: AppProps) {
         flex: 1,
         minHeight: 0,
         border: `1px solid ${palette.surface.line}`,
-        borderRadius: 10,
+        borderRadius: palette.radius.lg,
         overflow: 'hidden',
       }}
     >
@@ -595,7 +595,7 @@ function Line({
         gap: 10,
         padding: '2px 8px',
         margin: `${startsRun ? 10 : 0}px -8px 0`,
-        borderRadius: 6,
+        borderRadius: palette.radius.sm,
         ...(forMe ? { background: FOR_ME, boxShadow: `inset 3px 0 0 ${FOR_ME_EDGE}` } : {}),
       }}
     >
@@ -984,7 +984,7 @@ function NewConversation({
                 alignItems: 'center',
                 gap: 10,
                 padding: '6px 8px',
-                borderRadius: 6,
+                borderRadius: palette.radius.sm,
                 fontSize: 14,
                 color: palette.ink.strong,
                 cursor: 'pointer',
@@ -1098,7 +1098,7 @@ function PlaceButton({
         height: 30,
         padding: '0 8px',
         border: 'none',
-        borderRadius: 6,
+        borderRadius: palette.radius.sm,
         // The list itself is sunken: the open one stands up out of it, the way the space's sidebar marks its own.
         background: current ? palette.surface.card : 'none',
         boxShadow: current ? `0 0 0 1px ${palette.surface.line}` : 'none',

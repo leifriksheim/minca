@@ -39,7 +39,7 @@ and Datalog ([the comparison](contracts-comparison.md)). **Decided**
 (2026-10-12): contracts are CEL; grants are UCAN-shaped delegations with
 standard UCAN policies and no extension; Datalog is parked, as a possible
 query layer in the library later, never protocol. The five communities are
-now Weave's scenario suite, in `scenarios/`.
+now Minca's scenario suite, in `scenarios/`.
 
 ## Why this shape
 
@@ -53,7 +53,7 @@ Proven by others, not invented:
 - **Grants** take UCAN 1.0's fields, policy language and semantics: a format
   with a spec, implementations and a policy language, used for the account's
   own keys already.
-- **The v1 resolver** is "strong removal", which p2panda ships and Weave's
+- **The v1 resolver** is "strong removal", which p2panda ships and Minca's
   replay already does (03 §4); the literature calls it eventually consistent
   access control (Jacob & Hartenstein, CODASPY 2025).
 - **Contracts** follow the CALM theorem (Hellerstein): results that only grow
@@ -282,7 +282,7 @@ Each step is its own PR with an adversarial review.
 
 1. **Examples first** (done). The chess club, a co-op, a company team, the
    hall of fame and mutual credit, in CEL and in Datalog
-   ([the comparison](contracts-comparison.md)). They are now Weave's
+   ([the comparison](contracts-comparison.md)). They are now Minca's
    scenario suite (`scenarios/`), run with `npm run scenarios`; the
    evaluators there are stand-ins until they point at the library.
 2. **Keys that belong to their creator** (#72), first: `byCreator` and the

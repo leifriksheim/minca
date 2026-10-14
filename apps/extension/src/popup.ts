@@ -57,7 +57,7 @@ function render(): void {
     h(
       'div',
       { class: 'actions' },
-      h('button', { class: 'quiet wide small', onClick: openWelcome }, 'Open Weave'),
+      h('button', { class: 'quiet wide small', onClick: openWelcome }, 'Open Minca'),
     ),
   ];
   app.replaceChildren(...parts.filter((node): node is Node => node !== null));

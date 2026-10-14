@@ -3,7 +3,7 @@
  * which builds each store's kept set, and the ones after, which should only
  * read sums kept up as versions land.
  *
- *   npx tsx --conditions=@weaveprotocol/source tests/bench/hello-bench.ts [N]
+ *   npx tsx --conditions=@minca/source tests/bench/hello-bench.ts [N]
  */
 import { createStorageProvider } from '../../src/storage/storage-provider.js';
 import { createSyncEngine, type SyncEngine } from '../../src/sync/sync-engine.js';

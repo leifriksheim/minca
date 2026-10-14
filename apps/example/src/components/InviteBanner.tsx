@@ -1,5 +1,5 @@
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { useInviteLink, useMyName } from '@weaveprotocol/core/react';
+import type { SpaceSummary } from '@minca/core';
+import { useInviteLink, useMyName } from '@minca/core/react';
 import { NameField } from './NameField';
 import { styles } from '../styles';
 

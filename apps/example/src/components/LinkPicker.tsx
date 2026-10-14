@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { useLive, useNode } from '@weaveprotocol/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { useLive, useNode } from '@minca/core/react';
 import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { styles, palette } from '../styles';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 
 /**
  * Links this record to another, in one of the ways its collection allows —
@@ -79,7 +79,7 @@ export function LinkPicker({
         gap: 10,
         padding: 14,
         border: `1px solid ${palette.surface.line}`,
-        borderRadius: 10,
+        borderRadius: palette.radius.lg,
       }}
     >
       <h3 style={styles.sectionTitle}>{rel ? `${humanize(rel)}…` : 'Link to…'}</h3>
@@ -180,7 +180,7 @@ const pickRow = {
   gap: 10,
   padding: '8px 6px',
   border: 'none',
-  borderRadius: 6,
+  borderRadius: palette.radius.sm,
   background: 'none',
   textAlign: 'left' as const,
   fontSize: 14,

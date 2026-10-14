@@ -33,7 +33,7 @@ collection of a space is the line of every version that key signed there
 
 ## 1. Canonical JSON
 
-Every hash of, and every signature over, a JSON value in Weave is over its
+Every hash of, and every signature over, a JSON value in Minca is over its
 **canonical form**, defined here. The canonical form of a value is a string;
 its bytes are that string in UTF-8.
 
@@ -111,7 +111,7 @@ A reader decoding an id back to its digest MUST refuse anything that is not
 The leading `b` is the multibase prefix for base32, but an id is **not** a
 CIDv1: there is no version, codec or multihash prefix before the digest.
 
-Example: `bmzr56gi5ydwuqsqjs7jsprjcn474nxscmjjljbipkkhcp5nvh37a` (the id of the
+Example: `bvtkn4kg5z6qhfqvovhxypxvm767aqz6llyd67wztupdwixpfl7xa` (the id of the
 version in §3.4).
 
 _Source: `packages/core/src/utils/hash.ts` (`cidFromBytes`, `cidDigest`, `cidOfDigest`, `base32Encode`, `base32Decode`), `packages/core/src/schema/version.ts` (`getVersionId`). Tests: `packages/core/tests/validation.test.ts` ("rejects an id that does not match the content"), `packages/core/tests/sync.test.ts`._
@@ -222,10 +222,10 @@ own (§4.1). The body, canonical, is `{"done":false,"text":"Buy milk"}`, so
 part, canonical (one line in reality, wrapped here only between members):
 
 ```
-{"author":"did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
+{"author":"did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E",
 "bodyHash":"b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
 "collection":"app.todo.item","createdAt":"2026-09-26T12:00:00.000Z",
-"key":"iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa",
+"key":"akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa",
 "links":[{"rel":"about","to":"list.groceries"}],
 "log":{"n":0},"seen":["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],"seq":0,
 "space":"bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a"}
@@ -235,19 +235,19 @@ The version:
 
 ```json
 {
-  "id": "bmzr56gi5ydwuqsqjs7jsprjcn474nxscmjjljbipkkhcp5nvh37a",
-  "author": "did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ",
+  "id": "bvtkn4kg5z6qhfqvovhxypxvm767aqz6llyd67wztupdwixpfl7xa",
+  "author": "did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E",
   "collection": "app.todo.item",
   "createdAt": "2026-09-26T12:00:00.000Z",
   "space": "bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a",
-  "key": "iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa",
+  "key": "akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa",
   "seq": 0,
   "log": { "n": 0 },
   "seen": ["b2adwpfsyvp6w5qyvo54kgtomdh4iqdg5xhrwwyva7qq54lh74gpq"],
   "links": [{ "rel": "about", "to": "list.groceries" }],
   "bodyHash": "b47jrvlapsxwsx44hipgsfbwdbupytsv4giuf4hxgoj33hiq4oubq",
   "body": { "text": "Buy milk", "done": false },
-  "signature": "N2adN6lob2aMxJCp5WMu9wx6pWKkSqi6sR7KW32E28qdUvou4MqeYFxxdqiE9kbEWUZxHEwfRCGKEGYEkee0cg"
+  "signature": "6F_VmcmIYOMpViiFd3Wfn3j3MVll9hZ3GIP8si1sZrwz4QrwTOo8lREtoOvoqZjPrOzQppD58IskU5qvGcKyoQ"
 }
 ```
 
@@ -280,7 +280,7 @@ stays on a to-do however often the to-do changes.
 An owned key is `<owner>.<name>`. Its owner part names the creator's account:
 
 ```
-owner(root) = lowercase( base32( SHA-256( UTF-8( "weave/record-owner/v1|" ‖ root ) )[0..16) ) )   // 26 characters
+owner(root) = lowercase( base32( SHA-256( UTF-8( "minca/record-owner/v1|" ‖ root ) )[0..16) ) )   // 26 characters
 ```
 
 `root` is the account's root DID (§9.3), whichever of its keys signs; base32
@@ -296,10 +296,10 @@ is §2's alphabet without padding.
 - A **`onePer`** key is derived from the record (§7.3): an owned key named
   `one:<hex>` when the parts include `@author`, a shared key otherwise.
 
-Example: the root `did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ`
-has owner part `iz75dwgy223gqtlqlqv3qzjq4y`. Its fresh keys look like
-`iz75dwgy223gqtlqlqv3qzjq4y.mfrggzdfmztwq2lknnwg23tpoa`, and the name
-`settings` chosen by it is `iz75dwgy223gqtlqlqv3qzjq4y.settings`.
+Example: the root `did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E`
+has owner part `akthxqofxox3iszhpi5j3zhl6a`. Its fresh keys look like
+`akthxqofxox3iszhpi5j3zhl6a.mfrggzdfmztwq2lknnwg23tpoa`, and the name
+`settings` chosen by it is `akthxqofxox3iszhpi5j3zhl6a.settings`.
 
 **Checking.** A peer MUST refuse a first version outside `sys.*` whose key is
 of neither kind, or is an owned key whose owner part is not `owner(root)` of
@@ -349,7 +349,7 @@ place of theirs.
 > produce. Before keys named their owner, the first version was the `seq 0`
 > with the lowest id, and a member could write one for someone else's key,
 > retrying `createdAt` until its id sorted lower, and become the record's
-> creator ([#72](https://github.com/leifriksheim/weave/issues/72)). An owner
+> creator ([#72](https://github.com/leifriksheim/minca/issues/72)). An owner
 > part of 128 bits can't be matched by grinding accounts. Random names rather
 > than time-based, so a key says nothing about when the record was made.
 > The owner part says no more than the version does: its `author` and `proof`
@@ -604,7 +604,7 @@ collection, in the access history, and a first version under `onePer` or
 > the first peer. Tags are the one body check a stub escapes that `retain`
 > does not cover. A fix will either check tags on the version that is current,
 > or carry what they are checked against in the envelope.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 > **Planned: forgetting in blob stores.** Segments never change and only
 > their store writer compacts them ([05 §16.4](05-sync-and-storage.md)). A
@@ -710,7 +710,7 @@ after them do not. What K signs in `app.photos` is judged as before.
 > part of a space can walk only the lines of the collections it holds, and a
 > cutoff ([03](03-spaces.md) §6.3) names places in those lines. A line across
 > collections was there to catch a copy of a key: two copies that never write
-> in one collection would still have forked it. Weave does not try to catch
+> in one collection would still have forked it. Minca does not try to catch
 > copied keys. A stolen key is treated like a stolen session token: what it
 > signed before the owner revoked it stands, and the revoke (03 §6.4) stops
 > it from then on ([threat model](threat-model.md) §3.4). A fork is what a
@@ -804,11 +804,11 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`, `LINK_REL_PATTERN`,
 ### 5.3 Planned: references to other spaces
 
 > **Planned.** Not normative. Issue:
-> [#38](https://github.com/leifriksheim/weave/issues/38). A link points only
+> [#38](https://github.com/leifriksheim/minca/issues/38). A link points only
 > within its space, but following a public space, reposting from another
 > space, and a list whose items live in several spaces all point elsewhere.
 > The plan is a **reference**: a string naming a space and a key, such as
-> `weave:<space>/<key>`, carried in a body field rather than as a link, so
+> `minca:<space>/<key>`, carried in a body field rather than as a link, so
 > links stay same-space and checkable against the definitions (§5.2). A
 > reader resolves it only if it can read that space. _Open:_ the exact form;
 > whether it may pin a version; whether a private space's id in a public
@@ -924,7 +924,7 @@ protocol: see [collections](../packages/core/docs/collections.md#validating).
 > (§6.1), so that peer would enforce none of its rules. Either the publishing
 > check must tolerate these keywords before any app writes them, or such a
 > definition needs a higher protocol version that older peers recognise.
-> Tracked in [#163](https://github.com/leifriksheim/weave/issues/163).
+> Tracked in [#163](https://github.com/leifriksheim/minca/issues/163).
 
 ### 6.3 A definition's version number
 
@@ -1027,8 +1027,8 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 ### 6.5 Planned: compatible definitions
 
 > **Planned.** Not normative. Issues:
-> [#11](https://github.com/leifriksheim/weave/issues/11) (content-addressed
-> definitions) and [#12](https://github.com/leifriksheim/weave/issues/12)
+> [#11](https://github.com/leifriksheim/minca/issues/11) (content-addressed
+> definitions) and [#12](https://github.com/leifriksheim/minca/issues/12)
 > (definition tiers, additive-only). Today any change to a definition counts
 > once the access history lets its writer make it (§6.3), and an app decides
 > for itself whether a space's definition is one it can use. Whether an app
@@ -1055,7 +1055,7 @@ _Source: `packages/core/src/schema/collection-def.ts` (`StoredCollection`, `CATA
 >   needs a new name (`name/2`), and may ship upgrade steps as data. Peers can
 >   enforce it only on something every peer sees the same way, which the
 >   `supersedes` chain of #11 provides, so #12 depends on #11, and on key
->   rotation ([#9](https://github.com/leifriksheim/weave/issues/9)), because a
+>   rotation ([#9](https://github.com/leifriksheim/minca/issues/9)), because a
 >   stolen publisher key could push "additive" versions spaces pick up
 >   automatically.
 >
@@ -1166,9 +1166,9 @@ present and gives `field=null`. `owner` is §4.1's.
 changes for the space:
 
 ```
-IKM    = public space:  UTF-8( "weave/public-one-per/v1|" ‖ spaceId )
+IKM    = public space:  UTF-8( "minca/public-one-per/v1|" ‖ spaceId )
          private space: the space's first key K₀, the one the genesis's encryptionKeyId names (03 §8.1)
-oneKey = HKDF-SHA-256( IKM, salt = "" (zero length), info = UTF-8("weave/one-per/v1"), L = 32 ), as an HMAC-SHA-256 key
+oneKey = HKDF-SHA-256( IKM, salt = "" (zero length), info = UTF-8("minca/one-per/v1"), L = 32 ), as an HMAC-SHA-256 key
 ```
 
 In a public space anyone can compute a key, as anyone can read the records.
@@ -1184,20 +1184,20 @@ version's `author` and `proof` already do.
 Example — in the public space
 `bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a`, `std.vote`
 (`onePer: ["@author", "link:about"]`) by
-`did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ` about the record
-`iz75dwgy223gqtlqlqv3qzjq4y.poll`:
+`did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E` about the record
+`akthxqofxox3iszhpi5j3zhl6a.poll`:
 
 ```
 std.vote
-@author=did:key:zDnaeSm3GDBe3cfca4gaw8nchcuzkJ2LPQiZp9tYs2bRGfQRJ
-link:about=iz75dwgy223gqtlqlqv3qzjq4y.poll
+@author=did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E
+link:about=akthxqofxox3iszhpi5j3zhl6a.poll
 ```
 
-gives `iz75dwgy223gqtlqlqv3qzjq4y.one:04b56dc63076a6a7c759e41275fbeedf0514435e`.
+gives `akthxqofxox3iszhpi5j3zhl6a.one:a91e596711387286109b7a5b7f6d511b2620458a`.
 A `std.decision` (`onePer: ["link:about"]`) about the same record gives the
-shared key `one:7c302bdcb25613e2fb9d49a41bccd0a24e1a2f24`. With the private
+shared key `one:a1452e7523f8d551ce60f1a9f265a1878fa6b97a`. With the private
 space key `ff fe … e0` of 03 §8.1 as K₀, the vote's key is
-`iz75dwgy223gqtlqlqv3qzjq4y.one:712d97143fd66351845dee63247e1c2ddc298713`.
+`akthxqofxox3iszhpi5j3zhl6a.one:22da47c4972f8ae73081b863a93577bd52bbe942`.
 
 Checking: a peer MUST refuse a `seq 0` version of a collection with `onePer` in
 force whose `key` is not the derived key (including when a part is missing and
@@ -1331,9 +1331,9 @@ values.
 ### 8.2 The tag key
 
 ```
-IKM  = public space:  UTF-8( "weave/public-topics/v1|" ‖ spaceId )
+IKM  = public space:  UTF-8( "minca/public-topics/v1|" ‖ spaceId )
        private space: the space key K (32 bytes, 03 §8.1) whose id is the body's keyId
-PRK/OKM = HKDF-SHA-256( IKM, salt = "" (zero length), info = UTF-8("weave/topic-tags/v1"), L = 32 )
+PRK/OKM = HKDF-SHA-256( IKM, salt = "" (zero length), info = UTF-8("minca/topic-tags/v1"), L = 32 )
 tagKey  = OKM, used as an HMAC-SHA-256 key
 ```
 
@@ -1361,10 +1361,10 @@ Examples, in the public space
 `bimjoifogypbqrtuich3e375d67y43znkjsjnp4q4qhe7gwf7u74a`:
 
 - collection `app.chat.message`, field `channel`, value `"design"` →
-  `77UGGhMoLC5C1rXEcsqWKw`;
+  `Hh5Cwzt8mQlIfYWE_cPjkA`;
 - collection `std.message`, topic `link:channel`, a link
   `{ "rel": "channel", "to": "mfrggzdfmztwq2lknnwg23tpoa" }` →
-  `KmBza5PO__zHr48zfCH8Pw`.
+  `pL1YV0BFW4cn-RZUn8-VZQ`.
 
 ### 8.4 Checking
 

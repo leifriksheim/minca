@@ -273,11 +273,11 @@ Only these:
 | `size`, `contains`, `startsWith`, `endsWith`, `int`, `uint`, `double`, `string`, `bool`, `dyn`                       | CEL        | As CEL defines them                                                                                                                                                           |
 | `l.distinct()`                                                                                                       | CEL lists  | The list without the elements equal to an earlier one, as `==` says but with numbers compared by exact value: `[9007199254740993, 9007199254740992.0]` stays two              |
 | `math.greatest(…)`, `math.least(…)`                                                                                  | CEL math   | Of one list, or of one or more numbers: the greatest or least, the first of equals. An error on `NaN` or anything but a number                                                |
-| `sum(l)`                                                                                                             | Weave      | The elements added in order: all `int`s, all `uint`s or all `double`s, else an error; **`0.0` for `[]`**, since every number read from a body is a `double`                   |
-| `hash(x)`                                                                                                            | Weave      | The content id (02 §2) of the canonical JSON of `x`; of a body, its `bodyHash`. An error for a non-finite `double`, an integer past ±2⁵³, or a map key that is not a `string` |
-| `link(rel)`, `v.link(rel)`                                                                                           | Weave      | The `to` of the first link with that `rel` in this version's links, or in `v`'s `links`; `null` when there is none. `rel` is a literal link role (02 §5.1)                    |
-| `versions(ids)`                                                                                                      | Weave      | The cited version for each id in a list of strings, in order (§6)                                                                                                             |
-| `member(did)`                                                                                                        | Weave      | Whether the account is a member (a founder, or holds any role) as of this version's `seen`                                                                                    |
+| `sum(l)`                                                                                                             | Minca      | The elements added in order: all `int`s, all `uint`s or all `double`s, else an error; **`0.0` for `[]`**, since every number read from a body is a `double`                   |
+| `hash(x)`                                                                                                            | Minca      | The content id (02 §2) of the canonical JSON of `x`; of a body, its `bodyHash`. An error for a non-finite `double`, an integer past ±2⁵³, or a map key that is not a `string` |
+| `link(rel)`, `v.link(rel)`                                                                                           | Minca      | The `to` of the first link with that `rel` in this version's links, or in `v`'s `links`; `null` when there is none. `rel` is a literal link role (02 §5.1)                    |
+| `versions(ids)`                                                                                                      | Minca      | The cited version for each id in a list of strings, in order (§6)                                                                                                             |
+| `member(did)`                                                                                                        | Minca      | Whether the account is a member (a founder, or holds any role) as of this version's `seen`                                                                                    |
 
 `member` gives an error for a value that is not a string starting `did:`.
 There is no `can()`: who may write is the space's grants (03 §2), which every
@@ -403,7 +403,7 @@ count Bob's vote.
 > would go back on itself. The cost: a writer chooses its `seen`, and can
 > leave a removal out of it to count a removed member's earlier versions, and
 > nothing tells those from versions the removed member backdated after its
-> removal ([#184](https://github.com/leifriksheim/weave/issues/184)). It must
+> removal ([#184](https://github.com/leifriksheim/minca/issues/184)). It must
 > itself hold a role as of what it claims to have seen.
 
 _Source: `packages/core/src/records/contracts.ts` (`runContracts`, `CitedVersion`), `packages/core/src/node/space-runtime.ts` (`cited`, `checkedVersion`). Tests: `packages/core/tests/contracts.test.ts` ("a proof stays a proof…"), `packages/core/tests/contracts-pending-squat.test.ts`, `scenarios/tests/fame.test.ts` (all)._
@@ -528,7 +528,7 @@ _Source: `packages/core/src/records/contracts.ts` (`checkContracts`, `checkLine`
 
 ## 9. Planned: asking for what a version cites
 
-Issue: [#79](https://github.com/leifriksheim/weave/issues/79). A version
+Issue: [#79](https://github.com/leifriksheim/minca/issues/79). A version
 pending on a version it cites doesn't ask for it: a node that holds the whole
 space gets it in the next round anyway, but a node holding only some
 collections (05, What a node holds) may never fetch a cited version from a

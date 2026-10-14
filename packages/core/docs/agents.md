@@ -4,7 +4,7 @@ An agent reads and writes as the person, with a note from their account that
 every peer checks. The protocol doesn't know it is an agent: it is a program
 that asked for a note that grants writing records and nothing more
 (`/record`), so every peer refuses it defining collections, changing who
-may do what, or writing for the account ([spec 01 §8](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).
+may do what, or writing for the account ([spec 01 §8](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
 What it writes counts as the person's, and carries `recordsOnly: true`
 everywhere, which apps may show (the example app says "via agent"). It never
 gets the seed.
@@ -19,7 +19,7 @@ Schema for its input. The CLI, the MCP server and the browser's WebMCP tools
 are all generated from it.
 
 ```typescript
-import { NODE_ACTIONS, runAction } from '@weaveprotocol/core';
+import { NODE_ACTIONS, runAction } from '@minca/core';
 
 await runAction(node, 'records_put', { space, collection: 'app.todo.item', body: { text: 'milk' } });
 ```
@@ -29,18 +29,18 @@ await runAction(node, 'records_put', { space, collection: 'app.todo.item', body:
 
 ## Connecting an agent to someone's account
 
-From `@weaveprotocol/cli`, the `weave` command:
+From `@minca/cli`, the `minca` command:
 
 ```bash
-npx @weaveprotocol/cli connect wv_…   # the code from "Connect an agent" in an app
+npx @minca/cli connect mc_…   # the code from "Connect an agent" in an app
 ```
 
 It makes a key for this computer's agent, waits while the person allows it at
-their account home, and adds `weave mcp` to Claude Code, Claude Desktop and
+their account home, and adds `minca mcp` to Claude Code, Claude Desktop and
 Cursor where it finds them. The agent is then a node of its own: it follows
 the account's spaces and keeps working with every tab closed.
 
-`weave agent` runs the same agent without a chat client: it chats in the
+`minca agent` runs the same agent without a chat client: it chats in the
 terminal and thinks with the person's own Anthropic API key, offering the model
 the same tools. See `packages/cli/README.md`.
 
@@ -48,7 +48,7 @@ the same tools. See `packages/cli/README.md`.
 
 The code, the channel it opens and the messages the two sides trade are
 protocol, and know nothing of agents
-([spec 06 §3](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([spec 06 §3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 The library's two sides are `offerConnectCode` (the app) and `connectWithCode`
 (the program).
 
@@ -66,7 +66,7 @@ The library's two sides are `offerConnectCode` (the app) and `connectWithCode`
 
 What the reference sides add:
 
-- The terminal (`weave connect`) asks for records only, and shows the app's
+- The terminal (`minca connect`) asks for records only, and shows the app's
   origin while the person decides.
 - The app (`apps/example/src/components/ConnectAgent.tsx`) shows the code. It
   gives a program records only (`apps/example/src/program-terms.ts`): it
@@ -105,20 +105,20 @@ the app's: `collections_list` points at the guides a space's apps wrote
 
 ## Automations
 
-An agent that runs by itself (`weave agent`) also runs the person's
+An agent that runs by itself (`minca agent`) also runs the person's
 automations ([automations.md](automations.md)), and does what those that ask
 it say: when some records come to be a certain way, or at set times. An agent
 may write an automation when asked, but it runs only once the person has
 saved it themselves.
 
-`weave agent` can think with Anthropic's models, or with any server that
+`minca agent` can think with Anthropic's models, or with any server that
 speaks OpenAI's Chat Completions, including a model on your own machine
 (`--provider openai`; see `packages/cli/README.md`).
 
 ## Bots
 
 A bot is the same program running as an account of its own
-(`weave agent --bot`), which people invite to their spaces as a member. It
+(`minca agent --bot`), which people invite to their spaces as a member. It
 writes as itself, is checked against its role like any member, and is
 mentioned by the name its account says, like anyone: the one it was made
 with, unless its account already says another. It runs the automations that
@@ -130,11 +130,11 @@ none. See [automations.md](automations.md#who-runs-an-automation)
 and [standard-library.md](standard-library.md) (Bots).
 
 The usual way to have one is to let the host that keeps the community online
-run it (`node.hosting.startBot`, [spec 08 §3](https://github.com/leifriksheim/weave/blob/main/spec/08-hosting.md)):
+run it (`node.hosting.startBot`, [spec 08 §3](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)):
 an admin picks its name and role in the app, the host makes its account and
 joins, and the community pays for it as it pays for hosting. The host thinks
 with its own model key, within a daily cap per bot, and holds the bot's keys,
-so it can read what the bot can read. `weave agent --bot` is the same bot run
+so it can read what the bot can read. `minca agent --bot` is the same bot run
 by whoever wants to, with their own key.
 
 ## In your own code
@@ -151,9 +151,9 @@ on its say-so, not a proof, and peers would judge records the same either way;
 an app that wants to show it can keep its own list of connected programs by
 key, as the account home does.
 
-## Working on a Weave app with a coding agent
+## Working on a Minca app with a coding agent
 
 These guides ship inside the package so an agent in your repository can read
-them at `node_modules/@weaveprotocol/core/docs/`, matched to the installed
+them at `node_modules/@minca/core/docs/`, matched to the installed
 version. A line in your project's `AGENTS.md` or `CLAUDE.md` pointing there is
 enough.

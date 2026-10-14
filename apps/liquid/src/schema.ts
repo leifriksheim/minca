@@ -22,9 +22,9 @@ import {
   RECORD_DELETE,
   RECORD_READ,
   RECORD_WRITE,
-} from '@weaveprotocol/core';
-import type { Contract, SpaceRole } from '@weaveprotocol/core';
-import { fragments } from '@weaveprotocol/core/schemas';
+} from '@minca/core';
+import type { Contract, SpaceRole } from '@minca/core';
+import { fragments } from '@minca/core/schemas';
 
 const { typed, words, text, markdown, count, choice, people, one } = fragments;
 

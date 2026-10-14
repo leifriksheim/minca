@@ -5,15 +5,15 @@ import {
   type NodeCollection,
   type NodeRecord,
   type SpaceSummary,
-} from '@weaveprotocol/core';
-import { useAccount, useNode } from '@weaveprotocol/core/react';
-import { useMay, useMayDefine } from '@weave/app-shared/may';
-import { Modal } from '@weave/app-shared/Modal';
-import { AddBotDialog, useSpaceBots } from '@weave/app-shared/CommunitySetup';
+} from '@minca/core';
+import { useAccount, useNode } from '@minca/core/react';
+import { useMay, useMayDefine } from '@minca/app-shared/may';
+import { Modal } from '@minca/app-shared/Modal';
+import { AddBotDialog, useSpaceBots } from '@minca/app-shared/CommunitySetup';
 import { clauseFields, clauseOn, type Clause, type ClauseField } from '../../derive/conditions';
 import { belonging, collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { useBots } from '../../bots';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { nameOf, type People } from '../../derive/people';
 import {
   INSTRUCT,
@@ -28,7 +28,7 @@ import {
   type Automation,
   type AutomationAction,
   type AutomationMatch,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import {
   ACTIONS,
   COUNT_OPS,
@@ -521,13 +521,13 @@ export function AutomationBuilder({
                 <span style={{ color: palette.ink.muted }}>
                   {by
                     ? 'as itself, while it runs'
-                    : 'as you, while weave agent runs on one of your computers'}
+                    : 'as you, while minca agent runs on one of your computers'}
                 </span>
               </Sentence>
             )}
             {agentDoes && !has(profile.name) && (
               <p style={{ fontSize: 12.5, color: palette.ink.muted }}>
-                A bot run with <code>weave agent --bot</code> shows up here once {space.name} keeps profiles,
+                A bot run with <code>minca agent --bot</code> shows up here once {space.name} keeps profiles,
                 where it says it is one.{' '}
                 {space.writable && mayDefine ? (
                   <button
@@ -550,7 +550,7 @@ export function AutomationBuilder({
                     Add a bot
                   </button>
                 ) : (
-                  'Someone who manages it can add one, under Hosting, or run one with weave agent --bot.'
+                  'Someone who manages it can add one, under Hosting, or run one with minca agent --bot.'
                 )}
               </p>
             )}
@@ -610,7 +610,7 @@ export function AutomationBuilder({
           {agentDoes
             ? by
               ? `${botName} runs it, as itself.`
-              : 'Your agent runs it, as you, while weave agent runs on one of your computers.'
+              : 'Your agent runs it, as you, while minca agent runs on one of your computers.'
             : 'It runs on your devices while this app is open on one of them.'}{' '}
           Everyone in {space.name} can see the rule and what it did.
         </p>
@@ -776,7 +776,7 @@ const numberBox = {
   width: 72,
   height: 32,
   padding: '0 10px',
-  borderRadius: 8,
+  borderRadius: palette.radius.md,
   border: `1px solid ${palette.surface.lineStrong}`,
   fontSize: 14,
   fontWeight: 600,
@@ -788,7 +788,7 @@ const tile = {
   alignItems: 'flex-start',
   gap: 2,
   padding: '10px 12px',
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.card,
   textAlign: 'left',

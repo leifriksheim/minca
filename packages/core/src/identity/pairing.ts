@@ -15,7 +15,7 @@ import type { Channel } from './channel.js';
 /** Bytes of a pairing secret */
 const PAIRING_SECRET_BYTES = 16;
 
-const PAIRING_CODE_LABEL = 'weave/pairing-code/v1';
+const PAIRING_CODE_LABEL = 'minca/pairing-code/v1';
 
 /** What the QR code carries */
 export interface PairingTicket {

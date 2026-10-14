@@ -224,7 +224,7 @@ A → B   61 00 00 02 02 <id1> <id2>
         │  │  └ bound id length 0
         │  └ bound timestamp: infinity
         └ version 1
-        base64url: YQAAAgIBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        base64url: YQAAAgIBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 B → A   61 00 00 02 02 <id1> <id3>
 A:      have = [id2], need = [id3], done (nothing more to send)
 ```
@@ -515,7 +515,7 @@ cannot parse (§18).
 > at all (`packages/core/src/sync/sync-engine.ts`, `onReconcile`), so the initiator waits
 > until it gives up on the session (§6.3; 30 s in this library). A fix will
 > answer at once.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 > **Planned: limits per peer.** Every `hello` and every `reconcile` round
 > costs the answering side a pass over a collection's in-memory item set, as
@@ -527,7 +527,7 @@ cannot parse (§18).
 > peer over its limit is ignored until the minute is out, not disconnected.
 > Open: the numbers, and whether a node says it is refusing (so the other
 > side does not wait until it gives up). Byte rates per connection
-> belong to [04 — Network](04-network.md). Tracked in [#33](https://github.com/leifriksheim/weave/issues/33).
+> belong to [04 — Network](04-network.md). Tracked in [#33](https://github.com/leifriksheim/minca/issues/33).
 
 ### 6.5 Done
 
@@ -629,9 +629,9 @@ taken. A `versions` without `id` is limited to its first 200 entries.
 > can fill it with large versions that never stand. A node will cap
 > the total bytes held waiting, and the retries done per version stored. Open:
 > the numbers, and whether waiting versions are counted per peer so one peer
-> cannot push out another's. Tracked in [#33](https://github.com/leifriksheim/weave/issues/33).
+> cannot push out another's. Tracked in [#33](https://github.com/leifriksheim/minca/issues/33).
 
-> **Planned: access convergence** ([#10](https://github.com/leifriksheim/weave/issues/10)).
+> **Planned: access convergence** ([#10](https://github.com/leifriksheim/minca/issues/10)).
 > A randomized test with several peers, partitions and heals, role changes,
 > removals and key changes, asserting that every peer reaches the same access
 > state and current versions whatever order versions arrive in, and that
@@ -705,7 +705,7 @@ _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space")
   may bucket a date field the writer chose (`start` → `2026-10`), which is
   acceptable because a bucket only decides what is fetched, never what is
   allowed. Needs `holds` to name more than collections, and sync a way to ask
-  for a subset. Tracked in [#27](https://github.com/leifriksheim/weave/issues/27).
+  for a subset. Tracked in [#27](https://github.com/leifriksheim/minca/issues/27).
 
 ---
 
@@ -977,7 +977,7 @@ Values of entries whose key starts with one of the sealed prefixes —
 `spacerelays:` — are stored as an envelope ([01 §9.1](01-identity.md)):
 
 ```
-value = envelope(localKey, "weave/at-rest/v1", { entry: <the entry key> }, plaintext value)
+value = envelope(localKey, "minca/at-rest/v1", { entry: <the entry key> }, plaintext value)
 ```
 
 - A reader MUST refuse (not fall back to raw) a value under a sealed prefix
@@ -991,7 +991,7 @@ value = envelope(localKey, "weave/at-rest/v1", { entry: <the entry key> }, plain
 - Rollback and deletion are not protected. An envelope is bound only to its
   entry, so someone who can write the folder can put back an older sealed
   value of the same entry, such as a `spacekey:` from before a key change, and
-  it opens; or delete an entry ([#215](https://github.com/leifriksheim/weave/issues/215)).
+  it opens; or delete an entry ([#215](https://github.com/leifriksheim/minca/issues/215)).
 
 Every registry entry of §12 that belongs to one space is sealed.
 
@@ -1126,7 +1126,7 @@ Open: mirrors laid out per collection, so a node holding part of a space
 ### 16.6 Planned: files
 
 > **Planned.** Not normative. Issue:
-> [#37](https://github.com/leifriksheim/weave/issues/37). Records cannot
+> [#37](https://github.com/leifriksheim/minca/issues/37). Records cannot
 > carry file bytes today. `std.attachment` has a `url`, outside the space's
 > access rules and sync, and a `blob`: a **blob reference** in the body,
 > `{ hash, size, mime, name? }`, where `hash` is the SHA-256 of the bytes as
