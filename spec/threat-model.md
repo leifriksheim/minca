@@ -424,7 +424,7 @@ _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages
   - Its removal withdraws what it wrote before that the removal's cutoff
     doesn't cover: the remover's node covers only the lines it holds unbroken,
     in the collections it holds, up to 1024 places (03 §6.3). Peers don't
-    check how a cutoff was built, so a remover may leave anyone's lines out
+    check how a cutoff was built, so a remover may leave the removed account's lines out
     ([#166](https://github.com/leifriksheim/minca/issues/166)).
   - It keeps a private space's first key, from which `onePer` keys are
     derived, so it can test guesses of who voted on what in envelopes that
@@ -577,7 +577,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     contacts, carry spaces) without `/account/write` is refused by the
     account's devices, but a carrier, host or mirror reader that can't tell
     the space is the account's own lets it stand, so they disagree (03 §5.2,
-    [#10](https://github.com/leifriksheim/minca/issues/10)).
+    [#10](https://github.com/leifriksheim/minca/issues/10)) _(traced)_.
   - An account's chosen key is the same in every collection, so with a
     records grant it can write a record at a chosen name another app of the
     account's uses in another collection, and that app can't write its record
@@ -685,8 +685,9 @@ _Source: 03 §8; 02 §3, §7.3; 06 §4. Tests: `packages/core/tests/record-keys.
     account pin accepts any key whose note grants everything about the
     account, and checks no revoke ([#165](https://github.com/leifriksheim/minca/issues/165)) _(traced)_.
   - Whoever later obtains a space key reads everything sealed under it and
-    every earlier key it carries, and keys change only when a reader leaves,
-    not over time or on demand ([#170](https://github.com/leifriksheim/minca/issues/170)).
+    every earlier key it carries. Keys change when a reader leaves, or when a
+    member granted `/key/change` changes them; never on a schedule, and not
+    at all in a space where nobody holds `/key/change` ([#170](https://github.com/leifriksheim/minca/issues/170)).
 
 _Source: 04 §5, §6.1; 01 §15.2. Tests: `packages/core/tests/ws-transport.test.ts` ("only a note for everything about the account pins…"), `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open")._
 
