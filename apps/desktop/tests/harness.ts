@@ -1,10 +1,12 @@
 /**
  * The real preload (`page.ts`), run in a `vm` context for each window's top
- * page, wired to the real bridge (`bridge.ts`) the way `index.ts` wires them.
- * Only the DOM is faked, and only as far as the preload uses it.
+ * page, wired to the real bridge (`bridge.ts`) and node link (`node-link.ts`)
+ * the way `index.ts` wires them. Only the DOM and the socket are faked, and
+ * only as far as the preload uses them.
  */
 import vm from 'node:vm';
 import { createBridge, type PaneHost } from '../src/bun/bridge.ts';
+import { createNodeLink, nodeUrl, type LinkSocket } from '../src/bun/node-link.ts';
 import { preloadFor } from '../src/bun/page.ts';
 
 type Task = () => void;
@@ -65,6 +67,38 @@ export function setupHarness() {
     for (let i = 0; i < 10_000 && queue.length > 0; i++) queue.shift()?.();
   };
 
+  /** A WebSocket as the page sees it, reaching the link as Bun's server would: from the page's origin */
+  function socketFor(origin: string) {
+    return class FakeSocket {
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: unknown }) => void) | null = null;
+      constructor(url: string) {
+        // It connects once the page has loaded, as a real one does: after the window is made.
+        queue.push(() => {
+          const request = new Request(url.replace(/^ws/, 'http'), { headers: { origin } });
+          const token = link.accept(request);
+          if (token === null) return;
+          const socket: LinkSocket = {
+            data: { token },
+            send: (text) => queue.push(() => this.onmessage?.({ data: text })),
+            close: () => {
+              if (sockets.delete(socket)) link.closed(socket);
+            },
+          };
+          sockets.add(socket);
+          link.opened(socket);
+          this.toLink = (text) => queue.push(() => link.message(socket, text));
+          this.onopen?.();
+        });
+      }
+      private toLink: ((text: string) => void) | null = null;
+      // On the prototype, where the preload takes it from.
+      send(text: string): void {
+        this.toLink?.(text);
+      }
+    };
+  }
+
   function makePage(url: string, preload: string, setup: PageSetup = {}): Page {
     const address = new URL(url);
     const listeners = new Map<string, Listener[]>();
@@ -85,6 +119,7 @@ export function setupHarness() {
     const context: Record<string, unknown> = {
       URL,
       Uint8Array,
+      WebSocket: socketFor(address.origin),
       crypto: globalThis.crypto,
       // As WebKit does when the shell runs a script: it counts as a gesture.
       navigator: { userActivation: { isActive: true } },
@@ -137,11 +172,18 @@ export function setupHarness() {
     return page;
   }
 
+  const sockets = new Set<LinkSocket>();
   const bridge = createBridge({
-    preload: ({ secret, origin, popup, app }) =>
-      preloadFor({ secret, origin, popup, app, dragInset: app ? 28 : 0 }),
+    preload: ({ secret, origin, popup, app, node }) =>
+      preloadFor({
+        secret,
+        origin,
+        popup,
+        app,
+        dragInset: app ? 28 : 0,
+        nodeUrl: node ? nodeUrl(origin, node) : null,
+      }),
     openExternal: (url) => external.push(url),
-    node: (message) => toNode.push(message),
     open({ url, preload, popup, closed }) {
       const win: Win = {
         url,
@@ -179,5 +221,11 @@ export function setupHarness() {
     return app;
   }
 
-  return { bridge, windows, external, envelopes, toNode, flush, openApp, makePage, clock };
+  const link = createNodeLink({
+    origin: 'http://127.0.0.1:47830',
+    isToken: (token) => bridge.isNodeToken(token),
+    fromWindow: (message) => toNode.push(message),
+  });
+
+  return { bridge, link, sockets, windows, external, envelopes, toNode, flush, openApp, makePage, clock };
 }

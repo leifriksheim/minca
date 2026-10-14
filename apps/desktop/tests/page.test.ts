@@ -167,6 +167,7 @@ test('a page that hooks toJSON never sees the secret', () => {
     popup: true,
     app: false,
     dragInset: 0,
+    nodeUrl: null,
   });
   const page = makePage(HOME, preload, {
     before: `globalThis.leaked = []; Object.prototype.toJSON = function () { leaked.push(JSON.stringify(Object.assign({}, this))); return this; };
@@ -190,6 +191,7 @@ test('a frame, or a page at another origin, gets no bridge', () => {
     popup: true,
     app: false,
     dragInset: 0,
+    nodeUrl: null,
   });
   for (const page of [makePage(HOME, preload, { frame: true }), makePage('https://evil.example/', preload)]) {
     assert.equal(Reflect.get(page.context, 'opener'), undefined);
@@ -225,8 +227,8 @@ test('the app’s window can tell the menu bar its account; a popup has no way t
   assert.ok(envelopes.at(-1)?.includes('did:key:zLeif'));
 });
 
-test('the app’s window talks to its node through the shell, both ways; a popup has no way to', () => {
-  const { bridge, windows, toNode, flush, openApp } = setupHarness();
+test('the app’s window talks to its node over its socket, both ways; a popup has no way to', () => {
+  const { link, windows, toNode, envelopes, flush, openApp } = setupHarness();
   const app = openApp();
   app.page.click();
   call(app.page, 'open', HOME, 'minca-home', 'popup');
@@ -241,17 +243,48 @@ test('the app’s window talks to its node through the shell, both ways; a popup
 
   const heard: unknown[] = [];
   Reflect.apply(listen, node, [(data: unknown) => heard.push(data)]);
+  const before = envelopes.length;
+  // Said before the socket opens: it waits for it.
   Reflect.apply(send, node, [{ kind: 'attach' }]);
   flush();
   assert.deepEqual(toNode, [{ kind: 'attach' }]);
-  bridge.toApp({ kind: 'state', state: { status: 'ready', session: 1 } });
+  assert.equal(envelopes.length, before, 'nothing went through Electrobun’s bridge');
+  link.toWindow({ kind: 'state', state: { status: 'ready', session: 1 } });
+  flush();
   // Made in the page's realm: compared as what crossed.
   assert.deepEqual(JSON.parse(JSON.stringify(heard)), [
     { kind: 'state', state: { status: 'ready', session: 1 } },
   ]);
 
-  // The home's page hears nothing of it, and a forged delivery there reaches nobody.
+  // The home's page has none of it, and a forged delivery there reaches nobody.
   assert.equal(Reflect.get(home.page.context, 'mincaDesktop'), undefined);
   call(home.page, '__mincaReceive', { t: 'node', data: { kind: 'port' } });
+  flush();
   assert.equal(heard.length, 1);
+});
+
+test('the app’s page loaded again takes over the socket; once its window closes, the socket says nothing', () => {
+  const { link, sockets, toNode, flush, openApp } = setupHarness();
+  const app = openApp();
+  flush();
+  const first = [...sockets];
+  app.load('http://127.0.0.1:47830/app');
+  flush();
+  assert.equal(sockets.size, 1);
+  assert.ok(!first.some((socket) => sockets.has(socket)), 'the last page’s socket was closed');
+  const said = (data: unknown) => {
+    const node: unknown = Reflect.get(Object(Reflect.get(app.page.context, 'mincaDesktop')), 'node');
+    const send: unknown = Reflect.get(Object(node), 'send');
+    assert.ok(typeof send === 'function');
+    Reflect.apply(send, node, [data]);
+    flush();
+  };
+  said({ kind: 'attach' });
+  assert.deepEqual(toNode, [{ kind: 'attach' }]);
+  // Bun calls the link with the socket still open after the window is gone: nothing passes.
+  const [open] = [...sockets];
+  assert.ok(open);
+  app.close();
+  link.message(open, JSON.stringify({ kind: 'disconnect' }));
+  assert.deepEqual(toNode, [{ kind: 'attach' }]);
 });

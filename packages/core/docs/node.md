@@ -702,7 +702,9 @@ connection makes a new one.
 
 **An app's node outside the page.** The desktop app (`apps/desktop`) runs its
 app's node in a process of its own, `minca app-node`, so it keeps running with
-the window closed; the window uses it over a port, as a page uses its worker.
+the window closed; the window uses it over a port, as a page uses its worker,
+carried on a WebSocket to the shell's own server at the app's origin, which
+opens only for the app's window, with a token made for it.
 That process holds the key, so the window and the menu bar are one node: two
 signing with one key would fork its lines, and a lock on the folder keeps a
 second from starting. Its key and grant can't stay in a page there, so they
@@ -727,7 +729,7 @@ key is moved aside, and the node starts again unconnected. The window is shown t
 without its account, contact or member keys. It asks the home for a 30-day
 note, where a page asks for the home's default.
 
-_Source: `packages/cli/src/app-node.ts` (`runAppNode`), `apps/desktop/src/bun/app-node.ts` (`createAppNode`, `keychainKey`), `apps/example/src/desktop.ts` (`desktopConnection`). Tests: `packages/cli/tests/app-node.test.ts`, `apps/desktop/tests/app-node.test.ts`, `apps/desktop/tests/bridge.test.ts` ("only the app’s own window talks to its node…")._
+_Source: `packages/cli/src/app-node.ts` (`runAppNode`), `apps/desktop/src/bun/app-node.ts` (`createAppNode`, `keychainKey`), `apps/desktop/src/bun/node-link.ts` (`createNodeLink`), `apps/example/src/desktop.ts` (`desktopConnection`). Tests: `packages/cli/tests/app-node.test.ts`, `apps/desktop/tests/app-node.test.ts`, `apps/desktop/tests/bridge.test.ts` ("only the app’s own window gets a node token…"), `apps/desktop/tests/node-link.test.ts`._
 
 **The home's address.** `homeAddress(input)` turns what a person typed into the
 home's connect page:

@@ -18,6 +18,11 @@ export interface PageOptions {
    * an empty spot drags the window. 0 for none.
    */
   readonly dragInset: number;
+  /**
+   * For the app's own window, the socket its node is reached over
+   * (`node-link.ts`); null for every other window.
+   */
+  readonly nodeUrl: string | null;
 }
 
 export function preloadFor(options: PageOptions): string {
@@ -40,6 +45,9 @@ function page(options: PageOptions): void {
   const apply = Reflect.apply;
   const dispatch = window.dispatchEvent.bind(window);
   const Message = MessageEvent;
+  const parse = JSON.parse;
+  const Socket = WebSocket;
+  const socketSend: unknown = Reflect.get(Socket.prototype, 'send');
 
   // WebKit in this shell drops, without a word, any message to a SharedWorker
   // that holds a CryptoKey, and a node's worker is started with its session
@@ -121,6 +129,29 @@ function page(options: PageOptions): void {
   const opened = new Map<string, Proxy>();
   /** Who hears the app's node: the app's own window only */
   let nodeListener: ((data: unknown) => void) | null = null;
+  // The node's socket, opened before the page's own scripts run, so its handlers are these.
+  // What the page says before it opens waits for it.
+  const nodeSocket = options.app && !options.popup && options.nodeUrl ? new Socket(options.nodeUrl) : null;
+  let nodeWaiting: string[] | null = [];
+  if (nodeSocket) {
+    nodeSocket.onopen = () => {
+      const waiting = nodeWaiting ?? [];
+      nodeWaiting = null;
+      for (const text of waiting) sendOnSocket(nodeSocket, text);
+    };
+    nodeSocket.onmessage = (event) => {
+      if (nodeListener && typeof event.data === 'string') nodeListener(parse(event.data));
+    };
+  }
+  function sendOnSocket(socket: WebSocket, text: string): void {
+    if (typeof socketSend === 'function') apply(socketSend, socket, [text]);
+  }
+  function toNode(data: unknown): void {
+    if (!nodeSocket) return;
+    const text = stringify(data);
+    if (nodeWaiting) nodeWaiting.push(text);
+    else sendOnSocket(nodeSocket, text);
+  }
   const opener = options.popup ? proxy(null) : null;
 
   defineProperty(window, 'open', {
@@ -187,10 +218,6 @@ function page(options: PageOptions): void {
       origin?: string;
       data?: unknown;
     }) => {
-      if (message.t === 'node') {
-        if (options.app && !options.popup && nodeListener) nodeListener(message.data);
-        return;
-      }
       if (message.t === 'closed') {
         const closed = message.ref === null ? opener : opened.get(message.ref ?? '');
         if (closed) closed.closed = true;
@@ -236,7 +263,7 @@ function page(options: PageOptions): void {
         // The app's node runs in the shell, and the window uses it over this (apps/example/src/desktop.ts).
         node: Object.freeze({
           send(data: unknown) {
-            send({ t: 'node', data });
+            toNode(data);
           },
           listen(listener: unknown) {
             nodeListener =
