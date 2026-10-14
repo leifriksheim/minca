@@ -15,7 +15,7 @@ import { createMincaConnection } from '@minca/core/session';
 import { MincaProvider, useConnection } from '@minca/core/react';
 
 const connection = createMincaConnection({
-  home: 'https://weave-home.netlify.app/connect', // a suggestion: the person may use their own
+  home: 'https://minca-home.netlify.app/connect', // a suggestion: the person may use their own
   request: {
     name: 'Todo',
     access: 'write', // or 'read'

@@ -13,7 +13,7 @@
 import { createMincaConnection } from '@minca/core/session';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 
-const HOME = import.meta.env.VITE_MINCA_HOME ?? 'https://weave-home.netlify.app/connect';
+const HOME = import.meta.env.VITE_MINCA_HOME ?? 'https://minca-home.netlify.app/connect';
 
 export const connection = createMincaConnection({
   home: HOME,

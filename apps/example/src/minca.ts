@@ -4,7 +4,7 @@ import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared
 import { desktopConnection } from './desktop';
 
 /** The account home's connect page — ours by default; anyone can run their own */
-const HOME = import.meta.env.VITE_MINCA_HOME ?? 'https://weave-home.netlify.app/connect';
+const HOME = import.meta.env.VITE_MINCA_HOME ?? 'https://minca-home.netlify.app/connect';
 
 // A browser for every space in the account, so it asks for the whole account.
 // An app that needs less asks for less: `scope: 'spaces'`, or `create` a space of its own.
