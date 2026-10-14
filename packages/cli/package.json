@@ -34,9 +34,10 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
     "@clack/prompts": "^1.8.1",
-    "@types/node": "^26.6.3",
     "@minca/core": "*",
     "@minca/relay": "*",
+    "@types/node": "^26.6.3",
+    "add-mcp": "2.4.1",
     "esbuild": "^0.28.0",
     "tsx": "^4.19.0"
   },

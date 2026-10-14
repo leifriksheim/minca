@@ -4,7 +4,7 @@ One program, three jobs:
 
 - **Manage your spaces** — every command the Node API has, as `minca spaces …` and `minca records …`
 - **Run an always-on node** — `minca run` keeps every space syncing, serves sockets browsers dial into, and is a relay too
-- **Connect an agent** — `minca connect <code>`, then Claude Code, Claude Desktop or Cursor starts `minca mcp` by itself, or `minca agent` runs it on its own
+- **Connect an agent** — `minca connect <code>`, then Claude Code, Claude Desktop, Cursor, VS Code or another MCP client starts `minca mcp` by itself, or `minca agent` runs it on its own
 
 It uses the same data folder layout a browser does. Point `--home` at the folder
 you picked in Chrome and the CLI, the daemon and the browser all share one
@@ -253,8 +253,10 @@ meets the app on a channel only that code opens (introduced by a relay, sealed
 end to end), and waits while you allow it at your account home, which signs a
 records-only note (`/record`) for every space in your account, for as long as
 you chose. The agent is a program connected by code, not a kind of account:
-nothing in the note marks it as an agent except that it grants records only. Then it adds `minca` to Claude Code (`claude mcp add`), Claude Desktop
-and Cursor, where it finds them. `--no-configure` prints the config instead,
+nothing in the note marks it as an agent except that it grants records only. Then it adds `minca` to Claude Code (`claude mcp add`) and every other
+agent [add-mcp](https://github.com/neon-solutions/add-mcp) knows — Claude
+Desktop, Cursor, VS Code, Windsurf, Zed, Codex, Gemini CLI and more — where
+it finds them. `--no-configure` prints the config instead,
 `--name` changes what you see ("Agent on leifs-macbook"), and `--relay` adds
 one the app uses (`$MINCA_RELAYS` sets the defaults).
 
