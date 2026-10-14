@@ -3,7 +3,7 @@
 A door is an address an account hands out on purpose, so that someone it
 shares no space with can ask to become a contact. The keys, the door code, the
 topic, the relay mailbox and the sealed knock are protocol
-([spec 07](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)):
+([spec 07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)):
 a relay and a door's owner check them.
 
 What this page covers is a convention built on them, not part of the protocol:
@@ -16,13 +16,13 @@ people at either side of a door, have to agree on what follows.
 ## `std.door`
 
 An account's doors are `std.door` records in its **contacts space**
-([spec 03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
+([spec 03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)),
 which only the account can find and every one of its devices holds.
 
 | Field    | Type                 |                                                                                                                                       |
 | -------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`     | string, 16–64 chars  | The door id both keys are derived from ([spec 07 §1](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md))               |
-| `relays` | string[], 1–3        | Relay URLs, each passing the door code's relay check ([spec 07 §3](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md)) |
+| `id`     | string, 16–64 chars  | The door id both keys are derived from ([spec 07 §1](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md))               |
+| `relays` | string[], 1–3        | Relay URLs, each passing the door code's relay check ([spec 07 §3](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)) |
 | `name`   | string ≤64, optional | The name the code gives whoever knocks                                                                                                |
 | `label`  | string ≤64, optional | What the owner calls the door; never leaves the contacts space                                                                        |
 
@@ -58,7 +58,7 @@ _Source: `packages/core/src/schemas/contacts.ts` (`door`), `packages/core/src/no
 1. parses the code, and refuses one of its own doors;
 2. creates a private space named `"<own name> & <code name>"` with the `team`
    role preset, defines `std.knock-answer` in it, and makes an editor invite;
-3. seals the knock ([spec 07 §6](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md))
+3. seals the knock ([spec 07 §6](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md))
    and drops it at **every** relay the code names, since any one of them may
    lose it (the reference relay keeps its mailbox in memory, so a restart
    loses what it held);
@@ -78,7 +78,7 @@ Once its membership in the space for two has landed, it writes the
 **answer**:
 
 ```
-std.knock-answer { sig }      sig = door signing key over UTF-8("weave/knock-answer/v1|" + space + "|" + own account DID)
+std.knock-answer { sig }      sig = door signing key over UTF-8("minca/knock-answer/v1|" + space + "|" + own account DID)
 ```
 
 `sig` is ECDSA P-256 / SHA-256, P1363 (64 bytes), base64url, like every
@@ -103,18 +103,18 @@ longer held is deleted.
 written, and the knocker is not blocked. **Clearing** a door purges all of its
 knocks and keeps the door open.
 
-| Collection         | Fields                                                                          | Rules                | Where                    |
-| ------------------ | ------------------------------------------------------------------------------- | -------------------- | ------------------------ |
-| `std.knock`        | `space` ≤256, `name` ≤64, `door` ≤64, `sign` ≤64, `invite` ≤8000 (all required) | `onePer: ['space']`  | Knocker's contacts space |
-| `std.knock-answer` | `sig` ≤200 (required)                                                           | edit/delete: creator | The space for two        |
-| `std.contact`      | adds `door` ≤64, optional                                                       | as before            | Owner's contacts space   |
+| Collection         | Fields                                                                          | Rules               | Where                    |
+| ------------------ | ------------------------------------------------------------------------------- | ------------------- | ------------------------ |
+| `std.knock`        | `space` ≤256, `name` ≤64, `door` ≤64, `sign` ≤64, `invite` ≤8000 (all required) | `onePer: ['space']` | Knocker's contacts space |
+| `std.knock-answer` | `sig` ≤200 (required)                                                           | —                   | The space for two        |
+| `std.contact`      | adds `door` ≤64, optional                                                       | as before           | Owner's contacts space   |
 
 **Who may.** Knocking and accepting create or join a space, so they need a note
-that grants `account/write` for every space (`with: '*'`), as `contacts.ask`
+that grants `/account/write` for the whole account, as `contacts.ask`
 does, and the contact key. Doors are the person's: a node whose note lacks
-`account/write`, such as an agent's, refuses to open, close, clear, read,
+`/account/write`, such as an agent's, refuses to open, close, clear, read,
 knock, accept or dismiss. A home never gives an agent the
-contact key in the first place ([spec 06 §2.8](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+contact key in the first place ([spec 06 §2.8](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/node/node.ts` (Doors), `packages/core/src/node/types.ts` (`NodeDoors`), `packages/core/src/schemas/contacts.ts` (`knock`, `knockAnswer`, `contact`), `packages/core/src/doors/doors.ts` (`signAnswer`, `checkAnswer`), `packages/core/src/session/auth.ts` (`grant`). Tests: `packages/core/tests/doors.test.ts` ("node.doors"), `packages/core/tests/records-only.test.ts`._
 
@@ -138,7 +138,7 @@ _Source: `packages/core/src/network/mailbox.ts` (`createMailboxClient`)._
 
 The protocol side of names (a handle resolving to a door code, and a checked
 handle on a knock) is planned in
-[spec 07 §9](https://github.com/leifriksheim/weave/blob/main/spec/07-doors.md).
+[spec 07 §9](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md).
 On this side:
 
 - `node.doors.knock` accepts a handle wherever it takes a code.

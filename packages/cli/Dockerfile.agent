@@ -1,4 +1,4 @@
-# `weave agent --no-chat` as an image: your agent, or a community's bot, always
+# `minca agent --no-chat` as an image: your agent, or a community's bot, always
 # on. Built from the repository root, like the host's image:
 #
 #   docker build -f packages/cli/Dockerfile.agent .
@@ -15,11 +15,11 @@ COPY apps/home/package.json apps/home/
 COPY apps/example/package.json apps/example/
 COPY apps/extension/package.json apps/extension/
 # Optional dependencies stay in: node-datachannel's prebuilt binary for this platform is one.
-RUN npm ci --ignore-scripts --workspace @weaveprotocol/cli
+RUN npm ci --ignore-scripts --workspace @minca/cli
 COPY packages/core packages/core
 COPY packages/relay packages/relay
 COPY packages/cli packages/cli
-RUN npm run bundle -w @weaveprotocol/cli
+RUN npm run bundle -w @minca/cli
 
 # The runtime: Node, the bundle, and its two outside dependencies: `ws`, and
 # node-datachannel (WebRTC, to meet the account's devices) with its binary.
@@ -30,16 +30,16 @@ COPY --from=build /repo/node_modules/ws node_modules/ws
 COPY --from=build /repo/node_modules/node-datachannel node_modules/node-datachannel
 COPY --from=build /repo/node_modules/@node-datachannel node_modules/@node-datachannel
 COPY --from=build /repo/node_modules/detect-libc node_modules/detect-libc
-COPY --from=build /repo/packages/cli/dist/weave.mjs dist/weave.mjs
-# `weave` for `fly ssh console`, as the user the agent runs as.
-RUN printf '#!/bin/sh\nexec su-exec node node /app/dist/weave.mjs "$@"\n' > /usr/local/bin/weave && chmod +x /usr/local/bin/weave
+COPY --from=build /repo/packages/cli/dist/minca.mjs dist/minca.mjs
+# `minca` for `fly ssh console`, as the user the agent runs as.
+RUN printf '#!/bin/sh\nexec su-exec node node /app/dist/minca.mjs "$@"\n' > /usr/local/bin/minca && chmod +x /usr/local/bin/minca
 
 # The agent's key, its note and its copy of the spaces live here: a volume.
-ENV WEAVE_HOME=/data
+ENV MINCA_HOME=/data
 # `--bot` for a community's bot (an account of its own), or empty for your agent.
-ENV WEAVE_AGENT_ARGS=""
+ENV MINCA_AGENT_ARGS=""
 
-# Waits until there is something to run: an agent connected (`weave connect`
-# over `fly ssh console`), or a bot made (`weave agent --bot`, kept in
+# Waits until there is something to run: an agent connected (`minca connect`
+# over `fly ssh console`), or a bot made (`minca agent --bot`, kept in
 # bots/<name>). Then runs it; restarts bring it back.
-CMD ["sh", "-c", "mkdir -p \"$WEAVE_HOME\" && chown -R node:node \"$WEAVE_HOME\" && until [ -f \"$WEAVE_HOME/agent/grant.json\" ] || ls \"$WEAVE_HOME\"/bots/*/accounts.json >/dev/null 2>&1; do echo 'Nothing to run yet: connect an agent or make a bot over fly ssh console'; sleep 30; done; exec su-exec node node dist/weave.mjs agent --no-chat $WEAVE_AGENT_ARGS"]
+CMD ["sh", "-c", "mkdir -p \"$MINCA_HOME\" && chown -R node:node \"$MINCA_HOME\" && until [ -f \"$MINCA_HOME/agent/grant.json\" ] || ls \"$MINCA_HOME\"/bots/*/accounts.json >/dev/null 2>&1; do echo 'Nothing to run yet: connect an agent or make a bot over fly ssh console'; sleep 30; done; exec su-exec node node dist/minca.mjs agent --no-chat $MINCA_AGENT_ARGS"]

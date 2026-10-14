@@ -12,18 +12,19 @@ import type { CryptoProvider, Space, SpaceRole, SpaceVisibility, StorageAdapter 
 import { createP256Provider } from '../identity/crypto-p256.js';
 import { base64UrlEncode, base64UrlDecode, utf8Encode, utf8Decode } from '../utils/encoding.js';
 import { generateSpaceKey, spaceKeyFromRaw, type SpaceKey } from '../privacy/space-encryption.js';
+import { deriveInviteKey, deriveReadKey, type SpaceKeyPair } from './space-access.js';
 import {
   checkSpace,
-  checkStartingRoles,
-  deriveInviteKey,
-  deriveReadKey,
-  spaceGenesis,
+  constitutionProblem,
+  CONSTITUTION,
+  foundersOf,
   spaceIdOf,
-  type SpaceKeyPair,
-} from './space-access.js';
+  type Constitution,
+} from './constitution.js';
 import type { InvitePreview } from '../node/types.js';
 import { solo } from './presets.js';
-import { checkRelays } from './roles.js';
+import { checkRelays, STRONG_REMOVE } from './roles.js';
+import { isRecord } from '../utils/guards.js';
 
 /** A space plus the secrets this node holds for it */
 export interface SpaceRecord {
@@ -65,10 +66,33 @@ export interface CreateSpaceParams {
   readonly name: string;
   readonly visibility: SpaceVisibility;
   readonly creator: string;
-  /** The roles it starts with. Default: the creator alone, holding everything (`presets.solo`). */
+  /** The roles it is founded with, and their grants. Default: none, so the founders alone (`presets.solo`). */
   readonly roles?: ReadonlyArray<SpaceRole>;
-  readonly creatorRole?: string;
+  /**
+   * `founders` (the default): the creator, and any `cofounders`, hold every
+   * command and can't be removed by anyone else. `none`: no one is above the
+   * roles, and the creator holds only what `assigned` gives it.
+   */
+  readonly top?: 'founders' | 'none';
+  /** Under `top: founders`, who founds it with the creator */
+  readonly cofounders?: ReadonlyArray<string>;
+  /** Roles the constitution assigns, account → role names: under `top: none`, the creator's at least */
+  readonly assigned?: Readonly<Record<string, ReadonlyArray<string>>>;
+  /** The space this one succeeds: name it there too, with `spaces.succeed` */
+  readonly succeeds?: string;
 }
+
+/** A frozen copy of a founding role, so nothing the caller holds changes the constitution later */
+const copyRole = (role: SpaceRole): SpaceRole =>
+  Object.freeze({
+    name: role.name,
+    ...(role.title !== undefined ? { title: role.title } : {}),
+    grants: Object.freeze(role.grants.map((grant) => Object.freeze({ cmd: grant.cmd, pol: grant.pol }))),
+    ...(role.nests !== undefined ? { nests: Object.freeze([...role.nests]) } : {}),
+  });
+
+/** What a space record says of the account that founded it, in place of a role */
+export const FOUNDER = 'founder';
 
 /** What an invite carries: enough to find the space, to read it if it is private, and to join it if it says so */
 export interface SpaceInvite {
@@ -162,8 +186,14 @@ export function createSpaceManager(
 ): SpaceManager {
   async function readSpace(spaceId: string): Promise<Space | null> {
     const bytes = await adapter.get(`${SPACE_PREFIX}${spaceId}`);
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- what writeSpace stored
-    return bytes ? (JSON.parse(utf8Decode(bytes)) as Space) : null;
+    if (!bytes) return null;
+    const stored: unknown = JSON.parse(utf8Decode(bytes));
+    if (!isRecord(stored)) return null;
+    // One kept in an older format, or naming a resolver this version doesn't know, isn't judged here.
+    const { id: _id, ...constitution } = stored;
+    if (constitutionProblem(constitution) !== null) return null;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- what writeSpace stored, its constitution checked
+    return stored as unknown as Space;
   }
 
   async function writeSpace(space: Space): Promise<void> {
@@ -223,32 +253,42 @@ export function createSpaceManager(
       // A nonce keeps two spaces made alike from colliding on one id.
       const nonce = base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(12)));
       const roles = params.roles ?? solo.roles;
-      const creatorRole =
-        params.creatorRole ??
-        (params.roles ? [...roles].sort((a, b) => b.rank - a.rank)[0]?.name : solo.creatorRole) ??
-        '';
-      const problem = checkStartingRoles(roles, creatorRole);
-      if (problem) throw new Error(problem);
-
+      const founders = [params.creator, ...(params.cofounders ?? []).filter((did) => did !== params.creator)];
       const key = params.visibility === 'private' ? await generateSpaceKey() : null;
-      const fixed = {
+      const assigned =
+        params.assigned && Object.keys(params.assigned).length > 0 ? params.assigned : undefined;
+      const fixed: Constitution = {
+        minca: CONSTITUTION,
+        name: params.name,
         visibility: params.visibility,
-        creator: params.creator,
-        roles: roles.map((role) =>
-          Object.freeze({ ...role, permissions: Object.freeze([...role.permissions]) }),
-        ),
-        creatorRole,
+        resolver: STRONG_REMOVE,
+        top: params.top === 'none' ? 'none' : { founders },
+        roles: roles.map(copyRole),
+        ...(assigned
+          ? {
+              assigned: Object.fromEntries(
+                Object.entries(assigned).map(([did, names]) => [did, Object.freeze([...names])]),
+              ),
+            }
+          : {}),
+        ...(params.succeeds !== undefined ? { succeeds: params.succeeds } : {}),
         createdAt,
         nonce,
         ...(key ? { readKey: (await deriveReadKey(key, provider)).did, encryptionKeyId: key.id } : {}),
       };
-      const id = await spaceIdOf(spaceGenesis(fixed));
-      const space: Space = Object.freeze({ id, ...fixed, name: params.name });
+      const problem = constitutionProblem(fixed);
+      if (problem) throw new Error(problem);
+      const id = await spaceIdOf(fixed);
+      const space: Space = Object.freeze({ id, ...fixed });
+      const role = foundersOf(space).includes(params.creator)
+        ? FOUNDER
+        : ([...(assigned?.[params.creator] ?? [])].sort()[0] ?? null);
+      if (role === null) throw new Error('Its creator must be a founder or hold a role in it');
 
       await writeSpace(space);
       if (key) await writeKey(id, key);
-      await adapter.put(`${ROLE_PREFIX}${id}`, utf8Encode(creatorRole));
-      return { space, key, keys: key ? [key] : [], invite: null, role: creatorRole };
+      await adapter.put(`${ROLE_PREFIX}${id}`, utf8Encode(role));
+      return { space, key, keys: key ? [key] : [], invite: null, role };
     },
 
     async get(spaceId: string): Promise<SpaceRecord | null> {
@@ -403,9 +443,16 @@ export function bareInvite(invite: string): string {
 /** What an invite or a share link says, read without storage or a node — `spaces.preview` */
 export function previewInvite(invite: string): InvitePreview {
   const parsed = parseSpaceInvite(bareInvite(invite));
-  const { id, name, visibility, creator, createdAt } = parsed.space;
+  const { id, name, visibility, createdAt, succeeds } = parsed.space;
   return {
-    space: { id, name, visibility, creator, createdAt },
+    space: {
+      id,
+      name,
+      visibility,
+      founders: foundersOf(parsed.space),
+      createdAt,
+      ...(succeeds !== undefined ? { succeeds } : {}),
+    },
     invitedBy: parsed.invitedBy,
     carriesKey: typeof parsed.key === 'string',
     carriesWrite: typeof parsed.invite === 'string',

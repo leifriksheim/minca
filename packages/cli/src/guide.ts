@@ -1,27 +1,27 @@
 /**
  * The flows a person follows once, walked through at a terminal: which model
- * an agent thinks with, a rule, a standard collection. Each is also a set of
+ * an agent thinks with, an automation, a standard collection. Each is also a set of
  * flags, so an agent or a script gets there without being asked anything
  * (`ask.ts`).
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { DEFINE, roleHolds, type P2PNode } from '@weaveprotocol/core';
+import { COLLECTION_DEFINE, type P2PNode } from '@minca/core';
 import {
   SCHEDULES,
   checkCron,
   profile,
-  rule,
-  ruleRun,
+  automation,
+  automationRun,
   standardDefinition,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import * as ask from './ask.js';
 import { pickCollection, pickSpace } from './complete.js';
 import { commaList, errorCode, isRecord } from './json.js';
 
 // ─── Which model an agent thinks with ─────────────────────────────────
 
-/** What `weave agent` was told to think with: flags, the environment, or what setup kept */
+/** What `minca agent` was told to think with: flags, the environment, or what setup kept */
 export interface ModelSetting {
   readonly provider: 'anthropic' | 'openai';
   readonly model: string;
@@ -114,7 +114,7 @@ export async function loadModelSetting(home: string): Promise<ModelSetting | nul
  * Asks which model to think with, and keeps the answer for next time, in the
  * agent's folder. Only at a terminal; `--provider`, `--model`, `--base-url`
  * and `--price` say the same without asking.
- * @param knowsPrice Whether `weave agent` knows a model's price itself
+ * @param knowsPrice Whether `minca agent` knows a model's price itself
  */
 export async function setUpModel(
   home: string,
@@ -157,7 +157,7 @@ export async function setUpModel(
   };
   await writeFile(settingFile(home), `${JSON.stringify(setting, null, 2)}\n`, { mode: 0o600 });
   ask.note(
-    `Kept in ${settingFile(home)}.\n\`weave agent --setup\` asks again; flags such as --model win over it.`,
+    `Kept in ${settingFile(home)}.\n\`minca agent --setup\` asks again; flags such as --model win over it.`,
     'Saved',
   );
   return setting;
@@ -206,20 +206,20 @@ const readJson = (text: string, flag: string): Record<string, unknown> => {
 };
 
 /**
- * Adds a `std.rule` to a space that asks an agent: what the account's own
+ * Adds a `std.automation` to a space that asks an agent: what the account's own
  * agent, or a bot there, does when some records appear or change, or at set
- * times. Defines `std.rule` first when the space lacks it and this account may
+ * times. Defines `std.automation` first when the space lacks it and this account may
  * add collections.
  */
 export async function addRule(node: P2PNode, flags: RuleFlags): Promise<unknown> {
-  ask.intro('A new rule');
+  ask.intro('A new automation');
   const space = flags.space ?? (await pickSpace(node, 'Which space is it for?'));
   const collections = await node.collections.list(space);
-  for (const definition of [rule, ruleRun]) {
+  for (const definition of [automation, automationRun]) {
     if (collections.some((c) => c.name === definition.name && c.version !== null)) continue;
-    if (!roleHolds((await node.spaces.access(space)).role, DEFINE))
+    if (!(await node.spaces.may(space, COLLECTION_DEFINE, { collection: definition.name })))
       throw new Error(
-        'This space has no rules yet, and you may not add collections to it. Ask someone who can, or `weave collections define --standard std.rule`.',
+        'This space has no automations yet, and you may not add collections to it. Ask someone who can, or `minca collections define --standard std.automation`.',
       );
     await node.collections.define(space, definition);
   }
@@ -337,14 +337,14 @@ export async function addRule(node: P2PNode, flags: RuleFlags): Promise<unknown>
     ...(by ? { by } : {}),
     since: new Date().toISOString(),
   };
-  const written = await node.records.put(space, rule.name, body);
+  const written = await node.records.put(space, automation.name, body);
   ask.outro(
-    `“${name}” is on. ${by ? 'The bot' : 'Your agent'} runs it while \`weave agent${by ? ' --bot' : ''}\` does.`,
+    `“${name}” is on. ${by ? 'The bot' : 'Your agent'} runs it while \`minca agent${by ? ' --bot' : ''}\` does.`,
   );
   return { key: written.key, space, ...body };
 }
 
-/** Who runs a rule: the account's own agent, or a bot that says so on its profile here */
+/** Who runs an automation: the account's own agent, or a bot that says so on its profile here */
 async function pickRunner(node: P2PNode, space: string): Promise<string | undefined> {
   const bots = (await node.records.list(space, { collection: profile.name }).catch(() => [])).filter(
     (record) => isRecord(record.body) && record.body.bot === true && !!record.createdBy,
@@ -356,7 +356,7 @@ async function pickRunner(node: P2PNode, space: string): Promise<string | undefi
     flag: 'by',
     message: 'Who runs it?',
     options: [
-      { value: mine, label: 'My own agent', hint: 'weave agent' },
+      { value: mine, label: 'My own agent', hint: 'minca agent' },
       ...bots.map((record) => ({
         value: record.createdBy!,
         label: names.get(record.createdBy!) ?? record.createdBy!,
@@ -373,7 +373,7 @@ async function pickRunner(node: P2PNode, space: string): Promise<string | undefi
 export async function defineStandard(node: P2PNode, name: string, space?: string): Promise<unknown> {
   const definition = standardDefinition(name);
   if (!definition)
-    throw new Error(`The library has no ${name}. \`weave collections standard\` lists what it has.`);
+    throw new Error(`The library has no ${name}. \`minca collections standard\` lists what it has.`);
   const target = space ?? (await pickSpace(node, `Which space should get ${name}?`));
   return node.collections.define(target, definition);
 }

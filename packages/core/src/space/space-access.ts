@@ -2,13 +2,10 @@
  * What a space is, fixed at creation — and the keys around it that anyone can
  * check without holding a secret.
  *
- * The space's **genesis** names its creator, its visibility, the roles it
- * starts with and which of them the creator holds, and — for a private space —
- * the public half of its read key. The space id is the genesis's hash. A space
- * someone hands you — in an invite, from a host — either hashes to its id or
- * is refused, so nobody can quietly change who started it or with which roles.
- * Everything after that — new roles, members, invites — is records in the
- * space's access history (`space/roles.ts`).
+ * What a space is, fixed at creation, is its constitution
+ * (`space/constitution.ts`), whose hash is the space id. Everything after
+ * that — definitions, assignments, invites — is records in the space's
+ * access history (`space/roles.ts`); their keys are made here.
  *
  * A private space's **read key pair** is derived from its AES key, so everyone
  * who can read already has it. A node checks a connecting reader against its
@@ -20,36 +17,20 @@
  * the space and their identity — so the signature cannot be moved to anyone
  * else, or another space. Deleting the invite record closes the link.
  */
-import type { CryptoProvider, Space } from '../types.js';
+import type { CryptoProvider } from '../types.js';
 import type { SpaceKey } from '../privacy/space-encryption.js';
-import { canonicalize } from '../schema/version.js';
-import { newRecordKey } from '../records/version.js';
-import { cidFromBytes, hashedKey } from '../utils/hash.js';
+import { hashedKey } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
 import { bufferSource } from '../utils/guards.js';
 import { didOf, didToPublicKey } from '../identity/did.js';
-import { checkRole } from './roles.js';
 
-const READ_INFO = 'weave/space-read/v1';
-const INVITE_INFO = 'weave/space-invite/v1';
+const READ_INFO = 'minca/space-read/v1';
+const INVITE_INFO = 'minca/space-invite/v1';
 
 /** A key pair belonging to a space, and its public half as a did:key */
 export interface SpaceKeyPair {
   readonly did: string;
   readonly privateKey: CryptoKey;
-}
-
-/** What a space is, fixed at creation. Its hash is the space id. */
-export interface SpaceGenesis {
-  readonly v: 2;
-  readonly creator: string;
-  readonly visibility: Space['visibility'];
-  readonly roles: Space['roles'];
-  readonly creatorRole: string;
-  readonly createdAt: string;
-  readonly nonce: string;
-  readonly readKey?: string;
-  readonly encryptionKeyId?: string;
 }
 
 /** A fresh secret for an invite link */
@@ -107,69 +88,15 @@ export async function readKeyFromSeed(seed: Uint8Array, provider: CryptoProvider
   return Object.freeze({ did, privateKey: pair.privateKey });
 }
 
-/** The fields of a space its id is made from */
-export function spaceGenesis(space: Omit<Space, 'id' | 'name'>): SpaceGenesis {
-  return {
-    v: 2,
-    creator: space.creator,
-    visibility: space.visibility,
-    roles: space.roles,
-    creatorRole: space.creatorRole,
-    createdAt: space.createdAt,
-    nonce: space.nonce,
-    ...(space.readKey ? { readKey: space.readKey } : {}),
-    ...(space.encryptionKeyId ? { encryptionKeyId: space.encryptionKeyId } : {}),
-  };
-}
-
-/** The id a space with this genesis has */
-export function spaceIdOf(genesis: SpaceGenesis): Promise<string> {
-  return cidFromBytes(utf8Encode(canonicalize(genesis)));
-}
-
-/** Why a set of starting roles cannot found a space, or null */
-export function checkStartingRoles(roles: unknown, creatorRole: unknown): string | null {
-  if (!Array.isArray(roles) || roles.length === 0 || roles.length > 64)
-    return 'A space starts with 1–64 roles';
-  for (const role of roles) {
-    const problem = checkRole(role);
-    if (problem) return problem;
-  }
-  if (new Set(roles.map((role: { name: string }) => role.name)).size !== roles.length)
-    return 'Two starting roles share a name';
-  if (!roles.some((role: { name: string }) => role.name === creatorRole))
-    return "The creator's role is not one of the starting roles";
-  return null;
-}
-
-/**
- * Why a space someone handed over cannot be trusted, or null when it can:
- * its id must be its genesis's hash, and it must have the keys its kind needs.
- */
-export async function checkSpace(space: Space): Promise<string | null> {
-  if (typeof space?.id !== 'string' || typeof space.nonce !== 'string' || typeof space.creator !== 'string') {
-    return 'It is missing what identifies it';
-  }
-  if (space.visibility !== 'public' && space.visibility !== 'private')
-    return 'Its visibility is not public or private';
-  const roles = checkStartingRoles(space.roles, space.creatorRole);
-  if (roles) return roles;
-  if (space.visibility === 'private' && (!space.readKey || !space.encryptionKeyId))
-    return 'A private space must name its read key';
-  if (space.visibility === 'public' && (space.readKey || space.encryptionKeyId))
-    return 'A public space has no read key';
-  if ((await spaceIdOf(spaceGenesis(space))) !== space.id)
-    return 'Its id does not match what it says about itself';
-  return null;
-}
-
 // ─── Record keys in the access history ────────────────────────────────
 //
 // Record keys are lower case; DIDs and CIDs are not. So a key names a hash of
 // the thing, and the record's body names the thing itself.
 
-/** The key of an account's member record */
-export const memberKey = (did: string) => hashedKey('member', did);
+/** The key of the record assigning a role to an account, or taking it away */
+export const assignKey = (did: string, role: string) => hashedKey('assign', `${did}|${role}`);
+/** The key of the record removing an account from the space */
+export const removalKey = (did: string) => hashedKey('remove', did);
 /** The key of an invite's record, from its public key */
 export const inviteKey = (inviteDid: string) => hashedKey('invite', inviteDid);
 /** The key of an account's record revoking one of its keys: naming both, so no one else's can take its place */
@@ -182,13 +109,12 @@ export const revokeKey = (keyDid: string, accountDid: string) =>
  * checks its proof only to decide whether to show a flag (docs/warrants.md).
  */
 export const WARRANT_COLLECTION = 'std.warrant';
-/**
- * A fresh key for a warrant: random, so nobody can claim it before its writer
- * does. What a warrant proves is in its body, not its key.
- */
-export const newWarrantKey = () => `warrant:${newRecordKey()}`;
 /** The key of the record proving a writer's log forked, from the writer's key */
 export const forkKey = (writerDid: string) => hashedKey('fork', writerDid);
+/** The key of the record by which a founder steps down, keeping its roles */
+export const stepDownKey = (did: string) => hashedKey('stepdown', did);
+/** The key of the record naming a successor space, from the successor's id */
+export const succeedKey = (spaceId: string) => hashedKey('succeed', spaceId);
 /** The key of a role's record */
 export const roleKey = (name: string) => `role:${name}`;
 /**
@@ -210,7 +136,7 @@ export const SPACE_KEY_RECORD = 'key:space';
 /** The key of a sealed copy of a space key: one per key, recipient and sender */
 export const boxKey = (keyId: string, to: string, from: string) => hashedKey('box', `${keyId}|${to}|${from}`);
 /** The HPKE label a box is sealed under (spec 01 §9.3; spec 03 §9.4) */
-export const BOX_LABEL = 'weave/space-key-box/v1';
+export const BOX_LABEL = 'minca/space-key-box/v1';
 /** What a box is bound to, so one moved to another space, key or person doesn't open */
 export const boxBound = (space: string, keyId: string, to: string) => ({ space, keyId, to });
 

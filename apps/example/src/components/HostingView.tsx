@@ -1,6 +1,6 @@
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { SpaceHosting } from '@weave/app-shared/SpaceHosting';
-import { SpaceBots } from '@weave/app-shared/CommunitySetup';
+import type { SpaceSummary } from '@minca/core';
+import { SpaceHosting } from '@minca/app-shared/SpaceHosting';
+import { SpaceBots } from '@minca/app-shared/CommunitySetup';
 import { styles, palette } from '../styles';
 
 /** Keeping a space online: its host, its fund, and the AI helpers that host runs */

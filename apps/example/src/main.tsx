@@ -6,8 +6,8 @@ import { Developers } from './site/Site';
 import { Home } from './site/Home';
 import { Protocol } from './site/Protocol';
 import { Extension } from './site/Extension';
-import { WeaveProvider } from '@weaveprotocol/core/react';
-import { connection } from './weave';
+import { MincaProvider } from '@minca/core/react';
+import { connection } from './minca';
 
 /** The site's pages, and the app at `/app`; a link with an invite, door or pairing code in its fragment still opens the app */
 const path = globalThis.location.pathname.replace(/\/+$/, '') || '/';
@@ -46,9 +46,9 @@ createRoot(root).render(
   ) : page === 'extension' ? (
     <Extension />
   ) : (
-    // Every component in the app asks this for Weave.
-    <WeaveProvider connection={connection}>
+    // Every component in the app asks this for Minca.
+    <MincaProvider connection={connection}>
       <App />
-    </WeaveProvider>
+    </MincaProvider>
   ),
 );

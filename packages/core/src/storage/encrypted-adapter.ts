@@ -22,7 +22,7 @@ import type { StorageAdapter, BatchOp } from '../types.js';
 import { openEnvelope, sealEnvelope } from '../identity/envelope.js';
 
 /** The envelope label of a value sealed at rest; bound to `{ entry }`, its storage key */
-const AT_REST_LABEL = 'weave/at-rest/v1';
+const AT_REST_LABEL = 'minca/at-rest/v1';
 
 /**
  * What gets sealed by default: every entry of the space registry — each

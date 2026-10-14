@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { DEFINE, MANAGE, roleHolds } from '@weaveprotocol/core';
-import { useAccess, useCollections, useNode } from '@weaveprotocol/core/react';
-import { activity, profile } from '@weaveprotocol/core/schemas';
+import { COLLECTION_DEFINE, SPACE_KEEPERS } from '@minca/core';
+import { useCollections, useNode } from '@minca/core/react';
+import { useAssignable, useMay } from './may';
+import { activity, profile } from '@minca/core/schemas';
 import { Modal } from './Modal';
 import { Benefit, FeatureIcon, Glyph, StatusPill } from './Feature';
 import {
@@ -18,18 +19,15 @@ import { styles, palette } from './styles';
 
 /** Where running a bot on a server is explained */
 const SERVER_GUIDE =
-  'https://github.com/leifriksheim/weave/blob/main/packages/cli/README.md#always-on-on-a-server';
-const HIDDEN_KEY = 'weave-community-upgrades-hidden';
+  'https://github.com/leifriksheim/minca/blob/main/packages/cli/README.md#always-on-on-a-server';
+const HIDDEN_KEY = 'minca-community-upgrades-hidden';
 /** How long "Not now" keeps the upgrades out of the way */
 const NOT_NOW_MS = 30 * 24 * 3600 * 1000;
-/** How the CLI is run where this app is built, from the connect command (`VITE_WEAVE_CONNECT`) */
-const CLI = (import.meta.env.VITE_WEAVE_CONNECT ?? 'npx @weaveprotocol/cli connect').replace(
-  /\s+connect$/,
-  '',
-);
+/** How the CLI is run where this app is built, from the connect command (`VITE_MINCA_CONNECT`) */
+const CLI = (import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect').replace(/\s+connect$/, '');
 
 /**
- * What an admin can add to a community, at the top of its screen: two tiles,
+ * What whoever manages a community can add to it, at the top of its screen: two tiles,
  * Always online and an AI helper, each opening a dialog. Only those who may
  * manage the community see it, and "Not now" puts it away for a month.
  */
@@ -44,13 +42,12 @@ export function CommunitySetup({
   cli?: string;
   onAutomations?: () => void;
 }) {
-  const access = useAccess(spaceId);
   const { hosts, bots, look, lookBots } = useSpaceBots(spaceId, writable);
   const { offer } = useOffer();
   const [dialog, setDialog] = useState<'online' | 'bot' | null>(null);
   // Put away with "Not now" until a date, asked once when it first shows.
   const [hidden, setHidden] = useState(() => (readHidden()[spaceId] ?? 0) > Date.now());
-  const mayManage = writable && roleHolds(access?.role, MANAGE);
+  const mayManage = useMay(spaceId, SPACE_KEEPERS) && writable;
 
   useEffect(() => {
     if (!mayManage) return;
@@ -101,7 +98,7 @@ export function CommunitySetup({
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
         <Tile
-          icon={<FeatureIcon kind="online" glyph="cloud" />}
+          icon={<FeatureIcon kind="online" />}
           title="Always online"
           pill={onlineView ? <StatusPill tone={onlineView.tone}>{onlineView.pill}</StatusPill> : null}
           detail="Reachable when everyone's offline. Encrypted, so the host can't read it."
@@ -127,7 +124,7 @@ export function CommunitySetup({
           }
         />
         <Tile
-          icon={<FeatureIcon kind="bot" glyph="sparkle" />}
+          icon={<FeatureIcon kind="bot" />}
           title="AI helper"
           pill={
             botNames.length ? (
@@ -204,7 +201,7 @@ function Tile({
         flexDirection: 'column',
         gap: 12,
         padding: 16,
-        borderRadius: 12,
+        borderRadius: palette.radius.lg,
         border: `1px solid ${palette.surface.line}`,
         background: palette.surface.card,
       }}
@@ -257,15 +254,14 @@ export function AddBotDialog({
   onClose: () => void;
 }) {
   const node = useNode();
-  const access = useAccess(spaceId);
   const collections = useCollections(spaceId);
   const { hosts, look } = useSpaceHosts(spaceId, writable);
   const host = onlineHost(hosts);
   const profiles = collections.some((c) => c.name === profile.name && c.version !== null);
-  const mayDefine = roleHolds(access?.role, DEFINE);
-  // Roles below one's own, lowest first: what an invite may give. A bot needs no more than it must.
-  const mine = access?.roles.findIndex((role) => role.name === access.role?.name) ?? -1;
-  const roles = (access?.roles ?? []).slice(mine + 1).reverse();
+  const mayDefine = useMay(spaceId, COLLECTION_DEFINE, { collection: profile.name });
+  // The roles one may give and holds every grant of, `member` first: a bot does what members
+  // ask, so it holds no more than whoever adds it, and needs no more than it must.
+  const roles = useAssignable(spaceId, { held: true });
   const [role, setRole] = useState<string | null>(null);
   const [name, setName] = useState('');
   const { run, busy, error: problem, setError: setProblem } = useAction();
@@ -297,7 +293,7 @@ export function AddBotDialog({
     <Modal title="Add an AI helper" onClose={onClose} width={460}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <FeatureIcon kind="bot" glyph="sparkle" size={44} />
+          <FeatureIcon kind="bot" size={44} />
           <div>
             <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
               {started ? started.name : called}
@@ -388,7 +384,7 @@ export function AddBotDialog({
               <div
                 style={{
                   padding: 12,
-                  borderRadius: 10,
+                  borderRadius: palette.radius.lg,
                   background: palette.surface.sunken,
                   fontSize: 13,
                   color: palette.ink.muted,
@@ -408,7 +404,7 @@ export function AddBotDialog({
                     Turn on profiles
                   </button>
                 ) : (
-                  'An admin who may add collections can turn them on.'
+                  'Someone who may add collections can turn them on.'
                 )}
               </div>
             )}
@@ -511,7 +507,7 @@ function Copyable({ text, secret = false }: { text: string; secret?: boolean }) 
         gap: 8,
         alignItems: 'center',
         padding: '6px 6px 6px 10px',
-        borderRadius: 8,
+        borderRadius: palette.radius.lg,
         border: `1px solid ${palette.surface.line}`,
         background: palette.surface.sunken,
       }}
@@ -553,10 +549,9 @@ export function SpaceBots({
   cli?: string;
   onAutomations?: () => void;
 }) {
-  const access = useAccess(spaceId);
   const { bots: listed, look, lookBots } = useSpaceBots(spaceId, writable);
   const [adding, setAdding] = useState(false);
-  const mayManage = writable && roleHolds(access?.role, MANAGE);
+  const mayManage = useMay(spaceId, SPACE_KEEPERS) && writable;
   if (!listed.length && !mayManage) return null;
   return (
     <section aria-label="AI helpers" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -575,11 +570,11 @@ export function SpaceBots({
             alignItems: 'center',
             gap: 14,
             padding: 14,
-            borderRadius: 12,
+            borderRadius: palette.radius.lg,
             border: `1px dashed ${palette.surface.lineStrong}`,
           }}
         >
-          <FeatureIcon kind="bot" glyph="sparkle" size={36} />
+          <FeatureIcon kind="bot" size={36} />
           <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.45 }}>
             A bot answers when mentioned, sums up long threads and posts reminders. It holds a role like any
             member.
@@ -590,7 +585,7 @@ export function SpaceBots({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            borderRadius: 12,
+            borderRadius: palette.radius.lg,
             border: `1px solid ${palette.surface.line}`,
           }}
         >
@@ -605,7 +600,7 @@ export function SpaceBots({
                 borderTop: i ? `1px solid ${palette.surface.line}` : 'none',
               }}
             >
-              <FeatureIcon kind="bot" glyph="sparkle" size={28} />
+              <FeatureIcon kind="bot" size={28} />
               <strong style={{ flex: 1, fontSize: 14, color: palette.ink.strong }}>{bot.name}</strong>
               {bot.state === 'on' ? (
                 <StatusPill tone="good">Running</StatusPill>

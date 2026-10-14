@@ -1,8 +1,8 @@
 import type { Envelope, Version, Link, UnsignedVersion, WriterLog } from '../types.js';
+import type { Delegation } from '../identity/ucan.js';
 import { utf8Encode } from '../utils/encoding.js';
-import { cidFromBytes } from '../utils/hash.js';
+import { base32Encode, cidFromBytes } from '../utils/hash.js';
 import { isRecord } from '../utils/guards.js';
-import { newRecordKey } from '../records/version.js';
 
 /** Parameters for creating a new version. */
 export interface CreateVersionParams<T> {
@@ -12,9 +12,14 @@ export interface CreateVersionParams<T> {
   readonly createdAt?: string;
   /** Space this version belongs to */
   readonly space?: string;
-  /** Encoded UCAN authorizing this author, when signing with a delegated key */
-  readonly proof?: string;
-  /** The record this is a version of. Default: a new record, with a fresh key, at seq 0. */
+  /** The note authorizing this author, when signing with a delegated key */
+  readonly proof?: Delegation;
+  /**
+   * The record this is a version of. Default: a first version at 128 random
+   * bits, which a peer takes only in a `sys.*` collection or outside a space:
+   * anywhere else a first version needs a key its account owns
+   * (`newRecordKey` in `records/key.ts`).
+   */
   readonly version?: {
     readonly key: string;
     readonly seq: number;
@@ -71,7 +76,7 @@ export function createVersion<T>(params: CreateVersionParams<T>): UnsignedVersio
     createdAt: params.createdAt ?? new Date().toISOString(),
     ...(params.space ? { space: params.space } : {}),
     ...(params.proof ? { proof: params.proof } : {}),
-    key: params.version?.key ?? newRecordKey(),
+    key: params.version?.key ?? base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16))),
     seq: params.version?.seq ?? 0,
     ...(params.version?.prev ? { prev: params.version.prev } : {}),
     ...(params.version?.genesis ? { genesis: params.version.genesis } : {}),

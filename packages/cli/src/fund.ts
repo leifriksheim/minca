@@ -12,7 +12,7 @@
  * Kept in the host's store, and in its bucket when it has one, as the
  * subscriptions are: a fund is money people paid.
  */
-import type { BlobStore, StorageAdapter } from '@weaveprotocol/core';
+import type { BlobStore, StorageAdapter } from '@minca/core';
 import { isRecord } from './json.js';
 
 export interface FundState {

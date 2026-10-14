@@ -1,0 +1,16 @@
+{
+  "name": "@minca/scenarios",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Minca's scenario suite: kinds of community, written as tests. Not published.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "scenarios": "node --experimental-vm-modules --import tsx --test tests/*.test.ts",
+    "datalog": "node --experimental-vm-modules --import tsx --test parked-datalog/tests/*.test.ts",
+    "test": "npm run scenarios && npm run datalog"
+  },
+  "devDependencies": {
+    "zod": "^4.6.5"
+  }
+}

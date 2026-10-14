@@ -5,7 +5,8 @@
  * nobody to ask (`ask.ts`), each missing value fails naming its flag and where
  * to look, so an agent is never left waiting.
  */
-import type { NodeAction, P2PNode } from '@weaveprotocol/core';
+import { ROLE_ASSIGN } from '@minca/core';
+import type { NodeAction, P2PNode } from '@minca/core';
 import * as ask from './ask.js';
 import { isRecord } from './json.js';
 
@@ -24,11 +25,11 @@ function summary(body: unknown): string {
 export async function pickSpace(node: P2PNode, message = 'Which space?'): Promise<string> {
   const spaces = await node.spaces.list();
   if (!spaces.length && ask.interactive())
-    throw new Error('This account is in no spaces yet. Create one with `weave spaces create`, or join one.');
+    throw new Error('This account is in no spaces yet. Create one with `minca spaces create`, or join one.');
   return ask.select({
     flag: 'space',
     message,
-    hint: 'Its id is in `weave spaces list`.',
+    hint: 'Its id is in `minca spaces list`.',
     options: spaces.map((space) => ({
       value: space.id,
       label: space.name,
@@ -43,7 +44,7 @@ export async function pickCollection(node: P2PNode, space: string): Promise<stri
   const picked = await ask.select({
     flag: 'collection',
     message: 'Which collection?',
-    hint: `The space's are in \`weave collections list --space ${space}\`.`,
+    hint: `The space's are in \`minca collections list --space ${space}\`.`,
     options: [
       ...defined.map((c) => ({ value: c.name, label: c.title || c.name, hint: c.name })),
       { value: other, label: 'Another…', hint: 'type its name' },
@@ -59,7 +60,7 @@ async function pickRecord(node: P2PNode, space: string): Promise<string> {
   return ask.select({
     flag: 'key',
     message: 'Which record?',
-    hint: `Keys are in \`weave records list --space ${space}\`.`,
+    hint: `Keys are in \`minca records list --space ${space}\`.`,
     options: records.map((record) => ({
       value: record.key,
       label: summary(record.body) || record.key,
@@ -74,8 +75,12 @@ async function pickPerson(node: P2PNode, space: string): Promise<string> {
   return ask.select({
     flag: 'did',
     message: 'Who?',
-    hint: `Members are in \`weave spaces access --space ${space}\`.`,
-    options: access.members.map((m) => ({ value: m.did, label: name(m.did), hint: m.role })),
+    hint: `Members are in \`minca spaces access --space ${space}\`.`,
+    options: access.members.map((m) => ({
+      value: m.did,
+      label: name(m.did),
+      hint: m.founder ? 'founder' : m.roles.join(', ') || 'no role',
+    })),
   });
 }
 
@@ -102,7 +107,7 @@ async function askFor(
     return ask.select({
       flag: 'role',
       message: 'Which role?',
-      hint: `Roles are in \`weave spaces access --space ${space}\`.`,
+      hint: `Roles are in \`minca spaces access --space ${space}\`.`,
       options: access.roles.map((role) => ({ value: role.name, label: role.title ?? role.name })),
     });
   }
@@ -130,14 +135,16 @@ async function askFor(
 }
 
 /**
- * An invite's role, picked from the roles below yours and "view only":
+ * An invite's role, picked from the roles you may give and "view only":
  * asked at a terminal when neither `--role` nor `--view-only` was given.
  */
 async function inviteRole(node: P2PNode, space: string): Promise<Record<string, unknown>> {
   if (!ask.interactive()) return {};
   const access = await node.spaces.access(space);
-  const mine = access.role?.rank ?? 0;
-  const below = access.roles.filter((role) => role.rank < mine);
+  const below: Array<(typeof access.roles)[number]> = [];
+  for (const role of access.roles)
+    if (await node.spaces.may(space, ROLE_ASSIGN, { role: role.name, self: false, roles: [] }))
+      below.push(role);
   const view = '\u0000view';
   const picked = await ask.select({
     flag: 'role',

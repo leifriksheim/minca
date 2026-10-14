@@ -7,6 +7,7 @@
 import type { JsonSchema } from '../../schema/collection-def.js';
 import type { LinkDeclaration } from '../../records/links.js';
 import type { CollectionRules } from '../../records/rules.js';
+import type { CollectionContract } from '../../records/contracts.js';
 import type { BodyOf } from '../../query/types.js';
 import { define, typed } from '../fragments.js';
 
@@ -20,6 +21,8 @@ export interface DraftCollection {
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
   readonly permissions?: ReadonlyArray<string>;
   readonly rules?: CollectionRules;
+  /** What a version must be to count, judged by readers */
+  readonly contract?: CollectionContract;
   /** Fields whose values keepers can match without reading: `mentions`, `channel` */
   readonly topics?: ReadonlyArray<string>;
 }
@@ -60,8 +63,6 @@ export const blueprint = typed<Blueprint>()({
     },
     required: ['title', 'collections'],
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 
 /**
@@ -92,8 +93,7 @@ export const guide = define({
     },
     required: ['name', 'title', 'text'],
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'], onePer: ['name'] },
+  rules: { onePer: ['name'] },
 });
 export type Guide = BodyOf<typeof guide>;
 

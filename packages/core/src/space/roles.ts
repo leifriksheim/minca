@@ -1,53 +1,68 @@
 /**
- * Who may do what in a space: its roles, its members, its invites, and the
- * history of changes to them — replayed the same way on every peer.
+ * Who may do what in a space: its roles and their grants, the accounts
+ * assigned to them, its invites, and the history of changes to them —
+ * replayed the same way on every peer, by `strong-remove/1`.
  *
- * This module knows people and permissions. It knows nothing about polls or
- * todos: a collection's rules name a permission (`can:moderate`), and this
- * module answers one question about it — *does this account hold that
- * permission here, as of this point in the space's history?*
+ * This module knows people and grants. It knows nothing about polls or
+ * todos: it answers one question, *may this account invoke this command with
+ * these arguments here, as of this point in the space's history?*
  *
- * **Roles.** A role is a name, a rank and a list of permissions. Permissions
- * are plain strings: three the protocol checks itself (`manage`, `invite`,
- * `define`) and whatever the collections in the space declare
- * (`app.poll/moderate`). A `*` in a role's permission matches any run of
- * characters, so `*` alone is every permission.
+ * **Grants.** A role holds grants (`space/grants.ts`): delegations to the
+ * role of a command path under a UCAN policy. The constitution's grants for
+ * a role are its first definition; a later definition replaces them. A
+ * definition holds only what its author could do as of the definition, and
+ * definitions written apart hold only the grants they share.
  *
- * **Rank.** You may change people and roles ranked below you, and give out
- * roles up to your own rank. Two people at the same rank can never remove each
- * other — only themselves.
+ * **Accounts.** An account holds power only through the roles assigned to
+ * it, and invokes nothing with none. Under `top: { founders }` the founders
+ * hold every command, and no one but each founder itself can remove one,
+ * change its roles or make it step down. Under `top: "none"` there are no
+ * founders, and anyone may be removed by whoever holds the grant.
  *
- * **The access history.** Every change to a role, a member, an invite, a
- * revoked key or a collection definition is a record whose `seen` names the
- * latest changes its author knew of. That makes a small graph, and no order
- * over it decides anything (spec 03 §4):
+ * **The access history.** Every change to a role, an assignment, a removal,
+ * an invite, a revoked key or a collection definition is a record whose
+ * `seen` names the latest changes its author knew of. That makes a small
+ * graph, and no order over it decides anything (spec 03 §4):
  *
  * 1. A change is allowed when its author had the power in its own view: the
  *    changes it saw that are valid among what it saw.
- * 2. A change that lowers someone in its own view, a revoke, a fork proof or
- *    a closed invite strikes the changes it reaches that its cutoff doesn't
- *    cover and that it hadn't seen (a revoke or a fork, whatever it saw).
- *    Changes that strike each other all stand.
- * 3. The state is a merge of the valid changes: on each record the latest,
- *    and of latest ones that didn't see each other, the one giving least.
+ * 2. A removal or an unassignment strikes what its account did that it
+ *    hadn't seen, whatever that needed. A revoke, a fork proof or a closed
+ *    invite strikes what it reaches. Changes that strike each other all
+ *    stand.
+ * 3. The state is a merge of the valid changes: on each record the latest.
+ *    Rival definitions of a role hold what they share, an unassignment beats
+ *    an assignment, and a closed invite an open one.
  */
 
-import type { SpaceRole } from '../types.js';
+import { commandCovers } from '../identity/ucan.js';
+import { canonicalize } from '../schema/version.js';
 import { isObject } from '../utils/guards.js';
+import {
+  COLLECTION_DEFINE,
+  grantFits,
+  grantShape,
+  KEY_CHANGE,
+  MEMBER_REMOVE,
+  ROLE_ASSIGN,
+  ROLE_DEFINE,
+  ROLE_UNASSIGN,
+  SPACE_KEEPERS,
+  SPACE_RELAYS,
+  SPACE_SUCCEED,
+  type FoundingRole,
+} from './grants.js';
+import type { SpaceGrant as Grant } from '../types.js';
 
-/** A role, as a space defines it */
-export type Role = SpaceRole;
-
-/** The permissions the protocol checks itself. Every other one belongs to a collection. */
-export const MANAGE = 'manage';
-export const INVITE = 'invite';
-export const DEFINE = 'define';
-
+/** A role's definitions */
 export const ROLE_COLLECTION = 'sys.role';
-export const MEMBER_COLLECTION = 'sys.member';
+/** Assigning a role to an account, and taking it away */
+export const ASSIGN_COLLECTION = 'sys.assign';
+/** Removing an account from the space */
+export const REMOVE_COLLECTION = 'sys.remove';
 export const INVITE_COLLECTION = 'sys.invite';
 export const REVOKE_COLLECTION = 'sys.revoke';
-/** Collection definitions are part of the access history too: they decide what a rule asks for */
+/** Collection definitions are part of the access history too: what a version must keep to */
 export const DEFINITION_COLLECTION = 'sys.collection';
 /**
  * A private space's key changes: the new key's id and public read key. The
@@ -58,14 +73,13 @@ export const KEY_COLLECTION = 'sys.key';
 /**
  * Where the space's members meet: the relays it names, so two people whose
  * apps use different relays still find each other. Like a Nostr relay list,
- * but the space's, and changed only by someone who manages it.
+ * but the space's, and changed only by someone granted `/space/relays`.
  */
 export const RELAYS_COLLECTION = 'sys.relays';
 /**
  * Who keeps the space whole: nodes that hold every record of it — a host, an
  * extension — and how many copies a write should reach before a node that
- * holds only part of the space lets go of it. Changed only by someone who
- * manages the space, like its relays.
+ * holds only part of the space lets go of it.
  */
 export const KEEPERS_COLLECTION = 'sys.keepers';
 /**
@@ -75,11 +89,21 @@ export const KEEPERS_COLLECTION = 'sys.keepers';
  * collection from that place on stop counting.
  */
 export const FORK_COLLECTION = 'sys.fork';
+/** A founder stepping down: it stays, with the roles it holds, and is a founder no more */
+export const STEPDOWN_COLLECTION = 'sys.stepdown';
+/** A space that succeeds this one, by its id. It changes nothing here. */
+export const SUCCEED_COLLECTION = 'sys.succeed';
+
+/** The one resolver there is: a removal strikes what its account did concurrently (spec 03 §4) */
+export const STRONG_REMOVE = 'strong-remove/1';
+/** Every resolver this peer knows. A space naming another is not judged here. */
+export const RESOLVERS: ReadonlySet<string> = new Set([STRONG_REMOVE]);
 
 /** Every collection whose records are part of the access history */
 export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set([
   ROLE_COLLECTION,
-  MEMBER_COLLECTION,
+  ASSIGN_COLLECTION,
+  REMOVE_COLLECTION,
   INVITE_COLLECTION,
   REVOKE_COLLECTION,
   DEFINITION_COLLECTION,
@@ -87,59 +111,15 @@ export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set([
   RELAYS_COLLECTION,
   KEEPERS_COLLECTION,
   FORK_COLLECTION,
+  STEPDOWN_COLLECTION,
+  SUCCEED_COLLECTION,
 ]);
-
-const ROLE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,39}$/;
-
-/** Why a role is malformed, or null */
-export function checkRole(role: unknown): string | null {
-  if (!isObject(role)) return 'A role must be an object';
-  const r = role;
-  if (typeof r.name !== 'string' || !ROLE_NAME_PATTERN.test(r.name))
-    return 'A role name is 1–40 characters of a–z, 0–9 and . _ -';
-  if (r.title !== undefined && (typeof r.title !== 'string' || r.title.length > 80))
-    return 'A role title is text of at most 80 characters';
-  if (typeof r.rank !== 'number' || !Number.isFinite(r.rank)) return 'A role rank must be a number';
-  if (
-    !Array.isArray(r.permissions) ||
-    !r.permissions.every((p) => typeof p === 'string' && p.length > 0 && p.length <= 200)
-  ) {
-    return "A role's permissions must be a list of names";
-  }
-  return null;
-}
-
-/** Whether a role's permission (which may hold `*`) matches a permission */
-export function permissionMatches(pattern: string, permission: string): boolean {
-  if (pattern === permission || pattern === '*') return true;
-  if (!pattern.includes('*')) return false;
-  const regex = new RegExp(
-    `^${pattern
-      .split('*')
-      .map((part) => part.replace(/[.+?^${}()|[\]\\/]/g, '\\$&'))
-      .join('.*')}$`,
-  );
-  return regex.test(permission);
-}
-
-/** Whether a role holds a permission */
-export function roleHolds(role: Role | null | undefined, permission: string): boolean {
-  return !!role && role.permissions.some((pattern) => permissionMatches(pattern, permission));
-}
-
-/**
- * Whether someone holding `granted` may hand out `permission`: one of theirs
- * must cover it. A `*` in theirs matches anything, including a `*`.
- */
-function covers(granted: ReadonlyArray<string>, permission: string): boolean {
-  return granted.some((pattern) => permissionMatches(pattern, permission));
-}
 
 // ─── Events ───────────────────────────────────────────────────────────
 
 interface EventBase {
   readonly id: string;
-  /** The record key it changes: `role:moderator`, `member:…`, `invite:…`, `revoke:…`, `collection:…` */
+  /** The record key it changes: `role:moderator`, `assign:…`, `remove:…`, `invite:…`, `collection:…` */
   readonly key: string;
   /** The account behind the key that signed it */
   readonly root: string;
@@ -151,7 +131,7 @@ interface EventBase {
   readonly line?: number;
   /**
    * What this change leaves standing of what it takes away: for each key of
-   * the people it takes power from, and each collection, the end of the
+   * the account it takes power from, and each collection, the end of the
    * unbroken line of that key's versions in that collection its author held.
    * Versions at or below it are covered.
    */
@@ -171,17 +151,36 @@ export type Cutoff = ReadonlyMap<string, ReadonlyMap<string, number>>;
 export type AccessEvent = EventBase &
   (
     | {
+        /** A role's definition: it replaces the definitions it saw */
         readonly kind: 'role';
         readonly name: string;
-        /** Null: the role is removed */ readonly role: Role | null;
+        readonly title?: string;
+        readonly grants: ReadonlyArray<Grant>;
+        readonly nests: ReadonlyArray<string>;
       }
     | {
-        readonly kind: 'member';
+        /** `/role/assign`, or with `assigned: false` `/role/unassign` (leaving, when it is the account's own) */
+        readonly kind: 'assign';
         readonly did: string;
-        /** Null: they are no longer a member */
-        readonly role: string | null;
+        readonly role: string;
+        readonly assigned: boolean;
         /** The invite's public key, when the runtime checked the invite's signature on this record */
         readonly viaInvite?: string;
+      }
+    | {
+        /** `/member/remove`, or leaving when it is the account's own */
+        readonly kind: 'remove';
+        readonly did: string;
+      }
+    | {
+        /** A founder stepping down, built in: only its own */
+        readonly kind: 'stepdown';
+        readonly did: string;
+      }
+    | {
+        /** `/space/succeed`: the id of a space that succeeds this one */
+        readonly kind: 'succeed';
+        readonly space: string;
       }
     | { readonly kind: 'invite'; readonly inviteKey: string; readonly role: string; readonly open: boolean }
     | {
@@ -287,38 +286,92 @@ export interface SpaceKeyEpoch {
   readonly event: string;
 }
 
+/**
+ * One definition of a role: the constitution's, or one written since. The
+ * grants it holds count only as far as its author could invoke them itself,
+ * as of `view`.
+ */
+export interface RoleDefinition {
+  /** The definition's id; the space id for the constitution's */
+  readonly event: string;
+  /** Its author's account; null for the constitution's, which the space itself issues */
+  readonly by: string | null;
+  readonly title?: string;
+  readonly grants: ReadonlyArray<Grant>;
+  /** Roles whose grants members of this one hold too */
+  readonly nests: ReadonlyArray<string>;
+  /** Its own view: where its author's power is judged. Null for the constitution's */
+  readonly view: AccessState | null;
+}
+
 /** Who holds what, at one point in the history */
 export interface AccessState {
-  readonly roles: ReadonlyMap<string, Role>;
-  /** Account DID → role name */
-  readonly members: ReadonlyMap<string, string>;
-  /** Invite public key → its role, and whether it is open */
+  /** The founders: they hold every command, and only each founder itself takes its place or its roles */
+  readonly founders: ReadonlySet<string>;
+  /**
+   * Role name → its current definitions: one, or rivals none of which saw
+   * the others, which hold only the grants they share
+   */
+  readonly roles: ReadonlyMap<string, ReadonlyArray<RoleDefinition>>;
+  /** Account DID → the roles assigned to it → the assignment's id */
+  readonly assigned: ReadonlyMap<string, ReadonlyMap<string, string>>;
+  /**
+   * Invite public key → its role, whether it is open, and who opened it: a
+   * join through it is judged as their assignment
+   */
   readonly invites: ReadonlyMap<
     string,
-    { readonly role: string; readonly open: boolean; readonly event: string }
+    {
+      readonly role: string;
+      readonly open: boolean;
+      readonly event: string;
+      /** The accounts whose latest changes opened it, sorted: one, or rivals for the same role */
+      readonly by: ReadonlyArray<string>;
+    }
   >;
-  /** Collection name → the id of the definition in force, and who first defined it */
-  readonly definitions: ReadonlyMap<string, { readonly event: string; readonly definedBy: string }>;
+  /**
+   * Collection name → the id of the definition in force, and who first
+   * defined it: null when rival first definitions name different accounts
+   */
+  readonly definitions: ReadonlyMap<string, { readonly event: string; readonly definedBy: string | null }>;
+  /**
+   * Collections whose rival first definitions, by different accounts, no
+   * later one settles → the ids of the latest of them, lowest first. Which is
+   * in force is not the replay's to say (02 §6.3: none, unless they all say
+   * the same), and only someone who may define it may define it again.
+   */
+  readonly contested: ReadonlyMap<string, ReadonlyArray<string>>;
   /** A private space's keys, oldest first; the last is current. Empty in a public space. */
   readonly keys: ReadonlyArray<SpaceKeyEpoch>;
   /** Whether someone lost their place in the space since the current key — so a new one is due */
   readonly keyDue: boolean;
-  /** The relays the space names — empty until someone who manages it names some */
+  /** The relays the space names — empty until someone names some */
   readonly relays: ReadonlyArray<string>;
-  /** The nodes that keep the space whole — empty until someone who manages it names some */
+  /** The nodes that keep the space whole — empty until someone names some */
   readonly keepers: ReadonlyArray<Keeper>;
   /** How many keepers a write should reach; null for whatever each node defaults to */
   readonly copies: number | null;
+  /**
+   * Spaces named as this one's successors → the accounts that named each,
+   * sorted. Every one stands, and none is first: which to follow is each
+   * member's choice.
+   */
+  readonly successors: ReadonlyMap<string, ReadonlyArray<string>>;
 }
 
-/** What a space starts with, from its genesis */
+/** What a space starts with, from its constitution (`space/constitution.ts`) */
 export interface AccessGenesis {
   /** The space id — also the id every change implicitly comes after */
   readonly id: string;
-  readonly creator: string;
-  readonly roles: ReadonlyArray<Role>;
-  readonly creatorRole: string;
-  /** A private space's first key, from its genesis */
+  /** How changes made apart resolve. Only `strong-remove/1` is known; the replay refuses any other */
+  readonly resolver: string;
+  /** The founders, who hold every command: none under `top: "none"` */
+  readonly founders: ReadonlyArray<string>;
+  /** The founding roles: the constitution's grants for each are its first definition */
+  readonly roles: ReadonlyArray<FoundingRole>;
+  /** The roles the constitution assigns: account → role names */
+  readonly assigned?: Readonly<Record<string, ReadonlyArray<string>>>;
+  /** A private space's first key, from its constitution */
   readonly key?: { readonly keyId: string; readonly readKey: string };
 }
 
@@ -328,14 +381,7 @@ export type EventStatus =
   | { readonly status: 'waiting' };
 
 export type RecordVerdict =
-  | {
-      readonly ok: true;
-      /**
-       * Applied changes to its author's standing that it had not seen and that
-       * do not cover it. It must also be allowed as of what it saw plus these.
-       */
-      readonly unseen: ReadonlyArray<string>;
-    }
+  | { readonly ok: true }
   | {
       readonly ok: false;
       readonly reason: string;
@@ -347,6 +393,9 @@ export type RecordVerdict =
        */
       readonly withdrawn?: true;
     };
+
+/** What a record asks of its author, in a state: whether they may do what it does */
+export type Needs = (state: AccessState) => boolean;
 
 export interface AccessHistory {
   /** Who holds what once everything held is replayed */
@@ -365,15 +414,29 @@ export interface AccessHistory {
    * the most recently applied: what a writer names when there are more.
    */
   headsFor(keys: ReadonlyArray<string>, max: number): ReadonlyArray<string>;
-  /** The state as of what `seen` names, or null when some of it is not here */
-  at(seen: ReadonlyArray<string>): AccessState | null;
+  /**
+   * The state a record is judged by, as of what `seen` names: the changes it
+   * names and everything they saw, counting only those valid in the whole
+   * history, so a change struck since gives nothing even to a record that
+   * cites it. With `within`, valid among what `within` and `seen` name
+   * instead (a version another cites). Null when some of it is not here.
+   */
+  at(seen: ReadonlyArray<string>, within?: ReadonlyArray<string>): AccessState | null;
+  /**
+   * The state as its writer saw it: the changes `seen` names and everything
+   * they saw, judged among themselves alone. A record its author couldn't
+   * have written here is refused; one that fails only in {@link at} is
+   * withdrawn. Null when some of it is not here.
+   */
+  seenAs(seen: ReadonlyArray<string>): AccessState | null;
   /**
    * Whether a record stands as of what it saw: its key not revoked or forked
-   * past where the change that did so covers it, and its author's standing
-   * satisfying `needs`. The changes to its author's standing it had not seen,
-   * and that don't cover it, are returned: it must also be allowed with them.
+   * past where the change that did so covers it, its author allowed by
+   * `needs` as of what it saw, still allowed counting only the changes that
+   * stand ({@link at}), and no removal or unassignment of its account it had
+   * not seen and that doesn't cover it.
    * @param record The record's id, its account, what it saw, and the key that signed it
-   * @param needs What the record requires of its author's role
+   * @param needs What the record asks of its author
    * @param within For a version another cites: what the citing version saw.
    *   Only changes among those, and what they saw, can take it away.
    */
@@ -388,7 +451,7 @@ export interface AccessHistory {
       readonly collection?: string;
       readonly line?: number;
     },
-    needs: (role: Role | null, state: AccessState) => boolean,
+    needs: Needs,
     within?: ReadonlyArray<string>,
   ): RecordVerdict;
   /** The applied changes by an account that revoked one of its keys */
@@ -398,8 +461,8 @@ export interface AccessHistory {
   /** Every key whose line for a collection forked, and from where */
   forks(): ReadonlyArray<ForkedLine>;
   /**
-   * Whether an account appears anywhere in the history — the creator, or
-   * named by any member change, whatever became of it. Only grows as changes
+   * Whether an account appears anywhere in the history — a founder, assigned
+   * a role by the constitution, or named by any assignment, whatever became of it. Only grows as changes
    * arrive, so it can decide what to store without two peers ever disagreeing
    * for good.
    */
@@ -417,173 +480,446 @@ export interface AccessHistory {
 }
 
 interface MutableState {
-  roles: Map<string, Role>;
-  members: Map<string, string>;
-  invites: Map<string, { role: string; open: boolean; event: string }>;
-  definitions: Map<string, { event: string; definedBy: string }>;
+  founders: Set<string>;
+  roles: Map<string, ReadonlyArray<RoleDefinition>>;
+  assigned: Map<string, ReadonlyMap<string, string>>;
+  invites: Map<string, { role: string; open: boolean; event: string; by: ReadonlyArray<string> }>;
+  definitions: Map<string, { event: string; definedBy: string | null }>;
+  contested: Map<string, ReadonlyArray<string>>;
   keys: SpaceKeyEpoch[];
   keyDue: boolean;
   relays: ReadonlyArray<string>;
   keepers: ReadonlyArray<Keeper>;
   copies: number | null;
+  successors: Map<string, ReadonlyArray<string>>;
+}
+
+/** The constitution's definition of a founding role */
+function founding(genesis: AccessGenesis, role: FoundingRole): RoleDefinition {
+  return Object.freeze({
+    event: genesis.id,
+    by: null,
+    ...(role.title !== undefined ? { title: role.title } : {}),
+    grants: role.grants,
+    nests: role.nests ?? [],
+    view: null,
+  });
 }
 
 function startState(genesis: AccessGenesis): MutableState {
+  // The constitution's assignments are as if made by the space itself: their id is the space's.
+  const assigned = new Map<string, ReadonlyMap<string, string>>();
+  for (const [did, roles] of Object.entries(genesis.assigned ?? {}))
+    assigned.set(did, new Map(roles.map((role) => [role, genesis.id])));
   return {
-    roles: new Map(genesis.roles.map((role) => [role.name, role])),
-    members: new Map([[genesis.creator, genesis.creatorRole]]),
+    founders: new Set(genesis.founders),
+    roles: new Map(genesis.roles.map((role) => [role.name, [founding(genesis, role)]])),
+    assigned,
     invites: new Map(),
     definitions: new Map(),
+    contested: new Map(),
     keys: genesis.key ? [{ ...genesis.key, event: genesis.id }] : [],
     keyDue: false,
     relays: [],
     keepers: [],
     copies: null,
+    successors: new Map(),
   };
 }
 
-/** Everyone holding a role that exists — who can read, as far as the history is concerned */
+/** The roles assigned to an account in a state, by name */
+export function rolesOf(state: AccessState, did: string): ReadonlyArray<string> {
+  return [...(state.assigned.get(did)?.keys() ?? [])].sort();
+}
+
+/** Whether an account is a member in a state: a founder, or assigned a role */
+export function isMember(state: AccessState, did: string): boolean {
+  return state.founders.has(did) || (state.assigned.get(did)?.size ?? 0) > 0;
+}
+
+/** Every member — who can read, as far as the history is concerned */
 export function readers(state: AccessState): Set<string> {
-  return new Set([...state.members].filter(([, role]) => state.roles.has(role)).map(([did]) => did));
-}
-
-function roleOf(state: AccessState, did: string): Role | null {
-  const name = state.members.get(did);
-  return name === undefined ? null : (state.roles.get(name) ?? null);
-}
-
-/** Whether an account holds a permission in a state */
-export function holds(state: AccessState, did: string, permission: string): boolean {
-  return roleHolds(roleOf(state, did), permission);
-}
-
-/** The role an account holds in a state, or null */
-export function standing(state: AccessState, did: string): Role | null {
-  return roleOf(state, did);
+  const out = new Set(state.founders);
+  for (const [did, roles] of state.assigned) if (roles.size > 0) out.add(did);
+  return out;
 }
 
 /**
- * Why a change is not allowed in a state, or null when it is. The one place
- * the rank rule lives.
+ * Whether nobody can run the space any more: no founder is left, and no
+ * member may define or assign any role. The library's word, not the
+ * protocol's: the way on from a headless space is a successor.
+ */
+export function headless(state: AccessState): boolean {
+  if (state.founders.size > 0) return false;
+  const roles = [...state.roles.keys()];
+  return ![...readers(state)].some((did) =>
+    roles.some(
+      (role) =>
+        may(state, did, ROLE_DEFINE, { role }) ||
+        may(state, did, ROLE_ASSIGN, { role, self: false, roles: [] }),
+    ),
+  );
+}
+
+/** How a question to {@link may} is asked */
+export interface MayOptions {
+  /** The invocation's body couldn't be read here: policies on `.body` that find no data are left to readers */
+  readonly opaque?: boolean;
+}
+
+/** Answers already given in a state, which never changes once made */
+const answers = new WeakMap<AccessState, Map<string, boolean>>();
+
+/**
+ * Whether an account may invoke a command with these arguments in a state:
+ * a founder may invoke anything; anyone else, what a role assigned to it
+ * holds. A role holds what its current definitions all hold, each only as far
+ * as its author could invoke it, as of that definition (UCAN's attenuation),
+ * and what the roles it nests hold.
+ */
+export function may(
+  state: AccessState,
+  did: string,
+  cmd: string,
+  args: unknown,
+  options: MayOptions = {},
+): boolean {
+  if (state.founders.has(did)) return true;
+  const roles = rolesOf(state, did);
+  if (roles.length === 0) return false;
+  const key = `${did}\n${cmd}\n${canonicalize(args)}\n${options.opaque ? 1 : 0}`;
+  let cache = answers.get(state);
+  if (!cache) answers.set(state, (cache = new Map<string, boolean>()));
+  const known = cache.get(key);
+  if (known !== undefined) return known;
+  const answer = roles.some((role) => roleMay(state, role, cmd, args, !!options.opaque, new Set()));
+  cache.set(key, answer);
+  return answer;
+}
+
+/** Whether a role's grants let its members invoke a command with these arguments */
+function roleMay(
+  state: AccessState,
+  role: string,
+  cmd: string,
+  args: unknown,
+  opaque: boolean,
+  visiting: ReadonlySet<string>,
+): boolean {
+  if (visiting.has(role)) return false;
+  const heads = state.roles.get(role);
+  if (!heads || heads.length === 0) return false;
+  const [first, ...rivals] = heads;
+  // What every current definition holds: a grant by its command and policy, a nesting by its role.
+  const delegated = first!.grants.some(
+    (grant) =>
+      grantFits(grant, cmd, args, opaque) &&
+      rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
+  );
+  const inner = new Set(visiting).add(role);
+  const held =
+    delegated ||
+    first!.nests.some(
+      (nested) =>
+        nested !== role &&
+        rivals.every((rival) => rival.nests.includes(nested)) &&
+        roleMay(state, nested, cmd, args, opaque, inner),
+    );
+  // Each definition holds only what its author could do itself, as of it.
+  return (
+    held &&
+    heads.every(
+      (head) => head.view === null || head.by === null || may(head.view, head.by, cmd, args, { opaque }),
+    )
+  );
+}
+
+/**
+ * Whether an account holds every grant a role gives, each as wide or wider:
+ * what it may hand on to a bot or an agent of its own without handing on more
+ * than it holds. A grant is as wide when its command covers the other's and
+ * every statement of its policy is among the other's, held through the
+ * account's roles as {@link may} holds it (rivals sharing it, attenuated by
+ * each definition's author). A founder holds every grant. Only the policies'
+ * words are compared, so it may say no where the policies would in fact
+ * allow; never yes where they wouldn't.
+ */
+export function holdsRole(state: AccessState, did: string, role: string): boolean {
+  return grantsOfRole(state, role, new Set()).every((grant) => holdsGrant(state, did, grant));
+}
+
+/** What a role gives its members, as grants: its current definitions' shared ones, and its nested roles' */
+function grantsOfRole(state: AccessState, role: string, visiting: ReadonlySet<string>): ReadonlyArray<Grant> {
+  const heads = state.roles.get(role);
+  if (!heads?.length || visiting.has(role)) return [];
+  const [first, ...rivals] = heads;
+  const inner = new Set(visiting).add(role);
+  return [
+    ...first!.grants.filter((grant) =>
+      rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
+    ),
+    ...first!.nests
+      .filter((nested) => rivals.every((rival) => rival.nests.includes(nested)))
+      .flatMap((nested) => grantsOfRole(state, nested, inner)),
+  ];
+}
+
+/** Whether an account holds a grant as wide as `wanted` or wider, in a state */
+function holdsGrant(state: AccessState, did: string, wanted: Grant): boolean {
+  if (state.founders.has(did)) return true;
+  return rolesOf(state, did).some((role) => roleHoldsGrant(state, role, wanted, new Set()));
+}
+
+function roleHoldsGrant(
+  state: AccessState,
+  role: string,
+  wanted: Grant,
+  visiting: ReadonlySet<string>,
+): boolean {
+  if (visiting.has(role)) return false;
+  const heads = state.roles.get(role);
+  if (!heads || heads.length === 0) return false;
+  const [first, ...rivals] = heads;
+  const statements = new Set(wanted.pol.map((statement) => canonicalize(statement)));
+  const widens = (grant: Grant) =>
+    commandCovers(grant.cmd, wanted.cmd) &&
+    grant.pol.every((statement) => statements.has(canonicalize(statement)));
+  const inner = new Set(visiting).add(role);
+  const held =
+    first!.grants.some(
+      (grant) =>
+        widens(grant) &&
+        rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
+    ) ||
+    first!.nests.some(
+      (nested) =>
+        nested !== role &&
+        rivals.every((rival) => rival.nests.includes(nested)) &&
+        roleHoldsGrant(state, nested, wanted, inner),
+    );
+  return (
+    held &&
+    heads.every((head) => head.view === null || head.by === null || holdsGrant(head.view, head.by, wanted))
+  );
+}
+
+/** The arguments of a command about another account: `{ role?, self, roles }` */
+const targetArgs = (state: AccessState, invoker: string, target: string, role?: string) => ({
+  ...(role !== undefined ? { role } : {}),
+  self: invoker === target,
+  roles: rolesOf(state, target),
+});
+
+/** Whether any member holds `/space/succeed`, once per state: a state never changes */
+const maySucceed = new WeakMap<AccessState, boolean>();
+function anyMaySucceed(state: AccessState): boolean {
+  let found = maySucceed.get(state);
+  if (found === undefined) {
+    found = [...readers(state)].some((did) => may(state, did, SPACE_SUCCEED, {}));
+    maySucceed.set(state, found);
+  }
+  return found;
+}
+
+/**
+ * Why a change is not allowed in a state, or null when it is: its author
+ * held a grant for its command with these arguments, or it is one of the
+ * few things anyone may do for themselves (leave a role, leave the space,
+ * step down as a founder), or it names a successor where no one holds
+ * `/space/succeed`.
  */
 export function refusal(event: AccessEvent, state: AccessState): string | null {
-  const author = roleOf(state, event.root);
+  const root = event.root;
   switch (event.kind) {
-    case 'role': {
-      if (!roleHolds(author, MANAGE)) return 'Its author may not manage roles';
-      const existing = state.roles.get(event.name);
-      if (existing && existing.rank >= author!.rank)
-        return 'Its author may only change roles ranked below their own';
-      if (!event.role) return existing ? null : 'There is no such role to remove';
-      if (event.role.rank >= author!.rank) return 'Its author may only make roles ranked below their own';
-      const missing = event.role.permissions.find((p) => !covers(author!.permissions, p));
-      return missing ? `Its author cannot give a permission they do not hold (${missing})` : null;
-    }
-    case 'member': {
-      const current = roleOf(state, event.did);
-      // Joining with an invite: your own record, for the invite's role, while not a member.
+    case 'role':
+      return may(state, root, ROLE_DEFINE, { role: event.name })
+        ? null
+        : 'Its author may not define this role';
+    case 'assign': {
+      // Roles go to accounts: putting a role inside another is part of a definition, and grants.
+      if (event.did.startsWith('role:')) return 'A role is assigned to accounts, not to roles';
+      const holds = rolesOf(state, event.did).includes(event.role);
+      // Joining with an invite: your own record, for the invite's role, judged as the assignment
+      // its opener makes, with the joiner's own `self` and `roles`.
       if (event.viaInvite !== undefined) {
         const invite = state.invites.get(event.viaInvite);
-        if (event.root !== event.did) return 'Only the person joining can use an invite for themselves';
+        if (!event.assigned) return 'An invite only assigns';
+        if (root !== event.did) return 'Only the person joining can use an invite for themselves';
         if (!invite?.open) return 'The invite is not open';
         if (invite.role !== event.role) return 'The invite is for another role';
-        if (current) return 'Already a member';
-        return state.roles.has(invite.role) ? null : "The invite's role no longer exists";
+        if (holds) return 'Already holds that role';
+        if (!state.roles.has(event.role)) return `There is no role "${event.role}"`;
+        return invite.by.every((opener) =>
+          may(state, opener, ROLE_ASSIGN, targetArgs(state, opener, event.did, event.role)),
+        )
+          ? null
+          : 'Whoever opened the invite may not assign this role to them';
       }
-      // Leaving: anyone may remove themselves.
-      if (event.root === event.did && event.role === null) return current ? null : 'Not a member';
-      if (!roleHolds(author, MANAGE)) return 'Its author may not manage members';
-      if (current && current.rank >= author!.rank)
-        return 'Its author may only change people ranked below them';
-      if (event.role === null) return current ? null : 'Not a member';
-      const next = state.roles.get(event.role);
-      if (!next) return `There is no role "${event.role}"`;
-      return next.rank > author!.rank ? 'Its author may only give roles up to their own rank' : null;
+      // Leaving a role is built in.
+      if (!event.assigned && root === event.did) return holds ? null : 'It does not hold that role';
+      if (state.founders.has(event.did) && root !== event.did)
+        return "No one but a founder itself changes a founder's roles";
+      if (!state.roles.has(event.role)) return `There is no role "${event.role}"`;
+      const args = targetArgs(state, root, event.did, event.role);
+      if (event.assigned)
+        return may(state, root, ROLE_ASSIGN, args) ? null : 'Its author may not assign them this role';
+      if (!holds) return 'They do not hold that role';
+      return may(state, root, ROLE_UNASSIGN, args) ? null : 'Its author may not take this role from them';
+    }
+    case 'remove': {
+      if (!isMember(state, event.did)) return 'Not a member';
+      // Leaving the space is built in, for a founder too.
+      if (root === event.did) return null;
+      if (state.founders.has(event.did)) return 'No one but a founder itself removes a founder';
+      return may(state, root, MEMBER_REMOVE, targetArgs(state, root, event.did))
+        ? null
+        : 'Its author may not remove them';
     }
     case 'invite': {
-      if (!roleHolds(author, INVITE)) return 'Its author may not make invites';
+      // An invite is an assignment to whoever holds its secret: to someone else, holding nothing yet.
+      const assigns = (role: string) =>
+        state.roles.has(role) && may(state, root, ROLE_ASSIGN, { role, self: false, roles: [] });
       const existing = state.invites.get(event.inviteKey);
-      if (existing) {
-        const was = state.roles.get(existing.role);
-        if (was && was.rank > author!.rank) return 'Its author may only change invites up to their own rank';
-      }
+      if (existing && !assigns(existing.role)) return 'Its author may not change this invite';
       if (!event.open) return existing ? null : 'There is no such invite to close';
-      const role = state.roles.get(event.role);
-      if (!role) return `There is no role "${event.role}"`;
-      return role.rank > author!.rank ? 'Its author may only invite up to their own rank' : null;
+      if (!state.roles.has(event.role)) return `There is no role "${event.role}"`;
+      return assigns(event.role) ? null : 'Its author may not invite to this role';
+    }
+    // Stepping down is built in, and only a founder's own.
+    case 'stepdown':
+      if (root !== event.did) return 'Only a founder itself steps down';
+      return state.founders.has(event.did) ? null : 'Not a founder';
+    // A successor binds no one, so where no one holds the command, any member may name one.
+    case 'succeed': {
+      if (!isMember(state, root)) return 'Only a member may name a successor';
+      if (may(state, root, SPACE_SUCCEED, {})) return null;
+      return anyMaySucceed(state) ? 'Its author may not name a successor' : null;
     }
     // An account revokes its own keys: what a revoke takes away is only ever its own account's.
     case 'revoke':
-      return author ? null : 'Only a member may revoke a key here';
+      return isMember(state, root) ? null : 'Only a member may revoke a key here';
     // The proof stands on its own (checked before it got here); a member only has to bring it.
     case 'fork':
-      return author ? null : 'Only a member may report a fork';
+      return isMember(state, root) ? null : 'Only a member may report a fork';
     case 'definition': {
       const existing = state.definitions.get(event.name);
-      if (!existing) return roleHolds(author, DEFINE) ? null : 'Its author may not define collections';
-      // Changing one: whoever first defined it, while a member, or anyone who manages the space.
-      if (roleHolds(author, MANAGE)) return null;
-      return author && existing.definedBy === event.root
+      const contested = state.contested.has(event.name);
+      const defines = may(state, root, COLLECTION_DEFINE, { collection: event.name });
+      if (!existing && !contested) {
+        if (event.deleted) return 'There is no such definition to remove';
+        return defines ? null : 'Its author may not define this collection';
+      }
+      if (defines) return null;
+      // Rivals no one settled: no one first defined it, so only someone who may define it settles them.
+      if (contested) return 'Rival definitions of it stand: only someone who may define it may settle them';
+      return isMember(state, root) && existing?.definedBy === root
         ? null
-        : 'Only whoever defined it, or someone who manages the space, may change it';
+        : 'Only whoever defined it, or someone who may define it, may change it';
     }
     case 'key': {
       if (state.keys.length === 0) return 'A public space has no key to change';
-      if (!roleHolds(author, MANAGE)) return "Its author may not change the space's key";
+      if (!may(state, root, KEY_CHANGE, {})) return "Its author may not change the space's key";
       // Going back to a key a removed member still holds would undo the point of changing it.
       return state.keys.some((known) => known.keyId === event.keyId || known.readKey === event.readKey)
         ? 'That key was used before'
         : null;
     }
     case 'relays':
-      return roleHolds(author, MANAGE)
+      return may(state, root, SPACE_RELAYS, {})
         ? checkRelays(event.relays)
         : 'Its author may not change where the space meets';
     case 'keepers':
-      return roleHolds(author, MANAGE)
+      return may(state, root, SPACE_KEEPERS, {})
         ? checkKeepers(event.keepers, event.copies)
         : 'Its author may not change who keeps the space';
   }
 }
 
-/** Whether a role is lower than the one before it: gone, ranked lower, or missing a permission it had */
-function lowered(before: Role | null, after: Role | null): boolean {
-  if (!before) return false;
-  if (!after) return true;
-  return after.rank < before.rank || before.permissions.some((p) => !covers(after.permissions, p));
+/**
+ * The account a change takes from, in its own view: a removal of a member,
+ * or an unassignment of a role it holds, its own leaving included. Null when
+ * it takes nothing: it is no reduction.
+ */
+function reductionOf(event: AccessEvent, view: AccessState): string | null {
+  if (event.kind === 'remove') return isMember(view, event.did) ? event.did : null;
+  if (event.kind === 'stepdown') return view.founders.has(event.did) ? event.did : null;
+  if (event.kind === 'assign' && !event.assigned)
+    return rolesOf(view, event.did).includes(event.role) ? event.did : null;
+  return null;
 }
 
-/** The people whose standing a change may lower */
-function affected(event: AccessEvent, state: AccessState): ReadonlyArray<string> {
-  if (event.kind === 'member') return [event.did];
-  if (event.kind === 'role')
-    return [...state.members].filter(([, role]) => role === event.name).map(([did]) => did);
-  return [];
+/** The people whose reading a change may end */
+function affected(event: AccessEvent): ReadonlyArray<string> {
+  return event.kind === 'assign' || event.kind === 'remove' || event.kind === 'stepdown' ? [event.did] : [];
 }
 
-function change(event: AccessEvent, state: MutableState): void {
+/** A role's definition from a change, judged in `view` */
+function definitionFrom(event: AccessEvent, view: AccessState): RoleDefinition | null {
+  if (event.kind !== 'role') return null;
+  return Object.freeze({
+    event: event.id,
+    by: event.root,
+    ...(event.title !== undefined ? { title: event.title } : {}),
+    grants: event.grants,
+    nests: event.nests,
+    view,
+  });
+}
+
+function setAssigned(state: MutableState, did: string, role: string, event: string | null): void {
+  const roles = new Map(state.assigned.get(did) ?? []);
+  if (event === null) roles.delete(role);
+  else roles.set(role, event);
+  if (roles.size === 0) state.assigned.delete(did);
+  else state.assigned.set(did, roles);
+}
+
+/** Applies a change that saw everything in `state`, in which `view` is the state it saw */
+function change(event: AccessEvent, state: MutableState, view: AccessState): void {
   switch (event.kind) {
     case 'role':
-      if (event.role) state.roles.set(event.name, event.role);
-      else state.roles.delete(event.name);
+      state.roles.set(event.name, [definitionFrom(event, view)!]);
       return;
-    case 'member':
-      if (event.role === null) state.members.delete(event.did);
-      else state.members.set(event.did, event.role);
+    case 'assign':
+      setAssigned(state, event.did, event.role, event.assigned ? event.id : null);
+      return;
+    case 'remove':
+      // It ends every assignment it saw, since none of them saw it; a founder who leaves steps down.
+      state.assigned.delete(event.did);
+      if (event.root === event.did) state.founders.delete(event.did);
+      return;
+    case 'stepdown':
+      state.founders.delete(event.did);
+      return;
+    case 'succeed':
+      state.successors.set(
+        event.space,
+        [...new Set([...(state.successors.get(event.space) ?? []), event.root])].sort(),
+      );
       return;
     case 'invite':
-      state.invites.set(event.inviteKey, { role: event.role, open: event.open, event: event.id });
+      state.invites.set(event.inviteKey, {
+        role: event.role,
+        open: event.open,
+        event: event.id,
+        by: [event.root],
+      });
       return;
     case 'revoke':
     case 'fork':
       return;
     case 'definition': {
+      // It saw what it changes, so it settles any rivals it saw.
+      state.contested.delete(event.name);
       if (event.deleted) {
         state.definitions.delete(event.name);
         return;
       }
-      const definedBy = state.definitions.get(event.name)?.definedBy ?? event.root;
-      state.definitions.set(event.name, { event: event.id, definedBy });
+      const existing = state.definitions.get(event.name);
+      state.definitions.set(event.name, {
+        event: event.id,
+        definedBy: existing ? existing.definedBy : event.root,
+      });
       return;
     }
     case 'key':
@@ -603,11 +939,11 @@ function change(event: AccessEvent, state: MutableState): void {
 //
 // No order decides anything. A change is allowed when its author had the
 // power in the state its own view gives (the changes it saw that were
-// allowed, merged). A change that lowers someone, judged in its own view, is
-// a reduction; it strikes their changes it had not seen, past its cutoff.
-// Reductions that strike each other all stand. The state is a merge of the
-// valid changes: on each record, the latest wins, and of latest changes that
-// didn't see each other, the one that gives least.
+// allowed, merged). A removal or an unassignment, judged in its own view, is
+// a reduction; it strikes every change of its account that it had not seen,
+// past its cutoff. Reductions that strike each other all stand. The state is a
+// merge of the valid changes: on each record, the latest wins, and of latest
+// changes that didn't see each other, the one that gives least.
 
 /** A key's line for one collection, as a map key */
 const lineOf = (writer: string, collection: string) => `${writer}\n${collection}`;
@@ -615,7 +951,8 @@ const lineOf = (writer: string, collection: string) => `${writer}\n${collection}
 /** The kind's collection: where a change's place in its key's line is counted */
 const KIND_COLLECTION: Record<AccessEvent['kind'], string> = {
   role: ROLE_COLLECTION,
-  member: MEMBER_COLLECTION,
+  assign: ASSIGN_COLLECTION,
+  remove: REMOVE_COLLECTION,
   invite: INVITE_COLLECTION,
   revoke: REVOKE_COLLECTION,
   definition: DEFINITION_COLLECTION,
@@ -623,6 +960,8 @@ const KIND_COLLECTION: Record<AccessEvent['kind'], string> = {
   relays: RELAYS_COLLECTION,
   keepers: KEEPERS_COLLECTION,
   fork: FORK_COLLECTION,
+  stepdown: STEPDOWN_COLLECTION,
+  succeed: SUCCEED_COLLECTION,
 };
 
 /**
@@ -663,31 +1002,6 @@ function seenOf(
   };
 }
 
-/** Whether `a` gives no more than `b`: no role, or no higher rank and nothing `b` doesn't cover */
-function givesNoMore(a: Role | null, b: Role | null): boolean {
-  if (!a) return true;
-  if (!b) return false;
-  return a.rank <= b.rank && a.permissions.every((p) => covers(b.permissions, p));
-}
-
-/**
- * Of rival changes, the one giving least: one that gives no more than every
- * other, by coverage, not by counting permissions. Where two can't be
- * compared, the lower rank, then the lowest id.
- */
-function least<T extends { readonly id: string }>(
-  rivals: ReadonlyArray<T>,
-  gives: (rival: T) => Role | null,
-): T {
-  const minimal = rivals.filter((a) =>
-    rivals.every((b) => b === a || givesNoMore(gives(a), gives(b)) || !givesNoMore(gives(b), gives(a))),
-  );
-  const rank = (rival: T) => gives(rival)?.rank ?? -Infinity;
-  return [...(minimal.length > 0 ? minimal : rivals)].sort(
-    (a, b) => rank(a) - rank(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-  )[0]!;
-}
-
 interface Replay {
   readonly genesis: AccessGenesis;
   readonly byId: ReadonlyMap<string, AccessEvent>;
@@ -701,7 +1015,7 @@ interface Replay {
   /** Valid: allowed, and not struck */
   readonly valid: ReadonlySet<string>;
   readonly struck: ReadonlyMap<string, string>;
-  /** Valid reductions, by the account they lowered */
+  /** Valid reductions, by the account they took from */
   readonly reductions: ReadonlyMap<string, ReadonlyArray<string>>;
   readonly revokes: ReadonlyMap<string, ReadonlyArray<{ readonly event: string; readonly root: string }>>;
   /** The lowest applied fork of each key's line for each collection, by {@link lineOf} */
@@ -713,8 +1027,10 @@ interface Replay {
   readonly allowedIds: ReadonlySet<string>;
   /** Accounts each change took reading from, in its own view */
   readonly lostReaders: ReadonlyMap<string, ReadonlyArray<string>>;
-  /** What each allowed member or invite change gives, by the roles its own view had */
-  readonly power: ReadonlyMap<string, Role | null>;
+  /** Each role definition's own view, among the allowed changes */
+  readonly defViews: ReadonlyMap<string, AccessState>;
+  /** Each valid role definition's view among the valid changes: where the current state judges its grants */
+  readonly validDefViews: ReadonlyMap<string, AccessState>;
   /** Which allowed change strikes which: a function of the changes alone */
   readonly strikes: ReadonlyMap<string, ReadonlyArray<string>>;
   readonly index: ReadonlyMap<string, number>;
@@ -723,13 +1039,22 @@ interface Replay {
 
 type Ancestry = ReturnType<typeof seenOf>;
 
-/** The state a set of changes gives, merged: no order, only what saw what, and least power between rivals */
+const byId = (a: { readonly id: string }, b: { readonly id: string }) =>
+  a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
+/**
+ * The state a set of changes gives, merged: no order, only what saw what.
+ * Rival definitions of a role all stand, and hold what they share; an
+ * unassignment beats an assignment; an assignment counts only if it saw every
+ * removal of its account; a closed invite beats an open one, and open ones
+ * for different roles close it.
+ */
 function merge(
   genesis: AccessGenesis,
   events: ReadonlyArray<AccessEvent>,
   saw: ReadonlyMap<string, Seen>,
   lostReaders: ReadonlyMap<string, ReadonlyArray<string>>,
-  power: ReadonlyMap<string, Role | null>,
+  defViews: ReadonlyMap<string, AccessState>,
 ): MutableState {
   const state = startState(genesis);
   const byKey = new Map<string, AccessEvent[]>();
@@ -738,7 +1063,6 @@ function merge(
     if (event.kind === 'revoke' || event.kind === 'fork') continue;
     (byKey.get(event.key) ?? byKey.set(event.key, []).get(event.key)!).push(event);
   }
-  /** The latest on a key: those no other on it saw */
   /**
    * The latest on a key: those no other on it saw. One pass: a change was seen by another if its
    * place is below that one's prefix, or among its exceptions.
@@ -764,39 +1088,81 @@ function merge(
       return !(place < below || exceptions.has(place));
     });
   };
-  const byId = (a: AccessEvent, b: AccessEvent) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
-  // Roles first: members' rivals are compared by the roles' rank.
+  // Removals first: an assignment counts only if it saw every one of its account's.
+  const removals = new Map<string, ReadonlyArray<AccessEvent>>();
   for (const group of byKey.values()) {
-    const tops = latest(group).filter((event) => event.kind === 'role');
-    if (tops.length === 0) continue;
-    const role = (event: AccessEvent) => (event.kind === 'role' ? event.role : null);
-    change(least(tops, role), state);
+    if (group[0]?.kind !== 'remove') continue;
+    const did = group[0].did;
+    removals.set(did, latest(group));
+    // A founder who leaves is one no more; no one else can remove one.
+    if (group.some((event) => event.root === did)) state.founders.delete(did);
+    // Every removal saw the constitution: it ends the roles the constitution assigned.
+    state.assigned.delete(did);
   }
-  // What a change gives, by the roles as its own view had them: a later edit to a role can't reorder rivals.
-  const given = (event: AccessEvent) => power.get(event.id) ?? null;
   let currentKey: AccessEvent | null = null;
   const keyEvents: AccessEvent[] = [];
   for (const group of byKey.values()) {
-    const tops = latest(group);
-    const kind = tops[0]?.kind;
-    if (!kind || kind === 'role') continue;
-    if (kind === 'key') {
-      keyEvents.push(...group);
-      currentKey = [...tops].sort(byId)[0]!;
-      continue;
+    const tops = [...latest(group)].sort(byId);
+    const win = tops[0];
+    if (!win) continue;
+    switch (win.kind) {
+      case 'remove':
+        continue;
+      case 'stepdown':
+        state.founders.delete(win.did);
+        continue;
+      case 'succeed': {
+        // Every one stands, whoever named it: none is first.
+        const space = win.space;
+        state.successors.set(space, [...new Set(group.map((event) => event.root))].sort());
+        continue;
+      }
+      case 'role':
+        // Rivals all stand: the role holds what they share.
+        state.roles.set(
+          win.name,
+          tops.map((event) => definitionFrom(event, defViews.get(event.id)!)!),
+        );
+        continue;
+      case 'assign': {
+        // Taking a role away beats giving it; an assignment counts only if it saw its account's removals.
+        // The changes on its key all saw the constitution, so they decide over its assignment too.
+        const gone = removals.get(win.did) ?? [];
+        const counted = tops.some((event) => event.kind === 'assign' && !event.assigned)
+          ? undefined
+          : tops.find((event) => gone.every((removal) => saw.get(event.id)!.has(removal.id)));
+        setAssigned(state, win.did, win.role, counted ? counted.id : null);
+        continue;
+      }
+      case 'invite': {
+        // Closed beats open, and open ones that name different roles close it. Rival openers
+        // all stand: a join must be one each of them could have made.
+        const roles = new Set(tops.map((event) => (event.kind === 'invite' ? event.role : '')));
+        const closed = tops.find((event) => event.kind === 'invite' && !event.open);
+        const pick = closed ?? win;
+        if (pick.kind === 'invite')
+          state.invites.set(pick.inviteKey, {
+            role: pick.role,
+            open: !closed && roles.size === 1,
+            event: pick.id,
+            by: [...new Set(tops.map((event) => event.root))].sort(),
+          });
+        continue;
+      }
+      case 'key':
+        keyEvents.push(...group);
+        // Only those granted it change the key, and every key stands: an id picks which is current
+        // among keys any of them could have made current alone.
+        currentKey = win;
+        continue;
+      case 'definition':
+        mergeDefinitions(tops, group, saw, state);
+        continue;
+      // `relays` and `keepers`: an id picks among lists any of their authors could have set alone.
+      default:
+        change(win, state, state);
     }
-    if (kind === 'revoke' || kind === 'fork') continue;
-    let win: AccessEvent;
-    if (kind === 'member') win = least(tops, given);
-    else if (kind === 'invite') {
-      // Closed beats open; then the one giving least.
-      const closed = tops.filter((event) => event.kind === 'invite' && !event.open);
-      win = least(closed.length > 0 ? closed : tops, given);
-    } else win = [...tops].sort(byId)[0]!;
-    if (win.kind === 'definition' && !win.deleted) {
-      state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
-    } else change(win, state);
   }
   if (keyEvents.length > 0) {
     // Every key stands; the current one goes last, the rest by id: only which is current matters.
@@ -821,13 +1187,16 @@ function merge(
 function applied(state: AccessState, event: AccessEvent, genesisId: string): MutableState {
   const next: MutableState = {
     ...state,
+    founders: new Set(state.founders),
     roles: new Map(state.roles),
-    members: new Map(state.members),
+    assigned: new Map(state.assigned),
     invites: new Map(state.invites),
     definitions: new Map(state.definitions),
+    contested: new Map(state.contested),
     keys: [...state.keys],
+    successors: new Map(state.successors),
   };
-  change(event, next);
+  change(event, next, state);
   if (event.kind === 'key') {
     next.keyDue = false;
     // The keys before it in the order a merge gives: the space's own first, the rest by id.
@@ -841,33 +1210,82 @@ function applied(state: AccessState, event: AccessEvent, genesisId: string): Mut
   return next;
 }
 
-/** The role a member or invite change gives, by the roles as a state has them */
-function givenIn(state: AccessState, event: AccessEvent): Role | null {
-  if (event.kind === 'member' || event.kind === 'invite')
-    return event.role === null ? null : (state.roles.get(event.role) ?? null);
-  return null;
+/**
+ * The latest changes to one collection's definition, merged (02 §6.3). One
+ * account's alone, or changes by accounts that may each change it (its first
+ * definer and those who may define it, or only those once no one first
+ * defined it), are picked between by id: each could have made its own the
+ * latest alone. Anything else, rival first definitions by two accounts or a
+ * delete beside another account's change, is contested: no id decides, since
+ * an id can be ground, and readers judge the rivals by what they say.
+ */
+function mergeDefinitions(
+  tops: ReadonlyArray<AccessEvent>,
+  group: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+  state: MutableState,
+): void {
+  const sorted = [...tops].sort(byId);
+  const win = sorted[0]!;
+  if (win.kind !== 'definition') return;
+  // Who first defined it, as each latest definition sees the whole group: null where rivals stand.
+  const definitions = sorted.filter((top) => !isDelete(top));
+  const definers = new Set(definitions.map((top) => definerOf(top, group, saw)));
+  // No first definer is agreed on only once every latest change saw the rival firsts, which a
+  // settling change did; rival firsts that are themselves latest are not agreement.
+  const settled = definitions.every((top) =>
+    firstsOf(top, group, saw).every((first) => first === top || saw.get(top.id)?.has(first.id)),
+  );
+  const oneAccount = new Set(sorted.map((top) => top.root)).size === 1;
+  const agreed =
+    sorted.length === 1 ||
+    oneAccount ||
+    (definers.size === 1 && !sorted.some(isDelete) && (!definers.has(null) || settled));
+  if (agreed) {
+    if (win.deleted) change(win, state, state);
+    else state.definitions.set(win.name, { event: win.id, definedBy: definerOf(win, group, saw) });
+    return;
+  }
+  state.definitions.delete(win.name);
+  state.contested.set(
+    win.name,
+    sorted.map((top) => top.id),
+  );
 }
 
+const isDelete = (event: AccessEvent) => event.kind === 'definition' && event.deleted;
+
 /**
- * Whoever defined a collection this time: of the definitions the winning one
- * saw, and itself, those that saw every removal it saw; of those, one that
- * saw no other, the lowest id if several.
+ * Whoever defined a collection this time (02 §6.3): of the definitions in
+ * `group` that saw every removal the winning one saw, those that saw no
+ * other, if they are all one account's. Rival first definitions by two
+ * accounts give no one: no id decides it, since an id can be ground, so only
+ * someone who may define it may change it.
  */
 function definerOf(
   win: AccessEvent,
   group: ReadonlyArray<AccessEvent>,
   saw: ReadonlyMap<string, Seen>,
-): string {
-  const past = group.filter((event) => event === win || saw.get(win.id)?.has(event.id));
-  const removed = (event: AccessEvent) => event.kind === 'definition' && event.deleted;
-  const removals = past.filter(removed);
-  const life = past.filter(
-    (event) => !removed(event) && removals.every((removal) => saw.get(event.id)?.has(removal.id)),
+): string | null {
+  const firsts = firstsOf(win, group, saw);
+  const roots = new Set(firsts.map((event) => event.root));
+  return roots.size === 1 ? [...roots][0]! : roots.size === 0 ? win.root : null;
+}
+
+/** The first definitions of the life `win` is in: those of `group` that saw every removal it saw, and no other */
+function firstsOf(
+  win: AccessEvent,
+  group: ReadonlyArray<AccessEvent>,
+  saw: ReadonlyMap<string, Seen>,
+): ReadonlyArray<AccessEvent> {
+  const removals = group.filter((event) => isDelete(event) && saw.get(win.id)?.has(event.id));
+  const life = group.filter(
+    (event) =>
+      event.kind === 'definition' &&
+      !isDelete(event) &&
+      (event === win || removals.every((removal) => saw.get(event.id)?.has(removal.id))),
   );
-  const first = life
-    .filter((event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)))
-    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
-  return (first ?? win).root;
+  return life.filter((event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)));
 }
 
 /**
@@ -932,16 +1350,19 @@ const STRUCK = "Its author's power was taken away by a change it had not seen, o
 
 /** Replays a space's access history. */
 export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<AccessEvent>): AccessHistory {
-  const byId = new Map<string, AccessEvent>();
-  for (const event of events) if (!byId.has(event.id)) byId.set(event.id, event);
+  // Another resolver would judge the same changes differently: this peer doesn't judge the space at all.
+  if (!RESOLVERS.has(genesis.resolver))
+    throw new Error(`This peer doesn't know the resolver ${genesis.resolver}, so it can't judge this space`);
+  const byIdMap = new Map<string, AccessEvent>();
+  for (const event of events) if (!byIdMap.has(event.id)) byIdMap.set(event.id, event);
 
   // A change waits until everything it saw is here, and so does anything that saw it.
   const waiting = new Set<string>();
-  const known = (id: string) => id === genesis.id || byId.has(id);
+  const known = (id: string) => id === genesis.id || byIdMap.has(id);
   let changed = true;
   while (changed) {
     changed = false;
-    for (const event of byId.values()) {
+    for (const event of byIdMap.values()) {
       if (waiting.has(event.id)) continue;
       if (event.seen.some((parent) => parent === event.id || !known(parent) || waiting.has(parent))) {
         waiting.add(event.id);
@@ -951,7 +1372,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   }
 
   // Ancestors first (Kahn's order, ties by id): a cycle can only be forged, and must not hang it.
-  const placeable = [...byId.values()].filter((event) => !waiting.has(event.id));
+  const placeable = [...byIdMap.values()].filter((event) => !waiting.has(event.id));
   const children = new Map<string, string[]>();
   const pending = new Map<string, number>();
   for (const event of placeable) {
@@ -978,7 +1399,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const index = new Map(order.map((id, i) => [id, i]));
   const saw = new Map<string, Ancestry>();
   for (const id of order) {
-    const parents = [...new Set(byId.get(id)!.seen.filter((parent) => parent !== genesis.id))];
+    const parents = [...new Set(byIdMap.get(id)!.seen.filter((parent) => parent !== genesis.id))];
     let prefix = 0;
     for (const parent of parents) prefix = Math.max(prefix, saw.get(parent)!.prefix);
     const extra = new Set<number>();
@@ -991,12 +1412,12 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   // In order, ancestors first: each change's own view (the allowed changes it saw), whether it is
   // allowed there, what it takes, and the strikes it is part of.
   const lostReaders = new Map<string, string[]>();
-  const power = new Map<string, Role | null>();
   const refused = new Map<string, string>();
   const allowedIds = new Set<string>();
-  const lowers = new Map<string, string[]>();
+  const scopes = new Map<string, string>();
   const strikes = new Map<string, string[]>();
   const afterOf = new Map<string, AccessState>();
+  const defViews = new Map<string, AccessState>();
   const keyWide = (event: AccessEvent) => event.kind === 'revoke' || event.kind === 'fork';
   const covers = (reduction: AccessEvent, event: AccessEvent) =>
     (!keyWide(reduction) && saw.get(reduction.id)!.has(event.id)) ||
@@ -1013,21 +1434,35 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
       );
     // Closing an invite strikes joins through it that the close had not seen.
     if (reduction.kind === 'invite')
-      return !reduction.open && event.kind === 'member' && event.viaInvite === reduction.inviteKey;
-    return (lowers.get(reduction.id) ?? []).includes(event.root);
+      return !reduction.open && event.kind === 'assign' && event.viaInvite === reduction.inviteKey;
+    // A removal or an unassignment reaches everything its account did: what an action needed is
+    // judged in a view its author chooses, so it can't decide what a strike leaves.
+    return scopes.get(reduction.id) === event.root;
   };
   // Revokes and fork proofs are never struck: every allowed one applies.
-  const strikesOn = (reduction: AccessEvent, event: AccessEvent) =>
+  const reachedBy = (reduction: AccessEvent, event: AccessEvent) =>
     reduction.id !== event.id &&
     !keyWide(event) &&
-    reaches(reduction, event) &&
     (keyWide(reduction) || !saw.get(event.id)!.has(reduction.id)) &&
-    !covers(reduction, event);
+    !covers(reduction, event) &&
+    reaches(reduction, event);
+  // A stepping down is never struck (`invalidWithin`): founder status can't be given again. One a
+  // revoke or a fork proof reaches ends founder status and does nothing more (below).
+  const strikesOn = (reduction: AccessEvent, event: AccessEvent) =>
+    !(keyWide(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event);
   const reductionIds: string[] = [];
-  const allowedView = viewsAlong(byId, saw, genesis, (id) => allowedIds.has(id), afterOf, lostReaders, power);
+  const allowedView = viewsAlong(
+    byIdMap,
+    saw,
+    genesis,
+    (id) => allowedIds.has(id),
+    afterOf,
+    lostReaders,
+    defViews,
+  );
 
   for (const id of order) {
-    const event = byId.get(id)!;
+    const event = byIdMap.get(id)!;
     const view = allowedView(event);
     const reason = refusal(event, view);
     if (reason) {
@@ -1035,28 +1470,48 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
       continue;
     }
     allowedIds.add(id);
-    power.set(id, givenIn(view, event));
-    const after = stepped(view, event, genesis, saw, byId, allowedIds);
-    const lowered_ = affected(event, view).filter((did) => lowered(roleOf(view, did), roleOf(after, did)));
-    if (lowered_.length > 0) lowers.set(id, lowered_);
-    const lost = affected(event, view).filter((did) => reads(view, did) && !reads(after, did));
+    const after = stepped(view, event, genesis, saw, byIdMap, allowedIds);
+    const scope = reductionOf(event, view);
+    if (scope) scopes.set(id, scope);
+    const lost = affected(event).filter((did) => isMember(view, did) && !isMember(after, did));
     if (lost.length > 0) lostReaders.set(id, lost);
     if (lost.length > 0 && after.keys.length > 0 && event.kind !== 'key') after.keyDue = true;
     afterOf.set(id, after);
     // Strikes it is part of, with the allowed changes before it.
-    if (lowered_.length > 0 || keyWide(event) || (event.kind === 'invite' && !event.open))
-      reductionIds.push(id);
+    if (scope || keyWide(event) || (event.kind === 'invite' && !event.open)) reductionIds.push(id);
     for (const r of reductionIds)
-      if (r !== id && strikesOn(byId.get(r)!, event)) (strikes.get(r) ?? strikes.set(r, []).get(r)!).push(id);
+      if (r !== id && strikesOn(byIdMap.get(r)!, event))
+        (strikes.get(r) ?? strikes.set(r, []).get(r)!).push(id);
     if (reductionIds.at(-1) === id)
       for (const other of order) {
         if (other === id) break;
-        if (allowedIds.has(other) && strikesOn(event, byId.get(other)!))
+        if (allowedIds.has(other) && strikesOn(event, byIdMap.get(other)!))
           (strikes.get(id) ?? strikes.set(id, []).get(id)!).push(other);
       }
   }
 
-  const valid = validWithin(order, { genesis, byId, saw, allowedIds, strikes, lostReaders, power });
+  // A stepping down its key's revoke or fork proof reaches only ends founder status: it strikes
+  // nothing, and withdraws nothing, as a reduction would.
+  const keyWideIds = reductionIds.filter((r) => keyWide(byIdMap.get(r)!));
+  for (const id of order) {
+    const event = byIdMap.get(id)!;
+    if (event.kind !== 'stepdown' || !allowedIds.has(id)) continue;
+    if (keyWideIds.some((r) => reachedBy(byIdMap.get(r)!, event))) {
+      strikes.delete(id);
+      scopes.delete(id);
+    }
+  }
+
+  const within = validWithin(order, {
+    genesis,
+    byId: byIdMap,
+    saw,
+    allowedIds,
+    strikes,
+    lostReaders,
+    defViews,
+  });
+  const valid = within.valid;
   const struck = new Map<string, string>();
   for (const id of order) if (allowedIds.has(id) && !valid.has(id)) struck.set(id, STRUCK);
 
@@ -1065,9 +1520,9 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const forks = new Map<string, ForkedLine & { event: string }>();
   for (const id of order) {
     if (!valid.has(id)) continue;
-    const event = byId.get(id)!;
-    for (const did of lowers.get(id) ?? [])
-      (reductions.get(did) ?? reductions.set(did, []).get(did)!).push(id);
+    const event = byIdMap.get(id)!;
+    const scope = scopes.get(id);
+    if (scope) (reductions.get(scope) ?? reductions.set(scope, []).get(scope)!).push(id);
     if (event.kind === 'revoke')
       (revokes.get(event.target) ?? revokes.set(event.target, []).get(event.target)!).push({
         event: id,
@@ -1079,18 +1534,18 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
         forks.set(line, { event: id, writer: event.writer, collection: event.collection, from: event.from });
     }
   }
-  const named = new Set<string>([genesis.creator]);
+  const named = new Set<string>([...genesis.founders, ...Object.keys(genesis.assigned ?? {})]);
   const invites = new Set<string>();
-  for (const event of byId.values()) {
-    if (event.kind === 'member' && event.role !== null) named.add(event.did);
+  for (const event of byIdMap.values()) {
+    if (event.kind === 'assign' && event.assigned) named.add(event.did);
     if (event.kind === 'invite') invites.add(event.inviteKey);
   }
   const state = merge(
     genesis,
-    order.filter((id) => valid.has(id)).map((id) => byId.get(id)!),
+    order.filter((id) => valid.has(id)).map((id) => byIdMap.get(id)!),
     saw,
     lostReaders,
-    power,
+    within.defViews,
   );
   // Due, too, when someone who held the current key reads no more, however that came about: two
   // changes together can take reading where neither did alone. Whoever could read as the key was
@@ -1102,16 +1557,16 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     const now = readers(state);
     const held = new Set(atKey ? readers(atKey) : []);
     for (const id of order) {
-      const event = byId.get(id)!;
-      if (!valid.has(id) || event.kind !== 'member' || sawByKey?.has(id)) continue;
+      const event = byIdMap.get(id)!;
+      if (!valid.has(id) || event.kind !== 'assign' || sawByKey?.has(id)) continue;
       const after = afterOf.get(id);
-      if (after && readers(after).has(event.did)) held.add(event.did);
+      if (after && isMember(after, event.did)) held.add(event.did);
     }
     if ([...held].some((did) => !now.has(did))) state.keyDue = true;
   }
   return historyOf({
     genesis,
-    byId,
+    byId: byIdMap,
     waiting,
     order,
     saw,
@@ -1129,15 +1584,10 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     views: new Map(),
     allowedIds,
     lostReaders,
-    power,
+    defViews,
+    validDefViews: within.defViews,
     strikes,
   });
-}
-
-/** Whether someone reads in a state: a member whose role still exists */
-function reads(state: AccessState, did: string): boolean {
-  const role = state.members.get(did);
-  return role !== undefined && state.roles.has(role);
 }
 
 /** A state with one change on top, and who defined it when it defines a collection */
@@ -1146,14 +1596,14 @@ function stepped(
   event: AccessEvent,
   genesis: AccessGenesis,
   saw: ReadonlyMap<string, Seen>,
-  byId: ReadonlyMap<string, AccessEvent>,
+  byIdMap: ReadonlyMap<string, AccessEvent>,
   counted: ReadonlySet<string>,
 ): MutableState {
   const after = applied(view, event, genesis.id);
   if (event.kind === 'definition' && !event.deleted) {
     const group = [...saw.get(event.id)!]
-      .filter((other) => counted.has(other) && byId.get(other)!.key === event.key)
-      .map((other) => byId.get(other)!)
+      .filter((other) => counted.has(other) && byIdMap.get(other)!.key === event.key)
+      .map((other) => byIdMap.get(other)!)
       .concat(event);
     after.definitions.set(event.name, { event: event.id, definedBy: definerOf(event, group, saw) });
   }
@@ -1162,16 +1612,17 @@ function stepped(
 
 /**
  * Each change's view over the changes `counts` keeps among what it saw. Along a chain, the one
- * before's view, with it on top when kept; where branches meet, a merge. Asked in order.
+ * before's view, with it on top when kept; where branches meet, a merge. Asked in order. A role
+ * definition's view is kept in `defViews`, where its grants are judged.
  */
 function viewsAlong(
-  byId: ReadonlyMap<string, AccessEvent>,
+  byIdMap: ReadonlyMap<string, AccessEvent>,
   saw: ReadonlyMap<string, Seen>,
   genesis: AccessGenesis,
   counts: (id: string) => boolean,
   afterOf: ReadonlyMap<string, AccessState>,
   lostReaders: ReadonlyMap<string, ReadonlyArray<string>>,
-  power: ReadonlyMap<string, Role | null>,
+  defViews: Map<string, AccessState>,
 ): (event: AccessEvent) => AccessState {
   const viewOf = new Map<string, AccessState>();
   return (event) => {
@@ -1183,21 +1634,24 @@ function viewsAlong(
     else
       view = merge(
         genesis,
-        [...saw.get(event.id)!].filter(counts).map((other) => byId.get(other)!),
+        [...saw.get(event.id)!].filter(counts).map((other) => byIdMap.get(other)!),
         saw,
         lostReaders,
-        power,
+        defViews,
       );
     viewOf.set(event.id, view);
+    if (event.kind === 'role') defViews.set(event.id, view);
     return view;
   };
 }
 
 /**
- * The valid changes among `cut` (in replay order, closed under what they saw). First the strikes:
- * an allowed change is struck by a valid one from another component of the strikes inside the cut.
- * Then, ancestors first, a change stays valid only if the valid changes it saw still give its
- * author the power: so a struck grant gives none, to anything downstream.
+ * The valid changes among `cut` (in replay order, closed under what they saw), and the views
+ * their role definitions are judged in. First the strikes: an allowed change is struck by a valid
+ * one from another component of the strikes inside the cut. Then, ancestors first, a change stays
+ * valid only if the valid changes it saw still give its author the power: so a struck grant gives
+ * none, to anything downstream, and a struck definition is dropped before anything resting on it
+ * is judged.
  */
 function validWithin(
   cut: ReadonlyArray<string>,
@@ -1208,14 +1662,24 @@ function validWithin(
     readonly allowedIds: ReadonlySet<string>;
     readonly strikes: ReadonlyMap<string, ReadonlyArray<string>>;
     readonly lostReaders: ReadonlyMap<string, ReadonlyArray<string>>;
-    readonly power: ReadonlyMap<string, Role | null>;
+    readonly defViews: ReadonlyMap<string, AccessState>;
   },
-): ReadonlySet<string> {
-  const invalid = invalidWithin(cut, r.allowedIds, r.strikes);
+): { readonly valid: ReadonlySet<string>; readonly defViews: ReadonlyMap<string, AccessState> } {
+  // A stepping down is never struck: founder status can't be given back.
+  const invalid = invalidWithin(cut, r.allowedIds, r.strikes, (id) => r.byId.get(id)?.kind === 'stepdown');
   const valid = new Set(cut.filter((id) => !invalid.has(id)));
-  if (cut.every((id) => !r.allowedIds.has(id) || valid.has(id))) return valid;
+  if (cut.every((id) => !r.allowedIds.has(id) || valid.has(id))) return { valid, defViews: r.defViews };
   const afterOf = new Map<string, AccessState>();
-  const viewOf = viewsAlong(r.byId, r.saw, r.genesis, (id) => valid.has(id), afterOf, r.lostReaders, r.power);
+  const defViews = new Map<string, AccessState>();
+  const viewOf = viewsAlong(
+    r.byId,
+    r.saw,
+    r.genesis,
+    (id) => valid.has(id),
+    afterOf,
+    r.lostReaders,
+    defViews,
+  );
   for (const id of cut) {
     const event = r.byId.get(id)!;
     const view = viewOf(event);
@@ -1226,7 +1690,7 @@ function validWithin(
     }
     afterOf.set(id, stepped(view, event, r.genesis, r.saw, r.byId, valid));
   }
-  return valid;
+  return { valid, defViews };
 }
 
 /**
@@ -1239,6 +1703,7 @@ function invalidWithin(
   cut: Iterable<string>,
   allowedIds: ReadonlySet<string>,
   strikes: ReadonlyMap<string, ReadonlyArray<string>>,
+  immune: (id: string) => boolean,
 ): ReadonlySet<string> {
   const inCut = new Set(cut);
   const out = new Set([...inCut].filter((id) => !allowedIds.has(id)));
@@ -1256,16 +1721,17 @@ function invalidWithin(
     for (const to of targets)
       if (of.get(from) !== of.get(to)) (strikers.get(to) ?? strikers.set(to, []).get(to)!).push(from);
   for (const members of list)
-    for (const id of members) if ((strikers.get(id) ?? []).some((from) => !out.has(from))) out.add(id);
+    for (const id of members)
+      if (!immune(id) && (strikers.get(id) ?? []).some((from) => !out.has(from))) out.add(id);
   return out;
 }
 
 /**
  * The replay with one more change that saw every change placed, or null for
  * any other: then only replaying whole can say. Such a change can't be struck
- * (it saw every reduction) and strikes nothing (it saw everything), so it is
- * valid exactly when it is allowed, its view is every allowed change, and it
- * is the latest on its record.
+ * by a reduction (it saw every one) and strikes nothing (it saw everything),
+ * so it is valid exactly when it is allowed and no revoke or fork reaches it,
+ * its view is every allowed change, and it is the latest on its record.
  */
 function extended(r: Replay, event: AccessEvent): Replay | null {
   const { genesis } = r;
@@ -1288,14 +1754,19 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
   const index = new Map(r.index).set(event.id, r.order.length);
   const mine = seenOf(prefix, extra, order, index);
   const ancestry = new Map(r.ancestry).set(event.id, mine);
-  const byId = new Map(r.byId).set(event.id, event);
+  const byIdMap = new Map(r.byId).set(event.id, event);
   const named = new Set(r.named);
-  if (event.kind === 'member' && event.role !== null) named.add(event.did);
+  if (event.kind === 'assign' && event.assigned) named.add(event.did);
   const invites = new Set(r.invites);
   if (event.kind === 'invite') invites.add(event.inviteKey);
+  // It saw everything: its view is the current state.
+  const view = r.state;
+  const defViews = event.kind === 'role' ? new Map(r.defViews).set(event.id, view) : r.defViews;
+  const validDefViews =
+    event.kind === 'role' ? new Map(r.validDefViews).set(event.id, view) : r.validDefViews;
   const base = {
     genesis,
-    byId,
+    byId: byIdMap,
     waiting: r.waiting,
     order,
     saw: ancestry,
@@ -1304,26 +1775,14 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     named,
     invites,
     views: new Map<string, AccessState>(),
+    defViews,
   };
 
-  // It saw everything: its view is the current state.
-  const view = r.state;
   const reason = refusal(event, view);
-  if (reason) {
-    return {
-      ...r,
-      ...base,
-      refused: new Map(r.refused).set(event.id, reason),
-    };
-  }
+  if (reason) return { ...r, ...base, refused: new Map(r.refused).set(event.id, reason) };
   const after = applied(view, event, genesis.id);
-  const lowered_ = affected(event, view).filter((did) => lowered(roleOf(view, did), roleOf(after, did)));
-  const reads = (state: AccessState, did: string) => {
-    const role = state.members.get(did);
-    return role !== undefined && state.roles.has(role);
-  };
-  const lost = affected(event, view).filter((did) => reads(view, did) && !reads(after, did));
-  if (lost.length > 0 && after.keys.length > 0 && event.kind !== 'key') after.keyDue = true;
+  const scope = reductionOf(event, view);
+  const lost = affected(event).filter((did) => isMember(view, did) && !isMember(after, did));
   // Valid, besides allowed: no revoke or fork of its key reaches it, whatever it saw.
   const uncovered = (reduction: string) =>
     (r.byId.get(reduction)!.cutoff.get(event.author)?.get(KIND_COLLECTION[event.kind]) ?? -1) <
@@ -1335,6 +1794,8 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
       .map((revoke) => revoke.event),
     ...(fork && (event.line ?? 0) >= fork.from ? [fork.event] : []),
   ];
+  // A stepping down its key's revoke reaches ends founder status and does nothing else: only a whole replay says.
+  if (strikers.length > 0 && event.kind === 'stepdown') return null;
   if (strikers.length > 0) {
     const strikes = new Map(r.strikes);
     for (const by of strikers) strikes.set(by, [...(strikes.get(by) ?? []), event.id]);
@@ -1345,34 +1806,26 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
       struck: new Map(r.struck).set(event.id, STRUCK),
       allowedIds: new Set(r.allowedIds).add(event.id),
       lostReaders: lost.length > 0 ? new Map(r.lostReaders).set(event.id, lost) : r.lostReaders,
-      power: new Map(r.power).set(event.id, givenIn(view, event)),
     };
   }
   const state = applied(r.state, event, genesis.id);
   if (event.kind === 'definition' && !event.deleted) {
-    // Who defined it, by the same rule a merge uses: in the allowed changes for its view, the valid ones for the state.
-    const ancestryWith = new Map(r.ancestry).set(event.id, mine);
-    const group = (ids: ReadonlySet<string>) =>
-      [...r.byId.values()].filter((other) => other.key === event.key && ids.has(other.id)).concat(event);
-    after.definitions.set(event.name, {
-      event: event.id,
-      definedBy: definerOf(event, group(r.allowedIds), ancestryWith),
-    });
-    state.definitions.set(event.name, {
-      event: event.id,
-      definedBy: definerOf(event, group(r.valid), ancestryWith),
-    });
+    // Who defined it, by the same rule a merge uses: among the valid changes, which here are the allowed ones.
+    const group = [...r.byId.values()]
+      .filter((other) => other.key === event.key && r.valid.has(other.id))
+      .concat(event);
+    state.definitions.set(event.name, { event: event.id, definedBy: definerOf(event, group, ancestry) });
   }
   if (lost.length > 0 && state.keys.length > 0 && event.kind !== 'key') state.keyDue = true;
   const reductions = new Map(r.reductions);
-  for (const did of lowered_) reductions.set(did, [...(reductions.get(did) ?? []), event.id]);
+  if (scope) reductions.set(scope, [...(reductions.get(scope) ?? []), event.id]);
   return {
     ...r,
     ...base,
+    validDefViews,
     valid: new Set(r.valid).add(event.id),
     allowedIds: new Set(r.allowedIds).add(event.id),
     lostReaders: lost.length > 0 ? new Map(r.lostReaders).set(event.id, lost) : r.lostReaders,
-    power: new Map(r.power).set(event.id, givenIn(view, event)),
     state,
     reductions,
   };
@@ -1392,25 +1845,42 @@ function historyOf(r: Replay): AccessHistory {
     }
     return cut;
   };
-  const at = (ids: ReadonlyArray<string>): AccessState => {
-    const key = [...new Set(ids)].sort().join(',');
-    const cached = r.views.get(key);
-    if (cached) return cached;
-    const cut = cutOf(ids);
-    const valid = validWithin(
-      [...cut].sort((a, b) => r.index.get(a)! - r.index.get(b)!),
-      r,
-    );
-    const view = merge(
+  const inOrder = (ids: Iterable<string>) => [...ids].sort((a, b) => r.index.get(a)! - r.index.get(b)!);
+  const idsKey = (ids: ReadonlyArray<string>) => [...new Set(ids)].sort().join(',');
+  /** The merge of what `ids` name and saw, counting those of them in `among` */
+  const stateOf = (
+    ids: ReadonlyArray<string>,
+    among: { readonly valid: ReadonlySet<string>; readonly defViews: ReadonlyMap<string, AccessState> },
+  ) =>
+    merge(
       genesis,
-      [...valid].map((id) => r.byId.get(id)!),
+      inOrder(cutOf(ids))
+        .filter((id) => among.valid.has(id))
+        .map((id) => r.byId.get(id)!),
       r.saw,
       r.lostReaders,
-      r.power,
+      among.defViews,
     );
+  const cached = (key: string, make: () => AccessState): AccessState => {
+    const known = r.views.get(key);
+    if (known) return known;
+    const view = make();
     r.views.set(key, view);
     return view;
   };
+  /** Valid in the whole history, or among what `within` names and saw */
+  const at = (ids: ReadonlyArray<string>, within?: ReadonlyArray<string>): AccessState =>
+    cached(`at:${idsKey(ids)}|${within ? idsKey(within) : '*'}`, () =>
+      stateOf(
+        ids,
+        within
+          ? validWithin(inOrder(cutOf([...ids, ...within])), r)
+          : { valid: r.valid, defViews: r.validDefViews },
+      ),
+    );
+  /** Valid among what `ids` name and saw alone */
+  const seenAs = (ids: ReadonlyArray<string>): AccessState =>
+    cached(`seen:${idsKey(ids)}`, () => stateOf(ids, validWithin(inOrder(cutOf(ids)), r)));
   const index = new Map(r.order.map((id, i) => [id, i]));
   const changesState = (id: string) => !['revoke', 'fork'].includes(r.byId.get(id)!.kind);
   let heads: ReadonlyArray<string> | null = null;
@@ -1447,8 +1917,11 @@ function historyOf(r: Replay): AccessHistory {
       for (const id of recent) if (chosen.length < max && !chosen.includes(id)) chosen.push(id);
       return chosen.slice(0, max).sort();
     },
-    at(ids: ReadonlyArray<string>) {
-      return seen(ids) ? at(ids) : null;
+    at(ids: ReadonlyArray<string>, within?: ReadonlyArray<string>) {
+      return seen(ids) && (!within || seen(within)) ? at(ids, within) : null;
+    },
+    seenAs(ids: ReadonlyArray<string>) {
+      return seen(ids) ? seenAs(ids) : null;
     },
     judge(record, needs, within) {
       if (!seen(record.seen) || (within && !seen(within)))
@@ -1472,14 +1945,21 @@ function historyOf(r: Replay): AccessHistory {
           : r.forks.get(lineOf(record.writer, record.collection));
       if (fork && (record.line ?? 0) >= fork.from && counts(fork.event))
         return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
-      const own = at(record.seen);
-      if (!needs(roleOf(own, record.root), own))
+      if (!needs(seenAs(record.seen)))
         return { ok: false, reason: 'Its author was not allowed to, as of what it had seen' };
+      // What it had not seen of its author's standing: a removal or an unassignment takes everything.
       const cut = cutOf(record.seen);
-      const unseen = (r.reductions.get(record.root) ?? []).filter(
-        (event) => !cut.has(event) && counts(event) && !covered(event),
-      );
-      return { ok: true, unseen };
+      for (const reduction of r.reductions.get(record.root) ?? [])
+        if (!cut.has(reduction) && counts(reduction) && !covered(reduction))
+          return { ok: false, reason: "Its author's access was taken away", withdrawn: true };
+      // What it saw counts only as far as it stands: a struck change gives nothing, even cited.
+      if (!needs(at(record.seen, within)))
+        return {
+          ok: false,
+          reason: 'It rests on a change to who may do what that was struck',
+          withdrawn: true,
+        };
+      return { ok: true };
     },
     revoked: (key: string, root: string) =>
       (r.revokes.get(key) ?? []).filter((revoke) => revoke.root === root).map((revoke) => revoke.event),

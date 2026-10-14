@@ -10,26 +10,65 @@
  * `ACCESS_RUNS=<n>` changes how many histories run.
  */
 import { test, describe } from 'node:test';
+import type { SpaceGrant as Grant } from '../src/types.js';
 import assert from 'node:assert/strict';
 
 import {
+  isMember,
   refusal,
   replayAccess,
-  MANAGE,
+  rolesOf,
   type AccessEvent,
   type AccessGenesis,
   type AccessHistory,
-  type Role,
 } from '../src/space/roles.js';
+import {
+  MEMBER_REMOVE,
+  RECORD_WRITE,
+  ROLE_ASSIGN,
+  ROLE_DEFINE,
+  ROLE_UNASSIGN,
+  type FoundingRole,
+} from '../src/space/grants.js';
 
-const ROLES: ReadonlyArray<Role> = [
-  { name: 'owner', rank: 100, permissions: ['*'] },
-  { name: 'admin', rank: 50, permissions: [MANAGE] },
-  { name: 'mod', rank: 20, permissions: [MANAGE] },
-  { name: 'member', rank: 10, permissions: [] },
+const notOwner = ['not', ['any', '.roles', ['==', '.', 'owner']]] as const;
+const ROLES: ReadonlyArray<FoundingRole> = [
+  {
+    name: 'owner',
+    grants: [
+      { cmd: ROLE_ASSIGN, pol: [] },
+      { cmd: ROLE_UNASSIGN, pol: [notOwner] },
+      { cmd: MEMBER_REMOVE, pol: [notOwner] },
+      { cmd: ROLE_DEFINE, pol: [['!=', '.role', 'owner']] },
+    ],
+  },
+  {
+    name: 'admin',
+    grants: [
+      { cmd: ROLE_ASSIGN, pol: [['!=', '.role', 'owner']] },
+      { cmd: ROLE_UNASSIGN, pol: [notOwner] },
+      { cmd: MEMBER_REMOVE, pol: [notOwner] },
+      { cmd: ROLE_DEFINE, pol: [['==', '.role', 'member']] },
+    ],
+  },
+  {
+    name: 'mod',
+    grants: [
+      { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] },
+      { cmd: MEMBER_REMOVE, pol: [] },
+    ],
+  },
+  { name: 'member', grants: [{ cmd: RECORD_WRITE, pol: [] }] },
+];
+const POOL: ReadonlyArray<Grant> = [
+  { cmd: RECORD_WRITE, pol: [] },
+  { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] },
+  { cmd: MEMBER_REMOVE, pol: [] },
+  { cmd: ROLE_UNASSIGN, pol: [] },
+  { cmd: ROLE_DEFINE, pol: [['==', '.role', 'member']] },
 ];
 const PEOPLE = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'];
-const genesis: AccessGenesis = { id: 'space', creator: 'p0', roles: ROLES, creatorRole: 'owner' };
+const genesis: AccessGenesis = { id: 'space', resolver: 'strong-remove/1', founders: ['p0'], roles: ROLES };
 
 /** A small seeded generator: the same seed, the same history */
 function random(seed: number) {
@@ -58,18 +97,20 @@ type Random = ReturnType<typeof random>;
 /** Each person writes with one key, its own DID here; its changes take the next place in that key's line */
 interface Made {
   readonly events: ReadonlyArray<AccessEvent>;
-  /** Event id → its place in its key's line for `sys.member` */
+  /** Event id → its place in its author's line */
   readonly place: ReadonlyMap<string, number>;
   /** Event id → every change it saw, directly or not */
   readonly saw: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
+const LINES = ['sys.assign', 'sys.remove', 'sys.role'];
+
 /**
- * Members join, are promoted, demoted and removed, by authors of different
- * ranks, each seeing a random causal cut of what came before: so changes are
- * often concurrent, and removals race what their targets do. A change that
- * takes power away carries a cutoff: the highest place of the target's key
- * its author had seen.
+ * Roles are assigned, taken, redefined, and accounts removed, by authors
+ * holding different roles, each seeing a random causal cut of what came
+ * before: so changes are often concurrent, and removals race what their
+ * targets do. A change that takes power away carries a cutoff: the highest
+ * place of the target's key its author had seen, in each line.
  */
 function generate(seed: number): Made {
   const r = random(seed);
@@ -96,7 +137,7 @@ function generate(seed: number): Made {
     const seen = named.length ? [...new Set(named)] : [genesis.id];
     const author = r.chance(0.3) ? 'p0' : r.pick(PEOPLE);
     const did = r.pick(PEOPLE.filter((p) => p !== 'p0'));
-    const role = r.chance(0.3) ? null : r.pick(ROLES.slice(1)).name;
+    const role = r.pick(ROLES.slice(1)).name;
     // What the author had seen of the target's key: its highest place among the cut.
     let cutoff = -1;
     for (const id of cut) {
@@ -104,21 +145,49 @@ function generate(seed: number): Made {
       if (event.root === did) cutoff = Math.max(cutoff, place.get(id) ?? -1);
     }
     const id = `e${String(++counter).padStart(3, '0')}x${r.int(1e6)}`;
-    const event: AccessEvent = {
+    const common = {
       id,
-      key: `member:${did}`,
-      kind: 'member',
       root: author,
       author,
-      did,
-      role,
       seen,
-      cutoff: cutoff >= 0 ? new Map([[did, new Map([['sys.member', cutoff]])]]) : new Map(),
+      cutoff: cutoff >= 0 ? new Map([[did, new Map(LINES.map((line) => [line, cutoff]))]]) : new Map(),
       line: lineLength.get(author) ?? 0,
     };
-    events.push(event);
-    place.set(id, lineLength.get(author) ?? 0);
-    lineLength.set(author, (lineLength.get(author) ?? 0) + 1);
+    const roll = r.int(10);
+    const event: AccessEvent =
+      roll < 5
+        ? { ...common, key: `assign:${did}|${role}`, kind: 'assign', did, role, assigned: true }
+        : roll < 7
+          ? {
+              ...common,
+              ...(r.chance(0.2) ? { root: did, author: did } : {}),
+              key: `assign:${did}|${role}`,
+              kind: 'assign',
+              did,
+              role,
+              assigned: false,
+            }
+          : roll < 9
+            ? {
+                ...common,
+                ...(r.chance(0.2) ? { root: did, author: did } : {}),
+                key: `remove:${did}`,
+                kind: 'remove',
+                did,
+              }
+            : {
+                ...common,
+                key: `role:${role}`,
+                kind: 'role',
+                name: role,
+                grants: [...new Set(Array.from({ length: r.int(3) }, () => r.pick(POOL)))],
+                nests: [],
+              };
+    // Its place in its own author's line, whoever that turned out to be.
+    const placed: AccessEvent = { ...event, line: lineLength.get(event.root) ?? 0 };
+    events.push(placed);
+    place.set(id, lineLength.get(event.root) ?? 0);
+    lineLength.set(event.root, (lineLength.get(event.root) ?? 0) + 1);
     saw.set(id, cut);
   }
   return { events, place, saw };
@@ -142,7 +211,7 @@ function forHistories(check: (made: Made, r: Random) => void): void {
 
 const applied = (history: AccessHistory, id: string) => history.status(id)?.status === 'applied';
 const members = (history: AccessHistory) =>
-  JSON.stringify([...history.current.members].sort((a, b) => (a[0] < b[0] ? -1 : 1)));
+  JSON.stringify(PEOPLE.map((did) => [did, isMember(history.current, did), rolesOf(history.current, did)]));
 
 describe('access replay: properties', () => {
   test('order: any arrival order gives the same state and verdicts', () => {
@@ -188,15 +257,16 @@ describe('access replay: properties', () => {
     forHistories(({ events }) => {
       const history = replayAccess(genesis, events);
       const owner = 'p0';
-      if (!history.current.members.has(owner)) return;
+      if (!isMember(history.current, owner)) return;
       const next: AccessEvent = {
         id: 'zzz-last',
-        key: 'member:p5',
-        kind: 'member',
+        key: 'assign:p5|member',
+        kind: 'assign',
         root: owner,
         author: owner,
         did: 'p5',
         role: 'member',
+        assigned: true,
         seen: history.heads().length ? [...history.heads()] : [genesis.id],
         cutoff: new Map(),
       };
@@ -223,22 +293,58 @@ describe('access replay: properties', () => {
   test('reductions: no change by an account past a removal’s cutoff, that the removal hadn’t seen, applies', () => {
     forHistories(({ events, place, saw }) => {
       const history = replayAccess(genesis, events);
+      // Applied reductions, leaving included, and which strike which: x strikes y when x
+      // reduces y's author, its cutoff doesn't cover y, and neither saw the other.
+      const strikes = (x: AccessEvent, y: AccessEvent) =>
+        'did' in x &&
+        x.did === y.root &&
+        (x.cutoff.get(y.root)?.get('sys.assign') ?? -1) < (place.get(y.id) ?? 0) &&
+        !saw.get(x.id)?.has(y.id) &&
+        !saw.get(y.id)?.has(x.id);
+      const reductions = events.filter(
+        (e) => (e.kind === 'remove' || (e.kind === 'assign' && !e.assigned)) && applied(history, e.id),
+      );
+      const reaches = (from: AccessEvent, to: AccessEvent): boolean => {
+        const seen = new Set<string>([from.id]);
+        const stack = [from];
+        while (stack.length > 0) {
+          const x = stack.pop()!;
+          if (x.id === to.id) return true;
+          for (const y of reductions)
+            if (!seen.has(y.id) && strikes(x, y)) {
+              seen.add(y.id);
+              stack.push(y);
+            }
+        }
+        return false;
+      };
       for (const removal of events) {
-        if (removal.kind !== 'member' || removal.role !== null || removal.root === removal.did) continue;
+        if (removal.kind !== 'remove' || removal.root === removal.did) continue;
         if (!applied(history, removal.id)) continue;
-        const cutoff = removal.cutoff.get(removal.did)?.get('sys.member') ?? -1;
+        const cutoff = removal.cutoff.get(removal.did)?.get('sys.assign') ?? -1;
         for (const event of events) {
           if (event.root !== removal.did || !applied(history, event.id)) continue;
           if (saw.get(removal.id)?.has(event.id) || saw.get(event.id)?.has(removal.id)) continue;
-          // A change by the removed account that itself changes the remover strikes back:
-          // reductions that strike each other all stand (03 §4.3 step 4).
-          if (event.kind === 'member' && event.did === removal.root) continue;
+          // A reduction by the removed account that strikes back at the remover, directly or
+          // round a ring of reductions that strike each other, stands with it (03 §4.3 step 4).
+          if (reductions.some((r) => r.id === event.id) && reaches(event, removal)) continue;
           assert.ok(
             (place.get(event.id) ?? 0) <= cutoff,
             `${event.id} by ${event.root} applied past ${removal.id}'s cutoff`,
           );
         }
       }
+    });
+  });
+
+  test('removal: an assignment counts only if it saw every applied removal of its account', () => {
+    forHistories(({ events, saw }) => {
+      const history = replayAccess(genesis, events);
+      for (const [did, roles] of history.current.assigned)
+        for (const id of roles.values())
+          for (const removal of events)
+            if (removal.kind === 'remove' && removal.did === did && applied(history, removal.id))
+              assert.ok(saw.get(id)?.has(removal.id), `${id} counts without having seen ${removal.id}`);
     });
   });
 });

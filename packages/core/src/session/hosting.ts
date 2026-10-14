@@ -75,7 +75,7 @@ export async function subscriptionKey(
 
 async function requestText(method: string, path: string, at: number, body: string): Promise<Uint8Array> {
   const bodyHash = base64UrlEncode(await sha256(utf8Encode(body)));
-  return utf8Encode(`weave-host/v1\n${method.toUpperCase()}\n${path}\n${at}\n${bodyHash}`);
+  return utf8Encode(`minca-host/v1\n${method.toUpperCase()}\n${path}\n${at}\n${bodyHash}`);
 }
 
 /**
@@ -91,7 +91,7 @@ export async function signRequest(
   at = Math.floor(Date.now() / 1000),
 ): Promise<string> {
   const sig = base64UrlEncode(await provider.sign(key.privateKey, await requestText(method, path, at, body)));
-  return `Weave did=${key.did}, at=${at}, sig=${sig}`;
+  return `Minca did=${key.did}, at=${at}, sig=${sig}`;
 }
 
 /**
@@ -107,7 +107,7 @@ export async function verifyRequest(
   now = Math.floor(Date.now() / 1000),
 ): Promise<string | null> {
   const pattern =
-    /^Weave did=(did:key:z[1-9A-HJ-NP-Za-km-z]{1,120}), at=(\d{1,12}), sig=([A-Za-z0-9_-]{1,200})$/;
+    /^Minca did=(did:key:z[1-9A-HJ-NP-Za-km-z]{1,120}), at=(\d{1,12}), sig=([A-Za-z0-9_-]{1,200})$/;
   const [, did, atText, sig] = pattern.exec(header ?? '') ?? [];
   if (did === undefined || atText === undefined || sig === undefined) return null;
   const at = Number(atText);
@@ -155,16 +155,16 @@ export interface HostStatus {
 export interface SignedStatus {
   /** A `HostStatus`, as JSON */
   readonly payload: string;
-  /** base64url P-256 signature over `weave-host-status/v1\n<payload>` */
+  /** base64url P-256 signature over `minca-host-status/v1\n<payload>` */
   readonly sig: string;
 }
 
 /**
- * What a host says about itself, to anyone, at `/.well-known/weave-host`.
+ * What a host says about itself, to anyone, at `/.well-known/minca-host`.
  * Its plans say what can be paid for; how a payment is taken is the host's own.
  */
 export interface HostDescription {
-  readonly weave: 'host/1';
+  readonly minca: 'host/1';
   /** Its own key, as it appears to peers, and what signs its statuses */
   readonly did: string;
   readonly name: string;
@@ -335,9 +335,9 @@ export function hostPeerAddress(url: string, description: Pick<HostDescription, 
 }
 
 /** Where a host's description is */
-export const HOST_DESCRIPTION_PATH = '/.well-known/weave-host';
+export const HOST_DESCRIPTION_PATH = '/.well-known/minca-host';
 
-const statusText = (payload: string) => utf8Encode(`weave-host-status/v1\n${payload}`);
+const statusText = (payload: string) => utf8Encode(`minca-host-status/v1\n${payload}`);
 
 /** Signs a status with the host's key */
 export async function signStatus(
@@ -381,7 +381,7 @@ const HOST_TIMEOUT_MS = 15_000;
 /** Starting a bot makes an account and joins a space, so it gets longer */
 const BOT_TIMEOUT_MS = 60_000;
 
-const NOT_A_HOST = "That address doesn't answer as a Weave host";
+const NOT_A_HOST = "That address doesn't answer as a Minca host";
 
 /**
  * Asks a host, and gives up when it takes too long. Nothing there, or
@@ -422,7 +422,7 @@ export async function describeHost(url: string, timeoutMs = HOST_TIMEOUT_MS): Pr
     NOT_A_HOST,
   );
   if (
-    description.weave !== 'host/1' ||
+    description.minca !== 'host/1' ||
     typeof description.did !== 'string' ||
     !description.did.startsWith('did:key:')
   ) {

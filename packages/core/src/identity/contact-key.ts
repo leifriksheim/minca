@@ -23,10 +23,10 @@ import { bufferSource } from '../utils/guards.js';
 import { hkdf } from './hkdf.js';
 
 /** Domain separation for the contact key. Changing it changes every account's contact key. */
-const CONTACT_KEY_INFO = 'weave/p256-contact-key/v1';
-const MEMBER_KEY_INFO = 'weave/p256-member-key/v1';
-const DOOR_KEY_INFO = 'weave/p256-door-key/v1';
-const DOOR_SIGN_KEY_INFO = 'weave/p256-door-sign-key/v1';
+const CONTACT_KEY_INFO = 'minca/p256-contact-key/v1';
+const MEMBER_KEY_INFO = 'minca/p256-member-key/v1';
+const DOOR_KEY_INFO = 'minca/p256-door-key/v1';
+const DOOR_SIGN_KEY_INFO = 'minca/p256-door-sign-key/v1';
 
 /** 48 bytes reduce to a P-256 scalar without bias, as for the root key (`crypto-p256.ts`) */
 const P256_SEED_BYTES = 48;

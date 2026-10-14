@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { Query } from '@weaveprotocol/core';
+import type { Query } from '@minca/core';
 import type { Clause, ClauseField } from '../derive/conditions';
 import type { Sort } from '../derive/filters';
 import type { People } from '../derive/people';
@@ -109,7 +109,7 @@ export function QueryBuilder({
             lineHeight: 1.6,
             overflowX: 'auto',
             border: `1px solid ${palette.surface.line}`,
-            borderRadius: 8,
+            borderRadius: palette.radius.lg,
             background: palette.surface.sunken,
           }}
         >

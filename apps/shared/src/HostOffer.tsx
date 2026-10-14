@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { describeHost, type HostDescription } from '@weaveprotocol/core';
+import { describeHost, type HostDescription } from '@minca/core';
 import { DEFAULT_HOST } from './relay';
 import { HostAddressForm, type Wanted } from './HostAddress';
 import { FeatureIcon, StatusPill, type Tone } from './Feature';
@@ -139,7 +139,7 @@ export function HostStatusRow({
 }) {
   return (
     <>
-      <FeatureIcon kind="online" glyph="cloud" size={size} />
+      <FeatureIcon kind="online" size={size} />
       <div style={{ flex: '1 1 200px', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <strong style={{ fontSize: 14, color: palette.ink.strong }}>{name}</strong>

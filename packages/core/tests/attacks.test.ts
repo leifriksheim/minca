@@ -12,7 +12,8 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { SYNC_PROTOCOL_VERSION } from '../src/sync/sync-messages.js';
-import { newRecordKey, nextVersion } from '../src/records/version.js';
+import { nextVersion } from '../src/records/version.js';
+import { newRecordKey } from '../src/records/key.js';
 import { isSealedBody } from '../src/privacy/space-encryption.js';
 import { joined } from './helpers/joined.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -27,23 +28,41 @@ import { contactRequest } from '../src/schemas/contacts.js';
 import { until } from './helpers/until.js';
 import type { Version } from '../src/types.js';
 import { seenBy } from './helpers/as-member.js';
-import { memberKey } from '../src/space/space-access.js';
-import { MEMBER_COLLECTION } from '../src/space/roles.js';
+import { assignKey } from '../src/space/space-access.js';
+import { ASSIGN_COLLECTION } from '../src/space/roles.js';
+import { RECORD_DELETE, RECORD_WRITE } from '../src/space/grants.js';
 import { forge, open, person, settle } from './helpers/person.js';
+import { stubOf } from '../src/schema/version.js';
+import type { SpaceRole } from '../src/types.js';
 
-/** Alice owns a shared space with a creator-only poll collection; Bob is a member. */
+/** Editors here write and delete only what they made */
+const ownOnly = [
+  {
+    name: 'editor',
+    grants: [
+      { cmd: RECORD_WRITE, pol: [['==', '.byCreator', true]] },
+      { cmd: RECORD_DELETE, pol: [['==', '.byCreator', true]] },
+    ],
+  },
+];
+
+/** Alice founds a shared space whose editors change only their own records; Bob is an editor. */
 async function setup() {
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
-  const { id: space } = await alice.node.spaces.create({ name: 'Polls', ...team, visibility: 'public' });
+  const { id: space } = await alice.node.spaces.create({
+    name: 'Polls',
+    roles: ownOnly,
+    visibility: 'public',
+  });
   await bob.node.spaces.join(await alice.node.spaces.invite(space));
   await hold(alice.node, space);
   await joined(bob.node, space);
   await alice.node.collections.define(space, {
     name: 'app.poll',
     schema: { type: 'object' },
-    rules: { edit: 'creator', delete: 'creator', fixed: ['options'] },
+    rules: { fixed: ['options'] },
   });
   await hold(alice.node, space);
   await hold(bob.node, space);
@@ -71,7 +90,7 @@ describe('attacks on a shared space', () => {
     const relabelled = await forge(alice, space, {
       collection: 'app.other',
       body: sealed,
-      version: { key: newRecordKey(), seq: 0 },
+      version: { key: await newRecordKey(alice.node.did), seq: 0 },
     });
     assert.deepEqual((await alice.node.records.get(space, note.key))?.body, { text: 'secret' });
     for (const copy of [moved, relabelled]) {
@@ -123,7 +142,7 @@ describe('attacks on a shared space', () => {
     );
     const poll = (await alice.node.collections.list(space)).find((c) => c.name === 'app.poll');
     assert.equal(poll?.version, 1);
-    assert.deepEqual(poll?.rules, { edit: 'creator', delete: 'creator', fixed: ['options'] });
+    assert.deepEqual(poll?.rules, { fixed: ['options'] });
   });
 
   test('a member cannot freeze a record by skipping ahead to a seq nobody can outrank', async () => {
@@ -232,9 +251,9 @@ describe('attacks on a shared space', () => {
           bob,
           space,
           {
-            collection: MEMBER_COLLECTION,
-            body: { did, role: 'owner' },
-            version: { key: await memberKey(did), seq: 0 },
+            collection: ASSIGN_COLLECTION,
+            body: { did, role: 'editor', assigned: true },
+            version: { key: await assignKey(did, 'editor'), seq: 0 },
             retain: true,
             seen,
           },
@@ -254,7 +273,7 @@ describe('attacks on a shared space', () => {
     );
     assert.ok((await alice.node.spaces.access(space)).heads.length <= 2);
     await alice.node.records.put(space, 'app.note', { text: 'still here' });
-    await alice.node.spaces.setMember(space, bob.node.did, null);
+    await alice.node.spaces.removeMember(space, bob.node.did);
   });
 });
 
@@ -366,5 +385,93 @@ describe('attacks on contacts', () => {
       'only the original, from Leif',
     );
     assert.deepEqual(await anna.node.contacts.requests(other), []);
+  });
+});
+
+// Found by the adversarial review of grants: a stub and its whole version share an id and a
+// signature, so a verdict on the stub, judged without its body, was kept for the whole.
+describe('a stub sent ahead of its body', () => {
+  /** Pushes versions to whoever connects, one at a time, as a stranger in the room */
+  async function push(hub: FakeHub, space: string, versions: ReadonlyArray<unknown>) {
+    const stranger = hub.transport('did:key:zstubber', space);
+    // One at a time, so each is judged before the next arrives.
+    const sendAll = async (peer: string) => {
+      for (const version of versions) {
+        const payload = { v: SYNC_PROTOCOL_VERSION, type: 'push-update', version };
+        stranger.send(
+          peer,
+          new TextEncoder().encode(JSON.stringify({ type: 'sync', from: 'did:key:zstubber', payload })),
+        );
+        await settle(300);
+      }
+    };
+    stranger.on('connected', (peer: string) => void sendAll(peer));
+    await stranger.connect();
+  }
+
+  async function space(roles: ReadonlyArray<SpaceRole>) {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const bob = await person(hub);
+    const { id } = await alice.node.spaces.create({ name: 'S', roles, visibility: 'public' });
+    await bob.node.spaces.join(await alice.node.spaces.invite(id, { role: 'editor' }));
+    await hold(alice.node, id);
+    await joined(bob.node, id);
+    await settle(300);
+    return { hub, alice, bob, space: id };
+  }
+
+  test('does not get the whole version past a policy on its body', async () => {
+    const {
+      hub,
+      alice,
+      bob,
+      space: id,
+    } = await space([
+      {
+        name: 'editor',
+        grants: [
+          {
+            cmd: RECORD_WRITE,
+            pol: [
+              ['==', '.collection', 'app.note'],
+              ['!=', '.body.text', 'spam'],
+            ],
+          },
+        ],
+      },
+    ]);
+    const bad = await forge(bob, id, { collection: 'app.note', body: { text: 'spam' } }, { keep: false });
+    const good = await forge(bob, id, { collection: 'app.note', body: { text: 'hello' } }, { keep: false });
+    await push(hub, id, [stubOf(bad), bad, stubOf(good), good]);
+    await until(async () => (await alice.node.records.get(id, good.key)) !== null, 6000, 'the honest note');
+    assert.equal(await alice.node.records.get(id, bad.key), null, 'the body its grant forbids');
+  });
+
+  test('does not get the whole edit past `fixed`', async () => {
+    const {
+      hub,
+      alice,
+      bob,
+      space: id,
+    } = await space([{ name: 'editor', grants: [{ cmd: '/record', pol: [] }] }]);
+    await alice.node.collections.define(id, {
+      name: 'app.poll',
+      schema: { type: 'object' },
+      rules: { fixed: ['options'] },
+    });
+    const poll = await alice.node.records.put(id, 'app.poll', { question: 'Q', options: ['a'] });
+    await until(async () => (await bob.node.records.get(id, poll.key)) !== null, 4000, 'the poll');
+    const current = await (await stored(bob.stores, id)).getCurrent(poll.key);
+    const bad = await forge(
+      bob,
+      id,
+      { collection: 'app.poll', body: { question: 'Q', options: ['zzz'] }, version: nextVersion(current!) },
+      { keep: false },
+    );
+    await push(hub, id, [stubOf(bad), bad]);
+    await settle(1200);
+    const read = await alice.node.records.get<{ options: string[] }>(id, poll.key);
+    assert.deepEqual(read?.body?.options, ['a']);
   });
 });

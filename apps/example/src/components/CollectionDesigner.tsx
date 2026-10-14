@@ -1,8 +1,8 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { roleHolds } from '@weaveprotocol/core';
-import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@weaveprotocol/core';
-import { useAccess, useAccount, useCollections, useNode, useProfiles } from '@weaveprotocol/core/react';
-import { useAction } from '@weave/app-shared/action';
+import { useMayDefine } from '@minca/app-shared/may';
+import type { DefineCollection, JsonSchema, NodeCollection, SpaceSummary } from '@minca/core';
+import { useAccount, useCollections, useNode, useProfiles } from '@minca/core/react';
+import { useAction } from '@minca/app-shared/action';
 import { nameOf, peopleFrom } from '../derive/people';
 import { collectionLabel, humanize, isObject } from '../derive/schema-ui';
 import {
@@ -44,9 +44,6 @@ interface LinkDraft {
   to: ReadonlyArray<string>;
   many: boolean;
 }
-
-/** Who may change a record once it's there, in the two ways people mean it */
-type Who = 'anyone' | 'creator';
 
 /** Where a new collection starts: a few fields that thing usually has */
 const TEMPLATES: ReadonlyArray<{
@@ -154,15 +151,14 @@ export function useMayRedefine(
   collection: NodeCollection | null,
 ): { may: boolean; reason: string } {
   const account = useAccount();
-  const access = useAccess(space.id);
+  const defines = useMayDefine(space.id, collection?.name ?? '');
   const people = peopleFrom(useProfiles(space.id));
   if (!collection) return { may: false, reason: '' };
-  if (collection.definedBy === account.did || roleHolds(access?.role, 'manage'))
-    return { may: true, reason: '' };
+  if (collection.definedBy === account.did || defines) return { may: true, reason: '' };
   const definer = collection.definedBy ? nameOf(collection.definedBy, people) : 'whoever made it';
   return {
     may: false,
-    reason: `Only ${definer}, or someone who manages the space, can change what ${collectionLabel(collection)} is.`,
+    reason: `Only ${definer}, or someone the space lets define it, can change what ${collectionLabel(collection)} is.`,
   };
 }
 
@@ -192,9 +188,6 @@ export function CollectionEditor({
       to: d.to === '*' ? [] : [...d.to],
       many: d.cardinality !== 'one',
     })),
-  );
-  const [who, setWho] = useState<Who>(
-    collection ? (collection.rules.edit === 'creator' ? 'creator' : 'anyone') : 'creator',
   );
   const [onePer, setOnePer] = useState(false);
   const [template, setTemplate] = useState('Blank');
@@ -284,17 +277,11 @@ export function CollectionEditor({
         },
       ]),
     );
-    const { edit: _edit, delete: _delete, ...otherRules } = collection?.rules ?? {};
+    // Who may change a record is the space's grants, not the definition's.
     const rules = {
-      ...otherRules,
-      ...(who === 'creator'
-        ? { edit: 'creator' as const, delete: ['creator' as const, 'can:moderate' as const] }
-        : {}),
+      ...(collection?.rules ?? {}),
       ...(making && about && onePer ? { onePer: ['@author', 'link:about'] } : {}),
     };
-    const permissions = [
-      ...new Set([...(collection?.permissions ?? []), ...(who === 'creator' ? ['moderate'] : [])]),
-    ];
     await run(async () => {
       await node.collections.define(space.id, {
         name,
@@ -303,8 +290,8 @@ export function CollectionEditor({
         schema,
         ...(collection ? { history: collection.history } : {}),
         links: nextLinks,
-        permissions,
         rules,
+        ...(collection?.contract ? { contract: collection.contract } : {}),
       });
       onDone(name);
     });
@@ -601,27 +588,9 @@ export function CollectionEditor({
 
         <section style={section}>
           <Heading
-            title="Who can do what"
-            about="Every device in the space enforces this, not just this app."
+            title="What it keeps to"
+            about="Every device in the space enforces this. Who may add or change records is the space's roles."
           />
-          <div style={styles.segmented} role="group" aria-label="Who can change one">
-            {(
-              [
-                ['creator', 'Only whoever added it can change it'],
-                ['anyone', 'Anyone in the space can change it'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={who === value}
-                onClick={() => setWho(value)}
-                style={who === value ? styles.segmentActive : styles.segment}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           {making && about && (
             <label style={{ ...toggle, fontSize: 13.5 }}>
               <input type="checkbox" checked={onePer} onChange={(e) => setOnePer(e.target.checked)} />
@@ -787,7 +756,7 @@ const fieldCard: CSSProperties = {
   gap: 10,
   padding: 8,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
 };
 const nudge: CSSProperties = {
@@ -804,7 +773,7 @@ const typeButton: CSSProperties = {
   gap: 8,
   height: 36,
   padding: '0 10px 0 4px',
-  borderRadius: 8,
+  borderRadius: palette.radius.md,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.sunken,
   color: palette.ink.body,
@@ -819,7 +788,7 @@ const mark: CSSProperties = {
   justifyContent: 'center',
   width: 28,
   height: 28,
-  borderRadius: 6,
+  borderRadius: palette.radius.sm,
   background: palette.surface.card,
   border: `1px solid ${palette.surface.line}`,
   fontSize: 12,
@@ -832,7 +801,7 @@ const typeGrid: CSSProperties = {
   gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
   gap: 6,
   padding: 6,
-  borderRadius: 8,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
 };
 const typeTile: CSSProperties = {
@@ -840,7 +809,7 @@ const typeTile: CSSProperties = {
   alignItems: 'center',
   gap: 10,
   padding: 8,
-  borderRadius: 8,
+  borderRadius: palette.radius.md,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.card,
   textAlign: 'left',
@@ -860,7 +829,7 @@ const optionChip: CSSProperties = {
   gap: 6,
   height: 26,
   padding: '0 8px 0 10px',
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   background: palette.surface.sunken,
   border: `1px solid ${palette.surface.line}`,
   fontSize: 13,
@@ -868,7 +837,7 @@ const optionChip: CSSProperties = {
 };
 const addField_: CSSProperties = {
   height: 40,
-  borderRadius: 10,
+  borderRadius: palette.radius.pill,
   border: `1px dashed ${palette.surface.lineStrong}`,
   background: 'none',
   color: palette.ink.muted,
@@ -879,7 +848,7 @@ const preview: CSSProperties = {
   position: 'sticky',
   top: 0,
   padding: 16,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.sunken,
 };

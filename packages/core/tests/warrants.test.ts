@@ -5,15 +5,17 @@
  * proof that doesn't hold flags nobody.
  */
 import { test, describe } from 'node:test';
+import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { stubOf } from '../src/schema/version.js';
-import { team } from '../src/space/presets.js';
-import { MEMBER_COLLECTION } from '../src/space/roles.js';
+import { ASSIGN_COLLECTION, REMOVE_COLLECTION } from '../src/space/roles.js';
+import { ROLE_ASSIGN, ROLE_UNASSIGN } from '../src/space/grants.js';
+import type { SpaceRole } from '../src/types.js';
 import { isRecord } from '../src/utils/guards.js';
 import { readWarrant } from '../src/records/warrant.js';
-import { memberKey, newWarrantKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
+import { assignKey, removalKey, WARRANT_COLLECTION } from '../src/space/space-access.js';
 import type { Version } from '../src/types.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { joined } from './helpers/joined.js';
@@ -22,12 +24,25 @@ import { until } from './helpers/until.js';
 import { forge, person, type Person } from './helpers/person.js';
 import { seenBy } from './helpers/as-member.js';
 
+/** Editors write any record but notices, which only the founder posts; a steward role nobody holds */
+const ROLES: ReadonlyArray<SpaceRole> = [
+  {
+    name: 'editor',
+    title: 'Editor',
+    grants: [
+      { cmd: '/record', pol: [['!=', '.collection', 'app.notice']] },
+      { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'editor']] },
+    ],
+  },
+  { name: 'steward', title: 'Steward', grants: [{ cmd: '/', pol: [] }] },
+];
+
 async function sharedWithBob() {
   const hub = createFakeHub({ latencyMs: 1 });
   const alice = await person(hub);
   const bob = await person(hub);
-  const { id: space } = await alice.node.spaces.create({ name: 'Plans', ...team, visibility: 'public' });
-  await bob.node.spaces.join(await alice.node.spaces.invite(space));
+  const { id: space } = await alice.node.spaces.create({ name: 'Plans', roles: ROLES, visibility: 'public' });
+  await bob.node.spaces.join(await alice.node.spaces.invite(space, { role: 'editor' }));
   await hold(alice.node, space);
   await joined(bob.node, space);
   // And Alice has his join: until then, to her he is no member.
@@ -50,8 +65,8 @@ async function slip(who: Person, space: string, versions: ReadonlyArray<Version>
 /** A warrant's first version in someone's copy, found by the offence it proves */
 async function warrantAbout(who: Person, space: string, offence: string): Promise<Version | null> {
   const store = createStorageProvider(await who.stores(`spaces/${space}`));
-  for (const versions of (await store.histories('warrant:')).values())
-    for (const version of versions) {
+  for (const current of await store.queryVersions(WARRANT_COLLECTION))
+    for (const version of await store.history(current.key)) {
       const offending = readWarrant(version.body)?.evidence[0];
       if (version.seq === 0 && offending?.id === offence) return version;
     }
@@ -75,13 +90,8 @@ const flaggedEverywhere = (people: ReadonlyArray<Person>, space: string, account
 describe('warrants', () => {
   test('a member who signs past their place, as of what they had seen, is flagged for everyone', async () => {
     const { alice, bob, space } = await sharedWithBob();
-    // Only those who may post can create one, and editors may not.
-    await alice.node.collections.define(space, {
-      name: 'app.notice',
-      schema: { type: 'object' },
-      permissions: ['post'],
-      rules: { create: 'can:post' },
-    });
+    // Only the founder posts notices: editors hold no grant for them.
+    await alice.node.collections.define(space, { name: 'app.notice', schema: { type: 'object' } });
     await until(
       async () => !(await bob.node.records.can(space, 'create', 'app.notice')),
       4000,
@@ -103,30 +113,23 @@ describe('warrants', () => {
 
   test('a change to who may do what that its author had no power for, as of what they had seen', async () => {
     const { alice, bob, space } = await sharedWithBob();
-    // Bob, an editor, makes himself an owner: the next version of his own member record.
-    const store = createStorageProvider(await bob.stores(`spaces/${space}`));
-    const current = (await store.getCurrent(await memberKey(bob.node.did)))!;
+    // Bob, an editor, assigns himself steward, which no grant of his lets him give.
     const proper = await forge(
       bob,
       space,
       {
-        collection: MEMBER_COLLECTION,
-        body: { did: bob.node.did, role: 'owner' },
-        version: {
-          key: current.key,
-          seq: current.seq + 1,
-          prev: current.id,
-          genesis: current.genesis ?? current.id,
-        },
+        collection: ASSIGN_COLLECTION,
+        body: { did: bob.node.did, role: 'steward', assigned: true },
+        version: { key: await assignKey(bob.node.did, 'steward'), seq: 0 },
         retain: true,
       },
       { keep: false },
     );
     await slip(bob, space, [proper]);
     await flaggedEverywhere([alice, bob], space, bob.node.did, 'access');
-    assert.equal(
-      (await alice.node.spaces.access(space)).members.find((m) => m.did === bob.node.did)?.role,
-      'editor',
+    assert.deepEqual(
+      (await alice.node.spaces.access(space)).members.find((m) => m.did === bob.node.did)?.roles,
+      ['editor'],
     );
   });
 
@@ -162,7 +165,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [evidence] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -174,12 +176,7 @@ describe('warrants', () => {
 
   test('the accused can’t overwrite the proof against them: a warrant is its writer’s own record', async () => {
     const { alice, bob, space } = await sharedWithBob();
-    await alice.node.collections.define(space, {
-      name: 'app.notice',
-      schema: { type: 'object' },
-      permissions: ['post'],
-      rules: { create: 'can:post' },
-    });
+    await alice.node.collections.define(space, { name: 'app.notice', schema: { type: 'object' } });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
     const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
     await slip(bob, space, [bad]);
@@ -227,12 +224,7 @@ describe('warrants', () => {
 
   test('the accused can’t get in first: a warrant against yourself is never proof', async () => {
     const { alice, bob, space } = await sharedWithBob();
-    await alice.node.collections.define(space, {
-      name: 'app.notice',
-      schema: { type: 'object' },
-      permissions: ['post'],
-      rules: { create: 'can:post' },
-    });
+    await alice.node.collections.define(space, { name: 'app.notice', schema: { type: 'object' } });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
     const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
     // Bob warrants himself first, hoping Alice's node sees him flagged and writes nothing.
@@ -242,7 +234,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -288,30 +279,23 @@ describe('warrants', () => {
     await until(flaggedBy, 8000, 'Bob’s warrant');
 
     // Alice removes Bob, keeping nothing: his warrant is withdrawn with the rest.
-    const aliceStore = createStorageProvider(await alice.stores(`spaces/${space}`));
-    const membership = (await aliceStore.getCurrent(await memberKey(bob.node.did)))!;
     const removal = await forge(
       alice,
       space,
       {
-        collection: MEMBER_COLLECTION,
-        body: { did: bob.node.did, role: null },
-        version: {
-          key: membership.key,
-          seq: membership.seq + 1,
-          prev: membership.id,
-          genesis: membership.genesis ?? membership.id,
-        },
+        collection: REMOVE_COLLECTION,
+        body: { did: bob.node.did },
+        version: { key: await removalKey(bob.node.did), seq: 0 },
         retain: true,
       },
       { keep: false },
     );
     await slip(alice, space, [removal]);
-    await until(async () => (await bob.node.spaces.access(space)).role === null, 8000, 'the removal');
+    await until(async () => (await bob.node.spaces.access(space)).mine.length === 0, 8000, 'the removal');
     await until(async () => !(await flaggedBy()), 4000, 'the warrant to be withdrawn');
 
     // Alice gives him his place back, and he sees her break a chain again.
-    await alice.node.spaces.setMember(space, bob.node.did, 'editor');
+    await alice.node.spaces.assign(space, bob.node.did, 'editor');
     await letGo(bob.node, space);
     await hold(bob.node, space);
     await joined(bob.node, space, 8000);
@@ -331,14 +315,14 @@ describe('warrants', () => {
     await joined(mallory.node, space);
     await hold(mallory.node, space);
     // Alice, honestly, takes Bob's role away, and every peer judges the change.
-    await alice.node.spaces.setMember(space, bob.node.did, null);
+    await alice.node.spaces.unassign(space, bob.node.did, 'editor');
     const mallorysStore = createStorageProvider(await mallory.stores(`spaces/${space}`));
     await until(
       async () => !(await mallory.node.spaces.access(space)).members.some((m) => m.did === bob.node.did),
       4000,
       'the change at Mallory’s',
     );
-    const real = (await mallorysStore.getCurrent(await memberKey(bob.node.did)))!;
+    const real = (await mallorysStore.getCurrent(await assignKey(bob.node.did, 'editor')))!;
     // Mallory keeps its id, signature and body hash, and swaps the body for a change no owner
     // could make: to a role that doesn't exist.
     assert.ok(isRecord(real.body));
@@ -349,7 +333,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'access', evidence: [counterfeit] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -386,7 +369,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [rewritten] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -414,19 +396,24 @@ describe('warrants', () => {
     const { id: space } = await alice.node.spaces.create({
       name: 'Plans',
       roles: [
-        { name: 'owner', title: 'Owner', rank: 100, permissions: ['*'] },
-        { name: 'manager', title: 'Manager', rank: 50, permissions: ['manage', 'invite'] },
-        { name: 'editor', title: 'Editor', rank: 10, permissions: [] },
-        { name: 'viewer', title: 'Viewer', rank: 5, permissions: [] },
+        {
+          name: 'manager',
+          title: 'Manager',
+          // A warrant is a record like any other: whoever writes one needs a grant to write it.
+          grants: [
+            { cmd: '/record', pol: [] },
+            { cmd: ROLE_ASSIGN, pol: [] },
+            { cmd: ROLE_UNASSIGN, pol: [] },
+          ],
+        },
+        { name: 'editor', title: 'Editor', grants: [{ cmd: '/record', pol: [] }] },
       ],
-      creatorRole: 'owner',
       visibility: 'public',
     });
     await hold(alice.node, space);
     await mallory.node.spaces.join(await alice.node.spaces.invite(space, { role: 'manager' }));
     await joined(mallory.node, space);
     await hold(mallory.node, space);
-    // Carol holds the space with no role: a rival change will give her her first.
     await carol.node.spaces.join(await alice.node.spaces.invite(space, { write: false }));
     await hold(carol.node, space);
     await until(
@@ -434,39 +421,51 @@ describe('warrants', () => {
       8000,
       'Mallory in',
     );
-    const roleAt = async (who: Person) =>
-      (await who.node.spaces.access(space)).members.find((m) => m.did === carol.node.did)?.role ?? null;
+    // Alice makes Carol an editor.
+    await alice.node.spaces.assign(space, carol.node.did, 'editor');
+    const rolesAt = async (who: Person) =>
+      (await who.node.spaces.access(space)).members.find((m) => m.did === carol.node.did)?.roles ?? [];
+    await until(async () => (await rolesAt(mallory)).includes('editor'), 8000, 'Carol made an editor');
+    await joined(carol.node, space, 8000);
 
-    // Mallory signs two rivals as of the same point: R makes Carol an editor, X (sorting
-    // first) a viewer. Only R goes out.
+    // Mallory signs two rivals as of the same point: R gives Carol editor again, X takes it.
+    // Only R goes out.
     const seen = await seenBy(mallory.node, space);
-    const next = { key: await memberKey(carol.node.did), seq: 0 };
-    const rival = (role: string) =>
+    const mallorysStore = createStorageProvider(await mallory.stores(`spaces/${space}`));
+    const assigned = (await mallorysStore.getCurrent(await assignKey(carol.node.did, 'editor')))!;
+    const next = {
+      key: assigned.key,
+      seq: assigned.seq + 1,
+      prev: assigned.id,
+      genesis: assigned.genesis ?? assigned.id,
+    };
+    const rival = (on: boolean) =>
       forge(
         mallory,
         space,
         {
-          collection: MEMBER_COLLECTION,
-          body: { did: carol.node.did, role },
+          collection: ASSIGN_COLLECTION,
+          body: { did: carol.node.did, role: 'editor', assigned: on },
           version: next,
           retain: true,
           seen,
         },
         { keep: false },
       );
-    const back = await rival('editor');
-    let first = await rival('viewer');
-    while (first.id >= back.id) first = await rival('viewer');
+    const back = await rival(true);
+    const takes = await rival(false);
     await slip(mallory, space, [back]);
-    await until(async () => (await roleAt(alice)) === 'editor', 8000, 'Carol made an editor');
-    await joined(carol.node, space, 8000);
+    await until(
+      async () => (await alice.node.records.history(space, assigned.key)).length >= 2,
+      8000,
+      'R at Alice’s',
+    ).catch(() => {});
 
     // Carol writes, honestly; then the rival arrives, and Mallory cites her note.
     const note = await carol.node.records.put(space, 'app.note', { text: 'honest' });
     await until(async () => (await mallory.node.records.get(space, note.key)) !== null, 8000, 'the note');
-    await slip(mallory, space, [first]);
-    await until(async () => (await roleAt(alice)) === 'viewer', 8000, 'the rival');
-    const mallorysStore = createStorageProvider(await mallory.stores(`spaces/${space}`));
+    await slip(mallory, space, [takes]);
+    await until(async () => !(await rolesAt(alice)).includes('editor'), 8000, 'the rival');
     const written = (await mallorysStore.getVersion(note.version))!;
     const accusation = await forge(
       mallory,
@@ -474,7 +473,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(written)] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -500,7 +498,6 @@ describe('warrants', () => {
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'someday', evidence: [evidence] },
-        version: { key: newWarrantKey(), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -519,12 +516,7 @@ describe('warrants', () => {
 
   test('a burst of offences costs an honest node one warrant', async () => {
     const { alice, bob, space } = await sharedWithBob();
-    await alice.node.collections.define(space, {
-      name: 'app.notice',
-      schema: { type: 'object' },
-      permissions: ['post'],
-      rules: { create: 'can:post' },
-    });
+    await alice.node.collections.define(space, { name: 'app.notice', schema: { type: 'object' } });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
     const offences: Version[] = [];
     for (let i = 0; i < 20; i++)
@@ -538,22 +530,17 @@ describe('warrants', () => {
 
   test('a warrant out of shape, such as one from an older version, flags nobody', async () => {
     const { alice, bob, space } = await sharedWithBob();
-    await alice.node.collections.define(space, {
-      name: 'app.notice',
-      schema: { type: 'object' },
-      permissions: ['post'],
-      rules: { create: 'can:post' },
-    });
+    await alice.node.collections.define(space, { name: 'app.notice', schema: { type: 'object' } });
     await until(async () => !(await bob.node.records.can(space, 'create', 'app.notice')), 4000, 'the rules');
     const bad = await forge(bob, space, { collection: 'app.notice', body: { text: 'hi' } }, { keep: false });
-    // A true proof, at a key that isn't a warrant's.
+    // A true proof, at a key of the accused's: no peer takes a first version at a key its writer doesn't own.
     const misplaced = await forge(
       alice,
       space,
       {
         collection: WARRANT_COLLECTION,
         body: { kind: 'standing', evidence: [stubOf(bad)] },
-        version: { key: 'misplaced', seq: 0 },
+        version: { key: await ownedKey(bob.node.did, 'misplaced'), seq: 0 },
         retain: true,
       },
       { keep: false },
@@ -567,7 +554,7 @@ describe('warrants', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 500));
     const bobStore = createStorageProvider(await bob.stores(`spaces/${space}`));
-    assert.ok(await bobStore.getVersion(misplaced.id), 'stored like any record');
+    assert.equal(await bobStore.getVersion(misplaced.id), null, 'refused');
     assert.deepEqual(await flaggedFor(bob, space), []);
   });
 
@@ -576,8 +563,8 @@ describe('warrants', () => {
     await bob.node.records.put(space, 'app.note', { text: 'before' });
     // What a version Bob wrote now would name: read from his node, not a second copy of its store.
     const seenThen = (await bob.node.spaces.access(space)).heads;
-    await alice.node.spaces.setMember(space, bob.node.did, null);
-    await until(async () => (await bob.node.spaces.access(space)).role === null, 4000, 'the removal');
+    await alice.node.spaces.removeMember(space, bob.node.did);
+    await until(async () => (await bob.node.spaces.access(space)).mine.length === 0, 4000, 'the removal');
     // Written as if before the removal: withdrawn, as a write racing it would be — not refused.
     const backdated = await forge(
       bob,

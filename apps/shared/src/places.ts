@@ -1,17 +1,17 @@
 /**
  * Finding places by name, and naming where you are: OpenStreetMap's data
  * through Photon (photon.komoot.io), which is built for search as you type
- * and answers a browser directly. Nothing here is Weave: a place found is
+ * and answers a browser directly. Nothing here is Minca: a place found is
  * written into a record as plain `lat`, `lon` and address, and nobody else
  * needs to ask the same service.
  *
  * The public instance is free for fair use, with no key. Set
- * `VITE_WEAVE_PLACES` to your own (Photon is open source) before a lot of
+ * `VITE_MINCA_PLACES` to your own (Photon is open source) before a lot of
  * people use a deployment. OpenStreetMap's licence asks that results say
  * where they came from: show {@link PLACES_CREDIT} beside them.
  */
 
-const SERVICE = (import.meta.env.VITE_WEAVE_PLACES ?? 'https://photon.komoot.io').replace(/\/+$/, '');
+const SERVICE = (import.meta.env.VITE_MINCA_PLACES ?? 'https://photon.komoot.io').replace(/\/+$/, '');
 
 /** What results must credit, under the ODbL */
 export const PLACES_CREDIT = '© OpenStreetMap contributors';

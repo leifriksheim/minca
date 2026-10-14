@@ -16,12 +16,12 @@ const person = async () => (await somebody()).node;
 
 const Poll = z.object({ question: z.string().min(1), options: z.array(z.string().min(1)).min(2) });
 const Vote = z.object({ choice: z.int().min(0) });
-const polls = collection({ name: 'app.poll', schema: Poll, rules: { edit: 'creator', fixed: ['options'] } });
+const polls = collection({ name: 'app.poll', schema: Poll, rules: { fixed: ['options'] } });
 const votes = collection({
   name: 'app.poll.vote',
   schema: Vote,
   links: { about: { to: ['app.poll'], cardinality: 'one' } },
-  rules: { edit: 'creator', onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
 });
 
 describe('typed queries', () => {

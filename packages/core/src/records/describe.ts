@@ -12,7 +12,8 @@
  * throw rather than fall silent — a summary that leaves out a rule is the
  * lie it exists to prevent.
  */
-import type { CollectionRules, Who } from './rules.js';
+import type { CollectionRules } from './rules.js';
+import type { CollectionContract } from './contracts.js';
 import type { LinkDeclaration } from './links.js';
 import { isList, isObject } from '../utils/guards.js';
 
@@ -24,12 +25,12 @@ export interface Describable {
   readonly schema?: unknown;
   readonly history?: 'latest' | 'all';
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
-  readonly permissions?: ReadonlyArray<string>;
   readonly rules?: CollectionRules;
+  readonly contract?: CollectionContract;
 }
 
 /** Every rule there is. A new one in `CollectionRules` must be added here, with its sentence. */
-const KNOWN_RULES = ['create', 'edit', 'delete', 'onePer', 'fixed', 'check', 'final'] as const;
+const KNOWN_RULES = ['create', 'edit', 'delete', 'onePer', 'fixed', 'final'] as const;
 
 /** `closePolls` → `close polls`, `app.carpool.trip` → `trip` */
 const words = (name: string) =>
@@ -49,9 +50,6 @@ function joinOr(parts: ReadonlyArray<string>): string {
 function joinAnd(parts: ReadonlyArray<string>): string {
   return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 }
-
-const listOf = (who: Who | ReadonlyArray<Who> | undefined): ReadonlyArray<Who> =>
-  who === undefined ? ['member'] : isList(who) ? who : [who];
 
 /** A field's label: its schema title, else its name in words */
 function fieldLabel(schema: unknown, field: string): string {
@@ -84,34 +82,8 @@ export function describeCollection(definition: Describable): ReadonlyArray<strin
   const a = article(noun);
   const sentences: string[] = [];
 
-  /** "anyone in the space", "whoever added it", "those allowed to moderate" */
-  const who = (list: ReadonlyArray<Who>): { text: string; open: boolean } => {
-    const parts = list.map((w) =>
-      w === 'member'
-        ? 'anyone in the space'
-        : w === 'creator'
-          ? `whoever added ${a}`
-          : `those allowed to ${words(w.slice(4))}`,
-    );
-    return { text: joinOr(parts), open: list.includes('member') };
-  };
-
-  // Adding
-  const create = who(listOf(rules.create));
-  sentences.push(`${capital(create.open ? create.text : `only ${create.text}`)} can add ${a}.`);
-
-  // Changing and removing — one sentence when the same people may do both
-  const editors = listOf(rules.edit);
-  const removers = rules.delete === undefined ? editors : listOf(rules.delete);
-  const same = editors.length === removers.length && editors.every((w) => removers.includes(w));
-  const action = (list: ReadonlyArray<Who>, verb: string) => {
-    const { text, open } = who(list);
-    const object = list.includes('creator') ? 'it' : `any ${noun}`;
-    return `${capital(open ? text : `only ${text}`)} can ${verb} ${object}.`;
-  };
+  // Who may add, change or remove it is the space's grants, not the definition's (spec 02 §7).
   if (rules.final) sentences.push(`Nobody can change or remove ${a} once it is added.`);
-  else if (same) sentences.push(action(editors, 'change or remove'));
-  else sentences.push(action(editors, 'change'), action(removers, 'remove'));
 
   // One per…
   if (rules.onePer?.length) {
@@ -126,15 +98,8 @@ export function describeCollection(definition: Describable): ReadonlyArray<strin
     if (rules.final) sentences.push(`${perText} — the first one added holds it.`);
     else if (rules.onePer.includes('@author'))
       sentences.push(`${perText} — adding another changes the first.`);
-    else {
-      // Not per person: a second one is a change to the first, so the edit rule decides who may.
-      const editors = listOf(rules.edit);
-      sentences.push(
-        editors.includes('member')
-          ? `${perText} — anyone adding another replaces the first.`
-          : `${perText} — whoever adds it first holds it.`,
-      );
-    }
+    // Not per person: a second one is a change to the first, by whoever may change it.
+    else sentences.push(`${perText} — anyone adding another replaces the first.`);
   }
 
   // Fixed fields
@@ -144,7 +109,8 @@ export function describeCollection(definition: Describable): ReadonlyArray<strin
   }
 
   // Checks: their own words, which are what a refusal says
-  for (const check of rules.check ?? []) sentences.push(`Every change is checked: “${check.else.trim()}”`);
+  for (const check of definition.contract?.check ?? [])
+    sentences.push(`Every change is checked: “${check.else.trim()}”`);
 
   // What it points at
   for (const [rel, link] of Object.entries(definition.links ?? {})) {
@@ -158,12 +124,6 @@ export function describeCollection(definition: Describable): ReadonlyArray<strin
         ? `Each ${noun} points at one thing: ${target}${named}.`
         : `${capital(a)} can point at ${target}${named}.`,
     );
-  }
-
-  // Permissions a role can be given
-  if (definition.permissions?.length) {
-    const list = joinAnd(definition.permissions.map((permission) => `“${words(permission)}”`));
-    sentences.push(`Roles in the space can be given permission to ${list}.`);
   }
 
   if (definition.history === 'all') sentences.push(`Every earlier version of ${a} is kept.`);

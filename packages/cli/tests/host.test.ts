@@ -107,7 +107,7 @@ describe('a host', () => {
     const laptop = await device(me, hub);
     const notes = await laptop.spaces.create({ name: 'Notes', visibility: 'private' });
     const node = await host(hub);
-    const { invite } = await laptop.carriers.add({ did: node.did, name: 'Weave hosting' });
+    const { invite } = await laptop.carriers.add({ did: node.did, name: 'Minca hosting' });
 
     const id = await subscriptionId();
     await node.subscribe(id);
@@ -131,7 +131,7 @@ describe('a host', () => {
     await node.attach(
       id,
       me.did,
-      (await laptop.carriers.add({ did: node.did, name: 'Weave hosting' })).invite,
+      (await laptop.carriers.add({ did: node.did, name: 'Minca hosting' })).invite,
     );
     await until(carries(node, notes.id), 5000, 'the space to be carried');
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -285,7 +285,7 @@ describe('the host API', () => {
         const target = urlOf(input);
         stripeCalls.push(`${init?.method ?? 'GET'} ${new URL(target).pathname}`);
         if (target.endsWith('/v1/checkout/sessions')) {
-          assert.match(bodyOf(init), /subscription_data%5Bmetadata%5D%5Bweave_subscription%5D=did%3Akey/);
+          assert.match(bodyOf(init), /subscription_data%5Bmetadata%5D%5Bminca_subscription%5D=did%3Akey/);
           returnUrl = new URLSearchParams(bodyOf(init)).get('success_url');
           return Response.json({ url: 'https://checkout.stripe.test/c/1' });
         }
@@ -293,7 +293,7 @@ describe('the host API', () => {
           return Response.json({
             id: 'sub_1',
             customer: 'cus_1',
-            metadata: { weave_subscription: key.did },
+            metadata: { minca_subscription: key.did },
             items: { data: [{ current_period_end: periodEnd }] },
           });
         }
@@ -429,15 +429,15 @@ describe('an address that is not a host, or one that is down', () => {
 
   test('a server that is not a host is refused as one, whatever it answers', async () => {
     const missing = await listening((_req, res) => res.writeHead(404).end('Not found'));
-    await assert.rejects(describeHost(missing), /doesn't answer as a Weave host/);
+    await assert.rejects(describeHost(missing), /doesn't answer as a Minca host/);
     const page = await listening((_req, res) =>
       res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html>'),
     );
-    await assert.rejects(describeHost(page), /doesn't answer as a Weave host/);
+    await assert.rejects(describeHost(page), /doesn't answer as a Minca host/);
     const other = await listening((_req, res) =>
-      res.writeHead(200, { 'content-type': 'application/json' }).end('{"weave":"host/2","did":"did:key:z"}'),
+      res.writeHead(200, { 'content-type': 'application/json' }).end('{"minca":"host/2","did":"did:key:z"}'),
     );
-    await assert.rejects(describeHost(other), /doesn't answer as a Weave host/);
+    await assert.rejects(describeHost(other), /doesn't answer as a Minca host/);
   });
 
   test('a space says why a host it names can’t be asked, and its other hosts still answer', async () => {
@@ -536,7 +536,7 @@ describe('an account using a host, end to end over sockets', () => {
         return Response.json({
           id: 'sub_2',
           customer: 'cus_2',
-          metadata: { weave_subscription: paidFor },
+          metadata: { minca_subscription: paidFor },
           items: { data: [{ current_period_end: periodEnd }] },
         });
       },
@@ -743,7 +743,7 @@ describe('bots a host runs', () => {
     },
   };
   async function hostWithBots(options: Partial<Parameters<typeof startHost>[0]> = {}) {
-    const folder = await tempDir('weave-bots-');
+    const folder = await tempDir('minca-bots-');
     const served = await startHost({
       key: await provider.generateKeyPair(),
       stores: memoryStores(),
@@ -782,7 +782,9 @@ describe('bots a host runs', () => {
     assert.equal(bot.status.subscription, `space:${space}`, 'the answer is the space’s status');
     await until(
       async () =>
-        (await laptop.spaces.access(space)).members.some((m) => m.did === bot.bot && m.role !== 'admin'),
+        (await laptop.spaces.access(space)).members.some(
+          (m) => m.did === bot.bot && m.roles.length > 0 && !m.roles.includes('admin'),
+        ),
       15_000,
       'the bot to join, below its admin',
     );
@@ -936,24 +938,24 @@ describe('bots a host runs', () => {
   });
 
   test('from the env: bots think with Anthropic, or with any Chat Completions server, at a known price', async () => {
-    const env = { WEAVE_HOST_BOTS: '1' };
+    const env = { MINCA_HOST_BOTS: '1' };
     assert.equal(await botsFromEnv({}, '/data'), null, 'none unless asked for');
     await assert.rejects(botsFromEnv(env, '/data'), /ANTHROPIC_API_KEY/);
-    const openai = { ...env, WEAVE_BOT_PROVIDER: 'openai' };
-    await assert.rejects(botsFromEnv(openai, '/data'), /needs WEAVE_BOT_MODEL/);
-    await assert.rejects(botsFromEnv({ ...openai, WEAVE_BOT_MODEL: 'gpt-5.5' }, '/data'), /WEAVE_BOT_PRICE/);
+    const openai = { ...env, MINCA_BOT_PROVIDER: 'openai' };
+    await assert.rejects(botsFromEnv(openai, '/data'), /needs MINCA_BOT_MODEL/);
+    await assert.rejects(botsFromEnv({ ...openai, MINCA_BOT_MODEL: 'gpt-5.5' }, '/data'), /MINCA_BOT_PRICE/);
     await assert.rejects(
-      botsFromEnv({ ...openai, WEAVE_BOT_MODEL: 'gpt-5.5', WEAVE_BOT_PRICE: 'lots' }, '/data'),
+      botsFromEnv({ ...openai, MINCA_BOT_MODEL: 'gpt-5.5', MINCA_BOT_PRICE: 'lots' }, '/data'),
       /dollars per million tokens/,
     );
     await assert.rejects(
-      botsFromEnv({ ...openai, WEAVE_BOT_MODEL: 'gpt-5.5', WEAVE_BOT_PRICE: '1/8' }, '/data'),
+      botsFromEnv({ ...openai, MINCA_BOT_MODEL: 'gpt-5.5', MINCA_BOT_PRICE: '1/8' }, '/data'),
       /OPENAI_API_KEY/,
     );
 
     const asked: Array<{ url: string; auth: string | null; body: unknown }> = [];
     const bots = await botsFromEnv(
-      { ...openai, WEAVE_BOT_MODEL: 'gpt-5.5', WEAVE_BOT_PRICE: '1/8', OPENAI_API_KEY: 'sk-test' },
+      { ...openai, MINCA_BOT_MODEL: 'gpt-5.5', MINCA_BOT_PRICE: '1/8', OPENAI_API_KEY: 'sk-test' },
       '/data',
       async (input, init) => {
         asked.push({
@@ -1161,7 +1163,7 @@ describe('a host for named accounts only', () => {
     );
 
     assert.equal(allowList(undefined, {}), null);
-    assert.deepEqual(allowList(['did:key:zA'], { WEAVE_HOST_ALLOW: 'did:key:zB, did:key:zA' }), [
+    assert.deepEqual(allowList(['did:key:zA'], { MINCA_HOST_ALLOW: 'did:key:zB, did:key:zA' }), [
       'did:key:zA',
       'did:key:zB',
     ]);
@@ -1401,26 +1403,26 @@ describe('wallet payments', () => {
   test('from the env: an address and a price, or nothing', () => {
     assert.equal(walletFromEnv({}), null);
     assert.throws(
-      () => walletFromEnv({ WEAVE_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111' }),
+      () => walletFromEnv({ MINCA_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111' }),
       /need a price/,
     );
     assert.throws(
-      () => walletFromEnv({ WEAVE_WALLET_ADDRESS: 'me', WEAVE_WALLET_YEARLY: '36' }),
+      () => walletFromEnv({ MINCA_WALLET_ADDRESS: 'me', MINCA_WALLET_YEARLY: '36' }),
       /not an address/,
     );
     assert.throws(
       () =>
         walletFromEnv({
-          WEAVE_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111',
-          WEAVE_WALLET_YEARLY: '36',
-          WEAVE_WALLET_NETWORK: 'solana',
+          MINCA_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111',
+          MINCA_WALLET_YEARLY: '36',
+          MINCA_WALLET_NETWORK: 'solana',
         }),
       /base or base-sepolia/,
     );
     assert.equal(
       walletFromEnv({
-        WEAVE_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111',
-        WEAVE_WALLET_YEARLY: '36',
+        MINCA_WALLET_ADDRESS: '0x1111111111111111111111111111111111111111',
+        MINCA_WALLET_YEARLY: '36',
       })?.offer.chainId,
       8453,
     );
@@ -1576,12 +1578,12 @@ describe('a space paying for itself', () => {
     const once = new URLSearchParams(bodies[0]);
     assert.equal(once.get('mode'), 'payment');
     assert.equal(once.get('line_items[0][price_data][unit_amount]'), '1250');
-    assert.equal(once.get('metadata[weave_fund]'), `space:${space}`);
+    assert.equal(once.get('metadata[minca_fund]'), `space:${space}`);
     await laptop.hosting.payForSpace(space, url, { amount: '5', method: 'checkout', monthly: true });
     const monthly = new URLSearchParams(bodies[1]);
     assert.equal(monthly.get('mode'), 'subscription');
     assert.equal(monthly.get('line_items[0][price_data][recurring][interval]'), 'month');
-    assert.equal(monthly.get('subscription_data[metadata][weave_fund]'), `space:${space}`);
+    assert.equal(monthly.get('subscription_data[metadata][minca_fund]'), `space:${space}`);
 
     const webhook = (body: string) => {
       const t = nowSeconds();
@@ -1601,7 +1603,7 @@ describe('a space paying for itself', () => {
             mode: 'payment',
             payment_status: 'paid',
             amount_total: cents,
-            metadata: { weave_fund: `space:${space}` },
+            metadata: { minca_fund: `space:${space}` },
           },
         },
       });
@@ -1613,7 +1615,7 @@ describe('a space paying for itself', () => {
             id,
             amount_paid: cents,
             parent: {
-              subscription_details: { subscription: 'sub_9', metadata: { weave_fund: `space:${space}` } },
+              subscription_details: { subscription: 'sub_9', metadata: { minca_fund: `space:${space}` } },
             },
           },
         },
@@ -1654,7 +1656,7 @@ describe('a space paying for itself', () => {
     const first = (await laptop.hosting.space(space))[0]?.status?.readKey;
     assert.ok(first);
 
-    await laptop.spaces.setMember(space, bob.did, null);
+    await laptop.spaces.removeMember(space, bob.did);
     await until(
       async () => (await laptop.hosting.space(space))[0]?.status?.readKey !== first,
       6000,

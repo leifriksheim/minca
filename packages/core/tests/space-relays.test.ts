@@ -1,19 +1,15 @@
 /**
  * Where a space's members meet: the relays the space names (`sys.relays`),
- * set by whoever manages it and carried in its invites — so two people whose
+ * set by whoever is granted `/space/relays` and carried in its invites — so two people whose
  * apps use different relays still find each other.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { P2PNode } from '../src/node/types.js';
-import {
-  checkRelays,
-  replayAccess,
-  type AccessEvent,
-  type AccessGenesis,
-  type Role,
-} from '../src/space/roles.js';
+import { checkRelays, replayAccess, type AccessEvent, type AccessGenesis } from '../src/space/roles.js';
+import { SPACE_RELAYS } from '../src/space/grants.js';
+import { assign } from './helpers/access.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -24,13 +20,14 @@ import { person as somebody } from './helpers/person.js';
 
 const person = async (hub: FakeHub, relays: string[]) => (await somebody(hub, { relays })).node;
 
-const admin: Role = { name: 'admin', rank: 100, permissions: ['*'] };
-const member: Role = { name: 'member', rank: 0, permissions: [] };
 const genesis: AccessGenesis = {
   id: 'space',
-  creator: 'alice',
-  roles: [admin, member],
-  creatorRole: 'admin',
+  resolver: 'strong-remove/1',
+  founders: ['alice'],
+  roles: [
+    { name: 'admin', grants: [{ cmd: SPACE_RELAYS, pol: [] }] },
+    { name: 'member', grants: [{ cmd: '/record', pol: [] }] },
+  ],
 };
 
 let n = 0;
@@ -46,18 +43,8 @@ const named = (root: string, relays: string[], seen: string[] = []): AccessEvent
 });
 
 describe('a space’s relays, in its history', () => {
-  test('someone who manages the space names them; anyone else is ignored', () => {
-    const bob: AccessEvent = {
-      id: 'm-bob',
-      key: 'member:bob',
-      kind: 'member',
-      root: 'alice',
-      did: 'bob',
-      role: 'member',
-      seen: [],
-      author: 'k',
-      cutoff: new Map(),
-    };
+  test('someone granted /space/relays names them; anyone else is ignored', () => {
+    const bob = assign('alice', 'bob', 'member', [], { id: 'm-bob', author: 'k' });
     const byAlice = named('alice', ['wss://relay.one.test'], [bob.id]);
     const byBob = named('bob', ['wss://relay.bob.test'], [byAlice.id]);
     const history = replayAccess(genesis, [bob, byAlice, byBob]);
@@ -105,7 +92,7 @@ describe('a space’s relays, through real nodes', () => {
     );
     await hold(bob, space);
     await joined(bob, space);
-    // Bob does not manage the space, so his own relays never replace the space's.
+    // Bob holds no /space/relays, so his own relays never replace the space's.
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.deepEqual(await relaysOf(bob, space), ['wss://relay.alice.test']);
 
@@ -119,7 +106,7 @@ describe('a space’s relays, through real nodes', () => {
     ]);
   });
 
-  test('only someone who manages the space says where it meets, and only somewhere a space may', async () => {
+  test('only someone granted /space/relays says where it meets, and only somewhere a space may', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub, ['wss://relay.alice.test']);
     const bob = await person(hub, ['wss://relay.bob.test']);

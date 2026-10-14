@@ -3,7 +3,7 @@ import { Band, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
 
 /**
  * How it works, for people who want the design before the code: one section
- * per part of the spec, then what Weave gives up. Every claim here comes from
+ * per part of the spec, then what Minca gives up. Every claim here comes from
  * `spec/`; when the two disagree, the spec wins and this page is the bug.
  */
 
@@ -47,7 +47,7 @@ const KEYS = (
       <b>Root key</b>
       <code>did:key:zDnae…ZSULW</code>
     </div>
-    <div className="key-step">signs a one-hour pass for</div>
+    <div className="key-step">signs a one-hour note for</div>
     <div className="key">
       <b>Session key</b>
       <span>This tab</span>
@@ -100,8 +100,8 @@ const CHECKS = (
       </div>
       <ul>
         <li>Signature matches</li>
-        <li>Pass from Joe’s account is valid</li>
-        <li>Joe is a member</li>
+        <li>Note from Joe’s account is valid</li>
+        <li>Joe’s role lets him vote</li>
         <li>First vote on this poll</li>
       </ul>
     </div>
@@ -164,7 +164,7 @@ const PARTS: ReadonlyArray<Part> = [
       },
       {
         title: 'The master key stays home',
-        body: 'Your root key never signs your data. It signs hour-long permission slips (UCANs) for a session key, and the session key signs everything else.',
+        body: 'Your root key never signs your data. It signs an hour-long note (a UCAN 1.0 delegation, as JSON) for a session key, and the session key signs everything else. A note is one link from your account: no key below it can pass it on.',
       },
       {
         title: 'Apps get a pass, not your keys',
@@ -202,7 +202,11 @@ const PARTS: ReadonlyArray<Part> = [
       },
       {
         title: 'Four checks, every time',
-        body: 'Shape, signature, permission slip, then the space’s rules, including checks that cite other records as proof. Your own writes, a peer’s and a folder’s all go through the same checks.',
+        body: 'Shape, signature, the note from the account, then the space’s grants and rules. Your own writes, a peer’s and a folder’s all go through the same checks.',
+      },
+      {
+        title: 'Keys belong to whoever made them',
+        body: 'A record’s key names the account that created it, so nobody else can write its first version or take its name. A key anyone may write is derived from what makes the record unique, like one decision per proposal.',
       },
       {
         title: 'Kept, not refused',
@@ -213,9 +217,17 @@ const PARTS: ReadonlyArray<Part> = [
   {
     kicker: '03 — Spaces',
     title: 'Every device is the referee.',
-    lead: 'A space holds its own rules: the roles, who has them, and what each kind of record allows. There’s no server to ask.',
+    lead: 'A space holds its own rules: a constitution, the roles, who has them, and what each kind of record allows. There’s no server to ask.',
     file: '03-spaces.md',
     points: [
+      {
+        title: 'A constitution that never changes',
+        body: 'A space is founded with a constitution: its name, whether it’s private, its first roles, and who sits at the top. Its hash is the space’s id, so nobody can swap any of it.',
+      },
+      {
+        title: 'Founders, or no one at the top',
+        body: 'Founders hold every command, and nobody else can remove them; they can step down. A co-op names no one at the top, and runs on its roles alone. When a space can’t be run any more, members can follow a successor.',
+      },
       {
         title: 'Membership is data',
         body: 'Roles, members, invites and removals are records in the space. Every record says which of those changes its writer had seen.',
@@ -225,12 +237,12 @@ const PARTS: ReadonlyArray<Part> = [
         body: 'Every device replays that history the same way. Devices that were offline, or heard things in a different order, reach the same verdict.',
       },
       {
-        title: 'Rank decides who manages whom',
-        body: 'Managing roles takes the manage permission, and you can only change roles ranked below your own.',
+        title: 'Grants decide who may do what',
+        body: 'A role holds grants: a command and conditions on it, like “remove members, but not admins”. Accounts get power only from the roles they’re assigned, and nobody can give a role more than they may do themselves.',
       },
       {
         title: 'Encrypted before it leaves',
-        body: 'In a private space every record body is encrypted with the space key (AES-256-GCM). Who wrote it stays visible, so devices that can’t read a record can still check it was allowed.',
+        body: 'In a private space every record body is sealed in one envelope under the space key (AES-256-GCM). Who wrote it stays visible, so devices that can’t read a record can still check it was allowed.',
       },
       {
         title: 'The invite is the key',
@@ -238,7 +250,7 @@ const PARTS: ReadonlyArray<Part> = [
       },
       {
         title: 'Remove someone, change the lock',
-        body: 'When someone is removed, a manager makes a new key and seals it to everyone who’s left. Nothing written after that is readable to them.',
+        body: 'When someone is removed, a member who may change the key makes a new one and seals it to everyone who’s left, with HPKE. Nothing written after that is readable to them.',
       },
     ],
   },
@@ -302,7 +314,7 @@ const PARTS: ReadonlyArray<Part> = [
       },
       {
         title: 'Your account lives at home',
-        body: 'Apps never get your seed. They ask your account home, a page you chose, which gives them the spaces you pick, to read or to change, for a week at a time.',
+        body: 'Apps never get your seed. They ask your account home, a page you chose, which signs a note for the app’s own key: the spaces you pick, for a week at a time. A program you trust less, like an agent, gets records only.',
       },
       {
         title: 'Disconnect means disconnect',
@@ -338,6 +350,30 @@ const PARTS: ReadonlyArray<Part> = [
       },
     ],
   },
+  {
+    kicker: '09 — Contracts',
+    title: 'Proof that every device checks the same way.',
+    lead: 'A collection’s contract says what a version must be to count: conditions over its body, the version before it, and records it cites as evidence.',
+    file: '09-contracts.md',
+    points: [
+      {
+        title: 'Readers judge, peers store',
+        body: 'A version that fails its contract is still kept and synced. It just doesn’t count, on any device, so devices never disagree about what they hold.',
+      },
+      {
+        title: 'Cite, don’t search',
+        body: 'The writer cites the records that prove it, like the ballots behind a decision. Readers only check what was cited, so the verdict doesn’t depend on what each device happens to have.',
+      },
+      {
+        title: 'Always finishes, reads no clock',
+        body: 'Contracts are a small subset of CEL with fixed limits, so every device gets the same answer, whenever it looks.',
+      },
+      {
+        title: 'Lines for money',
+        body: 'A line makes one account’s versions in a collection a single sequence. Two versions after the same one cancel each other, so spending twice gets you nothing.',
+      },
+    ],
+  },
 ];
 
 /** What it gives up, and what isn't finished */
@@ -363,21 +399,20 @@ const LIMITS: ReadonlyArray<Point> = [
     body: 'Whoever had a space’s key keeps what they read. Changing the key protects what comes next. An app you give a private space can read all of it.',
   },
   {
-    title: 'You trust your keeper to be complete',
-    body: 'A keeper that holds records back still looks up to date. Signed logs per writer, which would show the gap, are planned.',
+    title: 'A keeper can hold things back',
+    body: 'A node that syncs with nobody else can be kept in the dark by the one it syncs with. Each writer’s versions form a numbered log, so a node that holds part of a space notices a gap, but only in ordinary collections.',
   },
   {
     title: 'Not for global feeds',
-    body: 'Weave is for data that’s private, shared by a few people, and works offline. Public feeds at the scale of a social network are what other protocols are for.',
+    body: 'Minca is for data that’s private, shared by a few people, and works offline. Public feeds at the scale of a social network are what other protocols are for.',
   },
   {
     title: 'The bugs are written down',
     body: (
       <>
         Where our implementation does something the protocol shouldn’t need, the spec says so. For example:
-        readers don’t check <code>prev</code> yet, so someone allowed to edit can skip <code>seq</code> ahead;
-        delegation chains longer than one step don’t validate on records yet; and leaving a space only takes
-        effect on your own device.
+        every tab of one app shares a key, so only the first gets into a space’s room; and only the browser
+        that connected an app takes it back when its time runs out.
       </>
     ),
   },
@@ -455,7 +490,7 @@ export function Protocol() {
 
       <Band
         kicker="Tradeoffs"
-        title="What Weave doesn’t do."
+        title="What Minca doesn’t do."
         intro={<p>No server means some things are harder, and some aren’t finished. Here they are.</p>}
       >
         <Points points={LIMITS} />
@@ -466,8 +501,8 @@ export function Protocol() {
         title="Designed, and on the way."
         intro={
           <p>
-            Permission chains that travel with a record, edit histories anyone can check, sealing with HPKE,
-            signed writer logs, handles like @you.bsky.social that lead to a door, and more.
+            Reading narrower than a space, files synced by hash, Web Push for closed apps, references to other
+            spaces, handles like @you.bsky.social that lead to a door, and more.
           </p>
         }
       >

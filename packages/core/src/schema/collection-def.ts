@@ -34,7 +34,7 @@ import type { StandardJSONSchemaV1, StandardSchemaV1 } from '../types.js';
 import { LINK_REL_PATTERN, type LinkDeclaration } from '../records/links.js';
 import type { DefineCollection } from '../node/types.js';
 import { checkRules, type CollectionRules } from '../records/rules.js';
-import { PERMISSION_PATTERN } from '../records/checks.js';
+import type { CollectionContract } from '../records/contracts.js';
 import { checkTopics } from '../records/topics.js';
 import { isObject, isRecord } from '../utils/guards.js';
 
@@ -101,15 +101,10 @@ export interface StoredCollection {
    */
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
   /**
-   * The permissions its rules may name, in its own words: `moderate`. A role
-   * holds one as `<collection>/<permission>` — `app.poll/moderate` — so two
-   * apps in one space never clash.
-   */
-  readonly permissions?: ReadonlyArray<string>;
-  /**
-   * Who may create, edit and delete its records, what must be unique, which
-   * fields are fixed. A version is judged by the definition in force as of
-   * the access changes it saw, on every peer.
+   * What must be unique, which fields are fixed, whether records are
+   * written once. Who may write is the space's grants, not the definition's
+   * (spec 02 §7). A version is judged by the definition in force as of the
+   * access changes it saw, on every peer.
    */
   readonly rules?: CollectionRules;
   /**
@@ -119,6 +114,12 @@ export interface StoredCollection {
    * a topic, never which topic. At most 8; exact values only.
    */
   readonly topics?: ReadonlyArray<string>;
+  /**
+   * What a version must be to count: conditions (`check`) and whether the
+   * collection is a line, one sequence per account at `lineKey(root,
+   * collection)`. Judged by readers (spec 09); peers keep it and don't read it.
+   */
+  readonly contract?: CollectionContract;
 }
 
 /** The reserved collection that collection definitions live in. */
@@ -266,11 +267,7 @@ export function checkStoredCollection(definition: unknown): string | null {
         return `links.${rel}.description must be text`;
     }
   }
-  const permissions = d.permissions === undefined ? [] : d.permissions;
-  if (!isPermissionList(permissions)) {
-    return 'permissions must be a list of names in lower camel case, like "moderate"';
-  }
-  const rules = checkRules(d.rules, 'rules', permissions);
+  const rules = checkRules(d.rules, 'rules');
   if (rules) return rules;
   const topics = checkTopics(d.topics);
   if (topics) return topics;
@@ -279,10 +276,6 @@ export function checkStoredCollection(definition: unknown): string | null {
 
 export function isStoredCollection(definition: unknown): definition is StoredCollection {
   return checkStoredCollection(definition) === null;
-}
-
-function isPermissionList(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((p) => typeof p === 'string' && PERMISSION_PATTERN.test(p));
 }
 
 export interface SchemaIssue {
@@ -338,7 +331,7 @@ export function asStandardSchema(schema: JsonSchema): StandardSchemaV1 {
   return {
     '~standard': {
       version: 1,
-      vendor: 'weave/json-schema',
+      vendor: 'minca/json-schema',
       validate(value: unknown) {
         const issues = validateJsonSchema(schema, value);
         return issues.length

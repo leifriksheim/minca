@@ -6,8 +6,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import type { NodeRecord, P2PNode } from '@weaveprotocol/core';
-import { guide, message, proposeCollections, reaction, type Guide } from '@weaveprotocol/core/schemas';
+import type { NodeRecord, P2PNode } from '@minca/core';
+import { guide, message, notifyOn, proposeCollections, reaction, type Guide } from '@minca/core/schemas';
 import {
   addBuiltIn,
   addMade,
@@ -60,7 +60,7 @@ describe('the launcher', () => {
         title: 'Carpool',
         collections: ['carpool.trip'],
         screen: '<p>Who drives</p>',
-        notify: [{ label: 'New trip', collection: 'carpool.trip' }],
+        notify: [notifyOn('New trip', 'carpool.trip')],
       },
       { links: [{ rel: 'blueprint', to: plan.key }] },
     );
@@ -245,10 +245,15 @@ describe('the launcher', () => {
     assert.deepEqual(titles(launcher.placed), ['chat', 'Not chat']);
 
     // Bob loses define: what he writes now stays a proposal.
-    await alice.node.spaces.putRole(space, { name: 'guest', title: 'Guest', rank: 1, permissions: [] });
-    await alice.node.spaces.setMember(space, bob.node.did, 'guest');
+    await alice.node.spaces.defineRole(space, {
+      name: 'guest',
+      title: 'Guest',
+      grants: [{ cmd: '/record/write', pol: [['==', '.byCreator', true]] }],
+    });
+    await alice.node.spaces.assign(space, bob.node.did, 'guest');
+    await alice.node.spaces.unassign(space, bob.node.did, 'editor');
     await waitFor(
-      async () => (await bob.node.spaces.access(space)).role?.name === 'guest',
+      async () => (await bob.node.spaces.access(space)).mine.join() === 'guest',
       'Bob to be a guest',
     );
     const his = await bob.node.records.put(space, launcherApp, {
@@ -267,7 +272,7 @@ describe('the launcher', () => {
     assert.equal(guides.length, 1, 'written once');
     assert.deepEqual(guides[0]?.body?.collections, ['launcher.app', 'std.blueprint']);
     assert.match(guides[0]?.body?.text ?? '', /collections_propose/);
-    assert.match(guides[0]?.body?.text ?? '', /window\.weave/);
+    assert.match(guides[0]?.body?.text ?? '', /window\.minca/);
   });
 
   test('copying an app proposes it in another space, with its collections as a blueprint', async () => {
@@ -291,7 +296,7 @@ describe('the launcher', () => {
     assert.equal(checkLauncherApp({ builtIn: 'chat' }), null);
     assert.match(checkLauncherApp({ title: 'x' }) ?? '', /collections/);
     assert.match(
-      checkLauncherApp({ ...app, notify: [{ label: 'Any message', collection: message.name }] }) ?? '',
+      checkLauncherApp({ ...app, notify: [notifyOn('Any message', message.name)] }) ?? '',
       /not one of its collections/,
     );
     assert.match(checkLauncherApp({ ...app, network: ['https://api.example.com'] }) ?? '', /no screen/);

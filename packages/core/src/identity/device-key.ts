@@ -10,7 +10,7 @@
 import { base64UrlEncode } from '../utils/encoding.js';
 import { idbOnce } from './idb.js';
 
-const DB_NAME = 'weave-device-keys';
+const DB_NAME = 'minca-device-keys';
 const STORE = 'keys';
 
 /** A local key, and the id a wrap records to find it again. */

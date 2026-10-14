@@ -107,8 +107,8 @@ may edit, the creator could fence off everyone else's concurrent edits
 withdrawn, like a record whose author was removed by a change they had not
 seen (03 §5), the stubs it let peers drop could not come back, and newcomers
 could no longer check what sits on the anchor. So a checkpoint stands or
-falls on arrival, as of what it saw, like a version a check cites
-(`packages/core/docs/checks.md`). What a
+falls on arrival, as of what it saw, like a version a contract cites
+([09 — Contracts](../09-contracts.md) §6.2). What a
 rogue manager can do with this is bounded: they can drop history and fence
 off concurrent branches (§4.2), but they cannot make any version count that
 the chain check would have refused, because they can only anchor at a
@@ -246,7 +246,7 @@ relying on details):
 What carries over:
 
 - **Boundaries by hash, not by signer.** Coordination-free compaction needs
-  no trust. Weave's stubs are content-free, though: bundling them shrinks the
+  no trust. Minca's stubs are content-free, though: bundling them shrinks the
   item count and the round trips, but not the signatures a newcomer must
   check, because a stub's only content is what proves the link. Dropping
   needs trust; bundling does not. §7.2 sketches bundling as an alternative
@@ -285,7 +285,7 @@ collection's line instead of a chain.
 
 ### 7.1 Fix the chain walk first (no protocol change beyond 05 §6.3)
 
-Tracked in [#138](https://github.com/leifriksheim/weave/issues/138).
+Tracked in [#138](https://github.com/leifriksheim/minca/issues/138).
 
 Most of today's cost is per link, not per version. Two library changes,
 each small:

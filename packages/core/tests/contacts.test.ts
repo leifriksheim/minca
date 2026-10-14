@@ -62,13 +62,13 @@ describe('the contact key', () => {
   test('opens what was sealed to it, only under the same label and bound', async () => {
     const pair = await contactKeyPair(await deriveContactKeyBytes(generateSeed()));
     const other = await contactKeyPair(await deriveContactKeyBytes(generateSeed()));
-    const label = 'weave/contact-request/v1';
+    const label = 'minca/contact-request/v1';
     const bound = { space: 'bspace', from: 'did:a', to: 'did:b' };
     const sealed = await sealValueTo(pair.publicKey, label, bound, { hello: 'Anna' });
     assert.deepEqual(await openValueFrom(pair, label, bound, sealed), { hello: 'Anna' });
     assert.equal(await openValueFrom(pair, label, { ...bound, space: 'bother' }, sealed), null);
     assert.equal(await openValueFrom(pair, label, { ...bound, from: 'did:c' }, sealed), null);
-    assert.equal(await openValueFrom(pair, 'weave/knock/v1', bound, sealed), null);
+    assert.equal(await openValueFrom(pair, 'minca/knock/v1', bound, sealed), null);
     assert.equal(await openValueFrom(other, label, bound, sealed), null);
   });
 
@@ -245,7 +245,6 @@ describe('asking to be added', () => {
     await forge(leif, club, {
       collection: 'std.contact-request',
       body: real.body,
-      version: { key: 'copy-from-one-space', seq: 0 },
     });
     await hold(leif.node, club);
     await until(

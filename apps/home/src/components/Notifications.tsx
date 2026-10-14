@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { NotifyView, P2PNode, SpaceSummary } from '@weaveprotocol/core/node';
-import { message, useAction } from '@weave/app-shared/action';
+import type { OwnAutomationView, P2PNode, SpaceSummary } from '@minca/core/node';
+import { message, useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 
 /**
@@ -11,14 +11,14 @@ import { styles, palette } from '../styles';
  * the notifications itself. Here you pause or remove them.
  */
 export function Notifications({ node }: { node: P2PNode }) {
-  const [subscriptions, setSubscriptions] = useState<ReadonlyArray<NotifyView> | null>(null);
+  const [subscriptions, setSubscriptions] = useState<ReadonlyArray<OwnAutomationView> | null>(null);
   const [spaces, setSpaces] = useState<ReadonlyArray<SpaceSummary>>([]);
   const [doing, setDoing] = useState<string | null>(null);
   const { run, busy: acting, error, setError } = useAction();
   const busy = acting ? doing : null;
 
   useEffect(() => {
-    void node.notifications.list().then(setSubscriptions, (reason: unknown) => setError(message(reason)));
+    void node.automations.list().then(setSubscriptions, (reason: unknown) => setError(message(reason)));
     void node.spaces.list().then(setSpaces, () => {});
     // Linked to from an app: straight here.
     if (location.hash === '#notifications') document.getElementById('notifications')?.scrollIntoView();
@@ -30,13 +30,13 @@ export function Notifications({ node }: { node: P2PNode }) {
     setDoing(what);
     return run(async () => {
       await work();
-      setSubscriptions(await node.notifications.list());
+      setSubscriptions(await node.automations.list());
     });
   };
 
   // By the app that asked; ones made here before, last.
   const groups = useMemo(() => {
-    const byApp = new Map<string, [NotifyView['app'], NotifyView[]]>();
+    const byApp = new Map<string, [OwnAutomationView['app'], OwnAutomationView[]]>();
     for (const sub of subscriptions ?? []) {
       const at = sub.app?.origin ?? '';
       if (!byApp.has(at)) byApp.set(at, [sub.app, []]);
@@ -50,8 +50,8 @@ export function Notifications({ node }: { node: P2PNode }) {
   return (
     <section id="notifications" style={styles.settingsSection}>
       <div>
-        <h2 style={{ ...styles.sectionTitle, fontSize: 16, marginBottom: 4 }}>Notify me when…</h2>
-        <p style={{ color: palette.ink.muted, fontSize: 14, lineHeight: 1.5 }}>
+        <h2 style={styles.sectionHeading}>Notify me when…</h2>
+        <p style={styles.sectionText}>
           Apps you use can ask to notify you. What you allow shows here, under the app that asked, and that
           app lets you know.
         </p>
@@ -67,7 +67,10 @@ export function Notifications({ node }: { node: P2PNode }) {
           {subs.map((sub) => (
             <div key={sub.id} style={styles.settingsRow}>
               <span style={{ opacity: sub.paused ? 0.55 : 1 }}>
-                {sub.label} · {sub.spaces === 'all' ? 'every space' : sub.spaces.map(spaceName).join(', ')}
+                {sub.name} ·{' '}
+                {(sub.spaces ?? 'all') === 'all'
+                  ? 'every space'
+                  : [...(sub.spaces ?? [])].map(spaceName).join(', ')}
                 {sub.paused ? ' · paused' : ''}
               </span>
               <span style={{ display: 'flex', gap: 8 }}>
@@ -75,7 +78,7 @@ export function Notifications({ node }: { node: P2PNode }) {
                   onClick={() =>
                     void act(
                       `pause:${sub.id}`,
-                      async () => void (await node.notifications.update(sub.id, { paused: !sub.paused })),
+                      async () => void (await node.automations.update(sub.id, { paused: !sub.paused })),
                     )
                   }
                   disabled={busy !== null}
@@ -85,7 +88,7 @@ export function Notifications({ node }: { node: P2PNode }) {
                   {sub.paused ? 'Resume' : 'Pause'}
                 </button>
                 <button
-                  onClick={() => void act(`remove:${sub.id}`, () => node.notifications.remove(sub.id))}
+                  onClick={() => void act(`remove:${sub.id}`, () => node.automations.remove(sub.id))}
                   disabled={busy !== null}
                   data-variant="quiet"
                   style={styles.smallButton}

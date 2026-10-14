@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DEFINE, MANAGE, describeHost, roleHolds } from '@weaveprotocol/core';
-import type { FundOffer, SpaceHostingView } from '@weaveprotocol/core';
-import { useAccess, useCollections, useNode } from '@weaveprotocol/core/react';
-import { host as hostSchema } from '@weaveprotocol/core/schemas';
+import { COLLECTION_DEFINE, KEY_CHANGE, RECORD_WRITE, describeHost } from '@minca/core';
+import type { FundOffer, SpaceHostingView } from '@minca/core';
+import { useAccess, useCollections, useNode } from '@minca/core/react';
+import { useMay } from './may';
+import { host as hostSchema } from '@minca/core/schemas';
 import { DEFAULT_HOST } from './relay';
 import { Modal } from './Modal';
 import { useWanted, type Wanted } from './HostAddress';
@@ -12,8 +13,6 @@ import { Benefit, FeatureIcon, Glyph, shortDate, timeLeft, type Tone } from './F
 import { useAction } from './action';
 import { styles, palette } from './styles';
 
-/** Who may choose the space's host: `std.host` asks for this permission */
-const MANAGE_HOST = `${hostSchema.name}/manage`;
 const DAY = 86_400;
 /** How long the dialog waits for a host just chosen to show among the space's, before it shows the form again */
 const CHOSEN_SHOWS_MS = 20_000;
@@ -26,8 +25,10 @@ const CHOSEN_SHOWS_MS = 20_000;
  */
 export function useSpaceHosts(spaceId: string, writable: boolean) {
   const node = useNode();
-  const access = useAccess(spaceId);
   const collections = useCollections(spaceId);
+  // Choosing the host is writing `std.host`, which the space's grants decide.
+  const writesHost = useMay(spaceId, RECORD_WRITE, { collection: hostSchema.name, byCreator: true });
+  const defines = useMay(spaceId, COLLECTION_DEFINE, { collection: hostSchema.name });
   const [asked, setHosts] = useState<ReadonlyArray<SpaceHostingView> | null>(null);
   const [looking, setLooking] = useState(false);
   const looks = useRef(0);
@@ -48,8 +49,7 @@ export function useSpaceHosts(spaceId: string, writable: boolean) {
     });
   }, [ask]);
   useAskAgain(ask);
-  const mayChoose =
-    writable && roleHolds(access?.role, MANAGE_HOST) && (defined || roleHolds(access?.role, DEFINE));
+  const mayChoose = writable && writesHost && (defined || defines);
   return { hosts, look, looking, defined, mayChoose };
 }
 
@@ -150,7 +150,7 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
                 ? view.line
                 : mayChoose
                   ? 'A host can keep it reachable when everyone is offline, without reading it.'
-                  : 'A host can keep it reachable when everyone is offline. An admin can turn that on.'
+                  : 'A host can keep it reachable when everyone is offline. Whoever manages the space can turn that on.'
           }
         >
           {host?.error && (
@@ -208,7 +208,7 @@ function StopHost({
   const node = useNode();
   const access = useAccess(spaceId);
   const { run, busy, error } = useAction();
-  const mayManage = roleHolds(access?.role, MANAGE);
+  const mayManage = useMay(spaceId, KEY_CHANGE);
   const members = new Set(access?.members.map((member) => member.did));
   const bots = host.bots.filter((bot) => members.has(bot.bot));
   const botNames = bots.map((bot) => bot.name).join(' and ');
@@ -228,7 +228,7 @@ function StopHost({
         <p style={said}>
           {mayManage
             ? `${botNames} ${bots.length === 1 ? 'is' : 'are'} removed from the community: ${host.name} runs ${bots.length === 1 ? 'it' : 'them'}.`
-            : `${botNames} ${bots.length === 1 ? 'stays' : 'stay'} until an admin removes ${bots.length === 1 ? 'it' : 'them'}: ${host.name} reads what ${bots.length === 1 ? 'it' : 'they'} can read.`}
+            : `${botNames} ${bots.length === 1 ? 'stays' : 'stay'} until someone who manages the space removes ${bots.length === 1 ? 'it' : 'them'}: ${host.name} reads what ${bots.length === 1 ? 'it' : 'they'} can read.`}
         </p>
       )}
       {host.error && (
@@ -343,7 +343,7 @@ export function KeepOnline({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {hero && !stopping && (
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <FeatureIcon kind="online" glyph="cloud" size={44} />
+          <FeatureIcon kind="online" size={44} />
           <div style={{ minWidth: 0 }}>
             <p style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong }}>
               {host ? host.name : 'Around the clock'}
@@ -388,7 +388,7 @@ export function KeepOnline({
           )}
           {!mayChoose ? (
             <p style={{ fontSize: 13, color: palette.ink.muted }}>
-              An admin of this community can turn it on.
+              Whoever manages this community can turn it on.
             </p>
           ) : !offerAsked ? (
             <p role="status" style={{ fontSize: 13, color: palette.ink.muted }}>
@@ -502,7 +502,7 @@ export function FundPaysFor({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#eef8f0',
+          background: palette.accent.goodSoft,
           color: palette.accent.good,
         }}
       >

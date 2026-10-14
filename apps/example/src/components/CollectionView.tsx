@@ -1,14 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { useNode, useLive, useProfiles, useCan, useAccount } from '@weaveprotocol/core/react';
-import type {
-  Filter,
-  NodeCollection,
-  NodeRecord,
-  Query,
-  QueryRecord,
-  SpaceSummary,
-} from '@weaveprotocol/core';
-import { reaction, comment, tag } from '@weaveprotocol/core/schemas';
+import { useNode, useLive, useProfiles, useCan, useAccount } from '@minca/core/react';
+import type { Filter, NodeCollection, NodeRecord, Query, QueryRecord, SpaceSummary } from '@minca/core';
+import { reaction, comment, tag } from '@minca/core/schemas';
 import {
   byRel,
   bodyOf,
@@ -32,11 +25,11 @@ import { ago } from '../derive/time';
 import { SchemaForm } from './SchemaForm';
 import { CollectionEditor, useMayRedefine } from './CollectionDesigner';
 import { Value } from './Value';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { reactionSummary } from './std/Reactions';
 import { chip, tagLabel } from './std/Tags';
 import { styles, palette, ui } from '../styles';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { Lane, Card } from './Lane';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
@@ -49,8 +42,8 @@ type Layout = (typeof LAYOUTS)[number];
 const isLayout = (value: unknown): value is Layout => LAYOUTS.some((layout) => layout === value);
 
 /** Each collection remembers how you last looked at it — on this device only */
-const layoutKey = (space: string, name: string) => `weave.layout:${space}:${name}`;
-const groupKey = (space: string, name: string) => `weave.board:${space}:${name}`;
+const layoutKey = (space: string, name: string) => `minca.layout:${space}:${name}`;
+const groupKey = (space: string, name: string) => `minca.board:${space}:${name}`;
 function remembered(key: string): string | null {
   try {
     return globalThis.localStorage.getItem(key);
@@ -275,7 +268,13 @@ export function CollectionView({
       {mayCreate &&
         !onOthers &&
         (adding ? (
-          <div style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, padding: 16 }}>
+          <div
+            style={{
+              border: `1px solid ${palette.surface.line}`,
+              borderRadius: palette.radius.lg,
+              padding: 16,
+            }}
+          >
             <SchemaForm
               schema={schema}
               initial={adding}
@@ -447,7 +446,11 @@ function ListLayout({
   return (
     <div
       role="list"
-      style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, overflow: 'hidden' }}
+      style={{
+        border: `1px solid ${palette.surface.line}`,
+        borderRadius: palette.radius.lg,
+        overflow: 'hidden',
+      }}
     >
       {rows.map(({ record, linked }, i) => {
         const body = bodyOf(record);
@@ -524,7 +527,7 @@ function Check({
         setShown(next);
         void onChange(next).catch(() => setShown(!next));
       }}
-      style={{ width: 16, height: 16, accentColor: '#000', flexShrink: 0 }}
+      style={{ width: 16, height: 16, accentColor: palette.accent.base, flexShrink: 0 }}
     />
   );
 }
@@ -540,7 +543,13 @@ function TableLayout({
 }) {
   const columns = columnsOf(schema);
   return (
-    <div style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, overflowX: 'auto' }}>
+    <div
+      style={{
+        border: `1px solid ${palette.surface.line}`,
+        borderRadius: palette.radius.lg,
+        overflowX: 'auto',
+      }}
+    >
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
         <thead>
           <tr>

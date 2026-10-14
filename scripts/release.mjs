@@ -28,8 +28,8 @@ import { readFileSync } from 'node:fs';
 
 const dryRun = process.argv.includes('--dry-run');
 const PACKAGES = [
-  { name: '@weaveprotocol/core', manifest: 'packages/core/package.json' },
-  { name: '@weaveprotocol/cli', manifest: 'packages/cli/package.json' },
+  { name: '@minca/core', manifest: 'packages/core/package.json' },
+  { name: '@minca/cli', manifest: 'packages/cli/package.json' },
 ];
 
 /** Runs a command where you can see it (and answer it: login, OTP); throws if it fails */

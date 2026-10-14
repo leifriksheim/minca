@@ -185,7 +185,7 @@ function LongText({ text }: { text: string }) {
             fontSize: 11,
             lineHeight: 1.45,
             background: palette.surface.sunken,
-            borderRadius: 6,
+            borderRadius: palette.radius.sm,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
           }}

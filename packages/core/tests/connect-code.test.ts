@@ -1,5 +1,5 @@
 /**
- * Connecting a program by code (`weave connect wv_…`): the channel both sides
+ * Connecting a program by code (`minca connect mc_…`): the channel both sides
  * run, and what the relay, someone who learns the code later, a second
  * program with the same code, or someone posing as the app can do with it.
  */
@@ -15,7 +15,6 @@ import {
   deriveChannel,
   type Channel,
 } from '../src/identity/channel.js';
-import { parseUCAN } from '../src/identity/ucan.js';
 import { checkGrant, type AppKey, type Grant } from '../src/session/connect.js';
 import { bytesField, meetOnChannel } from '../src/session/channel-room.js';
 import {
@@ -73,18 +72,18 @@ function room(hub: FakeHub, wire: Wire = (message, send) => send(message)) {
   return { network: { relays: [], transport }, seen };
 }
 
-/** A note from this person's account to `audience`: records only, unless `can` says otherwise */
-async function grantFor(who: Person, audience: string, can = 'record/*'): Promise<Grant> {
+/** A note from this person's account to `audience`: records only, unless `command` says otherwise */
+async function grantFor(who: Person, audience: string, command = '/record'): Promise<Grant> {
   const note = await createLocalRootSigner(who.me, who.manager.getProvider()).delegate({
     audience,
-    capabilities: [{ with: '*', can }],
+    command,
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   return {
-    v: 1,
+    v: 2,
     did: who.me.did,
     name: 'Ada',
-    token: note.encoded,
+    note,
     access: 'write',
     scope: 'account',
     spaces: [],
@@ -118,16 +117,16 @@ async function allowing(
 describe('the code channel', () => {
   test('the room for a code', async () => {
     // The example in spec 06 §3.
-    const code = readConnectCode('npx weave connect wv_eYV4XGMvhkky6OWpPfqfRaT1uh9z7enO');
+    const code = readConnectCode('npx minca connect mc_eYV4XGMvhkky6OWpPfqfRTkMD-CZuZbG');
     assert.equal(base64UrlEncode(code.secret), 'eYV4XGMvhkky6OWpPfqfRQ');
     const room = await channelRoom(CODE_CHANNEL, code.secret);
-    assert.equal(room, 'bodq6nylbhebwd57ve5zifkt7gqnltkzfn2dpclw4wlwewc5j66ya');
+    assert.equal(room, 'bihn55ne2az53tlealtmk3ervpyk6xa6364ii25ogc7xv54zkjszq');
     // The account it names: the start of its fingerprint.
-    assert.equal(Buffer.from(code.account).toString('hex'), 'a4f5ba1f73ede9ce');
+    assert.equal(Buffer.from(code.account).toString('hex'), '390c0fe099b996c6');
     const made = readConnectCode(
       await newConnectCode('did:key:zDnaeyrPwbZxpDVLsnvAvAEGYazWB2ZrM7QL4Qb1JPzfiYpKy'),
     );
-    assert.equal(Buffer.from(made.account).toString('hex'), 'a4f5ba1f73ede9ce');
+    assert.equal(Buffer.from(made.account).toString('hex'), '390c0fe099b996c6');
   });
 
   test('a message sent back to the side that sealed it does not open there', async () => {
@@ -237,7 +236,7 @@ describe('connecting a program by code', () => {
 
     let found = '';
     const grant = await connectWithCode({
-      code: `npx weave connect ${offer.offer.code}`,
+      code: `npx minca connect ${offer.offer.code}`,
       key,
       name: 'Agent on laptop',
       recordsOnly: true,
@@ -246,7 +245,7 @@ describe('connecting a program by code', () => {
     });
     assert.equal(found, ORIGIN, 'the program learns where the app lives');
     assert.equal(grant.did, who.me.did);
-    assert.equal(parseUCAN(grant.token).payload.aud, key.did);
+    assert.equal(grant.note.payload.aud, key.did);
     await until(async () => offer.kinds().includes('connected'), 2000, 'the app hearing it worked');
     assert.deepEqual(offer.kinds(), ['waiting', 'asking', 'connected']);
   });
@@ -299,7 +298,7 @@ describe('connecting a program by code', () => {
       recordsOnly: true,
       network,
     });
-    assert.equal(parseUCAN(grant.token).payload.aud, key.did);
+    assert.equal(grant.note.payload.aud, key.did);
     await until(async () => offer.kinds().includes('connected'), 2000, 'the app hearing it worked');
     assert.deepEqual(offer.kinds(), ['waiting', 'asking', 'connected']);
   });
@@ -351,7 +350,7 @@ describe('connecting a program by code', () => {
       void (async () => {
         for (const grant of [
           await grantFor(who, 'did:key:zOther'),
-          await grantFor(who, stage.asking.did, '*'),
+          await grantFor(who, stage.asking.did, '/'),
           await grantFor(eve, stage.asking.did),
         ])
           await stage.allow(grant).catch((error: unknown) => refusals.push(error));
@@ -366,12 +365,12 @@ describe('connecting a program by code', () => {
     assert.equal(refusals.length, 3);
     // And should an app send one anyway, the program refuses it too.
     await assert.rejects(
-      checkGrant(await grantFor(who, key.did, '*'), key.did, { recordsOnly: true }),
+      checkGrant(await grantFor(who, key.did, '/'), key.did, { recordsOnly: true }),
       /more than records/,
     );
-    assert.throws(() => readConnectCode('wv_short'), /not a connect code/);
+    assert.throws(() => readConnectCode('mc_short'), /not a connect code/);
     // A code from before it named the account.
-    assert.throws(() => readConnectCode('wv_eYV4XGMvhkky6OWpPfqfRQ'), /not a connect code/);
+    assert.throws(() => readConnectCode('mc_eYV4XGMvhkky6OWpPfqfRQ'), /not a connect code/);
   });
 
   test('someone else holding the code who answers first, with a note from their own account, is refused', async () => {

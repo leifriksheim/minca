@@ -1,32 +1,32 @@
 /**
  * @module session
  * Signing in and staying signed in, with no framework: the flow as state and
- * actions (`createWeaveAuth`), and the pieces it is made of.
+ * actions (`createMincaAuth`), and the pieces it is made of.
  *
  * Browser-only — it reaches for IndexedDB, WebAuthn and the File System Access
  * API when used — so it lives on its own entry point, away from the
  * isomorphic core.
  */
-export { createWeaveAuth, MIN_PASSWORD_LENGTH } from './auth.js';
+export { createMincaAuth, MIN_PASSWORD_LENGTH } from './auth.js';
 export type {
-  WeaveAuth,
-  WeaveAuthConfig,
+  MincaAuth,
+  MincaAuthConfig,
   AuthState,
   AuthStage,
   AuthSetup,
   AuthError,
   AccountEntry,
-  WeaveSession,
+  MincaSession,
   MovedToPod,
   Connection,
   GrantChoice,
   ProposeChoice,
 } from './auth.js';
-export { createWeaveConnection } from './connection.js';
+export { createMincaConnection } from './connection.js';
 export type {
-  WeaveConnection,
-  WeaveConnectionConfig,
-  WeaveConnectionState,
+  MincaConnection,
+  MincaConnectionConfig,
+  MincaConnectionState,
   ConnectionStatus,
 } from './connection.js';
 export {
@@ -42,7 +42,8 @@ export {
   startConnectedNode,
   grantSigner,
   grantStore,
-  grantCapabilities,
+  grantTerms,
+  GRANT_VERSION,
   appKey,
   forgetAppKey,
   MAX_GRANT_DAYS,

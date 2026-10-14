@@ -4,20 +4,20 @@ An account is 16 random bytes. Every key the account uses is derived from them,
 so the same 16 bytes give the same identity on any device and any origin. This
 part specifies the seed and its written form, every key derived from it, how
 keys become DIDs, how the root key delegates to the keys that actually sign
-(UCANs), the two ways anything is sealed (envelopes), how the seed is stored
-locked on a device, and how a second device receives an account (pairing).
+(notes, in a JSON profile of UCAN 1.0), the two ways anything is sealed
+(envelopes), how the seed is stored locked on a device, and how a second device receives an account (pairing).
 
 ```
 seed (16 bytes)
- ├─ HKDF "weave/p256-identity-key/v1" ─▶ root key (P-256, ECDSA) ─▶ account DID (did:key:zDn…)
- │                                         └─ signs UCANs ─▶ session / app keys ─▶ sign records
- ├─ HKDF "weave/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
- │                                         ├─ HKDF "weave/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
- │                                         └─ HKDF "weave/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
- ├─ HKDF "weave/local-key/v1"        ─▶ local key (AES-256): seals this device's storage; never handed out
- └─ HKDF "weave/account-key/v1"      ─▶ account key (32 bytes): what an app given the whole account holds
-                                           ├─ HKDF "weave/p256-member-key/v1|<space>" ─▶ member key per space
-                                           └─ HKDF "weave/account-registry/…", "weave/contacts/…" ─▶ account spaces
+ ├─ HKDF "minca/p256-identity-key/v1" ─▶ root key (P-256, ECDSA) ─▶ account DID (did:key:zDn…)
+ │                                         └─ signs notes ─▶ session / app keys ─▶ sign records
+ ├─ HKDF "minca/p256-contact-key/v1"  ─▶ contact key (P-256, ECDH)
+ │                                         ├─ HKDF "minca/p256-door-key/v1|<door>"      ─▶ door key per door (ECDH)
+ │                                         └─ HKDF "minca/p256-door-sign-key/v1|<door>" ─▶ door signing key per door (ECDSA)
+ ├─ HKDF "minca/local-key/v1"        ─▶ local key (AES-256): seals this device's storage; never handed out
+ └─ HKDF "minca/account-key/v1"      ─▶ account key (32 bytes): what an app given the whole account holds
+                                           ├─ HKDF "minca/p256-member-key/v1|<space>" ─▶ member key per space
+                                           └─ HKDF "minca/account-registry/…", "minca/contacts/…" ─▶ account spaces
 ```
 
 Conventions (MUST/SHOULD, encodings, canonical JSON) are those of the
@@ -110,7 +110,7 @@ spellings that decode to the same seed (see the example).
 > Crockford's mod-37 check symbol (which adds `*~$=U` to the alphabet) or a
 > check computed over the 26 symbols in the existing alphabet, and whether to
 > add a version marker at the same time. Replaces the "checksum" line in §16.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 ### 2.4 Example
 
@@ -128,7 +128,7 @@ _Tests:_ `packages/core/tests/recovery-code.test.ts`, `packages/core/tests/ident
 
 ## 3. Deriving P-256 keys
 
-Every signing or key-agreement key in Weave that is not freshly random is
+Every signing or key-agreement key in Minca that is not freshly random is
 derived from bytes by one of two procedures.
 
 ### 3.1 `ScalarFrom(okm)`
@@ -148,7 +148,7 @@ this.
 ### 3.2 `P256KeyFrom(ikm)` — the identity derivation
 
 ```
-okm = HKDF(ikm, "weave/p256-identity-key/v1", 48)
+okm = HKDF(ikm, "minca/p256-identity-key/v1", 48)
 d   = ScalarFrom(okm)
 ```
 
@@ -158,8 +158,8 @@ d   = ScalarFrom(okm)
 | Key                                   | `ikm`                                             |
 | ------------------------------------- | ------------------------------------------------- |
 | **Root key** (the account identity)   | the 16-byte seed                                  |
-| Space invite key ([03](03-spaces.md)) | `HKDF(inviteSecret, "weave/space-invite/v1", 32)` |
-| Space read key ([03](03-spaces.md))   | `HKDF(rawSpaceKey, "weave/space-read/v1", 32)`    |
+| Space invite key ([03](03-spaces.md)) | `HKDF(inviteSecret, "minca/space-invite/v1", 32)` |
+| Space read key ([03](03-spaces.md))   | `HKDF(rawSpaceKey, "minca/space-read/v1", 32)`    |
 
 The contact key and member keys (§10) use `ScalarFrom` directly, with their own
 labels, without the identity label.
@@ -173,13 +173,13 @@ MUST keep passing.
 |                |                                                                                                    |
 | -------------- | -------------------------------------------------------------------------------------------------- |
 | seed           | `00112233445566778899aabbccddeeff`                                                                 |
-| okm (48 bytes) | `40e656dfd00c34bd5fd78eafc9af158eeef351b1e9d6444662df48544eaa7db00a50db9fe92caeb7c4e3e16db0f14dd4` |
-| d              | `b8b27c37818b648e8cc2546eb327c6dcd27fd7cc1119666230e7826360508a75`                                 |
-| Q, compressed  | `029084c70c6acbeb1bfbab099abb469443aa06c02bd1b02b830d846b1129d8c7fb`                               |
-| DID            | `did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr`                                        |
+| okm (48 bytes) | `b1fc34eb5cbbdbabadec3403288c38f11ff530ad0e5e5561c1e8a36698232fdb11c563fc83da5893315f3e37cd3ed86d` |
+| d              | `686fc0350a6b8c186f7b0b7856e67534000e51f22a79609256330344e73c2dee`                                 |
+| Q, compressed  | `02388118d5b41d2e75aa0732d0b00606b5c1c085aaaff729fbcfc0349aa42247e2`                               |
+| DID            | `did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT`                                        |
 
-Other recorded vectors: 16 zero bytes → `did:key:zDnaebsZZSYuq5oaFMhu2qAaAygqtwPtZwuiVJpjenjA9GwQE`;
-16 `0xff` bytes → `did:key:zDnaexDGpQByMfPbsypSPAewepYNqS1yerAq5pEpDZwAmFQWS`.
+Other recorded vectors: 16 zero bytes → `did:key:zDnaenhB7GpWm1sDUA2mcNLjbZG85bD5uv8kXnX39YE9rGV3d`;
+16 `0xff` bytes → `did:key:zDnaeWqjSG4BrSYadheJUx2CC9zxRM6MznQb3bMEW51WEfsxn`.
 
 _Source:_ `packages/core/src/identity/crypto-p256.ts`, `packages/core/src/identity/identity-manager.ts` (`fromSeed`, `fromRecoveryCode`).
 _Tests:_ `packages/core/tests/identity.test.ts` ("deriveKeyPairFromSeed", "derivation is frozen", "noble computes the same public point Web Crypto does").
@@ -188,7 +188,7 @@ _Tests:_ `packages/core/tests/identity.test.ts` ("deriveKeyPairFromSeed", "deriv
 
 ## 4. DIDs (`did:key`)
 
-Every key in Weave — root, session, app, invite, read — is named by a
+Every key in Minca — root, session, app, invite, read — is named by a
 `did:key` over its P-256 public key.
 
 ```
@@ -213,11 +213,12 @@ Encoders MUST use the compressed point. Decoders:
 Decoders SHOULD reject a multicodec other than `0x80 0x24`.
 
 > **Known defect:** the reference decoder does not check the multicodec
-> (`packages/core/src/identity/did.ts`, `didToPublicKey`), and neither does `verifyUCAN` for
-> a token's `iss` (`packages/core/src/identity/ucan.ts`). A non-P-256 key fails later, only
-> because it does not import as a P-256 point. A fix will reject any other
-> multicodec when decoding.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20), [#19](https://github.com/leifriksheim/weave/issues/19).
+> (`packages/core/src/identity/did.ts`, `didToPublicKey`). A non-P-256 key
+> fails later, only because it does not import as a P-256 point. A
+> delegation's `iss` and `aud` are checked already: a P-256 `did:key` in its
+> one spelling (§7.1, `isP256Did` in `packages/core/src/identity/ucan.ts`). A
+> fix will reject any other multicodec when decoding.
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 > **Planned: one spelling per key.** Decoders will require the `0x80 0x24`
 > prefix **and** exactly 33 compressed bytes, refusing the uncompressed form.
@@ -226,11 +227,11 @@ Decoders SHOULD reject a multicodec other than `0x80 0x24`.
 > This fixes the known defect above.
 
 Example: see §3.3; the decoded bytes are
-`8024029084c70c6acbeb1bfbab099abb469443aa06c02bd1b02b830d846b1129d8c7fb`. The
+`802402388118d5b41d2e75aa0732d0b00606b5c1c085aaaff729fbcfc0349aa42247e2`. The
 did:key specification's own P-256 example,
 `did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169`, round-trips.
 
-Public keys elsewhere in Weave that are not DIDs (the contact key, member keys)
+Public keys elsewhere in Minca that are not DIDs (the contact key, member keys)
 are the 33-byte compressed point, base64url.
 
 _Source:_ `packages/core/src/identity/did.ts`, `packages/core/src/identity/crypto-p256.ts` (`exportPublicKey`, `importPublicKey`).
@@ -244,32 +245,34 @@ Every label under which bytes are derived anywhere in `packages/core/src/`. No t
 _purposes_ share a label, but see the notes below the table. Parts other than
 this one own the use; this table is the registry.
 
-| Label (UTF-8)                            | Mechanism                                 | Input                                                                              | Output                 | Used for                                                     | Defined in                         | Part   |
-| ---------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------ | ---------------------------------- | ------ |
-| `weave/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                 | P-256 scalar           | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`       | 01     |
-| `weave/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                               | P-256 scalar (ECDH)    | Contact key                                                  | `identity/contact-key.ts:26`       | 01     |
-| `weave/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                        | P-256 scalar (ECDH)    | Member key for one space                                     | `identity/contact-key.ts:27`       | 01, 03 |
-| `weave/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                               | P-256 scalar (ECDH)    | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:28`       | 01, 07 |
-| `weave/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                               | P-256 scalar (ECDSA)   | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:29`       | 01, 07 |
-| `weave/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                  | mailbox topic          | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
-| `weave/local-key/v1`                     | HKDF, L=32                                | seed                                                                               | AES-256-GCM key        | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`     | 01, 05 |
-| `weave/account-key/v1`                   | HKDF, L=32                                | seed                                                                               | 32 bytes               | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`     | 01, 06 |
-| `weave/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                             | room id                | Pairing room                                                 | `identity/channel.ts:39`           | 01     |
-| `weave/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                     | AES-256-GCM key        | Pairing messages sent by `<side>` (`offer` or `join`)        | `identity/channel.ts:40`           | 01     |
-| `weave/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                     | 6-digit code           | Code both screens show                                       | `identity/pairing.ts:18`           | 01     |
-| `weave/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                        | room id                | Room for connecting by code                                  | `identity/channel.ts:46`           | 06     |
-| `weave/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                | AES-256-GCM key        | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`           | 06     |
-| `weave/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                  | account fingerprint    | The account a connect code names                             | `session/connect-code.ts:28`       | 06     |
-| `weave/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                              | P-256 key              | Invite key                                                   | `space/space-access.ts:34`         | 03     |
-| `weave/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                        | P-256 key              | Read key of a private space                                  | `space/space-access.ts:33`         | 03     |
-| `weave/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                        | AES-256-GCM key        | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
-| `weave/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                        | key id (22 characters) | A space key's id                                             | `privacy/space-encryption.ts:16`   | 03     |
-| `weave/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                        | space nonce            | Account registry space                                       | `space/account-registry.ts:79,103` | 03     |
-| `weave/account-registry/key/v1`          | HKDF, L=32                                | account key                                                                        | space key K            | Account registry space                                       | `space/account-registry.ts:79,105` | 03     |
-| `weave/contacts/nonce/v1`                | as above                                  | account key                                                                        | space nonce            | Contacts space                                               | `space/account-registry.ts:92,103` | 03     |
-| `weave/contacts/key/v1`                  | as above                                  | account key                                                                        | space key K            | Contacts space                                               | `space/account-registry.ts:92,105` | 03     |
-| `weave/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `weave/public-topics/v1\|<spaceId>` (public) | HMAC key               | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
-| `weave-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                  | relay room name        | A space's room on a relay                                    | `node/space-runtime.ts:260`        | 04     |
+| Label (UTF-8)                            | Mechanism                                 | Input                                                                                            | Output                     | Used for                                                     | Defined in                         | Part   |
+| ---------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------ | ---------------------------------- | ------ |
+| `minca/p256-identity-key/v1`             | HKDF, L=48 → `ScalarFrom`                 | seed; or any `ikm` in §3.2's table                                                               | P-256 scalar               | Root key; second stage of invite and read keys               | `identity/crypto-p256.ts:11`       | 01     |
+| `minca/p256-contact-key/v1`              | HKDF, L=48 → `ScalarFrom`                 | seed                                                                                             | P-256 scalar (ECDH)        | Contact key                                                  | `identity/contact-key.ts:26`       | 01     |
+| `minca/p256-member-key/v1\|<spaceId>`    | HKDF, L=48 → `ScalarFrom`                 | account key                                                                                      | P-256 scalar (ECDH)        | Member key for one space                                     | `identity/contact-key.ts:27`       | 01, 03 |
+| `minca/p256-door-key/v1\|<doorId>`       | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDH)        | Door key (knocks are sealed to it)                           | `identity/contact-key.ts:28`       | 01, 07 |
+| `minca/p256-door-sign-key/v1\|<doorId>`  | HKDF, L=48 → `ScalarFrom`                 | contact key's 32-byte private scalar                                                             | P-256 scalar (ECDSA)       | Door signing key (proves ownership of a door)                | `identity/contact-key.ts:29`       | 01, 07 |
+| `minca/door-topic/v1\|<signKey>`         | SHA-256, base64url                        | —                                                                                                | mailbox topic              | A door's mailbox topic on a relay: a hash of its signing key | `doors/doors.ts` (`doorTopic`)     | 07     |
+| `minca/local-key/v1`                     | HKDF, L=32                                | seed                                                                                             | AES-256-GCM key            | Local key: this device's storage (§11.1)                     | `identity/account-vault.ts:29`     | 01, 05 |
+| `minca/account-key/v1`                   | HKDF, L=32                                | seed                                                                                             | 32 bytes                   | Account key: root of member keys and account spaces (§11.1)  | `identity/account-vault.ts:30`     | 01, 06 |
+| `minca/pairing-room/v1`                  | CID of prefix ‖ secret (no separator)     | 16-byte pairing secret                                                                           | room id                    | Pairing room                                                 | `identity/channel.ts:39`           | 01     |
+| `minca/pairing-key/v1\|<side>\|<O>\|<J>` | HKDF, L=32                                | pairing secret ‖ ECDH shared x                                                                   | AES-256-GCM key            | Pairing messages sent by `<side>` (`offer` or `join`)        | `identity/channel.ts:40`           | 01     |
+| `minca/pairing-code/v1\|<O>\|<J>`        | HKDF, L=4 → uint32 mod 10⁶                | pairing secret ‖ ECDH shared x                                                                   | 6-digit code               | Code both screens show                                       | `identity/pairing.ts:18`           | 01     |
+| `minca/code-room/v1`                     | CID of prefix ‖ secret (no separator)     | 16-byte connect-code secret                                                                      | room id                    | Room for connecting by code                                  | `identity/channel.ts:46`           | 06     |
+| `minca/code-key/v1\|<side>\|<O>\|<J>`    | HKDF, L=32                                | connect-code secret ‖ ECDH shared x                                                              | AES-256-GCM key            | Connect-by-code messages sent by `<side>`                    | `identity/channel.ts:47`           | 06     |
+| `minca/code-account/v1`                  | SHA-256 of prefix ‖ input, first 8 bytes  | UTF-8 account DID                                                                                | account fingerprint        | The account a connect code names                             | `session/connect-code.ts:27`       | 06     |
+| `minca/space-invite/v1`                  | HKDF, L=32 → `P256KeyFrom`                | 32-byte invite secret                                                                            | P-256 key                  | Invite key                                                   | `space/space-access.ts:28`         | 03     |
+| `minca/space-read/v1`                    | HKDF, L=32 → `P256KeyFrom`                | space key K                                                                                      | P-256 key                  | Read key of a private space                                  | `space/space-access.ts:27`         | 03     |
+| `minca/space-seal/v1`                    | HKDF, L=32                                | space key K                                                                                      | AES-256-GCM key            | Every envelope under a space key                             | `privacy/space-encryption.ts:15`   | 03     |
+| `minca/space-key-id/v1`                  | HKDF, L=16, base64url                     | space key K                                                                                      | key id (22 characters)     | A space key's id                                             | `privacy/space-encryption.ts:16`   | 03     |
+| `minca/account-registry/nonce/v1`        | HKDF, L=32, first 12 bytes, base64url     | account key                                                                                      | space nonce                | Account registry space                                       | `space/account-registry.ts:82,106` | 03     |
+| `minca/account-registry/key/v1`          | HKDF, L=32                                | account key                                                                                      | space key K                | Account registry space                                       | `space/account-registry.ts:82,108` | 03     |
+| `minca/contacts/nonce/v1`                | as above                                  | account key                                                                                      | space nonce                | Contacts space                                               | `space/account-registry.ts:95,106` | 03     |
+| `minca/contacts/key/v1`                  | as above                                  | account key                                                                                      | space key K                | Contacts space                                               | `space/account-registry.ts:95,108` | 03     |
+| `minca/topic-tags/v1`                    | HKDF → HMAC-SHA256 key                    | space key K (private) or the bytes of `minca/public-topics/v1\|<spaceId>` (public)               | HMAC key                   | Topic tags                                                   | `records/topics.ts:80,87`          | 02     |
+| `minca/one-per/v1`                       | HKDF → HMAC-SHA256 key                    | the space's first key K₀ (private) or the bytes of `minca/public-one-per/v1\|<spaceId>` (public) | HMAC key                   | `onePer` record keys                                         | `records/rules.ts:78,81`           | 02     |
+| `minca/record-owner/v1\|<root>`          | SHA-256, first 16 bytes, base32 lowercase | —                                                                                                | owner part (26 characters) | The owner part of an owned record key                        | `records/key.ts:54`                | 02     |
+| `minca-room/v1\|<spaceId>`               | SHA-256, first 20 bytes, base32 lowercase | —                                                                                                | relay room name            | A space's room on a relay                                    | `node/space-runtime.ts:305`        | 04     |
 
 Labels of sealed things: every envelope and every HPKE seal (§9) names one,
 with the fields of its `bound`. _docs_ marks a label used by a convention
@@ -278,43 +281,43 @@ CLI's own node reads:
 
 | Label                      | Primitive | `bound`                                                    | Defined in                           | Part   |
 | -------------------------- | --------- | ---------------------------------------------------------- | ------------------------------------ | ------ |
-| `weave/record-body/v1`     | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
-| `weave/earlier-keys/v1`    | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
-| `weave/membership/v1`      | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
-| `weave/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:213`          | 03     |
-| `weave/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
-| `weave/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
-| `weave/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
-| `weave/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
-| `weave/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:243`                 | 07     |
-| `weave/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1547`                  | docs   |
-| `weave/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
-| `weave/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
-| `weave/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
+| `minca/record-body/v1`     | envelope  | `space`, `collection`, `key`, `keyId`                      | `privacy/space-encryption.ts:20`     | 03     |
+| `minca/earlier-keys/v1`    | envelope  | `space`, `keyId`                                           | `privacy/space-encryption.ts:22`     | 03     |
+| `minca/membership/v1`      | envelope  | `space`                                                    | `privacy/space-encryption.ts:24`     | 03, 04 |
+| `minca/space-key-box/v1`   | HPKE      | `space`, `keyId`, `to`                                     | `space/space-access.ts:139`          | 03     |
+| `minca/vault-wrap/v1`      | envelope  | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | `identity/account-vault.ts:32`       | 01     |
+| `minca/at-rest/v1`         | envelope  | `entry`                                                    | `storage/encrypted-adapter.ts:25`    | 05     |
+| `minca/pairing/v1`         | envelope  | `type`, `seq`                                              | `identity/channel.ts:41`             | 01     |
+| `minca/code/v1`            | envelope  | `type`, `seq`                                              | `identity/channel.ts:48`             | 06     |
+| `minca/knock/v1`           | HPKE      | `door`                                                     | `doors/doors.ts:235`                 | 07     |
+| `minca/contact-request/v1` | HPKE      | `space`, `from`, `to`                                      | `node/node.ts:1568`                  | docs   |
+| `minca/direct-text/v1`     | envelope  | `space`, `from`, `to`                                      | `privacy/direct.ts:37`               | docs   |
+| `minca/direct-box/v1`      | HPKE      | `space`, `from`, `to`, `reader`                            | `privacy/direct.ts:39`               | docs   |
+| `minca/writer-key/v1`      | envelope  | `did`, `slot`                                              | `packages/cli/src/writer-keys.ts:27` | CLI    |
 
 Strings that separate _signed messages_ rather than derive keys, listed so
 new labels do not collide with them:
 
 | String                                                 | Kind                                                   | Defined in                                                    | Part |
 | ------------------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------- | ---- |
-| `weave/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:217`                                   | 03   |
-| `{"audience":…,"proof":"weave/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:254` (`keyStatement`)                     | 06   |
-| `weave/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
-| `weave/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
-| `weave-peer/v3\|client\|…`, `weave-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:190,192`                                | 04   |
-| `weave-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:302`                                    | 04   |
-| `weave-host/v1\n…`, `weave-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                   | 08   |
+| `minca/space-invite/v1\|<spaceId>\|<did>`              | Message signed by an invite key                        | `space/space-access.ts:143`                                   | 03   |
+| `{"audience":…,"proof":"minca/connect-key/v1",…}`      | Canonical JSON signed by a key a connect request names | `session/connect.ts:282` (`keyStatement`)                     | 06   |
+| `minca/door-purge/v1\|<topic>\|<nonce>\|<ids>`         | Signed by a door signing key, checked by a relay       | `doors/doors.ts` (`purgeMessage`), `packages/relay/relay.mjs` | 07   |
+| `minca/knock-answer/v1\|<space>\|<account>`            | Signed by a door signing key                           | `doors/doors.ts` (`signAnswer`)                               | docs |
+| `minca-peer/v3\|client\|…`, `minca-peer/v3\|server\|…` | Signed peer-auth messages                              | `network/peer-auth.ts:198,200`                                | 04   |
+| `minca-mesh/v1\|…`                                     | Signed mesh proof                                      | `network/peer-auth.ts:310`                                    | 04   |
+| `minca-host/v1\n…`, `minca-host-status/v1\n…`          | Signed host requests and statuses                      | `session/hosting.ts:78,340`                                   | 08   |
 
 Notes:
 
-- `weave/p256-identity-key/v1` is applied to more than one kind of input: the
+- `minca/p256-identity-key/v1` is applied to more than one kind of input: the
   seed, and (as a second stage) invite and read secrets that were first
   expanded under their own labels. The first-stage label is what separates
   them.
-- `weave/space-invite/v1` is both an HKDF label and the prefix of a signed
+- `minca/space-invite/v1` is both an HKDF label and the prefix of a signed
   message. The two uses are in different primitives and do not collide, but a
   new use MUST NOT reuse either string.
-- New labels SHOULD follow the `weave/<purpose>/v<N>` form. A label of a
+- New labels SHOULD follow the `minca/<purpose>/v<N>` form. A label of a
   sealed thing names exactly one use, and no derivation label is reused as one.
 
 ---
@@ -323,7 +326,7 @@ Notes:
 
 | Key                  | How made                                                        | Lifetime                                     | Signs                                   |
 | -------------------- | --------------------------------------------------------------- | -------------------------------------------- | --------------------------------------- |
-| **Root key**         | `P256KeyFrom(seed)`                                             | The account's                                | UCANs only (§7)                         |
+| **Root key**         | `P256KeyFrom(seed)`                                             | The account's                                | Notes only (§7)                         |
 | **Session key**      | A lasting P-256 key claimed under a lock, else fresh (02 §4.10) | While the device keeps it, else one node run | Records, peer-auth messages             |
 | **App key**          | Fresh random P-256 key pair kept by an app or other program     | Until the program forgets it                 | Records, under a grant                  |
 | **Contact key**      | `ScalarFrom(HKDF(seed, contact label, 48))`                     | The account's                                | Nothing; ECDH only (§10)                |
@@ -331,7 +334,7 @@ Notes:
 | **Door key**         | `ScalarFrom(HKDF(contactKey, door label, 48))`                  | Until the door is closed                     | Nothing; ECDH only (§10)                |
 | **Door signing key** | `ScalarFrom(HKDF(contactKey, door sign label, 48))`             | Until the door is closed                     | Purge challenges and knock answers (07) |
 
-The root key signs exactly one kind of thing: a UCAN delegating to another key.
+The root key signs exactly one kind of thing: a note (§7) delegating to another key.
 It MUST NOT be used to sign records directly in normal operation. (A record
 with no `proof` is judged as written by its `author` key itself — see
 [02 — Records](02-records.md).)
@@ -345,12 +348,12 @@ notes through, are the library's: see
 ### 6.2 The session delegation
 
 A node signs records with a session key (§6) under a note from the root
-(§7) made out to it: `aud` is the session DID, `prf` is `[]`, and `fct` is
-absent. Every record the
-session key signs carries that leaf token, encoded, as its `proof`
-([02 — Records](02-records.md)). Peers check only that the note verifies and
-covers what each record needs (§7.4–§7.6, §8); which capabilities it grants, how
-long it lasts and when it is renewed are the node's choice
+(§7) made out to it: `aud` is the session DID, `sub` the account's DID, and
+the node's proof is that token. Every record the session key signs
+carries the proof as its `proof` ([02 — Records](02-records.md)). Peers
+check only that the note verifies and grants what each record needs
+(§7.5, §8); which command it names, how long it lasts and when it is
+renewed are the node's choice
 ([Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes),
 [06](06-nodes-and-sessions.md)).
 
@@ -359,161 +362,225 @@ _Tests:_ `packages/core/tests/node.test.ts` ("records outlive the session that w
 
 ---
 
-## 7. UCAN delegations
+## 7. Delegations (UCAN 1.0, JSON profile)
 
-A **UCAN** (also called a _note_ in the code and UI) is a JWT-shaped token by
-which an issuer key grants capabilities to an audience key for a time window.
-Weave uses a subset of UCAN 0.10.
+A **delegation** is a signed token by which an issuer key passes some of
+what it may do to an audience key. A **note** is the one kind peers accept:
+a delegation from the account's root key to another key (§7.5).
+Minca writes them in its own **JSON profile of UCAN 1.0**: UCAN 1.0's fields
+(`iss`, `aud`, `sub`, `cmd`, `pol`, `nonce`, `meta`, `exp`, `nbf`), its
+command paths and its policy language, in Minca's canonical
+JSON ([02](02-records.md) §1) and signed as Minca signs everything else,
+instead of DAG-CBOR with a varsig header. UCAN's chains are not used: a
+note is always one link.
 
-> **Planned: UCAN 1.0** ([#19](https://github.com/leifriksheim/weave/issues/19)).
-> Tokens move to the 1.0 format: a DAG-CBOR envelope signed with a varsig
-> header, delegations with `sub`, `cmd` and a policy (`pol`) in place of
-> `att`, invocations that carry their chain in `prf`, and specified
-> revocation. `space:<id>` becomes a policy on `.space`, which also gives
-> grants narrower than a space (§7.1) and proof chains that travel (§7.5)
-> without new syntax. Issuers and verifiers switch outright, with a sync
-> version bump ([05](05-sync-and-storage.md) §4): before v1 a clean break is
-> preferred to a transition path. Not normative until built.
+It is **not byte-compatible** with other UCAN tools: a Minca token can't be
+handed to a UCAN library, nor a UCAN token to a Minca peer. That is
+deliberate. Every other signed thing in Minca is canonical JSON with a plain
+ES256 signature, and DAG-CBOR and varsig would be a second encoding, a
+second hash and a dependency for one kind of token. The semantics carry over
+whole, so moving to the CBOR form later is a change of encoding, not of
+meaning.
 
-### 7.1 Format
+Minca uses delegations, not UCAN invocations: a version, a knock or a peer
+proof is what the key does, and the peer that checks it fills in the
+arguments a policy reads (§8). Minca's revocation is its own, a record that
+names a key ([03](03-spaces.md) §6.4); UCAN's revocation spec is not used.
+
+### 7.1 The token
+
+A token is a JSON object with exactly three members:
 
 ```
-token = b64u(canonicalJSON(header)) "." b64u(canonicalJSON(payload)) "." b64u(signature)
+token        = { "payload": <payload>, "sig": <signature>, "type": "minca/ucan/dlg@1" }
+signed bytes = UTF-8( canonicalJSON( { "payload": <payload>, "type": "minca/ucan/dlg@1" } ) )
 ```
 
-- `b64u` is base64url without padding.
-- `canonicalJSON` is Weave's canonical JSON ([02 — Records](02-records.md)):
-  object keys sorted, no whitespace, `undefined` members dropped.
-- `signature` is ECDSA P-256 / SHA-256, 64-byte IEEE P1363 (`r ‖ s`), by the
-  issuer's key over the UTF-8 bytes of `b64u(header) "." b64u(payload)`
-  exactly as transmitted.
+- `type` names the profile and the kind of token, as UCAN's envelope tag
+  does. A peer MUST refuse any other value.
+- `sig` is ECDSA P-256 / SHA-256 by the issuer's key over the signed bytes:
+  64 bytes `r ‖ s` (IEEE P1363), base64url without padding, so exactly 86
+  characters. `s` MUST be in the **low-S** form, `s ≤ n/2`: an issuer
+  produces only that form, and a verifier MUST refuse a signature with
+  `s > n/2`. Its base64url MUST be the one spelling of its bytes (no
+  padding, nothing outside the alphabet, zero trailing bits).
 
-**Header** (fixed):
+**Payload.** Exactly these members; a verifier MUST refuse any other.
 
-```json
-{ "alg": "ES256", "typ": "JWT", "ucv": "0.10.0" }
-```
+| Field   | Type                  | Required | Meaning                                                                                                    |
+| ------- | --------------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `iss`   | string                | yes      | Issuer: a P-256 `did:key` (§4) in its one spelling (multicodec `p256-pub`, 33-byte key). Its key signs it. |
+| `aud`   | string                | yes      | Audience: who it is made out to. For a note, a P-256 `did:key` (§7.5)                                      |
+| `sub`   | string                | yes      | Subject: what it is about. The account (its DID, the issuer's), or one space, `space:<id>` (§7.2)          |
+| `cmd`   | string                | yes      | The command it covers, and every command under it (§7.3)                                                   |
+| `pol`   | array                 | yes      | Policy: conditions on the arguments of what it is used for (§7.4). `[]` for none                           |
+| `nonce` | string                | yes      | 1–64 base64url characters. Issuers use 12 random bytes. Makes each token unique; not otherwise checked     |
+| `meta`  | object                | no       | Signed, and read by no peer: a peer MUST NOT judge anything differently for what `meta` holds              |
+| `exp`   | integer, Unix seconds | no       | Not valid at or after this time (§7.6). A note has one                                                     |
+| `nbf`   | integer, Unix seconds | no       | Not valid before this time (§7.6). A note has one                                                          |
 
-**Payload:**
+`exp` and `nbf` are integers from 0 to 2⁵³ − 1. `exp` is never `null`: a
+token time doesn't end leaves it out. `sub` is never `null`: UCAN's
+_powerline_ is not used (§7.2). A token whose canonical form is longer than
+16 KiB is refused.
 
-| Field | Type                  | Required              | Meaning                                                                          |
-| ----- | --------------------- | --------------------- | -------------------------------------------------------------------------------- |
-| `iss` | string (did:key)      | yes                   | Issuer; its key signs the token                                                  |
-| `aud` | string (did:key)      | yes                   | Audience: the key receiving the capabilities                                     |
-| `exp` | integer, Unix seconds | yes                   | Not valid at or after this time                                                  |
-| `nbf` | integer, Unix seconds | yes                   | Not valid before this time                                                       |
-| `nnc` | string                | issuers always set it | Nonce: 8 random bytes as 16 lowercase hex characters. Not checked by verifiers   |
-| `att` | array of Capability   | yes                   | Capabilities granted (may be empty)                                              |
-| `prf` | array of string       | yes                   | CIDs of parent tokens (§7.5); `[]` for a token issued directly by the root       |
-| `fct` | array of object       | no                    | Facts. Omitted when there are none. Weave defines none, and peers read none (§8) |
+**The token's id** is `CID(UTF-8(canonicalJSON(token)))` (the conventions above, [02](02-records.md)
+§2): signature included. Since the token is read as JSON and re-canonicalized,
+and its signature has one form, a token has exactly one id.
 
-`nbf` is optional in UCAN 0.10 but **required** here: a verifier MUST reject a
-token without a finite numeric `exp` and `nbf`.
+> Rationale: a malleable signature gives a second token that verifies under
+> a different id, and anything that names or counts tokens by id (a cache)
+> would see two where there is one. Refusing high-S closes it at the source.
 
-> Rationale: records are judged at the time they claim to have been signed
-> (§7.4). A token with no start would let a leaked session key back-date
-> records to any time before the token existed.
+### 7.2 Subjects
 
-**Capability:**
+| `sub`          | Meaning                                                                        |
+| -------------- | ------------------------------------------------------------------------------ |
+| the root's DID | **The account**: everything it may do, in every space and as a whole (a knock) |
+| `space:<id>`   | **One space** of the account's. `<id>` is 1–128 of `[A-Za-z0-9._~-]`           |
 
-```json
-{ "with": "<resource>", "can": "<ability>" }
-```
+A DID subject MUST be the note's issuer, the account (§7.5): UCAN 1.0's own
+rule that the subject is whoever began the chain, for a chain of one. A note
+for **every space** is a note about the account. UCAN's `null` subject (a
+powerline) adds nothing when every note is from the account it is about, so
+it is refused, keeping one spelling for each meaning.
 
-Resources and abilities in use:
+### 7.3 Commands
 
-| `with`            | Meaning     |
-| ----------------- | ----------- |
-| `*`               | Every space |
-| `space:<spaceId>` | One space   |
+A command is `/`, or one or more segments each written `/` and then one or
+more of `a`–`z`, `0`–`9`, `.`, `_` and `-` (ASCII only), with no trailing
+`/`, at most 256 characters: UCAN 1.0's form, narrowed to ASCII so that no
+two spellings fold to the same command. As a pattern:
+`^/$|^(/[a-z0-9._-]+)+$`. A command covers
+itself and every command under it, by whole segments: `/record` covers
+`/record/write` but not `/recordings`, and `/` covers everything.
 
-| `can`               | Meaning                                                                                                     |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `record/write`      | Write records (what a record in a space requires: `{with: "space:<id>", can: "record/write"}`)              |
-| `record/read`       | Read-only access (app grants with read access)                                                              |
-| `record/*`          | Every `record/…` ability: records, and nothing more                                                         |
-| `collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                   |
-| `access/change`     | Every other change to a space's access history: roles, members, invites, revocations, keys, relays, keepers |
-| `account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                             |
-| `*`                 | Every ability                                                                                               |
+| Command              | What it permits                                                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                  | Everything below                                                                                                                            |
+| `/record`            | Every `/record/…` command: records, and nothing more                                                                                        |
+| `/record/write`      | Write records (every version in a space needs it)                                                                                           |
+| `/record/read`       | Nothing a peer checks: a note for an app given read access, which writes nothing                                                            |
+| `/collection/define` | Define, change or remove a space's collections (`sys.collection`, [02](02-records.md) §6)                                                   |
+| `/access/change`     | Every other change to a space's access history: role definitions, assignments, removals, invites, revocations, keys, relays, keepers, forks |
+| `/account/write`     | Write in the account's own spaces, and open doors and knock ([07](07-doors.md))                                                             |
 
-What each ability permits in a space is specified in
+What each command permits in a space is specified in
 [02 — Records](02-records.md), [03 — Spaces](03-spaces.md) and
-[06](06-nodes-and-sessions.md). Which abilities a version needs, and how a
-peer checks them, is §8.
+[06](06-nodes-and-sessions.md). Which commands a version needs, with which
+arguments, is §8.
 
-> **Planned: grants narrower than a space.** The smallest resource is a whole
-> space, so an app granted a private space can write in every
-> collection and read all of it for as long as its note lasts. A
-> per-collection resource would narrow writes. Narrowing reads also needs
-> keys per collection, which is [03 — Spaces](03-spaces.md)' question. Not
-> designed yet: how coverage (§7.6) treats it, and the resource syntax, which
-> UCAN 1.0 would make unnecessary: a policy on `.collection` narrows a
-> delegation with no new syntax ([#19](https://github.com/leifriksheim/weave/issues/19)).
+### 7.4 Policies
 
-### 7.2 The token's CID
+A policy is UCAN 1.0's policy language (UCAN Delegation, "Policy"),
+evaluated over canonical JSON values: a list of statements that MUST all
+hold for the arguments of what the token is used for (§8).
 
-A token is referred to (in `prf`) by
-`CID(UTF-8(token))` — the hash of the whole encoded string, signature
-included.
+| Statement                                             | Holds when                                                                                                                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `["==", sel, value]`, `["!=", sel, value]`            | The selected value is (is not) deeply equal to `value`, any JSON value                                                                           |
+| `["<", sel, n]`, `["<=", …]`, `[">", …]`, `[">=", …]` | Both are numbers, and compare so; `n` MUST be a number                                                                                           |
+| `["like", sel, pattern]`                              | The selected value is a string matching the glob `pattern`                                                                                       |
+| `["not", stmt]`                                       | `stmt` does not hold                                                                                                                             |
+| `["and", [stmt, …]]`, `["or", [stmt, …]]`             | Every (some) `stmt` holds. `and` of none holds; so does `or` of none                                                                             |
+| `["all", sel, stmt]`, `["any", sel, stmt]`            | The selected value is an array, or an object (its values), and `stmt` holds for every (some) element. `all` of none holds; `any` of none doesn't |
 
-> **Planned: one valid form per token.** ECDSA signatures are malleable: from
-> a valid `(r, s)` anyone can make `(r, n − s)`, which WebCrypto also accepts,
-> and a lenient base64url decoder accepts more than one spelling of the same
-> bytes. Either gives a token that still verifies under a different CID.
-> Revocation names a key, not a token ([03](03-spaces.md) §6.4), so a second
-> form does not slip past one; but whatever names or counts a token by its
-> CID, a `prf` link or a cache, sees two tokens where there is one. The plan: verifiers
-> refuse a signature with `s > n/2` (high-S), issuers produce low-S only, and
-> every base64url field is decoded strictly (no padding, no characters outside
-> the alphabet, no non-zero trailing bits).
+**Selectors** are UCAN 1.0's: `.` (the arguments), `.name` (a name of
+`[A-Za-z_][A-Za-z0-9_]*`), `.["any name"]` (a JSON string), `[i]` and
+`[-i]` (an array element, from the end when negative), `[a:b]`, `[a:]`,
+`[:b]` (an array slice, negative bounds from the end), `[]` (an array's
+elements, or an object's values; what follows applies to each, and fails if
+it fails for any), and `?` after a segment (null where it would fail;
+repeated `?` is one). A selector starts with `.`; `..`, a trailing `.` and
+anything else make it malformed. A missing member of an object is `null`;
+selecting further into that `null` fails.
 
-### 7.3 Issuing
+**Globs:** `*` matches any run of characters, including none; `\*` is a
+literal `*`; every other character, a backslash before anything but `*`
+included, is itself.
 
-An issuer produces a token of the form in §7.1; what a verifier checks is
-§7.4–§7.6. The reference issuer's defaults, and what it refuses to issue, are
-the library's: see
-[Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes).
+**When a selector fails** (it finds nothing and has no `?`), the statement
+it is in has **no data**. No data never holds: `not` keeps it no data (so a
+missing field can't turn `not` into a pass), `and` is false if any part is
+false and otherwise no data if any part is, `or` is true if any part is true
+and otherwise no data if any part is, and a policy holds only if every
+statement holds. `!=` is `not ==`. A comparison of the wrong types is false,
+not no data.
 
-### 7.4 Verifying one token
+**A missing member is not a failure.** It reads as `null`, as in UCAN, so a
+negated statement about it holds: `["!=", ".role", "admin"]` and
+`["not", ["==", ".role", "admin"]]` both hold for arguments with no `role`.
+Only selecting further into it fails. Where an argument may be absent, a
+policy that means "only these" says what is allowed, with `==` or an `or` of
+`==` statements, rather than what isn't.
 
-Given a token and a time `at` (Unix seconds), a verifier:
+A policy that is not well formed (an unknown operator, the wrong number of
+arguments, a malformed selector, a non-number in an inequality, a
+non-string pattern, nested more than 32 deep or holding more than 256
+statements) makes its token malformed: refused (§7.1).
 
-1. MUST split on `.` into exactly three parts, and base64url/JSON-decode the
-   first two.
-2. MUST check that `exp` and `nbf` are finite numbers, and that
-   `nbf ≤ at < exp`.
-3. MUST decode `iss` as a did:key (§4), import its public key, and verify the
-   signature over the first two parts as received.
+Peers MUST evaluate a note's policy wherever they check the note (§8). The
+reference passes UCAN's published policy fixtures.
 
-The verifier does not re-canonicalize and does not check `nnc` or `fct`. A
-verifier SHOULD reject a header other than the one in §7.1, and SHOULD reject
-an `iss` whose multicodec is not `p256-pub` (§4).
+> The UCAN fixtures leave some corners open; this section fixes them: `any`
+> over an empty collection is false, `not` keeps no data, and slices apply to
+> arrays only. The fixture file's one malformed case is corrected in the
+> copy the tests use (`packages/core/tests/vectors/ucan-policy.json`).
 
-> **Known defect:** the reference `verifyUCAN` checks neither the header
-> (`alg`, `typ`, `ucv`) nor the issuer's multicodec (`packages/core/src/identity/ucan.ts`,
-> `packages/core/src/identity/did.ts`). A fix will reject both. Other implementations MUST
-> NOT rely on a token with a different header being accepted.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20), [#19](https://github.com/leifriksheim/weave/issues/19).
+### 7.5 Notes
 
-> **Planned: strict token shape.** Besides the header and the multicodec
-> (the known defect above), verifiers will check the payload's shape: `att`
-> is an array of `{with, can}` string pairs, `prf` an array of CID strings,
-> `iss` and `aud` DIDs, `fct` (when present) an array of objects. A malformed
-> token is refused rather than failing somewhere later.
+What a key does carries its **proof**: one note, a token issued by the
+account's root key to that key. A record carries it in `proof`
+([02](02-records.md) §3.1); a knock ([07](07-doors.md)) and a peer's proof
+([04](04-network.md)) carry it the same way. It is a single JSON object,
+never a list.
 
-Which time step 2 uses depends on what the token is relied on for:
+Given a proof, and a time `at` or none (§7.6), a verifier MUST check:
 
-- **A record's `proof`: no time at all.** Step 2 is skipped. Whether a
-  record stands is something every peer must agree on whenever it looks, so
-  no one's clock, and no time the writer claims, may decide it
+1. It is one token, a JSON object in the exact form of §7.1, signed by its
+   `iss` (low S), within its time bounds at `at` (§7.6). Anything else,
+   a list of tokens (a chain) included, is refused.
+2. It is a **note**: `aud` is a P-256 `did:key`, and `exp` and `nbf` are
+   present.
+3. Its `sub`, when it is a DID, equals its `iss`.
+
+The note is then **for** its `aud`, and **from** its `iss`: the **root**,
+the account it acts for.
+
+A note **grants** a requirement (a command, a space or the account as a
+whole, and arguments; §8) iff its `cmd` covers the required command; its
+`sub` is the account, or `space:<S>` where the requirement is in space `S`;
+and its policy holds for the arguments.
+
+No key below the root can extend a note. A token a session or app key
+signs is a note from that key, about that key's own DID: it names no
+account but the key itself, and acts for no one else.
+
+> Rationale: one link means a key can't mint keys. A stolen session or app
+> key is like a stolen session token: usable, within its note, until it is
+> revoked, but it can't pass its power on to keys the account never saw, so
+> revoking it ([03](03-spaces.md) §6.4) takes everything it can do, with the
+> one cutoff the revoke names. With chains, a revoke would also have to
+> reach every key below the revoked one, and peers would have to agree on
+> what of theirs counted. A key that needs a narrower key of its own (an
+> app's helper, a key per tab) asks the account for a second note.
+
+### 7.6 Time
+
+Which time step 1 uses depends on what the proof is relied on for:
+
+- **A record's `proof`: no time at all.** Time bounds are not checked.
+  Whether a record stands is something every peer must agree on whenever it
+  looks, so no one's clock, and no time the writer claims, may decide it
   ([02 — Records](02-records.md) §9.3). A record stays valid after its note
   runs out. What ends a key's writes is a revoke of the key, with a cutoff
   at what it signed ([03 — Spaces](03-spaces.md) §6.4).
 - **Anything live** (a knock, a live message, a peer's proof when it
-  connects, an app checking its grant): the checking node's own clock. These
-  are one node's decisions in the moment, not verdicts peers share, so a
-  note that has run out stops working there on time, with no revoke needed.
+  connects, an app checking its grant): the checking node's own clock, or,
+  for a knock, the time it was signed and dropped (07). The note MUST have
+  `nbf ≤ at < exp` at that `at`. These are one node's decisions in the moment, not
+  verdicts peers share, so a note that has run out stops working there on
+  time, with no revoke needed.
 
 So a leaked key's live use ends when its note runs out, and its records end
 when its key is revoked. Signing out writes a revoke of the session key in every space
@@ -522,175 +589,121 @@ registry, with a cutoff at what it wrote, and a device that kept the key
 forgets it (`revokeSelf`); the revokes reach other peers as that device next
 syncs. _Open:_ removing a device from another one, which
 needs the list of the account's session keys
-([#165](https://github.com/leifriksheim/weave/issues/165)).
+([#165](https://github.com/leifriksheim/minca/issues/165)).
 
-### 7.5 Delegation chains
+### 7.7 Issuing
 
-A token with non-empty `prf` claims authority from its parents. The chain is
-resolved from the leaf toward the root:
+An issuer produces tokens of the form in §7.1, low S only; what a verifier
+checks is §7.5–§7.6. The reference issuer's defaults (an hour, `nbf` set
+back by five minutes for clocks that disagree, the terms a home gives an
+app) are the library's: see
+[Root signers and notes](../packages/core/docs/node.md#root-signers-and-notes).
 
-1. Verify the leaf (§7.4) at `at`.
-2. Let `current` be the leaf. Up to **10** times:
-   - If `current.prf` is empty, `current.iss` is the **root DID**. Stop: the
-     chain is valid; it grants the **leaf's** `att` to the **leaf's** `aud`.
-   - Resolve the token whose CID is `current.prf[0]`. If none is found, the
-     chain is invalid.
-   - Check the link: every CID in `current.prf` must be among the provided
-     proofs (only one is provided, so in effect `prf` MUST have at most one
-     entry); the parent must verify (§7.4) at the same `at`; the parent's `aud`
-     MUST equal `current.iss`; every capability in `current.att` MUST be
-     covered by some capability in the parent's `att` (§7.6).
-   - Move to the parent.
-3. A chain longer than 10 links is invalid.
+### 7.8 Example
 
-Because every parent is verified at the same `at`, a child is never usable
-outside its parents' windows, even though the chain check does not compare
-`exp` values directly.
-
-A record-validating peer additionally requires that the leaf's `aud` equals
-the record's `author`, that some leaf capability covers the capability the
-record needs, and that the root DID is allowed in the space
-([02 — Records](02-records.md), [03 — Spaces](03-spaces.md)).
-
-**How parent tokens travel is not yet specified** (§16). The rules above are
-the intended check for a chain of any length up to 10.
-
-> **Known defect:** a record carries only its leaf token in `proof`, and the
-> reference wires no proof resolver for records — the capability gate
-> defaults to `() => null` (`packages/core/src/validation/capability-gate.ts`),
-> and `packages/core/src/network/peer-auth.ts` passes it too. So a chain deeper than one link never
-> validates on a record; only tokens issued directly by the root (`prf: []`)
-> do. A fix will define how parents travel and resolve them.
-> Tracked in [#19](https://github.com/leifriksheim/weave/issues/19).
-
-#### Planned: proof chains that travel
-
-Fixes the known defect above; replaces the first line of §16.
-
-A record will carry, besides its leaf token, the intermediate tokens its chain
-needs, so any peer can resolve the chain from the record alone, with no lookup
-and no service. With that, delegations deeper than root → key work on records:
-a session key delegating on to a short-lived key, an app handing a narrower
-note to a helper.
-
-What it unblocks:
-
-- A note for a program connected by code is signed **root → its key**
-  directly today, only because peers resolve one link
-  ([06](06-nodes-and-sessions.md) §3). With chains, the app it connected
-  through could delegate to it itself, a narrower note than its own.
-- The older idea of **roles as delegations** ("anyone the owner made a
-  moderator" as a UCAN from the owner, carried in the record's proof) needed
-  this. Roles now live in the space's access history
-  ([03 — Spaces](03-spaces.md)) and `can:<p>` rules are built on them
-  ([02 — Records](02-records.md) §7.1), so this no longer depends on chains.
-
-Open questions:
-
-- Where parents go: a new optional version member (for example
-  `proofs: [token, …]`, parents in order), or tokens stored once per space and
-  referred to by CID. The first is self-contained; the second is smaller when
-  one note signs many records.
-- Whether the chain depth limit of 10 (§7.5) stays, given the bytes each link
-  adds to every record.
-- How revocation, which names a key ([03](03-spaces.md) §6.4), treats a key
-  in the middle of a chain: whether revoking it withdraws what keys it
-  delegated to signed.
-
-### 7.6 Capability coverage
-
-A parent capability `P` covers a child capability `C` iff both hold:
-
-- `P.with == "*"` or `P.with == C.with` (exact string match — no other
-  wildcards; `space:*` is _not_ a pattern);
-- `P.can == "*"`, or `P.can == C.can`, or `P.can` ends in `/*` and `C.can`
-  starts with `P.can` minus its final `*` (so `record/*` covers
-  `record/write` and `record/read`, but not `*`).
-
-### 7.7 Example
-
-Issued by the root key of §3.3 to the did:key spec's example key, records
-only, with fixed times and nonce:
-
-Header JSON: `{"alg":"ES256","typ":"JWT","ucv":"0.10.0"}`
-
-Payload JSON:
-
-```json
-{
-  "att": [{ "can": "record/*", "with": "*" }],
-  "aud": "did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169",
-  "exp": 1790000000,
-  "iss": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
-  "nbf": 1789996100,
-  "nnc": "0123456789abcdef",
-  "prf": []
-}
-```
-
-Encoded (ECDSA signatures are randomized, so the third part differs every
-time):
+Issued by the root key of §3.3 to the did:key spec's example key: records
+only, in collection `app.note`, with fixed times and nonce. The signed
+bytes:
 
 ```
-eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsInVjdiI6IjAuMTAuMCJ9.eyJhdHQiOlt7ImNhbiI6InJlY29yZC8qIiwid2l0aCI6IioifV0sImF1ZCI6ImRpZDprZXk6ekRuYWVyRGFURjVCWEVhdkNyZlJaRWszMTZkcGJMc2ZQRFozV0o1aFJUUEZVMjE2OSIsImV4cCI6MTc5MDAwMDAwMCwiaXNzIjoiZGlkOmtleTp6RG5hZWFBN0JjVnhBaUxkTlAxNXdMdlM2U0MxdmFRYzl6cGVWeHJVcEVDNDh5eGtyIiwibmJmIjoxNzg5OTk2MTAwLCJubmMiOiIwMTIzNDU2Nzg5YWJjZGVmIiwicHJmIjpbXX0.cuXLLqFQFJUaMxfpS0wLkvD-b8yvDhpKZP02e0jL4PYi6r6PShA9YgYeiyo1nDqX-rALrpAmrZ67Y6pP4OMC4w
+{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT"},"type":"minca/ucan/dlg@1"}
 ```
 
-Its CID (for this exact string): `bn3we3malzqeluqvvwpwefm5vsldddbz2f33ktrnji2ztcq6wu2rq`.
+One token over them (ECDSA signatures are randomized, so `sig` differs every
+time it is issued; this one is low-S):
 
-_Source:_ `packages/core/src/identity/ucan.ts`, `packages/core/src/validation/capability-gate.ts`, `packages/core/src/node/space-runtime.ts` (`writeCapability`, `noteCid`).
-_Tests:_ `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`, `packages/core/tests/attacks.test.ts`.
+```
+{"payload":{"aud":"did:key:zDnaerDaTF5BXEavCrfRZEk316dpbLsfPDZ3WJ5hRTPFU2169","cmd":"/record","exp":1790000000,"iss":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT","nbf":1789996100,"nonce":"AAECAwQFBgcICQoL","pol":[["==",".collection","app.note"]],"sub":"did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT"},"sig":"HBKED5Qimk7X5F0Xd79Gcm4F64GdtYbFqyt7B-kO-ZEl8e2gD3mW07VQaVYfnngREQ5FmzHLA8tCZckpLo7QDg","type":"minca/ucan/dlg@1"}
+```
+
+Its id: `bcmmtwj62gmokzcmv4h7devlpn2fgrkwof3gj6xv3lkpefcn7x6wa`. The same
+token with `s` replaced by `n − s` verifies under Web Crypto, and is
+refused (§7.1).
+
+_Source:_ `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyDelegation`, `isCommand`, `verifyNote`, `noteCovers`), `packages/core/src/identity/policy.ts` (`evaluatePolicy`, `policyProblem`), `packages/core/src/validation/capability-gate.ts`.
+_Tests:_ `packages/core/tests/ucan.test.ts` ("the example of 01 §7.8", "one token, one id: the high-S form of a signature is refused", "refuses anything but its exact shape", "commands cover what is under them", "a chain is refused, however sound its links", "a subject naming an account is only ever its issuer", "what a note grants"), `packages/core/tests/policy.test.ts` (the UCAN fixtures), `packages/core/tests/validation.test.ts` ("a note is one link", "a note's policy is checked against the version"), `packages/core/tests/space-access.test.ts` ("a key cannot pass its note on"), `packages/core/tests/attacks.test.ts`.
 
 ---
 
 ## 8. What a note lets a key do
 
-A key may do in a space what its note grants there, judged by capability
-coverage (§7.6) against what each version needs. The protocol never asks what
-kind of thing holds a key: a person's session, an app, any other program and a
-borrowed device are told apart only by what their notes grant.
+A key may do what its note grants (§7.5), judged against what each thing
+it does requires: a command, where (a space `S`, or the account as a whole),
+and the **arguments** the note's policy reads. The protocol never asks
+what kind of thing holds a key: a person's session, an app, any other
+program and a borrowed device are told apart only by what their notes grant.
 
-| A version in space `S`…                                                                                                     | needs `{ "with": "space:S", "can": … }` |
-| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| any record                                                                                                                  | `record/write`                          |
-| and in `sys.collection`                                                                                                     | also `collection/define`                |
-| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | also `access/change`                    |
-| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | also `account/write`                    |
+| A version in space `S`…                                                                                                     | requires (in `S`)    | with arguments                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------ |
+| any record                                                                                                                  | `/record/write`      | `{ "space": S, "collection": <its collection> }`                                           |
+| and in `sys.collection`                                                                                                     | `/collection/define` | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:` |
+| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | `/access/change`     | `{ "space": S, "collection": <its collection> }`                                           |
+| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | `/account/write`     | `{ "space": S, "collection": <its collection> }`                                           |
 
-A knock ([07 — Doors](07-doors.md)) needs `{ "with": "*", "can": "account/write" }`.
+A knock ([07 — Doors](07-doors.md)) requires `/account/write` for the
+account as a whole, with arguments `{}`: only a note about the account
+grants it, and a policy that limits it to some spaces does not hold there.
 
-- A version with no `proof` was signed by its author key itself, which may do
-  anything (§6).
-- A peer MUST ignore a change to the access history whose note does not grant
-  the ability it needs: it is not an event in the history, whatever the
-  writer's role ([03 — Spaces](03-spaces.md)). A version in one of the
-  account's own spaces whose note lacks `account/write` MUST NOT count there.
-- The check reads the leaf note's `att`. A chain that verifies (§7.5) never
-  grants more than its parents, so the leaf says enough.
+`space` is the space's id, without `space:`. `S` is the space the version is
+judged in, never one it claims. The arguments are exactly these: a policy
+that reads anything else finds `null` (a missing member) or nothing.
 
-A person's own sessions, and apps granted write, get `*`. A key the account
-trusts less gets `record/*` (a request for records only,
-[06](06-nodes-and-sessions.md) §2.4): it writes records, and proposes anything
-more for someone who may to apply
+- A version with no `proof` was signed by its author key itself, which may
+  do anything (§6).
+- A peer MUST ignore a change to the access history whose proof does not
+  grant what it requires: it is not an event in the history, whatever the
+  writer's roles ([03 — Spaces](03-spaces.md)). A version in one of the
+  account's own spaces whose proof lacks `/account/write` MUST NOT count
+  there.
+
+A person's own sessions, and apps granted write, get `/` about the account.
+A key the account trusts less gets `/record` (a request for records only,
+[06](06-nodes-and-sessions.md) §2.4): it writes records, and proposes
+anything more for someone who may to apply
 ([blueprints and guides](../packages/core/docs/blueprints-and-guides.md)).
+A note for one space is about that space (`sub: "space:<id>"`); a note for
+several is about the account, with a policy naming them:
+`[["or", [["==", ".space", "<id>"], …]]]`. Policies on `.collection` narrow
+a note to some collections; reading stays a matter of keys
+([03 — Spaces](03-spaces.md)), which a note doesn't narrow. An action about
+the account as a whole (a knock, the account's own spaces) carries no
+`space` argument, so `.space` reads as null there: a policy that only
+excludes spaces (`["not", ["==", ".space", "<id>"]]`) holds for it. To keep
+a note to some spaces, name them, as above.
+
+A key whose note grants `/access/change` in a space with no policy on
+`.collection` changes anything there its account may: it can make the
+account leave, and, for a founder, step down (`sys.stepdown`), and it can
+name a successor (`sys.succeed`, [03](03-spaces.md) §2.5, §2.7). Revoking
+the key undoes all of it but stepping down, which nothing undoes (03 §4.3):
+a key revoked and still held can end its account's founder status, and
+nothing else. A home that gives an app the access command, and wants less,
+names the collections it may change.
 
 A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
-message or a knock differently for any `fct` its note carries: what the key
-may do is what the note grants.
+message or a knock differently for anything in `meta`: what the key may do is
+what the proof grants.
 
 > Rationale: earlier, the protocol marked one kind of program with a fact,
 > first refusing changes from a note that carried it and later only showing
-> it as a label. Either way it tied the protocol to one kind of key. Abilities
-> say what matters in what UCAN already has, and serve any key the account
-> trusts less, a person's too.
+> it as a label. Either way it tied the protocol to one kind of key. Commands
+> and policies say what matters in what UCAN already has, and serve any key
+> the account trusts less, a person's too.
 
-_Source:_ `packages/core/src/identity/abilities.ts` (`noteGrants`, `DEFINE_ABILITY`, `ACCESS_ABILITY`, `ACCOUNT_ABILITY`), `packages/core/src/node/space-runtime.ts` (`accessCapability`, `buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantCapabilities`).
-_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants account/write: …").
+> Rationale for one command and a policy, not a set of delegations: every
+> note a home gives names one command, across one space, several or all of
+> them. One subject covers one space or all; a policy on `.space` covers
+> several. So one token per version, and one requirement checked against it,
+> keep everything notes granted before.
+
+_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `accountSpaceRequirement`, `ACCOUNT_REQUIREMENT`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
+_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").
 
 ---
 
 ## 9. Envelopes
 
-Everything Weave encrypts is sealed one of two ways: under a symmetric key,
+Everything Minca encrypts is sealed one of two ways: under a symmetric key,
 as an **envelope** (§9.1), or to a P-256 public key, with **HPKE** (§9.2).
 Each use names a **label** and a **bound**: the label says what the sealed
 thing is, the bound says where it belongs. Both are authenticated, so a
@@ -698,7 +711,7 @@ sealed thing opens only for the use and the place it was sealed for: moved to
 another record, another space, another account or another slot, or presented
 as something else, it does not open.
 
-- A **label** is a constant string `weave/<purpose>/v1`, listed in §5 with its
+- A **label** is a constant string `minca/<purpose>/v1`, listed in §5 with its
   bound's fields.
 - A **bound** is a flat JSON object whose values are strings or numbers. Its
   bytes are its canonical JSON ([02 — Records](02-records.md)).
@@ -734,12 +747,12 @@ Example (`packages/core/tests/envelope.test.ts`, "opens the fixed vector"):
 |           |                                                                                                                                       |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | key       | `000102…1f`                                                                                                                           |
-| label     | `weave/record-body/v1`                                                                                                                |
-| bound     | `{"space":"bexample","collection":"app.note","key":"k1","keyId":"aLhvw5pkV65_lcQHEcUOug"}`                                            |
-| aad       | `0x01` ‖ `weave/record-body/v1` ‖ `0x00` ‖ `{"collection":"app.note","key":"k1","keyId":"aLhvw5pkV65_lcQHEcUOug","space":"bexample"}` |
+| label     | `minca/record-body/v1`                                                                                                                |
+| bound     | `{"space":"bexample","collection":"app.note","key":"k1","keyId":"bgk-m-Kq-gEGgJCOOEYNYw"}`                                            |
+| aad       | `0x01` ‖ `minca/record-body/v1` ‖ `0x00` ‖ `{"collection":"app.note","key":"k1","keyId":"bgk-m-Kq-gEGgJCOOEYNYw","space":"bexample"}` |
 | nonce     | `a0a1…ab`                                                                                                                             |
 | plaintext | `{"body":{"text":"hi"}}`                                                                                                              |
-| envelope  | `01a0a1a2a3a4a5a6a7a8a9aaab9d3a1e4221b220851947f3b67f0ee2e452c43032efcaf9fa505cbbb531a3a7173c059be663ee`                              |
+| envelope  | `01a0a1a2a3a4a5a6a7a8a9aaab9d3a1e4221b220851947f3b67f0ee2e452c43032efca1438efe7c1526e9fe84d7b4aafc5653a`                              |
 
 ### 9.2 Sealing to a key (HPKE)
 
@@ -778,20 +791,20 @@ and for the same suite with AES-128-GCM (RFC 9180 Appendix A.3), in
 
 | Use                                  | Sealed   | Key                                         | Label                    | `bound`                                                    | Where                             |
 | ------------------------------------ | -------- | ------------------------------------------- | ------------------------ | ---------------------------------------------------------- | --------------------------------- |
-| A record body in a private space     | envelope | the space key's seal key                    | `weave/record-body/v1`   | `space`, `collection`, `key` (the record's), `keyId`       | [03 §8.3](03-spaces.md)           |
-| Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `weave/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)           |
-| A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `weave/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)          |
-| A space key boxed to a member        | HPKE     | the recipient's member key                  | `weave/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)           |
-| A knock                              | HPKE     | the door key                                | `weave/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)              |
-| A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `weave/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                             |
-| A registry value at rest             | envelope | the local key                               | `weave/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md)  |
-| A pairing message                    | envelope | the pairing key of the direction it travels | `weave/pairing/v1`       | `type`, `seq`                                              | §15.2                             |
-| A connect-by-code message            | envelope | the code key of the direction it travels    | `weave/code/v1`          | `type`, `seq`                                              | [06 §3](06-nodes-and-sessions.md) |
+| A record body in a private space     | envelope | the space key's seal key                    | `minca/record-body/v1`   | `space`, `collection`, `key` (the record's), `keyId`       | [03 §8.3](03-spaces.md)           |
+| Earlier keys in `sys.key`            | envelope | the new space key's seal key                | `minca/earlier-keys/v1`  | `space`, `keyId` (the new key's)                           | [03 §9.3](03-spaces.md)           |
+| A reader's note, proving it may read | envelope | the seal key behind the read key it proves  | `minca/membership/v1`    | `space`                                                    | [04 §6.3](04-network.md)          |
+| A space key boxed to a member        | HPKE     | the recipient's member key                  | `minca/space-key-box/v1` | `space`, `keyId`, `to` (account DID)                       | [03 §9.4](03-spaces.md)           |
+| A knock                              | HPKE     | the door key                                | `minca/knock/v1`         | `door` (the door key)                                      | [07 §6](07-doors.md)              |
+| A wrap of the seed                   | envelope | a device key, or a passphrase's PBKDF2 key  | `minca/vault-wrap/v1`    | `did`, `id`, `kind`; and `salt`, `iterations` (passphrase) | §11.3                             |
+| A registry value at rest             | envelope | the local key                               | `minca/at-rest/v1`       | `entry` (the storage key)                                  | [05 §15](05-sync-and-storage.md)  |
+| A pairing message                    | envelope | the pairing key of the direction it travels | `minca/pairing/v1`       | `type`, `seq`                                              | §15.2                             |
+| A connect-by-code message            | envelope | the code key of the direction it travels    | `minca/code/v1`          | `type`, `seq`                                              | [06 §3](06-nodes-and-sessions.md) |
 
 Conventions built on the protocol use the same two primitives: direct
-messages (`weave/direct-text/v1`, `weave/direct-box/v1`), contact requests
-(`weave/contact-request/v1`), and the CLI's writer keys on disk
-(`weave/writer-key/v1`); see `packages/core/docs/`.
+messages (`minca/direct-text/v1`, `minca/direct-box/v1`), contact requests
+(`minca/contact-request/v1`), and the CLI's writer keys on disk
+(`minca/writer-key/v1`); see `packages/core/docs/`.
 
 _Source:_ `packages/core/src/identity/envelope.ts` (`sealEnvelope`, `openEnvelope`, `boundContext`), `packages/core/src/identity/hpke.ts` (`hpkeSeal`, `hpkeOpen`, `sealTo`, `openFrom`).
 _Tests:_ `packages/core/tests/envelope.test.ts`.
@@ -808,7 +821,7 @@ A P-256 **key-agreement** key that lets anyone seal a message only the account
 can open, while the account is offline.
 
 ```
-d_contact = ScalarFrom(HKDF(seed, "weave/p256-contact-key/v1", 48))
+d_contact = ScalarFrom(HKDF(seed, "minca/p256-contact-key/v1", 48))
 ```
 
 - It is not the root key (one key should not both sign and decrypt) and not a
@@ -823,8 +836,8 @@ d_contact = ScalarFrom(HKDF(seed, "weave/p256-contact-key/v1", 48))
   granted contacts ([06](06-nodes-and-sessions.md)).
 
 Example (seed of §3.3): scalar
-`c030558f2c355efdec2c21246e4d422143cad65af9c28532ba1a3fc34f2e0b83`, public
-`AuK878OMKr6if2UO2L9nhzisStKD5W8tYM7ldyetTMdr`.
+`1d513eb757cd656fa9aee6e6f54a0506965be5279c281ae9520601bece578201`, public
+`AwFM-6h0Js6WTFMPqM9EDDkDHknhhgfst2aD-fROgWoV`.
 
 ### 10.2 Member keys
 
@@ -832,15 +845,15 @@ One key-agreement key per account per space, to which a private space's new
 keys are sealed ([03 — Spaces](03-spaces.md), `sys.box`).
 
 ```
-accountKey = HKDF(seed, "weave/account-key/v1", 32)        // §11.1
-d_member   = ScalarFrom(HKDF(accountKey, "weave/p256-member-key/v1|" ‖ spaceId, 48))
+accountKey = HKDF(seed, "minca/account-key/v1", 32)        // §11.1
+d_member   = ScalarFrom(HKDF(accountKey, "minca/p256-member-key/v1|" ‖ spaceId, 48))
 ```
 
 The public half has the same encoding as the contact key. Being per space, an
 account home can give an app the member keys for exactly the spaces it grants.
 
 Example: seed of §3.3, `spaceId = "bexample"` → scalar
-`d6e2d8fba5a6ad5e3e1484236c85c0313a01414bf9bc95fd44e4664946fb8a48`.
+`692597e89fbbfd804d1b090c1a02219cc869a4151860a427c724b5e397c1121a`.
 
 ### 10.3 Door keys
 
@@ -848,14 +861,14 @@ One key-agreement key per **door** (an address the account hands out so that
 strangers can ask to become a contact; [07 — Doors](07-doors.md)):
 
 ```
-d_door = ScalarFrom(HKDF(d_contact_bytes, "weave/p256-door-key/v1|" ‖ doorId, 48))
+d_door = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-door-key/v1|" ‖ doorId, 48))
 ```
 
 where `d_contact_bytes` is the contact key's 32-byte big-endian private scalar
 (§10.1). Beside it, each door has a **signing key**, used only for ECDSA:
 
 ```
-d_door_sign = ScalarFrom(HKDF(d_contact_bytes, "weave/p256-door-sign-key/v1|" ‖ doorId, 48))
+d_door_sign = ScalarFrom(HKDF(d_contact_bytes, "minca/p256-door-sign-key/v1|" ‖ doorId, 48))
 ```
 
 Every device and app holding the contact key derives the same door keys.
@@ -878,8 +891,8 @@ openable one way. The recovery code needs no wrap.
 Two keys are derived from the seed beside the root key, each for one job:
 
 ```
-localKey   = HKDF(seed, "weave/local-key/v1", 32)      // AES-256-GCM
-accountKey = HKDF(seed, "weave/account-key/v1", 32)    // 32 bytes, only ever HKDF input
+localKey   = HKDF(seed, "minca/local-key/v1", 32)      // AES-256-GCM
+accountKey = HKDF(seed, "minca/account-key/v1", 32)    // 32 bytes, only ever HKDF input
 ```
 
 - The **local key** seals what the account's devices keep for themselves:
@@ -901,8 +914,8 @@ nothing else carries: invite secrets waiting to be used (`spaceinvite:`) and
 the CLI's writer keys.
 
 Example (seed of §3.3): local key
-`26e6f39b9eeff4676d4efac5cfc6d075fb3becb6ceb13f9e03f6bc3d11d34fa9`, account key
-`f9b921c105dcc1f1f13b4d643cfe961701b733d3be473c1d0e416db233c5d598`.
+`4b41df023aa99109c19c859f1228674a607d3d5cdfc10f2d748d582636ab9a3d`, account key
+`9d1e01f2d4be2c948e921ac2604087a0b1448422b20d64f88e60f63238e87c9b`.
 
 ### 11.2 Vault format (version 1)
 
@@ -910,8 +923,8 @@ Example (seed of §3.3): local key
 {
   "version": 1,
   "label": "Ada",
-  "did": "did:key:zDnaeaA7BcVxAiLdNP15wLvS6SC1vaQc9zpeVxrUpEC48yxkr",
-  "createdAt": "2026-10-11T10:15:34.694Z",
+  "did": "did:key:zDnaeUEY3vrNH2aBdwvsv4qvZpDJ2qHm3Z6UFkorqWJw3CmZT",
+  "createdAt": "2026-10-13T19:44:45.107Z",
   "wraps": [
     {
       "kind": "device",
@@ -926,18 +939,18 @@ Example (seed of §3.3): local key
     },
     {
       "kind": "passphrase",
-      "id": "3FhYYIDMZJI",
+      "id": "w09cUHjZC7k",
       "label": "Passphrase",
-      "addedAt": "2026-10-11T10:15:34.694Z",
-      "salt": "9ae06Gjd9kltZrGo6jupLQ",
+      "addedAt": "2026-10-13T19:44:45.107Z",
+      "salt": "uSTGCMafmVGh1iPTcEQ2RA",
       "iterations": 600000,
-      "sealed": "AWFF7dAydbB7LQNVyPYX5ohUGrCi-n3UnxgyuWup2zlu1qBLRwtVYQft-BBr"
+      "sealed": "ASKGZ7foaMlbiCtMDmgwKfGzVX8nQwaEGmMnIZ6IoIObeD1jqU_MmXEvZdau"
     }
   ]
 }
 ```
 
-(The passphrase wrap above opens with `hunter2 hunter2` to the seed of §3.3.)
+(The passphrase wrap above opens with `hunter2 hunter2` to the seed of §3.3. The device wrap's `sealed` is illustrative: its device key is not given.)
 
 | Field       | Type            | Meaning                                                                                   |
 | ----------- | --------------- | ----------------------------------------------------------------------------------------- |
@@ -975,7 +988,7 @@ Every wrap:
 
 ### 11.3 Wrapping and unwrapping
 
-A wrap is an envelope (§9.1) with label `weave/vault-wrap/v1` around the seed:
+A wrap is an envelope (§9.1) with label `minca/vault-wrap/v1` around the seed:
 
 - **Device wrap:** key = the device key (§12); bound =
   `{ "did": <vault did>, "id": <wrap id>, "kind": "device" }`.
@@ -1174,8 +1187,8 @@ Each use names a **kind**, three labels:
 
 | Kind            | `room`                  | `key`                  | `message`          |
 | --------------- | ----------------------- | ---------------------- | ------------------ |
-| Pairing         | `weave/pairing-room/v1` | `weave/pairing-key/v1` | `weave/pairing/v1` |
-| Connect by code | `weave/code-room/v1`    | `weave/code-key/v1`    | `weave/code/v1`    |
+| Pairing         | `minca/pairing-room/v1` | `minca/pairing-key/v1` | `minca/pairing/v1` |
+| Connect by code | `minca/code-room/v1`    | `minca/code-key/v1`    | `minca/code/v1`    |
 
 The side that made the secret and shows it is `offer`; the side that joins
 with it is `join`. Both join mesh room ([04 — Network](04-network.md)):
@@ -1184,7 +1197,7 @@ with it is `join`. Both join mesh room ([04 — Network](04-network.md)):
 room = CID(UTF-8(room label) ‖ secret)     // raw concatenation
 ```
 
-Example (pairing, the secret above): room `bxvuzmmg4srdji5su7e2hyj56x55ohpyaczgg6aquq6iw55bcijha`.
+Example (pairing, the secret above): room `bha5qohdu5w35oenvib6zfdg4blcbzc4onwelk4nium6ooen6nq7q`.
 
 Each side makes an ephemeral P-256 ECDH key for this exchange only. `O` is the
 offering side's public point and `J` the joining side's, each as the 65-byte
@@ -1214,7 +1227,7 @@ does not open.
 Pairing adds a short code both screens show, and a commitment:
 
 ```
-code       = uint32_be(HKDF(ikm, "weave/pairing-code/v1" ‖ transcript, 4)) mod 1000000,
+code       = uint32_be(HKDF(ikm, "minca/pairing-code/v1" ‖ transcript, 4)) mod 1000000,
              as 6 decimal digits, zero-padded
 commitment = base64url(SHA-256(J))
 ```
@@ -1288,12 +1301,10 @@ _Tests:_ `packages/core/tests/pairing.test.ts` ("a message sent back to the side
 
 ## 16. Not yet specified
 
-- Transport of parent tokens for multi-link delegation chains: planned in
-  §7.5 ("Proof chains that travel").
 - A checksum or version marker for recovery codes: planned in §2.3.
 - Rotation of a compromised seed. Today an account _is_ its seed; a new seed
   is a new identity. A proposal (KERI-style pre-rotation: the identifier is
   the hash of an inception event committing to the next key, with a signed
   key event log synced like records) is issue
-  [#9](https://github.com/leifriksheim/weave/issues/9). It would change
+  [#9](https://github.com/leifriksheim/minca/issues/9). It would change
   the DID format everywhere a root appears.

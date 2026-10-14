@@ -107,7 +107,7 @@ export interface StaySignedInStore {
 export function createStaySignedIn(
   storage: KeyValueStore | null,
   rpId: string,
-  prefix = 'weave',
+  prefix = 'minca',
 ): StaySignedInStore {
   const SETTING = `${prefix}.stay-signed-in`;
   const RECORD = `${prefix}.remembered-session`;

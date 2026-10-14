@@ -1,6 +1,6 @@
 /**
  * @module session/connect-code
- * Connecting a program that has no browser of its own (`weave connect wv_…`)
+ * Connecting a program that has no browser of its own (`minca connect mc_…`)
  * with one code copied from an app. The two meet on the code's channel
  * (`identity/channel.ts`, `CODE_CHANNEL`): the app says where it lives, the
  * program says which key it holds and what it asks for, the app decides
@@ -12,7 +12,6 @@
  */
 import type { PeerTransport } from '../network/transport.js';
 import { channelKeyPair, CODE_CHANNEL, deriveChannel, type Channel } from '../identity/channel.js';
-import { parseUCAN } from '../identity/ucan.js';
 import { base64UrlDecode, base64UrlEncode, concatBytes, utf8Encode } from '../utils/encoding.js';
 import { sha256 } from '../utils/hash.js';
 import { isObject } from '../utils/guards.js';
@@ -21,11 +20,11 @@ import { grantsRecordsOnly } from '../identity/abilities.js';
 import { checkGrant, keyProof, type AppKey, type Grant } from './connect.js';
 import { bytesField, meetOnChannel } from './channel-room.js';
 
-const CODE_PREFIX = 'wv_';
+const CODE_PREFIX = 'mc_';
 const SECRET_BYTES = 16;
 /** How much of the account's fingerprint the code carries */
 const ACCOUNT_BYTES = 8;
-const ACCOUNT_LABEL = 'weave/code-account/v1';
+const ACCOUNT_LABEL = 'minca/code-account/v1';
 /** base64url characters for the secret and the fingerprint together */
 const CODE_CHARS = Math.ceil(((SECRET_BYTES + ACCOUNT_BYTES) * 4) / 3);
 
@@ -87,13 +86,13 @@ async function accountFingerprint(account: string): Promise<Uint8Array> {
   return (await sha256(concatBytes(utf8Encode(ACCOUNT_LABEL), utf8Encode(account)))).slice(0, ACCOUNT_BYTES);
 }
 
-/** A new code for the app signed in to `account`: `wv_`, 128 random bits and the account's fingerprint */
+/** A new code for the app signed in to `account`: `mc_`, 128 random bits and the account's fingerprint */
 export async function newConnectCode(account: string): Promise<string> {
   const secret = globalThis.crypto.getRandomValues(new Uint8Array(SECRET_BYTES));
   return CODE_PREFIX + base64UrlEncode(concatBytes(secret, await accountFingerprint(account)));
 }
 
-const CODE_PATTERN = new RegExp(`wv_([A-Za-z0-9_-]{${CODE_CHARS}})(?![A-Za-z0-9_-])`);
+const CODE_PATTERN = new RegExp(`mc_([A-Za-z0-9_-]{${CODE_CHARS}})(?![A-Za-z0-9_-])`);
 
 /**
  * What a code holds, for anything a person might paste — surrounding
@@ -146,7 +145,7 @@ export type ConnectCodeStage =
   | { readonly kind: 'failed'; readonly reason: string };
 
 export interface ConnectCodeOffer {
-  /** What the person pastes: `wv_…` */
+  /** What the person pastes: `mc_…` */
   readonly code: string;
   /** Stops listening. The code stops working. */
   stop(): void;
@@ -221,10 +220,9 @@ export async function offerConnectCode(
         kind: 'asking',
         asking,
         allow: async (grant) => {
-          if (parseUCAN(grant.token).payload.aud !== asking.did)
-            throw new Error('That note is for a different key.');
+          if (grant.note.payload.aud !== asking.did) throw new Error('That note is for a different key.');
           if (grant.did !== options.account) throw new Error('That note is from a different account.');
-          if (asking.recordsOnly && !grantsRecordsOnly(grant.token))
+          if (asking.recordsOnly && !grantsRecordsOnly(grant.note))
             throw new Error('That note grants more than the program asked for.');
           await room.seal(peer, ANSWER, channel, { grant } satisfies Answer);
         },

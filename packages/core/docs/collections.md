@@ -6,7 +6,7 @@ and know what its data means without your code.
 
 ```typescript
 import * as z from 'zod'; // or Valibot, ArkType, or plain JSON Schema
-import { collection } from '@weaveprotocol/core';
+import { collection } from '@minca/core';
 
 const Poll = z.object({
   question: z.string().min(1).max(500),
@@ -17,12 +17,7 @@ export const polls = collection({
   name: 'app.poll',
   title: 'Poll',
   schema: Poll,
-  permissions: ['moderate'],
-  rules: {
-    edit: 'creator',
-    delete: ['creator', 'can:moderate'],
-    fixed: ['options'],
-  },
+  rules: { fixed: ['options'] },
 });
 
 await node.collections.define(space.id, polls);
@@ -79,7 +74,7 @@ under a strict CSP.
 A record that doesn't fit the schema is still kept and synced, and comes back
 with `conforms: false` and the issues. Shape is checked when you write, not
 enforced on arrival, because two peers may have seen different versions of a
-definition ([spec 02 §9.6](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)).
+definition ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
 Rules, below, are enforced everywhere.
 
 _Source: `packages/core/src/schema/collection-def.ts` (`validateJsonSchema`, `toJsonSchema`, `asStandardSchema`), `packages/core/src/node/space-runtime.ts` (`contentIssues`). Tests: `packages/core/tests/space-catalog.test.ts` ("validate and reject within the supported subset", "an unknown keyword is ignored when validating, so newer spaces stay readable", "choices can carry labels, or come from a linked record", "a record that does not fit is kept and flagged when it arrives, never rejected"), `packages/core/tests/schemas.test.ts` ("schemas from a validator you already use")._
@@ -102,7 +97,7 @@ filter on them with `link:<rel>` ([records-and-queries.md](records-and-queries.m
 **A record that points at another record says so with a link**, never with
 the other record's key in a body field. Everything that follows relations
 works on links and only on links: declarations and conformance, `onePer`,
-checks, `include` and counts, rules ([rules.md](rules.md)), and the "what
+contracts, `include` and counts, automations ([automations.md](automations.md)), and the "what
 points here" a record's page shows. A key in a body field is a string to all
 of them. Fields are for values and for people (DIDs); links are for records.
 If a keeper must match on a link without reading, make it a topic:
@@ -116,23 +111,21 @@ _Source: `packages/core/src/records/links.ts` (`checkLinks`), `packages/core/src
 
 ## Rules
 
-| Rule     | Means                                                      | Default        |
-| -------- | ---------------------------------------------------------- | -------------- |
-| `create` | Who may create a record                                    | `member`       |
-| `edit`   | Who may write later versions                               | `member`       |
-| `delete` | Who may delete                                             | same as `edit` |
-| `onePer` | At most one record per combination of these                | none           |
-| `fixed`  | Fields that keep the value the record was created with     | none           |
-| `check`  | Conditions a version must meet to count ([below](#checks)) | none           |
-| `final`  | `true`: written once, then never edited or deleted         | none           |
+A definition says what its records must keep to, not who may write them:
+who may create, change and delete records is the space's grants, held by its
+roles ([roles](#roles)). Its rules are about the records alone
+([spec 02 §7](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)):
 
-Who is one of these, or a list meaning any of them:
+| Rule     | Means                                                  | Default |
+| -------- | ------------------------------------------------------ | ------- |
+| `onePer` | At most one record per combination of these            | none    |
+| `fixed`  | Fields that keep the value the record was created with | none    |
+| `final`  | `true`: written once, then never edited or deleted     | none    |
 
-- `member`: anyone holding a role in the space.
-- `creator`: whoever wrote the record's first version. Not allowed for `create`.
-- `can:<permission>`: someone whose role holds a permission the collection
-  declares in `permissions`. `can:moderate` in `app.poll` is the permission
-  `app.poll/moderate`.
+A definition with `create`, `edit`, `delete` or `check` in its rules is
+invalid: every peer treats it as no definition at all, and the node refuses
+to write it. What a version must be to count is not a rule but the
+definition's `contract` ([below](#contracts)).
 
 `onePer` names `@author` (the writer), `link:<rel>` (the record a link points
 at) or a body field. It works by construction: the record's key is derived
@@ -140,12 +133,26 @@ from those values, so a second vote from the same person on the same poll is
 the first vote's next version, not a new record.
 
 ```typescript
-rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:about'] }  // one vote per person per poll
+rules: {
+  onePer: ['@author', 'link:about'];
+} // one vote per person per poll
 ```
 
-## Checks
+With `@author`, the key is the writer's own, so nobody else can write their
+vote. Without it (one decision per proposal) the key is shared: anyone
+allowed to write there may write first, and two who do so apart each start a
+version of their own, the later edits of one outranking the other's. A grant
+on `.byCreator` only keeps others from editing your version. If a collection
+needs one writer per key, grant creating it to fewer roles, or name
+`@author`. `node.records.onePerKey(space, collection, body, { links })` gives
+the key a body would have, to read a record without searching for it.
 
-The rules above say who may write, and every peer enforces them. `check` says
+_Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerKey`). Tests: `packages/core/tests/rules.test.ts`, `packages/core/tests/record-keys.test.ts` ("onePer keys")._
+
+## Contracts
+
+Grants say who may write, and the rules above what a record must keep to;
+every peer enforces both. A contract, the definition's `contract`, says
 what a version must be to count: conditions over the body, the version before
 it, and other versions it **cites** as evidence. With them a space can hold things
 that normally need a server or a smart contract: a proposal that passes only
@@ -157,8 +164,8 @@ export const passed = collection({
   name: 'app.proposal.passed',
   schema: z.object({ votes: z.array(z.string()) }),
   links: { about: { to: ['app.proposal'], cardinality: 'one' } },
-  rules: {
-    onePer: ['link:about'], // one "passed" per proposal
+  rules: { onePer: ['link:about'] }, // one "passed" per proposal
+  contract: {
     check: [
       {
         // At least three members' yes votes on this proposal, among those cited
@@ -181,17 +188,17 @@ await node.records.put(
 );
 ```
 
-A check never searches, because no device holds everything. The writer does
+A contract never searches, because no device holds everything. The writer does
 the work (finds the votes, adds up the balances, picks the move) and cites
 what proves it. Every reader then checks that exactly what was cited proves
 it.
 
-Checks are read by the library, not enforced by peers
-([checks.md](checks.md)). A version that fails them is kept and synced
+Contracts are judged by readers, not enforced by peers
+([spec 09](../../../spec/09-contracts.md), [contracts.md](contracts.md)). A version that fails them is kept and synced
 everywhere like any other, but `get`, `list` and queries count only a
 record's newest version that passes: one that fails is skipped, and the
 version before shows instead. Your own node refuses to sign a version that
-fails, with the check's `else` as the reason. `node.records.checks(space, key)`
+fails, with the condition's `else` as the reason. `node.records.contracts(space, key)`
 says how a record's newest version fares, and why. A version citing one that
 hasn't arrived yet is pending, and doesn't count until it does.
 
@@ -202,10 +209,9 @@ Language that Kubernetes, Firebase and Envoy use for policies. It reads `body`,
 operators, `has()`, the macros `all` `exists` `exists_one` `filter` `map`,
 `size`, `contains` `startsWith` `endsWith`, the conversions `int` `uint`
 `double` `string` `bool`, and from CEL's extensions `distinct()`,
-`math.greatest` and `math.least`. Weave adds `sum(list)`, `hash(x)`,
-`link("rel")` and `v.link("rel")`, and three that ask the space:
-`versions(ids)` (read cited versions by id), `can("permission")` and
-`member(did)`.
+`math.greatest` and `math.least`. Minca adds `sum(list)`, `hash(x)`,
+`link("rel")` and `v.link("rel")`, and two that ask the space:
+`versions(ids)` (read cited versions by id) and `member(did)`.
 
 Some things to know:
 
@@ -215,22 +221,36 @@ Some things to know:
 - Reading a field that isn't there is an error, not `null`: ask
   `has(body.note)` first. `&&` and `||` let an error pass when the other side
   decides.
-- A condition holds only when it gives `true`, and a check always ends: its
+- A condition holds only when it gives `true`, and it always ends: its
   only loops are over lists in hand, and there is a step limit.
 
-`checkCostHints(checks)` flags what makes a check costly as records grow:
-macros nested three deep, or `versions()` called inside a macro. A check
-over more than its limits is refused, so a check that passes on small
+`contractCostHints(check)` flags what makes a condition costly as records grow:
+macros nested three deep, or `versions()` called inside a macro. A condition
+over more than its limits is refused, so one that passes on small
 records can fail on large ones; the hints say where to look.
 
+To write a condition in TypeScript instead, typed from the schema, use
+`contract(schema, that, else)`, which builds the CEL
+([contracts.md](contracts.md#writing-one-in-typescript)). Either way,
+`collections.define` refuses a condition that misreads the schema, like a
+misspelled field or a string compared with a number.
+
 Bytes, timestamps, durations, regular expressions and types as values are
-left out. The exact subset, and its limits, are in [checks.md](checks.md).
+left out. The exact subset, and its limits, are in [spec 09](../../../spec/09-contracts.md).
+
+**Lines.** A collection whose contract has `line: { once: [...] }` is one line per
+account, at `lineKey(account, collection)`: each version names the account's
+previous one, so a payment can carry a running balance its contract checks.
+Two versions after the same one are a double spend, and neither counts, nor
+anything after either; there is no way back, so keep a line on one device at
+a time. Each citation in a `once` field may appear only once along the line
+([spec 09 §7](../../../spec/09-contracts.md#7-lines)).
 
 **What can be cited.** Only versions kept whole, so every device reads the
 same thing however late it joins: any version in a collection with
-`history: 'all'` or with checks of its own (the node keeps those whole), and
+`history: 'all'` or with a contract of its own (the node keeps those whole), and
 a first version under `onePer` or `fixed`. A cited version must also pass its
-own checks. Give a collection you mean to cite `history: 'all'`,
+own contract. Give a collection you mean to cite `history: 'all'`,
 or an edited vote's latest version can't be cited. A cited version proves
 what was signed, not that it is still current, so make evidence final where
 it matters: `final: true` on a vote, so nobody can change or delete it once
@@ -248,8 +268,9 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 
 **Patterns.**
 
-- **Quorums and multisig.** "Three admins approved": cite the approvals, and
-  check `distinct()` authors with `can("approve", v.author)`.
+- **Quorums and multisig.** "Three members approved": cite the approvals, and
+  check `distinct()` authors with `member(v.author)`. Who may approve at all
+  is the grant on the approvals' collection.
 - **State machines.** Check each version against `prev`: a task moves from
   `open` to `done` only, a counter goes up by one, a chess move is legal from
   the board before. Each step is small, and there is no limit on steps.
@@ -259,8 +280,8 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 - **Commit, then reveal.** A player first writes `hash` of a secret, then
   reveals it: `hash(body.secret) == "<the commitment>"`.
   Shared dice, lotteries and sealed bids need nothing else.
-- **Closing a set.** A check can prove that something exists, not that nothing
-  else does. For "a majority" or "nobody objected", someone with a permission
+- **Closing a set.** A contract can prove that something exists, not that nothing
+  else does. For "a majority" or "nobody objected", someone granted it
   signs a record that closes the vote and lists what counts, and the result
   cites that.
 - **Time.** There is no clock. "Before Friday" is a record from someone
@@ -268,25 +289,37 @@ by a quorum of ballots, and `std.goal-reached`, a goal reached by pledges
 
 ## Roles
 
-Roles live in the space, not in your code. Each has a name, a rank and a list
-of permissions:
+Who may write lives in the space, not in your code, and not in a
+definition. A role holds grants: a command and a UCAN policy over its
+arguments ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
+"Members change only their own polls, hosts delete any" is:
 
 ```typescript
-await node.spaces.putRole(space.id, {
+import { RECORD_DELETE, RECORD_WRITE } from '@minca/core';
+
+await node.spaces.defineRole(space.id, {
   name: 'host',
   title: 'Host',
-  rank: 50,
-  permissions: ['invite', 'app.poll/moderate'],
+  grants: [{ cmd: RECORD_DELETE, pol: [['==', '.collection', 'app.poll']] }],
+  nests: ['member'], // a host holds what a member holds too
 });
-await node.spaces.setMember(space.id, did, 'host');
+await node.spaces.assign(space.id, did, 'host');
 ```
 
-- `*` alone is every permission. `*/*` is every permission any collection
-  declares, so a moderator can moderate every app in the space.
-- Space permissions include `invite`, `define` (add or change collections)
-  and `manage`. Defining also needs a note that grants `collection/define`,
-  which an agent's doesn't (spec 01 §8).
-- You can only change people and roles ranked below your own.
+- `/record/write` and `/record/delete` see `collection` and `byCreator`
+  (whether the writer's account made the record's first version; true for a
+  new one); a write also sees `body`. So `['==', '.byCreator', true]` is
+  "only your own".
+- `/collection/define` adds or changes collections; it also needs a note that
+  grants `/collection/define`, which an agent's doesn't (spec 01 §8).
+- A definition holds only what its writer could do: you can't grant what you
+  don't hold. Roles defining roles, assigning, removing and the rest are in
+  the spec.
+- The space's founders, if it has any, hold every command.
+
+`node.spaces.may(space.id, cmd, args)` says whether this account may do
+something now; `node.records.can(space, action, target)` asks it for a
+record.
 
 ## Other options
 
@@ -294,26 +327,28 @@ await node.spaces.setMember(space.id, did, 'host');
   (`node.records.history`). The default, `latest`, keeps the current one
   whole and forgets what earlier ones said, and what a deleted record said.
   With `onePer` or `fixed` in the rules, a record's first version is kept
-  whole too: those rules are checked against it. With `check`, the node
-  keeps every version whole, so checks can read the one before and cite it.
+  whole too: those rules are checked against it. With a `contract`, the node
+  keeps every version whole, so its contract can read the one before and cite it.
 - `topics: ['mentions', 'link:channel']` lets a node that can't read the
   space still match records by a field's value, or by where a link of that
-  role points, for notifications. At most 8.
+  role points, for the account's wakes ([automations](automations.md#the-accounts-own)).
+  At most 8.
 - `version`: see [below](#versions-of-a-definition).
 
 ## Versions of a definition
 
 Defining a collection again writes the next version of its definition, one
 higher unless you give a `version`. The node refuses a `version` that is not
-higher than the one in force; peers don't check it. Records don't name the
+higher than the one in force, or not below 2^53; peers don't check it. One in
+force at 2^53 or more, which nothing could follow, is followed by 1. Records don't name the
 version they were written under: each is judged by the definition in force
 as of the access changes it saw
-([spec 03 §5](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+([spec 03 §5](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 A change to the rules is not retroactive: it binds what saw it. A record that
 names an older point counts if its writer could have written it then, since
-nobody can tell it from one written offline. To bind someone at once, change
-their role as well: a demotion takes the rules it saw along with it, so
-nothing they write past what you had seen of them dodges the new rules. A
+nobody can tell it from one written offline. To stop someone at once, take
+their role or remove them: what they wrote that you had not seen stops
+counting. A
 write that races a change to its collection's rules is retried once, under
 the new ones.
 
@@ -321,12 +356,21 @@ the new ones.
 no records left, since records left behind would lose their shape and their
 rules.
 
-_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts` ("redefining bumps the version, and only the definer or someone who can manage the space may", "a definition can be removed once its collection is empty, by whoever may change it"), `packages/core/tests/rules.test.ts` ("rules: changing them")._
+Whoever first defined a collection may change it, while a member, as well as
+anyone granted `/collection/define` for it. If two accounts each defined it
+first without seeing the other's, `definedBy` is `null` and only those
+granted `/collection/define` may change it. Until one does, the
+collection has a definition only if the rivals say the same thing; if they
+differ, `collections.list` leaves it out and its records are judged by no
+rules
+([spec 02 §6.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
+
+_Source: `packages/core/src/node/space-runtime.ts` (`define`, `undefine`, `unseenRules`, `write`), `packages/core/src/node/types.ts` (`NodeCollections`). Tests: `packages/core/tests/space-catalog.test.ts`, `packages/core/tests/rules.test.ts` ("grants: changing them")._
 
 ## The standard library
 
 ```typescript
-import { reaction, comment, poll, vote, useSchemas } from '@weaveprotocol/core/schemas';
+import { reaction, comment, poll, vote, useSchemas } from '@minca/core/schemas';
 
 await useSchemas(node, space.id, [poll, vote, reaction, comment]); // defines only what the space is missing
 ```

@@ -28,23 +28,23 @@ const CONFIGURED_RELAYS: ReadonlyArray<string> = (import.meta.env.VITE_SIGNALING
   .filter(Boolean);
 
 /**
- * Always-on nodes to hold a socket to, comma separated — `weave run` serves one
+ * Always-on nodes to hold a socket to, comma separated — `minca run` serves one
  * at `ws(s)://host:port/peer`. Optional: without one, lists sync only while
  * someone else has them open.
  */
-export const CONFIGURED_NODES: ReadonlyArray<string> = (import.meta.env.VITE_WEAVE_NODES ?? '')
+export const CONFIGURED_NODES: ReadonlyArray<string> = (import.meta.env.VITE_MINCA_NODES ?? '')
   .split(',')
   .map((url: string) => url.trim())
   .filter(Boolean);
 
 /**
- * The host this build offers, `https://host` (`weave host`): what "Keep my
+ * The host this build offers, `https://host` (`minca host`): what "Keep my
  * spaces online" suggests, and where a new device looks for its account
  * before it knows which host the account uses. Hosts the account or a space
  * uses are reached without being named here.
  */
 export const DEFAULT_HOST: string | null = (() => {
-  const configured = import.meta.env.VITE_WEAVE_HOST?.trim();
+  const configured = import.meta.env.VITE_MINCA_HOST?.trim();
   if (!configured) return null;
   try {
     return new URL(configured).origin;
@@ -174,7 +174,7 @@ export function relayOnlyLocal(): string | null {
   return (
     `This deployment's relay is ${CONFIGURED_RELAY} — a program on this computer. Tabs on this ` +
     'computer can meet through it; a phone or another computer cannot. Set VITE_SIGNALING_URL to a ' +
-    'public wss:// relay (or `weave run` on a server) and rebuild.'
+    'public wss:// relay (or `minca run` on a server) and rebuild.'
   );
 }
 

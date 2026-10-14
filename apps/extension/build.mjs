@@ -6,20 +6,24 @@
  *   npm run package -- out.zip   once, for the deployed home and relay, zipped
  *
  * The protocol is bundled straight from its source in the workspace
- * (packages/core/src, through the `@weaveprotocol/source` export condition),
+ * (packages/core/src, through the `@minca/source` export condition),
  * as the home does, so a change there is a rebuild away. Settings are read at build time, from the shell
  * first, then `.env.local` (yours, not committed — copy `.env.example`), or
  * `.env.production` with `--production`:
  *
- *   WEAVE_HOME     the account home offered first   (default http://localhost:5174)
- *   WEAVE_RELAYS   relays, comma separated          (default: this machine's, and the deployed one)
+ *   MINCA_HOME     the account home offered first   (default http://localhost:5174)
+ *   MINCA_RELAYS   relays, comma separated          (default: this machine's, and the deployed one)
  *
  * The home's own relays arrive with the grant and are used as well, so an
  * extension built for one home still meets peers on another.
+ *
+ * The design system's tokens (`@minca/app-shared/tokens`) are written to
+ * `dist/tokens.css`, linked before `styles.css`, so the pages have their
+ * colours before any script runs.
  */
 import { build, context } from 'esbuild';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, rm } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -59,21 +63,36 @@ const options = {
   sourcemap: watch ? 'inline' : false,
   minify: !watch,
   // The protocol from the workspace, as source (packages/core/src).
-  conditions: ['@weaveprotocol/source'],
+  conditions: ['@minca/source'],
   define: {
-    __WEAVE_HOME__: JSON.stringify(setting('WEAVE_HOME', 'http://localhost:5174')),
-    __WEAVE_RELAYS__: JSON.stringify(
-      setting('WEAVE_RELAYS', 'ws://localhost:8787,wss://p2p-web-relay.fly.dev'),
+    __MINCA_HOME__: JSON.stringify(setting('MINCA_HOME', 'http://localhost:5174')),
+    __MINCA_RELAYS__: JSON.stringify(
+      setting('MINCA_RELAYS', 'ws://localhost:8787,wss://p2p-web-relay.fly.dev'),
     ),
   },
   logLevel: 'info',
 };
 
-console.log(`Home: ${options.define.__WEAVE_HOME__}  Relays: ${options.define.__WEAVE_RELAYS__}`);
+console.log(`Home: ${options.define.__MINCA_HOME__}  Relays: ${options.define.__MINCA_RELAYS__}`);
 
 await rm(here('dist'), { recursive: true, force: true });
 await mkdir(here('dist'), { recursive: true });
 await cp(here('static'), here('dist'), { recursive: true });
+await writeFile(here('dist/tokens.css'), await tokenCss());
+
+/** The shared `tokenCss`, bundled from its TypeScript source and evaluated here. */
+async function tokenCss() {
+  const result = await build({
+    stdin: { contents: "export { tokenCss } from '@minca/app-shared/tokens';", resolveDir: here('.') },
+    bundle: true,
+    format: 'esm',
+    write: false,
+    logLevel: 'silent',
+  });
+  const source = result.outputFiles[0].text;
+  const tokens = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+  return tokens.tokenCss;
+}
 
 if (watch) {
   const ctx = await context(options);

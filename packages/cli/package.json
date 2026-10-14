@@ -1,16 +1,16 @@
 {
-  "name": "@weaveprotocol/cli",
-  "version": "0.4.0",
-  "description": "The Weave protocol from a terminal: manage spaces, run an always-on node, serve MCP to agents",
+  "name": "@minca/cli",
+  "version": "0.5.0",
+  "description": "The Minca protocol from a terminal: manage spaces, run an always-on node, serve MCP to agents",
   "type": "module",
   "bin": {
-    "weave": "dist/weave.mjs"
+    "minca": "dist/minca.mjs"
   },
   "scripts": {
-    "start": "node --conditions=@weaveprotocol/source --import tsx src/main.ts",
-    "test": "node --conditions=@weaveprotocol/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts",
+    "start": "node --conditions=@minca/source --import tsx src/main.ts",
+    "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "bundle": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node22 --conditions=@weaveprotocol/source --outfile=dist/weave.mjs --external:ws --external:node-datachannel --banner:js='#!/usr/bin/env node'",
+    "bundle": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node22 --conditions=@minca/source --outfile=dist/minca.mjs --external:ws --external:node-datachannel --banner:js='#!/usr/bin/env node'",
     "build": "bun build.ts",
     "prepublishOnly": "npm run bundle"
   },
@@ -24,19 +24,19 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/leifriksheim/weave.git",
+    "url": "git+https://github.com/leifriksheim/minca.git",
     "directory": "packages/cli"
   },
   "files": [
-    "dist/weave.mjs",
+    "dist/minca.mjs",
     "README.md"
   ],
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
     "@clack/prompts": "^1.8.1",
     "@types/node": "^26.6.3",
-    "@weaveprotocol/core": "*",
-    "@weaveprotocol/relay": "*",
+    "@minca/core": "*",
+    "@minca/relay": "*",
     "esbuild": "^0.28.0",
     "tsx": "^4.19.0"
   },

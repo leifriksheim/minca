@@ -8,7 +8,7 @@ import { p256 } from '@noble/curves/nist.js';
 const P256_SEED_BYTES = 48;
 
 /** Domain separation for identity keys. Changing it changes every derived DID. */
-const P256_KEY_INFO = new TextEncoder().encode('weave/p256-identity-key/v1');
+const P256_KEY_INFO = new TextEncoder().encode('minca/p256-identity-key/v1');
 
 /** Public keys imported for verifying, by their bytes as hex; the oldest let go first */
 const publicKeys = new Map<string, Promise<CryptoKey>>();

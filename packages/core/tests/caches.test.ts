@@ -4,6 +4,7 @@
  * until enough keepers have them, and says when a query is complete.
  */
 import { test, describe, afterEach } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
@@ -122,17 +123,21 @@ describe('holding part of a space', () => {
     const second = await erin.node.records.put(space, 'app.chat', { text: 'two' });
     await until(async () => (await bob.node.records.get(space, photo.key)) !== null, 5000, 'all at Bob’s');
     const dave = await app(hub, alice, space);
-    // Alice has his join first: a promotion that crossed it would lose to it, by least power.
     await until(
       async () => (await alice.node.spaces.access(space)).members.some((m) => m.did === dave.node.did),
       5000,
       'Dave’s join at Alice’s',
     );
-    await alice.node.spaces.setMember(space, dave.node.did, 'owner');
+    // Dave may remove people: a role of Alice's defining, holding /member/remove.
+    await alice.node.spaces.defineRole(space, {
+      name: 'steward',
+      grants: [{ cmd: '/member/remove', pol: [] }],
+    });
+    await alice.node.spaces.assign(space, dave.node.did, 'steward');
     await until(
-      async () => (await dave.node.spaces.access(space)).role?.name === 'owner',
+      async () => (await dave.node.spaces.access(space)).mine.includes('steward'),
       5000,
-      'Dave an owner',
+      'Dave a steward',
     );
     await until(
       async () =>
@@ -141,7 +146,7 @@ describe('holding part of a space', () => {
       5000,
       'the chat at Dave’s',
     );
-    await dave.node.spaces.setMember(space, erin.node.did, null);
+    await dave.node.spaces.removeMember(space, erin.node.did);
     await until(
       async () => !(await bob.node.spaces.access(space)).members.some((m) => m.did === erin.node.did),
       5000,
@@ -203,18 +208,20 @@ describe('holding part of a space', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await alice.signer.delegate({
       audience: did,
-      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      command: '/record/write',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const { heads: seen } = await alice.node.spaces.access(space);
-    const sign = (text: string, log: Version['log']) =>
+    const sign = async (text: string, log: Version['log']) =>
       createSigner(provider).sign(
         createVersion({
           author: did,
           collection: 'app.chat',
           space,
+          version: { key: await newRecordKey(alice.node.did), seq: 0 },
           body: { text },
-          proof: note.encoded,
+          proof: note,
           seen,
           log,
         }),

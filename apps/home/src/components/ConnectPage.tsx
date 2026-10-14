@@ -1,16 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
+import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
   isProposeRequest,
   receiveConnectRequest,
   type ConnectRequest,
   type IncomingRequest,
   type ProposeRequest,
-} from '@weaveprotocol/core/session';
-import { WeaveAuth, useAuth, useSession, useWeave } from '@weaveprotocol/core/react';
-import { Wordmark } from '@weave/app-shared/Wordmark';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { useAction } from '@weave/app-shared/action';
+} from '@minca/core/session';
+import { MincaAuth, useAuth, useSession, useMinca } from '@minca/core/react';
+import { Wordmark } from '@minca/app-shared/Wordmark';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 
 /**
@@ -21,7 +22,7 @@ import { styles, palette } from '../styles';
  */
 export function ConnectPage() {
   const [incoming, setIncoming] = useState<IncomingRequest | null | undefined>(undefined);
-  const { state } = useWeave();
+  const { state } = useMinca();
 
   useEffect(() => {
     void receiveConnectRequest().then(setIncoming);
@@ -31,6 +32,7 @@ export function ConnectPage() {
     return (
       <Frame>
         <p style={styles.hint}>Waiting for the app…</p>
+        <SlowApp />
       </Frame>
     );
 
@@ -39,7 +41,7 @@ export function ConnectPage() {
       <Frame>
         <h1 style={styles.title}>Your account home</h1>
         <p style={styles.hint}>
-          Apps open this page to ask for access to your Weave account. Nothing has asked right now.
+          Apps open this page to ask for access to your Minca account. Nothing has asked right now.
         </p>
         <a href="/" style={{ ...styles.linkButton, paddingLeft: 0 }}>
           Your account
@@ -50,9 +52,9 @@ export function ConnectPage() {
 
   if (state?.stage !== 'ready') {
     return (
-      <Frame mark={false}>
+      <Frame>
         <Asking incoming={incoming} />
-        <WeaveAuth />
+        <MincaAuth />
       </Frame>
     );
   }
@@ -63,6 +65,19 @@ export function ConnectPage() {
     <ApproveCarrier incoming={incoming} request={request} />
   ) : (
     <Approve incoming={incoming} request={request} />
+  );
+}
+
+/** After a few seconds: a phone may pause the app's tab while this one is in front */
+function SlowApp() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!slow) return null;
+  return (
+    <p style={styles.hint}>Taking a while? Switch back to the app's tab for a moment, then come back here.</p>
   );
 }
 
@@ -84,13 +99,13 @@ function Asking({ incoming }: { incoming: IncomingRequest }) {
         marginBottom: 24,
         padding: '10px 12px',
         background: palette.surface.sunken,
-        borderRadius: 8,
+        borderRadius: palette.radius.none,
       }}
     >
       <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>{' '}
       {isProposeRequest(incoming.request)
         ? 'suggests what to notify you about.'
-        : 'wants to use your Weave account.'}{' '}
+        : 'wants to use your Minca account.'}{' '}
       Sign in to decide
       {isProposeRequest(incoming.request) ? '.' : ' what it gets.'}
     </p>
@@ -197,13 +212,14 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           {offered.length === 0 && <p style={styles.errorHint}>You have no spaces it could use.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {offered.map((space) => (
-              <label key={space.id} style={choice}>
+              <label key={space.id} data-choice style={styles.choice}>
                 <input
                   type="checkbox"
                   checked={chosen.has(space.id)}
                   onChange={() => setChosen((was) => toggled(was, space.id))}
                   style={{ ...styles.checkbox, marginTop: 0 }}
                 />
+                <Shape {...shapeFor(space.id)} size={18} />
                 <span style={{ flex: 1 }}>{space.name}</span>
                 <span style={{ color: palette.ink.faint, fontSize: 12 }}>
                   {space.visibility} · {space.role ?? 'following'}
@@ -219,12 +235,17 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           <p style={styles.fieldLabel}>New spaces for it</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {creating.map((space, index) => (
-              <div key={index} style={choice}>
+              <div key={index} style={{ ...styles.choice, flexWrap: 'wrap', cursor: 'default' }}>
                 <span style={{ flex: 1 }}>{space.name}</span>
                 <span style={{ color: palette.ink.faint, fontSize: 12 }}>
-                  {space.visibility} ·{' '}
-                  {space.roles ? space.roles.map((role) => role.title ?? role.name).join(', ') : 'just you'}
+                  {space.visibility} · {constitution(space, session.did)}
                 </span>
+                {space.top !== 'none' && cofoundersOf(space, session.did).length > 0 && (
+                  <span style={{ ...styles.errorHint, flexBasis: '100%' }}>
+                    Also founders, who hold everything there and can't be removed:{' '}
+                    {cofoundersOf(space, session.did).join(', ')}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -349,7 +370,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
     .find((known) => known.origin === origin && !known.via && known.access !== 'carry');
   const spaces = useSpaces(false);
   const [kept, setKept] = useState<ReadonlySet<number>>(
-    () => new Set(request.notify.map((_, index) => index)),
+    () => new Set(request.automations.map((_, index) => index)),
   );
   const { run, busy, error } = useAction();
 
@@ -362,7 +383,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
   };
 
   const allow = () =>
-    run(async () => incoming.approve(await auth.propose({ origin, request, notify: [...kept] })));
+    run(async () => incoming.approve(await auth.propose({ origin, request, kept: [...kept] })));
 
   if (!connection) {
     return (
@@ -394,15 +415,15 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
 
       <section style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {request.notify.map((proposal, index) => (
-            <label key={index} style={choice}>
+          {request.automations.map((proposal, index) => (
+            <label key={index} data-choice style={styles.choice}>
               <input
                 type="checkbox"
                 checked={kept.has(index)}
                 onChange={() => setKept((was) => toggled(was, index))}
                 style={{ ...styles.checkbox, marginTop: 0 }}
               />
-              <span style={{ flex: 1 }}>{proposal.label}</span>
+              <span style={{ flex: 1 }}>{proposal.name}</span>
               <span style={{ color: palette.ink.faint, fontSize: 12 }}>{where(proposal.spaces)}</span>
             </label>
           ))}
@@ -479,7 +500,11 @@ function Note({
 }) {
   return (
     <div
-      style={{ ...styles.errorBox, marginTop: 0, marginBottom: below, background: palette.surface.sunken }}
+      style={{
+        ...styles.note,
+        marginBottom: below,
+        ...(warn ? { borderColor: palette.accent.danger, background: palette.accent.dangerSoft } : {}),
+      }}
     >
       <p style={{ ...styles.todoText, ...(warn ? { color: palette.accent.danger } : {}) }}>{title}</p>
       <p style={styles.errorHint}>{children}</p>
@@ -535,35 +560,45 @@ function Answer({
   );
 }
 
+/**
+ * A new space's constitution in a few words: who founds it, and its roles.
+ * "You found it · Admin, Member"; "No founder · Steward, Member".
+ */
+/** The other founders an app names, each once, never the person themselves */
+function cofoundersOf(space: NewSpace, me: string): string[] {
+  return [...new Set(space.cofounders ?? [])].filter((did) => did !== me);
+}
+
+function constitution(space: NewSpace, me: string): string {
+  const roles = (space.roles ?? []).map((role) => role.title ?? role.name);
+  const others = cofoundersOf(space, me).length;
+  const top =
+    space.top === 'none'
+      ? 'No founder'
+      : others
+        ? `You and ${others === 1 ? 'one other' : `${others} others`} found it`
+        : roles.length
+          ? 'You found it'
+          : 'Just you';
+  return roles.length ? `${top} · ${roles.join(', ')}` : top;
+}
+
 /** "7 days", "1 year" */
 function lasts(days: number): string {
   if (days >= 365) return days === 365 ? '1 year' : `${Math.round(days / 365)} years`;
   return days === 1 ? '1 day' : `${days} days`;
 }
 
-/** The page around it; `mark` off when the sign-in element draws its own */
-function Frame({ children, mark = true }: { children: ReactNode; mark?: boolean }) {
+/** The page around it, under Minca's mark; the sign-in element's own is hidden in the home's styles */
+function Frame({ children }: { children: ReactNode }) {
   return (
     <div style={{ ...styles.container, paddingTop: 32 }}>
       <div style={{ ...styles.card, paddingTop: 0 }}>
-        {mark && (
-          <div style={{ marginBottom: 32 }}>
-            <Wordmark compact />
-          </div>
-        )}
+        <div style={{ marginBottom: 32 }}>
+          <Wordmark compact />
+        </div>
         {children}
       </div>
     </div>
   );
 }
-
-const choice = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '10px 12px',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: 8,
-  fontSize: 14,
-  cursor: 'pointer',
-} as const;

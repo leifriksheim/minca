@@ -1,12 +1,12 @@
-# @weaveprotocol/core
+# @minca/core
 
 A peer-to-peer data protocol for the browser. You own your identity as a
 written-down code, keep your data in signed records that sync directly between
 devices, and every app is a view onto that data rather than its owner.
 
-> **Building an app?** Short guides — sign-in, collections and rules,
+> **Building an app?** Short guides — sign-in, collections and rules, automations,
 > queries, blueprints, agents — are in [packages/core/docs](packages/core/docs/README.md),
-> and ship in the package as `node_modules/@weaveprotocol/core/docs/`, so a
+> and ship in the package as `node_modules/@minca/core/docs/`, so a
 > coding agent finds the ones that match the installed version.
 >
 > **Building a client, or an agent that needs the architecture?** The
@@ -21,9 +21,9 @@ devices, and every app is a view onto that data rather than its owner.
 │                        Applications                          │
 ├──────────────┬───────────┬────────────┬──────────┬───────────┤
 │   Accounts   │  Spaces   │ Validation │ Privacy  │   Sync    │
-│ seed, vault, │ roles,    │ crypto →   │ AES-GCM  │ Negentropy│
-│ root signer, │ members × │ structural │ per      │ per       │
-│ UCAN, pairing│ pub/priv  │ → UCAN     │ space    │ collection│
+│ seed, vault, │ founders, │ crypto →   │ envelope │ Negentropy│
+│ root signer, │ roles ×   │ structural │ + HPKE,  │ per       │
+│ UCAN, pairing│ grants    │ → UCAN     │ per space│ collection│
 ├──────────────┴───────────┴────────────┴──────────┴───────────┤
 │    Storage: signed versions + plain index over an adapter    │
 │    IndexedDB (per origin) · data folder (shared by origins)  │
@@ -65,7 +65,7 @@ import {
   createIndexedDBAdapter,
   createStorageProvider,
   createSpaceManager,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 
 // 1. An account is a 16-byte seed. Show the code once; the user keeps it.
 const seed = generateSeed();
@@ -79,9 +79,9 @@ const provider = manager.getProvider();
 const root = createLocalRootSigner(me, provider);
 const session = await provider.generateKeyPair();
 const sessionDid = publicKeyToDid(await provider.exportPublicKey(session.publicKey), P256_MULTICODEC);
-const ucan = await root.delegate({
+const note = await root.delegate({
   audience: sessionDid,
-  capabilities: [{ with: '*', can: '*' }],
+  command: '/', // everything the account may do
   expiration: Math.floor(Date.now() / 1000) + 3600,
 });
 
@@ -97,9 +97,9 @@ const signed = await createSigner(provider).sign(
     collection: 'app.example.note',
     space: space.id,
     body: { text: 'Hello, decentralized world!' },
-    proof: ucan.encoded,
-    // This key's first version here: its place in its log (spec 02 §4.10). A node keeps count for you.
-    log: { n: 0, c: { n: 0 } },
+    proof: note, // the note from the account to this key: one token
+    // This key's first version in this collection: its place in its line (spec 02 §4.10). A node keeps count for you.
+    log: { n: 0 },
   }),
   session.privateKey,
 );
@@ -117,7 +117,7 @@ import {
   createLocalRootSigner,
   indexedDBStores,
   rolePresets,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 
 const manager = createIdentityManager();
 const me = await manager.fromRecoveryCode(code);
@@ -142,20 +142,20 @@ await node.spaces.closeInvite(space.id, invite); // nobody else joins with that 
 
 ## Where everything is described
 
-| Topic                                                                              | Library (how to call it)                                                                                                                                                                                                               | Protocol (what peers agree on)                                                           |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| The node: records and versions, live messages, holding spaces, actions             | [node](packages/core/docs/node.md), [records and queries](packages/core/docs/records-and-queries.md), [actions](packages/core/docs/actions.md)                                                                                         | [02 Records](spec/02-records.md), [06 Nodes and sessions](spec/06-nodes-and-sessions.md) |
-| Signing in, `<weave-auth>`, React hooks                                            | [building an app](packages/core/docs/building-an-app.md), [sign-in](packages/core/docs/sign-in.md)                                                                                                                                     | [01 Identity](spec/01-identity.md)                                                       |
-| The account home, app grants, keepers, topic tags, notifications                   | [building an app](packages/core/docs/building-an-app.md), [node](packages/core/docs/node.md), [apps/home](apps/home/README.md)                                                                                                         | [06 Nodes and sessions](spec/06-nodes-and-sessions.md), [03 Spaces](spec/03-spaces.md)   |
-| Identity: the seed, recovery code, wraps, passkeys, UCAN, root signers             | [sign-in](packages/core/docs/sign-in.md), [node](packages/core/docs/node.md#root-signers-and-notes)                                                                                                                                    | [01 Identity](spec/01-identity.md)                                                       |
-| Spaces: roles, who may write, invites, key changes, profiles, the account registry | [spaces](packages/core/docs/spaces.md)                                                                                                                                                                                                 | [03 Spaces](spec/03-spaces.md)                                                           |
-| Collections, schemas, rules and checks, links, queries, the standard library       | [collections](packages/core/docs/collections.md), [query format](packages/core/docs/query-format.md), [standard library](packages/core/docs/standard-library.md), [blueprints and guides](packages/core/docs/blueprints-and-guides.md) | [02 Records](spec/02-records.md)                                                         |
-| Calls, contacts, doors, direct messages                                            | [calls](packages/core/docs/calls.md), [contacts](packages/core/docs/contacts.md), [doors](packages/core/docs/doors.md), [direct messages](packages/core/docs/direct-messages.md)                                                       | [07 Doors](spec/07-doors.md), [04 Network](spec/04-network.md)                           |
-| Network: the relay, TURN, meeting peers, introductions, pairing a phone            | [node](packages/core/docs/node.md#the-network), [packages/relay](packages/relay/README.md)                                                                                                                                             | [04 Network](spec/04-network.md)                                                         |
-| Sync, storage adapters, data folders and locking them, mirrors                     | [storage](packages/core/docs/storage.md)                                                                                                                                                                                               | [05 Sync and storage](spec/05-sync-and-storage.md)                                       |
-| The CLI, the always-on node, hosting, agents and MCP                               | [packages/cli](packages/cli/README.md), [agents](packages/core/docs/agents.md)                                                                                                                                                         | [06 Nodes and sessions](spec/06-nodes-and-sessions.md)                                   |
-| The example app, Liquid and mini apps                                              | [apps/example](apps/example/README.md)                                                                                                                                                                                                 | —                                                                                        |
-| Planned work                                                                       | [docs](packages/core/docs/README.md#planned-in-the-library)                                                                                                                                                                            | [spec](spec/README.md)                                                                   |
+| Topic                                                                                                                        | Library (how to call it)                                                                                                                                                                                                                                                             | Protocol (what peers agree on)                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| The node: records and versions, live messages, holding spaces, actions                                                       | [node](packages/core/docs/node.md), [records and queries](packages/core/docs/records-and-queries.md), [actions](packages/core/docs/actions.md)                                                                                                                                       | [02 Records](spec/02-records.md), [06 Nodes and sessions](spec/06-nodes-and-sessions.md) |
+| Signing in, `<minca-auth>`, React hooks                                                                                      | [building an app](packages/core/docs/building-an-app.md), [sign-in](packages/core/docs/sign-in.md)                                                                                                                                                                                   | [01 Identity](spec/01-identity.md)                                                       |
+| The account home, app grants, keepers, topic tags, notifications                                                             | [building an app](packages/core/docs/building-an-app.md), [node](packages/core/docs/node.md), [apps/home](apps/home/README.md)                                                                                                                                                       | [06 Nodes and sessions](spec/06-nodes-and-sessions.md), [03 Spaces](spec/03-spaces.md)   |
+| Identity: the seed, recovery code, wraps, passkeys, UCAN, root signers                                                       | [sign-in](packages/core/docs/sign-in.md), [node](packages/core/docs/node.md#root-signers-and-notes)                                                                                                                                                                                  | [01 Identity](spec/01-identity.md)                                                       |
+| Spaces: the constitution, founders, roles and their grants, invites, successors, key changes, profiles, the account registry | [spaces](packages/core/docs/spaces.md)                                                                                                                                                                                                                                               | [03 Spaces](spec/03-spaces.md)                                                           |
+| Collections, schemas, rules and contracts, links, queries, the standard library                                              | [collections](packages/core/docs/collections.md), [contracts](packages/core/docs/contracts.md), [query format](packages/core/docs/query-format.md), [standard library](packages/core/docs/standard-library.md), [blueprints and guides](packages/core/docs/blueprints-and-guides.md) | [02 Records](spec/02-records.md), [09 Contracts](spec/09-contracts.md)                   |
+| Calls, contacts, doors, direct messages                                                                                      | [calls](packages/core/docs/calls.md), [contacts](packages/core/docs/contacts.md), [doors](packages/core/docs/doors.md), [direct messages](packages/core/docs/direct-messages.md)                                                                                                     | [07 Doors](spec/07-doors.md), [04 Network](spec/04-network.md)                           |
+| Network: the relay, TURN, meeting peers, introductions, pairing a phone                                                      | [node](packages/core/docs/node.md#the-network), [packages/relay](packages/relay/README.md)                                                                                                                                                                                           | [04 Network](spec/04-network.md)                                                         |
+| Sync, storage adapters, data folders and locking them, mirrors                                                               | [storage](packages/core/docs/storage.md)                                                                                                                                                                                                                                             | [05 Sync and storage](spec/05-sync-and-storage.md)                                       |
+| The CLI, the always-on node, hosting, agents and MCP                                                                         | [packages/cli](packages/cli/README.md), [agents](packages/core/docs/agents.md)                                                                                                                                                                                                       | [06 Nodes and sessions](spec/06-nodes-and-sessions.md)                                   |
+| The example app, Liquid and mini apps                                                                                        | [apps/example](apps/example/README.md)                                                                                                                                                                                                                                               | —                                                                                        |
+| Planned work                                                                                                                 | [docs](packages/core/docs/README.md#planned-in-the-library)                                                                                                                                                                                                                          | [spec](spec/README.md)                                                                   |
 
 ## Running it locally
 
@@ -171,8 +171,8 @@ That starts everything, with coloured output per part, and Ctrl-C stops it all:
 | app    | http://localhost:5173 | The example app                                                                                                              |
 | liquid | http://localhost:5190 | Liquid, a standalone app for one job: liquid democracy                                                                       |
 | home   | http://localhost:5174 | The account home it connects to                                                                                              |
-| node   | port 8787             | An always-on node that is also the relay; a throwaway identity on first run (`packages/cli/.env.dev`, data in `.weave-dev/`) |
-| host   | http://localhost:8788 | `weave host`, what "Keep my spaces online" uses and what spaces chip in for; settings in `packages/cli/.env.host.dev`        |
+| node   | port 8787             | An always-on node that is also the relay; a throwaway identity on first run (`packages/cli/.env.dev`, data in `.minca-dev/`) |
+| host   | http://localhost:8788 | `minca host`, what "Keep my spaces online" uses and what spaces chip in for; settings in `packages/cli/.env.host.dev`        |
 | stripe | —                     | Only when you add a Stripe test key: forwards Stripe's webhooks to the host                                                  |
 
 `npm run signal` runs the relay alone. Trying it all out, payments included,
@@ -182,28 +182,28 @@ is in [apps/example](apps/example/README.md).
 
 One npm workspace, installed once at the root (`npm install`):
 
-| Folder           | Package                           |                                                                             |
-| ---------------- | --------------------------------- | --------------------------------------------------------------------------- |
-| `packages/core`  | `@weaveprotocol/core` (published) | The protocol library, and its tests                                         |
-| `packages/cli`   | `@weaveprotocol/cli` (published)  | `weave`: the always-on node, hosting, agents, MCP                           |
-| `packages/relay` | `@weaveprotocol/relay` (private)  | The signaling relay and its mailbox, run alone on Fly and inside every node |
-| `apps/home`      | —                                 | The account home                                                            |
-| `apps/example`   | —                                 | The website and the example app                                             |
-| `apps/liquid`    | —                                 | Liquid, a standalone example app: liquid democracy                          |
-| `apps/extension` | —                                 | The Chrome extension                                                        |
-| `apps/shared`    | `@weave/app-shared` (private)     | Styles, relay settings and components the home and the website share        |
-| `spec`           | —                                 | The protocol specification                                                  |
+| Folder           | Package                       |                                                                             |
+| ---------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| `packages/core`  | `@minca/core` (published)     | The protocol library, and its tests                                         |
+| `packages/cli`   | `@minca/cli` (published)      | `minca`: the always-on node, hosting, agents, MCP                           |
+| `packages/relay` | `@minca/relay` (private)      | The signaling relay and its mailbox, run alone on Fly and inside every node |
+| `apps/home`      | —                             | The account home                                                            |
+| `apps/example`   | —                             | The website and the example app                                             |
+| `apps/liquid`    | —                             | Liquid, a standalone example app: liquid democracy                          |
+| `apps/extension` | —                             | The Chrome extension                                                        |
+| `apps/shared`    | `@minca/app-shared` (private) | Styles, relay settings and components the home and the website share        |
+| `spec`           | —                             | The protocol specification                                                  |
 
-Everything imports the protocol by name, `@weaveprotocol/core`, and only
-through what it exports. Inside the workspace, the `@weaveprotocol/source`
+Everything imports the protocol by name, `@minca/core`, and only
+through what it exports. Inside the workspace, the `@minca/source`
 export condition resolves those imports to `packages/core/src`, so the apps,
 the CLI and the tests run on the source with no build step; published copies
 use `dist`. The CLI bundles the protocol and the relay into one file, so
-`npx @weaveprotocol/cli` and the single-file binaries need nothing else.
+`npx @minca/cli` and the single-file binaries need nothing else.
 
 ## Releasing
 
-`@weaveprotocol/core` (`packages/core/`) and `@weaveprotocol/cli`
+`@minca/core` (`packages/core/`) and `@minca/cli`
 (`packages/cli/`) are released together, always with the same version:
 
 ```bash
@@ -234,7 +234,7 @@ Covers key derivation — checked against the public keys Web Crypto generates
 for the same private scalars, and pinned to recorded DIDs so an accidental
 change cannot slip through; recovery codes; account vaults, wraps and account
 stores; data folders with several writers; spaces, invites and
-encrypt-then-sign; UCAN issuing, attenuation and chain validation; phone
+encrypt-then-sign; delegations (UCAN 1.0 policies; one-link notes); phone
 pairing; peer introductions; Negentropy, checked against the reference
 implementation; the validation gates; and two peers reconciling, including the forged, stolen,
 unauthorized and malformed versions their gatekeepers reject. Above those:

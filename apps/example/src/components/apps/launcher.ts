@@ -19,15 +19,15 @@
  * from the guide it writes in the space (`std.guide`, `LAUNCHER_GUIDE`).
  */
 import {
-  checkAppNotify,
-  DEFINE,
-  roleHolds,
+  checkAppAutomation,
+  COLLECTION_DEFINE,
+  grantFits,
   type DefineCollection,
   type NodeCollection,
   type NodeRecord,
   type P2PNode,
   type SpaceAccess,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 import {
   applyBlueprint,
   blueprint,
@@ -37,9 +37,9 @@ import {
   // Defines what a space lacks; not a React hook, whatever its name says.
   useSchemas as addSchemas,
   writeGuide,
-  type AppNotify,
+  type AppAutomation,
   type DraftCollection,
-} from '@weaveprotocol/core/schemas';
+} from '@minca/core/schemas';
 import { checkScreenNetwork, MAX_SCREEN_BYTES, SCREEN_GUIDE, offLimits } from './screens';
 
 export interface LauncherApp {
@@ -51,7 +51,7 @@ export interface LauncherApp {
   /** The collections it shows, by name */
   readonly collections?: ReadonlyArray<string>;
   /** What in it is worth hearing about */
-  readonly notify?: ReadonlyArray<AppNotify>;
+  readonly notify?: ReadonlyArray<AppAutomation>;
   /** Its own screen: one HTML document, run sealed (`screens.ts`) */
   readonly screen?: string;
   /** Exact origins that screen may connect to; none keeps it sealed */
@@ -92,7 +92,6 @@ export const launcherApp = fragments.typed<LauncherApp>()({
       description: 'The blueprint proposing the collections it needs',
     },
   },
-  rules: { edit: 'member', delete: 'member' },
 });
 
 /** Why this can't be a launcher record, or null */
@@ -113,30 +112,37 @@ export function checkLauncherApp(body: LauncherApp): string | null {
   const network = checkScreenNetwork(body.network, body.screen !== undefined);
   if (network) return network;
   for (const [index, entry] of (body.notify ?? []).entries()) {
-    const problem = checkAppNotify(entry);
+    const problem = checkAppAutomation(entry);
     if (problem) return `notify[${index}]: ${problem}`;
-    if (!names.has(entry.collection))
-      return `notify[${index}]: ${entry.collection} is not one of its collections`;
+    if (!names.has(entry.when.query.collection))
+      return `notify[${index}]: ${entry.when.query.collection} is not one of its collections`;
   }
   return null;
 }
 
-/** Whether this account's role in the space holds `define` */
+/**
+ * Whether an account may define collections here, as its roles' grants say
+ * now: a founder, or a role every current definition of which grants
+ * `/collection/define`. For showing, not judging: each definition's grants
+ * also count only as far as its author could give them, which the node checks.
+ */
 function mayDefine(access: SpaceAccess | null | undefined, did: string | null): boolean {
   const member = access?.members.find((m) => m.did === did);
-  return (
-    !!member &&
-    roleHolds(
-      access?.roles.find((r) => r.name === member.role),
-      DEFINE,
-    )
-  );
+  if (!member) return false;
+  if (member.founder) return true;
+  return member.roles.some((name) => {
+    const definitions = access?.roles.find((r) => r.name === name)?.definitions ?? [];
+    return (
+      definitions.length > 0 &&
+      definitions.every((d) => d.grants.some((g) => grantFits(g, COLLECTION_DEFINE, { collection: '' })))
+    );
+  });
 }
 
 /**
  * Whether a launcher record's current version stands for the space: written
  * by someone whose role may define collections, with a key whose note let
- * them. An agent's write, or an edit by anyone else, makes it a proposal again.
+ * them. A records-only write (an agent's), or an edit by anyone else, makes it a proposal again.
  */
 const vouchedFor = (record: NodeRecord<LauncherApp>, access: SpaceAccess | null | undefined) =>
   !record.recordsOnly && mayDefine(access, record.root);
@@ -405,7 +411,6 @@ const toDraft = (held: NodeCollection): DraftCollection | null =>
         ...(held.description !== undefined ? { description: held.description } : {}),
         history: held.history,
         links: held.links,
-        permissions: held.permissions,
         rules: held.rules,
         topics: held.topics,
       };

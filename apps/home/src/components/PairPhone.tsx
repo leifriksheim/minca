@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import type { PairingOffer, PairingStage } from '@weaveprotocol/core/session';
-import { useAuth } from '@weaveprotocol/core/react';
-import { servedOverLan, relayProblem, relayOnlyLocal } from '@weave/app-shared/relay';
-import { Info } from '@weave/app-shared/Info';
+import type { PairingOffer, PairingStage } from '@minca/core/session';
+import { useAuth } from '@minca/core/react';
+import { servedOverLan, relayProblem, relayOnlyLocal } from '@minca/app-shared/relay';
+import { Info } from '@minca/app-shared/Info';
 import { styles, palette } from '../styles';
 
 /** What each stage of the handover should say out loud. */
@@ -67,11 +67,14 @@ export function PairPhone() {
   };
 
   return (
-    <details style={styles.panel}>
-      <summary data-variant="ghost" style={styles.panelSummary}>
+    <details style={{ ...styles.panel, marginTop: 0, borderRadius: palette.radius.none }}>
+      <summary
+        data-variant="ghost"
+        style={{ ...styles.panelSummary, ...styles.sectionHeading, padding: '18px 20px' }}
+      >
         Add your phone
       </summary>
-      <div style={styles.panelBody}>
+      <div style={{ ...styles.panelBody, padding: '0 20px 20px' }}>
         {!offer ? (
           <>
             <p style={styles.errorHint}>
@@ -112,16 +115,25 @@ export function PairPhone() {
                   display: 'block',
                   margin: '14px auto',
                   padding: 12,
-                  // A quiet zone in white is part of the code, not decoration:
+                  // A light quiet zone is part of the code, not decoration:
                   // a camera needs the contrast to find the pattern.
-                  background: '#fff',
+                  background: palette.surface.card,
                   border: `1px solid ${palette.surface.line}`,
-                  borderRadius: palette.radius.md,
+                  borderRadius: palette.radius.none,
                 }}
               />
             )}
             {stage?.kind === 'compare' && (
-              <p style={{ ...styles.hint, fontSize: 28, letterSpacing: '0.15em', textAlign: 'center' }}>
+              <p
+                style={{
+                  ...styles.hint,
+                  fontFamily: palette.mono,
+                  fontSize: 28,
+                  letterSpacing: '0.15em',
+                  textAlign: 'center',
+                  color: palette.ink.strong,
+                }}
+              >
                 {stage.code.slice(0, 3)} {stage.code.slice(3)}
               </p>
             )}

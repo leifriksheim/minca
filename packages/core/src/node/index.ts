@@ -2,11 +2,11 @@
  * @module node
  * A node, and the actions every front end builds on.
  */
-export { createNode, SESSION_CAPABILITY } from './node.js';
+export { createNode, SESSION_COMMAND } from './node.js';
 export { serveNode, remoteNode, serveSigner, remoteSigner } from './remote.js';
 export { startNodeInWorker, runNodeWorker } from './worker.js';
 export type { WorkerNodeConfig, WorkerLike } from './worker.js';
-export { writeCapability, relayRoom } from './space-runtime.js';
+export { relayRoom } from './space-runtime.js';
 export { indexedDBStores, folderStores, workerStores } from './stores.js';
 export { browserWriterKeys } from './writer-keys.js';
 export type { ClaimedWriter, HeadStore, WriterKeySource } from './writer-keys.js';
@@ -20,9 +20,9 @@ export type {
   CarriedSpace,
   CarriedCollection,
   CarrierEvent,
-  CarriedSubscriptionView,
+  WakeView,
 } from './carrier.js';
-export type { NotifyWhen, NotifyApp, NotifyProposal, CarriedSubscription } from '../space/notify.js';
+export type { AutomationProposal, AppAutomation, Wake } from '../space/own-automations.js';
 export { createHostNode, NotAllowedError, spaceSubscription } from './host.js';
 export type { HostConfig, HostNode, Invoice, Subscription, SubscriptionState } from './host.js';
 export type { CopyAccountParams, CopyResult } from './copy.js';
@@ -57,15 +57,13 @@ export type {
   ListOptions,
   InviteOptions,
   ConnectionState,
-  DelegateParams,
-  Delegated,
   NodeCollection,
   NodeCollections,
   DefineCollection,
   NodeAccount,
   NodeCarriers,
-  NodeNotifications,
-  NotifyView,
+  NodeAutomations,
+  OwnAutomationView,
   NodeHosting,
   HostingView,
   SpaceHostingView,

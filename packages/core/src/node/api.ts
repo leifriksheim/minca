@@ -13,7 +13,7 @@ export type Namespace =
   | 'account'
   | 'carriers'
   | 'hosting'
-  | 'notifications'
+  | 'automations'
   | 'contacts'
   | 'direct'
   | 'doors'
@@ -39,9 +39,14 @@ export const API = Object.freeze({
     join: 'join spaces',
     leave: 'leave spaces',
     access: 'scoped',
-    setMember: 'change who is in a space',
-    putRole: 'change roles',
-    removeRole: 'change roles',
+    may: 'scoped',
+    holdsRole: 'scoped',
+    defineRole: 'change roles',
+    assign: 'change who is in a space',
+    unassign: 'change who is in a space',
+    removeMember: 'change who is in a space',
+    stepDown: 'step down as a founder',
+    succeed: 'name a successor space',
     closeInvite: 'close invites',
     changeKey: "change a space's key",
     setRelays: "change a space's relays",
@@ -57,7 +62,9 @@ export const API = Object.freeze({
   records: {
     list: 'scoped',
     get: 'scoped',
-    checks: 'scoped',
+    contracts: 'scoped',
+    keyFor: 'scoped',
+    onePerKey: 'scoped',
     put: 'scoped',
     update: 'scoped',
     linked: 'scoped',
@@ -70,13 +77,13 @@ export const API = Object.freeze({
   collections: { list: 'scoped', define: 'own', delete: 'remove collections', tag: 'scoped' },
   account: { profile: 'pass', setName: 'rename the account', revoke: 'revoke notes' },
   carriers: { list: 'pass', add: 'add a carrier', remove: 'remove a carrier' },
-  notifications: {
-    list: 'look at notifications',
-    add: 'subscribe to anything',
-    update: 'change notifications',
-    remove: 'change notifications',
-    versions: 'look at notifications',
-    take: 'change notifications',
+  automations: {
+    list: 'look at your automations',
+    add: 'make automations of your own',
+    update: 'change your automations',
+    remove: 'change your automations',
+    versions: 'look at your automations',
+    take: 'change your automations',
   },
   hosting: {
     list: 'look at hosting',

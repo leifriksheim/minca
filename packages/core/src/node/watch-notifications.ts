@@ -1,21 +1,21 @@
 /**
  * @module node/watch-notifications
- * An app showing its own notifications: the subscriptions the person kept for
+ * An app showing its own notifications: the automations the person kept for
  * it, matched against records as they arrive.
  *
- * The subscriptions live in the account registry (`space/notify.ts`), which a
+ * They live in the account registry (`space/own-automations.ts`), which a
  * node given the whole account can open. This reads the ones naming the app,
  * follows every space they look at, and hands each new record that matches
  * to the app — which decides how to show it. What was already there when it
  * started is never news.
  */
-import { matchesRecord, whereHolds } from '../space/notify.js';
-import type { NodeRecord, NotifyView, P2PNode } from './types.js';
+import { matchesRecord, ownQuery } from '../space/own-automations.js';
+import type { NodeRecord, OwnAutomationView, P2PNode } from './types.js';
 import { serial } from '../utils/serial.js';
 
-/** A record one of the app's subscriptions asks about */
+/** A record one of the app's automations asks about */
 export interface NotifyMatch {
-  readonly subscription: NotifyView;
+  readonly automation: OwnAutomationView;
   readonly record: NodeRecord;
 }
 
@@ -31,24 +31,24 @@ const LOOK_BACK = 50;
 
 /**
  * Starts matching. Needs a node with the account key — an app connected with
- * `scope: 'account'`; any other has no subscriptions to read, and hears nothing.
+ * `scope: 'account'`; any other has no automations to read, and hears nothing.
  * @returns Stops it
  */
 export function watchNotifications(node: P2PNode, options: WatchNotificationsOptions): () => void {
   const origin = options.origin ?? globalThis.location?.origin;
   let stopped = false;
-  let subscriptions: ReadonlyArray<NotifyView> = [];
+  let automations: ReadonlyArray<OwnAutomationView> = [];
   let spaces = new Set<string>();
   /** Record keys already seen, by space and collection: anything else is new */
   const seen = new Map<string, Set<string>>();
-  /** Spaces with a change not yet looked at; null means the subscriptions or spaces changed */
+  /** Spaces with a change not yet looked at; null means the automations or spaces changed */
   const dirty = new Set<string | null>([null]);
 
   const collectionsIn = (space: string) =>
     new Set(
-      subscriptions
-        .filter((sub) => sub.spaces === 'all' || sub.spaces.includes(space))
-        .map((sub) => sub.collection),
+      automations
+        .filter((own) => own.spaces === undefined || own.spaces === 'all' || own.spaces.includes(space))
+        .map((own) => ownQuery(own).collection),
     );
 
   /** Hands on what is new in one collection; the first look at one only learns what is there */
@@ -62,18 +62,15 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
       if (known.has(record.key)) continue;
       known.add(record.key);
       if (first) continue;
-      for (const subscription of subscriptions) {
+      for (const automation of automations) {
         if (stopped) return;
-        if (matchesRecord(subscription, record, node.did) && whereHolds(subscription, record))
-          options.onNotify({ subscription, record });
+        if (matchesRecord(automation, record, node.did)) options.onNotify({ automation, record });
       }
     }
   }
 
   async function reload(): Promise<void> {
-    subscriptions = (await node.notifications.list()).filter(
-      (sub) => !sub.paused && sub.app?.origin === origin,
-    );
+    automations = (await node.automations.list()).filter((own) => !own.paused && own.app?.origin === origin);
     spaces = new Set((await node.spaces.list()).map((space) => space.id));
     // Anything newly looked at starts from what is there now. What was looked at before still
     // reports what arrived since: the account changes all the time, and that is no reason to drop news.

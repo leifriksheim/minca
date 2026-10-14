@@ -15,7 +15,7 @@ import { createEmitter } from '../utils/events.js';
 import { isRecord } from '../utils/guards.js';
 import type { MessagePortLike } from '../utils/port.js';
 
-const TAG = 'weave-transport';
+const TAG = 'minca-transport';
 
 type Binding = { readonly local: string; readonly remote: string } | null;
 

@@ -4,8 +4,8 @@
  */
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { useSchemas } from '@weaveprotocol/core/schemas';
-import type { P2PNode } from '@weaveprotocol/core';
+import { useSchemas } from '@minca/core/schemas';
+import type { P2PNode } from '@minca/core';
 import { createNode } from '../../../packages/core/src/node/node.js';
 import { createIdentityManager } from '../../../packages/core/src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../../../packages/core/src/identity/root-signer.js';
@@ -15,7 +15,7 @@ import { createSigner } from '../../../packages/core/src/schema/signer.js';
 import { createVersion } from '../../../packages/core/src/schema/version.js';
 import { createStorageProvider } from '../../../packages/core/src/storage/storage-provider.js';
 import { team } from '../../../packages/core/src/space/presets.js';
-import { runChecks, type CheckedVersion } from '../../../packages/core/src/records/checks.js';
+import { runContracts, type CitedVersion } from '../../../packages/core/src/records/contracts.js';
 import { createFakeHub, type FakeHub } from '../../../packages/core/tests/helpers/fake-transport.js';
 import { memoryStores } from '../../../packages/core/tests/helpers/memory-stores.js';
 import { seenBy } from '../../../packages/core/tests/helpers/as-member.js';
@@ -61,7 +61,8 @@ async function forge(who: Person, space: string, fields: Parameters<typeof creat
   const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
   const ucan = await createLocalRootSigner(who.me, provider).delegate({
     audience: keyDid,
-    capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+    command: '/record/write',
+    subject: `space:${space}`,
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const signed = await createSigner(provider).sign(
@@ -72,7 +73,7 @@ async function forge(who: Person, space: string, fields: Parameters<typeof creat
       ...fields,
       author: keyDid,
       space,
-      proof: ucan.encoded,
+      proof: ucan,
     }),
     pair.privateKey,
   );
@@ -174,7 +175,7 @@ describe('liquid: deciding a proposal', () => {
     const a = await castBy(alice, space, put.key, 'for');
     await until(async () => (await bob.node.records.get(space, a.key)) !== null, 4000, 'Alice’s vote');
 
-    const key = (await decisionKey(alice, put.key)) ?? '';
+    const key = (await decisionKey(alice, space, put.key)) ?? '';
     await forge(alice, space, {
       author: '',
       collection: decision.name,
@@ -185,12 +186,12 @@ describe('liquid: deciding a proposal', () => {
     });
     await hold(alice.node, space);
     await until(
-      async () => (await bob.node.records.checks(space, key))?.passes === false,
+      async () => (await bob.node.records.contracts(space, key))?.passes === false,
       4000,
       'Bob to hold it',
     );
     assert.match(
-      (await bob.node.records.checks(space, key))?.reason ?? '',
+      (await bob.node.records.contracts(space, key))?.reason ?? '',
       /passes once as many voters as it needs/,
     );
     assert.equal(await bob.node.records.get(space, key), null);
@@ -503,7 +504,7 @@ describe('liquid: how a party decides', () => {
 describe('liquid: a decision fits in one check', () => {
   test('the largest proposal, 500 voters, decided by 251 votes, stays within the step limit', async () => {
     const voters = Array.from({ length: 500 }, (_, i) => `did:key:z${String(i).padStart(4, '0')}`);
-    const cited: CheckedVersion[] = voters.slice(0, 251).map((did, i) => ({
+    const cited: CitedVersion[] = voters.slice(0, 251).map((did, i) => ({
       id: `b-vote-${i}`,
       key: `k-${i}`,
       collection: vote.name,
@@ -514,7 +515,7 @@ describe('liquid: a decision fits in one check', () => {
       body: { choice: 'for' },
       links: [{ rel: 'about', to: 'proposal-key' }],
     }));
-    const theProposal: CheckedVersion = {
+    const theProposal: CitedVersion = {
       id: 'b-proposal',
       key: 'proposal-key',
       collection: proposal.name,
@@ -526,7 +527,7 @@ describe('liquid: a decision fits in one check', () => {
       links: [],
     };
     const held = new Map([...cited, theProposal].map((v) => [v.id, v]));
-    const outcome = await runChecks(decision.rules.check, {
+    const outcome = await runContracts(decision.contract.check, {
       values: {
         body: { outcome: 'passed', proposal: theProposal.id, voters, votes: cited.map((v) => v.id) },
         links: [{ rel: 'about', to: 'proposal-key' }],
@@ -534,13 +535,12 @@ describe('liquid: a decision fits in one check', () => {
         prev: null,
       },
       cite: async (id) => held.get(id) ?? { later: true },
-      can: () => false,
       member: () => true,
     });
     assert.deepEqual(outcome, { passed: true });
 
     // The same, with the most a rule may ask for.
-    const strict: CheckedVersion = {
+    const strict: CitedVersion = {
       ...theProposal,
       id: 'b-strict',
       body: { title: 'Big', voters, toPass: 255 },
@@ -551,7 +551,7 @@ describe('liquid: a decision fits in one check', () => {
       author: voters[i]!,
     }));
     const heldStrict = new Map([...most, strict].map((v) => [v.id, v]));
-    const strictOutcome = await runChecks(decision.rules.check, {
+    const strictOutcome = await runContracts(decision.contract.check, {
       values: {
         body: { outcome: 'passed', proposal: strict.id, voters, votes: most.map((v) => v.id) },
         links: [{ rel: 'about', to: 'proposal-key' }],
@@ -559,7 +559,6 @@ describe('liquid: a decision fits in one check', () => {
         prev: null,
       },
       cite: async (id) => heldStrict.get(id) ?? { later: true },
-      can: () => false,
       member: () => true,
     });
     assert.deepEqual(strictOutcome, { passed: true });
@@ -567,11 +566,6 @@ describe('liquid: a decision fits in one check', () => {
 });
 
 /** The key a decision about a proposal must have: one per proposal */
-async function decisionKey(who: Person, proposalKey: string): Promise<string | null> {
-  const { onePerKey } = await import('../../../packages/core/src/records/rules.js');
-  return onePerKey(decision.name, decision.rules.onePer, {
-    root: who.node.did,
-    links: [{ rel: 'about', to: proposalKey }],
-    body: {},
-  });
+function decisionKey(who: Person, space: string, proposalKey: string): Promise<string | null> {
+  return who.node.records.onePerKey(space, decision.name, {}, { links: [{ rel: 'about', to: proposalKey }] });
 }

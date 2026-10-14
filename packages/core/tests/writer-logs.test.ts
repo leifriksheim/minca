@@ -5,6 +5,7 @@
  * at every peer.
  */
 import { test, describe } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 
 import { createNode } from '../src/node/node.js';
@@ -53,7 +54,8 @@ async function handKey(bob: Person, space: string) {
   const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
   const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
     audience: did,
-    capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+    command: '/record/write',
+    subject: `space:${space}`,
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
   const { heads: seen } = await bob.node.spaces.access(space);
@@ -63,7 +65,15 @@ async function handKey(bob: Person, space: string) {
       createSigner(provider).sign(
         // Its log as given, which may be one a writer would never sign.
         {
-          ...createVersion({ author: did, collection, space, body: { text }, proof: note.encoded, seen }),
+          ...createVersion({
+            author: did,
+            collection,
+            space,
+            version: { key: await newRecordKey(bob.node.did), seq: 0 },
+            body: { text },
+            proof: note,
+            seen,
+          }),
           log,
         },
         pair.privateKey,
@@ -291,9 +301,9 @@ describe('a writer key that outlives the node', () => {
 
   test('where nothing can lock a key, there is no lasting one: the node makes its own', async () => {
     // No IndexedDB here, as in Node.
-    assert.equal(await browserWriterKeys('weave:test').claim(), null);
+    assert.equal(await browserWriterKeys('minca:test').claim(), null);
     const who = await person();
-    const node = await nodeWith(browserWriterKeys('weave:test'), who);
+    const node = await nodeWith(browserWriterKeys('minca:test'), who);
     assert.match(node.sessionDid, /^did:key:/);
   });
 });

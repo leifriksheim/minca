@@ -60,7 +60,7 @@ export function checkBlueprint(value: unknown): string | null {
 }
 
 /** The parts of a definition that say what it is, rather than what it is called */
-const SHAPE = ['schema', 'history', 'links', 'permissions', 'rules', 'topics'] as const;
+const SHAPE = ['schema', 'history', 'links', 'rules', 'contract', 'topics'] as const;
 
 /**
  * Collections as a proposer gives them: each a definition, or the name of a
@@ -90,8 +90,8 @@ export function standardCollections(collections: unknown): unknown {
       ...(standard.description !== undefined ? { description: standard.description } : {}),
       ...(standard.history !== undefined ? { history: standard.history } : {}),
       ...(standard.links !== undefined ? { links: standard.links } : {}),
-      ...(standard.permissions !== undefined ? { permissions: standard.permissions } : {}),
       ...(standard.rules !== undefined ? { rules: standard.rules } : {}),
+      ...(standard.contract !== undefined ? { contract: standard.contract } : {}),
       ...(standard.topics !== undefined ? { topics: standard.topics } : {}),
     };
     if (typeof draft === 'string') return library;
@@ -100,10 +100,8 @@ export function standardCollections(collections: unknown): unknown {
       schema: draft.schema,
       history: typeof draft.history === 'string' ? draft.history : undefined,
       links: draft.links,
-      permissions: Array.isArray(draft.permissions)
-        ? draft.permissions.filter((p): p is string => typeof p === 'string')
-        : undefined,
       rules: draft.rules,
+      contract: draft.contract,
       topics: Array.isArray(draft.topics)
         ? draft.topics.filter((t): t is string => typeof t === 'string')
         : undefined,
@@ -163,8 +161,8 @@ function essence(definition: {
   schema: unknown;
   history?: string | undefined;
   links?: unknown;
-  permissions?: ReadonlyArray<string> | undefined;
   rules?: unknown;
+  contract?: unknown;
   topics?: ReadonlyArray<string> | undefined;
 }) {
   return {
@@ -173,8 +171,8 @@ function essence(definition: {
     schema: canonicalize(definition.schema ?? null),
     history: definition.history ?? 'latest',
     links: canonicalize(definition.links ?? {}),
-    permissions: canonicalize([...(definition.permissions ?? [])].sort()),
     rules: canonicalize(definition.rules ?? {}),
+    contract: canonicalize(definition.contract ?? {}),
     topics: canonicalize([...(definition.topics ?? [])].sort()),
   };
 }
@@ -194,7 +192,8 @@ function differences(held: NodeCollection, wanted: DraftCollection): string[] {
   if (added.length) out.push(`adds ${added.map((f) => `“${f}”`).join(', ')}`);
   if (removed.length) out.push(`drops ${removed.map((f) => `“${f}”`).join(', ')}`);
   if (!added.length && !removed.length && a.schema !== b.schema) out.push('changes the shape of its fields');
-  if (a.rules !== b.rules || a.permissions !== b.permissions) out.push('changes who may do what');
+  if (a.rules !== b.rules) out.push('changes what its records must keep to');
+  if (a.contract !== b.contract) out.push('changes what its records must be to count');
   if (a.links !== b.links) out.push('changes what it points at');
   if (a.topics !== b.topics) out.push('changes what can be matched without reading it');
   if (a.history !== b.history)

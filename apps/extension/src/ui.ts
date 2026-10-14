@@ -2,9 +2,10 @@
  * The little the two visible pages share: building elements, and drawing the
  * carried spaces and the pod the same way in both.
  */
-import type { CarriedSpace } from '@weaveprotocol/core/node';
-import { ensureFolderPermission, recallDataFolder } from '@weaveprotocol/core/storage';
-import { avatarCells } from '@weave/app-shared/avatar-cells';
+import type { CarriedSpace } from '@minca/core/node';
+import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
+import { avatarCells } from '@minca/app-shared/avatar-cells';
+import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';
 import type { CarrierStatus, PodState } from './shared';
 
 type Child = Node | string | null | false | undefined;
@@ -30,15 +31,19 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-/** The wordmark, as in the home */
+/** The wordmark, as on the site */
 export function mark(): HTMLElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', '20');
-  svg.setAttribute('height', '20');
-  svg.setAttribute('viewBox', '0 0 20 20');
-  svg.innerHTML =
-    '<path d="M2 5 L7 15 L10 8 L13 15 L18 5" fill="none" stroke="#000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
-  return h('div', { class: 'mark' }, svg, 'Weave');
+  svg.setAttribute('viewBox', MARK_VIEWBOX);
+  svg.setAttribute('aria-hidden', 'true');
+  // The bands' colours come from the tokens, by class, in styles.css.
+  for (const [index, { d }] of MARK_BANDS.entries()) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', `band-${index + 1}`);
+    svg.append(path);
+  }
+  return h('div', { class: 'mark' }, svg, 'minca');
 }
 
 /**

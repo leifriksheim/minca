@@ -1,5 +1,5 @@
 {
-  "name": "weave-home",
+  "name": "@minca/home",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",
-    "@weave/app-shared": "*",
-    "@weaveprotocol/core": "*",
+    "@minca/app-shared": "*",
+    "@minca/core": "*",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

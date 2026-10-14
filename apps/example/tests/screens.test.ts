@@ -26,21 +26,21 @@ function runScreenClient(window: unknown, addEventListener: unknown, document: u
 }
 
 describe('screens', () => {
-  test('the script in front of a screen sets up weave, with me readable both ways', () => {
+  test('the script in front of a screen sets up minca, with me readable both ways', () => {
     const port: { postMessage: () => void; onmessage: unknown } = { postMessage: () => {}, onmessage: null };
     const window: Record<string, unknown> = {
-      __weave: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: ['app.chess.game'] },
+      __minca: { port, me: { did: 'did:key:zMe', name: 'Anna' }, collections: ['app.chess.game'] },
     };
     runScreenClient(window, () => {}, {});
-    const weave = window.weave;
-    assert.ok(isRecord(weave));
-    const { me } = weave;
+    const minca = window.minca;
+    assert.ok(isRecord(minca));
+    const { me } = minca;
     assert.ok(typeof me === 'function' && 'did' in me);
-    assert.equal(window.__weave, undefined, 'the port is not left lying around');
+    assert.equal(window.__minca, undefined, 'the port is not left lying around');
     assert.equal(me.did, 'did:key:zMe');
     assert.equal(me.name, 'Anna');
     assert.deepEqual(Reflect.apply(me, undefined, []), { did: 'did:key:zMe', name: 'Anna' });
-    assert.deepEqual(weave.collections, ['app.chess.game']);
+    assert.deepEqual(minca.collections, ['app.chess.game']);
   });
 
   test("the script in front of a screen shows the screen's own errors, not those of a browser extension in its frame", () => {
@@ -60,7 +60,7 @@ describe('screens', () => {
       body: { appendChild: () => {} },
     };
     const window: Record<string, unknown> = {
-      __weave: { port: { postMessage: () => {} }, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [] },
+      __minca: { port: { postMessage: () => {} }, me: { did: 'did:key:zMe', name: 'Anna' }, collections: [] },
     };
     runScreenClient(
       window,
@@ -136,11 +136,15 @@ describe('screens', () => {
 
   test("the bridge answers for its app's collections only, as the person looking, under the rules", async () => {
     const { alice, bob, space } = await setup();
-    await alice.node.collections.define(space, {
-      name: 'app.chess.game',
-      schema: { type: 'object' },
-      rules: { edit: 'creator' },
+    // Editors here change only what they added: who may write is the space's grants.
+    await alice.node.spaces.defineRole(space, {
+      name: 'editor',
+      grants: [
+        { cmd: '/record/write', pol: [['==', '.byCreator', true]] },
+        { cmd: '/collection/define', pol: [] },
+      ],
     });
+    await alice.node.collections.define(space, { name: 'app.chess.game', schema: { type: 'object' } });
     await alice.node.records.put(space, 'app.secret', { pin: 1234 });
     await waitFor(
       async () =>
@@ -191,7 +195,7 @@ describe('screens', () => {
       await waitFor(async () => (await bob.node.records.get(space, hers.key)) !== null, "Alice's game");
       const refused = await call('update', hers.key, { white: 'bob' });
       assert.equal(refused.ok, false);
-      assert.match(refused.error!, /whoever created it/);
+      assert.match(refused.error!, /no grant/);
 
       // Written by guessing: one object per call, a where, id and data. It works, and a wrong call says how to call it.
       const guessed = await call('put', { collection: 'app.chess.game', body: { status: 'open' } });
@@ -204,7 +208,7 @@ describe('screens', () => {
       assert.equal(open[0]!.id, open[0]!.key);
       assert.equal(open[0]!.data.status, 'open');
       const wrong = await call('list', 42);
-      assert.match(wrong.error!, /Name the collection as text, like weave\.list\("app\.chess\.game"\)/);
+      assert.match(wrong.error!, /Name the collection as text, like minca\.list\("app\.chess\.game"\)/);
     } finally {
       bridge.close();
       channel.port2.close();

@@ -758,7 +758,6 @@ const GLOBALS: Readonly<Record<string, ReadonlyArray<number>>> = {
   hash: [1],
   versions: [1],
   link: [1],
-  can: [1, 2],
   member: [1],
   '==': [2],
   '!=': [2],
@@ -785,15 +784,13 @@ const METHODS: Readonly<Record<string, ReadonlyArray<number>>> = {
   link: [1],
 };
 /** Functions read from the space: an expression that reads only a record leaves them out */
-const SPACE_FUNCTIONS = new Set(['versions', 'can', 'member']);
+const SPACE_FUNCTIONS = new Set(['versions', 'member']);
 
 /** What an expression may name and call */
 export interface CelScope {
   /** The variables it reads */
   readonly names: ReadonlySet<string>;
-  /** The permissions `can` may name; without it, `can` is refused */
-  readonly permissions?: ReadonlyArray<string>;
-  /** Whether it may read the space (`versions`, `can`, `member`) */
+  /** Whether it may read the space (`versions`, `member`) */
   readonly space?: boolean;
   /** Literal link roles `link` accepts */
   readonly linkRel?: RegExp;
@@ -851,15 +848,6 @@ export function checkCel(node: CelNode, scope: CelScope, count = { nodes: 0 }): 
           if (rel.k !== 'lit' || typeof rel.v !== 'string' || (scope.linkRel && !scope.linkRel.test(rel.v)))
             return 'link() takes a literal link role';
         }
-        if (n.fn === 'can' && !n.target) {
-          const permission = n.args[0]!;
-          if (
-            permission.k !== 'lit' ||
-            typeof permission.v !== 'string' ||
-            !(scope.permissions ?? []).includes(permission.v)
-          )
-            return 'can() takes a literal permission the definition declares';
-        }
         return (n.target ? walk(n.target, bound) : null) ?? first(n.args.map((a) => () => walk(a, bound)));
       }
     }
@@ -879,7 +867,7 @@ function first(checks: ReadonlyArray<() => string | null>): string | null {
 
 /** Stops an evaluation outright: a cited version not here yet, one that can't be read or doesn't stand, or too many steps */
 export interface CelStop {
-  readonly stop: 'later' | 'unreadable' | 'fail';
+  readonly stop: 'later' | 'unreadable' | 'unjudged' | 'fail';
   readonly why: string;
 }
 /** A stop, thrown */
@@ -895,10 +883,7 @@ export interface CelEnv {
   readonly links?: CelValue;
   /** Cited versions, as CEL values; may throw a `CelStop` */
   readonly versions?: (ids: ReadonlyArray<string>) => Promise<CelValue>;
-  readonly can?: (permission: string, did: string) => boolean;
   readonly member?: (did: string) => boolean;
-  /** The account `can(p)` asks about */
-  readonly author?: string;
 }
 
 /**
@@ -1278,7 +1263,8 @@ async function callGlobal(fn: string, args: ReadonlyArray<CelValue>, env: CelEnv
       return a;
     case 'sum': {
       if (!isList(a)) return err('no matching overload');
-      if (a.length === 0) return 0n;
+      // Every number read from a body is a double, so an empty sum is one too.
+      if (a.length === 0) return 0;
       let total: CelValue = a[0]!;
       if (!isNumber(total)) return err('no matching overload');
       for (const item of a.slice(1)) {
@@ -1300,12 +1286,6 @@ async function callGlobal(fn: string, args: ReadonlyArray<CelValue>, env: CelEnv
         return err('versions() takes a list of ids');
       if (!env.versions) return err('nothing to cite');
       return env.versions(a.filter((id) => typeof id === 'string'));
-    }
-    case 'can': {
-      const did = args.length === 2 ? b : (env.author ?? null);
-      if (typeof a !== 'string' || typeof did !== 'string' || !did.startsWith('did:'))
-        return err('no matching overload');
-      return env.can ? env.can(a, did) : false;
     }
     case 'member':
       if (typeof a !== 'string' || !a.startsWith('did:')) return err('no matching overload');

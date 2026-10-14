@@ -6,6 +6,7 @@
  * arriving as blueprints someone who may define them applies.
  */
 import { test, describe } from 'node:test';
+import { ownedKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import * as z from 'zod';
 
@@ -13,9 +14,10 @@ import { createNode } from '../src/node/node.js';
 import { runAction } from '../src/node/actions.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { noteTerms } from '../src/identity/abilities.js';
+import type { Policy } from '../src/identity/policy.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import { parseUCAN } from '../src/identity/ucan.js';
 import { deriveAccountRegistry } from '../src/space/account-registry.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion, type CreateVersionParams } from '../src/schema/version.js';
@@ -37,7 +39,7 @@ import {
   type Blueprint,
   type DraftCollection,
 } from '../src/schemas/index.js';
-import { createWeaveAuth, type WeaveAuth } from '../src/session/auth.js';
+import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import { grantSigner, type Grant } from '../src/session/connect.js';
 import { connectWithCode, offerConnectCode } from '../src/session/connect-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
@@ -50,24 +52,31 @@ import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { team } from '../src/space/presets.js';
-import { memberKey } from '../src/space/space-access.js';
+import { assignKey } from '../src/space/space-access.js';
 import { nextVersion } from '../src/records/version.js';
 import { hold, letGo } from './helpers/hold.js';
 import { isRecord } from '../src/utils/guards.js';
 import { until } from './helpers/until.js';
 import { asked, open, person, settle, testAppKey, type Person } from './helpers/person.js';
 
-/** A key for this person, and a note from their account for these spaces: records only, unless `can` says otherwise */
-async function agentFor(who: Person, spaces: ReadonlyArray<string>, can = 'record/*') {
+/** A key for this person, and a note from their account for these spaces: records only, unless `command` says otherwise */
+async function agentFor(
+  who: Person,
+  spaces: ReadonlyArray<string>,
+  command = '/record',
+  policy: Policy = [],
+) {
   const provider = who.manager.getProvider();
   const keys = await provider.generateKeyPair();
   const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
+  const terms = noteTerms(command, spaces);
   const note = await createLocalRootSigner(who.me, provider).delegate({
     audience: did,
-    capabilities: spaces.map((id) => ({ with: `space:${id}`, can })),
+    ...terms,
+    policy: [...(terms.policy ?? []), ...policy],
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
-  return { keys, did, note: note.encoded };
+  return { keys, did, note };
 }
 
 /** A version signed by hand under such a note — past every check its node would make — slipped into the person's store */
@@ -75,9 +84,9 @@ async function forgeAsAgent(
   who: Person,
   space: string,
   fields: Omit<CreateVersionParams<unknown>, 'author' | 'space' | 'proof'>,
-  note: { can?: string } = {},
+  note: { command?: string; policy?: Policy } = {},
 ) {
-  const agent = await agentFor(who, [space], note.can);
+  const agent = await agentFor(who, [space], note.command, note.policy);
   const provider = who.manager.getProvider();
   const signed = await createSigner(provider).sign(
     createVersion({
@@ -119,14 +128,13 @@ const carpool: Blueprint = {
         properties: { when: { type: 'string' }, seats: { type: 'integer', minimum: 1 } },
         required: ['when', 'seats'],
       },
-      rules: { edit: 'creator', delete: 'creator' },
     },
     {
       name: 'app.carpool.seat',
       title: 'Seat',
       schema: { type: 'object', properties: {} },
       links: { trip: { to: ['app.carpool.trip'], cardinality: 'one' } },
-      rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:trip'] },
+      rules: { onePer: ['@author', 'link:trip'] },
     },
   ],
 };
@@ -185,7 +193,8 @@ describe('an agent acting for a person', () => {
       /collections_propose/,
     );
     await assert.rejects(() => helper.spaces.invite(space), /Ask the person/);
-    await assert.rejects(() => helper.spaces.setMember(space, bob.node.did, null), /Ask the person/);
+    await assert.rejects(() => helper.spaces.removeMember(space, bob.node.did), /Ask the person/);
+    await assert.rejects(() => helper.spaces.unassign(space, bob.node.did, 'editor'), /Ask the person/);
     await assert.rejects(() => helper.spaces.join('anything'), /Ask the person/);
     await assert.rejects(
       () => runAction(helper, 'collections_define', { space, name: 'app.x', schema: { type: 'object' } }),
@@ -209,7 +218,7 @@ describe('an agent acting for a person', () => {
 
   test('a note that grants more than records will not do', async () => {
     const { alice, space } = await setup();
-    const wide = await agentFor(alice, [space], '*');
+    const wide = await agentFor(alice, [space], '/');
     await assert.rejects(
       () => alice.node.asAgent({ keys: wide.keys, note: wide.note }),
       /grants more than records/,
@@ -262,7 +271,7 @@ describe('an agent acting for a person', () => {
         retain: true,
         version: { key: 'collection:app.granted', seq: 0 },
       },
-      { can: '*' },
+      { command: '/' },
     );
     await hold(alice.node, space);
     await until(
@@ -280,29 +289,73 @@ describe('an agent acting for a person', () => {
     );
   });
 
+  test('a note’s policy is checked by every peer: a key limited to one collection writes in no other', async () => {
+    const { alice, bob, space } = await setup();
+    await letGo(alice.node, space);
+    const policy: Policy = [['==', '.collection', 'app.note']];
+    const inside = await forgeAsAgent(
+      alice,
+      space,
+      {
+        collection: 'app.note',
+        body: { text: 'in' },
+        version: { key: await ownedKey(alice.node.did, 'in'), seq: 0 },
+      },
+      { policy },
+    );
+    const outside = await forgeAsAgent(
+      alice,
+      space,
+      {
+        collection: 'app.other',
+        body: { text: 'out' },
+        version: { key: await ownedKey(alice.node.did, 'out'), seq: 0 },
+      },
+      { policy },
+    );
+    await hold(alice.node, space);
+    await until(
+      async () =>
+        (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(inside.id)) !== null,
+      4000,
+      'the version its note allows',
+    );
+    await settle(300);
+    // Refused on arrival: its note's policy doesn't hold for `{ collection: "app.other", space }`.
+    assert.equal(
+      await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(outside.id),
+      null,
+    );
+    assert.equal((await bob.node.records.get(space, outside.key))?.verified ?? null, null);
+    assert.equal((await bob.node.records.get(space, inside.key))?.verified, true);
+  });
+
   test('taking someone out of the space, under a records-only note, is ignored too', async () => {
     const { alice, bob, space } = await setup();
     // Bob knowing he joined is not Alice having heard it yet.
     await until(
       async () =>
-        (await (await stored(alice.stores, space)).getCurrent(await memberKey(bob.node.did))) !== null,
+        (await (await stored(alice.stores, space)).getCurrent(await assignKey(bob.node.did, 'editor'))) !==
+        null,
       4000,
-      "Alice to hold Bob's member record",
+      "Alice to hold Bob's assignment",
     );
-    const held = await (await stored(alice.stores, space)).getCurrent(await memberKey(bob.node.did));
+    const held = await (
+      await stored(alice.stores, space)
+    ).getCurrent(await assignKey(bob.node.did, 'editor'));
     await letGo(alice.node, space);
     await forgeAsAgent(alice, space, {
-      collection: 'sys.member',
-      body: { did: bob.node.did, role: null },
+      collection: 'sys.assign',
+      body: { did: bob.node.did, role: 'editor', assigned: false },
       retain: true,
       version: nextVersion(held!),
     });
     await hold(alice.node, space);
     await settle(500);
-    assert.equal((await bob.node.spaces.access(space)).role?.name, 'editor');
-    assert.equal(
-      (await alice.node.spaces.access(space)).members.find((m) => m.did === bob.node.did)?.role,
-      'editor',
+    assert.deepEqual((await bob.node.spaces.access(space)).mine, ['editor']);
+    assert.deepEqual(
+      (await alice.node.spaces.access(space)).members.find((m) => m.did === bob.node.did)?.roles,
+      ['editor'],
     );
   });
 });
@@ -449,10 +502,10 @@ describe('collections proposed in a blueprint', () => {
 
   test('a proposal that changes a collection the space has says so, and says how', async () => {
     const { alice, space } = await setup();
-    await alice.node.collections.define(space, { ...carpool.collections[0]!, rules: {} });
+    await alice.node.collections.define(space, { ...carpool.collections[0]!, rules: { fixed: ['seats'] } });
     const review = reviewBlueprint(carpool, await alice.node.collections.list(space));
     assert.equal(review.collections[0]?.status, 'change');
-    assert.deepEqual(review.collections[0]?.changes, ['changes who may do what']);
+    assert.deepEqual(review.collections[0]?.changes, ['changes what its records must keep to']);
     assert.equal(review.collections[1]?.status, 'new');
   });
 
@@ -595,8 +648,6 @@ describe('collections proposed in a blueprint', () => {
         properties: { text: { type: 'string', minLength: 1, maxLength: 10000 } },
         required: ['text'],
       },
-      rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
-      permissions: ['moderate'],
     };
     const oldChat: Blueprint = { title: 'Old chat', collections: [earlier] };
 
@@ -614,12 +665,15 @@ describe('collections proposed in a blueprint', () => {
     );
   });
 
-  test('a person whose role does not hold define proposes the same way, and someone who may applies it', async () => {
+  test('a person whose role holds no /collection/define proposes the same way, and someone who may applies it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const carol = await person(hub);
-    const { id: space } = await alice.node.spaces.create({ name: 'Choir', visibility: 'public' });
-    await alice.node.spaces.putRole(space, { name: 'singer', title: 'Singer', rank: 1, permissions: [] });
+    const { id: space } = await alice.node.spaces.create({
+      name: 'Choir',
+      visibility: 'public',
+      roles: [{ name: 'singer', title: 'Singer', grants: [{ cmd: '/record', pol: [] }] }],
+    });
     await carol.node.spaces.join(await alice.node.spaces.invite(space, { role: 'singer' }));
     await hold(alice.node, space);
     await joined(carol.node, space);
@@ -668,54 +722,32 @@ describe('collections proposed in a blueprint', () => {
 describe('what a collection allows, in words', () => {
   test('a vote, from its rules', () => {
     assert.deepEqual(describeCollection(vote), [
-      'Anyone in the space can add a vote.',
-      'Only whoever added a vote can change or remove it.',
       'One vote per person per poll or proposal — adding another changes the first.',
       'Each vote points at one thing: a poll or a proposal (“about”).',
     ]);
   });
 
-  test('a poll: different people change and remove, a fixed field, a permission', () => {
-    assert.deepEqual(describeCollection(poll), [
-      'Anyone in the space can add a poll.',
-      'Only whoever added a poll can change it.',
-      'Only whoever added a poll or those allowed to moderate can remove it.',
-      "Once a poll is added, its “options” can't be changed.",
-      'Roles in the space can be given permission to “moderate”.',
-    ]);
+  test('a poll: a fixed field', () => {
+    assert.deepEqual(describeCollection(poll), ["Once a poll is added, its “options” can't be changed."]);
   });
 
-  test("one per something that isn't per person: the first one holds it, unless anyone may change it", () => {
-    const seat = {
-      name: 'app.chess.seat',
-      title: 'Seat',
-      rules: { edit: 'creator' as const, onePer: ['color'] },
-    };
-    assert.ok(describeCollection(seat).includes('One seat per color — whoever adds it first holds it.'));
+  test("one per something that isn't per person: anyone adding another replaces the first", () => {
+    const seat = { name: 'app.chess.seat', title: 'Seat', rules: { onePer: ['color'] } };
     assert.ok(
-      describeCollection({ ...seat, rules: { onePer: ['color'] } }).includes(
-        'One seat per color — anyone adding another replaces the first.',
-      ),
+      describeCollection(seat).includes('One seat per color — anyone adding another replaces the first.'),
     );
   });
 
-  test('no rules still says something: the defaults', () => {
-    assert.deepEqual(describeCollection({ name: 'app.note' }), [
-      'Anyone in the space can add a note.',
-      'Anyone in the space can change or remove any note.',
-    ]);
+  test('no rules say nothing: who may write is the space’s grants, not the definition’s', () => {
+    assert.deepEqual(describeCollection({ name: 'app.note' }), []);
   });
 
   test('every rule the protocol accepts adds a sentence, and one it does not know is refused', () => {
     // The rule names checkRules lists in its error — the source of truth for what a rule can be.
     const known = /use ([^)]+)\)/.exec(checkRules({ nope: 1 })!)![1]!.split(', ');
     const samples: Record<string, CollectionRules> = {
-      create: { create: 'can:post' },
-      edit: { edit: 'creator' },
-      delete: { delete: 'creator' },
       onePer: { onePer: ['@author'] },
       fixed: { fixed: ['x'] },
-      check: { check: [{ that: 'body.amount > 0', else: 'An amount is more than 0' }] },
       final: { final: true },
     };
     const baseline = describeCollection({ name: 'app.thing' });
@@ -724,15 +756,18 @@ describe('what a collection allows, in words', () => {
         rule in samples,
         `describe.ts has no sample for the rule "${rule}" — add one, and a sentence for it`,
       );
-      const said = describeCollection({ name: 'app.thing', rules: samples[rule]!, permissions: ['post'] });
-      assert.notDeepEqual(
-        said.filter((s) => !s.includes('permission')),
-        baseline,
-        `the rule "${rule}" changes nothing in the summary`,
-      );
+      const said = describeCollection({ name: 'app.thing', rules: samples[rule]! });
+      assert.notDeepEqual(said, baseline, `the rule "${rule}" changes nothing in the summary`);
     }
+    // A contract is not a rule, and says itself in its own words.
+    assert.ok(
+      describeCollection({
+        name: 'app.thing',
+        contract: { check: [{ that: 'body.amount > 0', else: 'An amount is more than 0' }] },
+      }).some((sentence) => sentence.includes('An amount is more than 0')),
+    );
     // A rule from some later version, beside one this version knows.
-    const later = { edit: 'creator' as const, someday: true };
+    const later = { final: true as const, someday: true };
     assert.throws(() => describeCollection({ name: 'app.thing', rules: later }), /No way to describe/);
   });
 });
@@ -740,11 +775,11 @@ describe('what a collection allows, in words', () => {
 describe('a program connected by code, through the account home', () => {
   async function home(
     hub: FakeHub,
-    values = new Map<string, string>([['weave.stay-signed-in', '"never"']]),
-  ): Promise<WeaveAuth> {
+    values = new Map<string, string>([['minca.stay-signed-in', '"never"']]),
+  ): Promise<MincaAuth> {
     const accounts = createFolderAccountStore(createMemoryDirectory().handle);
     const stores = memoryStores();
-    const auth = createWeaveAuth({
+    const auth = createMincaAuth({
       rpId: 'home.test',
       storage: {
         getItem: (k) => values.get(k) ?? null,
@@ -800,7 +835,8 @@ describe('a program connected by code, through the account home', () => {
       recordsOnly: true,
       network,
     });
-    assert.deepEqual(parseUCAN(grant.token).payload.att, [{ with: '*', can: 'record/*' }]);
+    assert.equal(grant.note.payload.cmd, '/record');
+    assert.equal(grant.note.payload.sub, grant.did, 'about the whole account');
     assert.equal(grant.contactKey, undefined);
 
     // Gone again: its proof is refused from another origin, and still good from the app's.
@@ -822,11 +858,11 @@ describe('a program connected by code, through the account home', () => {
   });
 
   test('a connection kept in an older shape is dropped, not read as the app’s own', async () => {
-    const values = new Map<string, string>([['weave.stay-signed-in', '"never"']]);
+    const values = new Map<string, string>([['minca.stay-signed-in', '"never"']]);
     const auth = await home(createFakeHub({ latencyMs: 1 }), values);
     const origin = 'https://app.test';
     const program = await testAppKey('did:key:zOldAgent');
-    const key = `weave.connections:${auth.getState().session!.account.id}`;
+    const key = `minca.connections:${auth.getState().session!.account.id}`;
     const kept = {
       origin,
       name: 'Agent',
@@ -897,10 +933,12 @@ describe('a program connected by code, through the account home', () => {
       ),
       spaceIds: [gym.id],
     });
-    assert.equal(parseUCAN(agent.token).payload.fct, undefined, 'no label: the note says what it grants');
+    assert.equal(agent.note.payload.meta, undefined, 'no label: the note says what it grants');
     // What keeps it from defining collections anywhere: its note grants records only.
-    assert.deepEqual(parseUCAN(agent.token).payload.att, [{ with: `space:${gym.id}`, can: 'record/*' }]);
-    assert.deepEqual(parseUCAN(app.token).payload.att, [{ with: `space:${gym.id}`, can: '*' }]);
+    assert.equal(agent.note.payload.cmd, '/record');
+    assert.equal(agent.note.payload.sub, `space:${gym.id}`);
+    assert.equal(app.note.payload.cmd, '/');
+    assert.equal(app.note.payload.sub, `space:${gym.id}`);
     assert.equal(agent.accountKey, undefined);
     assert.equal(auth.connections().length, 2, 'the program does not replace the app');
 
@@ -980,7 +1018,8 @@ describe('a program connected by code, through the account home', () => {
       spaceIds: [],
     });
     assert.ok(laptop.accountKey, 'it follows the account, so spaces made later reach it');
-    assert.deepEqual(parseUCAN(laptop.token).payload.att, [{ with: '*', can: 'record/*' }]);
+    assert.equal(laptop.note.payload.cmd, '/record');
+    assert.equal(laptop.note.payload.sub, laptop.did);
     assert.equal(
       laptop.contactKey,
       undefined,
@@ -1008,7 +1047,7 @@ describe('a program connected by code, through the account home', () => {
 });
 
 describe('an agent running a node of its own', () => {
-  /** What `weave connect` ends up with: its own key, and the home's grant for the whole account */
+  /** What `minca connect` ends up with: its own key, and the home's grant for the whole account */
   async function agentNode(
     who: { me: Person['me']; manager: Person['manager']; seed: Uint8Array },
     hub: FakeHub,
@@ -1018,14 +1057,14 @@ describe('an agent running a node of its own', () => {
     const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(who.me, provider).delegate({
       audience: did,
-      capabilities: [{ with: '*', can: 'record/*' }],
+      command: '/record',
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const grant: Grant = {
-      v: 1,
+      v: 2,
       did: who.me.did,
       name: 'Ada',
-      token: note.encoded,
+      note,
       access: 'write',
       scope: 'account',
       spaces: [],
@@ -1042,7 +1081,7 @@ describe('an agent running a node of its own', () => {
       network: { transports: (spaceId: string, sessionDid: string) => [hub.transport(sessionDid, spaceId)] },
     });
     open.push(base);
-    return { base, node: await base.asAgent({ keys, note: note.encoded }), did };
+    return { base, node: await base.asAgent({ keys, note }), did };
   }
 
   async function accountHolder(hub: FakeHub) {
@@ -1098,24 +1137,27 @@ describe('an agent running a node of its own', () => {
     await ada.node.account.setName('Ada');
     const registry = (await deriveAccountRegistry(await deriveAccountKey(ada.seed), ada.me.did)).space.id;
     const provider = ada.manager.getProvider();
-    const slipIn = async (can: string) => {
+    const slipIn = async (command: string) => {
       const pair = await provider.generateKeyPair();
       const did = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
       const note = await createLocalRootSigner(ada.me, provider).delegate({
         audience: did,
-        capabilities: [{ with: '*', can }],
+        command,
         expiration: Math.floor(Date.now() / 1000) + 3600,
       });
       const signed = await createSigner(provider).sign(
         createVersion({
           seen: await seenBy(ada.node, registry),
           collection: 'app.note',
-          version: { key: `note-${can === '*' ? 'all' : 'records'}`, seq: 0 },
+          version: {
+            key: await ownedKey(ada.node.did, `note-${command === '/' ? 'all' : 'records'}`),
+            seq: 0,
+          },
           body: { text: 'Joined somewhere' },
           author: did,
           space: registry,
           log: { n: 0 },
-          proof: note.encoded,
+          proof: note,
         }),
         pair.privateKey,
       );
@@ -1123,8 +1165,8 @@ describe('an agent running a node of its own', () => {
       return ada.node.records.get(registry, signed.key);
     };
     // Past every writer's check, straight into the account's store: judged on reading, as from a peer.
-    assert.equal(await slipIn('record/*'), null, 'records only: it does not count');
-    assert.equal((await slipIn('*'))?.verified, true, 'a note that grants account/write: it does');
+    assert.equal(await slipIn('/record'), null, 'records only: it does not count');
+    assert.equal((await slipIn('/'))?.verified, true, 'a note that grants /account/write: it does');
   });
 
   test('it never writes the account itself: not its list of spaces, not its name', async () => {

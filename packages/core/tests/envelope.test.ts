@@ -45,23 +45,23 @@ describe('the envelope', () => {
   // Fixed inputs, and the exact bytes they give: what another implementation checks itself against.
   const vector = {
     key: '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
-    label: 'weave/record-body/v1',
-    bound: { space: 'bexample', collection: 'app.note', key: 'k1', keyId: 'aLhvw5pkV65_lcQHEcUOug' },
+    label: 'minca/record-body/v1',
+    bound: { space: 'bexample', collection: 'app.note', key: 'k1', keyId: 'bgk-m-Kq-gEGgJCOOEYNYw' },
     plaintext: '{"body":{"text":"hi"}}',
     aad:
-      '0177656176652f7265636f72642d626f64792f7631007b22636f6c6c656374696f6e223a226170702e6e6f7465222c226b6579' +
-      '223a226b31222c226b65794964223a22614c68767735706b5636355f6c6351484563554f7567222c227370616365223a226265' +
-      '78616d706c65227d',
+      '016d696e63612f7265636f72642d626f64792f7631007b22636f6c6c656374696f6e223a226170702e6e6f7465222c226b657922' +
+      '3a226b31222c226b65794964223a2262676b2d6d2d4b712d674547674a434f4f45594e5977222c227370616365223a2262657861' +
+      '6d706c65227d',
     // nonce a0 a1 … ab
     envelope:
-      '01a0a1a2a3a4a5a6a7a8a9aaab9d3a1e4221b220851947f3b67f0ee2e452c43032efcaf9fa505cbbb531a3a7173c059be663ee',
+      '01a0a1a2a3a4a5a6a7a8a9aaab9d3a1e4221b220851947f3b67f0ee2e452c43032efca1438efe7c1526e9fe84d7b4aafc5653a',
   };
 
   test('opens the fixed vector, whose additional data is the label and the canonical bound', async () => {
     assert.equal(bytesToHex(new Uint8Array([1, ...boundContext(vector.label, vector.bound)])), vector.aad);
     assert.equal(
       utf8Decode(boundContext(vector.label, vector.bound)),
-      'weave/record-body/v1\u0000{"collection":"app.note","key":"k1","keyId":"aLhvw5pkV65_lcQHEcUOug","space":"bexample"}',
+      'minca/record-body/v1\u0000{"collection":"app.note","key":"k1","keyId":"bgk-m-Kq-gEGgJCOOEYNYw","space":"bexample"}',
     );
     const key = await aesKey(hexToBytes(vector.key));
     const opened = await open(key, vector.label, vector.bound, hexToBytes(vector.envelope));
@@ -86,7 +86,7 @@ describe('the envelope', () => {
     const key = await aesKey(hexToBytes(vector.key));
     const sealed = hexToBytes(vector.envelope);
     const { label, bound } = vector;
-    assert.equal(await open(key, 'weave/at-rest/v1', bound, sealed), null);
+    assert.equal(await open(key, 'minca/at-rest/v1', bound, sealed), null);
     assert.equal(await open(key, label, { ...bound, key: 'k2' }, sealed), null);
     assert.equal(await open(key, label, { ...bound, extra: 1 }, sealed), null);
     const { keyId: _dropped, ...fewer } = bound;
@@ -117,11 +117,11 @@ describe('the envelope', () => {
 
   test('travels as base64url text when it seals a value', async () => {
     const key = await aesKey(hexToBytes(vector.key));
-    const text = await sealValue(key, 'weave/membership/v1', { space: 'b1' }, 'a note');
+    const text = await sealValue(key, 'minca/membership/v1', { space: 'b1' }, 'a note');
     assert.match(text, /^[A-Za-z0-9_-]+$/);
-    assert.equal(await openValue(key, 'weave/membership/v1', { space: 'b1' }, text), 'a note');
-    assert.equal(await openValue(key, 'weave/membership/v1', { space: 'b2' }, text), null);
-    assert.equal(await openValue(key, 'weave/membership/v1', { space: 'b1' }, 42), null);
+    assert.equal(await openValue(key, 'minca/membership/v1', { space: 'b1' }, text), 'a note');
+    assert.equal(await openValue(key, 'minca/membership/v1', { space: 'b2' }, text), null);
+    assert.equal(await openValue(key, 'minca/membership/v1', { space: 'b1' }, 42), null);
   });
 });
 
@@ -212,13 +212,13 @@ describe('sealing to a key', () => {
   test('is the version byte, the ephemeral point and the ciphertext, as base64url', async () => {
     const to = await recipient();
     const plaintext = utf8Encode('the space key');
-    const sealed = await sealTo(to.publicKey, 'weave/knock/v1', { door: to.publicKey }, plaintext);
+    const sealed = await sealTo(to.publicKey, 'minca/knock/v1', { door: to.publicKey }, plaintext);
     assert.match(sealed, /^[A-Za-z0-9_-]+$/);
     const bytes = base64UrlDecode(sealed);
     assert.equal(bytes[0], 0x01);
     assert.equal(bytes[1], 0x04, 'an uncompressed point');
     assert.equal(bytes.length, 1 + 65 + plaintext.length + 16);
-    assert.deepEqual(await openFrom(to, 'weave/knock/v1', { door: to.publicKey }, sealed), plaintext);
+    assert.deepEqual(await openFrom(to, 'minca/knock/v1', { door: to.publicKey }, sealed), plaintext);
   });
 
   test('a box opened with the wrong bound, label or key opens nothing', async () => {
@@ -233,7 +233,7 @@ describe('sealing to a key', () => {
       boxBound('bspace', 'key-1', 'did:key:zSomeoneElse'),
     ])
       assert.equal(await openValueFrom(to, BOX_LABEL, wrong, sealed), null);
-    assert.equal(await openValueFrom(to, 'weave/direct-box/v1', bound, sealed), null);
+    assert.equal(await openValueFrom(to, 'minca/direct-box/v1', bound, sealed), null);
     assert.equal(await openValueFrom(someoneElse, BOX_LABEL, bound, sealed), null);
     // The right private key presented under another public key is a different recipient.
     assert.equal(
@@ -245,7 +245,7 @@ describe('sealing to a key', () => {
   test('refuses an unknown version, a short or changed value, and anything not text', async () => {
     const to = await recipient();
     const bound = { door: to.publicKey };
-    const bytes = base64UrlDecode(await sealTo(to.publicKey, 'weave/knock/v1', bound, utf8Encode('hi')));
+    const bytes = base64UrlDecode(await sealTo(to.publicKey, 'minca/knock/v1', bound, utf8Encode('hi')));
     const flipped = (at: number, to?: number) => {
       const copy = Uint8Array.from(bytes);
       copy[at] = to ?? copy[at]! ^ 1;
@@ -260,6 +260,6 @@ describe('sealing to a key', () => {
       42,
       null,
     ])
-      assert.equal(await openFrom(to, 'weave/knock/v1', bound, bad), null);
+      assert.equal(await openFrom(to, 'minca/knock/v1', bound, bad), null);
   });
 });

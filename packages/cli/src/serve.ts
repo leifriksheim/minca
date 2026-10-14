@@ -27,8 +27,8 @@ import {
   type PeerTransport,
   type PeerTransportEvents,
   type ServerAuth,
-} from '@weaveprotocol/core';
-import { createRelay, turnFromEnv, MAX_MESSAGE_BYTES as RELAY_MAX_MESSAGE_BYTES } from '@weaveprotocol/relay';
+} from '@minca/core';
+import { createRelay, turnFromEnv, MAX_MESSAGE_BYTES as RELAY_MAX_MESSAGE_BYTES } from '@minca/relay';
 import { isRecord } from './json.js';
 
 /** A WebSocket message's bytes, however `ws` delivered them */

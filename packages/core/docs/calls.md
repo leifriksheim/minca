@@ -1,7 +1,7 @@
 # Calls
 
 A call is voice and video between the members of a space. It is live messages
-in that space ([spec 04 §9.2](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)),
+in that space ([spec 04 §9.2](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)),
 plus one WebRTC connection of its own between each pair of devices in it (a
 full mesh, good up to about six people with video). Its history is a [`std.call`](standard-library.md#stdcall)
 record.
@@ -11,19 +11,19 @@ never heard of calls sync, store and judge every record the same way; a call
 message is a live message like any other to them. Only apps that want to call
 each other have to agree on the messages below. It uses these protocol parts:
 live messages and the space's peer connection
-([spec 04](https://github.com/leifriksheim/weave/blob/main/spec/04-network.md)),
-roles ([spec 03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)),
+([spec 04](https://github.com/leifriksheim/minca/blob/main/spec/04-network.md)),
+roles ([spec 03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)),
 and TURN from relays (spec 04 §10).
 
 The setup travels over the space's peer connection, whose handshake proved
 who is at the other end, so an offer really comes from that device. A relay
 only introduces devices and never sees a call.
 
-In the library, `createCalls(node)` from `@weaveprotocol/core/calls` runs all
+In the library, `createCalls(node)` from `@minca/core/calls` runs all
 of it; in React, `CallsProvider` and `useCalls` ([node.md](node.md#client-conveniences)).
 
 ```ts
-import { createCalls } from '@weaveprotocol/core/calls';
+import { createCalls } from '@minca/core/calls';
 
 const calls = createCalls(node);
 await calls.start(space); // join the call going on here, or start one
@@ -37,10 +37,10 @@ of 1–64 characters (the library makes 12 random bytes in lowercase hex). A
 receiver must ignore a call message that is not one of these types, lacks a
 valid `call`, comes from a peer with no account (`from: null`), or comes from
 a key whose note writes records somewhere but can't define collections in
-this space (`recordsOnly: true`, a `record/*` note), judged on the whole note,
+this space (`recordsOnly: true`, a `/record` note), judged on the whole note,
 so a key given records in another space doesn't pass as the account here. The account trusts such a key less
 than itself, and in a call it would speak as the account. A key whose note
-only reads (`record/read`) is not one: it may take part, as an app that only
+only reads (`/record/read`) is not one: it may take part, as an app that only
 reads may. Its note can't tell whether it was asked for records only, since
 both kinds of read note are the same. This keeps an honest records-only program out of calls; it is
 not a boundary against a hostile app, which can ask the account for a read
@@ -66,9 +66,9 @@ Examples:
 
 ## Who takes part
 
-Only **members**, accounts holding a role in the space, take part. A receiver
-must ignore `call.here`, `call.ring` and `call.signal` from an account that
-holds no role there (a view-only reader). The library caches the member list
+Only **members**, the space's founders and accounts holding a role there,
+take part. A receiver must ignore `call.here`, `call.ring` and `call.signal`
+from an account that is neither (a view-only reader). The library caches the member list
 for 10 s and asks once more for someone not in it.
 
 A device must not ring for more than 3 `call.ring`s from one account in any
@@ -77,9 +77,9 @@ that rang.
 
 > **Planned: blocked people do not ring.** A device will ignore `call.ring`
 > from an account the person has blocked (`contacts.block`,
-> [spec 03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)).
+> [spec 03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)).
 > Today a ring is checked only for membership and rate. Tracked in
-> [#20](https://github.com/leifriksheim/weave/issues/20).
+> [#20](https://github.com/leifriksheim/minca/issues/20).
 
 ## Presence
 
@@ -155,7 +155,7 @@ missed-call record. If nobody else is left in the call and anyone else was
 ever in it, the leaver writes an ended-call record. The space's hold is
 released 1 s later, so the goodbye gets out first.
 
-The call a device is in is kept in `sessionStorage` under `weave-call`, so
+The call a device is in is kept in `sessionStorage` under `minca-call`, so
 after a reload the page can offer to rejoin
 ([`std.call`](standard-library.md#stdcall)).
 
@@ -172,7 +172,7 @@ _Source: `packages/core/src/calls/calls.ts` (`createCalls`, `isCallMessage`, `RI
 >
 > - **Ringing with the app closed.** A ring reaches only devices with the
 >   space open. Reaching a closed browser or a phone needs Web Push from a
->   carrier ([spec 06 §4.4](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md), Planned);
+>   carrier ([spec 06 §4.4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md), Planned);
 >   the extension, always running while the browser is, could ring too. Not
 >   designed: a live message is not a record, so a carrier has nothing to
 >   match a ring against today.
@@ -182,8 +182,8 @@ _Source: `packages/core/src/calls/calls.ts` (`createCalls`, `isCallMessage`, `RI
 >   watch. A host could run one. Not designed.
 > - **Listening without talking.** View-only readers are kept out of calls
 >   ([who takes part](#who-takes-part)). A space where readers may listen
->   could come as a role permission, e.g. `call: "listen" | "talk"`
->   ([spec 03](https://github.com/leifriksheim/weave/blob/main/spec/03-spaces.md)). Open.
+>   could come as a grant held by a role, e.g. a library command `/call/listen`
+>   ([spec 03](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)). Open.
 > - **Calls across apps.** A call lives in the app that started it; another
 >   app on another origin does not see it. Moving a call between apps would
 >   need the account home to hold it. No plan yet.

@@ -4,14 +4,14 @@
  * An admin asks for one from the app with a name and an invite for the role
  * it should hold. The host makes the bot an account of its own, in a folder
  * of its own under `bots/`, and joins with the invite; the bot then says its
- * name and that it is a bot in the space, as `weave agent --bot` does. It
+ * name and that it is a bot in the space, as `minca agent --bot` does. It
  * reaches the space through the host's own socket, since the host carries it:
  * no relays, no WebRTC.
  *
- * Its rules run while its community's fund has money in it, on the host's
+ * Its automations run while its community's fund has money in it, on the host's
  * model key, within a daily cap per bot; what it spends is taken from that
  * fund (`charge`). With the fund empty, it stays a member and does nothing.
- * Removing it from the space is how it stops: it then has no rules there to
+ * Removing it from the space is how it stops: it then has no automations there to
  * run.
  *
  * Unlike carrying, this is not blind: the host holds the bot's keys, so it
@@ -21,18 +21,18 @@
  */
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { parseSpaceInvite, type P2PNode, type StorageAdapter } from '@weaveprotocol/core';
+import { parseSpaceInvite, type P2PNode, type StorageAdapter } from '@minca/core';
 import { createAccount, openHome, unlock } from './home.js';
 import { startBotNode } from './agent.js';
 import { fileSpend, type Price, type Think } from './agent-chat.js';
-import { capEachOf, runRules } from './bot-runner.js';
+import { capEachOf, runAutomations } from './bot-runner.js';
 import { isRecord, messageOf } from './json.js';
 
 /** How the bots a host runs think */
 export interface BotModel {
   readonly name: string;
   readonly price?: Price;
-  /** A way to think, made fresh for each rule set off */
+  /** A way to think, made fresh for each automation set off */
   readonly think: () => Think;
   /** Dollars a day each bot may spend */
   readonly dailyCap: number;
@@ -57,9 +57,9 @@ export interface HostedBots {
   start(name: string, invite: string): Promise<{ readonly did: string; readonly name: string }>;
   /** The bots asked to join a space */
   list(spaceId: string): Promise<ReadonlyArray<{ readonly did: string; readonly name: string }>>;
-  /** Whether a bot is running its rules now */
+  /** Whether a bot is running its automations now */
   running(did: string): boolean;
-  /** Starts or stops each bot's rules as its community's fund says: `funded` is asked with the space's id */
+  /** Starts or stops each bot's automations as its community's fund says: `funded` is asked with the space's id */
   sync(funded: (spaceId: string) => Promise<boolean>): Promise<void>;
   close(): Promise<void>;
 }
@@ -196,7 +196,7 @@ export function createHostedBots(options: {
           };
           runners.set(
             kept.did,
-            runRules({
+            runAutomations({
               node,
               account: kept.did,
               bot: kept.name,
@@ -210,7 +210,7 @@ export function createHostedBots(options: {
               log: (line) => log(`bot ${kept.name}:${line}`),
             }),
           );
-          log(`bot ${kept.name} runs its rules`);
+          log(`bot ${kept.name} runs its automations`);
         } else if (!should && stop) {
           stop();
           runners.delete(kept.did);

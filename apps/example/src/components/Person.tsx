@@ -1,12 +1,12 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { ContactView, SpaceSummary } from '@weaveprotocol/core';
-import { useNode } from '@weaveprotocol/core/react';
+import type { ContactView, SpaceSummary } from '@minca/core';
+import { useNode } from '@minca/core/react';
 import { styles, palette } from '../styles';
 import { isBot, nameOf, type People } from '../derive/people';
 import { takeBack, useContacts, useStanding } from '../contacts';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { Modal } from '@weave/app-shared/Modal';
-import { useAction, useCopy } from '@weave/app-shared/action';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Modal } from '@minca/app-shared/Modal';
+import { useAction, useCopy } from '@minca/app-shared/action';
 
 /** What a name in a space needs to open its card: the space, who is in it, and where a space for two opens */
 interface PersonScope {

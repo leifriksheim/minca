@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import type { QueryRecord } from '@weaveprotocol/core';
-import { Avatar } from '@weave/app-shared/Avatar';
+import type { QueryRecord } from '@minca/core';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { ago } from '../../derive/time';
 import { styles, palette, ui } from '../../styles';
 import { Person } from '../Person';
@@ -10,7 +10,7 @@ const box = {
   ...ui.stack,
   padding: 16,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
 } as const;
 
 /** A question put to the space: who asked, its title, its options and what follows them */
@@ -103,7 +103,7 @@ export function OptionBar({
         height: 40,
         padding: '0 12px',
         border: `1px solid ${strong ? palette.ink.strong : palette.surface.line}`,
-        borderRadius: 8,
+        borderRadius: palette.radius.md,
         background: palette.surface.card,
         font: 'inherit',
         fontSize: 14,
@@ -132,7 +132,7 @@ export function OptionBar({
             width: 14,
             height: 14,
             flexShrink: 0,
-            borderRadius: 999,
+            borderRadius: palette.radius.pill,
             border: `1.5px solid ${chosen ? palette.ink.strong : palette.surface.lineStrong}`,
             background: chosen ? palette.ink.strong : 'none',
             boxShadow: chosen ? `inset 0 0 0 2px ${palette.surface.card}` : 'none',

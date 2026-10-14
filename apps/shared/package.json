@@ -1,10 +1,12 @@
 {
-  "name": "@weave/app-shared",
+  "name": "@minca/app-shared",
   "private": true,
   "type": "module",
-  "description": "What the example app, the account home and the mini apps share: the visual vocabulary, the relay configuration, a few components, and the mini app contract. Source only; each app's Vite build compiles it.",
+  "description": "What the example app, the account home and the mini apps share: the design system (tokens, shapes, styles), the relay configuration, a few components, and the mini app contract. Source only; each app's Vite build compiles it.",
   "exports": {
     "./styles": "./src/styles.ts",
+    "./tokens": "./src/tokens.ts",
+    "./shapes": "./src/shapes.tsx",
     "./relay": "./src/relay.ts",
     "./Avatar": "./src/Avatar.tsx",
     "./avatar-cells": "./src/avatar-cells.ts",
@@ -14,6 +16,7 @@
     "./HostOffer": "./src/HostOffer.tsx",
     "./Modal": "./src/Modal.tsx",
     "./Wordmark": "./src/Wordmark.tsx",
+    "./mark": "./src/mark.ts",
     "./useDismiss": "./src/useDismiss.ts",
     "./action": "./src/action.ts",
     "./hash": "./src/hash.ts",
@@ -21,7 +24,8 @@
     "./mini-app": "./src/mini-app.ts",
     "./Payment": "./src/Payment.tsx",
     "./CommunitySetup": "./src/CommunitySetup.tsx",
-    "./Feature": "./src/Feature.tsx"
+    "./Feature": "./src/Feature.tsx",
+    "./may": "./src/may.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -35,7 +39,7 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@weaveprotocol/core": "*",
+    "@minca/core": "*",
     "qrcode-generator": "^2.0.4"
   }
 }

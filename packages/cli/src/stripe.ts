@@ -34,9 +34,9 @@ export interface StripeConfig {
 }
 
 /** Where the subscription's id travels inside Stripe */
-const METADATA_KEY = 'weave_subscription';
+const METADATA_KEY = 'minca_subscription';
 /** Where the fund a payment goes into travels inside Stripe */
-const FUND_KEY = 'weave_fund';
+const FUND_KEY = 'minca_fund';
 /** How old a webhook's signature may be, as Stripe's own libraries allow */
 const TOLERANCE_SECONDS = 300;
 
@@ -158,7 +158,7 @@ export function createStripeBilling(config: StripeConfig): Billing {
         success_url: returnUrl,
         cancel_url: returnUrl,
         client_reference_id: subscription,
-        'subscription_data[metadata][weave_subscription]': subscription,
+        'subscription_data[metadata][minca_subscription]': subscription,
         customer,
       });
     },
@@ -176,7 +176,7 @@ export function createStripeBilling(config: StripeConfig): Billing {
         cancel_url: returnUrl,
         client_reference_id: fund,
         // Where Stripe keeps it: on the session when paid once, on the contributor's subscription when monthly.
-        ...(monthly ? { 'subscription_data[metadata][weave_fund]': fund } : { 'metadata[weave_fund]': fund }),
+        ...(monthly ? { 'subscription_data[metadata][minca_fund]': fund } : { 'metadata[minca_fund]': fund }),
       });
     },
 

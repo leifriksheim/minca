@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { useAccount, useCollections } from '@weaveprotocol/core/react';
-import { useDismiss } from '@weave/app-shared/useDismiss';
+import type { SpaceSummary } from '@minca/core';
+import { useAccount, useCollections } from '@minca/core/react';
+import { useDismiss } from '@minca/app-shared/useDismiss';
 import { markRead, useAlerts, useTabDot } from '../alerts';
-import { useAppNotifications, useSubscriptions } from '../notifications';
+import { useAppNotifications, useOwnAutomations } from '../notifications';
 import { ago } from '../derive/time';
 import { SpaceMark } from './SpaceList';
 import { Icon } from './Icon';
@@ -175,7 +175,7 @@ function Settings({
   setup: ReturnType<typeof useAppNotifications>;
   onBuild: () => void;
 }) {
-  const watches = useSubscriptions();
+  const watches = useOwnAutomations();
   const where = (spaceIds: 'all' | ReadonlyArray<string>) =>
     spaceIds === 'all'
       ? 'All your spaces'
@@ -225,12 +225,10 @@ function Settings({
                   <Icon name={sub.paused ? 'bell' : 'bellOn'} size={14} />
                 </span>
                 <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>
-                    {sub.label}
-                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: palette.ink.strong }}>{sub.name}</span>
                   <span style={{ fontSize: 12, color: palette.ink.faint }}>
-                    {where(sub.spaces)}
-                    {sub.where !== undefined ? ' · with conditions' : ''}
+                    {where(sub.spaces ?? 'all')}
+                    {sub.when?.query.where !== undefined ? ' · with conditions' : ''}
                     {sub.paused ? ' · paused' : ''}
                   </span>
                 </span>
@@ -267,7 +265,7 @@ function TabButton({ on, onClick, children }: { on: boolean; onClick: () => void
         height: 26,
         padding: '0 9px',
         border: 'none',
-        borderRadius: 6,
+        borderRadius: palette.radius.pill,
         background: on ? palette.surface.sunken : 'none',
         color: on ? palette.ink.strong : palette.ink.muted,
         fontSize: 12.5,
@@ -320,7 +318,7 @@ const button = {
   alignItems: 'center',
   justifyContent: 'center',
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   background: palette.surface.card,
   color: palette.ink.strong,
 };
@@ -329,7 +327,7 @@ const badge = {
   top: -5,
   right: -6,
   pointerEvents: 'none' as const,
-  borderRadius: 9,
+  borderRadius: palette.radius.pill,
   boxShadow: `0 0 0 2px ${palette.surface.card}`,
 };
 const panel = {
@@ -337,11 +335,11 @@ const panel = {
   zIndex: 20,
   width: 340,
   maxWidth: 'calc(100vw - 24px)',
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  border: `1px solid ${palette.surface.rule}`,
+  borderRadius: palette.radius.lg,
   backgroundColor: palette.surface.card,
-  boxShadow: '0 4px 12px rgba(0, 0, 0, .06), 0 16px 32px -12px rgba(0, 0, 0, .12)',
-  animation: 'weave-fade .1s ease',
+  boxShadow: palette.shadow.float,
+  animation: 'minca-fade .1s ease',
   overflow: 'hidden',
 };
 const below = { right: 0, top: 44 };
@@ -353,7 +351,7 @@ const row = {
   gap: 10,
   padding: '8px',
   border: 'none',
-  borderRadius: 8,
+  borderRadius: palette.radius.sm,
   background: 'none',
   textAlign: 'left' as const,
 };

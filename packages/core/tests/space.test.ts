@@ -7,16 +7,21 @@ import assert from 'node:assert/strict';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
-import { issueUCAN, type Capability } from '../src/identity/ucan.js';
+import { issueDelegation } from '../src/identity/ucan.js';
+import { writeRequirement } from '../src/identity/abilities.js';
 import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
 import { createCapabilityGate } from '../src/validation/capability-gate.js';
 import { createVersionCheck } from '../src/validation/check-version.js';
 import { openBody, sealBody, spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
-import { newRecordKey } from '../src/records/version.js';
+import { base32Encode } from '../src/utils/hash.js';
+
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { team } from '../src/space/presets.js';
 import { makeKey } from './helpers/person.js';
+
+/** Any key: sealing binds the body to it, whoever's it is */
+const newRecordKey = () => base32Encode(globalThis.crypto.getRandomValues(new Uint8Array(16)));
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
@@ -49,9 +54,13 @@ describe('space manager', () => {
 
     assert.equal(privatePersonal.space.encryptionKeyId, privatePersonal.key?.id);
     assert.equal(publicShared.space.encryptionKeyId, undefined);
-    assert.equal(publicPersonal.space.creator, OWNER);
-    assert.equal(publicPersonal.space.creatorRole, 'owner');
-    assert.equal(privateShared.role, 'owner');
+    assert.deepEqual(publicPersonal.space.top, { founders: [OWNER] });
+    assert.deepEqual(publicPersonal.space.roles, [], 'just the founder');
+    assert.deepEqual(
+      publicShared.space.roles.map((role) => role.name),
+      ['editor'],
+    );
+    assert.equal(privateShared.role, 'founder');
 
     const listed = await spaces.list();
     assert.equal(listed.length, 4);
@@ -116,7 +125,7 @@ describe('invites', () => {
     );
 
     assert.deepEqual(joined.space.roles, record.space.roles);
-    assert.equal(joined.space.creator, OWNER);
+    assert.deepEqual(joined.space.top, { founders: [OWNER] });
     assert.deepEqual(joined.invite, secret, 'the secret waits until its record arrives');
     assert.equal(joined.role, null);
   });
@@ -138,11 +147,9 @@ describe('private space versions', () => {
     });
     const spaceId = record.space.id;
 
-    const required: Capability = { with: `space:${spaceId}`, can: 'record/write' };
-
     const session = await makeKey();
-    const ucan = await issueUCAN(
-      { issuer: owner, audience: session.did, capabilities: [{ with: '*', can: 'record/*' }] },
+    const ucan = await issueDelegation(
+      { issuer: owner, audience: session.did, command: '/record' },
       provider,
     );
 
@@ -155,12 +162,15 @@ describe('private space versions', () => {
       space: spaceId,
       log: { n: 0 },
       body: sealed,
-      proof: ucan.encoded,
+      proof: ucan,
       version: { key: place.key, seq: 0 },
     });
     const version = await signer.sign(unsigned, session.privateKey);
 
-    const check = createVersionCheck({ provider, requiredCapability: () => required });
+    const check = createVersionCheck({
+      provider,
+      required: (version) => writeRequirement(spaceId, version.collection),
+    });
 
     // A peer with no key still verifies and relays it: the signature and capability hold.
     const verdict = await check(version);
@@ -174,10 +184,10 @@ describe('private space versions', () => {
 
   test('the example body of spec 03 §8.3 opens', async () => {
     const key = await spaceKeyFromRaw(new Uint8Array(32).map((_, i) => 255 - i));
-    assert.equal(key.id, 'aLhvw5pkV65_lcQHEcUOug');
+    assert.equal(key.id, 'bgk-m-Kq-gEGgJCOOEYNYw');
     const body = {
-      sealed: 'AaChoqOkpaanqKmqq0Fx-eCwOhnoZnLVU8hJnQsqWTBRgYQ5jezwBbEdvJDeKm5_wX3j',
-      keyId: 'aLhvw5pkV65_lcQHEcUOug',
+      sealed: 'AaChoqOkpaanqKmqq07DZlJUgYUf0LLiscCoiOZyTpmIYbOrOnd01S8p1FoAP4mxJDJ7',
+      keyId: 'bgk-m-Kq-gEGgJCOOEYNYw',
     };
     const place = { space: 'bexample', collection: 'app.note', key: 'k1' };
     assert.deepEqual(await openBody(body, key, place), { body: { text: 'hi' } });
@@ -210,13 +220,13 @@ describe('private space versions', () => {
 
     const gate = createCapabilityGate({
       provider,
-      requiredCapability: () => ({ with: `space:${spaceId}`, can: 'record/write' }),
+      required: (version) => writeRequirement(spaceId, version.collection),
       isTrustedRoot: (rootDid) => rootDid === owner.did,
     });
 
-    // Perfectly valid UCAN — from the wrong root.
-    const ucan = await issueUCAN(
-      { issuer: stranger, audience: strangerSession.did, capabilities: [{ with: '*', can: 'record/*' }] },
+    // A perfectly valid delegation — from the wrong root.
+    const ucan = await issueDelegation(
+      { issuer: stranger, audience: strangerSession.did, command: '/record' },
       provider,
     );
     const unsigned = createVersion({
@@ -225,7 +235,7 @@ describe('private space versions', () => {
       space: spaceId,
       log: { n: 0 },
       body: { text: 'let me in' },
-      proof: ucan.encoded,
+      proof: ucan,
     });
     const version = await signer.sign(unsigned, strangerSession.privateKey);
 

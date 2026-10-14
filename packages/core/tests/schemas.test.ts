@@ -120,12 +120,13 @@ describe('standard nouns', () => {
 describe('the standard library', () => {
   const names = new Set(standardSchemas.map((d) => d.name));
 
-  test('every definition is one a space can store, and says what it allows', () => {
+  test('every definition is one a space can store, and can be described', () => {
     assert.equal(names.size, standardSchemas.length, 'no name is listed twice');
     for (const definition of standardSchemas) {
       assert.match(definition.name, /^std\./);
       assert.equal(checkStoredCollection({ ...definition, version: 1 }), null, definition.name);
-      assert.ok(describeCollection(definition).length > 0, definition.name);
+      // Who may write is the space's grants: a definition with no rules or links has nothing to say.
+      assert.ok(Array.isArray(describeCollection(definition)), definition.name);
       assert.equal(standardDefinition(definition.name), definition);
     }
     assert.equal(standardDefinition('std.nothing'), undefined);
@@ -231,13 +232,13 @@ describe('schemas from a validator you already use', () => {
     const defined = await me.collections.define(space, {
       name: 'app.poll',
       schema: Poll,
-      rules: { edit: 'creator', fixed: ['options'] },
+      rules: { fixed: ['options'] },
     });
     await me.collections.define(space, {
       name: 'app.poll.vote',
       schema: Vote,
       links: { about: { to: ['app.poll'], cardinality: 'one' } },
-      rules: { edit: 'creator', onePer: ['@author', 'link:about'] },
+      rules: { onePer: ['@author', 'link:about'] },
     });
 
     // Plain data, readable by any app in any language — no trace of Zod.

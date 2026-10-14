@@ -2,7 +2,7 @@
  * The cost of churn: Alice creates 100 records and edits each E times; Bob
  * joins, and the time until his list matches hers is measured.
  *
- *   npx tsx --conditions=@weaveprotocol/source tests/bench/churn.ts [E]
+ *   npx tsx --conditions=@minca/source tests/bench/churn.ts [E]
  */
 import { team } from '../../src/space/presets.js';
 import { createFakeHub } from '../helpers/fake-transport.js';
@@ -19,7 +19,6 @@ await hold(alice, space);
 await alice.collections.define(space, {
   name: 'app.card',
   schema: { type: 'object', properties: { n: { type: 'integer' } }, required: ['n'] },
-  rules: { create: 'member', edit: 'member', delete: 'member' },
 });
 const keys: string[] = [];
 for (let i = 0; i < RECORDS; i++) keys.push((await alice.records.put(space, 'app.card', { n: 0 })).key);

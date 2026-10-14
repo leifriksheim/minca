@@ -7,10 +7,10 @@ dist/
 .env.local
 .env.*.local
 # The dev node's throwaway data folder
-.weave-dev/
+.minca-dev/
 # Copied in from the root README when the core package is packed
 packages/core/README.md
 
 .claude/worktrees
 # The extension the site offers, zipped at build time (netlify.toml)
-apps/example/public/weave-chrome.zip
+apps/example/public/minca-chrome.zip

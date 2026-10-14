@@ -26,7 +26,7 @@ import { createVault } from '../../core/src/identity/account-vault.js';
 
 const temporary: string[] = [];
 async function tempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'weave-paths-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'minca-paths-'));
   temporary.push(dir);
   return dir;
 }
@@ -157,15 +157,15 @@ describe('accounts.json is checked, not trusted', () => {
   });
 });
 
-describe('weave run --create off a terminal', () => {
+describe('minca run --create off a terminal', () => {
   test('keeps the recovery code out of the log', async () => {
     const home = await tempDir();
     const main = fileURLToPath(new URL('../src/main.ts', import.meta.url));
     const child = spawn(
       process.execPath,
-      ['--conditions=@weaveprotocol/source', '--import', 'tsx', main, 'run', '--create', '--port', '0'],
+      ['--conditions=@minca/source', '--import', 'tsx', main, 'run', '--create', '--port', '0'],
       {
-        env: { ...process.env, WEAVE_HOME: home, WEAVE_PASSPHRASE: 'pw' },
+        env: { ...process.env, MINCA_HOME: home, MINCA_PASSPHRASE: 'pw' },
         stdio: ['ignore', 'ignore', 'pipe'],
       },
     );

@@ -1,18 +1,5 @@
 /** Annotations: records that attach to any other record with an `about` link. */
-import {
-  about,
-  authored,
-  blob,
-  choice,
-  count,
-  own,
-  people,
-  person,
-  text,
-  define,
-  url,
-  words,
-} from '../fragments.js';
+import { about, blob, choice, count, people, person, text, define, url, words } from '../fragments.js';
 import type { BodyOf } from '../../query/types.js';
 
 /** An emoji reaction to any record. Link it: `{ rel: 'about', to: <key> }`. */
@@ -30,7 +17,7 @@ export const reaction = define({
   },
   links: { about: about('The record reacted to') },
   // One of each emoji per person per record; only yours to take back.
-  rules: { edit: 'creator', delete: 'creator', onePer: ['@author', 'link:about', 'emoji'] },
+  rules: { onePer: ['@author', 'link:about', 'emoji'] },
   topics: ['respondingTo'],
 });
 export type Reaction = BodyOf<typeof reaction>;
@@ -61,8 +48,6 @@ export const comment = define({
     about: about('The record commented on'),
     replyTo: { to: ['std.comment'], cardinality: 'one', description: 'The comment this replies to' },
   },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 export type Comment = BodyOf<typeof comment>;
 
@@ -77,8 +62,6 @@ export const tag = define({
     required: ['label'],
   },
   links: { about: { to: '*', cardinality: 'many', description: 'The records tagged' } },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 export type Tag = BodyOf<typeof tag>;
 
@@ -102,8 +85,6 @@ export const attachment = define({
     required: ['name', 'mime'],
   },
   links: { about: about('The record the file is attached to') },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 export type Attachment = BodyOf<typeof attachment>;
 
@@ -114,8 +95,6 @@ export const reference = define({
   description: 'A note that one record refers to another.',
   schema: { type: 'object', properties: { note: { type: 'string' } } },
   links: { about: about('The record doing the referring'), to: about('The record referred to') },
-  permissions: ['moderate'],
-  rules: { edit: 'creator', delete: ['creator', 'can:moderate'] },
 });
 export type Reference = BodyOf<typeof reference>;
 
@@ -133,7 +112,6 @@ export const bookmark = define({
     properties: { title: text(500), url: url('The page saved, when it is not a record'), note: text(2000) },
   },
   links: { about: about('The record saved') },
-  rules: own,
 });
 export type Bookmark = BodyOf<typeof bookmark>;
 
@@ -148,7 +126,7 @@ export const rating = define({
     required: ['score'],
   },
   links: { about: about('What is rated') },
-  rules: { ...own, onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
 });
 export type Rating = BodyOf<typeof rating>;
 
@@ -171,8 +149,6 @@ export const highlight = define({
     required: ['quote'],
   },
   links: { about: about('The text highlighted') },
-  permissions: ['moderate'],
-  rules: authored,
 });
 export type Highlight = BodyOf<typeof highlight>;
 
@@ -183,8 +159,7 @@ export const pin = define({
   description: 'A record pinned for everyone, by a moderator.',
   schema: { type: 'object', properties: { note: text(500) } },
   links: { about: about('The record pinned') },
-  permissions: ['moderate'],
-  rules: { create: 'can:moderate', edit: 'can:moderate', onePer: ['link:about'] },
+  rules: { onePer: ['link:about'] },
 });
 export type Pin = BodyOf<typeof pin>;
 
@@ -202,8 +177,7 @@ export const report = define({
     required: ['reason'],
   },
   links: { about: about('The record reported') },
-  permissions: ['moderate'],
-  rules: { ...authored, onePer: ['@author', 'link:about'] },
+  rules: { onePer: ['@author', 'link:about'] },
 });
 export type Report = BodyOf<typeof report>;
 
@@ -221,8 +195,7 @@ export const label = define({
     required: ['value'],
   },
   links: { about: about('The record labelled') },
-  permissions: ['moderate'],
-  rules: { create: 'can:moderate', edit: 'can:moderate', onePer: ['link:about', 'value'] },
+  rules: { onePer: ['link:about', 'value'] },
 });
 export type Label = BodyOf<typeof label>;
 
@@ -239,8 +212,7 @@ export const claim = define({
     properties: { respondingTo: person('Whose record it responds to, so they can be told'), note: text(500) },
   },
   links: { about: about('What is claimed') },
-  permissions: ['moderate'],
-  rules: { ...authored, onePer: ['link:about'] },
+  rules: { onePer: ['link:about'] },
   topics: ['respondingTo'],
 });
 export type Claim = BodyOf<typeof claim>;

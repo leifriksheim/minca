@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { NodeCollection } from '@weaveprotocol/core';
+import type { NodeCollection } from '@minca/core';
 import { collectionLabel, fieldsOf } from '../derive/schema-ui';
 import { namespaceOf } from '../derive/filters';
 import { styles, palette, ui } from '../styles';
@@ -35,7 +35,13 @@ export function CollectionsOverview({
       {collections.length === 0 ? (
         <p style={styles.emptyState}>No collections here.</p>
       ) : (
-        <div style={{ border: `1px solid ${palette.surface.line}`, borderRadius: 12, overflowX: 'auto' }}>
+        <div
+          style={{
+            border: `1px solid ${palette.surface.line}`,
+            borderRadius: palette.radius.lg,
+            overflowX: 'auto',
+          }}
+        >
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
             <thead>
               <tr>

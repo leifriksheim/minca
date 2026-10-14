@@ -167,7 +167,7 @@ const CALL_TYPES = new Set([
 ]);
 /** Rings one account may make you hear in a minute */
 const RINGS_PER_MINUTE = 3;
-const REJOIN_KEY = 'weave-call';
+const REJOIN_KEY = 'minca-call';
 /** How long "declined" or "missed" shows before a call with nobody else in it ends */
 const GIVE_UP_MS = 2500;
 /** How long a space stays open after leaving its call, for the goodbye to get out */

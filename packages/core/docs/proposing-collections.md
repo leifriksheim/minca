@@ -6,7 +6,7 @@ applies it. An agent works this way, and so does a person whose role doesn't
 let them define collections.
 
 ```typescript
-import { proposeCollections, reviewBlueprint, applyBlueprint } from '@weaveprotocol/core/schemas';
+import { proposeCollections, reviewBlueprint, applyBlueprint } from '@minca/core/schemas';
 
 const proposal = await proposeCollections(node, space.id, {
   title: 'Chores',
@@ -20,7 +20,7 @@ const proposal = await proposeCollections(node, space.id, {
         properties: { week: { type: 'string' }, who: { type: 'string' } },
         required: ['week', 'who'],
       },
-      rules: { delete: 'creator' },
+      rules: { fixed: ['week'] },
     },
   ],
 });
@@ -36,7 +36,8 @@ await applyBlueprint(node, space.id, proposal.key);
   same, with a summary in sentences worked out from its rules. Show that to
   the person before they apply it.
 - `applyBlueprint` defines each collection, signed by whoever applies it.
-  They need `define` in the space, and a note that grants `collection/define`.
+  They need a grant of `/collection/define` in the space, and a note that
+  grants it.
 - To change it, propose a new one with `updates: <its key>`.
 
 Through `collections_propose`, a standard collection may be given by name
@@ -49,7 +50,7 @@ A definition can't say "write one rota for each week, and say in it who does
 what". A guide can, and an agent finds it from `collections_list`:
 
 ```typescript
-import { writeGuide } from '@weaveprotocol/core/schemas';
+import { writeGuide } from '@minca/core/schemas';
 
 await writeGuide(node, space.id, {
   name: 'chores.how',

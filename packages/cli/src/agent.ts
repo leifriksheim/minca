@@ -1,10 +1,10 @@
 /**
- * The terminal as an agent: `weave connect <code>` trades the app's code for
+ * The terminal as an agent: `minca connect <code>` trades the app's code for
  * a records-only note from the account home, signed to a key made here that
- * never leaves (`packages/core/src/session/connect-code.ts`). Then `weave mcp`
- * and `weave agent` run a node of their own as the agent, under that note.
+ * never leaves (`packages/core/src/session/connect-code.ts`). Then `minca mcp`
+ * and `minca agent` run a node of their own as the agent, under that note.
  * Kept in `<home>/agent/`, readable only by this user: `key.json`,
- * `grant.json`, `data/`, and `weave agent`'s model keys and `spend.json`.
+ * `grant.json`, `data/`, and `minca agent`'s model keys and `spend.json`.
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -14,13 +14,12 @@ import {
   createNode,
   folderStores,
   didOf,
-  DEFINE,
-  roleHolds,
+  COLLECTION_DEFINE,
   type P2PNode,
-} from '@weaveprotocol/core';
-import { profile } from '@weaveprotocol/core/schemas';
-import { checkGrant, connectWithCode, grantSigner, type Grant } from '@weaveprotocol/core/session';
-import { base64UrlDecode } from '@weaveprotocol/core';
+} from '@minca/core';
+import { profile } from '@minca/core/schemas';
+import { checkGrant, connectWithCode, GRANT_VERSION, grantSigner, type Grant } from '@minca/core/session';
+import { base64UrlDecode } from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
@@ -29,18 +28,18 @@ import { holdLock } from './writer-keys.js';
 /** The relay the apps meet on unless told otherwise */
 const DEFAULT_RELAYS: ReadonlyArray<string> = ['wss://p2p-web-relay.fly.dev'];
 
-/** Relays from `$WEAVE_RELAYS` (comma separated), or the default */
+/** Relays from `$MINCA_RELAYS` (comma separated), or the default */
 export function configuredRelays(): string[] {
-  const listed = commaList(process.env.WEAVE_RELAYS);
+  const listed = commaList(process.env.MINCA_RELAYS);
   return listed.length ? listed : [...DEFAULT_RELAYS];
 }
 
 /**
- * Hosts from `$WEAVE_HOSTS` (`https://host`, comma separated), where the node
+ * Hosts from `$MINCA_HOSTS` (`https://host`, comma separated), where the node
  * looks for the account before it knows its host: on a server, it finds its
  * spaces over a host's socket without meeting a device first.
  */
-const configuredHosts = () => commaList(process.env.WEAVE_HOSTS);
+const configuredHosts = () => commaList(process.env.MINCA_HOSTS);
 
 /**
  * WebRTC, which Node doesn't have: the same API over libdatachannel. Loaded
@@ -94,7 +93,7 @@ async function agentKey(home: string): Promise<Stored> {
   return { keys, did: await didOf(keys.publicKey) };
 }
 
-/** The grant this computer's agent was given, or null before `weave connect` */
+/** The grant this computer's agent was given, or null before `minca connect` */
 async function loadAgentGrant(home: string): Promise<Grant | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- written by connectAgent; startAgentNode checks it with checkGrant before use
@@ -107,7 +106,7 @@ async function loadAgentGrant(home: string): Promise<Grant | null> {
 /** Whether this computer's agent was connected to an account, and its note still runs */
 export async function hasConnectedAgent(home: string): Promise<boolean> {
   const grant = await loadAgentGrant(home);
-  return !!grant && grant.expiresAt > Date.now() / 1000;
+  return !!grant && grant.v === GRANT_VERSION && grant.expiresAt > Date.now() / 1000;
 }
 
 /** "Agent on leifs-macbook" — what the person sees in the app and their account */
@@ -159,7 +158,7 @@ export function daysLeft(grant: Grant): number {
 /**
  * Starts this computer's agent: a node of its own, following the account,
  * acting as the agent.
- * @throws Before `weave connect`, or once the note has run out
+ * @throws Before `minca connect`, or once the note has run out
  */
 export async function startAgentNode(
   home: string,
@@ -169,6 +168,10 @@ export async function startAgentNode(
   if (!grant)
     throw new Error(
       'No agent is connected on this computer. In the app, choose “Connect an agent” and run the command it shows.',
+    );
+  if (grant.v !== GRANT_VERSION)
+    throw new Error(
+      'The agent was connected by an older version, whose access no peer reads now. In the app, choose “Connect an agent” and run the new command.',
     );
   if (grant.expiresAt <= Date.now() / 1000)
     throw new Error(
@@ -180,7 +183,7 @@ export async function startAgentNode(
   const release = await holdLock(path.join(agentDir(home), 'lock'));
   if (!release)
     throw new Error(
-      'This computer’s agent is already running (another `weave agent` or `weave mcp`). Stop it first: two at once would sign with one key.',
+      'This computer’s agent is already running (another `minca agent` or `minca mcp`). Stop it first: two at once would sign with one key.',
     );
   try {
     return await startWithKey(home, grant, key, options, release);
@@ -216,7 +219,7 @@ async function startWithKey(
   for (const space of grant.spaces)
     if (!held.has(space.id)) await base.spaces.join(space.invite).catch(() => {});
 
-  const node = await base.asAgent({ keys: key.keys, note: grant.token });
+  const node = await base.asAgent({ keys: key.keys, note: grant.note });
   const stopHolding = await holdEverySpace(node);
   return {
     node,
@@ -244,7 +247,7 @@ export async function forgetAgent(home: string): Promise<void> {
 export async function discloseBot(node: P2PNode, space: string): Promise<boolean> {
   const collections = await node.collections.list(space);
   if (!collections.some((c) => c.name === profile.name && c.version !== null)) {
-    if (!roleHolds((await node.spaces.access(space)).role, DEFINE)) return false;
+    if (!(await node.spaces.may(space, COLLECTION_DEFINE, { collection: profile.name }))) return false;
     await node.collections.define(space, profile);
   }
   const mine = (await node.records.list(space, { collection: profile.name })).find(
@@ -271,7 +274,7 @@ export async function startBotNode(
   unlocked: Unlocked,
   options: {
     readonly nodes?: ReadonlyArray<string>;
-    /** Relays to meet devices on, over WebRTC. Default `$WEAVE_RELAYS`; none, and it reaches only `nodes`. */
+    /** Relays to meet devices on, over WebRTC. Default `$MINCA_RELAYS`; none, and it reaches only `nodes`. */
     readonly relays?: ReadonlyArray<string>;
     /** Once for each space it can't say it is a bot in yet, since the space keeps no `std.profile` */
     readonly undisclosed?: (space: string) => void;
@@ -328,7 +331,7 @@ const UNDISCLOSED_AFTER_MS = 20_000;
 /** Where a provider's API key is kept: `anthropic-key`, `openai-key` */
 const modelKeyFile = (home: string, provider: string) => path.join(agentDir(home), `${provider}-key`);
 
-/** The API key `weave agent` was given for a provider, or null before it asked */
+/** The API key `minca agent` was given for a provider, or null before it asked */
 export async function loadModelKey(home: string, provider = 'anthropic'): Promise<string | null> {
   try {
     return (await readFile(modelKeyFile(home, provider), 'utf8')).trim() || null;
@@ -348,7 +351,7 @@ export async function saveModelKey(home: string, key: string, provider = 'anthro
  * Calls `onChange(true)` when every relay refused this agent because a socket
  * with the same agent key holds the room — one left from a crash, or a copy of
  * the agent elsewhere — and `onChange(false)` once one lets it in again.
- * Otherwise it would sit there looking connected (#19).
+ * Otherwise it would sit there looking connected (#162).
  */
 export function watchRelayRefusal(node: P2PNode, onChange: (refused: boolean) => void): () => void {
   let refused = false;

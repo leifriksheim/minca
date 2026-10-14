@@ -5,7 +5,7 @@
  * one the same way it learns any other, when someone defines it there:
  *
  * ```ts
- * import { reaction, comment, useSchemas } from '@weaveprotocol/core/schemas';
+ * import { reaction, comment, useSchemas } from '@minca/core/schemas';
  *
  * await useSchemas(node, space.id, [reaction, comment]);
  * await node.records.put(space.id, reaction, { emoji: '👍' }, {
@@ -132,8 +132,8 @@ export {
 } from './blueprints.js';
 export { guidesOf, writeGuide } from './guides.js';
 export {
-  rule,
-  ruleRun,
+  automation,
+  automationRun,
   activity,
   ACTIVITY_STATES,
   ACTIVITY_STALE_SECONDS,
@@ -141,32 +141,36 @@ export {
   setActivity,
   IT,
   ME,
+  asRunner,
   INSTRUCT,
-  checkRule,
-  ruleOf,
+  checkAutomation,
+  automationOf,
   matching,
   act,
-  runRules,
-  startRules,
-  rulesFor,
-  suggestedRules,
-  fillRuleText,
-} from './rules.js';
+  runAutomations,
+  startAutomations,
+  automationsFor,
+  suggestedAutomations,
+  fillAutomationText,
+} from './automations.js';
 export type {
-  ActiveRule,
-  Rule,
-  RuleAction,
-  RuleLink,
-  RuleMatch,
-  RuleRun,
+  ActiveAutomation,
+  Automation,
+  AutomationAction,
+  AutomationLink,
+  AutomationMatch,
+  AutomationRun,
+  AutomationApp,
+  AutomationSpaces,
   Activity,
   ActivityState,
-  RuleTrigger,
-  RuleWhen,
-  RuleNotifier,
-  RunRulesOptions,
-  StartRulesOptions,
-} from './rules.js';
+  AutomationTrigger,
+  AutomationWhen,
+  AutomationNotifier,
+  RunAutomationsOptions,
+  StartAutomationsOptions,
+} from './automations.js';
 export { checkCron, cronMatches, SCHEDULES } from './cron.js';
 export type { BlueprintReview, CollectionReview, ReviewContext } from './blueprints.js';
-export type { AppNotify } from '../space/notify.js';
+export { notifyOn, namesTheRunner } from '../space/own-automations.js';
+export type { AppAutomation } from '../space/own-automations.js';

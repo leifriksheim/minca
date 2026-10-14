@@ -1,5 +1,5 @@
 /** Conditions picked from a collection's schema, for filters, notifications and rules: kept as picked, turned into a filter when used. */
-import type { Filter, NodeCollection } from '@weaveprotocol/core';
+import type { Filter, NodeCollection } from '@minca/core';
 import { choicesOf, fieldsOf, type Choice } from './schema-ui';
 import { fieldTypeOf, type FieldTypeName } from './field-types';
 
@@ -182,42 +182,11 @@ function filterOf(clause: Clause, me: string): Filter {
   }
 }
 
-/** Every complete condition as a filter, for a query's, a subscription's or a rule's `where`; undefined when there are none */
+/** Every complete condition as a filter, for a query's or an automation's `where`; undefined when there are none */
 export function whereOf(clauses: ReadonlyArray<Clause>, me: string): Filter | undefined {
   const parts = clauses.filter(complete).map((clause) => filterOf(clause, me));
   if (parts.length === 0) return undefined;
   return parts.length === 1 ? parts[0] : { $and: parts };
-}
-
-/** The conditions as a subscription holds them: the first a carrier can match as its `topic`, the rest as `where` */
-export function subscriptionOf(
-  clauses: ReadonlyArray<Clause>,
-  fields: ReadonlyArray<ClauseField>,
-  me: string,
-): {
-  topic?: { field: string; me: true } | { field: string; value: string | number | boolean };
-  where?: Filter;
-} {
-  const ready = clauses.filter(complete);
-  const carried = ready.find(
-    (clause) =>
-      fields.find((f) => f.name === clause.field)?.topic === true &&
-      (clause.op === 'is' || clause.op === 'includes'),
-  );
-  const rest = whereOf(
-    ready.filter((clause) => clause !== carried),
-    me,
-  );
-  return {
-    ...(carried
-      ? {
-          topic: carried.me
-            ? { field: carried.field, me: true as const }
-            : { field: carried.field, value: carried.value! },
-        }
-      : {}),
-    ...(rest !== undefined ? { where: rest } : {}),
-  };
 }
 
 /** A value as a person reads it: a choice by its label, a person by name, yes or no */

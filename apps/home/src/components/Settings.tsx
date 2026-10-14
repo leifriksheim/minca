@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { CarrierSummary } from '@weaveprotocol/core/node';
+import type { CarrierSummary } from '@minca/core/node';
 import {
   MIN_PASSWORD_LENGTH,
   STAY_SIGNED_IN_CHOICES,
@@ -8,10 +8,11 @@ import {
   recoveryKit,
   type Connection,
   type StaySignedIn,
-} from '@weaveprotocol/core/session';
-import { useAuth, useSession } from '@weaveprotocol/core/react';
-import { Avatar } from '@weave/app-shared/Avatar';
-import { message, useAction, useCopy } from '@weave/app-shared/action';
+} from '@minca/core/session';
+import { useAuth, useSession } from '@minca/core/react';
+import { Avatar } from '@minca/app-shared/Avatar';
+import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { PairPhone } from './PairPhone';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
@@ -132,6 +133,7 @@ export function Settings() {
         {connections.map((app) => (
           <Row
             key={connectionId(app)}
+            shape={connectionId(app)}
             label={
               app.access === 'carry'
                 ? `${describeConnection(app)} · ${presence(app.carrySpace)}`
@@ -151,6 +153,7 @@ export function Settings() {
         {elsewhere.map((carrier) => (
           <Row
             key={carrier.space}
+            shape={carrier.space}
             label={`${carrier.name} · keeps your spaces online · connected on another device · ${presence(carrier.space)}`}
           >
             <button
@@ -209,7 +212,7 @@ export function Settings() {
               onClick={() => void auth.addPasskey()}
               disabled={state.busy}
               data-variant="primary"
-              style={{ ...styles.smallButton, background: '#000', color: '#fff', borderColor: '#000' }}
+              style={styles.darkSmall}
             >
               {state.busy ? 'Waiting…' : 'Set up a passkey'}
             </button>
@@ -275,7 +278,7 @@ export function Settings() {
               role="radio"
               aria-checked={stay === choice.value}
               onClick={() => void choose(choice.value)}
-              style={stay === choice.value ? { ...segment, ...segmentOn } : segment}
+              style={stay === choice.value ? segmentOn : segment}
             >
               {choice.label}
             </button>
@@ -364,13 +367,7 @@ function AccountHeader({
               type="submit"
               disabled={!draft.trim()}
               data-variant="primary"
-              style={{
-                ...styles.smallButton,
-                height: 34,
-                background: '#000',
-                color: '#fff',
-                borderColor: '#000',
-              }}
+              style={{ ...styles.darkSmall, height: 34 }}
             >
               Save
             </button>
@@ -456,12 +453,7 @@ function PasswordForm({
         At least {MIN_PASSWORD_LENGTH} characters. Let your password manager make one.
       </p>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          type="submit"
-          disabled={busy || !password}
-          data-variant="primary"
-          style={{ ...styles.smallButton, background: '#000', color: '#fff', borderColor: '#000' }}
-        >
+        <button type="submit" disabled={busy || !password} data-variant="primary" style={styles.darkSmall}>
           {busy ? 'Saving…' : 'Save password'}
         </button>
         <button
@@ -506,9 +498,10 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
             style={{
               display: 'block',
               padding: 12,
-              borderRadius: 8,
+              borderRadius: palette.radius.none,
               background: palette.surface.sunken,
               border: `1px solid ${palette.surface.line}`,
+              color: palette.ink.strong,
               fontSize: 15,
               letterSpacing: '0.04em',
               textAlign: 'center',
@@ -601,71 +594,34 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section
-      style={{
-        border: `1px solid ${palette.surface.line}`,
-        borderRadius: 12,
-        padding: 20,
-        marginBottom: 16,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}
-    >
+    <section style={styles.settingsSection}>
       <div>
-        <h2 style={{ ...styles.sectionTitle, fontSize: 16, marginBottom: 4 }}>{title}</h2>
-        <p style={{ color: palette.ink.muted, fontSize: 14, lineHeight: 1.5 }}>{description}</p>
+        <h2 style={styles.sectionHeading}>{title}</h2>
+        <p style={styles.sectionText}>{description}</p>
       </div>
       {children}
     </section>
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/** A line in a section; `shape` marks what it is about, an app by its address */
+function Row({ label, shape, children }: { label: string; shape?: string; children: ReactNode }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 12,
-        padding: '10px 12px',
-        background: palette.surface.sunken,
-        borderRadius: 8,
-        fontSize: 14,
-      }}
-    >
-      <span>{label}</span>
+    <div style={styles.settingsRow}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        {shape !== undefined && <Shape {...shapeFor(shape)} size={18} />}
+        <span>{label}</span>
+      </span>
       {children}
     </div>
   );
 }
 
 const segmented = {
+  ...styles.segmented,
   display: 'inline-flex',
   alignSelf: 'flex-start',
-  padding: 3,
-  gap: 2,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: 8,
-  background: palette.surface.sunken,
-  flexWrap: 'wrap' as const,
-};
-const segment = {
-  height: 30,
-  padding: '0 12px',
-  borderWidth: 1,
-  borderStyle: 'solid',
-  borderColor: 'transparent',
-  borderRadius: 6,
-  background: 'none',
-  color: palette.ink.muted,
-  fontSize: 13,
-  fontWeight: 500,
-};
-const segmentOn = {
-  background: palette.surface.card,
-  color: palette.ink.strong,
-  borderColor: palette.surface.line,
-  boxShadow: '0 1px 2px rgba(0,0,0,.06)',
-};
+  flexWrap: 'wrap',
+} as const;
+const segment = { ...styles.segment, flex: 'none', padding: '7px 14px' } as const;
+const segmentOn = { ...styles.segmentActive, flex: 'none', padding: '7px 14px' } as const;

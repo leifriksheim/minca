@@ -81,7 +81,7 @@ export type WorkerStores =
  */
 export function writerKeysFor(stores: WorkerStores): WriterKeySource | undefined {
   if ('indexedDB' in stores) return browserWriterKeys(stores.indexedDB);
-  return stores.basePath ? browserWriterKeys(`weave:${stores.basePath.replace(/\//g, ':')}`) : undefined;
+  return stores.basePath ? browserWriterKeys(`minca:${stores.basePath.replace(/\//g, ':')}`) : undefined;
 }
 
 /** The store factory a description stands for */

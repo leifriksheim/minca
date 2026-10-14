@@ -5,11 +5,13 @@
  * as a member.
  */
 import { test, describe } from 'node:test';
+import { newRecordKey } from '../src/records/key.js';
 import assert from 'node:assert/strict';
 import { isRecord } from '../src/utils/guards.js';
 
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
+import { issueDelegation, type Delegation } from '../src/identity/ucan.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
@@ -19,7 +21,6 @@ import { createStorageProvider } from '../src/storage/storage-provider.js';
 import { createSpaceManager, parseSpaceInvite } from '../src/space/space-manager.js';
 import { spaceKeyFromRaw } from '../src/privacy/space-encryption.js';
 import {
-  checkSpace,
   deriveInviteKey,
   deriveReadKey,
   generateInviteSecret,
@@ -27,6 +28,7 @@ import {
   verifyInvite,
 } from '../src/space/space-access.js';
 import { community, team } from '../src/space/presets.js';
+import { checkSpace } from '../src/space/constitution.js';
 import { base64UrlDecode, base64UrlEncode, utf8Decode, utf8Encode } from '../src/utils/encoding.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
@@ -55,6 +57,12 @@ function tamper(
   return base64UrlEncode(utf8Encode(JSON.stringify(parsed)));
 }
 
+/** What an account is in a space, as its own node sees it: `founder`, its first role, or null */
+async function place(node: Person['node'], space: string): Promise<string | null> {
+  const { founder, mine } = await node.spaces.access(space);
+  return founder ? 'founder' : (mine[0] ?? null);
+}
+
 /** A space shared with Bob as an Editor, synced both ways */
 async function sharedWithBob() {
   const hub = createFakeHub({ latencyMs: 1 });
@@ -81,7 +89,7 @@ describe('space access: the keys', () => {
     const spaceKey = await spaceKeyFromRaw(new Uint8Array(32).map((_, i) => 255 - i));
     assert.equal(
       (await deriveReadKey(spaceKey, provider)).did,
-      'did:key:zDnaem2ikLwS3eYm46gspC7nm6dmYYCMHUHU5yvVHNgARcsWf',
+      'did:key:zDnaes7SHHEzJcR4LfXNL8UjSMWQ3VMFfQiv6vZzoxgkaCNqt',
     );
     // The same bytes as an account seed give a different key: each use has its own label.
     assert.notEqual((await createIdentityManager().fromSeed(secret)).did, inviteDid);
@@ -99,7 +107,7 @@ describe('space access: the keys', () => {
 });
 
 describe('space access: the space vouches for itself', () => {
-  test('a created space checks out, and its id does not depend on its name', async () => {
+  test('a created space checks out, and its name, founders and roles are part of its id', async () => {
     const registry = createSpaceManager(createMemoryAdapter(), provider);
     const { space } = await registry.create({
       name: 'Trip',
@@ -108,25 +116,37 @@ describe('space access: the space vouches for itself', () => {
       creator: 'did:key:zAlice',
     });
     assert.equal(await checkSpace(space), null);
-    assert.equal(await checkSpace({ ...space, name: 'Renamed' }), null);
-    assert.match(String(await checkSpace({ ...space, creator: 'did:key:zMallory' })), /id does not match/);
-    assert.match(String(await checkSpace({ ...space, creatorRole: 'editor' })), /id does not match/);
+    assert.match(String(await checkSpace({ ...space, name: 'Renamed' })), /id does not match/);
+    assert.match(
+      String(await checkSpace({ ...space, top: { founders: ['did:key:zMallory'] } })),
+      /id does not match/,
+    );
     assert.match(
       String(
         await checkSpace({
           ...space,
-          roles: [...space.roles, { name: 'x', rank: 1000, permissions: ['*'] }],
+          roles: [...space.roles, { name: 'x', grants: [{ cmd: '/', pol: [] }] }],
+        }),
+      ),
+      /id does not match/,
+    );
+    // A grant widened in place changes the id too.
+    assert.match(
+      String(
+        await checkSpace({
+          ...space,
+          roles: space.roles.map((role) => ({ ...role, grants: [{ cmd: '/', pol: [] }] })),
         }),
       ),
       /id does not match/,
     );
     assert.match(
-      String(await checkSpace({ ...space, creatorRole: 'nobody' })),
-      /not one of the starting roles/,
+      String(await checkSpace({ ...space, roles: [...space.roles, ...space.roles] })),
+      /share a name/,
     );
   });
 
-  test('a forged invite is refused: changed creator, changed roles', async () => {
+  test('a forged invite is refused: changed founders, changed roles', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const bob = await person(hub);
@@ -134,11 +154,13 @@ describe('space access: the space vouches for itself', () => {
     const invite = await alice.node.spaces.invite(space);
 
     await assert.rejects(
-      bob.node.spaces.join(tamper(invite, (p) => (p.space.creator = bob.node.did))),
+      bob.node.spaces.join(tamper(invite, (p) => (p.space.top = { founders: [bob.node.did] }))),
       /does not describe a real space/,
     );
     await assert.rejects(
-      bob.node.spaces.join(tamper(invite, (p) => (p.space.creatorRole = 'editor'))),
+      bob.node.spaces.join(
+        tamper(invite, (p) => (p.space.roles = [{ name: 'editor', grants: [{ cmd: '/', pol: [] }] }])),
+      ),
       /does not describe a real space/,
     );
     assert.equal((await bob.node.spaces.list()).length, 0);
@@ -269,11 +291,14 @@ describe('space access: who may write', () => {
 });
 
 describe('space access: invites', () => {
-  test('an invite gives the lowest role below yours, once its record reaches the joiner', async () => {
+  test('an invite gives a role you may assign, once its record reaches the joiner', async () => {
     const { alice, bob, space } = await sharedWithBob();
     const access = await bob.node.spaces.access(space);
-    assert.equal(access.role?.name, 'editor');
-    assert.deepEqual(access.members.map((m) => m.role).sort(), ['editor', 'owner']);
+    assert.deepEqual(access.mine, ['editor']);
+    assert.deepEqual(access.members.map((m) => (m.founder ? 'founder' : m.roles.join())).sort(), [
+      'editor',
+      'founder',
+    ]);
     const note = await bob.node.records.put(space, 'app.note', { text: 'from Bob' });
     await until(
       async () => (await alice.node.records.get(space, note.key)) !== null,
@@ -283,7 +308,7 @@ describe('space access: invites', () => {
     assert.equal((await bob.node.spaces.get(space))?.writable, true);
   });
 
-  test('an invite for a named role; not above your own', async () => {
+  test('an invite for a named role; only one your grants let you assign', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const alice = await person(hub);
     const bob = await person(hub);
@@ -295,8 +320,10 @@ describe('space access: invites', () => {
     await bob.node.spaces.join(await alice.node.spaces.invite(space, { role: 'moderator' }));
     await hold(alice.node, space);
     await joined(bob.node, space);
-    assert.equal((await bob.node.spaces.access(space)).role?.name, 'moderator');
-    await assert.rejects(bob.node.spaces.invite(space, { role: 'admin' }), /up to their own rank/);
+    assert.equal(await place(bob.node, space), 'moderator');
+    // A moderator may assign member, so it invites to member and nothing else.
+    assert.equal(parseSpaceInvite(await bob.node.spaces.invite(space)).role, 'member');
+    await assert.rejects(bob.node.spaces.invite(space, { role: 'admin' }), /may not invite to this role/);
   });
 
   test('a closed invite lets nobody else in; who joined before stays', async () => {
@@ -314,12 +341,8 @@ describe('space access: invites', () => {
       'the close to reach Carol',
     );
     // Whether she used it before the close reached her or not, the close came first: she holds nothing.
-    await until(
-      async () => (await carol.node.spaces.access(space)).role === null,
-      4000,
-      'Carol to hold no role',
-    );
-    assert.equal((await bob.node.spaces.access(space)).role?.name, 'editor');
+    await until(async () => (await place(carol.node, space)) === null, 4000, 'Carol to hold no role');
+    assert.equal(await place(bob.node, space), 'editor');
   });
 
   test('a view-only invite to a private space reads everything and writes nothing', async () => {
@@ -368,12 +391,8 @@ describe('space access: taking it back', () => {
       (await createStorageProvider(await bob.stores(`spaces/${space}`)).getVersion(before.version))!.seen ??
       [];
 
-    await alice.node.spaces.setMember(space, bob.node.did, null);
-    await until(
-      async () => (await bob.node.spaces.access(space)).role === null,
-      4000,
-      'the removal to reach Bob',
-    );
+    await alice.node.spaces.removeMember(space, bob.node.did);
+    await until(async () => (await place(bob.node, space)) === null, 4000, 'the removal to reach Bob');
     await assert.rejects(
       bob.node.records.put(space, 'app.note', { text: 'after' }),
       /shared with you to view/,
@@ -399,10 +418,9 @@ describe('space access: taking it back', () => {
     assert.equal((await alice.node.records.get(space, before.key))?.verified, true);
   });
 
-  test('handing over: the creator gives their role and leaves, and the new owner keeps managing', async () => {
+  test('handing over: the founder steps down by leaving, and the editor keeps the space going', async () => {
     const { hub, alice, bob, space } = await sharedWithBob();
-    await alice.node.spaces.setMember(space, bob.node.did, 'owner');
-    await alice.node.spaces.setMember(space, alice.node.did, null);
+    await alice.node.spaces.removeMember(space, alice.node.did);
     await until(
       async () => (await bob.node.spaces.access(space)).members.every((m) => m.did !== alice.node.did),
       4000,
@@ -413,32 +431,46 @@ describe('space access: taking it back', () => {
     await carol.node.spaces.join(await bob.node.spaces.invite(space));
     await hold(carol.node, space);
     await joined(carol.node, space);
-    assert.equal((await carol.node.spaces.access(space)).role?.name, 'editor');
+    assert.equal(await place(carol.node, space), 'editor');
+    assert.equal(
+      (await carol.node.spaces.access(space)).members.some((m) => m.founder),
+      false,
+    );
     await assert.rejects(
       alice.node.records.put(space, 'app.note', { text: 'still here?' }),
       /shared with you to view/,
     );
   });
 
-  test('two owners cannot remove each other', async () => {
-    const { alice, bob, space } = await sharedWithBob();
-    await alice.node.spaces.setMember(space, bob.node.did, 'owner');
+  test('nobody removes the founder, and admins whose policy reads `.roles` cannot remove each other', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const bob = await person(hub);
+    const carol = await person(hub);
+    const { id: space } = await alice.node.spaces.create({
+      name: 'Club',
+      ...community,
+      visibility: 'public',
+    });
+    await hold(alice.node, space);
+    for (const who of [bob, carol]) {
+      await who.node.spaces.join(await alice.node.spaces.invite(space, { role: 'admin' }));
+      await hold(who.node, space);
+      await joined(who.node, space);
+    }
     await until(
-      async () => (await bob.node.spaces.access(space)).role?.name === 'owner',
+      async () => (await bob.node.spaces.access(space)).members.some((m) => m.did === carol.node.did),
       4000,
-      'Bob to be an owner',
+      'Bob to see Carol',
     );
-    await assert.rejects(bob.node.spaces.setMember(space, alice.node.did, null), /ranked below them/);
+    await assert.rejects(bob.node.spaces.removeMember(space, alice.node.did), /No one but a founder/);
+    await assert.rejects(bob.node.spaces.removeMember(space, carol.node.did), /may not remove them/);
+    assert.equal(await place(alice.node, space), 'founder');
   });
 
   test('the history a node keeps up as changes arrive is the one it would replay from its store', async () => {
+    // Editors assign editor, so both of them change who is in.
     const { alice, bob, space } = await sharedWithBob();
-    await alice.node.spaces.setMember(space, bob.node.did, 'owner');
-    await until(
-      async () => (await bob.node.spaces.access(space)).role?.name === 'owner',
-      4000,
-      'Bob to be an owner',
-    );
     const someone = async () =>
       publicKeyToDid(
         await provider.exportPublicKey((await provider.generateKeyPair()).publicKey),
@@ -447,7 +479,7 @@ describe('space access: taking it back', () => {
     // Both change who is in at once, so some changes arrive having not seen others.
     await Promise.all(
       [alice, bob].map(async ({ node }) => {
-        for (let i = 0; i < 6; i++) await node.spaces.setMember(space, await someone(), 'editor');
+        for (let i = 0; i < 6; i++) await node.spaces.assign(space, await someone(), 'editor');
       }),
     );
     const shape = async (node: Person['node']) => {
@@ -481,17 +513,19 @@ describe('space access: taking it back', () => {
     const keyDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
       audience: keyDid,
-      capabilities: [{ with: `space:${space}`, can: '*' }],
+      command: '/',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
-    const sign = (text: string, log: Version['log']) =>
+    const sign = async (text: string, log: Version['log']) =>
       createSigner(provider).sign(
         createVersion({
           author: keyDid,
           collection: 'app.board',
           space,
+          version: { key: await newRecordKey(bob.node.did), seq: 0 },
           body: { text },
-          proof: note.encoded,
+          proof: note,
           seen: seenThen,
           ...(log ? { log } : {}),
         }),
@@ -511,7 +545,7 @@ describe('space access: taking it back', () => {
       6000,
       'both at Alice',
     );
-    await alice.node.spaces.setMember(space, bob.node.did, null);
+    await alice.node.spaces.removeMember(space, bob.node.did);
     // After the removal, the next place in Bob's real line, naming the old point.
     const after = await sign('after removal', { n: 1, prev: first.id });
     await letGo(alice.node, space);
@@ -528,7 +562,8 @@ describe('space access: taking it back', () => {
     const appDid = publicKeyToDid(await provider.exportPublicKey(pair.publicKey), P256_MULTICODEC);
     const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
       audience: appDid,
-      capabilities: [{ with: `space:${space}`, can: 'record/write' }],
+      command: '/record/write',
+      subject: `space:${space}`,
       expiration: Math.floor(Date.now() / 1000) + 3600,
     });
     const store = createStorageProvider(await bob.stores(`spaces/${space}`));
@@ -543,8 +578,9 @@ describe('space access: taking it back', () => {
           author: appDid,
           collection: 'app.note',
           space,
+          version: { key: await newRecordKey(bob.node.did), seq: 0 },
           body: { text },
-          proof: note.encoded,
+          proof: note,
           seen: heads,
           log: last ? { n: (last.log?.n ?? 0) + 1, prev: last.id } : { n: 0 },
         }),
@@ -560,7 +596,7 @@ describe('space access: taking it back', () => {
       'the app’s note',
     );
 
-    await bob.node.spaces.revoke(space, note.encoded);
+    await bob.node.spaces.revoke(space, note.payload.aud);
     const late = await sign('late');
     const refused: string[] = [];
     alice.node.subscribe((event) => {
@@ -583,5 +619,64 @@ describe('space access: taking it back', () => {
       'Alice to stop counting it',
     );
     assert.equal((await alice.node.records.get(space, early.key))?.verified, true);
+  });
+
+  test('a key cannot pass its note on: a two-link proof counts for no peer', async () => {
+    const { alice, bob, space } = await sharedWithBob();
+    // An app of Bob's, and a helper it tries to pass its note on to.
+    const app = await provider.generateKeyPair();
+    const appDid = publicKeyToDid(await provider.exportPublicKey(app.publicKey), P256_MULTICODEC);
+    const helper = await provider.generateKeyPair();
+    const helperDid = publicKeyToDid(await provider.exportPublicKey(helper.publicKey), P256_MULTICODEC);
+    const note = await createLocalRootSigner(bob.me, bob.manager.getProvider()).delegate({
+      audience: appDid,
+      command: '/',
+      subject: `space:${space}`,
+      expiration: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const passedOn = await issueDelegation(
+      {
+        issuer: { did: appDid, privateKey: app.privateKey },
+        audience: helperDid,
+        command: '/record/write',
+        subject: `space:${space}`,
+      },
+      provider,
+    );
+    const store = createStorageProvider(await bob.stores(`spaces/${space}`));
+    const heads =
+      (await store.getVersion((await bob.node.records.put(space, 'app.note', { text: 'Bob' })).version))!
+        .seen ?? [];
+    const sign = async (text: string, by: CryptoKeyPair, author: string, proof: unknown) => {
+      const unsigned = createVersion({
+        author,
+        collection: 'app.note',
+        space,
+        version: { key: await newRecordKey(bob.node.did), seq: 0 },
+        body: { text },
+        seen: heads,
+        log: { n: 0 },
+      });
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a chain, as a peer may send one
+      return createSigner(provider).sign({ ...unsigned, proof: proof as Delegation }, by.privateKey);
+    };
+    const chained = await sign('from the helper, two links', helper, helperDid, [note, passedOn]);
+    const leaf = await sign('from the helper, its leaf alone', helper, helperDid, passedOn);
+    const own = await sign('from the app itself', app, appDid, note);
+    const refused: string[] = [];
+    alice.node.subscribe((event) => {
+      if (event.type === 'rejected') refused.push(event.reason);
+    });
+    await letGo(bob.node, space);
+    for (const version of [chained, leaf, own]) await store.addVersion(version);
+    await hold(bob.node, space);
+    await until(
+      async () => (await alice.node.records.get(space, own.key))?.verified === true,
+      4000,
+      'the app’s own record, under its one-link note',
+    );
+    await until(async () => refused.some((reason) => /one note/.test(reason)), 4000, 'the chain refused');
+    assert.equal(await alice.node.records.get(space, chained.key), null, 'two links');
+    assert.equal(await alice.node.records.get(space, leaf.key), null, 'the leaf alone names no member');
   });
 });

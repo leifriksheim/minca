@@ -11,10 +11,10 @@ the account to a key the app made for itself. Every peer checks that note, so
 the app cannot write anywhere it was not given.
 
 ```tsx
-import { createWeaveConnection } from '@weaveprotocol/core/session';
-import { WeaveProvider, useConnection } from '@weaveprotocol/core/react';
+import { createMincaConnection } from '@minca/core/session';
+import { MincaProvider, useConnection } from '@minca/core/react';
 
-const connection = createWeaveConnection({
+const connection = createMincaConnection({
   home: 'https://weave-home.netlify.app/connect', // a suggestion: the person may use their own
   request: {
     name: 'Todo',
@@ -26,15 +26,15 @@ const connection = createWeaveConnection({
 });
 
 createRoot(root).render(
-  <WeaveProvider connection={connection}>
+  <MincaProvider connection={connection}>
     <App />
-  </WeaveProvider>,
+  </MincaProvider>,
 );
 
 function App() {
   const { connection, state } = useConnection();
   if (state.status !== 'ready')
-    return <button onClick={() => connection.connect()}>Connect with Weave</button>;
+    return <button onClick={() => connection.connect()}>Connect with Minca</button>;
   return <Todos />;
 }
 ```
@@ -46,7 +46,7 @@ function App() {
   join spaces. Ask for the narrower one unless the app is a view onto
   everything.
 - Without React: `connectToHome`, `startConnectedNode` and `grantStore` from
-  `@weaveprotocol/core/session`.
+  `@minca/core/session`.
 
 ## Sign in inside the app
 
@@ -55,10 +55,10 @@ account, password or passkey, creating one, pairing a phone) ships as an
 element and as a React component.
 
 ```html
-<weave-auth app-name="Todo" relays="wss://p2p-web-relay.fly.dev"></weave-auth>
+<minca-auth app-name="Todo" relays="wss://p2p-web-relay.fly.dev"></minca-auth>
 <script type="module">
-  import '@weaveprotocol/core/elements';
-  document.querySelector('weave-auth').addEventListener('weave-session', (event) => {
+  import '@minca/core/elements';
+  document.querySelector('minca-auth').addEventListener('minca-session', (event) => {
     const session = event.detail.session; // { account, did, sessionDid, node }, or null
     if (session) start(session.node);
   });
@@ -66,21 +66,21 @@ element and as a React component.
 ```
 
 ```tsx
-import { createWeaveAuth } from '@weaveprotocol/core/session';
-import { WeaveProvider, WeaveAuth, useWeave } from '@weaveprotocol/core/react';
+import { createMincaAuth } from '@minca/core/session';
+import { MincaProvider, MincaAuth, useMinca } from '@minca/core/react';
 
-const auth = createWeaveAuth({ appName: 'Todo', network: { relays: ['wss://p2p-web-relay.fly.dev'] } });
+const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://p2p-web-relay.fly.dev'] } });
 
 function App() {
-  const { state } = useWeave();
-  if (state?.stage !== 'ready') return <WeaveAuth />;
+  const { state } = useMinca();
+  if (state?.stage !== 'ready') return <MincaAuth />;
   return <Todos />;
 }
 
 createRoot(root).render(
-  <WeaveProvider auth={auth}>
+  <MincaProvider auth={auth}>
     <App />
-  </WeaveProvider>,
+  </MincaProvider>,
 );
 ```
 
@@ -95,7 +95,7 @@ import {
   createLocalRootSigner,
   indexedDBStores,
   rolePresets,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 
 const manager = createIdentityManager();
 const me = await manager.fromRecoveryCode(code);
@@ -120,9 +120,13 @@ await node.spaces.join(invite); // on the friend's side
 await node.spaces.closeInvite(space.id, invite); // nobody else joins with it
 ```
 
-- `rolePresets`: `solo` (just you; invites are view-only), `team` (everyone
-  invited can write, invite and add collections), `community` (admins,
-  moderators, members). Or pass your own `roles`.
+- `rolePresets` are constitution templates: `solo` (just you; invites are
+  view-only), `team` (everyone invited can write, invite and add
+  collections), `community` (admins, moderators, members) and `coop` (no
+  founders: stewards and members, `top: 'none'`). Or pass your own `roles`.
+  Under the first three you are the space's founder: you hold every command,
+  and nobody else can remove you; `spaces.stepDown` gives that up
+  ([spaces.md](spaces.md#the-top-and-founders)).
 - A private invite carries the space key. Anyone holding it can read the
   space, so don't log it or put it in a URL a server sees (use the fragment,
   `#invite=…`).
@@ -131,7 +135,7 @@ await node.spaces.closeInvite(space.id, invite); // nobody else joins with it
 
 ## React hooks
 
-All from `@weaveprotocol/core/react`, below a `WeaveProvider`:
+All from `@minca/core/react`, below a `MincaProvider`:
 
 | Hook                                                                | Gives                                                                   |
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -163,7 +167,7 @@ lists only the spaces that define those collections: the ones the app works in.
 A space still being joined is kept, since its definitions haven't arrived yet.
 
 **Names.** A name is whatever its owner typed, so two people can both be "Sam".
-`useNames(space)` (or `displayName(did, profiles)` from `@weaveprotocol/core`)
+`useNames(space)` (or `displayName(did, profiles)` from `@minca/core`)
 adds the tail of the identity when a name is shared, and shows the tail alone
 for someone with no profile.
 
@@ -173,7 +177,7 @@ takes the invite out of a pasted link, and `useInviteLink()` reads the one the
 page was opened with:
 
 ```tsx
-import { inviteLink, useInviteLink, useMyName, useNode } from '@weaveprotocol/core/react';
+import { inviteLink, useInviteLink, useMyName, useNode } from '@minca/core/react';
 
 const link = inviteLink(await node.spaces.invite(space.id)); // https://app.example/#invite=…
 

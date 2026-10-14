@@ -31,11 +31,11 @@ registry, key `hosting:<hex of the first 20 bytes of SHA-256(utf8(url))>`, body:
 Every device of the account signs as the same subscription. It is not the
 account's key: the host learns a subscription, not who pays.
 
-**Description.** `GET <url>/.well-known/weave-host`, public:
+**Description.** `GET <url>/.well-known/minca-host`, public:
 
 | Field    | Meaning                                                                                                                                                              |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `weave`  | `"host/1"`                                                                                                                                                           |
+| `minca`  | `"host/1"`                                                                                                                                                           |
 | `did`    | The host's key: its identity to peers, and what signs its statuses.                                                                                                  |
 | `name`   | For people.                                                                                                                                                          |
 | `free`   | Every subscription counts as paid.                                                                                                                                   |
@@ -47,7 +47,7 @@ account's key: the host learns a subscription, not who pays.
 | `bots`   | Optional: `true` when it runs bots for the spaces it carries (§3).                                                                                                   |
 | `fund`   | Optional: how communities pay here, through a fund (§2). Absent: they can't.                                                                                         |
 
-A device MUST refuse a description whose `weave` is not `host/1` or whose `did`
+A device MUST refuse a description whose `minca` is not `host/1` or whose `did`
 is not a `did:key`, and MUST treat a host whose `did` changed since it was first
 used as a different host.
 
@@ -66,9 +66,9 @@ ignores a plan whose `method` it does not know. Example:
 
 ```json
 {
-  "weave": "host/1",
+  "minca": "host/1",
   "did": "did:key:zDnaeXL64…",
-  "name": "Weave host",
+  "name": "Minca host",
   "free": false,
   "price": "$4 a month or $36 a year",
   "peer": "/peer",
@@ -103,24 +103,26 @@ ignores a plan whose `method` it does not know. Example:
 **Signed requests.** Every call about a subscription carries
 
 ```
-Authorization: Weave did=<subscription DID>, at=<unix seconds>, sig=<base64url>
+Authorization: Minca did=<subscription DID>, at=<unix seconds>, sig=<base64url>
 ```
 
 where `sig` is the subscription key's signature over the UTF-8 bytes of
 
 ```
-weave-host/v1\n<METHOD>\n<path and query>\n<at>\n<base64url(SHA-256(body))>
+minca-host/v1\n<METHOD>\n<path and query>\n<at>\n<base64url(SHA-256(body))>
 ```
 
 (`body` is the exact request body, empty string when none). A host MUST refuse a
 request whose header does not match
-`^Weave did=(did:key:z[1-9A-HJ-NP-Za-km-z]{1,120}), at=(\d{1,12}), sig=([A-Za-z0-9_-]{1,200})$`,
+`^Minca did=(did:key:z[1-9A-HJ-NP-Za-km-z]{1,120}), at=(\d{1,12}), sig=([A-Za-z0-9_-]{1,200})$`,
 whose `at` is more than 300 s from its clock, whose signature fails, or whose
 signer is not the subscription in the path. Example:
 
 ```
-Authorization: Weave did=did:key:zDnaet57TmtMH7vQJT8HzNLSZV5sc5JGJub2ZzpX3oHshR2k2, at=1790422901, sig=UD0ynCDYHqxRQ2N08X3On5ljQhEZwyczof1_Zuiv0jhN4rYpoh0pEZ88mPx7hit20d9A5T2oSgvK-UPTetIO_Q
+Authorization: Minca did=did:key:zDnaet57TmtMH7vQJT8HzNLSZV5sc5JGJub2ZzpX3oHshR2k2, at=1790422901, sig=UD0ynCDYHqxRQ2N08X3On5ljQhEZwyczof1_Zuiv0jhN4rYpoh0pEZ88mPx7hit20d9A5T2oSgvK-UPTetIO_Q
 ```
+
+(The format only: the signature is illustrative, as the key is not given.)
 
 **Calls.** `<id>` is the subscription DID, URL-encoded or not.
 
@@ -139,7 +141,7 @@ subscription), 402, 403, 404, 405. The reference host sends
 
 **Signed status.** `SignedStatus = { payload, sig }`, where `payload` is the JSON
 text of a `HostStatus` and `sig` is the host key's signature (base64url) over
-`utf8("weave-host-status/v1\n" + payload)`. `HostStatus`:
+`utf8("minca-host-status/v1\n" + payload)`. `HostStatus`:
 
 | Field          | Meaning                                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -163,6 +165,8 @@ its `host` equals that DID, and its `subscription` is the device's own. Example:
   "sig": "cC4uQLCnF0tkMzhAuxHp58tjc2XWhdRpj9RpWgb-wYIhzKvhXhi97DoBn_hvcz9NLyv0ch2bqFMJfTIXgYxQhw"
 }
 ```
+
+(The format only: the DIDs are shortened and the signature is illustrative.)
 
 **Paying.** A device never handles a payment: it shows the host's plans, and
 what the host answers when asked to start one. A **pay answer** is one of:
@@ -365,7 +369,7 @@ read. A device MUST say so to the person before it asks a host for a bot.
 while its space's fund (§2) has money in it, or always on a free host, and
 what it spends is taken from that fund, at most `fund.botDailyCap` a day.
 With the fund empty, it stays a member and does nothing. What a bot does is
-the space's rules naming it ([rules](../packages/core/docs/rules.md)); how
+the space's automations naming it ([automations](../packages/core/docs/automations.md)); how
 the host thinks for it is the host's business.
 
 **Calls.** No `Authorization`: an invite is all it takes to add a bot, as it
@@ -412,23 +416,24 @@ _Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `start
 > invite will name the `peer` addresses of the hosts the space uses, as it
 > names relays, and the joining device holds a socket to them until the
 > space's records take over. Tracked in
-> [#220](https://github.com/leifriksheim/weave/issues/220).
+> [#220](https://github.com/leifriksheim/minca/issues/220).
 >
 > **Stopping a host a space pays.** A space that stops using a host (§2)
 > can only act on its own side: it removes the host's bots and changes its
 > key, so the host cannot follow. Nothing tells the host, so the fund keeps
 > paying and cards that add every month keep being charged. The space will
 > say it in `sys.keepers` ([03](03-spaces.md) §10), which is in the clear,
-> needs `manage`, and every peer already checks: a host carries a space for
+> needs a grant of `/space/keepers`, and every peer already checks: a host carries a space for
 > the space's own subscription only while the keepers name its DID, and once
 > they no longer do it pauses the subscription, which means it stops carrying,
 > stops its bots there, takes nothing more from the fund and cancels payments
 > that add every month. The balance stays and counts again if the space names
 > the host again. No refunds, and no new call: the subscription has no key,
-> so a call would let any pass holder stop it. Open: keepers need `manage`
-> while choosing a host needs only the library's `std.host/manage`; whether a
+> so a call would let any pass holder stop it. Open: keepers need
+> `/space/keepers` while choosing a host needs only a grant to write
+> `std.host`; whether a
 > host must be named a keeper before it carries at all; whether a paused fund
-> expires. Tracked in [#220](https://github.com/leifriksheim/weave/issues/220).
+> expires. Tracked in [#220](https://github.com/leifriksheim/minca/issues/220).
 >
 > **Metering beyond storage.** A host that meters requests and bandwidth per
 > subscription says so in `HostStatus` as it says `bytes`. Open: the fields,
@@ -441,9 +446,9 @@ _Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `start
 > business: the reference host takes an address with `…/remind` (§1,
 > `packages/cli/src/reminders.ts`), and every device already shows the date
 > it holds. The protocol route is Web Push through the carry space ([06](06-nodes-and-sessions.md) §4.4,
-> Planned): the home writes a
-> `sys.subscription` with no filter and `purpose: "hosting"` when the person
-> allows it, and the host pushes `{ kind: "hosting", host, paidUntil }`,
+> Planned): when the person allows it, the home writes a record in the carry
+> space, apart from wakes ([03](03-spaces.md) §15), asking for reminders about
+> hosting, and the host pushes `{ kind: "hosting", host, paidUntil }`,
 > signed like a status. No new call between home and host. Depends on Web Push.
 >
 > **Paying without being linked to the account.** Today the host can tie a

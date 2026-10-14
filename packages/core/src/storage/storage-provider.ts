@@ -64,6 +64,8 @@ export interface StorageProvider {
   queryVersions(collection: string): Promise<Version[]>;
   /** The id of every version this store keeps — current, first and retained. */
   versionIds(): Promise<string[]>;
+  /** Every version kept in one collection, current or not, superseded ones as their stubs. */
+  keptVersions(collection: string): Promise<Version[]>;
   /** The versions kept in one collection, as sync compares them: sorted, with sums. */
   items(collection: string): Promise<ItemSet>;
   /** Every collection this store keeps anything in, and the sum of its version ids. */
@@ -363,14 +365,15 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
 
   /**
    * Places a version that is not current: kept whole if retained, as a stub
-   * otherwise, and named as the record's first version if it is the lowest-id
-   * one seen.
+   * otherwise, and kept apart as a first version if it is the lowest-id one
+   * seen.
    */
   async function demote(entries: Entries, version: Version, current: Version): Promise<void> {
     await keepSuperseded(entries, version);
-    // The first version decides who created the record — the one with the
-    // lowest id, if several devices each created the same chosen key. Not
-    // while the record is still at seq 0: then the current version is it.
+    // A first version is kept apart, so a record's history lists it: the
+    // lowest id if there are several. Nothing reads who created a record from
+    // it; that is the first version a version's own chain names (02 §4.5).
+    // Not while the record is still at seq 0: then the current version is it.
     if (version.seq === 0 && current.seq > 0) {
       const heldId = await entries.get(genesisKey(version.key));
       if (heldId === null || version.id < heldId) entries.set(genesisKey(version.key), version.id);
@@ -513,6 +516,10 @@ export function createStorageProvider(adapter: StorageAdapter): StorageProvider 
       const held = await load((await loadKept()).get(collection)?.keys() ?? []);
       const current = await Promise.all(held.map(async (v) => (await readId(currentKey(v.key))) === v.id));
       return held.filter((_, i) => current[i]);
+    },
+
+    async keptVersions(collection: string): Promise<Version[]> {
+      return load((await loadKept()).get(collection)?.keys() ?? []);
     },
 
     async versionIds(): Promise<string[]> {

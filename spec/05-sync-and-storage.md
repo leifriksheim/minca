@@ -224,7 +224,7 @@ A → B   61 00 00 02 02 <id1> <id2>
         │  │  └ bound id length 0
         │  └ bound timestamp: infinity
         └ version 1
-        base64url: YQAAAgIBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        base64url: YQAAAgIBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 B → A   61 00 00 02 02 <id1> <id3>
 A:      have = [id2], need = [id3], done (nothing more to send)
 ```
@@ -246,9 +246,15 @@ A sync message is a JSON object. It travels as the `payload` of the network
 envelope `{ "type": "sync", "from": <sender session DID>, "payload": … }`
 ([04 — Network](04-network.md)); this part does not encode it again.
 
-Every message carries `"v": 3` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
+Every message carries `"v": 8` (`SYNC_PROTOCOL_VERSION`). A peer MUST drop a
 message that is not an object, whose `v` is not the version it speaks, or
 whose `type` is not a string. It MUST NOT answer it.
+
+> Rationale: 8 since a definition's contract left its `rules` for a
+> `contract` of its own ([02](02-records.md) §7.6), and carriers read wakes
+> ([03](03-spaces.md) §15). A reader of 7 would count what a `contract`
+> fails, and a peer of 8 holds a definition with `rules.check` as invalid;
+> they don't sync instead.
 
 > Rationale: two versions that cannot reconcile should fail loudly, not leave
 > a quiet partial sync.
@@ -273,7 +279,7 @@ Example (fingerprint values illustrative):
 
 ```json
 {
-  "v": 3,
+  "v": 8,
   "type": "hello",
   "holds": "all",
   "sums": {
@@ -509,7 +515,7 @@ cannot parse (§18).
 > at all (`packages/core/src/sync/sync-engine.ts`, `onReconcile`), so the initiator waits
 > until it gives up on the session (§6.3; 30 s in this library). A fix will
 > answer at once.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 > **Planned: limits per peer.** Every `hello` and every `reconcile` round
 > costs the answering side a pass over a collection's in-memory item set, as
@@ -521,7 +527,7 @@ cannot parse (§18).
 > peer over its limit is ignored until the minute is out, not disconnected.
 > Open: the numbers, and whether a node says it is refusing (so the other
 > side does not wait until it gives up). Byte rates per connection
-> belong to [04 — Network](04-network.md). Tracked in [#33](https://github.com/leifriksheim/weave/issues/33).
+> belong to [04 — Network](04-network.md). Tracked in [#33](https://github.com/leifriksheim/minca/issues/33).
 
 ### 6.5 Done
 
@@ -623,9 +629,9 @@ taken. A `versions` without `id` is limited to its first 200 entries.
 > can fill it with large versions that never stand. A node will cap
 > the total bytes held waiting, and the retries done per version stored. Open:
 > the numbers, and whether waiting versions are counted per peer so one peer
-> cannot push out another's. Tracked in [#33](https://github.com/leifriksheim/weave/issues/33).
+> cannot push out another's. Tracked in [#33](https://github.com/leifriksheim/minca/issues/33).
 
-> **Planned: access convergence** ([#10](https://github.com/leifriksheim/weave/issues/10)).
+> **Planned: access convergence** ([#10](https://github.com/leifriksheim/minca/issues/10)).
 > A randomized test with several peers, partitions and heals, role changes,
 > removals and key changes, asserting that every peer reaches the same access
 > state and current versions whatever order versions arrive in, and that
@@ -699,7 +705,7 @@ _Source: `packages/core/src/node/space-runtime.ts` ("Holding part of the space")
   may bucket a date field the writer chose (`start` → `2026-10`), which is
   acceptable because a bucket only decides what is fetched, never what is
   allowed. Needs `holds` to name more than collections, and sync a way to ask
-  for a subset. Tracked in [#27](https://github.com/leifriksheim/weave/issues/27).
+  for a subset. Tracked in [#27](https://github.com/leifriksheim/minca/issues/27).
 
 ---
 
@@ -755,9 +761,11 @@ atomically ([`commit`](../packages/core/docs/storage.md#storage-adapters)), vers
 first, then the entries in one batch, then the deletes, so no entry ever
 names a version that is not there.
 
-> Rationale: the first version decides who created the record — the lowest id
-> wins if several devices each created the same chosen key. It is kept as a
-> stub like any other version, unless retained.
+> Rationale: a first version is kept apart so that a record's history lists
+> it, the lowest id if a key has several. It decides nothing: who created a
+> record is the first version a version's own chain names
+> ([02](02-records.md) §4.5). It is kept as a stub like any other version,
+> unless retained.
 
 **Removing** a version (used when a folder file vanished, §14.5, or a
 collection is dropped, §9) unsets `r/k` and `g/k` if they name it, unsets its
@@ -969,7 +977,7 @@ Values of entries whose key starts with one of the sealed prefixes —
 `spacerelays:` — are stored as an envelope ([01 §9.1](01-identity.md)):
 
 ```
-value = envelope(localKey, "weave/at-rest/v1", { entry: <the entry key> }, plaintext value)
+value = envelope(localKey, "minca/at-rest/v1", { entry: <the entry key> }, plaintext value)
 ```
 
 - A reader MUST refuse (not fall back to raw) a value under a sealed prefix
@@ -983,7 +991,7 @@ value = envelope(localKey, "weave/at-rest/v1", { entry: <the entry key> }, plain
 - Rollback and deletion are not protected. An envelope is bound only to its
   entry, so someone who can write the folder can put back an older sealed
   value of the same entry, such as a `spacekey:` from before a key change, and
-  it opens; or delete an entry ([#215](https://github.com/leifriksheim/weave/issues/215)).
+  it opens; or delete an entry ([#215](https://github.com/leifriksheim/minca/issues/215)).
 
 Every registry entry of §12 that belongs to one space is sealed.
 
@@ -1031,22 +1039,23 @@ offline by anyone holding the store.
 A segment is UTF-8 JSON:
 
 ```json
-{"v":3,"versions":[ <Version>, … ]}
+{"v":7,"versions":[ <Version>, … ]}
 ```
 
 The versions are exactly as on the wire — private bodies still sealed. A
 segment carries its own version, apart from the sync messages' (§4): a mirror
 outlives the peers that wrote it, so a reader meets old segments long after
-it last met an old peer. `v` is `3` since a version's log became one line
-per collection ([02](02-records.md) §4.10); a reader MUST treat bytes that
-are not JSON, or `v` other than `3`, or a missing `versions` array, as holding nothing, so a
+it last met an old peer. `v` is `8` with sync's (§4): a reader of 7 would
+count versions under a definition's `contract` that a reader of 8 fails
+([02](02-records.md) §7.6). A reader MUST treat bytes that
+are not JSON, or `v` other than `8`, or a missing `versions` array, as holding nothing, so a
 segment of the old format is never misread; entries that are not objects
 with a string `id` are skipped.
 
 Its name is `<counter>-<hash>.seg`: the store writer's counter (from 1, decimal,
 zero-padded to 6 digits) and the first 8 bytes of SHA-256 of the segment's
-bytes, as 16 lower-case hex. The empty segment `{"v":3,"versions":[]}` written
-first is `000001-8f04721ece59f5c5.seg`. Only names ending `.seg` are segments.
+bytes, as 16 lower-case hex. The empty segment `{"v":8,"versions":[]}` written
+first is `000001-10773071eecc244b.seg`. Only names ending `.seg` are segments.
 
 > Rationale: the counter sorts a listing for people reading it; the hash
 > means a retried upload lands on the same name.
@@ -1117,7 +1126,7 @@ Open: mirrors laid out per collection, so a node holding part of a space
 ### 16.6 Planned: files
 
 > **Planned.** Not normative. Issue:
-> [#37](https://github.com/leifriksheim/weave/issues/37). Records cannot
+> [#37](https://github.com/leifriksheim/minca/issues/37). Records cannot
 > carry file bytes today. `std.attachment` has a `url`, outside the space's
 > access rules and sync, and a `blob`: a **blob reference** in the body,
 > `{ hash, size, mime, name? }`, where `hash` is the SHA-256 of the bytes as
@@ -1139,7 +1148,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 3                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 7                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |

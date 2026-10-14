@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { Modal } from '@weave/app-shared/Modal';
+import type { SpaceSummary } from '@minca/core';
+import { Modal } from '@minca/app-shared/Modal';
 import { ConnectAgent, useKnownAgent } from '../ConnectAgent';
 import { Icon } from '../Icon';
-import { useNode } from '@weaveprotocol/core/react';
+import { useNode } from '@minca/core/react';
 import { useLauncherRecords } from './entries';
 import { prepareLauncher } from './launcher';
 import { DESIGNS, designPrompt, type Design } from './designs';
@@ -21,7 +21,7 @@ const IDEAS = [
 ] as const;
 
 /** The look picked last time, in this browser */
-const DESIGN_KEY = 'weave:app-design';
+const DESIGN_KEY = 'minca:app-design';
 const rememberedDesign = (): Design => {
   try {
     const id = globalThis.localStorage.getItem(DESIGN_KEY);
@@ -76,7 +76,7 @@ export function CreateApp({
   if (connecting) return <ConnectAgent onClose={() => setConnecting(false)} />;
 
   const what = idea.trim().replace(/[.\s]+$/, '');
-  const prompt = `In my Weave space "${space.name}", make an app: ${what}. Use the standard collections where they fit, and propose it to the space the way the space's guide on launcher.app says (collections_list points at it), saying what is worth being notified about. ${designPrompt(design)}`;
+  const prompt = `In my Minca space "${space.name}", make an app: ${what}. Use the standard collections where they fit, and propose it to the space the way the space's guide on launcher.app says (collections_list points at it), saying what is worth being notified about. ${designPrompt(design)}`;
   const agent = known ?? 'your agent';
   const adds = mayDefine ? 'you add it' : 'someone who runs the space adds it';
   const byHand = mayDefine ? onBuildByHand : undefined;
@@ -245,7 +245,7 @@ function DesignPicker({ value, onChange }: { value: Design; onChange: (design: D
                 alignItems: 'center',
                 gap: 6,
                 padding: '8px 2px 7px',
-                borderRadius: 8,
+                borderRadius: palette.radius.lg,
                 border: `1px solid ${on ? palette.ink.strong : palette.surface.line}`,
                 boxShadow: on ? `0 0 0 1px ${palette.ink.strong}` : 'none',
                 background: palette.surface.card,
@@ -310,7 +310,7 @@ const note = {
   gap: 4,
   padding: '12px 14px',
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 8,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
 } as const;
 
@@ -340,7 +340,7 @@ const footer = {
 const promptBox = {
   padding: '10px 12px',
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 8,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
   fontSize: 13,
   lineHeight: 1.5,

@@ -10,12 +10,13 @@
  * one space, as whoever is looking — so every rule still holds, and a screen
  * can do nothing its viewer couldn't.
  *
- * Inside the frame, the screen finds `window.weave` (see {@link SCREEN_GUIDE}).
+ * Inside the frame, the screen finds `window.minca` (see {@link SCREEN_GUIDE}).
  * The port is handed over once, when the document is written; a frame that
  * navigates somewhere else leaves it behind, so a page it navigates to hears
  * nothing.
  */
-import type { Link, NodeRecord, P2PNode } from '@weaveprotocol/core';
+import type { Link, NodeRecord, P2PNode } from '@minca/core';
+import { accent, radius } from '@minca/app-shared/tokens';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -73,7 +74,7 @@ interface ScreenRecord {
   readonly updatedAt: string;
   /** Whether the person looking created it */
   readonly mine: boolean;
-  /** Written by an agent for `createdBy`'s account */
+  /** Written under a records-only note: an agent or other program `createdBy`'s account connected */
   readonly viaAgent: boolean;
 }
 
@@ -81,7 +82,7 @@ interface ScreenRecord {
 export const SCREEN_GUIDE = `A screen is one HTML document (scripts and styles inline, at most 48 KB) put on an app's launcher.app record as "screen".
 When the app is added, the app shows it instead of plain lists. It runs sealed: no network (no fetch, no
 images from URLs, no fonts from URLs), no storage, no popups, and no alert, confirm or prompt (show messages in the page).
-Forms work: handle "submit", call event.preventDefault() and save with weave.put; a form never goes anywhere itself.
+Forms work: handle "submit", call event.preventDefault() and save with minca.put; a form never goes anywhere itself.
 Keep state in records, never in the page.
 
 If it truly needs the network — weather, a map, a timetable — give the record "network": the exact origins it may
@@ -90,31 +91,31 @@ Nothing else is reachable, and fonts never are. Each origin is named when people
 before a screen they open gets it: a person who says no gets the screen sealed, so it must still work without them.
 Ask for no more than it needs.
 
-Inside it, window.weave is:
-  weave.me                          { did, name } — who is looking
-  weave.collections                 the collection names this screen may use (its app's "collections")
-  await weave.list(collection, { where? })   records, oldest first: { key, collection, body, links, createdBy, createdAt, updatedAt, mine, viaAgent }
+Inside it, window.minca is:
+  minca.me                          { did, name } — who is looking
+  minca.collections                 the collection names this screen may use (its app's "collections")
+  await minca.list(collection, { where? })   records, oldest first: { key, collection, body, links, createdBy, createdAt, updatedAt, mine, viaAgent }
                                     where: { "link:<rel>": "<record key>" } for records linking there, { field: value } for a field's value
-  await weave.get(key)              one record, or null
-  await weave.put(collection, body, { links?, key? })   → the record written, as the person looking
-  await weave.update(key, body, { links? })             → the next version
-  await weave.remove(key)
-  await weave.people()              [{ did, name }] — everyone in the space who said their name
-  weave.onChange(callback)          called whenever records in the space change, here or on another device; returns a function to stop
+  await minca.get(key)              one record, or null
+  await minca.put(collection, body, { links?, key? })   → the record written, as the person looking
+  await minca.update(key, body, { links? })             → the next version
+  await minca.remove(key)
+  await minca.people()              [{ did, name }] — everyone in the space who said their name
+  minca.onChange(callback)          called whenever records in the space change, here or on another device; returns a function to stop
 
-Calls may also take one object instead: weave.list({ collection, where }), weave.put({ collection, body, links, key }),
-weave.update({ key, body, links }), weave.remove({ key }). Records answer to id / data as well as key / body.
+Calls may also take one object instead: minca.list({ collection, where }), minca.put({ collection, body, links, key }),
+minca.update({ key, body, links }), minca.remove({ key }). Records answer to id / data as well as key / body.
 Every write is checked against the collection's rules, as the person looking: a refused write rejects with the reason.
 An error the screen doesn't catch is shown to the person, so they can tell you about it.
 Links look like { rel: "game", to: "<record key>" }, with the roles the definition declares.
-Draw everything from weave.list(...) and redraw on weave.onChange — other people's moves arrive that way.
-Two people can write at once: design collections so that clashes resolve by the rules (onePer, creator-only edits), not by the screen.
+Draw everything from minca.list(...) and redraw on minca.onChange — other people's moves arrive that way.
+Two people can write at once: design collections so that clashes resolve by the rules (onePer, each person changing only their own records), not by the screen.
 Use plain DOM; no libraries can be loaded. Prefer system fonts and simple, readable styling that works in light and dark.`;
 
-/** The script put in front of a screen's document: `window.weave`, over the port the host page kept for it */
+/** The script put in front of a screen's document: `window.minca`, over the port the host page kept for it */
 export const SCREEN_CLIENT = `(() => {
-  const given = window.__weave;
-  delete window.__weave;
+  const given = window.__minca;
+  delete window.__minca;
   if (!given) return;
   const port = given.port;
   const pending = new Map();
@@ -142,12 +143,12 @@ export const SCREEN_CLIENT = `(() => {
   };
   // Shown to the person, so a screen that fails says why instead of sitting blank.
   const report = (message) => {
-    let bar = document.getElementById('__weave-error');
+    let bar = document.getElementById('__minca-error');
     if (!bar) {
       bar = document.createElement('div');
-      bar.id = '__weave-error';
+      bar.id = '__minca-error';
       bar.setAttribute('role', 'alert');
-      bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;padding:8px 10px;border-radius:8px;background:#fff0f0;color:#b00020;border:1px solid #f3c2c2;font:12px/1.4 system-ui,sans-serif;white-space:pre-wrap';
+      bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;padding:8px 10px;border-radius:${radius.sm}px;background:${accent.dangerSoft};color:${accent.danger};border:1px solid ${accent.danger};font:12px/1.4 system-ui,sans-serif;white-space:pre-wrap';
       (document.body || document.documentElement).appendChild(bar);
     }
     bar.textContent = 'This screen hit an error: ' + message;
@@ -164,12 +165,12 @@ export const SCREEN_CLIENT = `(() => {
     if (fromExtension(event.reason && event.reason.stack)) return;
     report(event.reason && event.reason.message ? event.reason.message : String(event.reason));
   });
-  // weave.me is who is looking; calling it — weave.me() — gives the same.
+  // minca.me is who is looking; calling it — minca.me() — gives the same.
   // (defineProperty, because a function's own "name" can't be assigned)
   const me = () => ({ did: given.me.did, name: given.me.name });
   Object.defineProperty(me, 'did', { value: given.me.did, enumerable: true });
   Object.defineProperty(me, 'name', { value: given.me.name, enumerable: true });
-  window.weave = Object.freeze({
+  window.minca = Object.freeze({
     me: Object.freeze(me),
     collections: Object.freeze(given.collections.slice()),
     list: (collection) => call('list', collection),
@@ -215,7 +216,7 @@ export function screenPolicy(network: ReadonlyArray<string> = []): string {
  * @param network The origins the person looking agreed to; none keeps it sealed
  */
 export function screenDocument(screen: string, network: ReadonlyArray<string> = []): string {
-  // The policy first, so it is in force before any script runs; `weave` next, so it is there when the screen's run.
+  // The policy first, so it is in force before any script runs; `minca` next, so it is there when the screen's run.
   return `<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n<script>${SCREEN_CLIENT}</script>\n${screen}`;
 }
 
@@ -281,14 +282,14 @@ export function createScreenBridge(params: {
   const collectionOf = (name: unknown) => {
     if (typeof name !== 'string')
       throw new Error(
-        `Name the collection as text, like weave.list("${[...allowed][0] ?? 'app.example.thing'}"). This screen may use ${names}.`,
+        `Name the collection as text, like minca.list("${[...allowed][0] ?? 'app.example.thing'}"). This screen may use ${names}.`,
       );
     if (!allowed.has(name)) throw new Error(`This screen can't use "${name}". It may use ${names}.`);
     return name;
   };
   const ownRecord = async (key: unknown) => {
     if (typeof key !== 'string')
-      throw new Error('Name the record by its key, as text: weave.update(record.key, body)');
+      throw new Error('Name the record by its key, as text: minca.update(record.key, body)');
     const record = await node.records.get(spaceId, key);
     if (!record || !allowed.has(record.collection)) throw new Error(`No record ${key} this screen can use`);
     return record;

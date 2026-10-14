@@ -11,7 +11,7 @@
  * messages only; anything human-readable goes to stderr.
  */
 import { createInterface } from 'node:readline';
-import { callAction, offeredActions, type NodeAction, type P2PNode } from '@weaveprotocol/core';
+import { callAction, offeredActions, type NodeAction, type P2PNode } from '@minca/core';
 import { isRecord } from './json.js';
 
 const SUPPORTED_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
@@ -36,7 +36,7 @@ type JsonRpcResponse =
   | { jsonrpc: '2.0'; id: string | number | null; error: { code: number; message: string } };
 
 export interface McpOptions {
-  /** Serving an agent's node (`weave connect`), not the account itself */
+  /** Serving an agent's node (`minca connect`), not the account itself */
   readonly agent?: boolean;
   /** A bot: an account of its own that spaces added, offered what an agent is */
   readonly bot?: boolean;
@@ -56,7 +56,7 @@ export function toolInstructions(node: P2PNode, options: McpOptions = {}): strin
     'Standard collections (collections_standard) are shared by every app that uses them; prefer them to shapes of your own.' +
     (options.bot
       ? ' You are a bot: an account of your own, which spaces added as a member to help everyone in them. What you ' +
-        "write shows as you, and every member's device checks it against your role there. You cannot add " +
+        "write shows as you, and every member's device checks it against the grants your roles hold there. You cannot add " +
         'collections or change who is in a space; to make something new, propose the collections it needs ' +
         "(collections_propose) and someone who may adds them. A collection's guides (collections_list) say how " +
         'the apps in a space want new things proposed.'

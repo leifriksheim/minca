@@ -9,13 +9,14 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
 } from 'react';
-import { useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
+import { useLive, useNode, useProfiles } from '@minca/core/react';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
 import { collectionLabel, humanize, recordLabel } from '../derive/schema-ui';
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '../derive/time';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { RecordPanel } from './RecordPanel';
+import { SHAPE_CYCLE } from '@minca/app-shared/tokens';
 import { styles, palette, ui } from '../styles';
 import { Person } from './Person';
 
@@ -82,17 +83,17 @@ const writerOf = (record: NodeRecord) => record.createdBy ?? record.root ?? reco
 
 /**
  * Collections get a colour each: the standard ones (comments, reactions,
- * tags…) stay grey so they read as notes on records, the space's own ones get
- * muted hues spaced far enough apart to tell apart.
+ * tags…) stay grey so they read as notes on records, the space's own ones take
+ * the shapes' colours in turn.
  */
 function coloursFor(names: ReadonlyArray<string>): Map<string, string> {
-  const greys = ['#8f8f8f', '#b4b4b4', '#6b6b6b', '#c8c8c8', '#a3a3a3'];
+  const greys = [palette.ink.faint, palette.surface.lineStrong, palette.ink.muted];
   const map = new Map<string, string>();
   let grey = 0;
   let hue = 0;
   for (const name of names) {
     if (name.startsWith('std.')) map.set(name, greys[grey++ % greys.length]!);
-    else map.set(name, `hsl(${Math.round((212 + hue++ * 137.5) % 360)} 34% 50%)`);
+    else map.set(name, palette.shapes[SHAPE_CYCLE[hue++ % SHAPE_CYCLE.length] ?? 'cobalt']);
   }
   return map;
 }
@@ -683,7 +684,7 @@ export function GraphView({
                 style={{
                   width: 8,
                   height: 8,
-                  borderRadius: 99,
+                  borderRadius: palette.radius.pill,
                   background: off ? 'transparent' : colour,
                   border: `1.5px solid ${colour}`,
                   flexShrink: 0,
@@ -1008,9 +1009,7 @@ function Details({
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Avatar did={did} size={32} />
           <div>
-            <h3
-              style={{ fontSize: 16, fontWeight: 600, color: palette.ink.strong, letterSpacing: '-0.02em' }}
-            >
+            <h3 style={{ ...styles.appTitle, fontSize: 16 }}>
               <Person did={did} />
             </h3>
             <p style={{ fontSize: 12, color: palette.ink.faint }}>
@@ -1031,7 +1030,7 @@ function Details({
                     width: 8,
                     height: 8,
                     marginTop: 5,
-                    borderRadius: 99,
+                    borderRadius: palette.radius.pill,
                     flexShrink: 0,
                     background: colourOf(r.collection),
                   }}
@@ -1080,8 +1079,8 @@ const tooltip: CSSProperties = {
   padding: '8px 10px',
   borderRadius: palette.radius.md,
   background: palette.surface.card,
-  border: `1px solid ${palette.surface.line}`,
-  boxShadow: '0 8px 20px -12px rgba(15, 17, 21, .25)',
+  border: `1px solid ${palette.surface.rule}`,
+  boxShadow: palette.shadow.small,
   fontSize: 12,
   lineHeight: 1.4,
   pointerEvents: 'none',
@@ -1096,10 +1095,10 @@ const panel: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   background: palette.surface.card,
-  border: `1px solid ${palette.surface.line}`,
+  border: `1px solid ${palette.surface.rule}`,
   borderRadius: palette.radius.lg,
-  boxShadow: '0 12px 28px -16px rgba(15, 17, 21, .25)',
-  animation: 'weave-fade .12s ease',
+  boxShadow: palette.shadow.float,
+  animation: 'minca-fade .12s ease',
   zIndex: 3,
 };
 const panelBody: CSSProperties = {

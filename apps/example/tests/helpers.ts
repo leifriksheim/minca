@@ -9,7 +9,7 @@ import { joined } from '../../../packages/core/tests/helpers/joined.js';
 import { until as untilWithin } from '../../../packages/core/tests/helpers/until.js';
 import { createLocalRootSigner } from '../../../packages/core/src/identity/root-signer.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../../../packages/core/src/identity/did.js';
-import { team } from '@weaveprotocol/core';
+import { noteTerms, team } from '@minca/core';
 
 export const waitFor = (check: () => Promise<boolean>, what: string) => untilWithin(check, 4000, what);
 
@@ -33,8 +33,8 @@ export async function agentOf(who: Person, spaces: ReadonlyArray<string>) {
   const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
   const note = await createLocalRootSigner(who.me, provider).delegate({
     audience: did,
-    capabilities: spaces.map((id) => ({ with: `space:${id}`, can: 'record/*' })),
+    ...noteTerms('/record', spaces),
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
-  return who.node.asAgent({ keys, note: note.encoded });
+  return who.node.asAgent({ keys, note });
 }

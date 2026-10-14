@@ -17,25 +17,26 @@ the [standard library](standard-library.md).
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md).
+> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
 
 ## Who proposes
 
 Anyone in a space may write a blueprint. It is how a key that may only write
 records asks for collections: an agent's, whose note grants records only, or
-a person's, whose role does not hold `define`. Both take the same path, and
+a person's, whose roles hold no `/collection/define`. Both take the same path, and
 neither needs to know which they are. Every peer refuses a definition from a
-key whose note doesn't grant `collection/define`, so a blueprint is the only
+key whose note doesn't grant `/collection/define`, so a blueprint is the only
 way such a key gets a collection.
 
 `applyBlueprint` defines each collection the space doesn't have as the
-blueprint says, signed by whoever applies it. They need `define` in the
-space, and a note that grants it. It defines `std.blueprint` itself first
-when the space lacks it, so the blueprint's own rules hold from then on: only
-its proposer edits it.
+blueprint says, signed by whoever applies it. They need a grant of
+`/collection/define` in the space, and a note that grants it. It defines
+`std.blueprint` itself first when the space lacks it. Who may edit a
+blueprint is the space's grants: under the `community` template, only its
+proposer, moderators and admins.
 
 ```typescript
-import { proposeCollections, reviewBlueprint, applyBlueprint } from '@weaveprotocol/core/schemas';
+import { proposeCollections, reviewBlueprint, applyBlueprint } from '@minca/core/schemas';
 
 const proposal = await proposeCollections(node, space.id, {
   title: 'Chores',
@@ -49,7 +50,7 @@ const proposal = await proposeCollections(node, space.id, {
         properties: { title: { type: 'string', minLength: 1, maxLength: 200 }, done: { type: 'boolean' } },
         required: ['title'],
       },
-      rules: { delete: 'creator' },
+      rules: { fixed: ['title'] },
     },
   ],
 });
@@ -71,7 +72,7 @@ await applyBlueprint(node, space.id, proposal.key);
   `collections_apply` ([actions](actions.md)). An agent's node is not offered
   `collections_apply`.
 
-_Source: `packages/core/src/schemas/blueprints.ts` (`checkBlueprint`, `proposeCollections`, `applyBlueprint`, `copyBlueprint`), `packages/core/src/schemas/library/collections.ts` (`blueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`, `collections_apply`). Tests: `packages/core/tests/records-only.test.ts` ("collections proposed in a blueprint": "an agent proposes, someone who may define applies it, and the space then has the collections", "a person whose role does not hold define proposes the same way, and someone who may applies it", "copying a blueprint into another space proposes it there, and says where it came from", "a proposal may not name the protocol's own collections, a version, or one collection twice")._
+_Source: `packages/core/src/schemas/blueprints.ts` (`checkBlueprint`, `proposeCollections`, `applyBlueprint`, `copyBlueprint`), `packages/core/src/schemas/library/collections.ts` (`blueprint`), `packages/core/src/node/actions.ts` (`collections_propose`, `collections_proposals`, `collections_apply`). Tests: `packages/core/tests/records-only.test.ts` ("collections proposed in a blueprint": "an agent proposes, someone who may define applies it, and the space then has the collections", "a person whose role holds no /collection/define proposes the same way, and someone who may applies it", "copying a blueprint into another space proposes it there, and says where it came from", "a proposal may not name the protocol's own collections, a version, or one collection twice")._
 
 ## The review
 
@@ -85,7 +86,7 @@ blueprint is `applied` once every collection is the same.
 A space that holds the library's current definition of a standard
 collection meets a blueprint made against an earlier one: a `std.*`
 collection is **the same** as what the space holds when the space's schema,
-history, links, permissions, rules and topics are the library's. The review
+history, links, rules and topics are the library's. The review
 never offers an earlier standard definition as a change to a space that
 holds the current one, since applying it would only take the additions away.
 
@@ -124,7 +125,7 @@ _Source: `packages/core/src/schemas/blueprints.ts` (`supersededBlueprints`, `rev
 
 ## Guides
 
-A definition says what a record may hold and who may change it. It can't say
+A definition says what a record may hold and the rules it keeps. It can't say
 "to add an app with its own screen, write one of these, pointing at a
 blueprint". An app that has more to say about its collections writes a
 `std.guide`: a `name`, a `title`, the `text`, and the `collections` it is
@@ -173,19 +174,19 @@ every peer will enforce.
 
 `describeCollection(definition)` returns, in this order:
 
-1. Who may add: "Anyone in the space can add a vote." / "Only … can add …".
-2. Who may change and remove — one sentence when `edit` and effective `delete`
-   are the same set, else one each: "Only whoever added a vote can change or
-   remove it."
-3. `onePer`: "One vote per person per poll — adding another changes the
+1. `final`: "Nobody can change or remove a vote once it is added."
+2. `onePer`: "One vote per person per poll — adding another changes the
    first." (with `@author`); otherwise "… — anyone adding another replaces the
-   first." when `edit` includes `member`, else "… — whoever adds it first holds
-   it."
-4. `fixed`: "Once a poll is added, its “options” can't be changed."
+   first.", or with `final`, "… — the first one added holds it."
+3. `fixed`: "Once a poll is added, its “options” can't be changed."
+4. Each condition of the contract (`contract.check`), in its own words: "Every change is checked: “…”".
 5. One per declared link: "Each vote points at one thing: a poll (“about”)." or
    "A comment can point at anything in the space (“about”)."
-6. `permissions`: "Roles in the space can be given permission to “moderate”."
-7. `history: "all"`: "Every earlier version of a … is kept."
+6. `history: "all"`: "Every earlier version of a … is kept."
+
+Who may add, change or remove records is not the definition's to say: it is
+the space's grants ([spec 03 §2](https://github.com/leifriksheim/minca/blob/main/spec/03-spaces.md)),
+so the description says nothing of it.
 
 Nouns come from `title`, else the last segment of `name`; field labels from
 the schema's `title`s, else the field name in words. A rule the describer does
@@ -198,18 +199,17 @@ _Source: `packages/core/src/records/describe.ts`. Tests: `packages/core/tests/re
 ## Compatible definitions
 
 An app decides it can open a space by finding a collection with the right
-**name**. Chat opens any `std.message`, whatever its fields and whoever its
-rules let edit it. And a space whose definition is a little older than the
+**name**. Chat opens any `std.message`, whatever its fields and rules. And a space whose definition is a little older than the
 app's (a `std.message` without the `shares` link) stays that way, because the
 library skips a collection the space already has. Whether an app can use a
 definition it did not write is a question for the app, not for peers: a peer
 stores and judges every record the same way whatever the answer.
 
 > **Planned.** Not built. Issues:
-> [#11](https://github.com/leifriksheim/weave/issues/11),
-> [#12](https://github.com/leifriksheim/weave/issues/12). The parts peers
+> [#11](https://github.com/leifriksheim/minca/issues/11),
+> [#12](https://github.com/leifriksheim/minca/issues/12). The parts peers
 > would check, content-addressed definitions and additive-only changes, are
-> planned in [spec 02 §6.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md).
+> planned in [spec 02 §6.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md).
 
 ### The check: `compare(held, wanted)`
 
@@ -224,7 +224,7 @@ interface Compatibility {
 interface Break {
   path: string;
   message: string;
-} // 'rules.edit', "Anyone can edit anyone's messages here; this app assumes only their author"
+} // 'rules.onePer', "Anyone can react twice with one emoji here; this app assumes once"
 ```
 
 An app that only shows records needs `read` empty; one that writes needs both.
@@ -232,7 +232,7 @@ Anything the checker cannot decide is a break.
 
 - **Fields.** Reading needs every body the space accepts to be one the app
   accepts (held ⊆ wanted); writing needs wanted ⊆ held. Over the schema
-  keywords a definition may use ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md))
+  keywords a definition may use ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md))
   this is a walk of both schemas: `type` sets contained (`integer` inside
   `number`); a field one side relies on is `required` on the other; numeric
   and length ranges contained; `enum`, `const` and `oneOf` value sets
@@ -247,12 +247,11 @@ Anything the checker cannot decide is a break.
 - **Rules: never looser.** Stricter rules are never a safety problem (at worst
   the app cannot write, which `can` already reports), so rules are checked one
   way: the space's rule must be an **attenuation** of the app's, as in UCAN.
-  For `create`, `edit`, `delete`, every who in the space's list is covered by
-  one in the app's (`member` covers everyone; `creator` and `can:<p>` cover
-  themselves; defaults count). `onePer`: the space promises at least the
-  uniqueness the app relies on (fewer parts is a stronger promise). `fixed`:
-  the space keeps at least the fields the app expects fixed. `permissions`: a
-  permission the app's rules name is declared.
+  `onePer`: the space promises at least the uniqueness the app relies on
+  (fewer parts is a stronger promise). `fixed`: the space keeps at least the
+  fields the app expects fixed. `final`: an app that relies on it needs it.
+  Who may write is the space's grants, not the definition's, and is not
+  compared.
 
 ### What uses it
 
@@ -263,9 +262,9 @@ Anything the checker cannot decide is a break.
    the rules are no looser, a writer allowed to change the definition writes
    it at the next version without asking. (Adding `shares` to an older
    `std.message` is this case.)
-3. **Anything else asks a person.** The blueprint review shows the breaks ("lets
-   anyone edit messages; now only their author"), not only "changes who may do
-   what".
+3. **Anything else asks a person.** The blueprint review shows the breaks ("a poll's
+   options can now be changed after it is added"), not only "changes the
+   rules".
 
 An app should not define a `std.*` name that is not compatible with the
 standard library's. Peers don't refuse one on arrival (refusing depends on
@@ -303,8 +302,8 @@ error-level break for it on either side. Findings oasdiff reports as warnings
 or information stay that. The catalogue of checks is oasdiff's, mapped onto
 the schema keywords and links; a keyword it has no check for is a break.
 
-Rules are not shape. `create`, `edit`, `delete`, `onePer`, `fixed` and
-`permissions` are the space's governance: a space may tighten them under the
+Rules are not shape. `onePer`, `fixed` and `final` are the space's
+governance, as its grants are: a space may tighten them under the
 same name (at worst an app can't write, which `can` reports), and may never
 loosen them past what an app relies on ("never looser", above).
 
@@ -319,7 +318,7 @@ loosen them past what an app relies on ("never looser", above).
 
 ## Planned: meaning-level hints
 
-A definition says what a record may hold and who may change it, not what it
+A definition says what a record may hold and the rules it keeps, not what it
 means to a screen. Views derived from definitions (the blueprint review, an
 app's collection views, made apps without a screen of their own) have to guess
 which field is the title or that votes are shown as counts. The plan adds
@@ -337,4 +336,4 @@ Like `x-choicesFrom`, hints are display only and never checked when
 validating, and [`compare`](#compatible-definitions) ignores them. They would go in a new
 top-level definition member rather than as schema keywords: unknown
 top-level members are ignored by today's peers, while an unknown schema
-keyword makes the definition invalid ([spec 02 §6.2](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)). Added when a derived view falls short. _Open:_ the format.
+keyword makes the definition invalid ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)). Added when a derived view falls short. _Open:_ the format.

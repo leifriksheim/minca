@@ -9,7 +9,7 @@ messages, and ICE/TURN.
 
 What travels _inside_ an authenticated connection — the sync protocol — is
 in [05 — Sync and storage](05-sync-and-storage.md). Keys, DIDs and notes
-(UCAN delegations) are in [01 — Identity](01-identity.md). Read keys, space
+(delegations) are in [01 — Identity](01-identity.md). Read keys, space
 keys, roles and the access log are in [03 — Spaces](03-spaces.md). The relay
 mailbox used by doors is in [07 — Doors](07-doors.md).
 
@@ -33,7 +33,8 @@ Terms used below:
   ([01 — Identity](01-identity.md)). It is a peer's identity on the wire:
   in rooms, in handshakes and in every message's `from`.
 - **account DID** — the root DID behind a session, proven by the session's
-  **note** (the delegation from the account to the session key).
+  **note**: its proof, one token from the account's root key to the
+  session key ([01](01-identity.md) §7.5).
 - **room** — a name on a relay under which peers are introduced.
 - **space id**, **read key**, **space key** — see [03 — Spaces](03-spaces.md).
 
@@ -104,10 +105,11 @@ fixes the socket's DID for the life of the socket.
 > SharedWorker: each signs with the app's key ([06](06-nodes-and-sessions.md)
 > §2.1). (The processes of a program connected by code can't collide any
 > more: only one may hold its key.) The refused tab says so (§2, and `refused` in `spaces.status`), but
-> it cannot sync until the first closes. A key per tab, delegated from the
-> app's key, would fix it; that needs peers to accept a two-link chain
-> ([01](01-identity.md) §7.5). Tracked in
-> [#19](https://github.com/leifriksheim/weave/issues/19).
+> it cannot sync until the first closes. The fix is a key per tab, each with
+> its own one-link note signed by the account (through the home, or the
+> root signer), since a key can't pass its note on ([01](01-identity.md)
+> §7.5); the library doesn't ask for one yet. Tracked in
+> [#162](https://github.com/leifriksheim/minca/issues/162).
 
 _Source: `packages/relay/relay.mjs` (`handleMessage`, `isDid`, `CLOSE_DID_TAKEN`). Tests: `packages/core/tests/relay-refusal.test.ts` ("one DID per room")._
 
@@ -120,15 +122,15 @@ interpret it.
 connections belong together but not which space they are:
 
 ```
-room = lowercase( base32( SHA-256( UTF-8("weave-room/v1|" + spaceId) )[0..20) ) )
+room = lowercase( base32( SHA-256( UTF-8("minca-room/v1|" + spaceId) )[0..20) ) )
 ```
 
 `base32` is RFC 4648 (alphabet `A–Z2–7`), no padding, output lowercased. 20
 bytes give exactly 32 characters.
 
 Example: space id `example-space-id` →
-SHA-256 prefix `4cb4dac634926d7b5a4de659ec8ea1328d616cca` →
-room **`js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk`**.
+SHA-256 prefix `9c76ed8676b603bf3ec19ec228ef20fbbaa6ffcf` →
+room **`tr3o3btwwyb36pwbt3bcr3za7o5kn76p`**.
 
 A client MUST use this derivation for a space's room; two implementations
 that differ here never meet.
@@ -183,13 +185,13 @@ The relay passes it through untouched.
 Examples (DIDs shortened for readability; real ones are full `did:key`s):
 
 ```json
-→ {"type":"join","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk","from":"did:key:zDnaeV1Sz…"}
-← {"type":"join","from":"did:key:zDnaebEo…","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk"}
+→ {"type":"join","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p","from":"did:key:zDnaeV1Sz…"}
+← {"type":"join","from":"did:key:zDnaebEo…","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p"}
 → {"type":"offer","to":"did:key:zDnaebEo…","payload":{"type":"offer","sdp":"v=0\r\n…"},"from":"did:key:zDnaeV1Sz…"}
 ← {"type":"offer","from":"did:key:zDnaeV1Sz…","to":"did:key:zDnaebEo…","payload":{"type":"offer","sdp":"v=0\r\n…"}}
 → {"type":"candidate","to":"did:key:zDnaeV1Sz…","payload":{"candidate":"candidate:1 1 udp 2122260223 192.168.1.2 54321 typ host","sdpMid":"0","sdpMLineIndex":0},"from":"did:key:zDnaebEo…"}
-→ {"type":"leave","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk","from":"did:key:zDnaeV1Sz…"}
-← {"type":"leave","from":"did:key:zDnaeV1Sz…","room":"js2nvrrusjwxwwsn4zm6zdvbgkgwc3gk"}
+→ {"type":"leave","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p","from":"did:key:zDnaeV1Sz…"}
+← {"type":"leave","from":"did:key:zDnaeV1Sz…","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p"}
 → {"type":"ice","from":"did:key:zDnaeV1Sz…"}
 ← {"type":"ice","payload":{"servers":[{"urls":["turn:turn.example.com:3478"],"username":"1790000000:3q2-7wX0aBcD","credential":"n3Jk…="}],"expiresAt":1790000000000}}
 ```
@@ -335,7 +337,7 @@ a receiver recognises one (§7.3).
 > started (`packages/core/src/network/rtc-transport.ts`, `handleOffer`; `packages/core/src/network/mesh.ts`).
 > Found by reading the code, not reproduced. A fix will drop a duplicate offer.
 > Other implementations SHOULD NOT copy this.
-> Tracked in [#162](https://github.com/leifriksheim/weave/issues/162).
+> Tracked in [#162](https://github.com/leifriksheim/minca/issues/162).
 
 _Source: `packages/core/src/network/multi-signaling.ts`. Tests: `packages/core/tests/introductions.test.ts` ("several relays at once"), `packages/core/tests/network-manager.test.ts` ("a relay connects the first pair…")._
 
@@ -349,7 +351,7 @@ are configured with different relays still meet.
 - They are the body of the single record with key `relays:space` in the
   collection **`sys.relays`**: `{ "relays": [url, …] }`, stored in the clear
   even in a private space. It is part of the access log and only an author
-  holding the `manage` permission may change it; see
+  granted `/space/relays` may change it; see
   [03 — Spaces](03-spaces.md) for how the current value is chosen.
 - A valid list has at most **8** entries, no duplicates, each a string of at
   most 200 characters that parses as a URL with scheme `wss:` — or `ws:` when
@@ -442,9 +444,18 @@ refuse (close `4002`) a welcome unless:
 
 - the node DID is the pinned DID (a node that signs with its own key, as a
   host does); or
-- the welcome's `note` is a valid delegation (01 §7.5) whose audience is the
-  node DID and whose root is the pinned DID. This is how a node whose session
-  key changes on restart, such as `weave run`, is pinned by its account.
+- the welcome's `note` is a valid note (01 §7.5, checked at the client's
+  time, §7.6) whose audience is the node DID, whose issuer is the pinned
+  DID, and which grants a node's whole power: `cmd` is `/`, `sub` is the
+  pinned DID, and `pol` is `[]`. This is how a node whose session key
+  changes on restart, such as `minca run`, is pinned by its account. A
+  narrower note, an app's for one space or for reading only, is not the
+  account's node and MUST NOT satisfy the pin.
+
+> **Known defect:** any key whose note grants everything about the account,
+> an app given write to every space included, satisfies an account pin, and
+> the client checks no revoke of it. Tracked in
+> [#165](https://github.com/leifriksheim/minca/issues/165).
 
 A client SHOULD pin a host by the key its `sys.hosting` record names, or, for
 a host it only knows by address, by the `did` its description gives
@@ -455,7 +466,7 @@ The handshake is three text frames, then binary frames either way:
 ```
 1. node   → client   {"type":"challenge","nonce":<Nₛ>,"did":<node DID>}
 2. client → node     {"type":"hello","did":<client session DID>,"nonce":<N꜀>,"sig":…,"read"?:…,"readKey"?:…,"member"?:…,"earlier"?:[…]}
-3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>,"note"?:<the node's delegation>}
+3. node   → client   {"type":"welcome","did":<node DID>,"sig":<…>,"note"?:<the node's proof>}
 4. binary frames of UTF-8 JSON, either way
 ```
 
@@ -471,7 +482,7 @@ The proof fields and what is signed are in §6.1. The client:
 
 How the reference client redials is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`), `packages/core/src/node/node.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
+_Source: `packages/core/src/network/ws-transport.ts` (`nodeAddress`), `packages/core/src/network/peer-auth.ts` (`checkPin`, `pinned`), `packages/core/src/node/node.ts` (`pinnedTo`, `peerOf`), `packages/core/src/node/space-runtime.ts` (`nodeNetwork`), `packages/core/src/network/network-manager.ts`. Tests: `packages/core/tests/ws-transport.test.ts` ("pinning the node", "only a note for everything about the account pins…"), `packages/cli/tests/host.test.ts`, `packages/cli/tests/cli.test.ts` ("a device that pins the node by its account…")._
 
 ### 5.3 The `/peer` endpoint (node side)
 
@@ -527,11 +538,11 @@ Common rules:
   `did:key:` or does not decode fails.
 - `spaceId` in a label is the **space id**, not the room.
 
-### 6.1 Client and node (WebSocket, `weave-peer/v3`)
+### 6.1 Client and node (WebSocket, `minca-peer/v3`)
 
 ```
-H  = "weave-peer/v3|client|" + spaceId + "|" + clientDid + "|" + nodeDid + "|" + Nₛ
-W  = "weave-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
+H  = "minca-peer/v3|client|" + spaceId + "|" + clientDid + "|" + nodeDid + "|" + Nₛ
+W  = "minca-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
 ```
 
 - The client's hello carries `sig` = client session key signs `H`.
@@ -539,7 +550,7 @@ W  = "weave-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
   also check the read proof (§6.3) over the same `H`.
 - The welcome carries `sig` = node session key signs `W`. The client MUST
   verify it against the node DID from the challenge.
-- A node whose key acts for an account SHOULD also send its delegation as
+- A node whose key acts for an account SHOULD also send its note as
   `note`, so a client can pin the account (§5.2). It is not covered by `sig`
   and need not be: it is checked on its own, and binds to the node DID that
   `sig` verified.
@@ -551,7 +562,7 @@ W  = "weave-peer/v3|server|" + spaceId + "|" + nodeDid + "|" + N꜀
 
 _Source: `packages/core/src/network/peer-auth.ts` (`createClientAuth`, `createServerAuth`). Tests: `packages/core/tests/ws-transport.test.ts` ("a public space", "a private space", "a node that does not welcome properly is refused"), `packages/core/tests/key-change.test.ts` ("the current key lets you in; an old one only with a note…")._
 
-### 6.2 Between peers (mesh, `weave-mesh/v1`)
+### 6.2 Between peers (mesh, `minca-mesh/v1`)
 
 Run once per room on a WebRTC connection (§7.2 gives the frames):
 
@@ -562,7 +573,7 @@ A → B   __auth-proof  proof over T(A, B, N_b)
 B → A   __auth-proof  proof over T(B, A, Nₐ)
 
 T(prover, verifier, nonce) =
-  "weave-mesh/v1|" + spaceId + "|" + proverDid + "|" + verifierDid + "|" + nonce
+  "minca-mesh/v1|" + spaceId + "|" + proverDid + "|" + verifierDid + "|" + nonce
                   + "|" + proverCert + "|" + verifierCert
 ```
 
@@ -579,11 +590,11 @@ over the same `T`.
 In a room that asks no proof (a channel's room, pairing or connecting by
 code, which secures its own payloads), the hellos are still exchanged and no proofs are sent.
 
-Example (public space, placeholder fingerprints):
+Example (public space, placeholder fingerprints; the prover signs with the key of the seed of sixteen `07` bytes, the author of [02](02-records.md) §3.4; the verifier holds the key of sixteen zero bytes):
 
 ```
-T = "weave-mesh/v1|example-space-id|did:key:zDnaeV1SzGREx4fjGtUofWfZfnH42TV5EboaJ6deJLxvmo6jd|did:key:zDnaebEoAa6Zv2oVPznMq3oDqaXb9jCUUX15n4LzqpwMRLxzp|_8bGsP1hPeS2r_CFgK10jg|sha-256 AA:BB|sha-256 CC:DD"
-proof = {"sig":"tSsGyRGc85v0Q6QwVpHwssS0PeNyR3wqX_bK3y8w0AGeOEew4Iyu2wZ-FlBzl67tjNv3NYsgw3NWyPup4I7CQQ"}
+T = "minca-mesh/v1|example-space-id|did:key:zDnaemCBstFw5hzNdNggFHZm6GpHoHqNGrwEtrVi9CxGH9V7E|did:key:zDnaenhB7GpWm1sDUA2mcNLjbZG85bD5uv8kXnX39YE9rGV3d|_8bGsP1hPeS2r_CFgK10jg|sha-256 AA:BB|sha-256 CC:DD"
+proof = {"sig":"TajJEwHsk_JRk6cPhnN3l0dbvZB6aCYtaIX_d2aHjDKqxJPtbdmv99hK3DcpW1mwwvJOwAQR1jNi9ouUFuLSEA"}
 ```
 
 > Rationale: someone in the middle holds a different certificate pair on
@@ -608,8 +619,8 @@ proof:
   reason:
 
   ```
-  member = base64url( envelope(sealKey, "weave/membership/v1", { space: spaceId },
-                               UTF-8(JSON.stringify(noteString))) )
+  member = base64url( envelope(sealKey, "minca/membership/v1", { space: spaceId },
+                               UTF-8(JSON.stringify(proof))) )
   ```
 
   where `sealKey` is the seal key of that space key ([03](03-spaces.md) §8.1) and
@@ -627,10 +638,10 @@ The verifier:
    `did:key:` fails this step);
 3. accepts if that holds and `claimed` is the current read key, except that
    while a new key is due ([03](03-spaces.md) §9.2) it rejects a prover whose
-   `member` it can open to a valid note, made out to the prover's session DID,
+   `member` it can open to a valid proof (01 §7.5), made out to the prover's session DID,
    whose root account is a **former member** (03 §9.2);
 4. accepts if that holds and it holds the space key whose read key is
-   `claimed`, can open `member` with it, the note inside is valid, is made
+   `claimed`, can open `member` with it, the proof inside is valid, is made
    out to the prover's session DID, and its root account is a reader of the
    space now. A verifier without that key (a host) cannot;
 5. otherwise accepts only if an entry among the first 4 of `earlier` names
@@ -700,11 +711,13 @@ _Source: `packages/core/src/network/peer-auth.ts` (`proveRead`, `checkRead`, `MA
 
 A handshake proves a session DID, not whose it is. So the first message each
 side sends on a space's connection, as soon as the peer is admitted, is
-`who` (§9.1), carrying its note. The receiver resolves the note's
-delegation chain ([01 — Identity](01-identity.md)) and takes the root DID as
-the peer's account **only if** the chain is valid and its audience is the
-peer's proven session DID. A note longer than 16 384 characters, invalid, or
-made out to another key gives the peer **no account** (`null`). Nothing else
+`who` (§9.1), carrying its note: its proof. The receiver checks the note
+([01 — Identity](01-identity.md) §7.5, at its own time, §7.6) and takes its
+issuer as the peer's account **only if** the note is valid and its
+audience is the peer's proven session DID. A list of tokens is not a note.
+A proof whose canonical JSON is
+longer than 16 384 characters, invalid, or made out to another key gives
+the peer **no account** (`null`). Nothing else
 in the note is read here; what the library tells apps about the sender is in
 [the node](../packages/core/docs/node.md#live-messages-and-status).
 
@@ -825,7 +838,7 @@ attempt is given, how many relayed-signal ids it remembers) are in
 _Source: `packages/core/src/network/mesh.ts`, `packages/core/src/network/introductions.ts`. Tests: `packages/core/tests/introductions.test.ts`._
 
 > **Planned:** limits on how much one peer can cost another
-> ([#33](https://github.com/leifriksheim/weave/issues/33)).
+> ([#33](https://github.com/leifriksheim/minca/issues/33)).
 >
 > - **A byte rate per peer on every transport** (WebRTC, node socket), on
 >   top of the per-message limits that exist for live messages (§9.2) and
@@ -901,11 +914,11 @@ On every transport, a space's peers exchange messages of the form
 added), on a node socket as the whole binary frame. The
 receiver MUST attribute a message to the connection's peer, not to `from`.
 
-| `type` | Payload              | Specified in                                    |
-| ------ | -------------------- | ----------------------------------------------- |
-| `sync` | a sync message       | [05 — Sync and storage](05-sync-and-storage.md) |
-| `who`  | `{ "note": string }` | §6.4, §9.1                                      |
-| `live` | any JSON             | §9.2                                            |
+| `type` | Payload             | Specified in                                    |
+| ------ | ------------------- | ----------------------------------------------- |
+| `sync` | a sync message      | [05 — Sync and storage](05-sync-and-storage.md) |
+| `who`  | `{ "note": proof }` | §6.4, §9.1                                      |
+| `live` | any JSON            | §9.2                                            |
 
 A channel's rooms carry their own types (`packages/core/src/session/pairing.ts`,
 `packages/core/src/session/connect-code.ts`); see [01 — Identity](01-identity.md) §15 and
@@ -916,7 +929,7 @@ ignored.
 
 Sent by each side to each newly admitted peer of a space, **before any
 `live` message**: `{"type":"who","from":<session DID>,"payload":{"note":<the
-session's encoded note>}}`. Handling is in §6.4. A peer that sends none has no
+session's note, one token>}}`. Handling is in §6.4. A peer that sends none has no
 account.
 
 ### 9.2 Live messages

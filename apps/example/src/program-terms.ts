@@ -1,4 +1,4 @@
-import type { CodeAsking, ConnectOptions } from '@weaveprotocol/core/session';
+import type { CodeAsking, ConnectOptions } from '@minca/core/session';
 
 /**
  * What this app asks the account home for, for a program that asked over a

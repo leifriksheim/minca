@@ -1,12 +1,12 @@
 /**
- * @weaveprotocol/core
+ * @minca/core
  * Self-sovereign, peer-to-peer protocol for the browser.
  *
  * Identity via WebAuthn passkeys, data as signed Versions,
  * sync by range-based set reconciliation (Negentropy),
  * and end-to-end encryption for private Spaces.
  *
- * @module @weaveprotocol/core
+ * @module @minca/core
  */
 
 // Core types
@@ -23,6 +23,8 @@ export type {
   Link,
   Space,
   SpaceRole,
+  SpaceTop,
+  SpaceGrant,
   SpaceVisibility,
   CollectionDef,
   PeerInfo,
@@ -91,7 +93,7 @@ export type { IdentityManager, Identity } from './identity/identity-manager.js';
 export { createDeviceKey, getDeviceKey, deleteDeviceKey } from './identity/device-key.js';
 export type { DeviceKey } from './identity/device-key.js';
 export { createLocalRootSigner } from './identity/root-signer.js';
-export type { RootSigner } from './identity/root-signer.js';
+export type { RootSigner, NoteRequest } from './identity/root-signer.js';
 export {
   newPairingSecret,
   pairingCommitment,
@@ -109,25 +111,42 @@ export {
 } from './identity/channel.js';
 export type { Channel, ChannelKind, ChannelSide } from './identity/channel.js';
 export {
-  issueUCAN,
-  parseUCAN,
-  verifyUCAN,
-  isCapabilitySubset,
-  delegateCapabilities,
-  resolveDelegationRoot,
+  DELEGATION_TYPE,
+  issueDelegation,
+  parseDelegation,
+  verifyDelegation,
+  verifyNote,
+  noteCovers,
+  delegationId,
+  commandCovers,
+  isCommand,
 } from './identity/ucan.js';
 export type {
-  UCANHeader,
-  UCANPayload,
-  UCANToken,
-  Capability,
-  Fact,
-  IssueUCANOptions,
-  UCANValidation,
-  ChainResolution,
-  ProofResolver,
-  DelegateOptions,
+  Delegation,
+  DelegationPayload,
+  Requirement,
+  IssueOptions,
+  VerifyOptions,
+  Verified,
+  NoteCheck,
 } from './identity/ucan.js';
+export { evaluatePolicy, policyProblem } from './identity/policy.js';
+export type { Policy, Statement } from './identity/policy.js';
+export {
+  ALL_COMMAND,
+  RECORDS_COMMAND,
+  WRITE_COMMAND,
+  READ_COMMAND,
+  DEFINE_COMMAND,
+  ACCESS_COMMAND,
+  ACCOUNT_COMMAND,
+  noteGrants,
+  noteTerms,
+  noteSpaces,
+  writeRequirement,
+  grantsRecordsOnly,
+} from './identity/abilities.js';
+export type { NoteTerms } from './identity/abilities.js';
 
 // Phase 2: Schema & Data Structures
 export { createSchemaEngine } from './schema/schema-engine.js';
@@ -195,11 +214,10 @@ export {
   generateInviteSecret,
   deriveInviteKey,
   deriveReadKey,
-  spaceGenesis,
-  spaceIdOf,
-  checkSpace,
-  checkStartingRoles,
-  memberKey,
+  assignKey,
+  removalKey,
+  stepDownKey,
+  succeedKey,
   inviteKey,
   revokeKey,
   roleKey,
@@ -207,25 +225,36 @@ export {
   verifyInvite,
 } from './space/space-access.js';
 export {
+  CONSTITUTION,
+  constitutionOf,
+  constitutionProblem,
+  spaceIdOf,
+  checkSpace,
+  foundersOf,
+  accessGenesisOf,
+} from './space/constitution.js';
+export type { Constitution } from './space/constitution.js';
+export {
   replayAccess,
-  permissionMatches,
-  roleHolds,
-  holds,
-  standing,
-  checkRole,
+  may,
+  isMember,
+  rolesOf,
+  readers,
   checkRelays,
   MAX_RELAYS,
-  MANAGE,
-  INVITE,
-  DEFINE,
   ROLE_COLLECTION,
-  MEMBER_COLLECTION,
+  ASSIGN_COLLECTION,
+  REMOVE_COLLECTION,
   INVITE_COLLECTION,
   REVOKE_COLLECTION,
+  STEPDOWN_COLLECTION,
+  SUCCEED_COLLECTION,
+  STRONG_REMOVE,
   ACCESS_COLLECTIONS,
 } from './space/roles.js';
 export type {
-  Role,
+  RoleDefinition,
+  Needs,
   AccessEvent,
   AccessGenesis,
   AccessHistory,
@@ -233,10 +262,28 @@ export type {
   EventStatus,
   RecordVerdict,
 } from './space/roles.js';
-export { rolePresets, solo, team, community } from './space/presets.js';
+export { rolePresets, solo, team, community, coop, STAFF_COLLECTIONS } from './space/presets.js';
+// Grants: what a role may do (spec 03 §2)
+export {
+  RECORD_READ,
+  RECORD_WRITE,
+  RECORD_DELETE,
+  COLLECTION_DEFINE,
+  MEMBER_REMOVE,
+  ROLE_DEFINE,
+  ROLE_ASSIGN,
+  ROLE_UNASSIGN,
+  KEY_CHANGE,
+  SPACE_RELAYS,
+  SPACE_KEEPERS,
+  SPACE_SUCCEED,
+  checkFoundingRoles,
+  grantFits,
+} from './space/grants.js';
+export type { FoundingRole } from './space/grants.js';
 export { displayName } from './space/names.js';
 export type { RolePreset } from './space/presets.js';
-export type { SpaceGenesis, SpaceKeyPair } from './space/space-access.js';
+export type { SpaceKeyPair } from './space/space-access.js';
 
 // Phase 4: P2P Networking
 export { createSignalingClient, CLOSE_DID_TAKEN } from './network/signaling.js';
@@ -326,8 +373,7 @@ export {
   serveSigner,
   remoteSigner,
   startNodeInWorker,
-  SESSION_CAPABILITY,
-  writeCapability,
+  SESSION_COMMAND,
   relayRoom,
   indexedDBStores,
   folderStores,
@@ -346,10 +392,10 @@ export {
   NotAllowedError,
   watchNotifications,
 } from './node/index.js';
-/** How many subscriptions one proposal to the home may offer */
-export { MAX_PROPOSALS } from './space/notify.js';
+/** How many automations one proposal to the home may offer */
+export { MAX_PROPOSALS } from './space/own-automations.js';
 /** Why an app's "worth hearing about" entry can't be offered, or null */
-export { checkAppNotify } from './space/notify.js';
+export { checkAppAutomation, checkOwnAutomation, ownQuery } from './space/own-automations.js';
 export type {
   StoreFactory,
   WriterKeySource,
@@ -381,8 +427,6 @@ export type {
   ListOptions,
   InviteOptions,
   ConnectionState,
-  DelegateParams,
-  Delegated,
   NodeCollection,
   NodeCollections,
   DefineCollection,
@@ -410,12 +454,12 @@ export type {
   SubscriptionState,
   Keeper,
   CacheConfig,
-  NodeNotifications,
-  NotifyView,
-  NotifyWhen,
-  NotifyApp,
-  NotifyProposal,
-  CarriedSubscriptionView,
+  NodeAutomations,
+  OwnAutomationView,
+  AutomationProposal,
+  AppAutomation,
+  Wake,
+  WakeView,
   NotifyMatch,
   WatchNotificationsOptions,
 } from './node/index.js';
@@ -449,12 +493,31 @@ export { plainQuery } from './query/types.js';
 
 // Rules: who may create, edit and delete a collection's records, what must be unique,
 // and the conditions a version must meet, with the versions it cites
-export { checkRules, onePerKey } from './records/rules.js';
+export { checkRules, onePerKey, onePerSecret } from './records/rules.js';
+// Keys: whose a record is (spec 02 §4.1)
+export { keyKind, lineKey, ownedKey } from './records/key.js';
 export { describeCollection } from './records/describe.js';
-export type { CollectionRules, Who } from './records/rules.js';
-export type { Check, Condition } from './records/checks.js';
-export { checkCostHints } from './records/checks.js';
-/** Conditions over one record, in a check's language: a subscription's `where`, and an app's own filters */
+export type { CollectionRules } from './records/rules.js';
+export type { Contract, Condition, CollectionContract, Line } from './records/contracts.js';
+export { contractCostHints } from './records/contracts.js';
+// Contracts written in TypeScript, typed from the collection's schema, built into CEL
+export { contract } from './records/contract-builder.js';
+export type {
+  CelExpr,
+  CelInt,
+  Cited,
+  ContractContext,
+  Expr,
+  BoolExpr,
+  NumExpr,
+  IntExpr,
+  StrExpr,
+  ListExpr,
+  ObjExpr,
+  VersionExpr,
+  DynExpr,
+} from './records/contract-builder.js';
+/** Conditions over one record: an automation's `where`, and an app's own filters */
 
 // Hosting: a subscription key, signed requests to a host, and a client for one
 export {

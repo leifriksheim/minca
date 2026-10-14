@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { rolePresets, type NewSpace, type SpaceSummary } from '@weaveprotocol/core';
-import { useMyName, useNode } from '@weaveprotocol/core/react';
+import type { NewSpace, SpaceSummary } from '@minca/core';
+import { useMyName, useNode } from '@minca/core/react';
 // Defines collections in a space; not a React hook, whatever its name says.
-import { useSchemas as defineCollections } from '@weaveprotocol/core/schemas';
-import { Modal, Choice } from '@weave/app-shared/Modal';
-import { ASSEMBLY, topic } from './schema';
+import { useSchemas as defineCollections } from '@minca/core/schemas';
+import { Modal, Choice } from '@minca/app-shared/Modal';
+import { ASSEMBLY, assemblyRoles, topic } from './schema';
 import { Problem, TopicPicker } from './ui';
-import { useAction } from '@weave/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
+import { palette } from './styles';
 
 /** Topics most groups start with; the person picks some, adds their own, or none */
 const SUGGESTED: ReadonlyArray<{ name: string; hue: number }> = [
@@ -55,10 +56,7 @@ export function NewAssembly({
   const submit = () =>
     void action.run(async () => {
       await me.save();
-      const roles = rolePresets.community.roles.map((role) =>
-        role.name === 'member' && membersInvite ? { ...role, permissions: ['invite'] } : role,
-      );
-      const space = await create({ name: name.trim(), visibility, roles, creatorRole: 'admin' });
+      const space = await create({ name: name.trim(), visibility, roles: assemblyRoles(membersInvite) });
       if (!space) throw new Error('The assembly could not be made');
       await defineCollections(node, space.id, ASSEMBLY);
       for (const t of topics) await node.records.put(space.id, topic, { name: t.name, hue: t.hue });
@@ -155,13 +153,13 @@ export function NewAssembly({
             type="checkbox"
             checked={membersInvite}
             onChange={(event) => setMembersInvite(event.target.checked)}
-            style={{ marginTop: 3, accentColor: '#000' }}
+            style={{ marginTop: 3, accentColor: palette.accent.base }}
           />
           <span>
             Members can invite others
             <span className="lq-faint" style={{ display: 'block', fontSize: 12.5 }}>
-              Every account is one vote, so whoever can invite decides who votes. Off, only you and moderators
-              can.
+              Every account is one vote, so whoever can invite decides who votes. Off, only you, admins and
+              moderators can.
             </span>
           </span>
         </label>

@@ -98,6 +98,13 @@ describe('filters', () => {
     assert.equal(matches(r, { tags: { $contains: 'work' } }), false);
   });
 
+  test('$in and $nin: a list field is in when any of its items is', () => {
+    assert.equal(matches(r, { tags: { $in: ['work', 'shop'] } }), true);
+    assert.equal(matches(r, { tags: { $in: ['work'] } }), false);
+    assert.equal(matches(r, { tags: { $nin: ['work'] } }), true);
+    assert.equal(matches(r, { tags: { $nin: ['shop'] } }), false);
+  });
+
   test('comparisons across types never match', () => {
     assert.equal(matches(r, { amount: { $gt: '1' } }), false);
   });
@@ -176,7 +183,7 @@ describe('queries on a node', () => {
 
   test('pages with a cursor, never skipping or repeating — even on ties', async () => {
     const me = await person();
-    const { space } = await todos(me);
+    const { space, items } = await todos(me);
     const seen: string[] = [];
     let cursor: string | null = null;
     do {
@@ -190,16 +197,19 @@ describe('queries on a node', () => {
       seen.push(...page.records.map((r) => r.key));
       cursor = page.cursor;
     } while (cursor);
-    assert.deepEqual(seen, ['todo-0', 'todo-2', 'todo-4', 'todo-1', 'todo-3']);
+    assert.deepEqual(
+      seen,
+      [0, 2, 4, 1, 3].map((i) => items[i]!.key),
+    );
   });
 
   test('deleted records are not found', async () => {
     const me = await person();
-    const { space } = await todos(me);
-    await me.records.delete(space, 'todo-0');
+    const { space, items } = await todos(me);
+    await me.records.delete(space, items[0]!.key);
     const all = await me.records.query(space, { collection: 'app.todo.item' });
     assert.equal(
-      all.records.some((r) => r.key === 'todo-0'),
+      all.records.some((r) => r.key === items[0]!.key),
       false,
     );
     assert.equal(all.records.length, 4);
@@ -207,15 +217,15 @@ describe('queries on a node', () => {
 
   test('include pulls in what links to each result: records, counts, filtered, nested', async () => {
     const me = await person();
-    const { space } = await todos(me);
+    const { space, items } = await todos(me);
     const on = (key: string) => [{ rel: 'about', to: key }];
-    await me.records.put(space, 'std.reaction', { emoji: '👍' }, { links: on('todo-0') });
-    await me.records.put(space, 'std.reaction', { emoji: '🎉' }, { links: on('todo-0') });
+    await me.records.put(space, 'std.reaction', { emoji: '👍' }, { links: on(items[0]!.key) });
+    await me.records.put(space, 'std.reaction', { emoji: '🎉' }, { links: on(items[0]!.key) });
     const comment = await me.records.put(
       space,
       'std.comment',
       { text: 'oat milk?' },
-      { links: on('todo-0') },
+      { links: on(items[0]!.key) },
     );
     await me.records.put(
       space,
@@ -226,7 +236,7 @@ describe('queries on a node', () => {
 
     const result = await me.records.query(space, {
       collection: 'app.todo.item',
-      where: { '@key': 'todo-0' },
+      where: { '@key': items[0]!.key },
       include: {
         reactions: { rel: 'about', from: 'std.reaction', count: true },
         thumbs: { rel: 'about', from: 'std.reaction', where: { emoji: '👍' } },
@@ -250,12 +260,12 @@ describe('queries on a node', () => {
 
   test('include with direction "out" follows a record’s own links', async () => {
     const me = await person();
-    const { space } = await todos(me, 'public');
+    const { space, items } = await todos(me, 'public');
     await me.records.put(
       space,
       'std.comment',
       { text: 'about milk' },
-      { links: [{ rel: 'about', to: 'todo-0' }] },
+      { links: [{ rel: 'about', to: items[0]!.key }] },
     );
     const result = await me.records.query(space, {
       collection: 'std.comment',
@@ -269,7 +279,7 @@ describe('queries on a node', () => {
 
   test('watch re-runs when records change, and stops when told', async () => {
     const me = await person();
-    const { space } = await todos(me);
+    const { space, items } = await todos(me);
     const counts: number[] = [];
     const stop = me.records.watch(space, { collection: 'app.todo.item', where: { done: false } }, (r) =>
       counts.push(r.records.length),
@@ -282,11 +292,11 @@ describe('queries on a node', () => {
       }
     };
     await until(3);
-    await me.records.update(space, 'todo-0', { text: 'milk', done: true, rank: 5 });
+    await me.records.update(space, items[0]!.key, { text: 'milk', done: true, rank: 5 });
     await until(2);
     stop();
     const before = counts.length;
-    await me.records.update(space, 'todo-2', { text: 'eggs', done: true, rank: 3 });
+    await me.records.update(space, items[2]!.key, { text: 'eggs', done: true, rank: 3 });
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(counts.length, before);
   });

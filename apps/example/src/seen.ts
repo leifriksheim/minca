@@ -1,7 +1,7 @@
 /** What is new: records others wrote in an app since you last opened it, tracked in this browser only. */
 import { useSyncExternalStore } from 'react';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import { useAccount, useCollections, useLive } from '@weaveprotocol/core/react';
+import type { SpaceSummary } from '@minca/core';
+import { useAccount, useCollections, useLive } from '@minca/core/react';
 import { namesMe, useSpaceApps, type AppEntry } from './components/apps/entries';
 
 interface Seen {
@@ -11,7 +11,7 @@ interface Seen {
   readonly at: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
-const keyOf = (did: string) => `weave.seen:${did}`;
+const keyOf = (did: string) => `minca.seen:${did}`;
 const cache = new Map<string, Seen>();
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((listener) => listener());
@@ -56,8 +56,8 @@ function save(did: string, seen: Seen) {
 
 // Another tab looked at something: take its word.
 globalThis.addEventListener?.('storage', (event) => {
-  if (!event.key?.startsWith('weave.seen:')) return;
-  cache.delete(event.key.slice('weave.seen:'.length));
+  if (!event.key?.startsWith('minca.seen:')) return;
+  cache.delete(event.key.slice('minca.seen:'.length));
   changed();
 });
 
@@ -102,7 +102,7 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
   const watch = apps.map((app) => ({
     id: app.id,
     notify: app.notify,
-    collections: [...new Set(app.notify.map((n) => n.collection))],
+    collections: [...new Set(app.notify.map((n) => n.when.query.collection))],
     after: Date.parse(seenAt(seen, spaceId, app.id)),
   }));
   const signature = JSON.stringify(watch);
@@ -120,7 +120,7 @@ export function useUnread(spaceId: string, apps: ReadonlyArray<AppEntry>): Reado
           for (const record of records) {
             if (record.createdBy === did || Date.parse(record.createdAt) <= app.after) continue;
             count++;
-            if (namesMe(app.notify, collection, record.body, did)) forMe++;
+            if (namesMe(app.notify, collection, record, did)) forMe++;
           }
         }
         out.set(app.id, { count, forMe });

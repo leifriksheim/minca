@@ -1,13 +1,13 @@
-# Building on Weave
+# Building on Minca
 
-Short guides for building an app with `@weaveprotocol/core`. They ship in the
+Short guides for building an app with `@minca/core`. They ship in the
 package, so they always match the version installed: an agent working in an
-app's repository finds them at `node_modules/@weaveprotocol/core/docs/`.
+app's repository finds them at `node_modules/@minca/core/docs/`.
 
-The repository's README (https://github.com/leifriksheim/weave) gives the
+The repository's README (https://github.com/leifriksheim/minca) gives the
 whole picture, and where each thing is described. The protocol
 itself (what goes over the wire, what is signed, what every peer checks) is
-specified in `spec/` in the repository: https://github.com/leifriksheim/weave/tree/main/spec
+specified in `spec/` in the repository: https://github.com/leifriksheim/minca/tree/main/spec
 
 ## The model in ten lines
 
@@ -15,15 +15,19 @@ specified in `spec/` in the repository: https://github.com/leifriksheim/weave/tr
 - A **node** (`createNode`) is the whole stack in one object: it signs, stores,
   encrypts, checks and syncs. Everything below goes through it.
 - A **space** is a shared place: its members, their roles, and its data.
-  Private spaces are encrypted end to end.
+  Its first record is its constitution: its founders, if any, and the roles
+  it starts with. Private spaces are encrypted end to end.
 - A **collection** is a named kind of record in a space, like `app.todo.item`.
   Its definition (a JSON Schema, links, rules) is stored in the space itself.
 - A **record** is a signed JSON body with a key that stays the same across
   edits. Every edit is a new version.
-- **Rules** say who may create, edit and delete. Every device checks every
-  record that arrives against them, so there is no server to write.
-  **Checks** say what a record must be, citing other records as evidence;
-  the library counts only records that pass them.
+- **Grants** say who may do what: each role holds commands like
+  `/record/write`, narrowed by a policy, and accounts get them by being
+  assigned a role. A collection's **rules** say what its records must keep
+  to. Every device checks every record that arrives against both, so there
+  is no server to write. **Contracts** say what a record must be, citing
+  other records as evidence; every reader counts only records that pass
+  them (spec 09).
 - **Queries** are plain JSON: Mongo-style filters, sorting, paging, and
   `include` to follow links.
 
@@ -48,28 +52,28 @@ the others wrote.
 | Page                                                 | Covers                                                                                                                                                                                   |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [node.md](node.md)                                   | `createNode`: configuration, root signers and session notes, stores, holding spaces, following the account, events, the network, the app-side client, carriers and hosting, doors, React |
-| [sign-in.md](sign-in.md)                             | `createWeaveAuth`: places, account stores, ways in, passkeys, staying signed in, pods, pairing, the account home's side                                                                  |
+| [sign-in.md](sign-in.md)                             | `createMincaAuth`: places, account stores, ways in, passkeys, staying signed in, pods, pairing, the account home's side                                                                  |
 | [actions.md](actions.md)                             | The node's actions, and the CLI, MCP and WebMCP tools made of them                                                                                                                       |
 | [query-format.md](query-format.md)                   | The JSON query format: filters, operators, sort and cursor, include                                                                                                                      |
 | [standard-library.md](standard-library.md)           | Every `std.*` collection, and the conventions they follow                                                                                                                                |
 | [direct-messages.md](direct-messages.md)             | `std.direct` and `node.direct`: text sealed for some members of a space                                                                                                                  |
 | [blueprints-and-guides.md](blueprints-and-guides.md) | `std.blueprint` and `std.guide`: proposing collections, the review, updates, guides, compatibility                                                                                       |
-| [checks.md](checks.md)                               | `rules.check`: the CEL subset, citing versions, limits, and how the library counts only versions that pass                                                                               |
-| [rules.md](rules.md)                                 | `std.rule`: when a query finds records a condition holds for, or at set times, do something: in an app, an agent or a bot                                                                |
+| [contracts.md](contracts.md)                         | `contract` (`check` and `line`): how the library runs contracts (spec 09), counts only versions that pass, and refuses its own failing ones                                              |
+| [automations.md](automations.md)                     | `std.automation`: when a query finds records, or at set times, do something: in an app, an agent or a bot; and the account's own, which notify it                                        |
 | [calls.md](calls.md)                                 | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
 | [contacts.md](contacts.md)                           | `std.contact` and `std.contact-request`: the list, sealed requests, `node.contacts`                                                                                                      |
 | [doors.md](doors.md)                                 | Doors kept as records, and how a knock becomes a contact: `std.door`, `std.knock`, the answer                                                                                            |
-| [spaces.md](spaces.md)                               | Role presets, invite defaults, key upkeep, profiles, the space manager                                                                                                                   |
+| [spaces.md](spaces.md)                               | Constitution templates, invite defaults, key upkeep, profiles, the space manager                                                                                                         |
 | [warrants.md](warrants.md)                           | `std.warrant`: proof that an account broke the protocol's rules, written by members and checked by every node before it shows a flag                                                     |
 | [storage.md](storage.md)                             | Pacing sync, the store in memory, storage adapters, IndexedDB, data folders, blob stores and mirrors                                                                                     |
 
 ## Rules of thumb
 
-- Import only from the package's entry points: `@weaveprotocol/core`, and
+- Import only from the package's entry points: `@minca/core`, and
   `/react`, `/session`, `/schemas`, `/elements`, `/calls` for those parts.
 - Name your collections reverse-DNS style, `app.<yours>.<thing>`. `sys.*` is
   the protocol's own, and `std.*` is the shared library in `/schemas`.
-- Check the standard library (`@weaveprotocol/core/schemas`) before defining a
+- Check the standard library (`@minca/core/schemas`) before defining a
   reaction, comment, tag, message, task or poll of your own. Using the same
   one is how two apps see each other's data.
 - Never keep state outside records if other people should see it. Records are
@@ -79,7 +83,7 @@ the others wrote.
 
 ## Planned in the library
 
-What the protocol still has planned is in [the spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md),
+What the protocol still has planned is in [the spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md),
 under **Planned** in each part. Library work that isn't protocol:
 
 - **Typed queries, further.** Typed field paths and operator values in
@@ -91,10 +95,10 @@ under **Planned** in each part. Library work that isn't protocol:
   `node.use(space, Poll)`.
 - **Definitions that update themselves.** `useSchemas` and `applyBlueprint` applying
   harmless changes, with `differences()` in `packages/core/src/schemas/blueprints.ts`
-  replaced by the planned `compare` ([02](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md),
+  replaced by the planned `compare` ([02](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md),
   compatible definitions).
 - **Asking for what a version cites.** A version pending on a cited version
   from a collection this node doesn't hold, asking for it
-  ([checks.md](checks.md#planned-asking-for-what-a-version-cites),
-  [#138](https://github.com/leifriksheim/weave/issues/138)).
+  ([spec 09 §9](../../../spec/09-contracts.md#9-planned-asking-for-what-a-version-cites),
+  [#138](https://github.com/leifriksheim/minca/issues/138)).
 - **Web components** for the standard schemas.

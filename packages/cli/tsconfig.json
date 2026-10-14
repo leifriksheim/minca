@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "customConditions": ["@weaveprotocol/source"],
+    "customConditions": ["@minca/source"],
     "types": ["node"],
     "noEmit": true
   },

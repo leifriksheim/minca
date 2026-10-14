@@ -1,6 +1,6 @@
-# The Weave protocol
+# The Minca protocol
 
-This is the specification of Weave: what goes over the wire, what is stored,
+This is the specification of Minca: what goes over the wire, what is stored,
 what is signed, and what every peer must check. It is written so that someone
 can build a client that interoperates with this implementation without
 reading its code, and so that a reader, or a model, can understand the
@@ -14,13 +14,13 @@ the code disagree, that is a bug in one of them: open an issue, and say which.
 **The core.** What every peer implements to sync with others, store what they
 store, and judge every record the same way:
 
-| Part                                            | Covers                                                                                                                                                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, root and session signers, UCAN delegations, what a note lets a key do, envelopes and HPKE, contact keys, the account vault, device keys, pairing |
-| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline                                |
-| [03 — Spaces](03-spaces.md)                     | Spaces, roles and the access log, invites, encryption and key distribution, the account registry, profiles                                                                                       |
-| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                            |
-| [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                                                  |
+| Part                                            | Covers                                                                                                                                                                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [01 — Identity](01-identity.md)                 | Seeds and recovery codes, key derivation, DIDs, root and session signers, delegations (UCAN 1.0, JSON profile), what a note lets a key do, envelopes and HPKE, contact keys, the account vault, device keys, pairing |
+| [02 — Records](02-records.md)                   | Records and their versions, canonical encoding and hashing, signatures, which version wins, links, collection definitions, rules, topics, the validation pipeline                                                    |
+| [03 — Spaces](03-spaces.md)                     | Spaces, roles and grants, the access log and its replay (`strong-remove/1`), invites, encryption and key distribution, the account registry, profiles                                                                |
+| [04 — Network](04-network.md)                   | Relays and the signaling protocol, several relays at once, peer authentication, WebRTC and WebSocket transports, the mesh, introductions, live messages, ICE and TURN                                                |
+| [05 — Sync and storage](05-sync-and-storage.md) | Negentropy set reconciliation and its messages, what is stored and how, data folders, sealing at rest, segments, mirrors, blobs                                                                                      |
 
 **Built on the core.** Exchanges between two parties that a peer needs only
 if it takes part in them; a peer that doesn't still syncs, stores and judges
@@ -32,11 +32,19 @@ everything the same:
 | [07 — Doors](07-doors.md)                                 | Names and doors: how someone you share no space with can ask to become your contact, and the relay mailbox that holds their knock |
 | [08 — Hosting](08-hosting.md)                             | Hosts: subscriptions and payment, a space's own fund, bots a host runs                                                            |
 
+**Judged by readers.** What a version must be to count. Peers keep and sync
+every version whatever it says; two readers that judge it must count the
+same records:
+
+| Part                              | Covers                                                                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [09 — Contracts](09-contracts.md) | Contracts in a strict subset of CEL, cost limits, citing evidence, the verdicts (passes, fails, pending, unjudged), lines and double spends |
+
 ### A minimal peer
 
 A peer that joins spaces and syncs them needs, from the core:
 
-- 01 §1–9: keys, DIDs, UCAN notes, what a note lets a key do, and envelopes;
+- 01 §1–9: keys, DIDs, notes, what a note lets a key do, and envelopes;
   §10.2 and §11.1 for the member keys a private space's new keys are boxed to;
 - 02 whole;
 - 03 §1–7, and §8–9 for private spaces;
@@ -68,9 +76,6 @@ change without touching this spec:
   ([spaces](../packages/core/docs/spaces.md)).
 - **The query format** a node answers ([query format](../packages/core/docs/query-format.md)).
   Peers never exchange queries.
-- **Checks**: the CEL conditions a definition's `rules.check` holds, what a
-  version cites as evidence, and counting only versions that pass. Peers keep
-  `check` and every version that fails it ([checks](../packages/core/docs/checks.md)).
 - **Node actions** and the tools the CLI, MCP and WebMCP make of them
   ([actions](../packages/core/docs/actions.md)).
 - **The standard collections** (`std.*`), which are a naming convention, not
@@ -139,47 +144,45 @@ Designed but not built. Each entry is specified, as **Planned**, where it
 belongs. Rows marked _after v1_ link parked issues, closed with the `idea`
 label. Issues track the larger ones. Known defects link their issue where
 they are described; the smaller ones share
-[#20](https://github.com/leifriksheim/weave/issues/20).
+[#20](https://github.com/leifriksheim/minca/issues/20).
 
 | Planned                                                                                           | Where                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                          |
-| One spelling per key; one valid form per token; strict token shape                                | [01 §4, §7](01-identity.md)                                                                                                              |
-| Proof chains that travel (fixes a known defect)                                                   | [01 §7.5](01-identity.md), [#19](https://github.com/leifriksheim/weave/issues/19)                                                        |
-| Delegations as UCAN 1.0                                                                           | [01 §7](01-identity.md), [#19](https://github.com/leifriksheim/weave/issues/19)                                                          |
-| Grants narrower than a space                                                                      | [01 §7.1](01-identity.md), [06 §2](06-nodes-and-sessions.md), [#19](https://github.com/leifriksheim/weave/issues/19)                     |
-| Removing a lost device from another one (sign-out already revokes)                                | [01 §7.4](01-identity.md), [#165](https://github.com/leifriksheim/weave/issues/165)                                                      |
-| Keys that belong to their creator                                                                 | [02 §4.7](02-records.md), [#72](https://github.com/leifriksheim/weave/issues/72)                                                         |
+| A check character on recovery codes                                                               | [01 §2](01-identity.md), [#20](https://github.com/leifriksheim/minca/issues/20)                                                          |
+| One spelling per key                                                                              | [01 §4](01-identity.md)                                                                                                                  |
+| Grants narrower than a space (reading)                                                            | [06 §2.8](06-nodes-and-sessions.md)                                                                                                      |
+| Removing a lost device from another one (sign-out already revokes)                                | [01 §7.6](01-identity.md), [#165](https://github.com/leifriksheim/minca/issues/165)                                                      |
 | Merging inside one record                                                                         | [02 §4.8](02-records.md)                                                                                                                 |
 | Forgetting in blob stores                                                                         | [02 §4.9](02-records.md)                                                                                                                 |
-| References to records in other spaces _(after v1)_                                                | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/weave/issues/38)                                                         |
+| References to records in other spaces _(after v1)_                                                | [02 §5.3](02-records.md), [#38](https://github.com/leifriksheim/minca/issues/38)                                                         |
 | `pattern` and `format` in definitions                                                             | [02 §6](02-records.md)                                                                                                                   |
-| Private `onePer` keys; uniqueness that cannot be a key                                            | [02 §7.3](02-records.md), [#72](https://github.com/leifriksheim/weave/issues/72)                                                         |
-| Deleted access records can't leave access standing                                                | [03 §7.2](03-spaces.md), [#20](https://github.com/leifriksheim/weave/issues/20)                                                          |
-| What a private space still shows (hashed keys and collection names)                               | [03 §8.6](03-spaces.md), [#72](https://github.com/leifriksheim/weave/issues/72)                                                          |
-| Access-control convergence                                                                        | [05 §8](05-sync-and-storage.md), [#10](https://github.com/leifriksheim/weave/issues/10)                                                  |
-| Limits on what one peer can cost another                                                          | [04 §7.4](04-network.md), [05 §6.4, §8](05-sync-and-storage.md), [#33](https://github.com/leifriksheim/weave/issues/33)                  |
+| Uniqueness that cannot be a key                                                                   | [02 §7.3](02-records.md)                                                                                                                 |
+| Deleted access records can't leave access standing                                                | [03 §7.2](03-spaces.md), [#20](https://github.com/leifriksheim/minca/issues/20)                                                          |
+| What a private space still shows (profile keys and collection names)                              | [03 §8.6](03-spaces.md), [#223](https://github.com/leifriksheim/minca/issues/223)                                                        |
+| Access-control convergence                                                                        | [05 §8](05-sync-and-storage.md), [#10](https://github.com/leifriksheim/minca/issues/10)                                                  |
+| Limits on what one peer can cost another                                                          | [04 §7.4](04-network.md), [05 §6.4, §8](05-sync-and-storage.md), [#33](https://github.com/leifriksheim/minca/issues/33)                  |
 | Binary sync messages                                                                              | [05 §4](05-sync-and-storage.md)                                                                                                          |
-| Caches that fetch by record key; subsets smaller than a collection _(after v1)_                   | [05 §9.1](05-sync-and-storage.md), [#27](https://github.com/leifriksheim/weave/issues/27)                                                |
+| Caches that fetch by record key; subsets smaller than a collection _(after v1)_                   | [05 §9.1](05-sync-and-storage.md), [#27](https://github.com/leifriksheim/minca/issues/27)                                                |
 | Mirrors: restoring an account, absorbing a quiet store writer                                     | [05 §16.5](05-sync-and-storage.md)                                                                                                       |
-| Files: blob references, bytes synced by hash _(after v1)_                                         | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/weave/issues/37)                                               |
+| Files: blob references, bytes synced by hash _(after v1)_                                         | [05 §16.6](05-sync-and-storage.md), [#37](https://github.com/leifriksheim/minca/issues/37)                                               |
 | A wallet as the account home                                                                      | [06 §2](06-nodes-and-sessions.md)                                                                                                        |
 | Connecting by code: renewing notes, programs that can't run code of their own                     | [06 §3.1](06-nodes-and-sessions.md)                                                                                                      |
-| Subscriptions that match any of several topic values _(after v1)_                                 | [06 §4.4](06-nodes-and-sessions.md), [#141](https://github.com/leifriksheim/weave/issues/141)                                            |
-| Subscriptions delivered per device, by Web Push to an app that is closed _(after v1)_             | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/weave/issues/60)                      |
-| Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#220](https://github.com/leifriksheim/weave/issues/220)                                                         |
+| Wakes delivered per device, by Web Push to an app that is closed _(after v1)_                     | [03 §15](03-spaces.md), [06 §4.4](06-nodes-and-sessions.md), [#60](https://github.com/leifriksheim/minca/issues/60)                      |
+| Hosts: invites naming hosts, stopping a host, user storage, metering, reminders, private payments | [08 §4](08-hosting.md), [#220](https://github.com/leifriksheim/minca/issues/220)                                                         |
 | Names: handles that lead to a door                                                                | [07 §9](07-doors.md)                                                                                                                     |
-| Content-addressed definitions; definition tiers, additive-only _(after v1)_                       | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/weave/issues/11), [#12](https://github.com/leifriksheim/weave/issues/12) |
+| Corrections in a line, after a double spend                                                       | [09 §7.5](09-contracts.md)                                                                                                               |
+| Asking for what a version cites                                                                   | [09 §9](09-contracts.md), [#138](https://github.com/leifriksheim/minca/issues/138)                                                       |
+| Content-addressed definitions; definition tiers, additive-only _(after v1)_                       | [02 §6.5](02-records.md), [#11](https://github.com/leifriksheim/minca/issues/11), [#12](https://github.com/leifriksheim/minca/issues/12) |
 
 Proposed in an issue but not yet designed into the spec, so listed under
 **Not yet specified** in their part: key rotation, KERI-style pre-rotation
-([01 §16](01-identity.md), [#9](https://github.com/leifriksheim/weave/issues/9)), and access-history checkpoints
-([03 §17](03-spaces.md), [#25](https://github.com/leifriksheim/weave/issues/25)).
+([01 §16](01-identity.md), [#9](https://github.com/leifriksheim/minca/issues/9)), and access-history checkpoints
+([03 §17](03-spaces.md), [#25](https://github.com/leifriksheim/minca/issues/25)).
 
 ## The shape of it, in one page
 
 ```
- account (seed) ──derives──▶ root key ──signs UCAN──▶ session key ──signs──▶ records
+ account (seed) ──derives──▶ root key ──signs note──▶ session key ──signs──▶ records
                                                                            │
                                                           stored per space │ synced by Negentropy
                                                                            ▼
@@ -190,11 +193,12 @@ Proposed in an issue but not yet designed into the spec, so listed under
 
 - An **account** is a 16-byte seed. Everything else about it is derived.
 - The **root key** almost never signs data. It signs short-lived delegations
-  (UCANs) to **session keys**, which sign **records**.
+  (notes, a JSON profile of UCAN 1.0) to **session keys**, which sign **records**.
 - A **record** is a signed, versioned JSON document in a **collection** of a
   **space**. Private spaces encrypt record bodies with the space key.
-- A **space** carries its own rules: roles, who holds them, what each
-  collection accepts. Every peer replays the same history and reaches the
+- A **space** carries its own rules: its constitution (its founders, or
+  none, and the roles it starts with), whose hash is its id; then roles and
+  the grants they hold, who is assigned which, what each collection accepts. Every peer replays the same history and reaches the
   same answer about who may write what. There is no server to ask.
 - **Relays** only introduce peers. **Carriers** and **hosts** keep spaces
   online without being able to read them. Neither has authority.

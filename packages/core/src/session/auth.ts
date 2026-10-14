@@ -6,7 +6,6 @@
  * hands it to a new device. The seed stays inside this object, and signs only
  * the note that lets a session key write.
  */
-import { parseUCAN } from '../identity/ucan.js';
 import { isObject, unref } from '../utils/guards.js';
 import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
@@ -69,7 +68,8 @@ import {
   type StaySignedIn,
 } from './stay-signed-in.js';
 import {
-  grantCapabilities,
+  grantTerms,
+  GRANT_VERSION,
   MAX_GRANT_DAYS,
   type CarryGrant,
   type ConnectRequest,
@@ -80,13 +80,8 @@ import {
   checkKeyProof,
   requestTerms,
 } from './connect.js';
-import {
-  fromProposal,
-  proposalSpaces,
-  sameSubscription,
-  type NotifySpaces,
-  type NotifyWhen,
-} from '../space/notify.js';
+import { fromProposal, proposalSpaces, sameAutomation } from '../space/own-automations.js';
+import type { Automation, AutomationApp, AutomationSpaces } from '../schemas/automations.js';
 import {
   clearPairingTicket,
   receiveFromDesktop,
@@ -96,8 +91,8 @@ import {
   type PairingStage,
 } from './pairing.js';
 
-export interface WeaveAuthConfig {
-  /** What passkey prompts call this app. Default "Weave". */
+export interface MincaAuthConfig {
+  /** What passkey prompts call this app. Default "Minca". */
   readonly appName?: string;
   /** Relays and always-on nodes the signed-in node connects to. Omit to stay offline. */
   readonly network?: NodeNetworkConfig;
@@ -105,7 +100,7 @@ export interface WeaveAuthConfig {
   readonly rpId?: string;
   /** Where small choices are remembered — which account, stay signed in. Default `localStorage`. */
   readonly storage?: KeyValueStore | null;
-  /** Namespaces those choices, so two apps on one origin keep their own. Default "weave". */
+  /** Namespaces those choices, so two apps on one origin keep their own. Default "minca". */
   readonly storageKey?: string;
   /** The page a phone-pairing QR opens. Default: this page. */
   readonly pairingLink?: string;
@@ -119,7 +114,7 @@ export interface WeaveAuthConfig {
   };
   /**
    * Runs the node in a worker, off the page's main thread
-   * (`@weaveprotocol/core/node-worker`). Called once per sign-in; the worker
+   * (`@minca/core/node-worker`). Called once per sign-in; the worker
    * ends when the node closes. Not with `browser.stores`, which a worker
    * can't be handed.
    */
@@ -189,7 +184,7 @@ export interface AccountEntry {
 }
 
 /** An open account: who it is, and the node doing its work */
-export interface WeaveSession {
+export interface MincaSession {
   readonly account: AccountSummary;
   /** The account's identity */
   readonly did: string;
@@ -226,8 +221,6 @@ export interface Connection {
   readonly grantedAt: string;
   /** Unix seconds */
   readonly expiresAt: number;
-  /** The note the app writes under — what disconnecting revokes */
-  readonly token?: string;
   /** `code` for a program connected by code through the app at `origin`: its own key, kept apart from the app's own connection */
   readonly via?: 'code';
   /** Present, and true, when its note grants records only */
@@ -245,7 +238,6 @@ const CONNECTION_FIELDS = new Set([
   'spaces',
   'grantedAt',
   'expiresAt',
-  'token',
   'via',
   'recordsOnly',
 ]);
@@ -253,8 +245,7 @@ const CONNECTION_FIELDS = new Set([
 /** Whether a kept connection has this shape, and nothing else */
 function isConnection(value: unknown): value is Connection {
   if (!isObject(value) || !Object.keys(value).every((field) => CONNECTION_FIELDS.has(field))) return false;
-  const { origin, name, audience, access, scope, carrySpace, spaces, grantedAt, expiresAt, token, via } =
-    value;
+  const { origin, name, audience, access, scope, carrySpace, spaces, grantedAt, expiresAt, via } = value;
   return (
     typeof origin === 'string' &&
     (name === null || typeof name === 'string') &&
@@ -268,7 +259,6 @@ function isConnection(value: unknown): value is Connection {
     ) &&
     typeof grantedAt === 'string' &&
     typeof expiresAt === 'number' &&
-    (token === undefined || typeof token === 'string') &&
     (via === undefined || via === 'code') &&
     (value.recordsOnly === undefined || value.recordsOnly === true)
   );
@@ -289,7 +279,7 @@ export interface ProposeChoice {
   readonly origin: string;
   readonly request: ProposeRequest;
   /** Which proposals they said yes to, by index. Default: all of them. */
-  readonly notify?: ReadonlyArray<number>;
+  readonly kept?: ReadonlyArray<number>;
 }
 
 export interface AuthState {
@@ -300,7 +290,7 @@ export interface AuthState {
   readonly selectedId: string | null;
   /** Ways into the selected account */
   readonly entry: AccountEntry | null;
-  readonly session: WeaveSession | null;
+  readonly session: MincaSession | null;
   /** The recovery code, while the `recovery` screen shows it; cleared by `codeSaved()` */
   readonly freshCode: string | null;
   /** Set while the account is being set up (`recovery`, `unlock`, `pod`) */
@@ -318,7 +308,7 @@ export interface AuthState {
   readonly moved: MovedToPod | null;
 }
 
-export interface WeaveAuth {
+export interface MincaAuth {
   getState(): AuthState;
   /** Called after every change. Returns a function that stops it. */
   subscribe(listener: (state: AuthState) => void): () => void;
@@ -453,41 +443,37 @@ const afterStorage = (accounts: ReadonlyArray<unknown>): AuthStage =>
   accounts.length > 0 ? 'signIn' : 'welcome';
 
 /**
- * The subscriptions an app's proposals become, for the ones the person kept.
+ * The automations an app's proposals become, for the ones the person kept.
  * Checked whole before any is written: a proposal naming a space the app
  * can't reach refuses them all.
  */
-function subscriptionsFrom(
-  proposals: ProposeRequest['notify'],
+function automationsFrom(
+  proposals: ProposeRequest['automations'],
   kept: ReadonlyArray<number> | undefined,
-  context: {
-    readonly app: NotifyWhen['app'] & {};
-    readonly reach: NotifySpaces;
-    readonly account: string;
-  },
-): NotifyWhen[] {
-  const made: NotifyWhen[] = [];
+  context: { readonly app: AutomationApp; readonly reach: AutomationSpaces },
+): Automation[] {
+  const made: Automation[] = [];
   for (const [index, proposal] of proposals.entries()) {
     if (kept && !kept.includes(index)) continue;
     const spaces = proposalSpaces(proposal, context.reach);
-    if (!spaces) throw new Error(`“${proposal.label}” looks at a space it was not given.`);
-    made.push(fromProposal(proposal, { app: context.app, spaces, account: context.account }));
+    if (!spaces) throw new Error(`“${proposal.name}” looks at a space it was not given.`);
+    made.push(fromProposal(proposal, { app: context.app, spaces }));
   }
   return made;
 }
 
 /** Adds each, unless the same origin already has the same one */
-async function addSubscriptions(
+async function addAutomations(
   node: P2PNode,
   origin: string,
-  subscriptions: ReadonlyArray<NotifyWhen>,
-): Promise<Array<{ id: string; label: string }>> {
-  if (subscriptions.length === 0) return [];
-  const existing = (await node.notifications.list()).filter((sub) => sub.app?.origin === origin);
-  const added: Array<{ id: string; label: string }> = [];
-  for (const when of subscriptions) {
-    const made = existing.find((sub) => sameSubscription(sub, when)) ?? (await node.notifications.add(when));
-    added.push({ id: made.id, label: made.label });
+  automations: ReadonlyArray<Automation>,
+): Promise<Array<{ id: string; name: string }>> {
+  if (automations.length === 0) return [];
+  const existing = (await node.automations.list()).filter((own) => own.app?.origin === origin);
+  const added: Array<{ id: string; name: string }> = [];
+  for (const own of automations) {
+    const made = existing.find((found) => sameAutomation(found, own)) ?? (await node.automations.add(own));
+    added.push({ id: made.id, name: made.name });
   }
   return added;
 }
@@ -496,10 +482,10 @@ async function addSubscriptions(
 const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
 
 /** Creates the sign-in flow for this page. */
-export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
+export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   const rpId = config.rpId ?? globalThis.location?.hostname ?? 'localhost';
-  const appName = config.appName ?? 'Weave';
-  const prefix = config.storageKey ?? 'weave';
+  const appName = config.appName ?? 'Minca';
+  const prefix = config.storageKey ?? 'minca';
   const storage = defaultStorage(config.storage);
   const stay = createStaySignedIn(storage, rpId, prefix);
   const { get, set, read } = guardedStorage(storage);
@@ -634,8 +620,8 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
   /** Revokes the key a connection was given, where it could write; never this node's own */
   async function revokeConnection(node: P2PNode, connection: Connection): Promise<void> {
-    if (!connection.token || connection.access !== 'write') return;
-    if (parseUCAN(connection.token).payload.aud === node.sessionDid) return;
+    if (connection.access !== 'write') return;
+    if (connection.audience === node.sessionDid) return;
     const contactsSpace = await node.contacts.space();
     const covered =
       connection.scope === 'account'
@@ -646,10 +632,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         : connection.spaces.map((space) => space.id);
     // Every space at once: each is its own store. A space that is gone, or
     // that this account no longer writes in, has nothing to revoke.
-    const token = connection.token;
-    await Promise.all(covered.map((spaceId) => node.spaces.revoke(spaceId, token).catch(() => {})));
+    const key = connection.audience;
+    await Promise.all(covered.map((spaceId) => node.spaces.revoke(spaceId, key).catch(() => {})));
     // A whole-account app could also add spaces to the account's list, and rename it.
-    if (connection.scope === 'account') await node.account.revoke(token).catch(() => {});
+    if (connection.scope === 'account') await node.account.revoke(key).catch(() => {});
   }
 
   /** Disconnects every app connected here whose chosen time has passed */
@@ -665,7 +651,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     place: Place,
     account: AccountSummary,
     unlocked: Uint8Array,
-  ): Promise<WeaveSession> {
+  ): Promise<MincaSession> {
     await stopNode();
 
     const { identity, signer } = await rootFromSeed(unlocked);
@@ -686,7 +672,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
     seed = unlocked;
     localKey = key;
-    const session: WeaveSession = Object.freeze({
+    const session: MincaSession = Object.freeze({
       account,
       did: identity.did,
       sessionDid: node.sessionDid,
@@ -717,7 +703,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   }
 
   /** Records that an account was just used, and starts its session. */
-  async function begin(place: Place, summary: AccountSummary, unlocked: Uint8Array): Promise<WeaveSession> {
+  async function begin(place: Place, summary: AccountSummary, unlocked: Uint8Array): Promise<MincaSession> {
     const used: AccountSummary = { ...summary, lastUsedAt: new Date().toISOString() };
     try {
       const vault = await place.store.read(summary.id);
@@ -760,7 +746,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
    * then a way in is chosen. A paired device skips the code: it was never
    * shown one, and the device it came from keeps it.
    */
-  async function arrive(session: WeaveSession, setup: AuthSetup | null): Promise<void> {
+  async function arrive(session: MincaSession, setup: AuthSetup | null): Promise<void> {
     const place = state.place;
     const entry = place ? await openEntry(place, session.account.id) : null;
     const landed = {
@@ -785,7 +771,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
   }
 
   /** Runs a way in. One that took the recovery code may lead on to setting up an everyday one. */
-  const enter = (open: () => Promise<{ session: WeaveSession; byCode: boolean }>) =>
+  const enter = (open: () => Promise<{ session: MincaSession; byCode: boolean }>) =>
     run(async () => {
       const { session, byCode } = await open();
       await arrive(session, byCode ? 'restored' : null);
@@ -796,7 +782,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
    * not seen it.
    * @param expected The account the person meant, when they picked one
    */
-  async function openWithCode(code: string, expected: AccountSummary | null): Promise<WeaveSession> {
+  async function openWithCode(code: string, expected: AccountSummary | null): Promise<MincaSession> {
     const place = state.place;
     if (!place) throw new Error('No place to sign in to yet.');
     if (!isValidRecoveryCode(code)) {
@@ -905,7 +891,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
   // ─── The flow ──────────────────────────────────────────────────────
 
-  const auth: WeaveAuth = {
+  const auth: MincaAuth = {
     getState: () => state,
 
     subscribe(listener) {
@@ -1058,6 +1044,8 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
 
     showSignIn() {
       update({ error: null, stage: 'signIn' });
+      // Back from "another account", which let go of the one picked: pick it again.
+      if (!state.selectedId && state.place) void refresh(state.place).catch(() => {});
     },
 
     showWelcome() {
@@ -1065,7 +1053,9 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
     },
 
     showExisting() {
-      update({ error: null, stage: 'existing' });
+      // Any account, not the one the list had picked: a recovery code from
+      // here opens whichever account it belongs to.
+      update({ error: null, stage: 'existing', selectedId: null, entry: null });
     },
 
     showRestore() {
@@ -1355,12 +1345,9 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       const days = Math.min(Math.max(choice.days ?? request.days ?? 7, 1 / 24), MAX_GRANT_DAYS);
       const expiresAt = Math.floor(Date.now() / 1000) + Math.round(days * 24 * 3600);
       const { signer } = await rootFromSeed(seed);
-      const token = await signer.delegate({
+      const note = await signer.delegate({
         audience: request.audience,
-        capabilities: grantCapabilities(
-          recordsOnly && access === 'write' ? 'records' : access,
-          whole ? 'all' : ids,
-        ),
+        ...grantTerms(recordsOnly && access === 'write' ? 'records' : access, whole ? 'all' : ids),
         expiration: expiresAt,
       });
 
@@ -1373,7 +1360,6 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         spaces: spaces.map(({ id, name }) => ({ id, name })),
         grantedAt: new Date().toISOString(),
         expiresAt,
-        token: token.encoded,
         ...(byCode ? { via: 'code' as const } : {}),
         ...(recordsOnly ? { recordsOnly: true as const } : {}),
       };
@@ -1386,10 +1372,10 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       writeConnections([connection, ...auth.connections().filter((known) => !replaced(known))]);
 
       return {
-        v: 1,
+        v: GRANT_VERSION,
         did: session.did,
         name: session.account.name,
-        token: token.encoded,
+        note,
         access,
         scope: whole ? 'account' : 'spaces',
         spaces,
@@ -1404,7 +1390,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
       };
     },
 
-    async propose({ origin, request, notify: kept }) {
+    async propose({ origin, request, kept }) {
       const session = state.session;
       if (!session) throw new Error('Sign in first.');
       const { node } = session;
@@ -1417,7 +1403,7 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
           'Only an app connected to your account here may suggest what to notify you about. Connect it first.',
         );
       // What it may reach: every space for a whole-account app, else the spaces it was given, less the contacts space.
-      let reach: NotifySpaces = 'all';
+      let reach: AutomationSpaces = 'all';
       if (connection.scope === 'spaces') {
         const contactsSpace = connection.spaces.length ? await node.contacts.space().catch(() => null) : null;
         reach = connection.spaces.map((space) => space.id).filter((id) => id !== contactsSpace);
@@ -1431,15 +1417,15 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
             ? { name: request.name.slice(0, 80) }
             : {}),
       };
-      const when = subscriptionsFrom(request.notify, kept, { app, reach, account: session.did });
+      const made = automationsFrom(request.automations, kept, { app, reach });
       // One at a time: two popups answered together would each find the other's not there yet.
-      const adding = subscribing.then(() => addSubscriptions(node, origin, when));
+      const adding = subscribing.then(() => addAutomations(node, origin, made));
       subscribing = adding.catch(() => {});
-      const notify = await adding;
+      const automations = await adding;
       // An app with the account key reads them from its own node: handed over now, they are there on its next load.
-      if (reach !== 'all' || notify.length === 0) return { v: 1, kind: 'proposed', notify };
-      const versions = await node.notifications.versions(notify.map((sub) => sub.id));
-      return { v: 1, kind: 'proposed', notify, versions };
+      if (reach !== 'all' || automations.length === 0) return { v: 2, kind: 'proposed', automations };
+      const versions = await node.automations.versions(automations.map((own) => own.id));
+      return { v: 2, kind: 'proposed', automations, versions };
     },
 
     async grantCarry({ origin, request }) {
@@ -1509,11 +1495,15 @@ export function createWeaveAuth(config: WeaveAuthConfig = {}): WeaveAuth {
         // Like a revoke below: one that can't be done must not keep the rest from happening.
         if (connection.carrySpace && node) await node.carriers.remove(connection.carrySpace).catch(() => {});
         if (node) await revokeConnection(node, connection);
-        // The app's own subscriptions go with it, and a carrier's: what they look for is theirs to know.
+        // The automations it proposed go with it, and a carrier's: what they look for is theirs to know.
+        // So does any its own key wrote, whichever app that one names.
         if (!connection.via && node) {
-          for (const sub of await node.notifications.list()) {
-            if (sub.app?.origin === connection.origin)
-              await node.notifications.remove(sub.id).catch(() => {});
+          for (const own of await node.automations.list()) {
+            const wrote = (await node.automations.versions([own.id])).some(
+              (version) => version.author === connection.audience,
+            );
+            if (own.app?.origin === connection.origin || wrote)
+              await node.automations.remove(own.id).catch(() => {});
           }
         }
       }

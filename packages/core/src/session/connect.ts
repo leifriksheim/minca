@@ -2,7 +2,7 @@
  * @module session/connect
  * An app using an account without ever seeing its seed. The app opens the
  * account home in a popup with its own non-exportable key; the person approves
- * there, and the home signs a note (a UCAN) letting that key write in the
+ * there, and the home signs a note (a delegation) letting that key write in the
  * spaces given, which every peer checks. The two sides talk by `postMessage`,
  * each checking the other's origin as the browser reports it.
  */
@@ -10,26 +10,33 @@ import { createP256Provider } from '../identity/crypto-p256.js';
 import { didOf, didToPublicKey } from '../identity/did.js';
 import { canonicalize } from '../schema/version.js';
 import { idbOnce } from '../identity/idb.js';
-import { cidFromBytes } from '../utils/hash.js';
 import { base64UrlDecode, base64UrlEncode, utf8Encode } from '../utils/encoding.js';
-import { verifyUCAN, parseUCAN, type Capability, type UCANToken } from '../identity/ucan.js';
-import { grantsRecordsOnly } from '../identity/abilities.js';
+import { verifyNote, type Delegation } from '../identity/ucan.js';
+import {
+  ALL_COMMAND,
+  grantsRecordsOnly,
+  noteTerms,
+  READ_COMMAND,
+  RECORDS_COMMAND,
+  type NoteTerms,
+} from '../identity/abilities.js';
 import type { RootSigner } from '../identity/root-signer.js';
 import { startPageNode, type WorkerLike } from '../node/worker.js';
 import type { StoreFactory } from '../node/stores.js';
 import type { Version } from '../types.js';
 import type { CacheConfig, NewSpace, NodeNetworkConfig, P2PNode } from '../node/types.js';
-import { checkStartingRoles } from '../space/space-access.js';
+import { checkFoundingRoles } from '../space/grants.js';
 import { parseSpaceInvite } from '../space/space-manager.js';
-import { checkProposal, MAX_PROPOSALS, type NotifyProposal } from '../space/notify.js';
+import { soleFounder } from '../space/constitution.js';
+import { checkProposal, MAX_PROPOSALS, type AutomationProposal } from '../space/own-automations.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
 import { isObject } from '../utils/guards.js';
 
 /** Messages between an app and the home it opened */
-const HELLO = 'weave:hello';
-const REQUEST = 'weave:request';
-const GRANT = 'weave:grant';
-const DENIED = 'weave:denied';
+const HELLO = 'minca:hello';
+const REQUEST = 'minca:request';
+const GRANT = 'minca:grant';
+const DENIED = 'minca:denied';
 
 /** What an app asks a home for */
 export interface ConnectRequest {
@@ -69,7 +76,7 @@ export interface ConnectRequest {
   /** Whether to offer the person's existing spaces to pick from. Default true. */
   readonly chooseSpaces?: boolean;
   /**
-   * A note that grants writing records and nothing more (`record/*`), so
+   * A note that grants writing records and nothing more (`/record`), so
    * every peer refuses its key changing a space's collections or who may do
    * what, or writing in the account's own spaces. No contact key, no spaces
    * made for it, and no carrying.
@@ -87,28 +94,28 @@ export interface ConnectRequest {
 
 /**
  * What an app already connected to a home asks for when the person wants to
- * be notified: subscriptions, and nothing else. Never part of connecting — a
+ * be notified: automations of the account's own, and nothing else. Never part of connecting — a
  * person signing in has asked for nothing yet. The home knows the app by the
  * origin the browser reports, and refuses one it has no connection for, a
  * carrier's and a program's connected by code.
  */
 export interface ProposeRequest {
-  readonly v: 1;
+  readonly v: 2;
   readonly kind: 'propose';
   /** What it calls itself. Shown, never trusted. */
   readonly name?: string;
-  /** 1 to 8 subscriptions to offer the person */
-  readonly notify: ReadonlyArray<NotifyProposal>;
+  /** 1 to 8 automations to offer the person */
+  readonly automations: ReadonlyArray<AutomationProposal>;
 }
 
 /** What the home answers a {@link ProposeRequest} with, once the person decided */
 export interface Proposed {
-  readonly v: 1;
+  readonly v: 2;
   readonly kind: 'proposed';
-  /** The subscriptions added or found, by the person's yes: none when they kept none */
-  readonly notify: ReadonlyArray<{ readonly id: string; readonly label: string }>;
+  /** The automations added or found, by the person's yes: none when they kept none */
+  readonly automations: ReadonlyArray<{ readonly id: string; readonly name: string }>;
   /**
-   * For an app given the whole account: every version of those subscriptions,
+   * For an app given the whole account: every version of those automations,
    * signed, so its node holds them at once rather than once it meets another
    * of the account's devices, which may be long after the home's window closed.
    */
@@ -136,15 +143,18 @@ export interface GrantedSpace {
   readonly memberKey?: string;
 }
 
+/** A grant's format: 2 since its note is a delegation in the UCAN 1.0 profile (spec 01 §7) */
+export const GRANT_VERSION = 2;
+
 /** What the home hands back when the person approves */
 export interface Grant {
-  readonly v: 1;
+  readonly v: typeof GRANT_VERSION;
   /** The account's identity — what the app acts for */
   readonly did: string;
   /** The account's name, for showing who is connected */
   readonly name: string;
   /** The signed note: the account → the app's key, for these spaces, until `expiresAt` */
-  readonly token: string;
+  readonly note: Delegation;
   readonly access: 'read' | 'write';
   readonly scope: 'spaces' | 'account';
   readonly spaces: ReadonlyArray<GrantedSpace>;
@@ -202,7 +212,7 @@ export interface CarryGrant {
 
 /**
  * Turns what a person typed into a home's connect page:
- * `weave.example.com` → `https://weave.example.com/connect`. Plain `http` only
+ * `minca.example.com` → `https://minca.example.com/connect`. Plain `http` only
  * for this machine, where development happens.
  * @throws When it is not a web address
  */
@@ -235,23 +245,23 @@ export function homeAddress(input: string): string {
 }
 
 /**
- * The capabilities a grant carries, for these spaces. Writing is everything
- * the account may do there; `records` is writing records only, for a key the
- * account trusts less: it can't define collections, change who may do what,
- * or write for the account (`identity/abilities.ts`).
+ * The terms of the note a grant carries, for these spaces. Writing is every
+ * command; `records` is records only, for a key the account trusts less: it
+ * can't define collections, change who may do what, or write for the
+ * account (`identity/abilities.ts`).
  */
-export function grantCapabilities(
+export function grantTerms(
   access: 'read' | 'write' | 'records',
   spaceIds: ReadonlyArray<string> | 'all',
-): Capability[] {
-  const can = access === 'write' ? '*' : access === 'records' ? 'record/*' : 'record/read';
-  return spaceIds === 'all' ? [{ with: '*', can }] : spaceIds.map((id) => ({ with: `space:${id}`, can }));
+): NoteTerms {
+  const command = access === 'write' ? ALL_COMMAND : access === 'records' ? RECORDS_COMMAND : READ_COMMAND;
+  return noteTerms(command, spaceIds);
 }
 
 // ─── The app's side ──────────────────────────────────────────────────
 
 /** What a key signs to show it is the one a connect request names */
-const KEY_PROOF = 'weave/connect-key/v1';
+const KEY_PROOF = 'minca/connect-key/v1';
 
 /**
  * What a key agrees to in a connect request: how it reached the app, how much
@@ -314,7 +324,7 @@ export interface AppKey {
   readonly did: string;
 }
 
-const KEY_DB = 'weave-app-key';
+const KEY_DB = 'minca-app-key';
 
 /**
  * This app's key: made once, kept in this site's IndexedDB, and never
@@ -342,7 +352,7 @@ export async function forgetAppKey(name = 'default'): Promise<void> {
 }
 
 export interface ConnectOptions {
-  /** The home's connect page, e.g. `https://weave.example/connect` */
+  /** The home's connect page, e.g. `https://minca.example/connect` */
   readonly home: string;
   /** What to ask for; `audience`, `proof` and `via` are filled in */
   readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof' | 'via'>;
@@ -372,24 +382,26 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   // Opened before anything is awaited, so it still counts as the click's.
   const popup = openHome(homeUrl);
-  let audience: string;
-  let proof: string;
-  const byCode = options.audience !== undefined;
-  if (options.audience !== undefined) {
-    if (!options.audienceProof) throw new Error('Asking for another key needs its proof (keyProof).');
-    audience = options.audience;
-    proof = options.audienceProof;
-  } else {
-    const key = options.key ?? (await appKey(options.keyName));
-    audience = key.did;
-    proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
+  if (options.audience !== undefined && !options.audienceProof) {
+    popup.close();
+    throw new Error('Asking for another key needs its proof (keyProof).');
   }
-  const grant = await askHome<Grant>(
-    popup,
-    homeUrl.origin,
-    { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) },
-    options.timeoutMs,
-  );
+  const byCode = options.audience !== undefined;
+  const request = (async (): Promise<ConnectRequest> => {
+    let audience: string;
+    let proof: string;
+    if (options.audience !== undefined && options.audienceProof) {
+      audience = options.audience;
+      proof = options.audienceProof;
+    } else {
+      const key = options.key ?? (await appKey(options.keyName));
+      audience = key.did;
+      proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
+    }
+    return { v: 1, audience, proof, ...options.request, ...(byCode ? { via: 'code' as const } : {}) };
+  })();
+  const grant = await askHome<Grant>(popup, homeUrl.origin, request, options.timeoutMs);
+  const { audience } = await request;
   await checkGrant(grant, audience, { recordsOnly: options.request.recordsOnly === true });
   return { ...grant, home: homeUrl.href };
 }
@@ -411,20 +423,20 @@ export async function connectCarrier(options: {
 }): Promise<CarryGrant> {
   const homeUrl = new URL(options.home, globalThis.location.href);
   const popup = openHome(homeUrl);
-  const request: ConnectRequest = {
+  const request = keyProof(options.key).then((proof): ConnectRequest => ({
     v: 1,
     audience: options.key.did,
-    proof: await keyProof(options.key),
+    proof,
     access: 'carry',
     ...(options.name ? { name: options.name } : {}),
-  };
+  }));
   const grant = await askHome<CarryGrant>(popup, homeUrl.origin, request, options.timeoutMs);
   checkCarryGrant(grant);
   return { ...grant, home: homeUrl.href };
 }
 
 /**
- * Offers the person subscriptions, from an app already connected to their
+ * Offers the person automations that notify them, from an app already connected to their
  * home. Call it from a click on something that asked for it — "Notify me" —
  * in a page that stays open: the home opens in a popup, and the person keeps
  * the ones they want. The app shows the notifications itself
@@ -436,22 +448,22 @@ export async function connectCarrier(options: {
  */
 export async function proposeToHome(options: {
   readonly home: string;
-  readonly notify: ReadonlyArray<NotifyProposal>;
+  readonly automations: ReadonlyArray<AutomationProposal>;
   readonly name?: string;
   readonly timeoutMs?: number;
 }): Promise<Proposed> {
-  if (options.notify.length === 0 || options.notify.length > MAX_PROPOSALS)
-    throw new Error(`Propose 1 to ${MAX_PROPOSALS} subscriptions.`);
+  if (options.automations.length === 0 || options.automations.length > MAX_PROPOSALS)
+    throw new Error(`Propose 1 to ${MAX_PROPOSALS} automations.`);
   const homeUrl = new URL(options.home, globalThis.location.href);
   const popup = openHome(homeUrl);
   const request: ProposeRequest = {
-    v: 1,
+    v: 2,
     kind: 'propose',
     ...(options.name ? { name: options.name } : {}),
-    notify: options.notify,
+    automations: options.automations,
   };
   const answer = await askHome<Proposed | null>(popup, homeUrl.origin, request, options.timeoutMs);
-  if (answer?.kind !== 'proposed' || !Array.isArray(answer.notify))
+  if (answer?.kind !== 'proposed' || !Array.isArray(answer.automations))
     throw new Error('Your account home did not answer the proposal.');
   return answer;
 }
@@ -464,7 +476,7 @@ function checkCarryGrant(grant: CarryGrant): void {
   const invite = parseSpaceInvite(grant.carry.invite);
   if (
     invite.space.id !== grant.carry.space ||
-    invite.space.creator !== grant.did ||
+    soleFounder(invite.space) !== grant.did ||
     invite.space.visibility !== 'private' ||
     !invite.key
   ) {
@@ -480,31 +492,57 @@ function checkCarryGrant(grant: CarryGrant): void {
 }
 
 function openHome(homeUrl: URL): Window {
-  const popup = globalThis.open(homeUrl.href, 'weave-home', 'popup,width=460,height=720');
+  const popup = globalThis.open(homeUrl.href, 'minca-home', 'popup,width=460,height=720');
   if (!popup) throw new Error('The browser blocked the window. Allow pop-ups for this site and try again.');
   return popup;
 }
 
-/** Sends the request once the home says hello, and waits for its answer, which the caller checks. */
+/**
+ * Sends the request when the home says hello, and again every half second
+ * until it answers, only ever to the home's origin; then waits for the answer,
+ * which the caller checks. A phone may hardly run this page while the home is
+ * in front, so the hello can arrive before the request is made, or be missed:
+ * it listens from the start, and the repeats reach a home that has loaded.
+ */
 function askHome<T>(
   popup: Window,
   homeOrigin: string,
-  request: ConnectRequest | ProposeRequest,
+  request: Promise<ConnectRequest | ProposeRequest> | ConnectRequest | ProposeRequest,
   timeoutMs = 10 * 60_000,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    let finished = false;
     const done = (finish: () => void) => {
+      if (finished) return;
+      finished = true;
       globalThis.removeEventListener('message', onMessage);
       globalThis.clearInterval(watch);
       globalThis.clearTimeout(timer);
       finish();
     };
+    let made: ConnectRequest | ProposeRequest | null = null;
+    const send = () => {
+      if (made && !finished) popup.postMessage({ type: REQUEST, request: made }, homeOrigin);
+    };
+    const ready = Promise.resolve(request);
+    ready.then(
+      (value) => {
+        made = value;
+      },
+      () => {},
+    );
+    ready.catch((error: unknown) =>
+      done(() => {
+        popup.close();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }),
+    );
     const onMessage = (event: MessageEvent) => {
       // Only the popup we opened, at the address we opened it on.
       if (event.source !== popup || event.origin !== homeOrigin) return;
       const data: unknown = event.data;
       if (!isObject(data)) return;
-      if (data.type === HELLO) popup.postMessage({ type: REQUEST, request }, homeOrigin);
+      if (data.type === HELLO) void ready.then(send, () => {});
       else if (data.type === GRANT && data.grant)
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant, checkCarryGrant and proposeToHome check it
         done(() => resolve(data.grant as T));
@@ -515,6 +553,8 @@ function askHome<T>(
     };
     const watch = globalThis.setInterval(() => {
       if (popup.closed) done(() => reject(new Error('The window was closed before access was given.')));
+      // Until the home answers; one that has its request already ignores the rest.
+      else send();
     }, 500);
     const timer = globalThis.setTimeout(
       () => done(() => reject(new Error('No answer from your account home.'))),
@@ -533,21 +573,19 @@ export async function checkGrant(
   audience: string,
   asked: { readonly recordsOnly?: boolean } = {},
 ): Promise<void> {
-  if (!isObject(grant) || grant.v !== 1 || typeof grant.token !== 'string' || typeof grant.did !== 'string') {
+  if (!isObject(grant) || grant.v !== GRANT_VERSION || typeof grant.did !== 'string') {
     throw new Error('That is not a grant.');
   }
-  const verified = await verifyUCAN(grant.token, createP256Provider());
-  if (!verified.valid) throw new Error(`The grant does not check out: ${verified.reason ?? 'invalid'}`);
-  const { payload } = parseUCAN(grant.token);
-  if (payload.aud !== audience) throw new Error('The grant was made out to a different key.');
-  if (payload.iss !== grant.did) throw new Error('The grant was not signed by the account it names.');
-  if (asked.recordsOnly && !grantsRecordsOnly(grant.token))
+  const verified = await verifyNote(grant.note, createP256Provider());
+  if (!verified.valid) throw new Error(`The grant does not check out: ${verified.reason}`);
+  if (verified.audience !== audience) throw new Error('The grant was made out to a different key.');
+  if (verified.root !== grant.did) throw new Error('The grant was not signed by the account it names.');
+  if (asked.recordsOnly && !grantsRecordsOnly(grant.note))
     throw new Error('The grant gives more than records, which is all that was asked for.');
 }
 
 /** A signer that answers with the note the home gave — the app holds nothing else. */
 export function grantSigner(grant: Grant): RootSigner {
-  let token: Promise<UCANToken> | null = null;
   return {
     did: grant.did,
     custody: 'remote',
@@ -555,12 +593,7 @@ export function grantSigner(grant: Grant): RootSigner {
       if (grant.expiresAt <= Math.floor(Date.now() / 1000)) {
         throw new Error('Access has run out. Connect to your account home again.');
       }
-      token ??= cidFromBytes(utf8Encode(grant.token)).then((cid) => ({
-        ...parseUCAN(grant.token),
-        encoded: grant.token,
-        cid,
-      }));
-      return token;
+      return grant.note;
     },
   };
 }
@@ -592,7 +625,7 @@ export async function startConnectedNode(params: {
     {
       signer: grantSigner(params.grant),
       sessionKey: key.keys,
-      stores: { indexedDB: `weave-app:${params.grant.did}` },
+      stores: { indexedDB: `minca-app:${params.grant.did}` },
       ...(network ? { network } : {}),
       ...(params.cache === false ? {} : { cache: params.cache ?? {} }),
       ...(params.grant.accountKey ? { accountKey: base64UrlDecode(params.grant.accountKey) } : {}),
@@ -613,12 +646,15 @@ export async function startConnectedNode(params: {
 }
 
 /** Where an app keeps its grant between visits */
-export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'weave.grant') {
+export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'minca.grant') {
   const kept = guardedStorage(storage);
   return {
     load(): Grant | null {
       const grant = kept.read<Grant>(key);
-      return grant && grant.expiresAt > Math.floor(Date.now() / 1000) ? grant : null;
+      // One kept in an older format holds a note no peer reads now: connecting again replaces it.
+      return grant && grant.v === GRANT_VERSION && grant.expiresAt > Math.floor(Date.now() / 1000)
+        ? grant
+        : null;
     },
     save: (grant: Grant): void => kept.write(key, grant),
     forget: (): void => kept.write(key, null),
@@ -639,21 +675,27 @@ export interface IncomingRequest {
 }
 
 /**
- * Waits for the app that opened this page to say what it wants.
- * @returns The request, or null when this page was not opened by an app
+ * Waits for the app that opened this page to say what it wants. It says hello
+ * once, and listens long: on a phone the app's tab behind this one may not run
+ * for a while, and its request (which it repeats) comes when it does.
+ * @returns The request, or null when this page was not opened by an app, the app's window closed, or none came in time
  */
-export function receiveConnectRequest(timeoutMs = 10_000): Promise<IncomingRequest | null> {
+export function receiveConnectRequest(timeoutMs = 10 * 60_000): Promise<IncomingRequest | null> {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- lib.dom has it as any, and an opener on another origin is no instanceof Window here
   const opener = globalThis.opener as Window | null;
   if (!opener) return Promise.resolve(null);
 
   return new Promise((resolve) => {
+    const stop = () => {
+      globalThis.removeEventListener('message', onMessage);
+      globalThis.clearTimeout(timer);
+      globalThis.clearInterval(watch);
+    };
     const onMessage = (event: MessageEvent) => {
       if (event.source !== opener) return;
       const data: unknown = event.data;
       if (!isObject(data) || data.type !== REQUEST) return;
-      globalThis.removeEventListener('message', onMessage);
-      globalThis.clearTimeout(timer);
+      stop();
 
       // A request this home cannot read — often an app newer than the home —
       // is answered, not ignored: otherwise both sides wait with nothing said.
@@ -685,12 +727,18 @@ export function receiveConnectRequest(timeoutMs = 10_000): Promise<IncomingReque
       });
     };
     const timer = globalThis.setTimeout(() => {
-      globalThis.removeEventListener('message', onMessage);
+      stop();
       resolve(null);
     }, timeoutMs);
+    const watch = globalThis.setInterval(() => {
+      if (!opener.closed) return;
+      stop();
+      resolve(null);
+    }, 500);
     globalThis.addEventListener('message', onMessage);
     // Nothing secret in a hello, so any origin may hear it; the request that
-    // answers it is what names the app.
+    // answers it is what names the app. Said once: a page that takes over the
+    // app's tab later is not told where this home is.
     opener.postMessage({ type: HELLO }, '*');
   });
 }
@@ -710,7 +758,7 @@ const REQUEST_FIELDS = new Set([
   'via',
   'days',
 ]);
-const PROPOSE_FIELDS = new Set(['v', 'kind', 'name', 'notify']);
+const PROPOSE_FIELDS = new Set(['v', 'kind', 'name', 'automations']);
 
 const onlyFields = (value: Record<string, unknown>, fields: ReadonlySet<string>): boolean =>
   Object.keys(value).every((field) => fields.has(field));
@@ -721,12 +769,12 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
   if (proposal.kind !== undefined) {
     return (
       onlyFields(proposal, PROPOSE_FIELDS) &&
-      proposal.v === 1 &&
+      proposal.v === 2 &&
       proposal.kind === 'propose' &&
       (proposal.name === undefined || (typeof proposal.name === 'string' && proposal.name.length <= 80)) &&
-      Array.isArray(proposal.notify) &&
-      proposal.notify.length > 0 &&
-      isProposals(proposal.notify, origin)
+      Array.isArray(proposal.automations) &&
+      proposal.automations.length > 0 &&
+      isProposals(proposal.automations, origin)
     );
   }
   const request = value;
@@ -759,7 +807,7 @@ function isRequest(value: unknown, origin: string): value is ConnectRequest | Pr
   );
 }
 
-/** Subscriptions an app proposes: few, each one it could offer, each click leading back to it */
+/** Automations an app proposes: few, each one it could offer, each click leading back to it */
 function isProposals(value: unknown, origin: string): boolean {
   return (
     Array.isArray(value) &&
@@ -783,11 +831,7 @@ function isNewSpaces(value: unknown): boolean {
         space.name.trim().length > 0 &&
         space.name.length <= 80 &&
         (space.visibility === 'private' || space.visibility === 'public') &&
-        (space.roles === undefined ||
-          checkStartingRoles(
-            space.roles,
-            space.creatorRole ?? [...space.roles].sort((a, b) => b.rank - a.rank)[0]?.name,
-          ) === null),
+        (space.roles === undefined || checkFoundingRoles(space.roles) === null),
     )
   );
 }

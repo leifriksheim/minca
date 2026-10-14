@@ -1,9 +1,9 @@
-# Weave home
+# Minca home
 
-Your own account home: the one place your Weave account is ever unlocked.
+Your own account home: the one place your Minca account is ever unlocked.
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/leifriksheim/weave&base=apps/home)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/leifriksheim/weave&root-directory=apps/home)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/leifriksheim/minca&base=apps/home)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/leifriksheim/minca&root-directory=apps/home)
 
 Apps never sign you in. They open your home in a small window, you sign in
 there — with a passkey, or the password your password manager keeps —
@@ -40,9 +40,9 @@ Settings, as build-time environment variables:
 | Variable             | Default                       |                                                                                             |
 | -------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
 | `VITE_SIGNALING_URL` | `wss://p2p-web-relay.fly.dev` | Relays, comma separated. Must include one your apps use, or they cannot sync with the home. |
-| `VITE_WEAVE_NODES`   | —                             | Always-on nodes (`weave run`) to keep a socket to                                           |
+| `VITE_MINCA_NODES`   | —                             | Always-on nodes (`minca run`) to keep a socket to                                           |
 
-Then use it from any Weave app: choose **Use your own home** when connecting
+Then use it from any Minca app: choose **Use your own home** when connecting
 and type its address. The app remembers it, and joins the relays your home
 uses, so the two sync even if they were set up with different ones.
 
@@ -75,7 +75,7 @@ either, every visit asks for the recovery code, and it ends up being used as a
 password after all.
 
 Last, in a browser that can open folders, you are offered a **pod** — a folder
-on your computer that holds your data, which any Weave app you point at it can
+on your computer that holds your data, which any Minca app you point at it can
 open. Or keep it in this browser; you can move it any time from your account
 page.
 
@@ -192,8 +192,8 @@ the web has no filesystem change notification.
 
 - **A passkey that works on a new device.** Today a passkey synced by iCloud or Bitwarden gates a key that stays in one browser, so a new device still needs pairing or the recovery code. With the PRF extension the passkey could wrap the seed itself, its user handle could name the DID, and an always-on node could keep the wrapped copy — at the cost of working only with managers that implement PRF, and of those copies becoming a target.
 
-- **Members and roles.** Screens to see who is in a space and what they hold, edit roles, make an invite link per role, hand over, and leave. So far only `example/` has these (`RolesView`). The copy should be honest: someone removed keeps what they already downloaded, and view-only links made before a removal stop working.
+- **Members and roles.** Screens to see who is in a space and what they hold, edit roles and their grants, make an invite link per role, step down as a founder, name or follow a successor space, and leave. So far only `example/` has these (`RolesView`). The copy should be honest: someone removed keeps what they already downloaded, and view-only links made before a removal stop working.
 - **Notifications per device.** The app that asked shows its notifications itself; say which devices and apps are showing them.
 - **Hosting.**
   - Say plainly, before a lapsed host deletes data, that it will.
-  - Remind people before time runs out on a device, not only by email (email reminders are built: `RemindMe` in `apps/shared/src/Payment.tsx`); that needs Web Push ([#60](https://github.com/leifriksheim/weave/issues/60)).
+  - Remind people before time runs out on a device, not only by email (email reminders are built: `RemindMe` in `apps/shared/src/Payment.tsx`); that needs Web Push ([#60](https://github.com/leifriksheim/minca/issues/60)).

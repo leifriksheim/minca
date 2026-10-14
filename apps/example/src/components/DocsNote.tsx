@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { palette } from '../styles';
 
-const REPO = 'https://github.com/leifriksheim/weave/blob/main/';
+const REPO = 'https://github.com/leifriksheim/minca/blob/main/';
 
 /** A line on what is going on underneath, and the page that explains the rest */
 export function DocsNote({

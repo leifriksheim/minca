@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import type { SpaceSummary } from '@weaveprotocol/core';
-import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@weaveprotocol/core/calls';
-import { useAccount, useCalls, useProfiles } from '@weaveprotocol/core/react';
+import type { SpaceSummary } from '@minca/core';
+import type { CallAround, CallPeer, CurrentCall, IncomingCall } from '@minca/core/calls';
+import { useAccount, useCalls, useProfiles } from '@minca/core/react';
 import { nameOf, peopleFrom } from '../../derive/people';
-import { Avatar } from '@weave/app-shared/Avatar';
+import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';
 import { styles, palette } from '../../styles';
 
@@ -80,7 +80,7 @@ function CallPanel({
   const act = (fn: () => Promise<void> | void) => () => void Promise.resolve(fn()).catch(() => {});
 
   const outgoing = call.outgoing && (
-    <p style={{ fontSize: 13, color: stage ? '#bbb' : palette.ink.muted }}>
+    <p style={{ fontSize: 13, color: stage ? palette.surface.lineStrong : palette.ink.muted }}>
       {call.outgoing.state === 'ringing'
         ? `Ringing ${nameOf(call.outgoing.to, people)}…`
         : call.outgoing.state === 'declined'
@@ -99,12 +99,18 @@ function CallPanel({
     >
       <header style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span
-          style={{ width: 8, height: 8, borderRadius: 4, background: palette.accent.good, flexShrink: 0 }}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: palette.radius.pill,
+            background: palette.accent.good,
+            flexShrink: 0,
+          }}
         />
         <button
           onClick={onGoTo}
           data-variant="ghost"
-          style={{ ...linkish, color: stage ? '#fff' : palette.ink.strong }}
+          style={{ ...linkish, color: stage ? palette.surface.card : palette.ink.strong }}
           title="Go to this space"
         >
           {spaceName}
@@ -112,7 +118,7 @@ function CallPanel({
         <span
           style={{
             fontSize: 12,
-            color: stage ? '#999' : palette.ink.faint,
+            color: stage ? palette.ink.faint : palette.ink.faint,
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -146,7 +152,7 @@ function CallPanel({
 
       {pip.window ? (
         <>
-          <p style={{ fontSize: 13, color: stage ? '#bbb' : palette.ink.muted }}>
+          <p style={{ fontSize: 13, color: stage ? palette.surface.lineStrong : palette.ink.muted }}>
             Showing in picture-in-picture.
           </p>
           {createPortal(<div className="call-pip">{tiles}</div>, pip.window.document.body)}
@@ -403,14 +409,14 @@ function Choice({
         style={{
           width: 52,
           height: 52,
-          borderRadius: 26,
+          borderRadius: palette.radius.pill,
           padding: 0,
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: color,
           border: `1px solid ${color}`,
-          color: '#fff',
+          color: palette.surface.card,
         }}
       >
         <Icon name={icon} size={20} />
@@ -441,9 +447,9 @@ function Rejoin({ call, spaceName }: { call: CallAround; spaceName: string }) {
           style={{
             ...styles.smallButton,
             flex: 1,
-            background: palette.ink.strong,
-            color: '#fff',
-            border: `1px solid ${palette.ink.strong}`,
+            background: palette.accent.base,
+            color: palette.surface.card,
+            border: `1px solid ${palette.accent.base}`,
           }}
         >
           Rejoin
@@ -495,7 +501,11 @@ export function CallButton({ space }: { space: SpaceSummary }) {
         alignItems: 'center',
         gap: 6,
         ...(going
-          ? { background: palette.accent.good, border: `1px solid ${palette.accent.good}`, color: '#fff' }
+          ? {
+              background: palette.accent.good,
+              border: `1px solid ${palette.accent.good}`,
+              color: palette.surface.card,
+            }
           : {}),
       }}
       title={
@@ -562,21 +572,29 @@ function RoundButton({
   const style: CSSProperties = {
     width: size,
     height: size,
-    borderRadius: size / 2,
+    borderRadius: palette.radius.pill,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: `1px solid ${danger ? palette.accent.danger : dark ? '#333' : palette.surface.line}`,
+    border: `1px solid ${danger ? palette.accent.danger : dark ? palette.ink.body : palette.surface.line}`,
     background: danger
       ? palette.accent.danger
       : on
         ? dark
-          ? '#fff'
+          ? palette.surface.card
           : palette.ink.strong
         : dark
-          ? '#1a1a1a'
+          ? palette.ink.body
           : palette.surface.card,
-    color: danger ? '#fff' : on ? (dark ? '#000' : '#fff') : dark ? '#eee' : palette.ink.body,
+    color: danger
+      ? palette.surface.card
+      : on
+        ? dark
+          ? palette.ink.strong
+          : palette.surface.card
+        : dark
+          ? palette.surface.page
+          : palette.ink.body,
     padding: 0,
     flexShrink: 0,
   };
@@ -632,7 +650,7 @@ function usePictureInPicture(): { supported: boolean; window: Window | null; tog
         for (const sheet of document.querySelectorAll('style, link[rel="stylesheet"]'))
           opened.document.head.appendChild(sheet.cloneNode(true));
         opened.document.body.style.margin = '0';
-        opened.document.body.style.background = '#000';
+        opened.document.body.style.background = palette.ink.strong;
         opened.addEventListener('pagehide', () => setPip(null));
         setPip(opened);
       })

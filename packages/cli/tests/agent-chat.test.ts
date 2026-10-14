@@ -1,5 +1,5 @@
 /**
- * `weave agent`'s loop, against a real node and a scripted model: the tools it
+ * `minca agent`'s loop, against a real node and a scripted model: the tools it
  * is offered, what it asks before running, and the daily cap.
  */
 import { test, describe } from 'node:test';
@@ -73,7 +73,7 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : JS
 
 const quiet = { confirm: async () => false, log: () => {} };
 
-describe('weave agent', () => {
+describe('minca agent', () => {
   test('offers the agent tools, runs what the model calls, and answers every call in one message', async () => {
     const node = await aNode(11);
     const space = await node.spaces.create({ name: 'Club', visibility: 'public' });
@@ -273,7 +273,7 @@ describe('weave agent', () => {
   });
 
   test("keeps today's spend on disk, and starts again the next day", async () => {
-    const dir = await tempDir('weave-agent-');
+    const dir = await tempDir('minca-agent-');
     let now = new Date(2026, 8, 29, 23, 0);
     const spend = fileSpend(dir, () => now);
     await spend.add(0.25);
@@ -284,7 +284,7 @@ describe('weave agent', () => {
   });
 
   test('makes its folder on the first spend, as a bot a host runs has none yet', async () => {
-    const dir = await tempDir('weave-agent-');
+    const dir = await tempDir('minca-agent-');
     const spend = fileSpend(path.join(dir, 'agent'));
     assert.equal(await spend.today(), 0);
     await spend.add(0.1, 'did:key:zSomeone');

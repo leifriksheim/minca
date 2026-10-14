@@ -18,7 +18,7 @@ import { listing } from '../src/schemas/library/money.js';
 import { event } from '../src/schemas/library/planning.js';
 import { place } from '../src/schemas/library/life.js';
 import { createStorageProvider } from '../src/storage/storage-provider.js';
-import { matchesRecord } from '../src/space/notify.js';
+import { matchesRecord } from '../src/space/own-automations.js';
 import { team } from '../src/space/presets.js';
 import { createFakeHub } from './helpers/fake-transport.js';
 import { person } from './helpers/person.js';
@@ -156,19 +156,18 @@ describe('places as topics', () => {
     // Within 3 km of Grünerløkka: nine cells, each a tag a keeper can match.
     const area = cellsAround(59.9226, 10.7522, 3);
     assert.ok(area);
+    // Any of the nine: what a carrier holds as nine tags.
     const found = [near, far].filter((record) =>
-      area.cells.some((value) =>
-        matchesRecord(
-          {
-            label: 'Near',
-            collection: listing.name,
-            spaces: 'all',
-            topic: { field: 'place.cells', value },
-            since,
-          },
-          record,
-          'did:key:zDnaeBob',
-        ),
+      matchesRecord(
+        {
+          name: 'Near',
+          when: { query: { collection: listing.name, where: { 'place.cells': { $in: area.cells } } } },
+          then: { kind: 'notify', text: 'Near' },
+          spaces: 'all',
+          since,
+        },
+        record,
+        'did:key:zDnaeBob',
       ),
     );
     assert.deepEqual(

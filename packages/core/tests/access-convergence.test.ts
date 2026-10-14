@@ -1,8 +1,9 @@
 /**
  * Access replay is consensus: two peers that place changes differently
  * disagree for good about who may write. This generates random access
- * histories — several authors of different ranks, concurrent role changes,
- * removals, revoked notes, key changes, `seen` drawn from causal cuts — and
+ * histories — several authors holding different roles, concurrent role
+ * definitions, assignments and removals, revoked notes, key changes, `seen`
+ * drawn from causal cuts — and
  * checks that:
  *
  * - every arrival order gives the same history: state, statuses, `at()`
@@ -14,22 +15,34 @@
  * `ACCESS_RUNS=<n>` changes how many histories run.
  */
 import { test, describe } from 'node:test';
+import type { SpaceGrant as Grant } from '../src/types.js';
 import assert from 'node:assert/strict';
 
 import {
+  isMember,
+  may,
   replayAccess,
-  roleHolds,
-  MANAGE,
-  INVITE,
-  DEFINE,
   type AccessEvent,
   type AccessGenesis,
   type AccessHistory,
   type AccessState,
   type EventStatus,
   type Keeper,
-  type Role,
+  type Needs,
 } from '../src/space/roles.js';
+import {
+  COLLECTION_DEFINE,
+  KEY_CHANGE,
+  MEMBER_REMOVE,
+  RECORD_DELETE,
+  RECORD_WRITE,
+  ROLE_ASSIGN,
+  ROLE_DEFINE,
+  ROLE_UNASSIGN,
+  SPACE_KEEPERS,
+  SPACE_RELAYS,
+  type FoundingRole,
+} from '../src/space/grants.js';
 
 /** What every peer must agree on: everything a history answers but `extend` and `headsFor`, which only serve a writer */
 type ReferenceHistory = Omit<AccessHistory, 'extend' | 'headsFor'>;
@@ -58,15 +71,57 @@ function random(seed: number) {
 }
 type Random = ReturnType<typeof random>;
 
-const ROLES: ReadonlyArray<Role> = [
-  { name: 'admin', rank: 100, permissions: ['*'] },
-  { name: 'mod', rank: 50, permissions: [MANAGE, INVITE, DEFINE, 'app.x/*'] },
-  { name: 'helper', rank: 20, permissions: [INVITE, 'app.x/moderate'] },
-  { name: 'member', rank: 0, permissions: [] },
+const notAdmin = ['not', ['any', '.roles', ['==', '.', 'admin']]] as const;
+/** Grants a definition may hold, drawn at random */
+const POOL: ReadonlyArray<Grant> = [
+  { cmd: '/record', pol: [] },
+  { cmd: RECORD_WRITE, pol: [['==', '.byCreator', true]] },
+  { cmd: RECORD_DELETE, pol: [['==', '.collection', 'app.x']] },
+  { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] },
+  { cmd: ROLE_ASSIGN, pol: [['==', '.self', false]] },
+  { cmd: ROLE_UNASSIGN, pol: [notAdmin] },
+  { cmd: MEMBER_REMOVE, pol: [notAdmin] },
+  { cmd: MEMBER_REMOVE, pol: [] },
+  { cmd: ROLE_DEFINE, pol: [['!=', '.role', 'admin']] },
+  { cmd: ROLE_DEFINE, pol: [['==', '.role', 'helper']] },
+  { cmd: COLLECTION_DEFINE, pol: [] },
+  { cmd: KEY_CHANGE, pol: [] },
+  { cmd: SPACE_RELAYS, pol: [] },
+  { cmd: SPACE_KEEPERS, pol: [] },
+];
+const ROLES: ReadonlyArray<FoundingRole> = [
+  {
+    name: 'admin',
+    grants: [
+      { cmd: '/record', pol: [] },
+      { cmd: ROLE_ASSIGN, pol: [] },
+      { cmd: ROLE_UNASSIGN, pol: [notAdmin] },
+      { cmd: MEMBER_REMOVE, pol: [notAdmin] },
+      { cmd: ROLE_DEFINE, pol: [['!=', '.role', 'admin']] },
+      { cmd: COLLECTION_DEFINE, pol: [] },
+      { cmd: KEY_CHANGE, pol: [] },
+      { cmd: SPACE_RELAYS, pol: [] },
+      { cmd: SPACE_KEEPERS, pol: [] },
+    ],
+  },
+  {
+    name: 'mod',
+    grants: [
+      { cmd: RECORD_DELETE, pol: [] },
+      { cmd: ROLE_ASSIGN, pol: [['==', '.role', 'member']] },
+      { cmd: MEMBER_REMOVE, pol: [['==', '.self', false], notAdmin] },
+      { cmd: ROLE_DEFINE, pol: [['==', '.role', 'helper']] },
+    ],
+  },
+  {
+    name: 'helper',
+    grants: [{ cmd: RECORD_WRITE, pol: [['==', '.collection', 'app.x']] }],
+    nests: ['member'],
+  },
+  { name: 'member', grants: [{ cmd: RECORD_WRITE, pol: [['==', '.byCreator', true]] }] },
 ];
 const ROLE_NAMES = ['admin', 'mod', 'helper', 'member', 'extra'];
 const PEOPLE = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
-const PERMISSIONS = [MANAGE, INVITE, DEFINE, 'app.x/moderate', 'app.x/*', '*'];
 const WRITERS = ['w1', 'w2'];
 const COLLECTIONS = ['app.x', 'app.y'];
 const INVITES = ['i1', 'i2', 'i3'];
@@ -90,9 +145,9 @@ function generate(seed: number): History {
   const r = random(seed);
   const genesis: AccessGenesis = {
     id: 'genesis',
-    creator: 'p0',
+    resolver: 'strong-remove/1',
+    founders: ['p0'],
     roles: ROLES,
-    creatorRole: 'admin',
     ...(r.chance(0.8) ? { key: { keyId: 'k0', readKey: 'r0' } } : {}),
   };
   const events: AccessEvent[] = [];
@@ -144,40 +199,47 @@ function generate(seed: number): History {
       const did = r.pick(PEOPLE);
       const opened = events.filter((e) => e.kind === 'invite' && e.open);
       const viaInvite = opened.length > 0 && r.chance(0.2) ? r.pick(opened) : null;
+      const role = r.pick(ROLE_NAMES);
+      const key = `assign:${did}|${role}`;
       if (viaInvite?.kind === 'invite') {
-        const role = r.chance(0.85) ? viaInvite.role : r.pick(ROLE_NAMES);
+        const joined = r.chance(0.85) ? viaInvite.role : role;
         event = {
           ...base,
           root: did,
-          kind: 'member',
-          key: `member:${did}`,
+          kind: 'assign',
+          key: `assign:${did}|${joined}`,
           did,
-          role,
+          role: joined,
+          assigned: true,
           viaInvite: viaInvite.inviteKey,
+        };
+      } else if (r.chance(0.2)) {
+        // Removed, or leaving.
+        event = {
+          ...base,
+          ...(r.chance(0.3) ? { root: did } : {}),
+          kind: 'remove',
+          key: `remove:${did}`,
+          did,
         };
       } else {
         const leaving = r.chance(0.1);
-        const role = leaving || r.chance(0.2) ? null : r.pick(ROLE_NAMES);
         event = {
           ...base,
           ...(leaving ? { root: did } : {}),
-          kind: 'member',
-          key: `member:${did}`,
+          kind: 'assign',
+          key,
           did,
           role,
+          assigned: !leaving && r.chance(0.75),
         };
       }
-      if (event.role !== null && r.chance(0.7)) powerful.add(event.did);
+      if (event.kind === 'assign' && event.assigned && r.chance(0.7)) powerful.add(event.did);
     } else if (roll < 55) {
-      const name = r.pick(['mod', 'helper', 'member', 'extra']);
-      const role: Role | null = r.chance(0.25)
-        ? null
-        : {
-            name,
-            rank: r.pick([0, 10, 20, 50, 60, 100]),
-            permissions: [...new Set(Array.from({ length: r.int(4) }, () => r.pick(PERMISSIONS)))],
-          };
-      event = { ...base, kind: 'role', key: `role:${name}`, name, role };
+      const name = r.pick(['mod', 'helper', 'member', 'extra', 'admin']);
+      const grants = [...new Set(Array.from({ length: r.int(4) }, () => r.pick(POOL)))];
+      const nests = r.chance(0.2) ? [r.pick(ROLE_NAMES.filter((n) => n !== name))] : [];
+      event = { ...base, kind: 'role', key: `role:${name}`, name, grants, nests };
     } else if (roll < 67) {
       const inviteKey = r.pick(INVITES);
       const role = r.pick(ROLE_NAMES);
@@ -187,7 +249,7 @@ function generate(seed: number): History {
       event = { ...base, kind: 'revoke', key: `revoke:${key}|${base.root}`, target: key };
     } else if (roll < 75) {
       const writer = r.pick(WRITERS);
-      const collection = r.pick([...COLLECTIONS, 'sys.member', 'sys.role']);
+      const collection = r.pick([...COLLECTIONS, 'sys.assign', 'sys.role']);
       event = { ...base, kind: 'fork', key: `fork:${writer}`, writer, collection, from: r.int(5) };
     } else if (roll < 83) {
       const name = r.pick(['app.x', 'app.y']);
@@ -242,10 +304,22 @@ function generate(seed: number): History {
 
 // ─── What two replays must agree on ────────────────────────────────────
 
-const NEEDS: ReadonlyArray<(role: Role | null, state: AccessState) => boolean> = [
-  (role) => role !== null,
-  (role) => roleHolds(role, 'app.x/moderate'),
-  (role, state) => roleHolds(role, DEFINE) && state.definitions.has('app.x'),
+/** What a record by `root` asks, three ways */
+const NEEDS: ReadonlyArray<(root: string) => Needs> = [
+  (root) => (state) => isMember(state, root),
+  (root) => (state) => may(state, root, RECORD_DELETE, { collection: 'app.x', byCreator: false }),
+  (root) => (state) =>
+    may(state, root, COLLECTION_DEFINE, { collection: 'app.x' }) && state.definitions.has('app.x'),
+];
+
+/** Questions to ask of a state about each person: what a role's grants, judged where defined, give */
+const ASKED: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+  [RECORD_WRITE, { collection: 'app.x', byCreator: false }],
+  [RECORD_DELETE, { collection: 'app.y', byCreator: true }],
+  [ROLE_ASSIGN, { role: 'member', self: false, roles: [] }],
+  [MEMBER_REMOVE, { self: false, roles: ['mod'] }],
+  [ROLE_DEFINE, { role: 'helper' }],
+  [KEY_CHANGE, {}],
 ];
 
 const byKey = <T>(map: ReadonlyMap<string, T>) => [...map].sort((a, b) => (a[0] < b[0] ? -1 : 1));
@@ -253,15 +327,21 @@ const byKey = <T>(map: ReadonlyMap<string, T>) => [...map].sort((a, b) => (a[0] 
 function stateShape(state: AccessState | null): string {
   if (!state) return 'null';
   return JSON.stringify({
-    roles: byKey(state.roles),
-    members: byKey(state.members),
+    founders: [...state.founders].sort(),
+    roles: byKey(state.roles).map(([name, definitions]) => [
+      name,
+      definitions.map(({ event, by, grants, nests }) => ({ event, by, grants, nests })),
+    ]),
+    assigned: byKey(state.assigned).map(([did, roles]) => [did, byKey(roles)]),
     invites: byKey(state.invites),
     definitions: byKey(state.definitions),
+    contested: byKey(state.contested),
     keys: state.keys,
     keyDue: state.keyDue,
     relays: state.relays,
     keepers: state.keepers,
     copies: state.copies,
+    may: PEOPLE.map((did) => ASKED.map(([cmd, args]) => (may(state, did, cmd, args) ? 1 : 0)).join('')),
   });
 }
 
@@ -283,13 +363,15 @@ function shape(history: ReferenceHistory, h: History): Record<string, string> {
   h.cuts.forEach((cut, i) => (out[`at #${i} [${cut.join(',')}]`] = stateShape(history.at(cut))));
   for (const record of h.records) {
     NEEDS.forEach((needs, i) => {
-      out[`judge ${record.id} needs#${i}`] = JSON.stringify(history.judge(record, needs, record.within));
+      out[`judge ${record.id} needs#${i}`] = JSON.stringify(
+        history.judge(record, needs(record.root), record.within),
+      );
     });
   }
   for (const writer of WRITERS)
     for (const did of PEOPLE) out[`revoked ${writer} ${did}`] = JSON.stringify(history.revoked(writer, did));
   for (const writer of WRITERS)
-    for (const collection of [...COLLECTIONS, 'sys.member', 'sys.role'])
+    for (const collection of [...COLLECTIONS, 'sys.assign', 'sys.role'])
       out[`forked ${writer} ${collection}`] = JSON.stringify(history.forked(writer, collection));
   out.forks = JSON.stringify(
     [...history.forks()].sort(
@@ -361,6 +443,9 @@ describe('access replay converges', () => {
     let waiting = 0;
     let concurrent = 0;
     let refused = 0;
+    let rivals = 0;
+    let struck = 0;
+    let struckDefinitions = 0;
     forHistories((h) => {
       const history = replayAccess(h.genesis, h.events);
       for (const event of h.events) {
@@ -371,12 +456,23 @@ describe('access replay converges', () => {
       }
       const parents = new Set(h.events.flatMap((event) => event.seen));
       if (h.events.filter((event) => !parents.has(event.id)).length > 1) concurrent++;
-      for (const record of h.records) if (!history.judge(record, NEEDS[0]!).ok) refused++;
+      for (const record of h.records) if (!history.judge(record, NEEDS[0]!(record.root)).ok) refused++;
+      for (const definitions of history.current.roles.values()) if (definitions.length > 1) rivals++;
+      for (const event of h.events) {
+        const status = history.status(event.id);
+        if (status?.status === 'dropped' && status.reason.startsWith("Its author's power was taken")) {
+          struck++;
+          if (event.kind === 'role') struckDefinitions++;
+        }
+      }
     });
     assert.ok(applied > RUNS * 3, `applied ${applied}`);
     assert.ok(dropped > RUNS, `dropped ${dropped}`);
     assert.ok(waiting > 0, `waiting ${waiting}`);
     assert.ok(concurrent > RUNS / 4, `concurrent ${concurrent}`);
     assert.ok(refused > RUNS, `refused ${refused}`);
+    assert.ok(rivals > RUNS / 200, `rival definitions ${rivals}`);
+    assert.ok(struck > RUNS / 10, `struck ${struck}`);
+    assert.ok(struckDefinitions > 0, `struck definitions ${struckDefinitions}`);
   });
 });

@@ -5,16 +5,13 @@ produced by an agent. It runs against the records one node holds of one space.
 
 > Not protocol: peers never exchange queries, so another implementation may
 > offer any query language, and a better one later is not a protocol change.
-> Open, in [#126](https://github.com/leifriksheim/weave/issues/126): whether
-> the filter `sys.notify.where` stores, which every device of an account
-> reads, belongs in the spec. Ideas for later, from
-> [#28](https://github.com/leifriksheim/weave/issues/28): the interface
-> another query language plugs into, which reports the collections
+> Ideas for later, from
+> [#28](https://github.com/leifriksheim/minca/issues/28): the interface another query language plugs into, which reports the collections
 > it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them; and the
-> small filter a screen's `weave.list(collection, { where })` takes (field
+> small filter a screen's `minca.list(collection, { where })` takes (field
 > equality and `link:<rel>`, `apps/example/src/components/apps/screens.ts`), which
 > apps that run [screens](blueprints-and-guides.md#apps-with-a-screen-of-their-own) have to agree on.
-> A [rule](rules.md) keeps a query in a record, so everything that runs rules
+> An [automation](automations.md) keeps a query in a record, so everything that runs automations
 > has to read this format the same way; peers that only sync and judge the
 > record still never read it.
 
@@ -46,7 +43,7 @@ Field      = MetaField | LinkField | IncludeField | BodyPath
 MetaField  = "@key" | "@author" | "@root" | "@createdBy" | "@createdAt"
            | "@updatedAt" | "@seq" | "@collection"
 LinkField  = "link:" rel                  ; rel as spec 02 §5.1
-IncludeField = "include:" name            ; in a rule's `holds` only: what its query included
+IncludeField = "include:" name            ; in an automation's `holds` only: what its query included
 BodyPath   = segment *( "." segment )     ; not starting with "@", "$" or "link:"
 
 IncludeMap = { *( Name: Include ) }
@@ -74,33 +71,33 @@ as `collection` or `from`; it is replaced by its `name` before the query runs.
 ## Candidates
 
 A query considers the **current, non-deleted** version of every record in
-`collection` that stands ([spec 02 §9.5](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)) and whose body this node can read. Records it
+`collection` that stands ([spec 02 §9.5](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)) and whose body this node can read. Records it
 cannot open are left out — here and in every include — so a result's `body` is
 never `null`.
 
 > **Planned: leaving out records that do not conform.** Records whose body or
-> links do not fit the definition are kept and flagged ([spec 02 §9.6](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), but queries,
+> links do not fit the definition are kept and flagged ([spec 02 §9.6](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), but queries,
 > includes and counts use them like any other, so a tally can count a record
 > the definition says is malformed. The plan: queries and includes leave out
 > records with `conforms: false` unless the query asks for them (a new
 > optional member, e.g. `"nonconforming": true`). Rules are already enforced
-> on arrival ([spec 02 §9.4](https://github.com/leifriksheim/weave/blob/main/spec/02-records.md)), so this is about shape, not about who wrote it.
+> on arrival ([spec 02 §9.4](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), so this is about shape, not about who wrote it.
 
 ## Field values
 
-| Field            | Value                                                                                                                                                                                                                                        |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@key`           | the record key                                                                                                                                                                                                                               |
-| `@author`        | the DID that signed this version                                                                                                                                                                                                             |
-| `@root`          | the account it acted for                                                                                                                                                                                                                     |
-| `@createdBy`     | the root of the record's first version (or null)                                                                                                                                                                                             |
-| `@createdAt`     | `createdAt` of the record's first version (the creator's clock)                                                                                                                                                                              |
-| `@updatedAt`     | `createdAt` of this version                                                                                                                                                                                                                  |
-| `@seq`           | `seq`                                                                                                                                                                                                                                        |
-| `@collection`    | `collection`                                                                                                                                                                                                                                 |
-| `link:<rel>`     | the `to` of the record's first link with that `rel`, as checks' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel. |
-| `include:<name>` | in a [rule](rules.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                                     |
-| body path        | Walk the body: at each segment, the current value must be a non-null object or array, and the segment one of its own member names, or of an array a position (`0`, `1`, …; nothing else, not `length`); otherwise the value is _missing_.    |
+| Field            | Value                                                                                                                                                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@key`           | the record key                                                                                                                                                                                                                                  |
+| `@author`        | the DID that signed this version                                                                                                                                                                                                                |
+| `@root`          | the account it acted for                                                                                                                                                                                                                        |
+| `@createdBy`     | the root of the record's first version (or null)                                                                                                                                                                                                |
+| `@createdAt`     | `createdAt` of the record's first version (the creator's clock)                                                                                                                                                                                 |
+| `@updatedAt`     | `createdAt` of this version                                                                                                                                                                                                                     |
+| `@seq`           | `seq`                                                                                                                                                                                                                                           |
+| `@collection`    | `collection`                                                                                                                                                                                                                                    |
+| `link:<rel>`     | the `to` of the record's first link with that `rel`, as contracts' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel. |
+| `include:<name>` | in an [automation](automations.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                           |
+| body path        | Walk the body: at each segment, the current value must be a non-null object or array, and the segment one of its own member names, or of an array a position (`0`, `1`, …; nothing else, not `length`); otherwise the value is _missing_.       |
 
 ## Operators
 
@@ -114,8 +111,8 @@ means deep equality: same JSON type; objects with the same member names
 | `$eq`                     | `value` equals `x`                                                                                                                                           |
 | `$ne`                     | `value` does not equal `x` — **true for a missing field**                                                                                                    |
 | `$gt` `$gte` `$lt` `$lte` | both are numbers, or both strings (compared by UTF-16 code units), and the comparison holds. Any other pairing, including missing, is false.                 |
-| `$in`                     | `x` is a list containing an element equal to `value`                                                                                                         |
-| `$nin`                    | `x` is a list containing no element equal to `value` (false if `x` is not a list)                                                                            |
+| `$in`                     | `x` is a list containing an element equal to `value`, or, when `value` is a list, equal to any of its elements                                               |
+| `$nin`                    | `x` is a list for which `$in` does not hold (false if `x` is not a list)                                                                                     |
 | `$exists`                 | `(value is not missing) == x`. `null` exists.                                                                                                                |
 | `$contains`               | `value` and `x` are strings and `lower(x)` is a substring of `lower(value)`; or `value` is a list with an element equal to `x`. Otherwise false. Not search. |
 
@@ -125,7 +122,7 @@ means deep equality: same JSON type; objects with the same member names
 > for it. Not designed. _Open:_ whether the index is a node's local business
 > (specified here only as query syntax and result order) or something peers
 > share; and, for private spaces, that the index holds plaintext and must be
-> kept like the bodies it came from ([05](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)).
+> kept like the bodies it came from ([05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 
 `$and`, `$or` and `$not` nest at most 16 deep.
 
@@ -155,7 +152,7 @@ subfilter does not hold.
 > **Known defect:** when the cursor's key is gone, the reference starts again
 > from the first record (`packages/core/src/query/engine.ts`), so a caller paging through
 > sees records twice. A fix will resume after the cursor's position.
-> Tracked in [#20](https://github.com/leifriksheim/weave/issues/20).
+> Tracked in [#20](https://github.com/leifriksheim/minca/issues/20).
 
 ## Include
 
@@ -182,7 +179,7 @@ includes.
 
 `complete` is false only on a node that holds part of a space while a
 collection the query needs is still arriving
-([05 — Sync and storage](https://github.com/leifriksheim/weave/blob/main/spec/05-sync-and-storage.md)). The shape of each record
-object is the node's record view ([06 — Nodes, sessions and apps](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)).
+([05 — Sync and storage](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)). The shape of each record
+object is the node's record view ([06 — Nodes, sessions and apps](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
 _Source: `packages/core/src/query/types.ts`, `packages/core/src/query/filter.ts` (`checkQuery`, `matches`, `fieldValue`, `MAX_INCLUDE_DEPTH`), `packages/core/src/query/engine.ts` (`runQuery`, `sortRecords`, `expand`). Tests: `packages/core/tests/query.test.ts` (all; "link:<rel> is where the first link…" for link fields), `packages/core/tests/typed-query.test.ts`._

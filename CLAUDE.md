@@ -1,6 +1,6 @@
-# Working on Weave
+# Working on Minca
 
-Weave is a protocol first and a library second. `spec/` says what goes over
+Minca is a protocol first and a library second. `spec/` says what goes over
 the wire, what is stored, what is signed and what every peer must check;
 `packages/core/src/` is the reference implementation, and `packages/core/docs/`
 describes the library built on it. Read the part of the spec, or the page of
@@ -8,18 +8,19 @@ the docs, a change touches before changing the code.
 
 ## Layout
 
-| Folder                                        |                                                                                               |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07 (normative), and its threat model.   |
-| `packages/core`                               | `@weaveprotocol/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`) |
-| `packages/cli`                                | `@weaveprotocol/cli`: `weave`, the always-on node, hosting, agents, MCP                       |
-| `packages/relay`                              | The signaling relay and its mailbox                                                           |
-| `apps/home`, `apps/example`, `apps/extension` | The account home, the website and example app, the Chrome extension                           |
-| `apps/liquid`                                 | Liquid, a mini app: standalone, and inside the example (`apps/shared/src/mini-app.ts`)        |
-| `apps/shared`                                 | What the apps share: styles, relay settings, components, the mini app contract                |
+| Folder                                        |                                                                                                |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `spec/`                                       | The protocol specification, `README.md` plus parts 01–07 (normative), and its threat model.    |
+| `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
+| `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
+| `packages/relay`                              | The signaling relay and its mailbox                                                            |
+| `apps/home`, `apps/example`, `apps/extension` | The account home, the website and example app, the Chrome extension                            |
+| `apps/liquid`                                 | Liquid, a mini app: standalone, and inside the example (`apps/shared/src/mini-app.ts`)         |
+| `apps/shared`                                 | What the apps share: styles, relay settings, components, the mini app contract                 |
+| `scenarios`                                   | Kinds of community written as tests: grants, contracts and their attacks (`npm run scenarios`) |
 
-Everything imports the protocol as `@weaveprotocol/core`, only through what it
-exports. Inside the workspace the `@weaveprotocol/source` condition resolves it
+Everything imports the protocol as `@minca/core`, only through what it
+exports. Inside the workspace the `@minca/source` condition resolves it
 to `packages/core/src`, so nothing needs building first.
 
 ## Commands
@@ -27,6 +28,7 @@ to `packages/core/src`, so nothing needs building first.
 ```bash
 npm install          # once, at the root
 npm test             # every workspace
+npm run scenarios    # the scenario suite (scenarios/README.md)
 npm run typecheck    # every workspace, and core's tests (TypeScript 7)
 npm run lint         # oxlint, type-aware (.oxlintrc.json)
 npm run format       # Prettier
@@ -115,10 +117,12 @@ parts of `packages/cli`, the grant in `apps/home`, the mini app contract in
    fix. Answer every other finding through the `file-issue` skill: fixed,
    joined to an existing issue, recorded in the spec, parked, filed, or why it
    isn't one. Run the review again after fixing a blocker; fixes open holes too.
-3. Put the findings and what was done about each under **Adversarial review**
+3. Run the scenarios (`npm run scenarios`); they must pass. A change that
+   lets Minca serve a new kind of community adds a scenario for it.
+4. Put the findings and what was done about each under **Adversarial review**
    in the PR description, and say under **Threat model** what changes there.
    CI (`scripts/check-review.mjs`) fails a protocol PR without both.
-4. If a guarantee in `spec/threat-model.md` changes, or a new gap opens,
+5. If a guarantee in `spec/threat-model.md` changes, or a new gap opens,
    change that page in the same PR. A change to that page is reviewed against
    every "Holds" claim on it, not only the ones it touches.
 
@@ -202,10 +206,10 @@ Elsewhere:
   mode and redrawing, which is fiddly across terminals to get right. Released
   since 2023, widely used, four tiny dependencies. Used only when stdin and
   stderr are terminals; with none, the CLI asks nothing.
-- `node-datachannel` in `packages/cli`: WebRTC for `weave mcp` and headless
+- `node-datachannel` in `packages/cli`: WebRTC for `minca mcp` and headless
   nodes.
 - `@anthropic-ai/sdk`, a dev dependency of `packages/cli`, bundled into
-  `weave agent` only and loaded when that command runs
+  `minca agent` only and loaded when that command runs
   (`packages/cli/src/agent-chat.ts`): the Messages API's streaming, tool use,
   retries and error types. Anthropic's own client, released since 2023, with
   two small dependencies. Never import it from `packages/core` or the apps.

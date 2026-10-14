@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { NodeCollection } from '@weaveprotocol/core';
-import { useQuery } from '@weaveprotocol/core/react';
+import type { NodeCollection } from '@minca/core';
+import { useQuery } from '@minca/core/react';
 import {
   clauseOn,
   clauseWords,
@@ -11,7 +11,7 @@ import {
 } from '../../derive/conditions';
 import { nameOf, type People } from '../../derive/people';
 import { recordLabel } from '../../derive/schema-ui';
-import { noun, type Within } from '../../rules';
+import { noun, type Within } from '../../automations';
 import { styles, palette } from '../../styles';
 import { Icon } from '../Icon';
 
@@ -321,14 +321,14 @@ export const card: CSSProperties = {
   gap: 16,
   padding: 16,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 12,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
 };
 
-/** What a rule or notification would have caught, under the builder */
+/** What an automation or notification would have caught, under the builder */
 export const previewBox: CSSProperties = {
   padding: '12px 14px',
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
   border: `1px solid ${palette.surface.line}`,
   display: 'flex',
@@ -341,7 +341,7 @@ export const previewBox: CSSProperties = {
 const pill: CSSProperties = {
   height: 32,
   padding: '0 26px 0 12px',
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   border: `1px solid ${palette.surface.lineStrong}`,
   background: `${palette.surface.card} url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center`,
   appearance: 'none',
@@ -354,7 +354,7 @@ const pill: CSSProperties = {
 const box: CSSProperties = {
   height: 32,
   padding: '0 10px',
-  borderRadius: 8,
+  borderRadius: palette.radius.md,
   border: `1px solid ${palette.surface.lineStrong}`,
   background: palette.surface.card,
   color: palette.ink.strong,
@@ -367,7 +367,7 @@ const clauseRow: CSSProperties = {
   alignItems: 'center',
   gap: 6,
   padding: '6px 6px 6px 10px',
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   background: palette.surface.sunken,
 };
 
@@ -376,7 +376,7 @@ const addButton: CSSProperties = {
   alignItems: 'center',
   height: 30,
   padding: '0 12px',
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   border: `1px dashed ${palette.surface.lineStrong}`,
   color: palette.ink.muted,
   fontSize: 13,
@@ -387,7 +387,7 @@ const addButton: CSSProperties = {
 export const chip: CSSProperties = {
   ...styles.smallButton,
   height: 30,
-  borderRadius: 999,
+  borderRadius: palette.radius.pill,
   fontSize: 13,
   color: palette.ink.muted,
 };
@@ -445,7 +445,7 @@ export function Empty({ children }: { children: ReactNode }) {
     <p
       style={{
         padding: '18px 16px',
-        borderRadius: 10,
+        borderRadius: palette.radius.lg,
         border: `1px dashed ${palette.surface.lineStrong}`,
         color: palette.ink.muted,
         fontSize: 13.5,
@@ -462,7 +462,7 @@ export const list = { listStyle: 'none', display: 'flex', flexDirection: 'column
 export const iconDot = {
   width: 28,
   height: 28,
-  borderRadius: 8,
+  borderRadius: palette.radius.sm,
   flexShrink: 0,
   display: 'inline-flex',
   alignItems: 'center',
@@ -471,7 +471,7 @@ export const iconDot = {
   color: palette.ink.body,
 } as const;
 
-/** "in any channel", or one of them: where a rule's or notification's records must be */
+/** "in any channel", or one of them: where an automation's or notification's records must be */
 export function PlacePill({
   spaceId,
   collections,

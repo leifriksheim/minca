@@ -70,10 +70,10 @@ export function svg(markup: string): Element {
 
 /** Kept on the document itself, so two copies of this library on one page still add each sheet once */
 function adoptedIds(doc: Document): Set<unknown> {
-  const found: unknown = Reflect.get(doc, '__weaveStyles');
+  const found: unknown = Reflect.get(doc, '__mincaStyles');
   if (found instanceof Set) return found;
   const ids = new Set<unknown>();
-  Reflect.set(doc, '__weaveStyles', ids);
+  Reflect.set(doc, '__mincaStyles', ids);
   return ids;
 }
 

@@ -1,7 +1,7 @@
-# Weave for Chrome
+# Minca for Chrome
 
-Keeps your Weave spaces online, and your pod up to date, while your browser is
-open — even with no Weave app open. It can't read them.
+Keeps your Minca spaces online, and your pod up to date, while your browser is
+open — even with no Minca app open. It can't read them.
 
 Without it, your data only moves while some app of yours is open. Write
 something, close the tab, and it waits there until that app and one of your
@@ -37,15 +37,15 @@ card after a change (and after a change to `static/`, restart `npm run dev`).
 The website offers it for download too, at `/extension`, until it is in the
 Chrome Web Store: `npm run package -w apps/extension -- <out.zip>` builds it
 with `.env.production` (the deployed home and relay) and zips it, and the
-site's build (`netlify.toml`) puts it at `/weave-chrome.zip`.
+site's build (`netlify.toml`) puts it at `/minca-chrome.zip`.
 
 Settings are read at build time, from `extension/.env.local` (not committed;
 copy `.env.example` to start). A variable set in the shell wins over the file.
 
 | Variable       | Default                                           | What                                                                               |
 | -------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `WEAVE_HOME`   | `http://localhost:5174`                           | The account home offered first. People can type their own.                         |
-| `WEAVE_RELAYS` | `ws://localhost:8787,wss://p2p-web-relay.fly.dev` | Relays, comma separated. The home's relays arrive with the grant and are used too. |
+| `MINCA_HOME`   | `http://localhost:5174`                           | The account home offered first. People can type their own.                         |
+| `MINCA_RELAYS` | `ws://localhost:8787,wss://p2p-web-relay.fly.dev` | Relays, comma separated. The home's relays arrive with the grant and are used too. |
 
 For local development run the home (`npm run dev -w apps/home`). The relay on
 this machine (`npm run signal` at the root) is optional: the deployed one is in
@@ -60,14 +60,19 @@ the defaults too, so you only need the local one to work offline.
 | `src/welcome.ts`   | a tab              | Connecting to the home, picking the pod, status, disconnecting. Connecting has to happen here: the toolbar popup closes when the home's window takes focus.        |
 | `src/popup.ts`     | the toolbar popup  | Status at a glance, and **Resume pod sync** when Chrome wants a click.                                                                                             |
 
+The pages follow the shared design system (`apps/shared/DESIGN.md`):
+`static/styles.css` reads its colours as `--minca-*` properties, which the
+build writes to `dist/tokens.css` from `@minca/app-shared/tokens`. The faces
+ship in `static/fonts/` (OFL), so opening the popup fetches nothing.
+
 Permissions: `offscreen`, `alarms`, `unlimitedStorage`. No
 host permissions and no content scripts, so installing it shows no warning
 about reading your sites.
 
 ## Notifications
 
-It shows none. Apps notify you themselves, about the subscriptions you
-accepted from them; the extension only keeps your spaces online.
+It shows none. Apps notify you themselves, about the automations you kept
+from them; the extension holds their wakes and keeps your spaces online.
 
 The design, and what is still to be checked, is in
 [06 — Nodes, sessions and apps](../../spec/06-nodes-and-sessions.md).

@@ -26,10 +26,10 @@ export const PASSPHRASE_ITERATIONS = 600_000;
 /** More rounds than this are refused: a vault file edited to a huge count would hang the page */
 const MAX_ITERATIONS = 10_000_000;
 
-const LOCAL_KEY_INFO = utf8Encode('weave/local-key/v1');
-const ACCOUNT_KEY_INFO = utf8Encode('weave/account-key/v1');
+const LOCAL_KEY_INFO = utf8Encode('minca/local-key/v1');
+const ACCOUNT_KEY_INFO = utf8Encode('minca/account-key/v1');
 /** The envelope label of a wrap; bound to `{ did, id, kind }`, and a passphrase wrap's `salt` and `iterations` */
-const WRAP_LABEL = 'weave/vault-wrap/v1';
+const WRAP_LABEL = 'minca/vault-wrap/v1';
 
 /** Fields every wrap carries, whatever unlocks it */
 interface WrapBase {

@@ -6,7 +6,7 @@ import {
   type JsonSchema,
   type NodeCollection,
   type NodeRecord,
-} from '@weaveprotocol/core';
+} from '@minca/core';
 
 export { quickAddBody, titleField };
 

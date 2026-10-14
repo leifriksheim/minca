@@ -6,7 +6,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { watchNotifications, type NotifyMatch } from '../src/node/watch-notifications.js';
-import type { NodeEvent, NodeRecord, NotifyView, P2PNode } from '../src/node/types.js';
+import type { NodeEvent, NodeRecord, OwnAutomationView, P2PNode } from '../src/node/types.js';
 import { until } from './helpers/until.js';
 
 const ME = 'did:key:zMe';
@@ -35,12 +35,12 @@ const dm = (key: string): NodeRecord => ({
 function fakeNode() {
   const records: NodeRecord[] = [];
   const listeners = new Set<(event: NodeEvent) => void>();
-  const subscription: NotifyView = {
-    id: 'notify:1',
-    label: 'New direct message',
-    collection: 'std.direct',
+  const subscription: OwnAutomationView = {
+    id: 'own1',
+    name: 'New direct message',
+    when: { query: { collection: 'std.direct', where: { to: { $contains: '$me' } } } },
+    then: { kind: 'notify', text: 'New direct message' },
     spaces: 'all',
-    topic: { field: 'to', value: ME },
     app: { origin: ORIGIN },
     since: new Date(Date.now() - 60_000).toISOString(),
   };
@@ -50,7 +50,7 @@ function fakeNode() {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    notifications: { list: async () => [subscription] },
+    automations: { list: async () => [subscription] },
     spaces: { list: async () => [{ id: 'club' }] },
     records: { list: async () => [...records].reverse() },
   };

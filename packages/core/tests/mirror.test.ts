@@ -228,7 +228,7 @@ describe('a mirror', () => {
     const old = JSON.stringify({ v: 1, versions: [version] });
     assert.deepEqual(unpackSegment(new TextEncoder().encode(old)), []);
     // The example in spec 05 §16.3.
-    assert.equal(await segmentName(1, packSegment([])), '000001-8f04721ece59f5c5.seg');
+    assert.equal(await segmentName(1, packSegment([])), '000001-10773071eecc244b.seg');
   });
 });
 
@@ -243,7 +243,7 @@ describe('the S3 driver', () => {
       seen.push(request);
       const url = new URL(request.url);
       const [, bucket, ...rest] = url.pathname.split('/');
-      assert.equal(bucket, 'weave');
+      assert.equal(bucket, 'minca');
       const key = rest.map(decodeURIComponent).join('/');
       if (request.method === 'PUT') {
         // The first write is turned away, as a busy bucket does: the driver waits and tries again.
@@ -280,7 +280,7 @@ describe('the S3 driver', () => {
     const bucket = fakeS3();
     const store = createS3BlobStore({
       endpoint: 'https://account.r2.test',
-      bucket: 'weave',
+      bucket: 'minca',
       accessKeyId: 'AKID',
       secretAccessKey: 'SECRET',
       prefix: 'host-1',
@@ -315,7 +315,7 @@ describe('the S3 driver', () => {
     const bucket = fakeS3(3);
     const store = createS3BlobStore({
       endpoint: 'https://account.r2.test',
-      bucket: 'weave',
+      bucket: 'minca',
       accessKeyId: 'A',
       secretAccessKey: 'S',
       fetch: bucket.fetchS3,

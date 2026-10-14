@@ -56,7 +56,6 @@ export const contactRequest = define({
     },
     required: ['to', 'sealed'],
   },
-  rules: { edit: 'creator', delete: 'creator' },
 });
 export type ContactRequestRecord = BodyOf<typeof contactRequest>;
 
@@ -142,11 +141,10 @@ export const knockAnswer = define({
       sig: {
         type: 'string',
         maxLength: 200,
-        description: 'The door signing key over "weave/knock-answer/v1|<space>|<account>"',
+        description: 'The door signing key over "minca/knock-answer/v1|<space>|<account>"',
       },
     },
     required: ['sig'],
   },
-  rules: { edit: 'creator', delete: 'creator' },
 });
 export type KnockAnswer = BodyOf<typeof knockAnswer>;

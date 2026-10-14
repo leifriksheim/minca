@@ -2,13 +2,13 @@
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
-> agree on is in the [spec](https://github.com/leifriksheim/weave/blob/main/spec/README.md).
+> agree on is in the [spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md).
 
-`createWeaveAuth(config)` is the whole sign-in flow of a page that holds the
+`createMincaAuth(config)` is the whole sign-in flow of a page that holds the
 seed — an account home, or an app that signs people in itself — as a state to
 read and actions to call. It is a client convenience: nothing in it goes over
 the wire except what the node it starts does. An account home is a page built on it; the exchange it has with apps is
-[spec 06 §2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md).
+[spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md).
 
 ## Places
 
@@ -22,20 +22,20 @@ A **place** is where accounts and their data are kept (`Place`):
 A pod is a directory picked through the File System Access API. The last one
 picked is remembered and re-opened without a prompt when permission is still
 granted. A place holds any number of accounts; `listAccounts` returns them most
-recently used first. Account files and vault formats are in [01](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
+recently used first. Account files and vault formats are in [01](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
 
 _Source: `packages/core/src/session/places.ts`. Tests: `packages/core/tests/account-store.test.ts`._
 
 ## Account stores
 
 A folder's `accounts.json` and vault files are
-[spec 01 §14.1](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
+[spec 01 §14.1](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
 The library lists them most recently used first (`lastUsedAt`, else
 `createdAt`), and writes each file as JSON with a 2-space indent and a trailing
 newline.
 
 **In the browser**, with no folder, the same shape lives in IndexedDB database
-`weave-accounts`, object store `accounts`: key `__list` holds the array of
+`minca-accounts`, object store `accounts`: key `__list` holds the array of
 summaries, and key `<id>` that account's vault. No other origin can edit it.
 
 _Source: `packages/core/src/identity/account-store.ts`. Tests: `packages/core/tests/account-store.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account file")._
@@ -55,7 +55,7 @@ _Source: `packages/core/src/identity/account-store.ts`. Tests: `packages/core/te
 | `recovery` | Signed in; `freshCode` is the recovery code to keep safe.                                                                                                  |
 | `unlock`   | Signed in; choose a passkey or a password. Required.                                                                                                       |
 | `pod`      | Signed in; a new account is offered a pod. Optional.                                                                                                       |
-| `pair`     | Opened from a phone-pairing link ([01](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)).                                              |
+| `pair`     | Opened from a phone-pairing link ([01](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).                                              |
 | `ready`    | Signed in; `session` is set.                                                                                                                               |
 
 Transitions:
@@ -89,7 +89,7 @@ _Source: `packages/core/src/session/auth.ts`. Tests: `packages/core/tests/auth.t
 ## Ways in
 
 - **The recovery code** is the seed written out, 26 characters
-  ([01](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md)). It works on any site without anything stored there,
+  ([01](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)). It works on any site without anything stored there,
   and is for restoring, not for every day. If an account is selected and the
   code opens a different one, sign-in fails with a reason. If the code's
   account is new to this place, it is filed there with an empty vault (no
@@ -125,9 +125,9 @@ _Source: `packages/core/src/session/auth.ts`, `packages/core/src/session/credent
 
 ## Device keys and passkeys
 
-A device key ([spec 01 §12](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md))
+A device key ([spec 01 §12](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md))
 is generated non-extractable, with usages `encrypt` and `decrypt`, and kept in
-IndexedDB database `weave-device-keys`, object store `keys`, key = its id,
+IndexedDB database `minca-device-keys`, object store `keys`, key = its id,
 value = the `CryptoKey`.
 
 What that protects: someone holding a copy of the folder or the vault gets
@@ -149,7 +149,7 @@ Registration (`navigator.credentials.create`):
 
 | Option                          | Value                                                                                                                                                             |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rp`                            | `{ id: rpId, name: appName }` (default name `Weave`)                                                                                                              |
+| `rp`                            | `{ id: rpId, name: appName }` (default name `Minca`)                                                                                                              |
 | `user.id`                       | 32 random bytes (kept, base64url, as the wrap's `userHandle`)                                                                                                     |
 | `user.name`, `user.displayName` | The account's name                                                                                                                                                |
 | `challenge`                     | 32 random bytes                                                                                                                                                   |
@@ -174,7 +174,7 @@ key (`deriveAccountKey(seed)`), the contact key (`deriveContactKeyBytes(seed)`),
 the place's stores for that account ([stores](node.md#stores)) and the configured network. A
 page holds the local key (`deriveLocalKey(seed)`), which seals a pod's
 registry, as a non-extractable `CryptoKey`, and never hands it out. The
-session (`WeaveSession`) is `{ account, did, sessionDid, node }`. The seed stays
+session (`MincaSession`) is `{ account, did, sessionDid, node }`. The seed stays
 inside the auth object; `recoveryCode()` returns it as a recovery code.
 
 The account's name follows the account: on every `account` event the node's
@@ -206,7 +206,7 @@ _Implementation detail:_ kept in `localStorage` as `<prefix>.stay-signed-in`
 
 Other keys the flow keeps: `<prefix>.last-account`, `<prefix>.storage-choice`,
 and at an account home `<prefix>.connections:<accountId>` ([the account home's side](#the-account-homes-side)). `prefix`
-defaults to `weave`.
+defaults to `minca`.
 
 _Source: `packages/core/src/session/stay-signed-in.ts`, `packages/core/src/session/auth.ts`. Tests: none._
 
@@ -225,7 +225,7 @@ _Source: `packages/core/src/session/auth.ts` (`confirmPod`), `packages/core/src/
 ## Pairing a phone
 
 The ticket, the room and the exchange are
-[spec 01 §15](https://github.com/leifriksheim/weave/blob/main/spec/01-identity.md).
+[spec 01 §15](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
 `offerToPhone(onStage)` starts an offer on the first configured relay and
 returns `{ url, stop }`: the link for the QR code, and a way to stop. The link
 holds a one-time secret, not the account. The offer answers the first phone
@@ -244,22 +244,22 @@ On the phone, the `pair` stage waits for a tap, then meets the computer
 'confirm', code }`). Only when the person confirms on the computer does the
 seed arrive; the phone then signs in with it and joins each space, ending on
 `received`. It waits 60 seconds for the computer to answer, and 10 minutes for
-the person to confirm. Where accounts are already kept here, `<weave-auth>`
+the person to confirm. Where accounts are already kept here, `<minca-auth>`
 warns before going on: a link someone else sent would put the phone in their
 account.
 
-_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`), `packages/core/src/elements/weave-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`._
+_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`._
 
 ## The account home's side
 
 What a home receives from an app, what it must check and what it answers are
-protocol ([spec 06 §2](https://github.com/leifriksheim/weave/blob/main/spec/06-nodes-and-sessions.md)). An account home built on `createWeaveAuth` does
+protocol ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). An account home built on `createMincaAuth` does
 its side with these:
 
-**Receiving a request.** `receiveConnectRequest(timeoutMs = 10 000)` does
-nothing without `window.opener`, says hello, and resolves with the first
-request from the opener and the origin the browser reports for it, or `null`
-after the timeout. Answering closes the window 100 ms later.
+**Receiving a request.** `receiveConnectRequest(timeoutMs = 10 minutes)` does
+nothing without `window.opener`, says hello once, and resolves with the first request from the opener and the origin
+the browser reports for it, or `null` once the opener is closed or after the
+timeout. Answering closes the window 100 ms later.
 
 **Granting.** `auth.grant({ origin, request, spaceIds, days? })` makes the
 grant: `spaceIds` are the spaces the person picked, `days` their choice of
@@ -268,9 +268,12 @@ lifetime, clamped to [1/24, 365].
 **Connections.** The home remembers each connection per account in
 `localStorage` under `<prefix>.connections:<accountId>` (`Connection`:
 `origin`, `name`, `audience`, `access`, `scope`, `carrySpace?`, `spaces`,
-`grantedAt`, `expiresAt`, `token?`, `via?`, `recordsOnly?`). A kept
-connection with any other field, or one of these in another shape, is
-dropped when read, not read in part: its app or program connects again.
+`grantedAt`, `expiresAt`, `via?`, `recordsOnly?`). It keeps no note:
+disconnecting revokes the `audience` key, which is all a revoke names. A kept
+connection with any other field (a `token` from before notes were
+delegations in the UCAN 1.0 profile, say), or one of these in another
+shape, is dropped when read, not read in part: its app or program connects
+again.
 Connecting the same origin again replaces its connection; a connection with `via: 'code'` (a
 program connected by code through the app) is keyed by its audience instead,
 so each such program is its own. `auth.connections()` lists them.
@@ -278,13 +281,13 @@ so each such program is its own. `auth.connections()` lists them.
 **Disconnecting.** `auth.disconnect(origin, { byCode?, audience? })` removes
 the app's connections (by default the app and every program connected through
 it by code; `byCode: true` only those programs; `audience` only that key),
-revokes the notes of those with `access: write`, and, unless only programs
-connected by code go, removes the subscriptions the app proposed.
+revokes the keys of those with `access: write`, and, unless only programs
+connected by code go, removes the automations the app proposed.
 
-**Proposals.** `auth.propose({ origin, request, notify? })` adds the
-subscriptions the person kept: `notify` is the indices kept, default all. The
-home lists the account's subscriptions by app, and the person pauses or removes
-them there.
+**Proposals.** `auth.propose({ origin, request, kept? })` adds the
+automations the person kept as the account's own: `kept` is the indices kept,
+default all. The home lists the account's own automations by app, and the
+person pauses or removes them there.
 
 **Carriers.** `auth.grantCarry({ origin, request })` replaces any earlier
 carrier from the same origin, adds the carrier with `node.carriers.add`

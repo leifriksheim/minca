@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNode } from '@weaveprotocol/core/react';
-import type { NodeCollection, SpaceSummary } from '@weaveprotocol/core';
+import { useNode } from '@minca/core/react';
+import type { NodeCollection, SpaceSummary } from '@minca/core';
 // `useSchemas` defines collections in a space; it is not a React hook, whatever its name says.
-import { standardAnnotations, useSchemas as addSchemas } from '@weaveprotocol/core/schemas';
+import { standardAnnotations, useSchemas as addSchemas } from '@minca/core/schemas';
 import { styles, palette } from '../styles';
 
 const WHAT_IT_ADDS: Record<string, string> = {
@@ -52,7 +52,7 @@ export function Library({
               gap: 8,
               padding: 14,
               border: `1px solid ${palette.surface.line}`,
-              borderRadius: 10,
+              borderRadius: palette.radius.lg,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>

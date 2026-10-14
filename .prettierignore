@@ -1,5 +1,5 @@
 node_modules
 dist
-.weave-dev
+.minca-dev
 package-lock.json
 packages/cli/pay/dist

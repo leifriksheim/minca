@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useAction } from '@weave/app-shared/action';
-import type { NodeCollection, NodeRecord, SpaceSummary } from '@weaveprotocol/core';
-import { useLive, useNode, useProfiles } from '@weaveprotocol/core/react';
+import { useAction } from '@minca/app-shared/action';
+import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
+import { useLive, useNode, useProfiles } from '@minca/core/react';
 import { SchemaForm } from '../SchemaForm';
 import { Value } from '../Value';
 import {
@@ -193,7 +193,11 @@ function Children({
                   height: 30,
                   gap: 8,
                   ...(on
-                    ? { background: palette.ink.strong, color: '#fff', borderColor: palette.ink.strong }
+                    ? {
+                        background: palette.accent.base,
+                        color: palette.surface.card,
+                        borderColor: palette.accent.base,
+                      }
                     : {}),
                 }}
               >
@@ -327,7 +331,7 @@ const card = {
   gap: 10,
   padding: 14,
   border: `1px solid ${palette.surface.line}`,
-  borderRadius: 10,
+  borderRadius: palette.radius.lg,
   background: palette.surface.card,
 };
 const cardTitle = {
