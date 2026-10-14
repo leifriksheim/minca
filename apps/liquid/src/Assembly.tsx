@@ -15,6 +15,7 @@ import { useDuties } from './duties';
 import { palette } from './styles';
 import { CommunitySetup } from '@minca/app-shared/CommunitySetup';
 import { Loader } from '@minca/app-shared/Loader';
+import { ask } from '@minca/app-shared/Ask';
 
 type Tab = 'proposals' | 'trust' | 'people';
 
@@ -274,11 +275,16 @@ function Topics({ a, onClose }: { a: Assembly; onClose: () => void }) {
                 inUse(t.key) ? 'Proposals or delegations use it: they would lose their topic' : undefined
               }
               onClick={() => {
-                if (
-                  !inUse(t.key) ||
-                  globalThis.confirm(`Remove ${t.name}? Proposals and delegations on it lose their topic.`)
-                )
-                  void action.run(() => node.records.delete(a.spaceId, t.key));
+                const sure = inUse(t.key)
+                  ? ask('Proposals and delegations on it lose their topic.', {
+                      title: `Remove ${t.name}?`,
+                      yes: 'Remove',
+                      danger: true,
+                    })
+                  : Promise.resolve(true);
+                void sure.then(async (yes) => {
+                  if (yes) await action.run(() => node.records.delete(a.spaceId, t.key));
+                });
               }}
             >
               Remove

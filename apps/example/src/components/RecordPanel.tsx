@@ -32,6 +32,7 @@ import { useAction } from '@minca/app-shared/action';
 import { Person } from './Person';
 import { useDraft } from './useDraft';
 import { Loader } from '@minca/app-shared/Loader';
+import { ask } from '@minca/app-shared/Ask';
 
 /** Standard collections with a place of their own on every record, so not offered as "+ Add …" */
 const ANNOTATIONS = new Set<string>([reaction.name, comment.name, tag.name]);
@@ -471,8 +472,13 @@ export function RecordPanel({
               {may?.delete && (
                 <button
                   onClick={() => {
-                    if (!globalThis.confirm('Delete this for everyone in the space?')) return;
-                    void node.records.delete(space.id, record.key).then(onClose);
+                    void ask('It is deleted for everyone in the space.', {
+                      title: 'Delete this?',
+                      yes: 'Delete',
+                      danger: true,
+                    }).then(async (sure) => {
+                      if (sure) await node.records.delete(space.id, record.key).then(onClose);
+                    });
                   }}
                   data-variant="quiet"
                   style={{ ...styles.smallButton, color: palette.accent.danger }}

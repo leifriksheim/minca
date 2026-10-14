@@ -18,6 +18,7 @@ import { createInviteLink } from '../spaces';
 import { styles, palette, variants } from '../styles';
 import { Person } from './Person';
 import { Loader } from '@minca/app-shared/Loader';
+import { ask } from '@minca/app-shared/Ask';
 
 /** Your own name, renamed in place on the account, so every space you are in gets it */
 function MyName({ name }: { name: string }) {
@@ -456,14 +457,16 @@ function Members({
   // People who said who they are here but hold no role: they follow along.
   const followers = [...people.keys()].filter((did) => !members.has(did));
 
-  const confirmed = (ask: string) => globalThis.confirm(ask);
+  // Asks first, then does it, if the person said yes.
+  const confirmed = (title: string, question: string, yes: string, then: () => Promise<unknown>) =>
+    void ask(question, { title, yes, danger: true }).then((sure) => sure && run(then));
   const closeInvite = async (key: string) => {
-    if (
-      !confirmed(
-        'Close this invite link? Nobody new can join with it. People who already joined keep their role.',
-      )
-    )
-      return;
+    const sure = await ask('Nobody new can join with it. People who already joined keep their role.', {
+      title: 'Close this invite link?',
+      yes: 'Close it',
+      danger: true,
+    });
+    if (!sure) return;
     await run(() => node.spaces.closeInvite(space.id, key));
   };
 
@@ -495,8 +498,13 @@ function Members({
                         confirmed(
                           self
                             ? `Give up your ${r ? titleOf(r) : role} role?`
-                            : `Take ${r ? titleOf(r) : role} from ${name}? What they already wrote stays.`,
-                        ) && void run(() => node.spaces.unassign(space.id, did, role))
+                            : `Take ${r ? titleOf(r) : role} from ${name}?`,
+                          self
+                            ? 'You can only have it back if someone gives it to you.'
+                            : 'What they already wrote stays.',
+                          self ? 'Give it up' : 'Take it',
+                          () => node.spaces.unassign(space.id, did, role),
+                        )
                       }
                       aria-label={`Take ${role} from ${name}`}
                       style={{ ...styles.linkButton, padding: '0 0 0 6px', fontSize: 12 }}
@@ -534,8 +542,11 @@ function Members({
           <button
             onClick={() =>
               confirmed(
-                'Step down as a founder? You stay, with the roles you hold, and can be removed like anyone else.',
-              ) && void run(() => node.spaces.stepDown(space.id))
+                'Step down as a founder?',
+                'You stay, with the roles you hold, and can be removed like anyone else.',
+                'Step down',
+                () => node.spaces.stepDown(space.id),
+              )
             }
             data-variant="quiet"
             style={styles.smallButton}
@@ -547,10 +558,13 @@ function Members({
           <button
             onClick={() =>
               confirmed(
+                self ? 'Leave this space?' : `Remove ${name} from the space?`,
                 self
-                  ? 'Leave this space? You give up every role you hold here.'
-                  : `Remove ${name} from the space? They lose every role here. What they already wrote stays.`,
-              ) && void run(() => node.spaces.removeMember(space.id, did))
+                  ? 'You give up every role you hold here.'
+                  : 'They lose every role here. What they already wrote stays.',
+                self ? 'Leave' : 'Remove',
+                () => node.spaces.removeMember(space.id, did),
+              )
             }
             data-variant="danger"
             style={{ ...styles.smallButton, color: palette.accent.danger }}

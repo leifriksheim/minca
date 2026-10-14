@@ -16,7 +16,7 @@
  * nothing.
  */
 import type { Link, NodeRecord, P2PNode } from '@minca/core';
-import { accent, radius } from '@minca/app-shared/tokens';
+import { accent, display, ink, radius, surface } from '@minca/app-shared/tokens';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -78,6 +78,19 @@ interface ScreenRecord {
   readonly viaAgent: boolean;
 }
 
+/**
+ * How a screen looks unless the person asks for another look: like Minca, so
+ * a made app sits well beside its own. From the tokens, so it follows them.
+ */
+const SCREEN_LOOK =
+  `Unless the person asks for another look, make it look at home in Minca: a warm paper page (${surface.page}, never white), ` +
+  `cards and panels in ${surface.card} with square corners, separated by 1px hairlines (${surface.line}) instead of shadows, and nothing blurred: no soft drop shadows or gradients. ` +
+  `Navy text: ${ink.strong} for headings, ${ink.body} for body, ${ink.muted} for anything secondary. ` +
+  `Headings bold (700) with tight letter spacing (-0.04em) in ${display}; body in the system font stack (-apple-system, "Segoe UI", system-ui, sans-serif) at 14px. ` +
+  `One accent, cobalt (${accent.base}), turning ${accent.hover} on hover, only for the main action and what is selected. ` +
+  'Buttons, chips and toggles are pills (border-radius: 999px), real elements at least 36px tall with a visible focus ring. ' +
+  'Spacing on a 4px grid, plenty of room, and no decoration beyond that. Fonts from URLs never load, so the heading font falls back to the system one.';
+
 /** How to write a screen, for an agent: part of the guide the launcher writes in the space (`launcher.ts`) */
 export const SCREEN_GUIDE = `A screen is one HTML document (scripts and styles inline, at most 48 KB) put on an app's launcher.app record as "screen".
 When the app is added, the app shows it instead of plain lists. It runs sealed: no network (no fetch, no
@@ -110,7 +123,9 @@ An error the screen doesn't catch is shown to the person, so they can tell you a
 Links look like { rel: "game", to: "<record key>" }, with the roles the definition declares.
 Draw everything from minca.list(...) and redraw on minca.onChange — other people's moves arrive that way.
 Two people can write at once: design collections so that clashes resolve by the rules (onePer, each person changing only their own records), not by the screen.
-Use plain DOM; no libraries can be loaded. Prefer system fonts and simple, readable styling that works in light and dark.`;
+Use plain DOM; no libraries can be loaded.
+
+${SCREEN_LOOK}`;
 
 /** The script put in front of a screen's document: `window.minca`, over the port the host page kept for it */
 export const SCREEN_CLIENT = `(() => {

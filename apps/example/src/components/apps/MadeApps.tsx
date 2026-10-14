@@ -14,6 +14,7 @@ import { ScreenFrame } from './ScreenFrame';
 import { ago } from '../../derive/time';
 import { styles, palette } from '../../styles';
 import { Person } from '../Person';
+import { ask } from '@minca/app-shared/Ask';
 
 /**
  * The blueprint a proposed app points at, if any, and what applying it would
@@ -129,13 +130,14 @@ function Proposal({
     run(async () => {
       onAdded(await addMade(node, space.id, record, placed));
     });
-  const remove = () => {
-    const sure = globalThis.confirm(
-      mine
-        ? `Withdraw ${body?.title ?? 'this app'}?`
-        : `Decline ${body?.title ?? 'this app'}? It is removed for everyone.`,
-    );
-    if (sure) void run(() => removeApp(node, space.id, record, [record]));
+  const remove = async () => {
+    const title = body?.title ?? 'this app';
+    const sure = await ask(mine ? 'Your proposal is taken back.' : 'It is removed for everyone.', {
+      title: mine ? `Withdraw ${title}?` : `Decline ${title}?`,
+      yes: mine ? 'Withdraw' : 'Decline',
+      danger: true,
+    });
+    if (sure) await run(() => removeApp(node, space.id, record, [record]));
   };
 
   const changes = review?.collections.filter((one) => one.status === 'change') ?? [];
@@ -171,7 +173,7 @@ function Proposal({
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           {mine && (
             <button
-              onClick={remove}
+              onClick={() => void remove()}
               disabled={busy}
               data-variant="quiet"
               style={{ ...styles.smallButton, height: 28 }}
@@ -181,7 +183,7 @@ function Proposal({
           )}
           {mayDefine && !mine && (
             <button
-              onClick={remove}
+              onClick={() => void remove()}
               disabled={busy}
               data-variant="quiet"
               style={{ ...styles.smallButton, height: 28 }}

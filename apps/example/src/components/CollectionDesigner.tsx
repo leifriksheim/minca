@@ -18,6 +18,7 @@ import {
 } from '../derive/field-types';
 import { SchemaForm } from './SchemaForm';
 import { styles, palette, ui } from '../styles';
+import { ask } from '@minca/app-shared/Ask';
 
 type LinkDeclaration = NonNullable<DefineCollection['links']>[string];
 
@@ -301,10 +302,14 @@ export function CollectionEditor({
   const cannotDelete = collection?.records
     ? `Delete its ${collection.records === 1 ? 'one record' : `${collection.records} records`} first. A definition can only be deleted once nothing uses it.`
     : null;
-  const remove = (gone: NodeCollection) => {
-    if (!globalThis.confirm(`Delete the definition of ${label}? It's removed for everyone in the space.`))
-      return;
-    void run(async () => {
+  const remove = async (gone: NodeCollection) => {
+    const sure = await ask(`It's removed for everyone in the space.`, {
+      title: `Delete the definition of ${label}?`,
+      yes: 'Delete',
+      danger: true,
+    });
+    if (!sure) return;
+    await run(async () => {
       await node.collections.delete(space.id, gone.name);
       onDone(null);
     });
@@ -642,7 +647,7 @@ export function CollectionEditor({
           {collection && (
             <button
               type="button"
-              onClick={() => remove(collection)}
+              onClick={() => void remove(collection)}
               disabled={busy || !!cannotDelete}
               title={cannotDelete ?? undefined}
               data-variant="danger"

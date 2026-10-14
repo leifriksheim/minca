@@ -18,6 +18,7 @@ import { styles, palette, variants } from '../styles';
 import { Person } from './Person';
 import { DocsNote } from './DocsNote';
 import { useAction } from '@minca/app-shared/action';
+import { ask } from '@minca/app-shared/Ask';
 
 /** The time now, a second at a time, for countdowns and "for 4 min" */
 export function useNow(): number {
@@ -313,14 +314,13 @@ function SpaceRelays({
     if (await save([...named, candidate])) setDraft('');
   };
 
-  const remove = (url: string) => {
-    if (
-      !globalThis.confirm(
-        `Stop meeting on ${relayName(url)}? Members still on only that relay lose touch until their apps pick up the change from someone else.`,
-      )
-    )
-      return;
-    void save(named.filter((u) => u !== url));
+  const remove = async (url: string) => {
+    const sure = await ask(
+      'Members still on only that relay lose touch until their apps pick up the change from someone else.',
+      { title: `Stop meeting on ${relayName(url)}?`, yes: 'Stop', danger: true },
+    );
+    if (!sure) return;
+    await save(named.filter((u) => u !== url));
   };
 
   return (
@@ -350,7 +350,7 @@ function SpaceRelays({
                 {manages && (
                   <button
                     type="button"
-                    onClick={() => remove(url)}
+                    onClick={() => void remove(url)}
                     disabled={busy || named.length === 1}
                     title={named.length === 1 ? 'Add another relay before removing the last one' : undefined}
                     style={{

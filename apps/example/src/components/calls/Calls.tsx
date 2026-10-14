@@ -7,6 +7,7 @@ import { nameOf, peopleFrom } from '../../derive/people';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Icon, type ICONS } from '../Icon';
 import { styles, palette } from '../../styles';
+import { ask } from '@minca/app-shared/Ask';
 
 /** Calls, drawn once above every space, so moving between spaces never touches one. */
 export function CallLayer({
@@ -56,8 +57,10 @@ export function CallLayer({
 }
 
 /** Asks before leaving one call for another. True to go ahead. */
-function mayLeaveFor(current: CurrentCall | null, what: string): boolean {
-  return !current || globalThis.confirm(`Leave the call you're in and ${what}?`);
+async function mayLeaveFor(current: CurrentCall | null, what: string): Promise<boolean> {
+  return (
+    !current || ask(`Leave the call you're in and ${what}?`, { title: 'You are in a call', yes: 'Leave it' })
+  );
 }
 
 // ─── The call you're in ──────────────────────────────────────────────
@@ -340,8 +343,8 @@ function Ringing({
   const people = peopleFrom(useProfiles(ring.space));
   const [busy, setBusy] = useState(false);
   const name = nameOf(ring.from, people);
-  const answer = (video: boolean) => {
-    if (!calls || !mayLeaveFor(inCall, 'answer this one')) return;
+  const answer = async (video: boolean) => {
+    if (!calls || !(await mayLeaveFor(inCall, 'answer this one'))) return;
     setBusy(true);
     void calls.answer(ring.id, { video }).catch(() => setBusy(false));
   };
@@ -375,9 +378,15 @@ function Ringing({
           tone="good"
           disabled={busy}
           autoFocus={first}
-          onClick={() => answer(false)}
+          onClick={() => void answer(false)}
         />
-        <Choice icon="camera" label="With video" tone="good" disabled={busy} onClick={() => answer(true)} />
+        <Choice
+          icon="camera"
+          label="With video"
+          tone="good"
+          disabled={busy}
+          onClick={() => void answer(true)}
+        />
       </div>
     </div>
   );
@@ -484,14 +493,14 @@ export function CallButton({ space }: { space: SpaceSummary }) {
       </span>
     );
   }
-  const start = () => {
-    if (!mayLeaveFor(state.current, going ? 'join this one' : 'start one here')) return;
+  const start = async () => {
+    if (!(await mayLeaveFor(state.current, going ? 'join this one' : 'start one here'))) return;
     setBusy(true);
     void calls.start(space.id).finally(() => setBusy(false));
   };
   return (
     <button
-      onClick={start}
+      onClick={() => void start()}
       disabled={busy}
       data-variant={going ? 'primary' : 'quiet'}
       style={{
@@ -528,10 +537,13 @@ export function RingButton({ space, did, name }: { space: SpaceSummary; did: str
   const withThem = state.current?.people.some((p) => p.account === did);
   return (
     <button
-      onClick={() => {
-        if (!mayLeaveFor(state.current?.space === space.id ? null : state.current, `call ${name}`)) return;
-        void calls.ring(space.id, did).catch(() => {});
-      }}
+      onClick={() =>
+        void mayLeaveFor(state.current?.space === space.id ? null : state.current, `call ${name}`).then(
+          (go) => {
+            if (go) void calls.ring(space.id, did).catch(() => {});
+          },
+        )
+      }
       disabled={ringing || withThem}
       data-variant="quiet"
       style={{ ...styles.smallButton, display: 'inline-flex', alignItems: 'center', gap: 6 }}

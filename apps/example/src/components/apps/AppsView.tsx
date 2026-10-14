@@ -10,6 +10,7 @@ import { addBuiltIn, moveApp, removeApp } from './launcher';
 import { Icon } from '../Icon';
 import { unreadOf, type Unread } from '../../seen';
 import { styles, palette, variants } from '../../styles';
+import { ask } from '@minca/app-shared/Ask';
 
 /**
  * A space's apps like a phone's home screen: those added, then proposals and
@@ -50,13 +51,14 @@ export function AppsView({
     const at = apps.placed.findIndex((record) => record.key === app.record.key);
     void arrange.run(() => moveApp(node, space.id, apps.placed, app.record.key, at + by));
   };
-  const remove = (app: AppEntry) => {
-    const sure = globalThis.confirm(
+  const remove = async (app: AppEntry) => {
+    const sure = await ask(
       app.builtIn
-        ? `Take ${app.title} off ${space.name}? Everything it holds stays in the space, and adding it again brings it back.`
-        : `Take ${app.title} off ${space.name}? Everything it holds stays in the space; to have the app again, someone proposes it again.`,
+        ? 'Everything it holds stays in the space, and adding it again brings it back.'
+        : 'Everything it holds stays in the space; to have the app again, someone proposes it again.',
+      { title: `Take ${app.title} off ${space.name}?`, yes: 'Take it off', danger: true },
     );
-    if (sure) void arrange.run(() => removeApp(node, space.id, app.record, apps.records));
+    if (sure) await arrange.run(() => removeApp(node, space.id, app.record, apps.records));
   };
 
   return (
@@ -103,7 +105,7 @@ export function AppsView({
                 first={at === 0}
                 last={at === apps.ready.length - 1}
                 onMove={(by) => move(app, by)}
-                onRemove={() => remove(app)}
+                onRemove={() => void remove(app)}
               />
             ) : (
               <AppCard

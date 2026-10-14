@@ -26,6 +26,7 @@ import { Wordmark } from '@minca/app-shared/Wordmark';
 
 import { readDoorFromUrl, takeBack } from './contacts';
 import { styles, palette } from './styles';
+import { ask } from '@minca/app-shared/Ask';
 
 /** The app: connect to your account home, then your spaces */
 export function App() {
@@ -73,9 +74,10 @@ function Workspace() {
     );
     if (pair) {
       if (
-        !globalThis.confirm(
+        !(await ask(
           `${space.name} is your space for two with ${pair.name}. Leaving it removes ${pair.name} from your contacts, and takes back your request if they haven't accepted. They keep their copy.`,
-        )
+          { title: `Leave ${space.name}?`, yes: 'Leave', danger: true },
+        ))
       )
         return;
       const shared = spaces
@@ -85,9 +87,10 @@ function Workspace() {
       return;
     }
     if (
-      !globalThis.confirm(
-        `Leave ${space.name}? It goes from all your devices. Others in it keep it, and you need a new invite to come back. If no one else is in it, what's in it is gone.`,
-      )
+      !(await ask(
+        `It goes from all your devices. Others in it keep it, and you need a new invite to come back. If no one else is in it, what's in it is gone.`,
+        { title: `Leave ${space.name}?`, yes: 'Leave', danger: true },
+      ))
     )
       return;
     await mine.leave(id);

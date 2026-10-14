@@ -17,6 +17,7 @@ import { Modal } from '@minca/app-shared/Modal';
 import { styles, palette } from '../styles';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
+import { ask } from '@minca/app-shared/Ask';
 
 /** How often to look in the doors' mailboxes: knocks wait on relays, which tell nobody */
 const KNOCK_POLL_MS = 30_000;
@@ -373,11 +374,15 @@ function ContactRow({
       </button>
       <button
         onClick={() =>
-          globalThis.confirm(
+          void ask(
             standing === 'waiting'
-              ? `Remove ${contact.name}? Your request is taken back and you leave the space for two.`
-              : `Remove ${contact.name}? You leave the space for two; they keep their copy.`,
-          ) && void act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did))
+              ? 'Your request is taken back and you leave the space for two.'
+              : 'You leave the space for two; they keep their copy.',
+            { title: `Remove ${contact.name}?`, yes: 'Remove', danger: true },
+          ).then(async (sure) => {
+            if (sure)
+              await act(() => takeBack(node, standing === 'waiting' ? shared : [], account.did, contact.did));
+          })
         }
         data-variant="ghost"
         style={styles.linkButton}
@@ -386,9 +391,13 @@ function ContactRow({
       </button>
       <button
         onClick={() =>
-          globalThis.confirm(
-            `Block ${contact.name}? You leave the space for two, and their requests and knocks are hidden from now on.`,
-          ) && void act(() => node.contacts.block(contact.did))
+          void ask('You leave the space for two, and their requests and knocks are hidden from now on.', {
+            title: `Block ${contact.name}?`,
+            yes: 'Block',
+            danger: true,
+          }).then(async (sure) => {
+            if (sure) await act(() => node.contacts.block(contact.did));
+          })
         }
         data-variant="ghost"
         style={{ ...styles.linkButton, color: palette.accent.danger }}
@@ -452,8 +461,13 @@ function Doors({
               </button>
               <button
                 onClick={() =>
-                  globalThis.confirm('Close this door? Its link stops working everywhere it was shared.') &&
-                  void act(() => node.doors.close(door.id))
+                  void ask('Its link stops working everywhere it was shared.', {
+                    title: 'Close this door?',
+                    yes: 'Close it',
+                    danger: true,
+                  }).then(async (sure) => {
+                    if (sure) await act(() => node.doors.close(door.id));
+                  })
                 }
                 data-variant="ghost"
                 style={{ ...styles.linkButton, color: palette.accent.danger }}

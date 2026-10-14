@@ -18,6 +18,7 @@ import { useAction } from '@minca/app-shared/action';
 import { Shape } from '@minca/app-shared/shapes';
 import { SHAPE_CYCLE } from '@minca/app-shared/tokens';
 import { SHADE_HUES, colourOf, palette, partyMarkOf } from './styles';
+import { ask } from '@minca/app-shared/Ask';
 
 /** A party picks one of the shapes' colours; its record keeps it as a hue */
 const shadeAt = (i: number) => SHADE_HUES[SHAPE_CYCLE[i % SHAPE_CYCLE.length] ?? 'cobalt'];
@@ -520,17 +521,19 @@ function PartyForm({ a, editing, onClose }: { a: Assembly; editing?: PartyFull; 
               className="lq-btn"
               data-variant="danger"
               disabled={action.busy}
-              onClick={() => {
-                if (
-                  globalThis.confirm(
-                    `Dissolve ${editing.name}? Everyone who trusts it will need to vote themselves, or trust someone else.`,
-                  )
-                )
-                  void action.run(async () => {
-                    await node.records.delete(a.spaceId, editing.key);
-                    onClose();
-                  });
-              }}
+              onClick={() =>
+                void ask('Everyone who trusts it will need to vote themselves, or trust someone else.', {
+                  title: `Dissolve ${editing.name}?`,
+                  yes: 'Dissolve',
+                  danger: true,
+                }).then(async (sure) => {
+                  if (sure)
+                    await action.run(async () => {
+                      await node.records.delete(a.spaceId, editing.key);
+                      onClose();
+                    });
+                })
+              }
             >
               Dissolve
             </button>

@@ -18,6 +18,7 @@ import { Empty, SectionHead, iconDot, list, section } from './parts';
 import { SpaceBots } from '@minca/app-shared/CommunitySetup';
 import { useAction } from '@minca/app-shared/action';
 import { useActivityOff } from '../../activity';
+import { ask } from '@minca/app-shared/Ask';
 
 type Open = {
   readonly kind: 'automation';
@@ -214,8 +215,13 @@ export function AutomationsView({
                       {rules.deletable.has(record.key) && (
                         <button
                           onClick={() => {
-                            if (globalThis.confirm(`Delete the automation “${automation.name}”?`))
-                              act(() => node.records.delete(space.id, record.key));
+                            void ask('It stops running, for everyone in the space.', {
+                              title: `Delete the automation “${automation.name}”?`,
+                              yes: 'Delete',
+                              danger: true,
+                            }).then((sure) => {
+                              if (sure) act(() => node.records.delete(space.id, record.key));
+                            });
                           }}
                           data-variant="danger"
                           aria-label={`Delete ${automation.name}`}

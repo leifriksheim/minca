@@ -8,6 +8,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAction, useCopy } from '@minca/app-shared/action';
 import { Loader } from '@minca/app-shared/Loader';
+import { ask } from '@minca/app-shared/Ask';
 
 /** What a name in a space needs to open its card: the space, who is in it, and where a space for two opens */
 interface PersonScope {
@@ -218,9 +219,12 @@ function Standing({
         <button
           disabled={busy}
           onClick={() =>
-            globalThis.confirm(
-              `Take back your request to ${name}? Your space for two is left and the request here is deleted.`,
-            ) && void act(() => takeBack(node, [space.id], me, contact.did))
+            void ask('Your space for two is left and the request here is deleted.', {
+              title: `Take back your request to ${name}?`,
+              yes: 'Take back',
+            }).then(async (sure) => {
+              if (sure) await act(() => takeBack(node, [space.id], me, contact.did));
+            })
           }
           data-variant="quiet"
           style={styles.smallButton}

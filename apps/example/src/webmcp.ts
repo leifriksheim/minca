@@ -27,6 +27,7 @@ import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill';
 import type { InputSchema } from '@mcp-b/webmcp-types';
 import { NODE_ACTIONS, callAction, checkActionInput } from '@minca/core';
 import { getNode } from './minca';
+import { ask } from '@minca/app-shared/Ask';
 
 const text = (value: string, isError = false) => ({
   content: [{ type: 'text' as const, text: value }],
@@ -68,14 +69,18 @@ export function exposeToAgents(): void {
           const problem = checkActionInput(action, args);
           if (problem) return text(`${action.name}: ${problem}`, true);
           const people = changesPeople(action.name);
-          const ask = action.readOnly
+          const question = action.readOnly
             ? null
             : action.sensitive && !people
               ? `An agent wants to run "${action.name}", which hands out access to a space. Allow it?`
               : people || action.destructive
                 ? `An agent wants to run "${action.name}" with ${JSON.stringify(args)}. Allow it?`
                 : null;
-          if (ask && !globalThis.confirm(ask)) return text('The person declined.', true);
+          if (
+            question &&
+            !(await ask(question, { title: 'Allow the agent?', yes: 'Allow', no: "Don't allow" }))
+          )
+            return text('The person declined.', true);
           const { text: said, isError } = await callAction(node, action.name, args);
           return text(said, isError);
         },
