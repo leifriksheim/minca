@@ -4,7 +4,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
 import { ConnectAgent } from './ConnectAgent';
-import { palette } from '../styles';
+import { palette, styles } from '../styles';
 
 /**
  * Who this app acts for, and its menu; the account itself lives in the account home. A pill in a
@@ -62,7 +62,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
             gap: 8,
             height: 36,
             padding: '0 12px 0 4px',
-            border: `1px solid ${palette.surface.line}`,
+            border: `1px solid ${palette.surface.rule}`,
             borderRadius: palette.radius.pill,
             background: palette.surface.card,
             color: palette.ink.strong,
@@ -189,10 +189,7 @@ const menu = {
   position: 'absolute' as const,
   zIndex: 20,
   width: 280,
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.lg,
-  backgroundColor: palette.surface.card,
-  boxShadow: palette.shadow.float,
+  ...styles.float,
   animation: 'minca-fade .1s ease',
   overflow: 'hidden',
 };
@@ -206,7 +203,7 @@ const item = {
   height: 36,
   padding: '0 10px',
   border: 'none',
-  borderRadius: palette.radius.sm,
+  borderRadius: palette.radius.md,
   background: 'none',
   color: palette.ink.body,
   fontSize: 14,

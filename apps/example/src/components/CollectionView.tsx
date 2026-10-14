@@ -270,8 +270,7 @@ export function CollectionView({
         (adding ? (
           <div
             style={{
-              border: `1px solid ${palette.surface.line}`,
-              borderRadius: palette.radius.lg,
+              ...styles.tile,
               padding: 16,
             }}
           >
@@ -447,7 +446,7 @@ function ListLayout({
     <div
       role="list"
       style={{
-        border: `1px solid ${palette.surface.line}`,
+        border: `1px solid ${palette.surface.rule}`,
         borderRadius: palette.radius.lg,
         overflow: 'hidden',
       }}
@@ -545,7 +544,7 @@ function TableLayout({
   return (
     <div
       style={{
-        border: `1px solid ${palette.surface.line}`,
+        border: `1px solid ${palette.surface.rule}`,
         borderRadius: palette.radius.lg,
         overflowX: 'auto',
       }}

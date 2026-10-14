@@ -67,7 +67,7 @@ export function PairPhone() {
   };
 
   return (
-    <details style={{ ...styles.panel, marginTop: 0, borderRadius: palette.radius.none }}>
+    <details style={{ ...styles.panel, marginTop: 0 }}>
       <summary
         data-variant="ghost"
         style={{ ...styles.panelSummary, ...styles.sectionHeading, padding: '18px 20px' }}
@@ -119,7 +119,7 @@ export function PairPhone() {
                   // a camera needs the contrast to find the pattern.
                   background: palette.surface.card,
                   border: `1px solid ${palette.surface.line}`,
-                  borderRadius: palette.radius.none,
+                  borderRadius: palette.radius.md,
                 }}
               />
             )}

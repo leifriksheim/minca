@@ -294,7 +294,7 @@ function AskContact({
         onChange={(event) => setNote(event.target.value)}
         maxLength={2000}
         rows={3}
-        style={{ ...styles.input, height: 'auto', padding: 10 }}
+        style={styles.textarea}
       />
       {error && <p style={styles.bad}>{error}</p>}
       <button

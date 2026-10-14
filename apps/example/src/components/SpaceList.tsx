@@ -168,12 +168,7 @@ function NewIn({ space }: { space: SpaceSummary }) {
   );
 }
 
-const tile = {
-  position: 'relative' as const,
-  borderRadius: palette.radius.lg,
-  border: `1px solid ${palette.surface.line}`,
-  background: palette.surface.card,
-};
+const tile = { position: 'relative' as const, ...styles.tile };
 const tileButton = {
   width: '100%',
   minHeight: 132,

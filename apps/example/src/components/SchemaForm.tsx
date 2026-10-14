@@ -65,7 +65,7 @@ export function SchemaForm({
             value={json}
             onChange={(e) => setJson(e.target.value)}
             rows={6}
-            style={{ ...styles.input, fontFamily: 'monospace' }}
+            style={{ ...styles.textarea, fontFamily: palette.mono }}
           />
         </label>
       ) : (
@@ -259,7 +259,7 @@ export function FieldInput({
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => onChange(e.target.value)}
             rows={4}
-            style={styles.input}
+            style={styles.textarea}
           />
         </label>
       );
@@ -278,7 +278,7 @@ export function FieldInput({
           style={{
             ...labelStyle,
             border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.lg,
+            borderRadius: palette.radius.md,
             padding: 10,
           }}
         >

@@ -124,7 +124,8 @@ function Choice({
         alignItems: 'flex-start',
         textAlign: 'left',
         padding: 14,
-        borderRadius: palette.radius.none,
+        // A card to pick, at the surface corner: the navy rule once it is the one picked.
+        borderRadius: palette.radius.lg,
         border: `1px solid ${checked ? palette.surface.rule : palette.surface.line}`,
         background: palette.surface.card,
         width: '100%',

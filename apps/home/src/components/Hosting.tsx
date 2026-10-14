@@ -4,6 +4,7 @@ import { describeHost, type HostDescription } from '@minca/core';
 import type { HostingView, P2PNode } from '@minca/core/node';
 import { DEFAULT_HOST } from '@minca/app-shared/relay';
 import { Modal } from '@minca/app-shared/Modal';
+import { Loader } from '@minca/app-shared/Loader';
 import { useWanted, type Wanted } from '@minca/app-shared/HostAddress';
 import {
   HostOfferPicker,
@@ -68,7 +69,7 @@ export function Hosting({ node }: { node: P2PNode }) {
   return (
     <section id="hosting" style={{ ...styles.settingsSection, gap: 16 }}>
       {hosts === null && !error ? (
-        <p style={{ fontSize: 13, color: palette.ink.muted }}>Asking your host…</p>
+        <Loader label="Asking your host" showLabel />
       ) : hosts?.length ? (
         <>
           <h2 style={styles.sectionHeading}>Always online</h2>
@@ -294,7 +295,7 @@ function HostingDialog({
             onDone={onClose}
           />
         ) : url ? (
-          <p style={{ fontSize: 13, color: palette.ink.muted }}>One moment…</p>
+          <Loader label="One moment" showLabel />
         ) : (
           <HostOfferPicker
             offer={offer}
@@ -394,7 +395,8 @@ export function HostingDue() {
           gap: 12,
           marginBottom: 16,
           padding: '10px 12px 10px 14px',
-          borderRadius: palette.radius.none,
+          // A row inside the section: the row corner, a hairline.
+          borderRadius: palette.radius.md,
           border: `1px solid ${palette.surface.line}`,
           background: palette.surface.card,
         }}

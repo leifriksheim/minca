@@ -102,7 +102,7 @@ function Asking({ incoming }: { incoming: IncomingRequest }) {
         marginBottom: 24,
         padding: '10px 12px',
         background: palette.surface.sunken,
-        borderRadius: palette.radius.none,
+        borderRadius: palette.radius.md,
       }}
     >
       <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>{' '}
@@ -531,7 +531,9 @@ function Note({
       style={{
         ...styles.note,
         marginBottom: below,
-        ...(warn ? { borderColor: palette.accent.danger, background: palette.accent.dangerSoft } : {}),
+        ...(warn
+          ? { border: `1px solid ${palette.accent.danger}`, background: palette.accent.dangerSoft }
+          : {}),
       }}
     >
       <p style={{ ...styles.todoText, ...(warn ? { color: palette.accent.danger } : {}) }}>{title}</p>
@@ -574,11 +576,12 @@ function Answer({
           onClick={onDeny}
           disabled={busy}
           data-variant="quiet"
+          // The secondary of the two: the card's white and the navy rule, at the primary's size.
           style={{
             ...styles.button,
             background: palette.surface.card,
-            color: palette.ink.body,
-            borderColor: palette.surface.lineStrong,
+            color: palette.ink.strong,
+            borderColor: palette.surface.rule,
           }}
         >
           {denyLabel}
@@ -620,7 +623,7 @@ function lasts(days: number): string {
 /** The page around it, under Minca's mark; the sign-in element's own is hidden in the home's styles */
 function Frame({ children }: { children: ReactNode }) {
   return (
-    <div style={{ ...styles.container, paddingTop: 32 }}>
+    <div className="page" style={{ paddingTop: 32 }}>
       <div style={{ ...styles.card, paddingTop: 0 }}>
         <div style={{ marginBottom: 32 }}>
           <Wordmark compact />

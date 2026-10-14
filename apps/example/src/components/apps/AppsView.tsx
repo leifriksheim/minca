@@ -348,13 +348,11 @@ const iconBox = {
 } as const;
 
 const card = {
+  ...styles.tile,
   display: 'flex',
   alignItems: 'flex-start',
   gap: 12,
   padding: 14,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
   font: 'inherit',
   color: 'inherit',
   textAlign: 'left',
@@ -367,12 +365,7 @@ const createCard = {
 } as const;
 const cardTitle = { fontSize: 15, fontWeight: 600, color: palette.ink.strong };
 const cardText = { fontSize: 13, lineHeight: 1.45, color: palette.ink.muted };
-const addRow = {
-  padding: 12,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
-} as const;
+const addRow = { ...styles.tile, padding: 12 } as const;
 const inlineButton = {
   width: 'auto',
   height: 36,

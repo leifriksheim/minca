@@ -14,6 +14,7 @@ import { clauseFields, clauseOn, type Clause, type ClauseField } from '../../der
 import { belonging, collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { useBots } from '../../bots';
 import { useAction } from '@minca/app-shared/action';
+import { Loader } from '@minca/app-shared/Loader';
 import { nameOf, type People } from '../../derive/people';
 import {
   INSTRUCT,
@@ -291,7 +292,7 @@ export function AutomationBuilder({
                       value={every}
                       onChange={(e) => setEvery(e.target.value)}
                       placeholder="30 7 * * 1-5"
-                      style={{ ...styles.input, fontFamily: 'ui-monospace, monospace' }}
+                      style={{ ...styles.input, fontFamily: palette.mono }}
                     />
                     <span
                       style={{
@@ -477,8 +478,8 @@ export function AutomationBuilder({
                     onClick={() => setThen(startAction(action.kind, settable, targets, then))}
                     style={{
                       ...tile,
-                      borderColor: on ? palette.ink.strong : palette.surface.line,
-                      boxShadow: on ? `0 0 0 1px ${palette.ink.strong}` : 'none',
+                      borderColor: on ? palette.surface.rule : palette.surface.line,
+                      boxShadow: on ? `0 0 0 1px ${palette.surface.rule}` : 'none',
                     }}
                   >
                     <strong style={{ fontSize: 13, color: palette.ink.strong }}>{action.label}</strong>
@@ -576,7 +577,7 @@ export function AutomationBuilder({
             <div style={previewBox}>
               <span style={{ color: palette.ink.strong, fontWeight: 500 }}>{sentence}</span>
               {preview === null ? (
-                <span style={{ color: palette.ink.faint }}>Looking at what's here…</span>
+                <Loader label="Looking at what's here" showLabel />
               ) : preview.length === 0 ? (
                 <span style={{ color: palette.ink.muted }}>Nothing here matches yet.</span>
               ) : (
@@ -775,8 +776,8 @@ function ActionDetail({
 const numberBox = {
   width: 72,
   height: 32,
-  padding: '0 10px',
-  borderRadius: palette.radius.md,
+  padding: '0 12px',
+  borderRadius: palette.radius.pill,
   border: `1px solid ${palette.surface.lineStrong}`,
   fontSize: 14,
   fontWeight: 600,
@@ -788,7 +789,7 @@ const tile = {
   alignItems: 'flex-start',
   gap: 2,
   padding: '10px 12px',
-  borderRadius: palette.radius.lg,
+  borderRadius: palette.radius.md,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.card,
   textAlign: 'left',

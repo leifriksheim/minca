@@ -356,7 +356,7 @@ function Ringing({
         <Avatar did={ring.from} size={72} />
       </span>
       <div>
-        <p id={`ring-${ring.id}`} style={{ fontSize: 18, fontWeight: 600, color: palette.ink.strong }}>
+        <p id={`ring-${ring.id}`} style={styles.modalTitle}>
           {name}
         </p>
         <p style={{ fontSize: 14, color: palette.ink.muted }}>is calling you · {spaceName}</p>
@@ -576,7 +576,7 @@ function RoundButton({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: `1px solid ${danger ? palette.accent.danger : dark ? palette.ink.body : palette.surface.line}`,
+    border: `1px solid ${danger ? palette.accent.danger : dark ? palette.ink.body : palette.surface.rule}`,
     background: danger
       ? palette.accent.danger
       : on

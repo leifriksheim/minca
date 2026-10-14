@@ -700,7 +700,7 @@ function RsvpButtons({
             onChange={(e) =>
               void node.records.update(space.id, mine.key, { ...mine.body, guests: Number(e.target.value) })
             }
-            style={{ ...styles.input, height: 36, width: 'auto', padding: '0 8px' }}
+            style={{ ...styles.input, height: 36, width: 'auto', padding: '0 12px' }}
           >
             {[0, 1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
@@ -847,9 +847,8 @@ function EventRow({ record, onOpen }: { record: EventRecord; onOpen: () => void 
         alignItems: 'center',
         gap: 12,
         padding: 10,
-        borderRadius: palette.radius.lg,
+        ...styles.tile,
         textAlign: 'left',
-        border: `1px solid ${palette.surface.line}`,
       }}
     >
       <Cover
@@ -1023,13 +1022,7 @@ function EventForm({
             placeholder="What to expect, what to bring, who's playing"
             rows={4}
             maxLength={10000}
-            style={{
-              ...styles.input,
-              height: 'auto',
-              padding: '10px 12px',
-              resize: 'vertical',
-              lineHeight: 1.5,
-            }}
+            style={styles.textarea}
           />
         </Field>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -1119,7 +1112,6 @@ function DateTile({ when, large }: { when: string; large?: boolean }) {
         borderRadius: palette.radius.lg,
         background: palette.surface.card,
         border: `1px solid ${palette.surface.rule}`,
-        boxShadow: palette.shadow.small,
       }}
     >
       <span
@@ -1287,11 +1279,10 @@ const bare: CSSProperties = {
   font: 'inherit',
   color: 'inherit',
 };
+/** When it is, above its name: in words, not shouted (no labels above headings) */
 const eyebrow: CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '.04em',
 };
 const backLink: CSSProperties = {
   alignSelf: 'flex-start',

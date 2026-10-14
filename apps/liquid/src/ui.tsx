@@ -54,17 +54,15 @@ export function TopicChip({ topic }: { topic: TopicView }) {
   );
 }
 
-/** Topics as chips to pick; `solid` fills the picked one, for a filter */
+/** Topics as chips to pick: the picked one is chosen as a segment is, with the rule */
 export function TopicPicker<T extends { name: string; hue: number }>({
   topics,
   on,
   onToggle,
-  solid,
 }: {
   topics: ReadonlyArray<T>;
   on: (topic: T) => boolean;
   onToggle: (topic: T) => void;
-  solid?: boolean;
 }) {
   return topics.map((t) => (
     <button
@@ -72,7 +70,6 @@ export function TopicPicker<T extends { name: string; hue: number }>({
       type="button"
       className="lq-chip"
       data-filter
-      data-outline={solid ? undefined : ''}
       aria-pressed={on(t)}
       onClick={() => onToggle(t)}
     >

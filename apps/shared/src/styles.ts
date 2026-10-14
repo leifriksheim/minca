@@ -567,7 +567,7 @@ export const styles = {
     backgroundColor: surface.card,
     overflow: 'hidden',
   },
-  /** A tag or a filter: a small pill with a hairline */
+  /** A tag or a filter: a small sunken pill with a hairline, as the site's chips are */
   chip: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -576,7 +576,7 @@ export const styles = {
     padding: '0 10px',
     borderRadius: radius.pill,
     border: `1px solid ${surface.line}`,
-    backgroundColor: surface.card,
+    backgroundColor: surface.sunken,
     color: ink.body,
     fontSize: 12,
     fontWeight: 500,

@@ -8,7 +8,8 @@ const { ink, surface, accent, radius, display, mono, shadow } = palette;
 /**
  * The sign-in element from `@minca/core` dressed as Minca: its
  * colours through the custom properties it reads, and the few shapes it
- * fixes itself (pill buttons, square options, a framed popover). Its sheet
+ * fixes itself, on the one scale: pill buttons and fields, options and boxes
+ * at the row corner, a framed popover. Its sheet
  * is adopted after this one, so each rule starts at `html` to win.
  */
 const authCss = `
@@ -26,7 +27,7 @@ const authCss = `
       --minca-on-accent: ${surface.card};
       --minca-danger: ${accent.danger};
       --minca-danger-soft: ${accent.dangerSoft};
-      --minca-radius: ${radius.sm}px;
+      --minca-radius: ${radius.md}px;
       --minca-font: ${palette.font};
       --minca-mono: ${mono};
     }
@@ -35,14 +36,17 @@ const authCss = `
     html minca-auth .wa-card { max-width: none; }
     html minca-auth .wa-title { font-family: ${display}; font-weight: 700; font-size: 32px; line-height: 1.05; }
     html minca-auth .wa-button, html minca-auth .wa-secondary { border-radius: ${radius.pill}px; }
-    html minca-auth .wa-option, html minca-auth .wa-error-box, html minca-auth .wa-code { border-radius: 0; }
+    html minca-auth .wa-secondary { border-color: ${surface.rule}; }
+    /* A field for one line is a pill, as every control is; a checkbox is not a field. */
+    html minca-auth input:not([type="checkbox"]):not([type="radio"]) { border-radius: ${radius.pill}px; padding: 0 16px; }
+    html minca-auth .wa-option, html minca-auth .wa-error-box, html minca-auth .wa-code { border-radius: ${radius.md}px; }
     html minca-auth .wa-error-box { border: 1px solid ${accent.danger}; }
-    html minca-auth .wa-option:not(:disabled):hover { border-color: ${surface.rule}; box-shadow: ${shadow.small}; background: ${surface.card}; }
+    html minca-auth .wa-option:not(:disabled):hover { border-color: ${surface.rule}; background: ${surface.card}; }
     html minca-auth input:focus { border-color: ${accent.base}; box-shadow: 0 0 0 3px ${accent.soft}; }
     html minca-auth input:focus-visible { outline: none; }
     html minca-auth :focus-visible { outline-color: ${accent.base}; }
-    html minca-auth .wa-avatar { border-radius: 0; }
-    html minca-auth .wa-popover { border-radius: 0; border-color: ${surface.rule}; box-shadow: ${shadow.small}; }
+    html minca-auth .wa-avatar { border-radius: ${radius.sm}px; }
+    html minca-auth .wa-popover { border-radius: ${radius.lg}px; border-color: ${surface.rule}; box-shadow: ${shadow.small}; }
 `;
 
 /**
@@ -73,21 +77,12 @@ export function injectBaseStyles(): void {
   globalThis.document.head.appendChild(style);
 }
 
-/** The shared vocabulary, plus the page the home's screens sit on. */
+/** The shared vocabulary, plus the home's own parts. The page it sits on is `.page`, from baseCss. */
 export const styles = {
   ...shared,
-  container: {
-    minHeight: '100vh',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    padding: '56px 20px 80px',
-  },
-  /** One part of the settings page: a square card on the paper */
+  /** One part of the settings page: a tile on the paper */
   settingsSection: {
-    border: `1px solid ${surface.line}`,
-    borderRadius: radius.none,
-    background: surface.card,
+    ...shared.tile,
     padding: 20,
     marginBottom: 16,
     display: 'flex',
@@ -99,7 +94,7 @@ export const styles = {
     fontFamily: display,
     fontSize: 19,
     fontWeight: 700,
-    letterSpacing: '-0.03em',
+    letterSpacing: '-0.04em',
     lineHeight: 1.2,
     color: ink.strong,
   },
@@ -113,14 +108,13 @@ export const styles = {
     gap: 12,
     padding: '10px 12px',
     background: surface.sunken,
-    borderRadius: radius.none,
+    borderRadius: radius.md,
     fontSize: 14,
   },
-  /** A boxed explanation on the consent page: what something may do, or may not */
+  /** An explanation on the consent page, set back from it: what something may do, or may not */
   note: {
     padding: '14px 16px',
-    borderRadius: radius.none,
-    border: `1px solid ${surface.line}`,
+    borderRadius: radius.md,
     backgroundColor: surface.sunken,
   },
   /** A line to tick, on the consent page */
@@ -130,7 +124,7 @@ export const styles = {
     gap: 10,
     padding: '10px 12px',
     border: `1px solid ${surface.line}`,
-    borderRadius: radius.none,
+    borderRadius: radius.md,
     background: surface.card,
     fontSize: 14,
     color: ink.strong,

@@ -12,6 +12,7 @@ import {
 } from '@minca/core/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { Loader } from '@minca/app-shared/Loader';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { delegation, proposal } from './schema';
 import { AssemblyView } from './Assembly';
@@ -72,7 +73,7 @@ function Opening({ onBack }: { onBack: () => void }) {
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, paddingTop: 120 }}
       >
         <Logo compact />
-        <p className="lq-muted lq-fade">Opening the assembly…</p>
+        <Loader label="Opening the assembly" showLabel />
         <p
           className="lq-faint"
           style={{ fontSize: 13, maxWidth: 360, textAlign: 'center', lineHeight: 1.55 }}
@@ -196,7 +197,7 @@ function Tile({ space, onOpen }: { space: SpaceSummary; onOpen: () => void }) {
         )}
       </div>
       <div style={{ marginTop: 'auto' }}>
-        <p className="lq-display" style={{ fontSize: 19, letterSpacing: '-0.03em' }}>
+        <p className="lq-display" style={{ fontSize: 19 }}>
           {space.name}
         </p>
         <p className="lq-muted lq-num" style={{ fontSize: 13, marginTop: 3 }}>
@@ -224,11 +225,10 @@ function InviteCard({ onJoin }: { onJoin: (invite: string) => Promise<SpaceSumma
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
-        borderColor: palette.surface.rule,
       }}
     >
       <div>
-        <p className="lq-display" style={{ fontSize: 22, letterSpacing: '-0.035em' }}>
+        <p className="lq-display" style={{ fontSize: 22 }}>
           {preview ? `You’re invited to ${preview.space.name}` : 'You’re invited'}
         </p>
         <p className="lq-muted" style={{ fontSize: 13.5, marginTop: 4 }}>

@@ -20,7 +20,6 @@ export function Lane({
         padding: 8,
         borderRadius: palette.radius.lg,
         background: over ? palette.surface.line : palette.surface.sunken,
-        border: `1px solid ${palette.surface.line}`,
         ...style,
       }}
     >
@@ -56,7 +55,7 @@ export function Card({ style, ...rest }: ComponentProps<'button'>) {
         gap: 6,
         padding: '10px 12px',
         border: `1px solid ${palette.surface.line}`,
-        borderRadius: palette.radius.lg,
+        borderRadius: palette.radius.md,
         background: palette.surface.card,
         font: 'inherit',
         fontSize: 14,

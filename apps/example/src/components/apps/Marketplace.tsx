@@ -633,11 +633,10 @@ function Ask({ space, record }: { space: AppProps['space']; record: ListingRecor
           });
       }}
       style={{
+        ...styles.tile,
         ...ui.stack,
         gap: 8,
         padding: 14,
-        borderRadius: palette.radius.lg,
-        border: `1px solid ${palette.surface.line}`,
       }}
     >
       <label style={{ ...styles.fieldLabel, margin: 0 }} htmlFor="mk-note">
@@ -650,7 +649,7 @@ function Ask({ space, record }: { space: AppProps['space']; record: ListingRecor
         onChange={(e) => setNote(e.target.value)}
         rows={3}
         maxLength={2000}
-        style={{ ...styles.input, height: 'auto', padding: '10px 12px', resize: 'vertical', lineHeight: 1.5 }}
+        style={styles.textarea}
       />
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button
@@ -801,8 +800,7 @@ function SellerCard({ did }: { did: string | null }) {
         alignItems: 'center',
         gap: 12,
         padding: 14,
-        borderRadius: palette.radius.lg,
-        border: `1px solid ${palette.surface.line}`,
+        ...styles.tile,
       }}
     >
       <Avatar did={did} size={40} />
@@ -939,13 +937,7 @@ function ListingForm({
             placeholder="Size, age, any marks, why you're selling"
             rows={4}
             maxLength={10000}
-            style={{
-              ...styles.input,
-              height: 'auto',
-              padding: '10px 12px',
-              resize: 'vertical',
-              lineHeight: 1.5,
-            }}
+            style={styles.textarea}
           />
         </Field>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

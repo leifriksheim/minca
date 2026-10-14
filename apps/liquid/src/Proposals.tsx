@@ -101,7 +101,6 @@ export function Proposals({ a, writable }: { a: Assembly; writable: boolean }) {
           </button>
           <TopicPicker
             topics={a.topics}
-            solid
             on={(t) => filter === t.key}
             onToggle={(t) => setFilter(filter === t.key ? null : t.key)}
           />
@@ -211,7 +210,6 @@ function ProposalCard({
           className="lq-display"
           style={{
             fontSize: 19,
-            letterSpacing: '-0.03em',
             lineHeight: 1.2,
             wordBreak: 'break-word',
           }}
@@ -448,7 +446,7 @@ function VotePanel({
 
   return (
     <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <p className="lq-display" style={{ fontSize: 19, letterSpacing: '-0.03em' }}>
+      <p className="lq-display" style={{ fontSize: 19 }}>
         Your vote
       </p>
       <div className="lq-votes" role="group" aria-label="Cast your vote">
@@ -614,7 +612,7 @@ function Results({ a, p }: { a: Assembly; p: ProposalView }) {
   return (
     <section className="lq-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <p className="lq-display" style={{ fontSize: 17, letterSpacing: '-0.03em' }}>
+        <p className="lq-display" style={{ fontSize: 17 }}>
           {p.result === 'open' ? 'Standing now' : 'Result'}
         </p>
         <span className="lq-faint lq-num" style={{ fontSize: 12 }}>
@@ -636,7 +634,6 @@ function Results({ a, p }: { a: Assembly; p: ProposalView }) {
               className="lq-num lq-display"
               style={{
                 fontSize: 26,
-                letterSpacing: '-0.03em',
                 color: c === 'abstain' ? palette.ink.body : tone[c],
               }}
             >

@@ -746,8 +746,8 @@ export function GraphView({
         className="graph-canvas"
         style={{
           position: 'relative',
-          border: `1px solid ${palette.surface.line}`,
-          borderRadius: palette.radius.lg,
+          border: `1px solid ${palette.surface.rule}`,
+          borderRadius: palette.radius.xl,
           background: palette.surface.sunken,
           overflow: 'hidden',
         }}
@@ -1100,10 +1100,7 @@ const panel: CSSProperties = {
   width: `min(${PANEL}px, calc(100% - 24px))`,
   display: 'flex',
   flexDirection: 'column',
-  background: palette.surface.card,
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.lg,
-  boxShadow: palette.shadow.float,
+  ...styles.float,
   animation: 'minca-fade .12s ease',
   zIndex: 3,
 };

@@ -8,7 +8,7 @@ import { ago } from '../derive/time';
 import { SpaceMark } from './SpaceList';
 import { Icon } from './Icon';
 import { WatchBuilder } from './automations/WatchBuilder';
-import { palette } from '../styles';
+import { palette, styles } from '../styles';
 
 type Tab = 'activity' | 'settings';
 
@@ -317,7 +317,7 @@ const button = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  border: `1px solid ${palette.surface.line}`,
+  border: `1px solid ${palette.surface.rule}`,
   borderRadius: palette.radius.pill,
   background: palette.surface.card,
   color: palette.ink.strong,
@@ -335,10 +335,7 @@ const panel = {
   zIndex: 20,
   width: 340,
   maxWidth: 'calc(100vw - 24px)',
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.lg,
-  backgroundColor: palette.surface.card,
-  boxShadow: palette.shadow.float,
+  ...styles.float,
   animation: 'minca-fade .1s ease',
   overflow: 'hidden',
 };
@@ -351,17 +348,15 @@ const row = {
   gap: 10,
   padding: '8px',
   border: 'none',
-  borderRadius: palette.radius.sm,
+  borderRadius: palette.radius.md,
   background: 'none',
   textAlign: 'left' as const,
 };
 const heading = {
   padding: '8px 8px 2px',
-  fontSize: 11.5,
-  fontWeight: 600,
-  letterSpacing: '.02em',
-  textTransform: 'uppercase' as const,
-  color: palette.ink.faint,
+  fontSize: 12.5,
+  fontWeight: 500,
+  color: palette.ink.muted,
 };
 const note = { padding: '6px 8px', fontSize: 12.5, lineHeight: 1.45, color: palette.ink.muted };
 const link = {

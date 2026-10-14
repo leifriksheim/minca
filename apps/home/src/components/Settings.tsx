@@ -588,7 +588,7 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
             style={{
               display: 'block',
               padding: 12,
-              borderRadius: palette.radius.none,
+              borderRadius: palette.radius.md,
               background: palette.surface.sunken,
               border: `1px solid ${palette.surface.line}`,
               color: palette.ink.strong,
@@ -711,11 +711,12 @@ function Row({ label, shape, children }: { label: string; shape?: string; childr
   );
 }
 
+// The shared segmented control, as wide as its choices rather than the section.
 const segmented = {
   ...styles.segmented,
   display: 'inline-flex',
   alignSelf: 'flex-start',
   flexWrap: 'wrap',
 } as const;
-const segment = { ...styles.segment, flex: 'none', padding: '7px 14px' } as const;
-const segmentOn = { ...styles.segmentActive, flex: 'none', padding: '7px 14px' } as const;
+const segment = { ...styles.segment, flex: 'none' } as const;
+const segmentOn = { ...styles.segmentActive, flex: 'none' } as const;

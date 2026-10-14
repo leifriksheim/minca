@@ -316,21 +316,18 @@ export function Sentence({ children }: { children: ReactNode }) {
 
 /** Where a builder's parts sit: one card */
 export const card: CSSProperties = {
+  ...styles.tile,
   display: 'flex',
   flexDirection: 'column',
   gap: 16,
   padding: 16,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
 };
 
 /** What an automation or notification would have caught, under the builder */
 export const previewBox: CSSProperties = {
   padding: '12px 14px',
-  borderRadius: palette.radius.lg,
+  borderRadius: palette.radius.md,
   background: palette.surface.sunken,
-  border: `1px solid ${palette.surface.line}`,
   display: 'flex',
   flexDirection: 'column',
   gap: 6,
@@ -343,7 +340,7 @@ const pill: CSSProperties = {
   padding: '0 26px 0 12px',
   borderRadius: palette.radius.pill,
   border: `1px solid ${palette.surface.lineStrong}`,
-  background: `${palette.surface.card} url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center`,
+  background: `${palette.surface.card} url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235d6480' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center`,
   appearance: 'none',
   color: palette.ink.strong,
   fontSize: 14,
@@ -353,8 +350,8 @@ const pill: CSSProperties = {
 
 const box: CSSProperties = {
   height: 32,
-  padding: '0 10px',
-  borderRadius: palette.radius.md,
+  padding: '0 12px',
+  borderRadius: palette.radius.pill,
   border: `1px solid ${palette.surface.lineStrong}`,
   background: palette.surface.card,
   color: palette.ink.strong,
@@ -393,11 +390,9 @@ export const chip: CSSProperties = {
 };
 
 const stepLabel: CSSProperties = {
-  fontSize: 11.5,
-  fontWeight: 600,
-  letterSpacing: '.06em',
-  textTransform: 'uppercase',
-  color: palette.ink.faint,
+  fontSize: 13,
+  fontWeight: 500,
+  color: palette.ink.muted,
   paddingTop: 8,
 };
 

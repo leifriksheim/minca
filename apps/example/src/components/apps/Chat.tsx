@@ -107,7 +107,7 @@ export function Chat(props: AppProps) {
         display: listed ? undefined : 'flex',
         flex: 1,
         minHeight: 0,
-        border: `1px solid ${palette.surface.line}`,
+        border: `1px solid ${palette.surface.rule}`,
         borderRadius: palette.radius.lg,
         overflow: 'hidden',
       }}
@@ -595,7 +595,7 @@ function Line({
         gap: 10,
         padding: '2px 8px',
         margin: `${startsRun ? 10 : 0}px -8px 0`,
-        borderRadius: palette.radius.sm,
+        borderRadius: palette.radius.md,
         ...(forMe ? { background: FOR_ME, boxShadow: `inset 3px 0 0 ${FOR_ME_EDGE}` } : {}),
       }}
     >
@@ -984,7 +984,7 @@ function NewConversation({
                 alignItems: 'center',
                 gap: 10,
                 padding: '6px 8px',
-                borderRadius: palette.radius.sm,
+                borderRadius: palette.radius.md,
                 fontSize: 14,
                 color: palette.ink.strong,
                 cursor: 'pointer',
@@ -1043,10 +1043,8 @@ function Heading({ label, onAdd }: { label: string; onAdd: (() => void) | undefi
     >
       <span
         style={{
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: '.05em',
           color: palette.ink.muted,
         }}
       >
@@ -1096,12 +1094,12 @@ function PlaceButton({
         width: '100%',
         minWidth: 0,
         height: 30,
-        padding: '0 8px',
+        padding: '0 10px',
         border: 'none',
-        borderRadius: palette.radius.sm,
+        borderRadius: palette.radius.pill,
         // The list itself is sunken: the open one stands up out of it, the way the space's sidebar marks its own.
         background: current ? palette.surface.card : 'none',
-        boxShadow: current ? `0 0 0 1px ${palette.surface.line}` : 'none',
+        boxShadow: current ? `0 0 0 1px ${palette.surface.rule}` : 'none',
         color: current ? palette.ink.strong : palette.ink.body,
         fontWeight: current ? 600 : 400,
         font: 'inherit',

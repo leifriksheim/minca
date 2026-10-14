@@ -6,12 +6,7 @@ import { styles, palette, ui } from '../../styles';
 import { Person } from '../Person';
 
 const MAX_OPTIONS = 10;
-const box = {
-  ...ui.stack,
-  padding: 16,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-} as const;
+const box = { ...styles.tile, ...ui.stack, padding: 16 } as const;
 
 /** A question put to the space: who asked, its title, its options and what follows them */
 export function OptionCard({

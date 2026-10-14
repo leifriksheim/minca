@@ -16,6 +16,7 @@ import { collectionLabel, fieldsOf, recordLabel, titleField } from '../derive/sc
 import { nameOf, peopleFrom } from '../derive/people';
 import { ago } from '../derive/time';
 import { message as messageOf } from '@minca/app-shared/action';
+import { Loader } from '@minca/app-shared/Loader';
 import { styles, palette, ui } from '../styles';
 import { DocsNote } from './DocsNote';
 
@@ -302,7 +303,7 @@ export function QueryPlayground({
           >
             <span style={styles.fieldLabel}>
               {result ? `${records.length} found${result.cursor ? ', and more after these' : ''}` : 'Results'}
-              {running && <span style={{ color: palette.ink.faint, fontWeight: 400 }}> · running…</span>}
+              {running && <Loader size={9} label="Running the query" style={{ marginLeft: 8 }} />}
               {stale && result && (
                 <span style={{ color: palette.ink.faint, fontWeight: 400 }}>
                   {' '}
@@ -475,7 +476,7 @@ function Editor({ value, onChange }: { value: string; onChange: (next: string) =
           minHeight: 320,
           resize: 'vertical',
           margin: 0,
-          border: `1px solid ${palette.surface.line}`,
+          border: `1px solid ${palette.surface.rule}`,
           borderRadius: palette.radius.lg,
           background: 'transparent',
           color: 'transparent',
@@ -497,7 +498,7 @@ function Highlighted({ code, style }: { code: string; style?: CSSProperties }) {
         ...syntax,
         margin: 0,
         overflow: 'auto',
-        border: `1px solid ${palette.surface.line}`,
+        border: `1px solid ${palette.surface.rule}`,
         borderRadius: palette.radius.lg,
         backgroundColor: palette.surface.sunken,
         ...style,
@@ -535,7 +536,7 @@ function ResultTable({
   return (
     <div
       style={{
-        border: `1px solid ${palette.surface.line}`,
+        border: `1px solid ${palette.surface.rule}`,
         borderRadius: palette.radius.lg,
         overflowX: 'auto',
       }}

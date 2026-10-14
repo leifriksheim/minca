@@ -667,7 +667,7 @@ function groupBy<T>(items: ReadonlyArray<T>, key: (item: T) => string): Map<stri
 const scrimStyle = {
   position: 'fixed' as const,
   inset: 0,
-  background: `color-mix(in srgb, ${palette.ink.strong} 18%, transparent)`,
+  background: palette.surface.scrim,
   zIndex: 30,
   animation: 'minca-fade .12s ease',
 };
@@ -715,7 +715,7 @@ const miniRow = {
   gap: 10,
   padding: '8px 6px',
   border: 'none',
-  borderRadius: palette.radius.sm,
+  borderRadius: palette.radius.md,
   background: 'none',
   textAlign: 'left' as const,
   fontSize: 14,

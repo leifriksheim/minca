@@ -755,9 +755,7 @@ const fieldCard: CSSProperties = {
   flexDirection: 'column',
   gap: 10,
   padding: 8,
-  border: `1px solid ${palette.surface.line}`,
-  borderRadius: palette.radius.lg,
-  background: palette.surface.card,
+  ...styles.tile,
 };
 const nudge: CSSProperties = {
   border: 'none',
@@ -772,8 +770,8 @@ const typeButton: CSSProperties = {
   alignItems: 'center',
   gap: 8,
   height: 36,
-  padding: '0 10px 0 4px',
-  borderRadius: palette.radius.md,
+  padding: '0 14px 0 4px',
+  borderRadius: palette.radius.pill,
   border: `1px solid ${palette.surface.line}`,
   background: palette.surface.sunken,
   color: palette.ink.body,
@@ -788,7 +786,7 @@ const mark: CSSProperties = {
   justifyContent: 'center',
   width: 28,
   height: 28,
-  borderRadius: palette.radius.sm,
+  borderRadius: palette.radius.pill,
   background: palette.surface.card,
   border: `1px solid ${palette.surface.line}`,
   fontSize: 12,
@@ -849,6 +847,5 @@ const preview: CSSProperties = {
   top: 0,
   padding: 16,
   borderRadius: palette.radius.lg,
-  border: `1px solid ${palette.surface.line}`,
   background: palette.surface.sunken,
 };

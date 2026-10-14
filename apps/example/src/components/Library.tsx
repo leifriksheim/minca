@@ -51,8 +51,7 @@ export function Library({
               flexDirection: 'column',
               gap: 8,
               padding: 14,
-              border: `1px solid ${palette.surface.line}`,
-              borderRadius: palette.radius.lg,
+              ...styles.tile,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>

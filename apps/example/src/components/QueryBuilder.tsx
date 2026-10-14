@@ -108,8 +108,7 @@ export function QueryBuilder({
             fontSize: 12,
             lineHeight: 1.6,
             overflowX: 'auto',
-            border: `1px solid ${palette.surface.line}`,
-            borderRadius: palette.radius.lg,
+            borderRadius: palette.radius.md,
             background: palette.surface.sunken,
           }}
         >

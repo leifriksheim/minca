@@ -34,7 +34,7 @@ export function App() {
 
 function Page({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
-    <div style={styles.container}>
+    <div className="page">
       <div style={wide ? styles.app : styles.card}>{children}</div>
     </div>
   );
