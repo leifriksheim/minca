@@ -102,8 +102,8 @@ export function ConnectAgent({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Connect an agent" onClose={onClose}>
       <p style={{ ...styles.hint, marginBottom: 0 }}>
-        Lets Claude Code, Claude Desktop or Cursor work in your spaces — even with this tab closed. What it
-        writes shows “via agent”. It can propose apps; adding one is always yours.
+        Lets Claude Code, Claude Desktop, Cursor, VS Code and other agents work in your spaces — even with
+        this tab closed. What it writes shows “via agent”. It can propose apps; adding one is always yours.
       </p>
 
       {step.kind === 'connected' ? (
@@ -199,9 +199,8 @@ function Connected({ agent, onClose }: { agent: CodeAsking; onClose: () => void 
       <div style={note}>
         <p style={{ ...styles.todoText, color: palette.accent.good }}>✓ Connected: {agent.name}</p>
         <p style={styles.errorHint}>
-          It was added to Claude Code, Claude Desktop and Cursor, where they're installed — start a new
-          session there, or restart the app, to use it. You can disconnect it any time in your account
-          settings.
+          It was added to the agents installed on that computer — start a new session there, or restart the
+          app, to use it. You can disconnect it any time in your account settings.
         </p>
         <p style={styles.errorHint}>
           To keep it running your automations while this computer is off, connect it on a server the same way

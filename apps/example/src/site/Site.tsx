@@ -243,7 +243,7 @@ minca records query --space <id> \\
 # available, and relays for your devices
 minca run
 
-# Connect an agent (Claude Code, Claude Desktop, Cursor) with the
+# Connect an agent (Claude Code, Cursor, VS Code, …) with the
 # code from "Connect an agent" in an app; it then serves MCP by itself
 minca connect mc_…
 `;

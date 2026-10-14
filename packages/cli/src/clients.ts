@@ -1,16 +1,15 @@
 /**
  * Adding `minca mcp` to the agents on this computer, so connecting is one
- * command: Claude Code (through its own `claude mcp add`), Claude Desktop and
- * Cursor (their config files). Only the ones installed are touched, and an
+ * command: Claude Code through its own `claude mcp add`, and every other agent
+ * add-mcp knows (Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex, …)
+ * through its config file. Only the ones installed are touched, and an
  * existing "minca" entry is replaced, nothing else.
  */
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { errorCode, isRecord, messageOf } from './json.js';
+import { errorCode, messageOf } from './json.js';
 
 const run = promisify(execFile);
 
@@ -46,37 +45,6 @@ export function serverCommand(home: string): ServerCommand {
   };
 }
 
-/** Claude Desktop's config file on this system */
-function claudeDesktopConfig(): string {
-  if (process.platform === 'darwin')
-    return path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
-  if (process.platform === 'win32')
-    return path.join(
-      process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'),
-      'Claude',
-      'claude_desktop_config.json',
-    );
-  return path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json');
-}
-
-/** Puts the server in an `mcpServers` config file, keeping everything else in it */
-async function addToConfigFile(file: string, server: ServerCommand): Promise<void> {
-  let config: Record<string, unknown> = {};
-  try {
-    const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
-    if (!isRecord(parsed)) throw new Error('not an object');
-    config = parsed;
-  } catch (error) {
-    if (errorCode(error) !== 'ENOENT') throw new Error(`${file} is not valid JSON, so it was left alone`);
-  }
-  config.mcpServers = {
-    ...(isRecord(config.mcpServers) ? config.mcpServers : {}),
-    [SERVER_NAME]: { command: server.command, args: [...server.args] },
-  };
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
-}
-
 export interface Configured {
   readonly client: string;
   /** What happened, for the person */
@@ -84,38 +52,52 @@ export interface Configured {
   readonly ok: boolean;
 }
 
-/** Adds the server to every agent found on this computer. */
+/** What to do after adding it, for agents that read their config only at start */
+const RESTART: Readonly<Record<string, string>> = {
+  'claude-code': 'start a new session to use it',
+  'claude-desktop': 'restart it to use it',
+};
+
+/**
+ * Adds the server to every agent found on this computer. Claude Code goes
+ * through `claude mcp add` when it is on the PATH, since it rewrites its own
+ * config file while running. Every other agent's config path and format come
+ * from add-mcp, which keeps them current; it is loaded only when connecting.
+ */
 export async function configureClients(server: ServerCommand): Promise<ReadonlyArray<Configured>> {
   const done: Configured[] = [];
+  let claudeCli = true;
 
   try {
     // Replacing: `add` refuses a name that exists.
     await run('claude', ['mcp', 'remove', SERVER_NAME, '--scope', 'user']).catch(() => {});
     await run('claude', ['mcp', 'add', SERVER_NAME, '--scope', 'user', '--', server.command, ...server.args]);
-    done.push({ client: 'Claude Code', result: 'added — start a new session to use it', ok: true });
+    done.push({ client: 'Claude Code', result: `added — ${RESTART['claude-code']}`, ok: true });
   } catch (error) {
-    if (errorCode(error) !== 'ENOENT') {
+    if (errorCode(error) === 'ENOENT') claudeCli = false;
+    else
       done.push({
         client: 'Claude Code',
         result: `could not add it: ${messageOf(error).split('\n')[0]}`,
         ok: false,
       });
-    }
   }
 
-  const desktop = claudeDesktopConfig();
-  if (existsSync(path.dirname(desktop))) {
-    await addToConfigFile(desktop, server).then(
-      () => done.push({ client: 'Claude Desktop', result: 'added — restart it to use it', ok: true }),
-      (error: Error) => done.push({ client: 'Claude Desktop', result: error.message, ok: false }),
-    );
-  }
-
-  const cursor = path.join(os.homedir(), '.cursor');
-  if (existsSync(cursor)) {
-    await addToConfigFile(path.join(cursor, 'mcp.json'), server).then(
-      () => done.push({ client: 'Cursor', result: 'added', ok: true }),
-      (error: Error) => done.push({ client: 'Cursor', result: error.message, ok: false }),
+  const { agents, detectGlobalAgents, upsertServer } = await import('add-mcp');
+  for (const type of await detectGlobalAgents()) {
+    if (type === 'claude-code' && claudeCli) continue;
+    const agent = agents[type];
+    if (!agent.supportedTransports.includes('stdio')) continue;
+    const added = upsertServer(type, SERVER_NAME, { command: server.command, args: [...server.args] });
+    const restart = RESTART[type];
+    done.push(
+      added.success
+        ? { client: agent.displayName, result: restart ? `added — ${restart}` : 'added', ok: true }
+        : {
+            client: agent.displayName,
+            result: `could not add it to ${added.path}: ${added.error ?? 'unknown error'}`,
+            ok: false,
+          },
     );
   }
   return done;

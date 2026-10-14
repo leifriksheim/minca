@@ -208,6 +208,15 @@ Elsewhere:
   stderr are terminals; with none, the CLI asks nothing.
 - `node-datachannel` in `packages/cli`: WebRTC for `minca mcp` and headless
   nodes.
+- `add-mcp`, a dev dependency of `packages/cli`, pinned and bundled, loaded
+  only when `minca connect` runs (`packages/cli/src/clients.ts`): where each
+  MCP client keeps its config, in what format (JSON, JSONC, YAML, TOML) and
+  under which key, for twenty-odd clients that move their files between
+  releases. A long tail someone else keeps current. Neon's, released since
+  2025; its library API (`detectGlobalAgents`, `upsertServer`) needs only its
+  parsers (js-yaml, @iarna/toml, jsonc-parser). Young and still changing, so
+  it is pinned to an exact version and bumped on purpose. Claude Code still
+  goes through `claude mcp add`.
 - `@anthropic-ai/sdk`, a dev dependency of `packages/cli`, bundled into
   `minca agent` only and loaded when that command runs
   (`packages/cli/src/agent-chat.ts`): the Messages API's streaming, tool use,

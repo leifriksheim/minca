@@ -108,7 +108,7 @@ Usage:
   minca collections define --standard std.automation [--space ID]
   minca actions
 
-Agents (Claude Code, Claude Desktop, Cursor):
+Agents (Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex, …):
   In the app, choose "Connect an agent" and run the command it shows. It
   connects this computer's agent to your account, and adds "minca" to the
   agents it finds. From then on they start "minca mcp" themselves: a node of

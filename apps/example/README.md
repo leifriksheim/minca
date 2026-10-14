@@ -225,7 +225,7 @@ key, asks the person first. An app an agent makes may bring its own screen,
 which the example runs in a sandboxed frame with no network (the launcher's
 guide, `src/components/apps/launcher.ts`, and `src/components/apps/screens.ts`).
 
-**On your computer (Claude Code, Claude Desktop, Cursor).** "Connect an
+**On your computer (Claude Code, Claude Desktop, Cursor, VS Code, …).** "Connect an
 agent", in the account menu, shows one command:
 `npx @minca/cli connect mc_…`. The person allows it at their account
 home, and the command adds `minca` to the agents it finds, which start

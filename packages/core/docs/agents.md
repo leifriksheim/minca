@@ -36,8 +36,8 @@ npx @minca/cli connect mc_…   # the code from "Connect an agent" in an app
 ```
 
 It makes a key for this computer's agent, waits while the person allows it at
-their account home, and adds `minca mcp` to Claude Code, Claude Desktop and
-Cursor where it finds them. The agent is then a node of its own: it follows
+their account home, and adds `minca mcp` to the agents it finds (Claude Code,
+Claude Desktop, Cursor, VS Code, Windsurf, Zed, Codex and more). The agent is then a node of its own: it follows
 the account's spaces and keeps working with every tab closed.
 
 `minca agent` runs the same agent without a chat client: it chats in the
