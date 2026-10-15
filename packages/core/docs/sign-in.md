@@ -249,13 +249,27 @@ options.
 On the phone, the `pair` stage waits for a tap, then meets the computer
 (`receiveFromDesktop`) and shows the same code (`pairingStage` is `{ kind:
 'confirm', code }`). Only when the person confirms on the computer does the
-seed arrive; the phone then signs in with it and joins each space, ending on
+seed arrive; the phone then signs in with it (`sending`), joins each space in
+turn (`{ kind: 'joining', joined, total }`, before each one), and ends on
 `received`. It waits 60 seconds for the computer to answer, and 10 minutes for
 the person to confirm. Where accounts are already kept here, `<minca-auth>`
 warns before going on: a link someone else sent would put the phone in their
 account.
 
-_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`._
+The camera opens the link in a new tab, so an app that sent the person to
+sign in is still waiting in another. A flow that is signed out picks up a
+sign-in another tab keeps (`storage` events on the remembered session), as a
+refresh would, so that tab is signed in when the person goes back to it.
+
+A tab takes one up only once `start()` has finished, and only at `welcome`,
+`existing`, or `signIn` with no account picked or the same one picked: a tab
+where the person chose another account is left alone. It holds `busy`
+meanwhile, so a sign-in by hand waits for it and two nodes never start in one
+tab. It keeps the remembered key as it is, and gives up if the kept sign-in
+changed meanwhile. When the kept sign-in goes, because the person signed out
+in another tab, a tab that took it up signs out too, revoking its own key.
+
+_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`, `packages/core/tests/take-up.test.ts`._
 
 ## The account home's side
 

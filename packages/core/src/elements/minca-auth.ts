@@ -206,9 +206,11 @@ function describePairing(stage: PairingStage): string {
     case 'compare':
       return 'Check your computer shows the same code, and confirm there.';
     case 'sending':
-      return 'Collecting your account…';
+      return 'The codes matched. Setting up this phone…';
+    case 'joining':
+      return `Adding your spaces: ${stage.joined} of ${stage.total}…`;
     case 'received':
-      return stage.spaces === 1 ? 'Got 1 space.' : `Got ${stage.spaces} spaces.`;
+      return stage.spaces === 1 ? 'Added 1 space.' : `Added ${stage.spaces} spaces.`;
     case 'sent':
       return 'Done.';
     case 'failed':
@@ -909,6 +911,10 @@ export class MincaAuthElement extends Base {
             describePairing(state.pairingStage),
           )
         : null,
+      // The app waits in the tab it opened; the camera opened this one.
+      state.setup === 'paired'
+        ? h('p', { class: 'wa-small' }, 'If an app sent you to sign in, you can go back to it now.')
+        : null,
       errorBox(state.error),
     );
   }
@@ -952,6 +958,8 @@ export class MincaAuthElement extends Base {
     const auth = this.auth;
     const stage = state.pairingStage;
     const code = stage?.kind === 'confirm' ? stage.code : null;
+    // The codes matched and the account is here: nothing left to tap or warn about.
+    const arriving = stage?.kind === 'sending';
     return card(
       'Add this phone',
       subtitle('You scanned a code from your computer.'),
@@ -970,14 +978,14 @@ export class MincaAuthElement extends Base {
               'Your computer and this phone show the same six digits. When you confirm them on the computer, it sends the account here directly — the relay only introduces the two, and sees nothing it could use.',
             ),
           ),
-      state.accounts.length > 0 && !code
+      state.accounts.length > 0 && !code && !arriving
         ? h(
             'p',
             { class: 'wa-error' },
             'Only continue if the code is on your own screen, in front of you. A link someone sent you would put this phone in their account instead of yours.',
           )
         : null,
-      state.pairing && !code
+      state.pairing && !code && !arriving
         ? h(
             'button',
             {

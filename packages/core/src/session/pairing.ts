@@ -50,7 +50,10 @@ export type PairingStage =
       readonly same: () => void;
       readonly different: () => void;
     }
+  /** The desktop sealing the account; on the phone, signing in with what arrived */
   | { readonly kind: 'sending' }
+  /** The phone's side: joining the spaces that came with the account, one at a time */
+  | { readonly kind: 'joining'; readonly joined: number; readonly total: number }
   | { readonly kind: 'sent'; readonly spaces: number }
   | { readonly kind: 'received'; readonly spaces: number }
   | { readonly kind: 'failed'; readonly reason: string };
