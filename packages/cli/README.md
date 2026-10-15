@@ -294,6 +294,12 @@ forgets it on this computer and takes `minca` out of the agents connecting
 added it to (an entry you added by hand stays); disconnecting it in your
 account home stops its note working everywhere.
 
+To connect it again, after a disconnect or when its time runs out, run
+`minca connect` with a new code. Each connect makes a new key, since a
+revoked key never writes again, and a `minca mcp` already running takes the
+new connection up by itself, so the agent's session needs no restart. Until
+then, a tool that fails says the agent was disconnected.
+
 `minca mcp --account` serves the unlocked account instead, as you:
 
 ```json

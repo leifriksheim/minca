@@ -552,6 +552,71 @@ describe('MCP', () => {
       server.stop();
     }
   });
+
+  test('once started, a waiting server follows the node the agent runs now: a reconnect starts a new one', async () => {
+    const first = await aNode(7);
+    const second = await aNode(8);
+    let current = first;
+    const server = waitingMcp(
+      {
+        holder: 'pid 42',
+        tryStart: async () => first,
+        takeOver: () => Promise.reject(new Error('not asked')),
+        current: () => current,
+      },
+      info,
+      { agent: true },
+      () => {},
+    );
+    try {
+      await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+      assert.equal(server.node(), first);
+      current = second;
+      assert.equal(server.node(), second);
+      const call = await server.handle({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'node_info', arguments: {} },
+      });
+      assert.match(String(at(call, 'result', 'content', 0, 'text')), new RegExp(second.did));
+    } finally {
+      server.stop();
+    }
+  });
+
+  test('a tool that fails says what the model can’t see, such as a revoked key; one that works says nothing more', async () => {
+    const node = await aNode(9);
+    const options = {
+      agent: true,
+      trouble: () => 'This agent was disconnected. Ask them to connect it again.',
+    };
+    const failed = await handleMcpMessage(
+      node,
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'records_get', arguments: { space: 'no-such-space', key: 'k' } },
+      },
+      info,
+      options,
+    );
+    assert.equal(at(failed, 'result', 'isError'), true);
+    assert.match(
+      String(at(failed, 'result', 'content', 0, 'text')),
+      /disconnected\. Ask them to connect it again/,
+    );
+
+    const worked = await handleMcpMessage(
+      node,
+      { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'node_info', arguments: {} } },
+      info,
+      options,
+    );
+    assert.equal(at(worked, 'result', 'isError'), false);
+    assert.doesNotMatch(String(at(worked, 'result', 'content', 0, 'text')), /disconnected/);
+  });
 });
 
 describe('the minca command', () => {

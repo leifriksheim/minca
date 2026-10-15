@@ -72,11 +72,13 @@ import {
   forgetAgent,
   hasConnectedAgent,
   loadModelKey,
+  reloadOnConnect,
   saveModelKey,
   startAgentNode,
   startBotNode,
   takeOverAgent,
   watchRelayRefusal,
+  type RunningAgent,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
 import { capEachOf, runAutomations } from './bot-runner.js';
@@ -896,14 +898,31 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     const nodes = commaList(process.env.MINCA_NODES);
     const info = { name: 'minca', version: VERSION };
     // Set here or, once it stops or is taken over, from the waiting server.
-    const here: { agent: Awaited<ReturnType<typeof startAgentNode>> | null } = { agent: null };
-    const started = (running: Awaited<ReturnType<typeof startAgentNode>>) => {
+    const here: { agent: RunningAgent | null } = { agent: null };
+    const start = {
+      nodes,
+      onRevoked: (space: string) =>
+        stderr(
+          `minca mcp: the agent's key was revoked in ${space}; nothing it writes there counts until it connects again`,
+        ),
+    };
+    // While its key is revoked, a failed write says what to do: the model sees only "revoked" otherwise.
+    const trouble = () =>
+      here.agent?.revoked().length
+        ? "This agent was disconnected in the person's account home, so its key is revoked and nothing it writes counts. " +
+          'Ask them to connect it again: in the app, "Connect an agent", then run the command it shows. ' +
+          'This session takes the new connection up by itself within a few seconds; no restart is needed.'
+        : null;
+    let stopReloading = () => {};
+    const started = (running: RunningAgent) => {
       here.agent = running;
       stderr(
         `minca mcp: an agent for ${running.grant.name} (${running.grant.did}), ${daysLeft(running.grant)} days left`,
       );
       // A socket left with the agent's key, or a copy of the agent elsewhere, keeps this one out of a relay's rooms.
       sayRelayRefusal(running.node, 'minca mcp', 'Writes are kept here and sync once that one stops');
+      // `minca connect` again, after a disconnect or to renew: take the new key and note up here.
+      stopReloading = reloadOnConnect(home, running, (line) => stderr(`minca mcp: ${line}`));
       return running.node;
     };
     // Taken over by another session (agent_take_over): close, so the lock and the writes are left in order.
@@ -913,7 +932,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     });
     let busy: AgentBusy | null = null;
     try {
-      started(await startAgentNode(home, { nodes }));
+      started(await startAgentNode(home, start));
     } catch (error) {
       if (!(error instanceof AgentBusy)) throw error;
       busy = error;
@@ -926,13 +945,18 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
         {
           holder,
           tryStart: async () =>
-            (await agentRunning(home)) === null ? started(await startAgentNode(home, { nodes })) : null,
-          takeOver: async () => started(await takeOverAgent(home, { nodes })),
+            (await agentRunning(home)) === null ? started(await startAgentNode(home, start)) : null,
+          takeOver: async () => started(await takeOverAgent(home, start)),
+          current: () => here.agent?.node ?? null,
         },
         info,
-        { agent: true },
+        { agent: true, trouble },
       );
-    } else if (here.agent) await runMcpStdio(here.agent.node, info, { agent: true });
+    } else if (here.agent) {
+      const running = here.agent;
+      await runMcpStdio(() => running.node, info, { agent: true, trouble });
+    }
+    stopReloading();
     await here.agent?.close();
     // WebRTC keeps the process alive; the agent closed stdin, so it's done.
     process.exit(0);
@@ -1067,7 +1091,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     // Offline: the MCP process writes to the folder; a running daemon syncs it.
     const node = await nodeFor(await openAccount(globals));
     stderr(`minca mcp: serving ${NODE_ACTIONS.length} tools for ${node.did}`);
-    await runMcpStdio(node, { name: 'minca', version: VERSION });
+    await runMcpStdio(() => node, { name: 'minca', version: VERSION });
     await node.close();
     return 0;
   }

@@ -40,6 +40,8 @@ export interface McpOptions {
   readonly agent?: boolean;
   /** A bot: an account of its own that spaces added, offered what an agent is */
   readonly bot?: boolean;
+  /** What is wrong that the model can't see, said with each tool that fails: the agent's key revoked, say */
+  readonly trouble?: () => string | null;
 }
 
 /** An action's description as a tool, with a warning when its result grants access */
@@ -129,8 +131,9 @@ export async function handleMcpMessage(
         return fail(-32602, `Unknown tool: ${name}`);
       // A failed tool is a result the model should read, not a protocol error.
       const { text, isError, value } = await callAction(node, name, message.params?.arguments ?? {});
+      const trouble = isError ? options.trouble?.() : null;
       return reply({
-        content: [{ type: 'text', text }],
+        content: [{ type: 'text', text: trouble ? `${text}\n\n${trouble}` : text }],
         ...(isError ? {} : { structuredContent: isRecord(value) ? value : { result: value } }),
         isError,
       });
@@ -143,13 +146,13 @@ export async function handleMcpMessage(
 type Outgoing = JsonRpcResponse | { jsonrpc: '2.0'; method: string };
 const send = (message: Outgoing) => process.stdout.write(`${JSON.stringify(message)}\n`);
 
-/** Serves MCP over stdin/stdout until stdin closes. */
+/** Serves MCP over stdin/stdout until stdin closes, from the node `node()` gives at each message: it can change while it runs. */
 export async function runMcpStdio(
-  node: P2PNode,
+  node: () => P2PNode,
   serverInfo: { name: string; version: string },
   options: McpOptions = {},
 ): Promise<void> {
-  await serveStdio((message) => handleMcpMessage(node, message, serverInfo, options));
+  await serveStdio((message) => handleMcpMessage(node(), message, serverInfo, options));
 }
 
 async function serveStdio(
@@ -188,6 +191,8 @@ export interface Waiting {
   readonly tryStart: () => Promise<P2PNode | null>;
   /** Stops the other and starts the agent here */
   readonly takeOver: () => Promise<P2PNode>;
+  /** The node once the agent runs here, if it can change after it starts: a reconnect starts it again */
+  readonly current?: () => P2PNode | null;
 }
 
 /** How often a waiting server looks for the other to have stopped */
@@ -240,8 +245,11 @@ export function waitingMcp(
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   };
 
+  const live = () => (node ? (waiting.current?.() ?? node) : null);
+
   async function handle(message: JsonRpcRequest): Promise<JsonRpcResponse | null> {
-    if (node) return handleMcpMessage(node, message, serverInfo, options);
+    const running = live();
+    if (running) return handleMcpMessage(running, message, serverInfo, options);
     const id = message.id ?? null;
     const reply = (result: unknown): JsonRpcResponse | null =>
       message.id === undefined ? null : { jsonrpc: '2.0', id, result };
@@ -262,7 +270,7 @@ export function waitingMcp(
         });
       }
       case 'tools/list': {
-        const started = await attempt();
+        const started = (await attempt()) && live();
         return started
           ? handleMcpMessage(started, message, serverInfo, options)
           : reply({ tools: [takeOverTool] });
@@ -280,7 +288,7 @@ export function waitingMcp(
             return text(error instanceof Error ? error.message : String(error), true);
           }
         }
-        const started = await attempt();
+        const started = (await attempt()) && live();
         return started ? handleMcpMessage(started, message, serverInfo, options) : text(unavailable, true);
       }
       case 'ping':
@@ -295,7 +303,7 @@ export function waitingMcp(
   return {
     handle,
     /** The node, once the agent runs here */
-    node: () => node,
+    node: live,
     stop: () => clearInterval(timer),
   };
 }

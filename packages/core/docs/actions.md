@@ -103,18 +103,26 @@ _Source: `packages/core/src/node/actions.ts` (`callAction`, `offeredActions`), `
 
 ## The agent on a computer
 
-_Implementation detail of the CLI._ `minca connect` makes a P-256 key once and
-keeps it as JWK in `<home>/agent/key.json` (mode 0600), the grant in
-`grant.json`, and the spaces in `data/`. `minca mcp` then starts a node of its
-own: signer `grantSigner(grant)`, session key = the agent key, the grant's
-account key when present, relays = the grant's ∪ `$MINCA_RELAYS` (default
-`wss://minca.fly.dev`), WebRTC via `node-datachannel`; joins any granted
-spaces it lacks; wraps the node with `asAgent`; holds every space; and serves
-MCP over stdio: `offeredActions({ agent: true })`, without the `PERSON_ONLY`
-actions or direct messages ([actions](#actions)).
+_Implementation detail of the CLI._ Each `minca connect` makes a new P-256
+key and keeps it as JWK in `<home>/agent/key.json` (mode 0600), then the grant
+made out to it in `grant.json`, each written whole, and the spaces in `data/`.
+A new key each time, since a key the account home revoked stays revoked in
+every space, so a new note made out to it would write nothing. `minca mcp`
+then starts a node of its own: signer `grantSigner(grant)`, session key = the
+agent key, the grant's account key when present, relays = the grant's ∪
+`$MINCA_RELAYS` (default `wss://minca.fly.dev`), WebRTC via `node-datachannel`;
+joins any granted spaces it lacks; wraps the node with `asAgent`; holds every
+space; and serves MCP over stdio: `offeredActions({ agent: true })`, without
+the `PERSON_ONLY` actions or direct messages ([actions](#actions)).
 
 Only one `minca mcp` or `minca agent` with the same `--home` runs at a time:
 both sign with the one agent key, which is held under a lock in the agent's
 folder, so a second says the agent is already running and stops.
 
-_Source: `packages/cli/src/agent.ts` (`startAgentNode`), `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/mcp.ts`. Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP")._
+A running `minca mcp` watches `grant.json`, and looks every 30 s as well.
+When `minca connect` writes a new key and grant that check out, it closes its
+node and starts one under them, keeping the lock, so the session using it
+needs no restart. When the node hears that its key was revoked in a space, a
+tool that fails says so, and that connecting again fixes it.
+
+_Source: `packages/cli/src/agent.ts` (`connectAgent`, `startAgentNode`, `reloadOnConnect`), `packages/cli/src/writer-keys.ts` (`holdLock`), `packages/cli/src/mcp.ts`, `packages/cli/src/main.ts` (`minca mcp`). Tests: `packages/core/tests/records-only.test.ts` ("an agent running a node of its own"), `packages/cli/tests/cli.test.ts` ("MCP"), `packages/cli/tests/agent-reconnect.test.ts` (all)._
