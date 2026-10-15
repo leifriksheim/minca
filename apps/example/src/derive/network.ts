@@ -34,10 +34,35 @@ export function healthOf(status: SpaceStatus | undefined, network: MeshStatus): 
 /** Who a connected peer is, as far as its proof says */
 export type PeerKind = 'mine' | 'person' | 'carrier' | 'server';
 
-export function peerKind(peer: string, status: SpaceStatus, me: string): PeerKind {
+function peerKind(peer: string, status: SpaceStatus, me: string): PeerKind {
   if (status.carriers.includes(peer)) return 'carrier';
   if (status.own.includes(peer) || status.accounts[peer] === me) return 'mine';
   return status.accounts[peer] ? 'person' : 'server';
+}
+
+/** Connected peers by whom they act for: one group per account, one per carrier or unattributed server */
+export interface PeerGroup {
+  readonly kind: PeerKind;
+  /** The account the group's devices act for: you for `mine`, the member for `person`; the carrier's or server's own key otherwise */
+  readonly did: string;
+  readonly peers: ReadonlyArray<string>;
+}
+
+const GROUP_ORDER: ReadonlyArray<PeerKind> = ['mine', 'person', 'carrier', 'server'];
+
+/** Your devices first, then each member's, then carriers, then servers that didn't say whose they are. */
+export function groupPeers(status: SpaceStatus, me: string): PeerGroup[] {
+  const groups = new Map<string, { kind: PeerKind; did: string; peers: string[] }>();
+  for (const peer of status.peers) {
+    const kind = peerKind(peer, status, me);
+    // Only accounts gather devices: each carrier and each server stands alone.
+    const did = kind === 'mine' ? me : kind === 'person' ? (status.accounts[peer] ?? peer) : peer;
+    const key = `${kind} ${did}`;
+    const group = groups.get(key);
+    if (group) group.peers.push(peer);
+    else groups.set(key, { kind, did, peers: [peer] });
+  }
+  return [...groups.values()].sort((a, b) => GROUP_ORDER.indexOf(a.kind) - GROUP_ORDER.indexOf(b.kind));
 }
 
 /** "wss://relay.example" → "relay.example" */

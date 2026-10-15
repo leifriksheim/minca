@@ -99,6 +99,11 @@ export function injectBaseStyles(): void {
     .value-fold > summary::-webkit-details-marker { display: none; }
     .value-fold > summary::before { content: '▸'; display: inline-block; width: 12px; color: ${ink.faint}; transition: transform .1s ease; }
     .value-fold[open] > summary::before { transform: rotate(90deg); }
+    /* An account on several devices: a caret at the row's end that turns when it opens */
+    .peer-fold > summary { list-style: none; }
+    .peer-fold > summary::-webkit-details-marker { display: none; }
+    .peer-fold > summary::after { content: '▸'; color: ${ink.faint}; transition: transform .1s ease; }
+    .peer-fold[open] > summary::after { transform: rotate(90deg); }
     .rail-count, .app-card-count, .tab-count { position: absolute; pointer-events: none; }
     .rail-count { top: -2px; right: 8px; }
     .rail-count .count { box-shadow: 0 0 0 2px ${surface.sunken}; }
