@@ -13,6 +13,7 @@ import {
   addMade,
   checkLauncherApp,
   copyApp,
+  EXAMPLE_APP,
   launcherApp,
   moveApp,
   placeBuiltIn,
@@ -273,6 +274,27 @@ describe('the launcher', () => {
     assert.deepEqual(guides[0]?.body?.collections, ['launcher.app', 'std.blueprint']);
     assert.match(guides[0]?.body?.text ?? '', /collections_propose/);
     assert.match(guides[0]?.body?.text ?? '', /window\.minca/);
+    // The guide prints this app as its example, so what it teaches is what the launcher takes.
+    assert.equal(checkLauncherApp(EXAMPLE_APP), null);
+  });
+
+  test("a proposal the launcher can't take stays in sight, with why, rather than vanishing", async () => {
+    const { alice, space } = await setup();
+    await prepareLauncher(alice.node, space);
+    await alice.node.collections.define(space, trip);
+    // Notify in a shape the launcher doesn't read, as an older guide taught agents to write it.
+    const broken = await alice.node.records.put(space, launcherApp.name, {
+      title: 'Carpool',
+      collections: ['carpool.trip'],
+      notify: [{ label: 'New trip', collection: 'carpool.trip' }],
+    });
+    const launcher = await launcherOf(alice.node, space);
+    assert.deepEqual(
+      launcher.proposed.map((r) => r.key),
+      [broken.key],
+    );
+    assert.deepEqual(launcher.placed, []);
+    await assert.rejects(addMade(alice.node, space, launcher.proposed[0]!, launcher.placed), /notify\[0\]/);
   });
 
   test('copying an app proposes it in another space, with its collections as a blueprint', async () => {

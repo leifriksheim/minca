@@ -5,7 +5,7 @@ import { Loader } from '@minca/app-shared/Loader';
 import { AgentStep, ConnectAgent, stepList, stepText, useKnownAgent } from '../ConnectAgent';
 import { useNode } from '@minca/core/react';
 import { useLauncherRecords } from './entries';
-import { prepareLauncher } from './launcher';
+import { checkLauncherApp, prepareLauncher } from './launcher';
 import { styles, palette } from '../../styles';
 
 const TITLE = 'Add your own app';
@@ -115,6 +115,8 @@ function AskForApp({
   const [since] = useState(() => new Date(Date.now() - 60_000).toISOString());
   const proposed = apps.find((one) => one.createdAt >= since && one.body && !one.body.builtIn)?.body;
   const adds = mayDefine ? 'you add it' : 'someone who runs the space adds it';
+  // Said here too, so the person can tell the agent while its chat is still open.
+  const problem = proposed ? checkLauncherApp(proposed) : null;
 
   return (
     <>
@@ -141,9 +143,15 @@ function AskForApp({
           <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
             <span style={{ color: palette.accent.good }}>✓</span> {agent} proposed “{proposed.title}”
           </p>
-          <p style={{ fontSize: 13, color: palette.ink.body }}>
-            Nothing changes in {space.name} until {adds}.
-          </p>
+          {problem ? (
+            <p style={styles.error}>
+              It can't be added yet; ask {agent} to fix it: {problem}
+            </p>
+          ) : (
+            <p style={{ fontSize: 13, color: palette.ink.body }}>
+              Nothing changes in {space.name} until {adds}.
+            </p>
+          )}
           <button
             type="button"
             onClick={onReview}
