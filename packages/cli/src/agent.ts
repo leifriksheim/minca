@@ -26,7 +26,7 @@ import { commaList, errorCode, isRecord, messageOf } from './json.js';
 import { holdLock } from './writer-keys.js';
 
 /** The relay the apps meet on unless told otherwise */
-const DEFAULT_RELAYS: ReadonlyArray<string> = ['wss://p2p-web-relay.fly.dev'];
+const DEFAULT_RELAYS: ReadonlyArray<string> = ['wss://minca.fly.dev'];
 
 /** Relays from `$MINCA_RELAYS` (comma separated), or the default */
 export function configuredRelays(): string[] {

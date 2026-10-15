@@ -366,7 +366,7 @@ Example (shortened):
     "access": "write",
     "scope": "spaces",
     "spaces": [{ "id": "blm7z6…", "name": "Todos", "invite": "…", "memberKey": "q0v…" }],
-    "relays": ["wss://p2p-web-relay.fly.dev"],
+    "relays": ["wss://minca.fly.dev"],
     "expiresAt": 1792614901
   }
 }

@@ -11,7 +11,7 @@ import { programRequest } from '../program-terms';
 /** What people run, before the code */
 const COMMAND = import.meta.env.VITE_MINCA_CONNECT ?? 'npx @minca/cli connect';
 /** The relay the CLI meets on unless told otherwise (`packages/cli/src/agent.ts`) */
-const CLI_RELAY = 'wss://p2p-web-relay.fly.dev';
+const CLI_RELAY = 'wss://minca.fly.dev';
 
 const LASTS = [
   { value: '1', label: '1 day' },

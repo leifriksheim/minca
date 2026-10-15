@@ -1,4 +1,4 @@
-# A relay on Fly — deployed as p2p-web-relay (https://p2p-web-relay.fly.dev).
+# A relay on Fly — deployed as minca (https://minca.fly.dev).
 # To run your own, change `app` to a name of your own before deploying.
 #
 #   cd packages/relay
@@ -23,15 +23,15 @@
 #
 # Without TURN_SECRET the relay runs alone.
 
-app = "p2p-web-relay"
+app = "minca"
 primary_region = "ams"
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
-  TURN_PUBLIC_IP = "169.155.61.145"
-  TURN_URLS = "turn:169.155.61.145:3478?transport=udp,turn:169.155.61.145:3478?transport=tcp"
+  TURN_PUBLIC_IP = "149.248.214.195"
+  TURN_URLS = "turn:149.248.214.195:3478?transport=udp,turn:149.248.214.195:3478?transport=tcp"
 
 [http_service]
   internal_port = 8080
