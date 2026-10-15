@@ -289,7 +289,7 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     shape: { kind: 'pass', colour: 'lilac' },
     intro:
       'An app doesn’t get your account. It asks your account home for access, and you see what it wants: which spaces, read or write, for how long. Approve, and it gets a pass that says exactly that, which every device checks and you can take back anytime. It never sees your keys or password.',
-    code: "const connection = createMincaConnection({\n  home: 'https://minca-home.netlify.app/connect',\n  request: { name: 'Polls', access: 'write',\n    scope: 'spaces' },\n});",
+    code: "const connection = createMincaConnection({\n  home: 'https://home.minca.social/connect',\n  request: { name: 'Polls', access: 'write',\n    scope: 'spaces' },\n});",
     visual: APPS,
   },
   {
