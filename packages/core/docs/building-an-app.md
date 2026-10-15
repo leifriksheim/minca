@@ -22,7 +22,7 @@ const connection = createMincaConnection({
     scope: 'spaces', // or 'account', for every space
     create: [{ name: 'Todos', visibility: 'private' }],
   },
-  network: { relays: ['wss://p2p-web-relay.fly.dev'] },
+  network: { relays: ['wss://minca.fly.dev'] },
 });
 
 createRoot(root).render(
@@ -55,7 +55,7 @@ account, password or passkey, creating one, pairing a phone) ships as an
 element and as a React component.
 
 ```html
-<minca-auth app-name="Todo" relays="wss://p2p-web-relay.fly.dev"></minca-auth>
+<minca-auth app-name="Todo" relays="wss://minca.fly.dev"></minca-auth>
 <script type="module">
   import '@minca/core/elements';
   document.querySelector('minca-auth').addEventListener('minca-session', (event) => {
@@ -69,7 +69,7 @@ element and as a React component.
 import { createMincaAuth } from '@minca/core/session';
 import { MincaProvider, MincaAuth, useMinca } from '@minca/core/react';
 
-const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://p2p-web-relay.fly.dev'] } });
+const auth = createMincaAuth({ appName: 'Todo', network: { relays: ['wss://minca.fly.dev'] } });
 
 function App() {
   const { state } = useMinca();
@@ -103,7 +103,7 @@ const me = await manager.fromRecoveryCode(code);
 const node = await createNode({
   signer: createLocalRootSigner(me, manager.getProvider()),
   stores: indexedDBStores('my-app'),
-  network: { relays: ['wss://p2p-web-relay.fly.dev'] },
+  network: { relays: ['wss://minca.fly.dev'] },
 });
 ```
 
