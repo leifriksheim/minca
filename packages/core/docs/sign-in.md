@@ -54,7 +54,7 @@ _Source: `packages/core/src/identity/account-store.ts`. Tests: `packages/core/te
 | `create`   | Name a new account.                                                                                                                                        |
 | `recovery` | Signed in; `freshCode` is the recovery code to keep safe.                                                                                                  |
 | `unlock`   | Signed in; choose a passkey or a password. Required.                                                                                                       |
-| `pod`      | Signed in; a new account is offered a pod. Optional.                                                                                                       |
+| `pod`      | Signed in; a new account is offered a pod. Optional, and skipped with `offerPod: false`.                                                                   |
 | `pair`     | Opened from a phone-pairing link ([01](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).                                              |
 | `ready`    | Signed in; `session` is set.                                                                                                                               |
 
@@ -76,13 +76,18 @@ Transitions:
 | `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `recovery` with `setup: 'restored'`             |
 | `create`                        | `createAccount(name)`                                                                                                 | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                       |
 | `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                             |
-| `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, else `ready`                                             |
+| `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, unless `offerPod` is false; else `ready`                 |
 | `pair`                          | `acceptPairing()`                                                                                                     | once the computer confirms the code, `unlock` with `setup: 'paired'` if the account has no way in here, else `ready` |
 | `pair`                          | `dismissPairing()`                                                                                                    | `ready` if signed in, else `signIn` / `welcome`                                                                      |
 | `ready`                         | `signOut()`                                                                                                           | `starting`, then `signIn` / `welcome`                                                                                |
 
 A failed action sets `error` (`{ message, hint?, code? }`) and leaves the stage
 as it was. A dismissed passkey or folder prompt sets no error.
+
+A pod is brought up to date only by a node that has it open: this page's
+while it runs, or a carrier given the folder. A page that closes once signed
+in, such as an account home's connect page, passes `offerPod: false`, and
+offers the pod where the person comes back instead.
 
 _Source: `packages/core/src/session/auth.ts`. Tests: `packages/core/tests/auth.test.ts`._
 

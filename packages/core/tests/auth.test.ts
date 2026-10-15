@@ -5,7 +5,12 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMincaAuth, type MincaAuth, type AuthState } from '../src/session/auth.js';
+import {
+  createMincaAuth,
+  type MincaAuth,
+  type MincaAuthConfig,
+  type AuthState,
+} from '../src/session/auth.js';
 import type { KeyValueStore } from '../src/session/stay-signed-in.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
@@ -21,13 +26,14 @@ function memoryStorage(): KeyValueStore {
 }
 
 /** A flow whose "browser" is in memory, so it runs here as it would in a page. */
-function testAuth(): MincaAuth {
+function testAuth(config: Partial<MincaAuthConfig> = {}): MincaAuth {
   const accounts = createFolderAccountStore(createMemoryDirectory().handle);
   const stores = new Map<string, ReturnType<typeof memoryStores>>();
   const storage = memoryStorage();
   // Staying signed in keeps a key in IndexedDB, which Node does not have.
   storage.setItem('minca.stay-signed-in', JSON.stringify('never'));
   return createMincaAuth({
+    ...config,
     rpId: 'example.test',
     storage,
     browser: {
@@ -46,8 +52,8 @@ afterEach(async () => {
   await Promise.all(open.splice(0).map((auth) => auth.signOut()));
 });
 
-function started(): MincaAuth {
-  const auth = testAuth();
+function started(config: Partial<MincaAuthConfig> = {}): MincaAuth {
+  const auth = testAuth(config);
   open.push(auth);
   return auth;
 }
@@ -268,6 +274,25 @@ describe('createMincaAuth', () => {
     assert.equal(auth.getState().error?.code, 'VAULT_UNLOCK_FAILED');
     assert.ok(auth.getState().error?.hint);
     assert.equal(auth.getState().busy, false);
+  });
+
+  test('where folders can be picked, a new account is offered a pod, unless the page says not to', async () => {
+    // The flow looks for the picker when it is made.
+    Object.defineProperty(globalThis, 'showDirectoryPicker', { value: () => {}, configurable: true });
+    try {
+      const offered = started();
+      const declined = started({ offerPod: false });
+      for (const auth of [offered, declined]) {
+        await auth.start();
+        auth.startCreating();
+        await createAccount(auth, 'Ada');
+      }
+      assert.equal(offered.getState().stage, 'pod');
+      assert.equal(declined.getState().stage, 'ready');
+      assert.equal(declined.getState().setup, null);
+    } finally {
+      Reflect.deleteProperty(globalThis, 'showDirectoryPicker');
+    }
   });
 
   test('subscribers hear every change', async () => {

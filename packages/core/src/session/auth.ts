@@ -121,6 +121,13 @@ export interface MincaAuthConfig {
    * can't be handed.
    */
   readonly worker?: () => WorkerLike;
+  /**
+   * Whether a new account is offered a pod before it goes in (`pod`). Default
+   * true. Turn it off where the page closes once signed in, as when an app
+   * opened it to connect: the pod is only kept up to date while this page
+   * runs, so it is better offered where the person comes back.
+   */
+  readonly offerPod?: boolean;
 }
 
 /**
@@ -832,7 +839,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
   /** After a way in is set up: offer a pod to a new account that could use one, or go in. */
   function afterUnlock(): void {
-    const offerPod = state.setup === 'new' && state.folderAvailable && state.place?.kind === 'browser';
+    const offerPod =
+      config.offerPod !== false &&
+      state.setup === 'new' &&
+      state.folderAvailable &&
+      state.place?.kind === 'browser';
     update(offerPod ? { stage: 'pod' } : { stage: 'ready', setup: null });
   }
 

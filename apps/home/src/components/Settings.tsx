@@ -315,7 +315,7 @@ export function Settings() {
       {state.folderAvailable && (
         <Section
           title="Where your data lives"
-          description="A pod is a folder on your computer that holds your account and spaces. Copy it, back it up, or put it in iCloud or Dropbox."
+          description="A pod is a folder on your computer that keeps your account and spaces. Copy it, back it up, or put it in iCloud or Dropbox."
         >
           <Row
             label={place?.kind === 'folder' ? `Pod: ${place.directory?.name ?? 'folder'}` : 'In this browser'}
@@ -329,6 +329,12 @@ export function Settings() {
               {place?.kind === 'folder' ? 'Change pod' : 'Move to a pod'}
             </button>
           </Row>
+          {/* Which carriers were given the folder is the extension's to know, not the home's: say what is true either way. */}
+          <p style={styles.errorHint}>
+            {place?.kind === 'folder'
+              ? 'Your pod is brought up to date while this page is open, and by the Minca browser extension if you gave it this folder. Apps keep their own copy, so without it, what you do in them reaches the pod the next time you come back here.'
+              : 'A pod is brought up to date while this page is open, or all the time with the Minca browser extension.'}
+          </p>
         </Section>
       )}
 
