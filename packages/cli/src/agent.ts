@@ -5,8 +5,14 @@
  * and `minca agent` run a node of their own as the agent, under that note.
  * Kept in `<home>/agent/`, readable only by this user: `key.json`,
  * `grant.json`, `data/`, and `minca agent`'s model keys and `spend.json`.
+ *
+ * Each connect makes a new key: a key the home revoked stays revoked in every
+ * space (`packages/core/src/space/roles.ts`, `judge`), so a new note made out
+ * to it would write nothing. A running `minca mcp` takes the new key and note
+ * up by itself ({@link reloadOnConnect}).
  */
 import { execFile } from 'node:child_process';
+import { watch } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,12 +24,13 @@ import {
   folderStores,
   didOf,
   COLLECTION_DEFINE,
+  type NodeConfig,
   type P2PNode,
 } from '@minca/core';
 import { profile } from '@minca/core/schemas';
 import { checkGrant, connectWithCode, GRANT_VERSION, grantSigner, type Grant } from '@minca/core/session';
 import { base64UrlDecode } from '@minca/core';
-import { openFsDirectory } from './fs-directory.js';
+import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
 import { holdLock, lockHolder } from './writer-keys.js';
@@ -62,38 +69,41 @@ interface Stored {
   readonly did: string;
 }
 
-/** This computer's agent key: made once, kept in `key.json` */
-async function agentKey(home: string): Promise<Stored> {
+const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256' };
+
+/** A new agent key, and the JWK `key.json` keeps of it. Used here only as a key that can't be exported. */
+async function makeAgentKey(): Promise<Stored & { readonly jwk: string }> {
+  const subtle = globalThis.crypto.subtle;
+  const made = await subtle.generateKey(ALGORITHM, true, ['sign', 'verify']);
+  const stored = {
+    privateKey: await subtle.exportKey('jwk', made.privateKey),
+    publicKey: await subtle.exportKey('jwk', made.publicKey),
+  };
+  const keys = {
+    privateKey: await subtle.importKey('jwk', stored.privateKey, ALGORITHM, false, ['sign']),
+    publicKey: made.publicKey,
+  };
+  return { keys, did: await didOf(keys.publicKey), jwk: `${JSON.stringify(stored)}\n` };
+}
+
+/** This computer's agent key, from `key.json`; null before `minca connect` made one */
+async function readAgentKey(home: string): Promise<Stored | null> {
   const file = path.join(agentDir(home), 'key.json');
   const subtle = globalThis.crypto.subtle;
-  const algorithm = { name: 'ECDSA', namedCurve: 'P-256' };
-  let keys: CryptoKeyPair;
   try {
     const stored: unknown = JSON.parse(await readFile(file, 'utf8'));
     // importKey checks the rest of each key.
     if (!isRecord(stored) || !isRecord(stored.privateKey) || !isRecord(stored.publicKey))
       throw new Error('not a key pair');
-    const { privateKey, publicKey } = stored;
-    keys = {
-      privateKey: await subtle.importKey('jwk', privateKey, algorithm, false, ['sign']),
-      publicKey: await subtle.importKey('jwk', publicKey, algorithm, true, ['verify']),
+    const keys = {
+      privateKey: await subtle.importKey('jwk', stored.privateKey, ALGORITHM, false, ['sign']),
+      publicKey: await subtle.importKey('jwk', stored.publicKey, ALGORITHM, true, ['verify']),
     };
+    return { keys, did: await didOf(keys.publicKey) };
   } catch (error) {
-    if (errorCode(error) !== 'ENOENT')
-      throw new Error(`${file} could not be read. Delete it and connect again.`);
-    const made = await subtle.generateKey(algorithm, true, ['sign', 'verify']);
-    await mkdir(agentDir(home), { recursive: true, mode: 0o700 });
-    const stored = {
-      privateKey: await subtle.exportKey('jwk', made.privateKey),
-      publicKey: await subtle.exportKey('jwk', made.publicKey),
-    };
-    await writeFile(file, `${JSON.stringify(stored)}\n`, { mode: 0o600 });
-    keys = {
-      privateKey: await subtle.importKey('jwk', stored.privateKey, algorithm, false, ['sign']),
-      publicKey: made.publicKey,
-    };
+    if (errorCode(error) === 'ENOENT') return null;
+    throw new Error(`${file} could not be read. Delete it and connect again.`);
   }
-  return { keys, did: await didOf(keys.publicKey) };
 }
 
 /** The grant this computer's agent was given, or null before `minca connect` */
@@ -127,14 +137,17 @@ export async function connectAgent(params: {
   readonly relays: ReadonlyArray<string>;
   readonly name: string;
   readonly log: (line: string) => void;
+  /** How the code is traded: the home's exchange, or a stand-in for tests */
+  readonly connect?: typeof connectWithCode;
 }): Promise<Grant> {
-  await enableWebRTC();
-  const key = await agentKey(params.home);
-  const did = key.did;
+  const connect = params.connect ?? connectWithCode;
+  if (!params.connect) await enableWebRTC();
+  // A new key each time: one the home revoked can't write again, whatever note it is given.
+  const key = await makeAgentKey();
   params.log('Looking for the app…');
-  const grant = await connectWithCode({
+  const grant = await connect({
     code: params.code,
-    key: { keys: key.keys, did },
+    key: { keys: key.keys, did: key.did },
     name: params.name,
     recordsOnly: true,
     network: { relays: params.relays },
@@ -147,9 +160,10 @@ export async function connectAgent(params: {
   if (before && before.did !== grant.did)
     await rm(path.join(agentDir(params.home), 'data'), { recursive: true, force: true });
   const kept = { ...grant, relays: [...new Set([...(grant.relays ?? []), ...params.relays])] };
-  await writeFile(path.join(agentDir(params.home), 'grant.json'), `${JSON.stringify(kept, null, 2)}\n`, {
-    mode: 0o600,
-  });
+  await mkdir(agentDir(params.home), { recursive: true, mode: 0o700 });
+  // The key, then the grant made out to it: a running agent reloads when the grant changes.
+  await writeWhole(path.join(agentDir(params.home), 'key.json'), key.jwk);
+  await writeWhole(path.join(agentDir(params.home), 'grant.json'), `${JSON.stringify(kept, null, 2)}\n`);
   return kept;
 }
 
@@ -221,10 +235,7 @@ export async function describeAgentProcess(pid: number): Promise<string> {
  * and starts the agent here instead.
  * @throws When it doesn't stop in time, or isn't this user's to stop
  */
-export async function takeOverAgent(
-  home: string,
-  options: { readonly nodes?: ReadonlyArray<string> } = {},
-): Promise<{ node: P2PNode; grant: Grant; close(): Promise<void> }> {
+export async function takeOverAgent(home: string, options: StartOptions = {}): Promise<RunningAgent> {
   const holder = await agentRunning(home);
   if (holder !== null) {
     try {
@@ -244,15 +255,37 @@ export async function takeOverAgent(
   return startAgentNode(home, options);
 }
 
+export interface StartOptions {
+  /** Nodes to reach by address, from `$MINCA_NODES` */
+  readonly nodes?: ReadonlyArray<string>;
+  /** How to reach peers instead of the relays: tests use a fake hub */
+  readonly network?: NodeConfig['network'];
+  /** Told once per space when the agent's key is revoked there */
+  readonly onRevoked?: (space: string) => void;
+}
+
 /**
- * Starts this computer's agent: a node of its own, following the account,
- * acting as the agent.
- * @throws Before `minca connect`, or once the note has run out; {@link AgentBusy} while another process runs it
+ * This computer's agent as it runs. Its node and grant change when `minca
+ * connect` writes new ones and {@link RunningAgent.reload} takes them up, so
+ * read them each time rather than keeping them.
  */
-export async function startAgentNode(
-  home: string,
-  options: { readonly nodes?: ReadonlyArray<string> } = {},
-): Promise<{ node: P2PNode; grant: Grant; close(): Promise<void> }> {
+export interface RunningAgent {
+  readonly node: P2PNode;
+  readonly grant: Grant;
+  /** The spaces where the key this node writes with was revoked: nothing it writes there counts */
+  revoked(): ReadonlyArray<string>;
+  /**
+   * Starts the node again under the key and grant on disk, if `minca connect`
+   * changed them, keeping the lock. A grant on disk that doesn't check out
+   * (half written, or run out) is left alone.
+   * @returns Whether it did
+   */
+  reload(): Promise<boolean>;
+  close(): Promise<void>;
+}
+
+/** The grant and key on disk, checked, or why the agent can't run under them */
+async function readConnection(home: string): Promise<{ grant: Grant; key: Stored }> {
   const grant = await loadAgentGrant(home);
   if (!grant)
     throw new Error(
@@ -266,27 +299,100 @@ export async function startAgentNode(
     throw new Error(
       "The agent's access has run out. In the app, choose “Connect an agent” and run the new command.",
     );
-  const key = await agentKey(home);
+  const key = await readAgentKey(home);
+  if (!key)
+    throw new Error(
+      "The agent's key is gone. In the app, choose “Connect an agent” and run the command it shows.",
+    );
   await checkGrant(grant, key.did, { recordsOnly: true });
+  return { grant, key };
+}
+
+/**
+ * Starts this computer's agent: a node of its own, following the account,
+ * acting as the agent.
+ * @throws Before `minca connect`, or once the note has run out; {@link AgentBusy} while another process runs it
+ */
+export async function startAgentNode(home: string, options: StartOptions = {}): Promise<RunningAgent> {
+  const first = await readConnection(home);
   // One key, so one process signing with it: two at once would fork its log (spec 02 §4.10).
   const release = await holdLock(agentLock(home));
   if (!release) throw new AgentBusy((await agentRunning(home)) ?? 0);
+  let current: { grant: Grant; key: Stored; node: P2PNode; stop(): Promise<void> };
   try {
-    return await startWithKey(home, grant, key, options, release);
+    current = { ...first, ...(await startWithKey(home, first.grant, first.key, options)) };
   } catch (error) {
     await release();
     throw error;
   }
+
+  let revokedIn = new Set<string>();
+  const listen = (node: P2PNode) => {
+    const told = new Set<string>();
+    revokedIn = told;
+    return node.subscribe((event) => {
+      if (event.type !== 'revoked' || told.has(event.space)) return;
+      told.add(event.space);
+      options.onRevoked?.(event.space);
+    });
+  };
+  let unlisten = listen(current.node);
+  let closed = false;
+  // One reload at a time, and none once closed: each closes the node before starting the next on the same folder.
+  let queue: Promise<unknown> = Promise.resolve();
+  const exclusive = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = queue.then(work);
+    queue = next.catch(() => {});
+    return next;
+  };
+
+  return Object.freeze({
+    get node() {
+      return current.node;
+    },
+    get grant() {
+      return current.grant;
+    },
+    revoked: () => [...revokedIn],
+    reload: () =>
+      exclusive(async () => {
+        if (closed) return false;
+        const next = await readConnection(home).catch(() => null);
+        if (!next || (next.key.did === current.key.did && sameGrant(next.grant, current.grant))) return false;
+        unlisten();
+        await current.stop();
+        try {
+          current = { ...next, ...(await startWithKey(home, next.grant, next.key, options)) };
+        } catch (error) {
+          // Back under what it had, so the session keeps what it could do.
+          current = { ...current, ...(await startWithKey(home, current.grant, current.key, options)) };
+          unlisten = listen(current.node);
+          throw error;
+        }
+        unlisten = listen(current.node);
+        return true;
+      }),
+    close: () =>
+      exclusive(async () => {
+        if (closed) return;
+        closed = true;
+        unlisten();
+        await current.stop();
+        await release();
+      }),
+  });
 }
 
+const sameGrant = (a: Grant, b: Grant) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The agent's node under one grant and key, and how to stop it without letting go of the lock */
 async function startWithKey(
   home: string,
   grant: Grant,
   key: Stored,
-  options: { readonly nodes?: ReadonlyArray<string> },
-  release: () => Promise<void>,
-): Promise<{ node: P2PNode; grant: Grant; close(): Promise<void> }> {
-  await enableWebRTC();
+  options: StartOptions,
+): Promise<{ node: P2PNode; stop(): Promise<void> }> {
+  if (!options.network) await enableWebRTC();
   const data = await openFsDirectory(path.join(agentDir(home), 'data'));
   const relays = [...new Set([...(grant.relays ?? []), ...configuredRelays()])];
   const base = await createNode({
@@ -294,7 +400,7 @@ async function startWithKey(
     sessionKey: key.keys,
     stores: folderStores(data),
     ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
-    network: {
+    network: options.network ?? {
       relays,
       hosts: configuredHosts(),
       ...(options.nodes?.length ? { nodes: options.nodes } : {}),
@@ -309,13 +415,59 @@ async function startWithKey(
   const stopHolding = await holdEverySpace(node);
   return {
     node,
-    grant,
-    close: async () => {
+    stop: async () => {
       stopHolding();
       await node.close().catch(() => {});
       await base.close();
-      await release();
     },
+  };
+}
+
+/** How long after `grant.json` changes the agent looks: `minca connect` writes the key, then the grant */
+const SETTLE_MS = 250;
+/** How often it looks anyway, for file systems that don't say when a file changes */
+const LOOK_EVERY_MS = 30_000;
+
+/**
+ * Reloads a running agent when `minca connect` gives this computer a new key
+ * and note, so a session using it needs no restart.
+ * @returns How to stop watching
+ */
+export function reloadOnConnect(
+  home: string,
+  agent: RunningAgent,
+  log: (line: string) => void,
+  options: { readonly everyMs?: number } = {},
+): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const look = () => {
+    // One look at a time, a little after the first sign: a burst of events, or the regular look, doesn't put it off.
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = undefined;
+      void agent.reload().then(
+        (changed) =>
+          changed && log(`reconnected: an agent for ${agent.grant.name}, ${daysLeft(agent.grant)} days left`),
+        (error: unknown) => log(`reconnecting failed: ${messageOf(error)}`),
+      );
+    }, SETTLE_MS);
+  };
+  let watcher: ReturnType<typeof watch> | null = null;
+  try {
+    watcher = watch(agentDir(home), (_event, file) => {
+      if (file === null || file === 'grant.json') look();
+    });
+    watcher.on('error', () => {});
+    watcher.unref();
+  } catch {
+    // No watching here: the regular look still finds it.
+  }
+  const every = setInterval(look, options.everyMs ?? LOOK_EVERY_MS);
+  every.unref();
+  return () => {
+    watcher?.close();
+    clearInterval(every);
+    clearTimeout(timer);
   };
 }
 

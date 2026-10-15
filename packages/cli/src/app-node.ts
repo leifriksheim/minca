@@ -18,7 +18,7 @@
  * them: the window's port, and the account home's window when connecting.
  * It listens on no port.
  */
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import {
@@ -41,7 +41,7 @@ import {
   type ConnectRequest,
   type Grant,
 } from '@minca/core/session';
-import { openFsDirectory } from './fs-directory.js';
+import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { configuredRelays, enableWebRTC } from './agent.js';
 import { isRecord, messageOf } from './json.js';
 import { holdLock } from './writer-keys.js';
@@ -146,13 +146,6 @@ async function sealKeyFrom(text: string): Promise<CryptoKey> {
     'encrypt',
     'decrypt',
   ]);
-}
-
-/** Writes a file whole or not at all, readable by this user alone */
-async function writeWhole(file: string, text: string): Promise<void> {
-  const writing = `${file}.${globalThis.crypto.randomUUID()}.tmp`;
-  await writeFile(writing, text, { mode: 0o600, flag: 'wx' });
-  await rename(writing, file);
 }
 
 /**

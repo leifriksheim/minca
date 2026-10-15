@@ -131,3 +131,10 @@ function directory(dir: string): DirectoryHandleLike {
     },
   };
 }
+
+/** Writes a file whole or not at all, readable by this user alone */
+export async function writeWhole(file: string, text: string): Promise<void> {
+  const writing = `${file}.${randomUUID()}.tmp`;
+  await fs.writeFile(writing, text, { mode: 0o600, flag: 'wx' });
+  await fs.rename(writing, file);
+}
