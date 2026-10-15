@@ -113,6 +113,8 @@ export function Settings() {
   const presence = (space: string | undefined) =>
     space && online.has(space) ? 'online now' : 'not online right now';
   const anyAway = (carriers ?? []).some((carrier) => !online.has(carrier.space));
+  // A host keeps spaces online, not the pod: only an extension can be given the folder.
+  const podCarried = (carriers ?? []).some((carrier) => !hostKeys.has(carrier.did));
   // A carrier disconnected on another device is gone here too.
   const connections = auth
     .connections()
@@ -315,7 +317,7 @@ export function Settings() {
       {state.folderAvailable && (
         <Section
           title="Where your data lives"
-          description="A pod is a folder on your computer that holds your account and spaces. Copy it, back it up, or put it in iCloud or Dropbox."
+          description="A pod is a folder on your computer that keeps your account and spaces. Copy it, back it up, or put it in iCloud or Dropbox."
         >
           <Row
             label={place?.kind === 'folder' ? `Pod: ${place.directory?.name ?? 'folder'}` : 'In this browser'}
@@ -329,6 +331,14 @@ export function Settings() {
               {place?.kind === 'folder' ? 'Change pod' : 'Move to a pod'}
             </button>
           </Row>
+          {/* Apps keep their own copy, so the pod only hears of what they do through a page or carrier that writes it. */}
+          <p style={styles.errorHint}>
+            {place?.kind === 'folder'
+              ? podCarried
+                ? 'Your pod is brought up to date while this page is open, and by your browser extension while Chrome runs, if you gave it this folder.'
+                : 'Your pod is brought up to date while this page is open. Apps keep their own copy, so what you do in them reaches the pod the next time you come back here — or straight away, with the Minca browser extension.'
+              : 'A pod is brought up to date while this page is open, or all the time with the Minca browser extension.'}
+          </p>
         </Section>
       )}
 

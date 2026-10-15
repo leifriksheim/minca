@@ -921,7 +921,7 @@ export class MincaAuthElement extends Base {
       h(
         'p',
         { class: 'wa-hint' },
-        'A pod is a folder on your computer that holds your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Minca app you point at it opens the same account.',
+        'A pod is a folder on your computer that keeps your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Minca app you point at it opens the same account. It is brought up to date while this page is open.',
       ),
       h(
         'div',
