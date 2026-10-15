@@ -260,7 +260,7 @@ function Children({
               onClick={() => void run(() => node.records.put(space.id, child.name, {}, { links }))}
               disabled={busy}
               data-variant="primary"
-              style={{ ...styles.smallButton, height: 28 }}
+              style={{ ...styles.darkSmall, height: 28 }}
             >
               Add your {label}
             </button>

@@ -404,7 +404,7 @@ function SignOut() {
           onClick={() => signOut({ disconnect })}
           disabled={busy}
           data-variant="primary"
-          style={styles.smallButton}
+          style={styles.darkSmall}
         >
           {busy ? 'Signing out…' : 'Sign out'}
         </button>

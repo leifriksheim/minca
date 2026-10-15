@@ -592,7 +592,7 @@ function Members({
         <button
           onClick={() => setInviteOpen(!inviteOpen)}
           data-variant={inviteOpen ? 'quiet' : 'primary'}
-          style={styles.smallButton}
+          style={inviteOpen ? styles.smallButton : styles.darkSmall}
         >
           {inviteOpen ? 'Close' : 'Invite people'}
         </button>

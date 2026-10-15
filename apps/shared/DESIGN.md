@@ -113,7 +113,13 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
   `decorative` keeps the row as ornament, as the site's closing call does.
 
 Small and calm. Shapes may turn a little on hover; controls only change
-colour, they don't move. Demos play on their own, and stop under
+colour, they don't move.
+
+A button's look is its inline style; its hover is its `data-variant`
+(`hoverCss`). They are separate, so give each button the pair that match:
+`primary` with `button` or `darkSmall`, `quiet` with `smallButton`, `danger`
+with `smallButton` in `accent.danger`, `ghost` with `linkButton`. A white
+button marked `primary` turns cobalt only under the pointer. Demos play on their own, and stop under
 `prefers-reduced-motion`, where they show their final state.
 
 ## Words

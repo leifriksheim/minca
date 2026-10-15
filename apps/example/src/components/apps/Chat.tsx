@@ -876,7 +876,7 @@ function Places({
             type="submit"
             disabled={busy || !name.trim()}
             data-variant="primary"
-            style={{ ...styles.smallButton, height: 30 }}
+            style={{ ...styles.darkSmall, height: 30 }}
           >
             Add
           </button>

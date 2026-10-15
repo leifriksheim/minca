@@ -119,7 +119,7 @@ export function ScreenFrame({
           reachable. Without it, the screen runs sealed and may do less.
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => answerWith('yes')} data-variant="primary" style={styles.smallButton}>
+          <button onClick={() => answerWith('yes')} data-variant="quiet" style={styles.smallButton}>
             Allow
           </button>
           <button onClick={() => answerWith('no')} data-variant="quiet" style={styles.smallButton}>

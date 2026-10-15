@@ -95,8 +95,10 @@ export const baseCss = `
  * leave a hover look stuck.
  */
 export const hoverCss = `
-    /* Controls only change colour: nothing moves, nothing lifts. */
-    [data-variant="primary"]:not(:disabled):hover { background-color: ${accent.hover} !important; border-color: ${accent.hover} !important; }
+    /* Controls only change colour: nothing moves, nothing lifts. Each rule sets
+       the text colour as well as the fill, so the hover reads whatever the
+       button looked like before it. */
+    [data-variant="primary"]:not(:disabled):hover { background-color: ${accent.hover} !important; border-color: ${accent.hover} !important; color: ${ink.inverse} !important; }
     [data-variant="quiet"]:not(:disabled):hover { background-color: ${surface.sunken} !important; color: ${ink.strong} !important; }
     [data-variant="ghost"]:not(:disabled):hover { color: ${ink.strong} !important; }
     [data-variant="danger"]:not(:disabled):hover { background-color: ${accent.dangerSoft} !important; color: ${accent.danger} !important; }

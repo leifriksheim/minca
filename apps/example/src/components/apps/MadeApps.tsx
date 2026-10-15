@@ -199,7 +199,7 @@ function Proposal({
               onClick={() => void add()}
               disabled={busy}
               data-variant="primary"
-              style={{ ...styles.smallButton, height: 28 }}
+              style={{ ...styles.darkSmall, height: 28 }}
               aria-label={`Add ${body?.title}`}
             >
               {busy ? 'Adding…' : 'Add'}
