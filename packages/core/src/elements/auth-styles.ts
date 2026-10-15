@@ -29,6 +29,8 @@ minca-auth {
   --minca-on-accent: #fff;
   --minca-danger: #e5484d;
   --minca-danger-soft: #fff0f0;
+  --minca-warn: #9a5a0b;
+  --minca-good: #2f7a52;
   --minca-radius: 6px;
   --minca-font: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --minca-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -51,6 +53,13 @@ minca-auth .wa-title { font-size: 28px; font-weight: 600; letter-spacing: -0.04e
 minca-auth .wa-subtitle { font-size: 15px; color: var(--minca-muted); margin-bottom: 32px; line-height: 1.5; }
 minca-auth .wa-hint { font-size: 14px; color: var(--minca-muted); margin-bottom: 20px; line-height: 1.6; }
 minca-auth .wa-small { font-size: 13px; color: var(--minca-muted); margin-top: 8px; line-height: 1.6; }
+minca-auth .wa-meter { display: flex; gap: 4px; margin-top: 2px; }
+minca-auth .wa-meter > span { flex: 1; height: 4px; border-radius: 2px; background: var(--minca-line); transition: background-color .15s ease; }
+minca-auth .wa-meter[data-strength="weak"] > span:first-child { background: var(--minca-danger); }
+minca-auth .wa-meter[data-strength="fair"] > span:not(:last-child) { background: var(--minca-warn); }
+minca-auth .wa-meter[data-strength="strong"] > span { background: var(--minca-good); }
+minca-auth .wa-small[data-strength] { margin-top: 0; }
+minca-auth .wa-small[data-strength="weak"] { color: var(--minca-danger); }
 minca-auth .wa-error { color: var(--minca-danger); font-size: 14px; font-weight: 500; }
 minca-auth .wa-error-box { margin-top: 16px; padding: 12px 14px; border-radius: var(--minca-radius); background: var(--minca-danger-soft); }
 

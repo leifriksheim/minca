@@ -110,8 +110,9 @@ offer a choice without knowing what to call it. The keys are not.
 
 The password and the passkey are the same seed encrypted two other ways. A
 password in a pod is a locked copy anyone who copies the folder can try to guess
-offline, which is why it has to be at least 10 characters — let your password
-manager make one. A passkey has no such weakness.
+offline. Any password works, and a meter under the field says how hard yours is
+to guess — let your password manager make a strong one. A passkey has no such
+weakness.
 
 Accounts made before passwords existed used the recovery code as their login,
 and password managers still fill it in. It still works in the password field,

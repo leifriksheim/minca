@@ -27,6 +27,8 @@ const authCss = `
       --minca-on-accent: ${surface.card};
       --minca-danger: ${accent.danger};
       --minca-danger-soft: ${accent.dangerSoft};
+      --minca-warn: ${accent.warn};
+      --minca-good: ${accent.good};
       --minca-radius: ${radius.md}px;
       --minca-font: ${palette.font};
       --minca-mono: ${mono};

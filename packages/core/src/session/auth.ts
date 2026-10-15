@@ -160,9 +160,6 @@ export type AuthStage =
  */
 export type AuthSetup = 'new' | 'restored' | 'paired';
 
-/** The shortest password `setPassword` takes. It guards a copy of the seed in a folder that may be copied. */
-export const MIN_PASSWORD_LENGTH = 10;
-
 /** A failure, in the shape a screen needs to explain it */
 export interface AuthError {
   readonly message: string;
@@ -1234,11 +1231,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     setPassword: (password) =>
       changeShortcut(async (unlocked) => {
-        if (password.length < MIN_PASSWORD_LENGTH) {
-          throw new Error(
-            `Use at least ${MIN_PASSWORD_LENGTH} characters. Your password manager can make one for you.`,
-          );
-        }
+        // Any password will do; the form warns about weak ones (`passwordStrength`).
+        if (!password) throw new Error('Choose a password.');
         const wrap = await wrapSeedWithPassphrase(unlocked, password, 'Password');
         // One password: the new one replaces the last. The CLI's passphrase is its own, and stays.
         await updateVault(async (vault) => ({
