@@ -29,7 +29,7 @@ the routes, in `App.tsx`.
 | `?collection=<name>`, in Data                                 | The collection Data shows              |
 
 A space's layout (`SpaceLayout` in `src/components/SpaceView.tsx`) hands its
-pages (`src/components/SpacePages.tsx`) the space through `useSpaceScreen`.
+pages, drawn in `src/router.tsx`, the space through `useSpaceScreen`.
 Keep each route a named constant before `addChildren`: a `createRoute` written
 inline in the list loses the router's types, and every path and param quietly
 becomes `any`.
