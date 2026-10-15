@@ -107,12 +107,12 @@ const bridge = createBridge({
     win.on('close', () => {
       closed();
       if (host === homeWindow) homeWindow = null;
-      // The app's window: the dock icon goes with it.
+      // The app's window: the dock icon goes with it, unless it is kept there.
       if (isApp) {
         app = null;
         link.close();
         appNode.detach();
-        Utils.setDockIconVisible(false);
+        Utils.setDockIconVisible(keepInDock);
       }
     });
     let start = { x: 0, y: 0, frameX: 0, frameY: 0 };
@@ -152,7 +152,7 @@ function openHome() {
   homeWindow = bridge.openWindow(new URL('/', home).href, { width: 720, height: 820 }, { app: false });
 }
 
-// The app's window: made when asked for, gone when closed. The dock icon shows only while it is open.
+// The app's window: made when asked for, gone when closed. The dock icon shows while it is open, or always when kept there.
 function openApp() {
   if (app) return app.activate();
   Utils.setDockIconVisible(true);
@@ -161,13 +161,26 @@ function openApp() {
 
 // The carrier. Its folder is a setting (`settings.json`, `carrierFolder`), in the
 // app's own data folder until someone picks another.
-const settings: unknown = await readFile(join(Utils.paths.userData, 'settings.json'), 'utf8').then(
+const settingsFile = join(Utils.paths.userData, 'settings.json');
+const settings: unknown = await readFile(settingsFile, 'utf8').then(
   (text): unknown => JSON.parse(text),
   () => ({}),
 );
 const chosen: unknown =
   typeof settings === 'object' && settings !== null ? Reflect.get(settings, 'carrierFolder') : null;
 const carrierFolder = typeof chosen === 'string' && chosen ? chosen : join(Utils.paths.userData, 'carrier');
+// Keep in Dock, from the menu bar (`settings.json`, `keepInDock`): the dock icon stays when the window closes.
+let keepInDock =
+  typeof settings === 'object' && settings !== null && Reflect.get(settings, 'keepInDock') === true;
+function setKeepInDock(keep: boolean) {
+  keepInDock = keep;
+  Utils.setDockIconVisible(keep || app !== null);
+  const saved = typeof settings === 'object' && settings !== null ? settings : {};
+  void writeFile(settingsFile, JSON.stringify({ ...saved, keepInDock: keep }, null, 2), {
+    mode: 0o600,
+  }).catch(() => {});
+  showMenu();
+}
 const { runtime } = await BuildConfig.get();
 const home = typeof runtime?.home === 'string' ? runtime.home : 'https://home.minca.social/connect';
 /** The relays, nodes and hosts the app was built with, so the node meets the same peers */
@@ -347,6 +360,7 @@ function showMenu() {
     { type: 'divider' },
     ...carrierItems(),
     { type: 'divider' },
+    { type: 'normal', label: 'Keep in Dock', action: 'dock', checked: keepInDock },
     { type: 'normal', label: 'Quit Minca', action: 'quit' },
   ]);
 }
@@ -358,6 +372,7 @@ tray.on('tray-clicked', (event) => {
   if (action === 'renew') appNode.renew();
   if (action === 'pause') void carrier.pause();
   if (action === 'resume') carrier.resume();
+  if (action === 'dock') setKeepInDock(!keepInDock);
   if (action === 'quit') quit();
 });
 

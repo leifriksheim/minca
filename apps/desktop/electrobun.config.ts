@@ -37,7 +37,8 @@ export default {
       [`../../node_modules/${webrtc}`]: `views/node_modules/${webrtc}`,
     },
     // The system's WebKit: no Chromium in the bundle.
-    mac: { bundleCEF: false },
+    // The dock icon: drawn by assets/icon.swift.
+    mac: { bundleCEF: false, icons: 'assets/icon.iconset' },
     linux: { bundleCEF: false },
     win: { bundleCEF: false },
   },

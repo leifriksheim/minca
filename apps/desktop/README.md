@@ -76,7 +76,11 @@ carry` from the CLI, with the Bun Electrobun ships. Like the Chrome extension
   what the carrier is doing for it, Pause or Resume, Quit. Pausing keeps the
   folder: only the account takes a carrier off (Disconnect, in its home), and
   then the carrier deletes what it carried. Closing the window leaves the tray
-  and the carrier running, and hides the dock icon.
+  and the carrier running, and hides the dock icon, unless "Keep in Dock" is
+  checked in the menu bar (`settings.json`, `"keepInDock"`).
+- Has an icon of its own in the dock: the rainbow on a warm apricot ground
+  (`assets/icon.swift` draws `assets/icon.iconset`, every size macOS asks for:
+  `swift apps/desktop/assets/icon.swift apps/desktop/assets/icon.iconset`).
 - Keeps one account: the app's. The app tells the shell which account it is
   connected as (`apps/example/src/desktop.ts`, `mincaDesktop.account`, which
   only the app's own window has). The carrier keeps that account's spaces
