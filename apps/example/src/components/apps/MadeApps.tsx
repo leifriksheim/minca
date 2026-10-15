@@ -9,7 +9,7 @@ import {
   type BlueprintReview,
 } from '@minca/core/schemas';
 import { AppBoard } from './AppBoard';
-import { addMade, copyApp, removeApp, updated, type LauncherApp } from './launcher';
+import { addMade, checkLauncherApp, copyApp, removeApp, updated, type LauncherApp } from './launcher';
 import { ScreenFrame } from './ScreenFrame';
 import { ago } from '../../derive/time';
 import { styles, palette } from '../../styles';
@@ -113,7 +113,10 @@ function Proposal({
       !collections.some((c) => c.name === name && c.version !== null) &&
       !plan?.collections.some((c) => c.name === name),
   );
-  const problem = review?.problem ?? (missing.length ? `the space has no ${missing.join(' or ')}` : null);
+  const problem =
+    (body ? checkLauncherApp(body) : null) ??
+    review?.problem ??
+    (missing.length ? `the space has no ${missing.join(' or ')}` : null);
   // What it shows that the space has already, which its blueprint doesn't cover: listed too, so nothing it can write is unseen.
   const alsoShows = (body?.collections ?? []).flatMap((name) => {
     if (plan?.collections.some((c) => c.name === name)) return [];

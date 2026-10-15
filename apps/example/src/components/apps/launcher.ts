@@ -32,6 +32,7 @@ import {
   applyBlueprint,
   blueprint,
   fragments,
+  notifyOn,
   positionBetween,
   proposeCollections,
   // Defines what a space lacks; not a React hook, whatever its name says.
@@ -182,8 +183,10 @@ export function sortLauncher(
   const builtIns = new Set<string>();
   for (const record of [...records].sort(byPosition)) {
     const body = record.body;
-    if (!body || record.deleted || checkLauncherApp(body)) continue;
+    if (!body || record.deleted) continue;
+    const broken = checkLauncherApp(body) !== null;
     if (body.builtIn !== undefined) {
+      if (broken) continue;
       const needs = needsOf(body.builtIn);
       const stands = needs !== undefined && vouchedFor(record, access) && needs.every((n) => here.has(n));
       // Two people adding the same app at once: the first one placed counts.
@@ -191,7 +194,9 @@ export function sortLauncher(
       if (stands) builtIns.add(body.builtIn);
       continue;
     }
+    // A made app the launcher can't take stays a proposal, so whoever reviews it sees why.
     const stands =
+      !broken &&
       body.updates === undefined &&
       vouchedFor(record, access) &&
       (body.collections ?? []).every((name) => here.has(name));
@@ -216,18 +221,36 @@ export const updated = (
     : placed.find((record) => record.key === proposal.body?.updates && record.body?.builtIn === undefined);
 
 /**
+ * The app the guide shows agents, kept as a value rather than written out:
+ * the guide prints it, its type holds it to `LauncherApp`, and a test runs it
+ * through `checkLauncherApp`, so the example can't drift from what is accepted.
+ */
+export const EXAMPLE_APP = {
+  title: 'Carpool',
+  description: 'Who drives to the match, and who rides with them',
+  collections: ['carpool.trip', 'carpool.seat'],
+  notify: [
+    notifyOn('New trip', 'carpool.trip'),
+    notifyOn('A seat on my trip', 'carpool.seat', { driver: '$me' }),
+  ],
+} satisfies LauncherApp;
+
+/** A value as the guide prints it: JSON, indented to sit inside a numbered step */
+const shown = (value: unknown) => JSON.stringify(value, null, 2).replaceAll('\n', '\n   ');
+
+/**
  * What agents read to propose an app here, written in the space as a guide
  * on `launcher.app`, so one finds it with `collections_list`.
  */
 const LAUNCHER_GUIDE = `To make an app for this space that people open from its launcher:
 
 1. Propose the collections it needs with collections_propose (one std.blueprint). Use standard ones by name where they fit. Note its key.
-2. Write one launcher.app record with records_put:
-   { "title": "Carpool", "description": "What it is for, in a sentence", "collections": ["carpool.trip", "carpool.seat"],
-     "notify": [{ "label": "New trip", "collection": "carpool.trip" }] }
+2. Write one launcher.app record with records_put, like this one:
+   ${shown(EXAMPLE_APP)}
    with links [{ "rel": "blueprint", "to": "<the blueprint's key>" }].
-   "collections" names every collection it shows. "notify" is optional: what is worth hearing about, each naming one of
-   its collections; add "topic": { "field": "driver", "me": true } for only records naming the person looking.
+   "collections" names every collection it shows. "notify" is optional: what is worth hearing about, each a name and
+   the query whose new records it tells of, in one of its collections. A "where" naming "$me" keeps it to records that
+   name the person it would tell, as the second one does.
 3. If plain lists and forms can't show it (a game board, a calendar, a whiteboard), add "screen": its own HTML UI, one
    document, and, only if it must reach the network, "network": the exact origins. The screen is described below.
 
