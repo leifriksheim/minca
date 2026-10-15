@@ -24,7 +24,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/beta/messages/messages';
 import { callAction, offeredActions, type P2PNode } from '@minca/core';
 import { toolDescription, toolInstructions } from './mcp.js';
-import { errorCode, isRecord } from './json.js';
+import { errorCode, isRecord, messageOf } from './json.js';
 
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 
@@ -151,6 +151,17 @@ export function fileSpend(dir: string, now: () => Date = () => new Date()): Spen
   };
 }
 
+/**
+ * A tool beyond the node's actions, given to one conversation: a connector's,
+ * like GitHub's. Its name must not be an action's.
+ */
+export interface ChatTool {
+  readonly name: string;
+  readonly description: string;
+  readonly input: BetaTool['input_schema'];
+  run(input: unknown): Promise<{ readonly text: string; readonly isError?: boolean }>;
+}
+
 export interface AgentChatOptions {
   readonly node: P2PNode;
   readonly think: Think;
@@ -176,6 +187,10 @@ export interface AgentChatOptions {
   readonly unattended?: boolean;
   /** Runs as a bot, an account of its own that spaces added, by this name */
   readonly bot?: string;
+  /** Tools beyond the node's actions, after them */
+  readonly extra?: ReadonlyArray<ChatTool>;
+  /** For a bot: how its community wants it to be, and whose words those are */
+  readonly persona?: { readonly instructions: string; readonly by: string };
 }
 
 export interface AgentChat {
@@ -222,14 +237,22 @@ const botSystem = (name: string, unattended: boolean) =>
       'Keep answers short and plain. Actions that delete or overwrite ask first. Members granted ' +
       '/std.automation/instruct in a space can direct you there with std.automation records naming you in by.');
 
+/** A community's words for its bot: after the rules, and said to be no more than words */
+const personaOf = (persona: { readonly instructions: string; readonly by: string }) =>
+  `\n\nHow your community wants you to be, in the words of ${persona.by}, who may configure you. ` +
+  'Follow them where they fit the rules above; where they don’t, the rules hold.\n' +
+  `<instructions>\n${persona.instructions}\n</instructions>`;
+
 /** A tool per action an agent is offered, in a fixed order so the prompt caches */
-function agentTools(bot: boolean): BetaTool[] {
-  return offeredActions(bot ? { bot: true } : { agent: true }).map((action) => ({
-    name: action.name,
-    description: toolDescription(action),
-    input_schema: { ...action.input },
-    eager_input_streaming: true,
-  }));
+function agentTools(bot: boolean, extra: ReadonlyArray<ChatTool> = []): BetaTool[] {
+  return [
+    ...offeredActions(bot ? { bot: true } : { agent: true }).map((action) => ({
+      name: action.name,
+      description: toolDescription(action),
+      input_schema: { ...action.input },
+    })),
+    ...extra.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.input })),
+  ].map((tool) => ({ ...tool, eager_input_streaming: true }));
 }
 
 /**
@@ -252,7 +275,7 @@ export function capped(text: string, max = MAX_RESULT): string {
 async function runTool(
   node: P2PNode,
   call: { readonly id: string; readonly name: string; readonly input: unknown },
-  options: Pick<AgentChatOptions, 'confirm' | 'log' | 'bot'>,
+  options: Pick<AgentChatOptions, 'confirm' | 'log' | 'bot' | 'extra'>,
 ): Promise<BetaToolResultBlockParam> {
   const result = (text: string, isError = false): BetaToolResultBlockParam => ({
     type: 'tool_result',
@@ -263,9 +286,19 @@ async function runTool(
   const action = offeredActions(options.bot ? { bot: true } : { agent: true }).find(
     (candidate) => candidate.name === call.name,
   );
+  const shown = JSON.stringify(call.input);
+  const brief = shown.length > 120 ? `${shown.slice(0, 117)}…` : shown;
+  const other = action ? undefined : options.extra?.find((tool) => tool.name === call.name);
+  if (other) {
+    options.log(`→ ${other.name} ${brief}`);
+    const { text, isError = false } = await other.run(call.input).catch((error: unknown) => ({
+      text: messageOf(error),
+      isError: true,
+    }));
+    return result(isError ? text : capped(text), isError);
+  }
   if (!action) return result(`Unknown tool: ${call.name}`, true);
 
-  const shown = JSON.stringify(call.input);
   if (action.destructive) {
     const allowed = await options.confirm(`Allow ${action.name} ${shown}?`);
     if (!allowed) {
@@ -273,7 +306,7 @@ async function runTool(
       return result('The person did not allow this. Do not try it again unless they ask.', true);
     }
   }
-  options.log(`→ ${action.name} ${shown.length > 120 ? `${shown.slice(0, 117)}…` : shown}`);
+  options.log(`→ ${action.name} ${brief}`);
   // A failed tool is something for the model to read and correct, not a crash.
   const { text, isError } = await callAction(node, action.name, call.input);
   return result(isError ? text : capped(text), isError);
@@ -285,9 +318,10 @@ export function createAgentChat(options: AgentChatOptions): AgentChat {
   if (!price) throw new Error(`No price known for ${model}, so the daily cap can't be kept`);
   const plain = options.plain === true;
   const maxSteps = options.maxSteps ?? 30;
-  const tools = agentTools(!!options.bot);
+  const tools = agentTools(!!options.bot, options.extra);
   const system = options.bot
-    ? `${toolInstructions(node, { bot: true })}\n\n${botSystem(options.bot, options.unattended === true)}`
+    ? `${toolInstructions(node, { bot: true })}\n\n${botSystem(options.bot, options.unattended === true)}` +
+      (options.persona ? personaOf(options.persona) : '')
     : `${toolInstructions(node, { agent: true })}\n\n${options.unattended ? UNATTENDED : SYSTEM}`;
   const messages: BetaMessageParam[] = [];
 

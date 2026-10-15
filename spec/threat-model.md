@@ -77,6 +77,19 @@ reference implementation, or any implementation, honestly.
     ([#33](https://github.com/leifriksheim/minca/issues/33)). That includes knocks on doors and contact requests (07),
     whose mailbox can be flooded ([#162](https://github.com/leifriksheim/minca/issues/162)).
   - It can squat a session DID in a relay room, or fill a room ([#162](https://github.com/leifriksheim/minca/issues/162)).
+  - Text it writes on GitHub, an issue on a public repository a connected bot
+    reads, reaches the model in a run that may write on GitHub. It is marked
+    as data, but only the model keeps to that. Accepted, as for any chat bot
+    with an integration: the bot only ever reaches the repositories its
+    connection was made with, each result checked by its own repository
+    (`packages/cli/tests/github.test.ts`,
+    `packages/cli/tests/github-search-scope.test.ts`), and never sees a token.
+  - Where a space lets it in, as an open community does, it can ask a
+    connected bot what is in the connected repositories, and set off what the
+    community's automations do on GitHub (`packages/core/docs/bots.md`).
+  - Sent a configurer's unused connect link, an admin of another GitHub
+    organisation who opens it connects the bot to their own repositories: the
+    link is a bearer link for ten minutes, as most such links are (08 §3.1).
   - A page that takes over an app's tab while the account home waits for the
     app's request (up to 10 minutes in the reference home) can send its own
     request, in the window the person opened from the app. The home shows
@@ -181,6 +194,21 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     accounts that may not each change it, and a contested collection takes
     no writes until someone granted `/collection/define` for it settles it (02 §6.3).
 - **Does not hold yet.**
+  - A bot connected to GitHub works like a chat app a workspace installs:
+    any member whose record sets off an automation can ask it what is in the
+    connected repositories, private ones included, and what they write steers
+    what it does there, though it reaches the model marked as data. An
+    automation acts on GitHub only when someone who may configure the bot
+    made it, as its current words say; one rewritten by someone who may not
+    instruct the bot isn't run, and no bot counts as configuring it: not
+    itself, nor another its host runs, and apps give bots no role that may
+    instruct bots (`runAutomations` in `packages/cli/src/bot-runner.ts`;
+    `packages/cli/tests/agent-automations.test.ts`, "writes outside the space
+    for an automation someone who may configure it made";
+    `packages/cli/tests/bot-provenance.test.ts`, `packages/cli/tests/two-bots.test.ts`).
+    A bot run elsewhere, given such a role by hand, still counts. The bar is what common chat
+    apps give their integrations, no more: connect only what every member
+    may read. Not protocol: a bot run by other code does as it likes.
   - A narrowed rule, or a role written again with fewer grants, binds only
     what saw it: a version naming an older point counts if its author could
     have written it then, since nobody can tell it from one written offline.
@@ -688,6 +716,19 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space
     key ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
+  - A host whose bot is connected to GitHub (08 §3.1) can act on GitHub as
+    the community, within its App's permissions and the repositories of the
+    installation, which an admin of the GitHub account chose. No peer checks
+    what a bot does outside the space; only the bot's own code does, and a
+    dishonest host need not run it. Uninstalling the App on GitHub ends it
+    whatever the host does. One installation may serve several communities
+    of one GitHub account; each connection keeps the repositories it was made
+    with, and changes on GitHub only narrow them. The reference host also
+    drops the connection
+    when the bot leaves the space or whoever connected it may no longer
+    configure it (`usable` in `packages/cli/src/host-connect.ts`;
+    `packages/cli/tests/host-connect.test.ts`, "a connection stands only
+    while…").
   - A bot acts with its own role's grants on what members ask, so someone
     who may instruct it can reach past their own grants through it. The
     library narrows this: the dialog that adds a bot offers only roles whose

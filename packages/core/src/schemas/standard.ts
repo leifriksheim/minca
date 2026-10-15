@@ -13,6 +13,7 @@ import { moneyGroups } from './library/money.js';
 import { communityGroups } from './library/community.js';
 import { activity, automation, automationRun } from '../schemas/automations.js';
 import { collectionsGroups } from './library/collections.js';
+import { botSettings, connect, connector } from './connectors.js';
 
 type Definitions = ReadonlyArray<DefineCollection>;
 
@@ -33,6 +34,7 @@ export const standardGroups: Readonly<Record<string, Definitions>> = Object.free
   ...moneyGroups,
   ...communityGroups,
   Rules: [automation, automationRun, activity],
+  Bots: [botSettings, connect, connector],
   ...collectionsGroups,
 });
 

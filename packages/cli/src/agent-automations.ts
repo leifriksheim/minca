@@ -4,7 +4,7 @@
  * `startAutomations` in `@minca/core/schemas`; this is only the words.
  */
 import { runAction, type P2PNode } from '@minca/core';
-import { INSTRUCT, type AutomationTrigger } from '@minca/core/schemas';
+import { mayConfigure, type AutomationTrigger } from '@minca/core/schemas';
 
 /**
  * What the model is told when an automation asks it: the automation's own words, which are
@@ -157,7 +157,8 @@ export async function ruleContext(node: P2PNode, trigger: AutomationTrigger): Pr
   while (parent && thread.length < THREAD) {
     const found = await node.records.get(space, parent).catch(() => null);
     if (!found || found.deleted) break;
-    const writer = found.createdBy ?? '';
+    // Whoever wrote the version shown, which may not be whoever made it.
+    const writer = found.root ?? found.createdBy ?? '';
     thread.unshift({ key: found.key, writer: names.get(writer) ?? writer, body: found.body });
     parent = found.links.find((link) => link.rel === 'replyTo')?.to;
   }
@@ -174,11 +175,11 @@ export async function ruleContext(node: P2PNode, trigger: AutomationTrigger): Pr
 }
 
 /**
- * Whether whoever wrote the record that set an automation off may instruct the one
- * running it. A bot: the automation's maker, or any member granted `/std.automation/instruct`
- * in the space, as for making automations for it, and only one who holds every grant
- * of the bot's roles: what they ask is done with the bot's power, so it must
- * not be more than theirs. Which grants a request in plain words would use
+ * Whether whoever wrote the current version of the record that set an automation off
+ * may instruct the one running it, as a person and not an agent. A bot: someone who
+ * may configure it (`mayConfigure`): a person granted `/std.automation/instruct` in the
+ * space, who holds every grant of the bot's roles: what they ask is done with the bot's
+ * power, so it must not be more than theirs. Which grants a request in plain words would use
  * can't be told before the model acts, so all of them are asked for. A
  * person's own agent: only the person.
  */
@@ -187,17 +188,10 @@ export async function writerInstructs(
   trigger: AutomationTrigger,
   runner: { readonly account: string; readonly bot: boolean },
 ): Promise<boolean> {
-  const writer = trigger.match?.record.createdBy;
-  if (!writer) return false;
+  // Whoever wrote the version the model reads, which may not be whoever made the record; the person, not an agent.
+  const record = trigger.match?.record;
+  const writer = record?.root;
+  if (!writer || record.recordsOnly) return false;
   if (!runner.bot) return writer === runner.account;
-  const space = trigger.automation.space;
-  if (
-    writer !== trigger.automation.maker &&
-    !(await node.spaces.may(space, INSTRUCT, {}, writer).catch(() => false))
-  )
-    return false;
-  const { members } = await node.spaces.access(space);
-  const roles = members.find((member) => member.did === runner.account)?.roles ?? [];
-  for (const role of roles) if (!(await node.spaces.holdsRole(space, role, writer))) return false;
-  return true;
+  return mayConfigure(node, trigger.automation.space, runner.account, writer);
 }

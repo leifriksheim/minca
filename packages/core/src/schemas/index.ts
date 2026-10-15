@@ -170,6 +170,20 @@ export type {
   RunAutomationsOptions,
   StartAutomationsOptions,
 } from './automations.js';
+export {
+  connect,
+  connector,
+  CONNECTOR_KINDS,
+  CONNECT_REQUEST_SECONDS,
+  askToConnect,
+  askToDisconnect,
+  connectPage,
+  botSettings,
+  BOT_INSTRUCTIONS_MAX,
+  mayConfigure,
+  holdsBotRoles,
+} from './connectors.js';
+export type { BotSettings, Connect, ConnectAsk, Connector, ConnectorKind } from './connectors.js';
 export { checkCron, cronMatches, SCHEDULES } from './cron.js';
 export type { BlueprintReview, CollectionReview, ReviewContext } from './blueprints.js';
 export { notifyOn, namesTheRunner } from '../space/own-automations.js';

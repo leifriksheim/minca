@@ -184,6 +184,8 @@ export interface HostDescription {
   readonly bots?: boolean;
   /** How a community pays for itself here: a fund anyone adds to. Absent: communities can't pay here. */
   readonly fund?: FundOffer;
+  /** The services its bots can be connected to, at `/host/bots/<bot>/connect/<kind>` */
+  readonly connectors?: ReadonlyArray<'github'>;
 }
 
 /** What a host says about community funds: what keeping one online costs, and how people add to it */

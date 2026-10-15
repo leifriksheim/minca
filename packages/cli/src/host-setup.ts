@@ -19,6 +19,7 @@ import { createWalletPayments, isNetworkName, NETWORKS, type WalletPayments } fr
 import { chooseModel, isLoopback, isPlain, thinker } from './model.js';
 import { commaList } from './json.js';
 import type { BotModel } from './hosted-bots.js';
+import { createGitHubApp, type GitHubApp } from './connectors/github.js';
 
 /** Where a host keeps its data unless told: `~/.minca-host` */
 export function defaultHostData(): string {
@@ -200,6 +201,37 @@ export function checkExposure(options: {
  * choose the model as `minca agent`'s flags do (`chooseModel`), with
  * claude-sonnet-5-5 by default. None otherwise.
  */
+/**
+ * The host's GitHub App, from MINCA_GITHUB_*: what connects its bots to
+ * GitHub. All five or none; the private key as PEM, or a path to one.
+ */
+export async function githubFromEnv(env: NodeJS.ProcessEnv): Promise<GitHubApp | null> {
+  const names = [
+    'MINCA_GITHUB_APP_ID',
+    'MINCA_GITHUB_APP_SLUG',
+    'MINCA_GITHUB_CLIENT_ID',
+    'MINCA_GITHUB_CLIENT_SECRET',
+    'MINCA_GITHUB_PRIVATE_KEY',
+  ] as const;
+  const given = names.filter((name) => env[name]?.trim());
+  if (given.length === 0) return null;
+  const missing = names.filter((name) => !given.includes(name));
+  if (missing.length) throw new Error(`A GitHub App needs ${missing.join(', ')} too`);
+  if (env.MINCA_HOST_BOTS !== '1')
+    throw new Error('MINCA_GITHUB_* connects bots: it needs MINCA_HOST_BOTS=1');
+  const key = env.MINCA_GITHUB_PRIVATE_KEY!.trim();
+  return createGitHubApp({
+    id: env.MINCA_GITHUB_APP_ID!.trim(),
+    slug: env.MINCA_GITHUB_APP_SLUG!.trim(),
+    clientId: env.MINCA_GITHUB_CLIENT_ID!.trim(),
+    clientSecret: env.MINCA_GITHUB_CLIENT_SECRET!.trim(),
+    privateKey: key.startsWith('-----BEGIN') ? key.replace(/\\n/g, '\n') : await readFile(key, 'utf8'),
+    ...(env.MINCA_GITHUB_WEBHOOK_SECRET?.trim()
+      ? { webhookSecret: env.MINCA_GITHUB_WEBHOOK_SECRET.trim() }
+      : {}),
+  });
+}
+
 export async function botsFromEnv(
   env: NodeJS.ProcessEnv,
   data: string,
