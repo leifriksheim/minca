@@ -8,15 +8,6 @@ import { Shape, type ShapeKind } from '@minca/app-shared/shapes';
 import type { ShapeColour } from '@minca/app-shared/tokens';
 import { CONCEPTS } from './concepts';
 
-/** How the concepts heading says its count, so it never goes stale */
-const NUMBER_WORDS: Readonly<Record<number, string>> = {
-  5: 'Five',
-  6: 'Six',
-  7: 'Seven',
-  8: 'Eight',
-  9: 'Nine',
-  10: 'Ten',
-};
 import { CONNECT, SCENARIOS, describePreset } from './walkthrough';
 import './site.css';
 
@@ -541,9 +532,8 @@ export function Developers() {
             runs nowhere.
           </h1>
           <p>
-            A protocol for any kind of social space. Let your users be your infrastructure: their devices keep
-            the data, check the rules and sync with each other. No servers to run, and nothing in the middle
-            that can read it.
+            Let your users be your infrastructure: their devices keep the data, check the rules and sync with
+            each other. No servers to run, and nothing in the middle that can read it.
           </p>
           <div className="actions">
             <span className="install">
@@ -560,8 +550,13 @@ export function Developers() {
       <Band
         id="concepts"
         kicker="The concepts"
-        title={`${NUMBER_WORDS[CONCEPTS.length] ?? CONCEPTS.length} ideas, top to bottom.`}
-        intro={<p>Everything on Minca is built from these. Each one in a few lines.</p>}
+        title="A protocol for any kind of social space."
+        intro={
+          <p>
+            Minca was built to enable decentralized governance without a blockchain. These are the parts it's
+            made of, and every app on it uses them.
+          </p>
+        }
       >
         <Concepts />
       </Band>
