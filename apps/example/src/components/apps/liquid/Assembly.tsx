@@ -1,8 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { SpaceSummary } from '@minca/core';
-import { inviteLink, useHoldSpace, useNode } from '@minca/core/react';
-import { Avatar } from '@minca/app-shared/Avatar';
-import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { useNode } from '@minca/core/react';
 import { Modal } from '@minca/app-shared/Modal';
 import { useAssembly, type Assembly } from './model';
 import { Proposals } from './Proposals';
@@ -10,10 +8,9 @@ import { Delegations } from './Delegations';
 import { People } from './People';
 import { topic as topicCollection } from './schema';
 import { Problem, TopicChip } from './ui';
-import { useAction, useCopy } from '@minca/app-shared/action';
+import { useAction } from '@minca/app-shared/action';
 import { useDuties } from './duties';
 import { palette } from './styles';
-import { CommunitySetup } from '@minca/app-shared/CommunitySetup';
 import { Loader } from '@minca/app-shared/Loader';
 import { ask } from '@minca/app-shared/Ask';
 
@@ -29,67 +26,15 @@ const seenHow = () => {
   }
 };
 
-/** The standalone shell: back to the list, the name, who is here, invites. The assembly itself below. */
-export function AssemblyView({ space, onBack }: { space: SpaceSummary; onBack: () => void }) {
-  useHoldSpace(space.id);
-  const a = useAssembly(space.id);
-  const [inviting, setInviting] = useState(false);
-
-  return (
-    <div className="lq-shell">
-      <header className="lq-header">
-        <div className="lq-header-inner lq-bar">
-          <button
-            className="lq-icon-btn"
-            onClick={onBack}
-            aria-label="Your assemblies"
-            title="Your assemblies"
-          >
-            ←
-          </button>
-          <Shape {...shapeFor(space.id)} size={22} />
-          <p
-            className="lq-display"
-            style={{
-              minWidth: 0,
-              flex: 1,
-              fontSize: 19,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {space.name}
-          </p>
-          <span className="lq-stack lq-hide-phone" title="Who is here">
-            {a.members.slice(0, 5).map((m) => (
-              <Avatar key={m.did} did={m.did} size={24} />
-            ))}
-          </span>
-          {a.mayInvite && space.writable && (
-            <button className="lq-btn" data-size="sm" onClick={() => setInviting(true)}>
-              Invite
-            </button>
-          )}
-        </div>
-      </header>
-      <main className="lq-main">
-        <AssemblyBody space={space} a={a} />
-      </main>
-      {inviting && <Invite a={a} onClose={() => setInviting(false)} />}
-    </div>
-  );
-}
-
 /**
- * One assembly, as a host shows it in its own frame (`app.tsx`): the host
- * brings the space's name, its members and its invites.
+ * One assembly, in the example's frame for an app: the example brings the
+ * space's name, its members and its invites.
  */
 export function AssemblySpace({ space }: { space: SpaceSummary }) {
   return <AssemblyBody space={space} a={useAssembly(space.id)} />;
 }
 
-/** The tabs, and what each shows: the same standalone and inside a host */
+/** The tabs, and what each shows */
 function AssemblyBody({ space, a }: { space: SpaceSummary; a: Assembly }) {
   const [tab, setTab] = useState<Tab>('proposals');
   const [how, setHow] = useState(() => !seenHow());
@@ -157,7 +102,6 @@ function AssemblyBody({ space, a }: { space: SpaceSummary; a: Assembly }) {
               You can read this assembly, but you hold no role in it, so you can’t vote, propose or delegate.
             </div>
           )}
-          {tab === 'proposals' && <CommunitySetup spaceId={a.spaceId} writable={space.writable} />}
           {tab === 'proposals' && <Proposals a={a} writable={space.writable} />}
           {tab === 'trust' && <Delegations a={a} writable={space.writable} />}
           {tab === 'people' && <People a={a} writable={space.writable} />}
@@ -200,52 +144,6 @@ function Waiting() {
         online.
       </p>
     </div>
-  );
-}
-
-/** A link for someone new: as a member, who votes */
-function Invite({ a, onClose }: { a: Assembly; onClose: () => void }) {
-  const node = useNode();
-  const [link, setLink] = useState<string | null>(null);
-  const { copied, copy } = useCopy(1600);
-  const action = useAction();
-  const make = () =>
-    void action.run(async () => {
-      setLink(inviteLink(await node.spaces.invite(a.spaceId, { role: 'member' })));
-    });
-
-  return (
-    <Modal title="Invite someone" onClose={onClose} width={440}>
-      <p className="lq-muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
-        Anyone who opens this link joins as a member: they can vote, propose, delegate and be trusted. Each
-        account is one vote, so send it only to people who belong here.
-      </p>
-      {link ? (
-        <>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              className="lq-input"
-              readOnly
-              value={link}
-              onFocus={(event) => event.target.select()}
-              aria-label="Invite link"
-            />
-            <button className="lq-btn" onClick={() => copy(link)}>
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <p className="lq-faint" style={{ fontSize: 12, lineHeight: 1.5 }}>
-            The link carries the key to the assembly in the part after #, which browsers never send to a
-            server. Anyone who has it can join, so treat it like a key.
-          </p>
-        </>
-      ) : (
-        <button className="lq-btn" onClick={make} disabled={action.busy}>
-          {action.busy ? 'Making a link…' : 'Make an invite link'}
-        </button>
-      )}
-      <Problem>{action.error}</Problem>
-    </Modal>
   );
 }
 

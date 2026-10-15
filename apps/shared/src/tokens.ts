@@ -1,6 +1,6 @@
 /**
  * Minca's design tokens: the one place every UI takes its colours, type and
- * corners from. The site, the app, the account home, Liquid and the extension
+ * corners from. The site, the app, the account home and the extension
  * all read these, either as values (inline styles) or as the CSS custom
  * properties in {@link tokenCss}. DESIGN.md beside this file says how to use
  * them.

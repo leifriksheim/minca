@@ -1,7 +1,7 @@
 # Minca's design system
 
-Every UI with Minca's name on it (the site, the app, the account home, Liquid,
-the Chrome extension) is built from what is in this folder. When something
+Every UI with Minca's name on it (the site, the app, the account home, the
+Chrome extension) is built from what is in this folder. When something
 looks different from one UI to the next, one of them is wrong.
 
 The look in one line: **warm paper, navy ink, thin navy rules and flat shapes,

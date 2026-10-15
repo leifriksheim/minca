@@ -1,7 +1,6 @@
 /**
- * Liquid as a mini app (`@minca/app-shared/mini-app`): what a host like the
- * example app mounts inside one of its spaces. The standalone site
- * (`main.tsx`) wraps the same `AssemblySpace` in a shell of its own.
+ * Liquid as a mini app (`@minca/app-shared/mini-app`): what the example
+ * mounts inside one of its spaces.
  */
 import { notifyOn } from '@minca/core/schemas';
 import type { MiniApp } from '@minca/app-shared/mini-app';

@@ -14,7 +14,6 @@ import { RecordPanel } from './RecordPanel';
 import { GraphView } from './GraphView';
 import { QueryPlayground } from './QueryPlayground';
 import { RolesView } from './RolesView';
-import { CommunitySetup } from '@minca/app-shared/CommunitySetup';
 import { AppsView } from './apps/AppsView';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
@@ -461,13 +460,6 @@ export function SpaceView({
                 </div>
               )}
 
-              {view.kind === 'apps' && (
-                <CommunitySetup
-                  spaceId={space.id}
-                  writable={space.writable}
-                  onAutomations={() => setView({ kind: 'automations' })}
-                />
-              )}
               {view.kind === 'apps' && (
                 <AppsView
                   space={space}

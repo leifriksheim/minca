@@ -31,7 +31,7 @@ import { Polls } from './Polls';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import type { Glyph } from '../Icon';
 import type { MiniApp } from '@minca/app-shared/mini-app';
-import { liquid } from '@minca/liquid/app';
+import { liquid } from './liquid/mini-app';
 
 export interface AppProps {
   readonly space: SpaceSummary;

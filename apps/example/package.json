@@ -12,7 +12,6 @@
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^4.0.0",
     "@minca/app-shared": "*",
-    "@minca/liquid": "*",
     "@minca/core": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

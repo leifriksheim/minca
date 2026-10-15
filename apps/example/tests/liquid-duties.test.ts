@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { duties } from '../src/duties';
-import type { Assembly, PartyFull, ProposalView, RollView } from '../src/model';
+import { duties } from '../src/components/apps/liquid/duties';
+import type { Assembly, PartyFull, ProposalView, RollView } from '../src/components/apps/liquid/model';
 import {
   follow,
   majority,
@@ -10,8 +10,8 @@ import {
   type CastVote,
   type DelegationEdge,
   type PartyStand,
-} from '../src/tally';
-import type { Choice } from '../src/schema';
+} from '../src/components/apps/liquid/tally';
+import type { Choice } from '../src/components/apps/liquid/schema';
 
 const ADA = 'did:ada';
 const BO = 'did:bo';

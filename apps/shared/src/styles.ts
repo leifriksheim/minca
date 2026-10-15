@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { accent, display, font, ink, mono, radius, shadow, shapeColours, surface, tokenCss } from './tokens';
 
 /**
- * One visual vocabulary for the example app, the account home and Liquid,
+ * One visual vocabulary for the example app and the account home,
  * built from Minca's tokens (`tokens.ts`; DESIGN.md says how to use them).
  *
  * Warm paper, navy ink, cobalt for the thing to do. What stands on the page

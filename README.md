@@ -169,7 +169,6 @@ That starts everything, with coloured output per part, and Ctrl-C stops it all:
 | Part   | Where                 | What                                                                                                                         |
 | ------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | app    | http://localhost:5173 | The example app                                                                                                              |
-| liquid | http://localhost:5190 | Liquid, a standalone app for one job: liquid democracy                                                                       |
 | home   | http://localhost:5174 | The account home it connects to                                                                                              |
 | node   | port 8787             | An always-on node that is also the relay; a throwaway identity on first run (`packages/cli/.env.dev`, data in `.minca-dev/`) |
 | host   | http://localhost:8788 | `minca host`, what "Keep my spaces online" uses and what spaces chip in for; settings in `packages/cli/.env.host.dev`        |
@@ -189,7 +188,6 @@ One npm workspace, installed once at the root (`npm install`):
 | `packages/relay` | `@minca/relay` (private)      | The signaling relay and its mailbox, run alone on Fly and inside every node |
 | `apps/home`      | —                             | The account home                                                            |
 | `apps/example`   | —                             | The website and the example app                                             |
-| `apps/liquid`    | —                             | Liquid, a standalone example app: liquid democracy                          |
 | `apps/extension` | —                             | The Chrome extension                                                        |
 | `apps/shared`    | `@minca/app-shared` (private) | Styles, relay settings and components the home and the website share        |
 | `spec`           | —                             | The protocol specification                                                  |

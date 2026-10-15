@@ -234,21 +234,18 @@ closed. See [agents](../../packages/core/docs/agents.md).
 
 ### Mini apps
 
-[Liquid](../liquid/) is a standalone app for one job: an assembly votes on
-proposals, and anyone can trust a person or a party with their vote, topic by
-topic, and take it back. Its collections are its own
-(`apps/liquid/src/schema.ts`), every device counts the votes the same way
-(`apps/liquid/src/tally.ts`, tested in `apps/liquid/tests/`), and what it can't
-promise is on its own **?** page.
+Liquid (`src/components/apps/liquid/`) is an app for one job: an assembly
+votes on proposals, and anyone can trust a person or a party with their vote,
+topic by topic, and take it back. Its collections are its own (`schema.ts`),
+every device counts the votes the same way (`tally.ts`, tested in
+`tests/liquid-*.test.ts`), and what it can't promise is on its own **?** page.
 
-It is written once and runs two ways: as its own site, and as one of this
-app's apps, on the same records. The contract is `MiniApp` in
-`apps/shared/src/mini-app.ts`: the collections the app needs, its icon, and a
-`Space` component that shows one space in whatever frame it gets. Liquid
-exports one (`@minca/liquid/app`, from `apps/liquid/src/mini-app.tsx`), its
-standalone shell wraps the same `Space` in a header of its own, and this app
-lists it with `fromMiniApp` (`src/components/apps/index.tsx`). A new one is a
-workspace under `apps/` that exports a `MiniApp`, plus one line in `APPS`.
+It is bigger than the other apps, so it sits in a folder of its own behind the
+`MiniApp` contract in `apps/shared/src/mini-app.ts`: the collections the app
+needs, its icon, and a `Space` component that shows one space in whatever
+frame it gets. Liquid exports one (`mini-app.tsx`), and this app lists it with
+`fromMiniApp` (`src/components/apps/index.tsx`). A new one is a folder that
+exports a `MiniApp`, plus one line in `APPS`.
 
 ## Layout
 

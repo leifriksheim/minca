@@ -14,8 +14,7 @@ the docs, a change touches before changing the code.
 | `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
 | `packages/relay`                              | The signaling relay and its mailbox                                                            |
-| `apps/home`, `apps/example`, `apps/extension` | The account home, the website and example app, the Chrome extension                            |
-| `apps/liquid`                                 | Liquid, a mini app: standalone, and inside the example (`apps/shared/src/mini-app.ts`)         |
+| `apps/home`, `apps/example`, `apps/extension` | The account home, the website and example app (Liquid among its apps), the Chrome extension    |
 | `apps/shared`                                 | What the apps share: styles, relay settings, components, the mini app contract                 |
 | `scenarios`                                   | Kinds of community written as tests: grants, contracts and their attacks (`npm run scenarios`) |
 
