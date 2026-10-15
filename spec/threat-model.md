@@ -716,19 +716,18 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - A host asked for a bot receives a lasting role invite carrying the space
     key ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
-  - A host whose bot is connected to GitHub (08 §3.1) can act on GitHub as
-    the community, within its App's permissions and the repositories of the
-    installation, which an admin of the GitHub account chose. No peer checks
-    what a bot does outside the space; only the bot's own code does, and a
-    dishonest host need not run it. Uninstalling the App on GitHub ends it
-    whatever the host does. One installation may serve several communities
-    of one GitHub account; each connection keeps the repositories it was made
-    with, and changes on GitHub only narrow them. The reference host also
-    drops the connection
-    when the bot leaves the space or whoever connected it may no longer
-    configure it (`usable` in `packages/cli/src/host-connect.ts`;
-    `packages/cli/tests/host-connect.test.ts`, "a connection stands only
-    while…").
+  - A host whose bot is connected to a service (08 §3.1) can act there as
+    the community, within what the service granted it: for GitHub, the App's
+    permissions on the repositories an admin of the account chose. Each host
+    writes its own connectors, and no peer checks what a bot does outside the
+    space; only the host's code does, and a dishonest host need not run it.
+    Revoking the grant at the service, where it lets one be revoked, ends it
+    whatever the host does. The
+    reference host keeps what each connection reached when it was made and
+    only narrows it, and drops a connection when the bot leaves the space or
+    whoever connected it may no longer configure it (`usable` in
+    `packages/cli/src/host-connect.ts`; `packages/cli/tests/host-connect.test.ts`,
+    "a connection stands only while…").
   - A bot acts with its own role's grants on what members ask, so someone
     who may instruct it can reach past their own grants through it. The
     library narrows this: the dialog that adds a bot offers only roles whose

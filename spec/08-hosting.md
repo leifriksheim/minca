@@ -46,7 +46,7 @@ account's key: the host learns a subscription, not who pays.
 | `remind`     | Optional: `true` when it sends reminders by email before paid time runs out (`…/remind`).                                                                            |
 | `bots`       | Optional: `true` when it runs bots for the spaces it carries (§3).                                                                                                   |
 | `fund`       | Optional: how communities pay here, through a fund (§2). Absent: they can't.                                                                                         |
-| `connectors` | Optional, with `bots`: the services its bots can be connected to (§3.1), of `["github"]`.                                                                            |
+| `connectors` | Optional, with `bots`: the services its bots can be connected to (§3.1), each `{ id, name }`.                                                                        |
 
 A device MUST refuse a description whose `minca` is not `host/1` or whose `did`
 is not a `did:key`, and MUST treat a host whose `did` changed since it was first
@@ -391,12 +391,31 @@ there, and every peer refuses what it writes.
 The reference host runs bots only in spaces it carries, each reaching the
 space through the host's own socket, so it needs no relay.
 
+_Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `startBot`), `packages/core/src/node/node.ts` (`hosting.startBot`), `packages/cli/src/hosted-bots.ts`, `packages/cli/src/host.ts` (`answerBot`, `fundOf`), `packages/cli/src/bot-runner.ts`. Tests: `packages/cli/tests/host.test.ts` ("bots a host runs": all)._
+
 ### 3.1 Connecting a bot to a service
 
-A host that names `connectors` lets someone who may configure one of its bots
-connect it to that service, through the service's own consent screen. The
-host keeps what reaches the service; no secret of it enters the space. GitHub
-is the only service so far.
+A host may connect its bots to services outside Minca, each through the
+service's own consent screen: GitHub, a calendar, a drive. Which services,
+and everything between the host and each, is the host's: its pages, what it
+keeps, what the bot may do there. This part fixes only the exchange between
+the person's app and the host around them, so that any app can connect a bot
+at any host. No secret of a service enters the space.
+
+**What a host offers.** Its description names the services as `connectors`:
+
+```json
+{
+  "connectors": [
+    { "id": "github", "name": "GitHub" },
+    { "id": "calendar", "name": "Calendar" }
+  ]
+}
+```
+
+`id` is 1 to 40 lowercase letters, digits and dashes, and names the service
+in the addresses and records below; `name` is for people, at most 60
+characters. A device MUST ignore an entry that isn't both.
 
 **Who may.** Someone who holds `/std.automation/instruct` in the space and
 every role the bot holds there, by the host's view of the space's access
@@ -407,7 +426,8 @@ exchange between the person's app and the host, so this part says how the
 host reads it.
 
 **The request.** The person's device makes a random secret of at least 32
-bytes, keeps it, and writes a `std.connect` record (packages/core/docs/bots.md):
+bytes, keeps it, and writes a `std.connect` record (packages/core/docs/bots.md),
+`kind` the service's `id`:
 
 ```json
 {
@@ -421,17 +441,17 @@ bytes, keeps it, and writes a `std.connect` record (packages/core/docs/bots.md):
 It then opens, in a window of its own:
 
 ```
-GET <host>/host/bots/<bot DID>/connect/<kind>?space=<space id>&request=<record key>&secret=<base64url(secret)>
+GET <host>/host/bots/<bot DID>/connect/<id>?space=<space id>&request=<record key>&secret=<base64url(secret)>
 ```
 
 The host MUST answer with the service's consent screen only if all of these
 hold, and otherwise with a page that says why:
 
-1. It runs the bot, and the bot holds the space.
+1. It offers that service, runs the bot, and the bot holds the space.
 2. The record at `request` is in that space, verified, not deleted, its first
    version (`seq` 0), signed by its creator under a note that may do more than
    write records (not `recordsOnly`, as an agent's note is), in `std.connect`.
-3. Its `bot` is the bot in the path, its `kind` the kind in the path, it has a
+3. Its `bot` is the bot in the path, its `kind` the `id` in the path, it has a
    `verifier`, and no `disconnect`.
 4. `expires` is later than now and no more than 600 seconds from now.
 5. SHA-256 of `secret` is `verifier`, compared in constant time.
@@ -441,61 +461,44 @@ hold, and otherwise with a page that says why:
 Once a request passes these checks the host MUST mark it used before it
 answers, so that of two calls with it at once only one passes; a call it
 refuses leaves it unused, since the record may not have reached it yet. It
-MUST bind the consent screen's return to the bot, the space and
+MUST bind the consent screen's return to the bot, the space, the service and
 the writer with a one-time `state` of at least 32 random bytes that lasts at
 most 15 minutes. It MUST also bind that return to the browser: it sets a
 cookie of at least 32 random bytes on the answer (`HttpOnly`, `SameSite=Lax`,
-`Secure` over https, scoped to the callback), keeps its hash with the state,
-and refuses a return without it. Otherwise someone could open the page, then
-send the service's link to another account's admin, and finish with their
-consent.
+`Secure` over https, scoped to where the service returns), keeps its hash
+with the state, and refuses a return without it. Otherwise someone could open
+the page, then send the service's link to someone else, and finish with
+their consent. When the browser returns, the host MUST check again that the
+writer may configure the bot.
 
 The secret travels in the page's address, so it can reach the host's logs and
 the browser's history. It counts once and for ten minutes at most. Whoever
-holds an unused link can finish it with a GitHub account they control: the
-link is a bearer link, as most "connect your account" links are. The
-connection names that account, so the app shows whose it is. Repositories
-are kept by name: a repository renamed away, and another made under its old
-name in an installation for all repositories, is reached in its place.
+holds an unused link can finish it with an account at the service they
+control: the link is a bearer link, as most "connect your account" links are.
 
-**GitHub.** The host is a GitHub App that asks for the user's authorisation
-during installation. The consent screen is the App's install page; GitHub
-returns to `<host>/host/connect/github/callback` with `installation_id`,
-`code` and `state`. GitHub does not vouch for `installation_id` there, and
-lists an installation to anyone with access to one of its repositories, so
-the host MUST exchange `code` for the user's token and MUST keep the
-installation only if it is on that user's own account, or on an organisation
-the user is an active admin of (`GET /user`, `GET /user/installations`,
-`GET /user/memberships/orgs/{org}`). It MUST check again that the request's
-writer may configure the bot. A `state` counts once, used or refused. The bot
-then writes its own `std.connector` record naming the account and
-repositories, which apps show only when the bot wrote it.
-
-A connection reaches the repositories the installation reached when it was
-made. One installation may serve several communities, so when GitHub says its
-repositories changed, a host MUST only narrow each connection's list, never
-widen it; adding one means connecting again. A connection stands while the
-installation does, the bot holds a role in the space, and its writer may still
-configure the bot, by the host's view; a host MUST NOT act through it
-otherwise.
+**What the bot says.** Once connected, the bot writes its own `std.connector`
+naming the service, the account there and what it reaches, as people read
+them, so the app shows whose account it is; an app MUST show one only when
+the bot it names wrote it. When a host stops acting through a connection is
+its own: no peer can check it (the reference host's is in
+[bots](../packages/core/docs/bots.md)).
 
 **Disconnecting.** The device writes a `std.connect` as above with
 `"disconnect": true`, and calls:
 
-| Call                                    | Body                               | Answer                                                                   |
-| --------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
-| `POST /host/bots/:bot/disconnect/:kind` | `{ "space", "request", "secret" }` | `{ "disconnected": true }`; 400, 403 or 404 with `{ error }`, as checked |
+| Call                                  | Body                               | Answer                                                                   |
+| ------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| `POST /host/bots/:bot/disconnect/:id` | `{ "space", "request", "secret" }` | `{ "disconnected": true }`; 400, 403 or 404 with `{ error }`, as checked |
 
 The host MUST check the request as for connecting, except that it must ask to
 disconnect, and then MUST forget the connection; the bot deletes its
 `std.connector`.
 
-What the bot does with a connection is the library's
-([bots](../packages/core/docs/bots.md)): no peer can check it.
+How the reference host connects GitHub, and what a bot does with a
+connection, are the library's ([bots](../packages/core/docs/bots.md)): no
+peer can check them.
 
-_Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finish`, `disconnect`, `check`, `usable`), `packages/cli/src/connectors/github.ts` (`createGitHubApp`: `confirm`), `packages/core/src/schemas/connectors.ts` (`mayConfigure`, `connect`, `connector`), `packages/cli/src/host.ts` (`CONNECT_PATH`, `CALLBACK_PATH`, `DISCONNECT_PATH`). Tests: `packages/cli/tests/host.test.ts` ("connecting a bot to GitHub": all), `packages/cli/tests/host-connect.test.ts`, `packages/cli/tests/github.test.ts` ("confirms an installation only for its own account, or an admin of its organisation")._
-
-_Source: `packages/core/src/session/hosting.ts` (`createSpaceHostClient`: `startBot`), `packages/core/src/node/node.ts` (`hosting.startBot`), `packages/cli/src/hosted-bots.ts`, `packages/cli/src/host.ts` (`answerBot`, `fundOf`), `packages/cli/src/bot-runner.ts`. Tests: `packages/cli/tests/host.test.ts` ("bots a host runs": all)._
+_Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finish`, `disconnect`, `check`, `usable`), `packages/cli/src/connectors/connector.ts` (`HostConnector`), `packages/core/src/schemas/connectors.ts` (`mayConfigure`, `connect`, `connector`), `packages/core/src/session/hosting.ts` (`connectorOffers`), `packages/cli/src/host.ts` (`CONNECT_PATH`, `CALLBACK_PATH`, `DISCONNECT_PATH`). Tests: `packages/cli/tests/host-connect.test.ts` (all; "a host’s own connectors"), `packages/cli/tests/host.test.ts` ("connecting a bot to GitHub": all), `packages/core/tests/host-connectors.test.ts`._
 
 ## 4. Planned: hosts
 

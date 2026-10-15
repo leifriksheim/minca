@@ -20,10 +20,10 @@
  *   GET    /host/spaces/:space/bots               the bots it runs there, each with its signed status
  *   GET    /host/bots/:did                        a bot's subscription: its status, to anyone
  *   POST   /host/bots/:did/pay                    { plan } — anyone may pay for a bot
- *   GET    /host/bots/:did/connect/github?space=&request=&secret=   connect a bot to GitHub: a page
- *   GET    /host/connect/github/callback          where GitHub's install screen sends people back to
- *   POST   /host/bots/:did/disconnect/github      { space, request, secret } — disconnect it
- *   POST   /host/connect/github/hook              GitHub's webhook: uninstalls, repositories changed
+ *   GET    /host/bots/:did/connect/:kind?space=&request=&secret=   connect a bot to a service: a page
+ *   GET    /host/connect/:kind/callback           where the service's consent screen sends people back to
+ *   POST   /host/bots/:did/disconnect/:kind       { space, request, secret } — disconnect it
+ *   POST   /host/connect/:kind/hook               the service's own calls: uninstalls, what it reaches
  *   POST   /host/billing/webhook                  the payment provider, telling us someone paid
  *   GET    /host/paid                             where a checkout page sends people back to
  *   GET    /host/remind/confirm?t=…, /host/remind/stop?t=…   the links in reminder mails
@@ -61,8 +61,7 @@ import { isEmail, type Reminders } from './reminders.js';
 import { createHostedBots, type BotModel } from './hosted-bots.js';
 import { createFunds } from './fund.js';
 import { createBotConnect } from './host-connect.js';
-import type { GitHubApp } from './connectors/github.js';
-import { dailyBudget, githubTools } from './connectors/github-tools.js';
+import { dailyBudget, isConnectorId, type HostConnector } from './connectors/connector.js';
 import type { BotConnect } from './host-connect.js';
 
 /** What the host needs from a payment provider */
@@ -128,8 +127,8 @@ export interface HostOptions {
   readonly watchMs?: number;
   /** Bots for the spaces it carries, each an account of its own under `folder`, thinking with `model` */
   readonly bots?: { readonly folder: string; readonly model: BotModel } | null;
-  /** The host's GitHub App, which its bots are connected to GitHub with. Needs `bots`. */
-  readonly github?: GitHubApp | null;
+  /** The services this host connects its bots to: GitHub, a calendar, whatever it offers. Needs `bots`. */
+  readonly connectors?: ReadonlyArray<HostConnector>;
   /** Bots one space may have here, paid or not. Default 5. */
   readonly botsPerSpace?: number;
   /** What keeping a community online takes from its fund a month, in dollars. Default "4". */
@@ -256,10 +255,11 @@ function cookiesOf(req: IncomingMessage): Record<string, string> {
   return found;
 }
 
-const CONNECT_PATH = /^\/host\/bots\/([^/]+)\/connect\/github$/;
-const CALLBACK_PATH = '/host/connect/github/callback';
-const DISCONNECT_PATH = /^\/host\/bots\/([^/]+)\/disconnect\/github$/;
-const HOOK_PATH = '/host/connect/github/hook';
+// A connector's id: lowercase letters, digits and dashes (`isConnectorId`).
+const CONNECT_PATH = /^\/host\/bots\/([^/]+)\/connect\/([a-z0-9-]{1,40})$/;
+const CALLBACK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/callback$/;
+const DISCONNECT_PATH = /^\/host\/bots\/([^/]+)\/disconnect\/([a-z0-9-]{1,40})$/;
+const HOOK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/hook$/;
 
 /** "$4 a month or $36 a year", from the wallet's prices */
 function priceText(wallet: WalletPayments | null): string | undefined {
@@ -433,6 +433,11 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     monthly: Number(monthly) * 1e6,
     mirror: options.mirror ?? null,
   });
+  const ids = (options.connectors ?? []).map((one) => one.id);
+  if (new Set(ids).size !== ids.length) throw new Error(`Two connectors share an id: ${ids.join(', ')}`);
+  for (const one of options.connectors ?? [])
+    if (!isConnectorId(one.id))
+      throw new Error(`A connector id is lowercase letters, digits and dashes, not "${one.id}"`);
   const description: HostDescription = {
     minca: 'host/1',
     did: node.did,
@@ -447,8 +452,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     // Only where a bot can be paid for, from a fund, or costs nothing.
     ...(options.bots && (options.free || fundOffer) ? { bots: true } : {}),
     ...(options.terms ? { terms: options.terms } : {}),
-    ...(options.bots && (options.free || fundOffer) && options.github
-      ? { connectors: ['github'] as const }
+    ...(options.bots && (options.free || fundOffer) && options.connectors?.length
+      ? { connectors: options.connectors.map(({ id, name }) => ({ id, name })) }
       : {}),
   };
 
@@ -472,21 +477,18 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
             const state = await funds.charge(`space:${spaceId}`, usd * markup * 1e6, bot);
             if (state.balance <= 0) await refreshFund(`space:${spaceId}`);
           },
-          // A bot connected to GitHub in a space reaches the repositories chosen there.
-          ...(options.github
+          // A bot connected to a service in a space gets that connector's tools there.
+          ...(options.connectors?.length
             ? {
                 tools: async (bot: string, spaceId: string, mayWrite: boolean) => {
                   // Only while the bot is in the space and whoever connected it still may.
-                  const connection = await connect?.usable(bot, spaceId);
-                  if (!connection || !options.github) return [];
+                  const standing = (await connect?.usable(bot, spaceId)) ?? [];
                   let budget = budgets.get(bot);
                   if (!budget) budgets.set(bot, (budget = dailyBudget()));
-                  return githubTools({
-                    app: options.github,
-                    installation: connection.installation,
-                    repos: connection.repos,
-                    mayWrite,
-                    budget,
+                  const day = budget;
+                  return standing.flatMap((connection) => {
+                    const service = options.connectors?.find((one) => one.id === connection.kind);
+                    return service ? service.tools(connection, { mayWrite, budget: day }) : [];
                   });
                 },
               }
@@ -495,12 +497,12 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
         })
       : null;
   connect =
-    bots && options.github
+    bots && description.connectors
       ? createBotConnect({
           store: await options.stores('host-connect'),
           botNode: (did) => bots.node(did),
           isBot: (did) => bots.runs(did),
-          github: options.github,
+          connectors: options.connectors ?? [],
           log,
         })
       : null;
@@ -758,9 +760,9 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     if (url.pathname === '/host/bots') return answerBot(req, res, method);
     const disconnecting = DISCONNECT_PATH.exec(url.pathname);
     if (disconnecting && method === 'POST') {
-      if (!connect) throw refusal(404, 'This host connects no bots to GitHub');
+      if (!connect) throw refusal(404, 'This host connects no bots to services');
       const input = jsonFields(await readBody(req));
-      const done = await connect.disconnect(decodeURIComponent(disconnecting[1]!), {
+      const done = await connect.disconnect(decodeURIComponent(disconnecting[1]!), disconnecting[2]!, {
         space: typeof input.space === 'string' ? input.space : '',
         request: typeof input.request === 'string' ? input.request : '',
         secret: typeof input.secret === 'string' ? input.secret : '',
@@ -768,23 +770,18 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       if (!done.ok) throw refusal(done.status, done.said);
       return send(res, 200, { disconnected: true });
     }
-    if (url.pathname === HOOK_PATH && method === 'POST') {
-      if (!connect || !options.github?.hooks) throw refusal(404, 'This host takes no GitHub webhook');
-      const body = await readBody(req);
-      const signature = req.headers['x-hub-signature-256'];
-      if (!options.github.signed(body, Array.isArray(signature) ? signature[0] : signature))
-        throw refusal(401, 'Not signed by GitHub');
-      const event = req.headers['x-github-event'];
-      const did = await connect.hook(
-        Array.isArray(event) ? (event[0] ?? '') : (event ?? ''),
-        jsonFields(body),
-      );
-      log(`GitHub: ${did}`);
+    const hooked = HOOK_PATH.exec(url.pathname);
+    if (hooked && method === 'POST') {
+      if (!connect) throw refusal(404, 'This host connects no bots to services');
+      const did = await connect.hook(hooked[1]!, await readBody(req), req.headers);
+      if (did === null) throw refusal(401, 'Not from that service');
+      log(`${hooked[1]}: ${did}`);
       return send(res, 200, { received: true });
     }
     const connecting = CONNECT_PATH.exec(url.pathname);
-    if ((connecting || url.pathname === CALLBACK_PATH) && method === 'GET') {
-      if (!connect) throw refusal(404, 'This host connects no bots to GitHub');
+    const returning = CALLBACK_PATH.exec(url.pathname);
+    if ((connecting || returning) && method === 'GET') {
+      if (!connect) throw refusal(404, 'This host connects no bots to services');
       const html = (status: number, said: string, done = false) => {
         res.writeHead(status, {
           'content-type': 'text/html; charset=utf-8',
@@ -793,42 +790,35 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
         });
         res.end(noticeHtml(name, said, done));
       };
+      const kind = (connecting?.[2] ?? returning?.[1])!;
+      const callback = `${originOf(req, options.publicUrl)}/host/connect/${kind}/callback`;
       const params = url.searchParams;
       if (connecting) {
-        const step = await connect.start(decodeURIComponent(connecting[1]!), {
-          space: params.get('space') ?? '',
-          request: params.get('request') ?? '',
-          secret: params.get('secret') ?? '',
-        });
+        const step = await connect.start(
+          decodeURIComponent(connecting[1]!),
+          kind,
+          {
+            space: params.get('space') ?? '',
+            request: params.get('request') ?? '',
+            secret: params.get('secret') ?? '',
+          },
+          callback,
+        );
         if (!step.ok) return html(step.status, step.said);
-        // GitHub sends this browser back; the cookie is how the host knows it is the same one.
+        // The service sends this browser back; the cookie is how the host knows it is the same one.
         const secure = originOf(req, options.publicUrl).startsWith('https:') ? '; Secure' : '';
         res.writeHead(302, {
           location: step.to,
-          'set-cookie': `${step.cookie.name}=${step.cookie.value}; Path=${CALLBACK_PATH}; Max-Age=900; HttpOnly; SameSite=Lax${secure}`,
+          'set-cookie': `${step.cookie.name}=${step.cookie.value}; Path=/host/connect/${kind}/callback; Max-Age=900; HttpOnly; SameSite=Lax${secure}`,
           ...page,
         });
         return void res.end();
       }
-      if (params.get('setup_action') === 'request')
-        return html(
-          202,
-          'GitHub asked an owner of the organisation to approve the app. Connect again once they have.',
-        );
-      const installation = Number(params.get('installation_id'));
-      if (!Number.isSafeInteger(installation) || installation <= 0)
-        return html(400, 'GitHub sent no installation. Start again from the app.');
-      const done = await connect.finish({
-        state: params.get('state') ?? '',
-        code: params.get('code') ?? '',
-        installation,
-        cookies: cookiesOf(req),
-      });
+      const done = await connect.finish(kind, params, cookiesOf(req), callback);
       if (!done.ok) return html(done.status, done.said);
-      const repos = done.connection.repos.length;
       return html(
         200,
-        `Connected to GitHub as ${done.connection.account}, ${repos} ${repos === 1 ? 'repository' : 'repositories'}. You can close this window.`,
+        `Connected to ${done.name} as ${done.connection.account}. You can close this window.`,
         true,
       );
     }

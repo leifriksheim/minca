@@ -816,7 +816,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       key: await hostKey(data),
       stores,
       bots: await botsFromEnv(process.env, data),
-      github: await githubFromEnv(process.env),
+      connectors: [await githubFromEnv(process.env)].flatMap((one) => (one ? [one] : [])),
       ...fundFromEnv(process.env),
       reminders,
       measure: spaceSize(data),

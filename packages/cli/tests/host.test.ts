@@ -52,6 +52,7 @@ import {
 } from '../../core/src/schemas/connectors.js';
 import { verifierOf } from '../src/host-connect.js';
 import type { GitHubApp } from '../src/connectors/github.js';
+import { githubConnector } from '../src/connectors/github-connector.js';
 import { team } from '../../core/src/space/presets.js';
 import { parseSpaceInvite } from '../../core/src/space/space-manager.js';
 import { hold } from '../../core/tests/helpers/hold.js';
@@ -1034,7 +1035,7 @@ describe('connecting a bot to GitHub', () => {
       port: 0,
       free: true,
       bots: { folder, model },
-      github,
+      connectors: github ? [githubConnector(github)] : [],
     });
     hosts.push(served);
     const url = `http://127.0.0.1:${served.port}`;
@@ -1119,9 +1120,24 @@ describe('connecting a bot to GitHub', () => {
   const stateOf = (res: Response) =>
     new URL(res.headers.get('location') ?? '').searchParams.get('state') ?? '';
 
+  test('a host refuses to start with two connectors of one id, or one whose id won’t fit an address', async () => {
+    const github = githubConnector(fakeGitHub({}));
+    const start = async (connectors: ReadonlyArray<typeof github>) =>
+      startHost({
+        key: await provider.generateKeyPair(),
+        stores: memoryStores(),
+        port: 0,
+        free: true,
+        bots: { folder: await tempDir('minca-connect-'), model },
+        connectors,
+      });
+    await assert.rejects(start([github, github]), /share an id/);
+    await assert.rejects(start([{ ...github, id: '../Bots' }]), /lowercase letters, digits and dashes/);
+  });
+
   test('the host says it connects bots to GitHub only when it has a GitHub App', async () => {
     const { url } = await botToConnect();
-    assert.deepEqual((await describeHost(url)).connectors, ['github']);
+    assert.deepEqual((await describeHost(url)).connectors, [{ id: 'github', name: 'GitHub' }]);
     const without = await botToConnect(null);
     assert.equal((await describeHost(without.url)).connectors, undefined);
     const request = await without.ask('secret-one');
@@ -1147,7 +1163,7 @@ describe('connecting a bot to GitHub', () => {
       page,
     );
     assert.equal(done.status, 200);
-    assert.match(await done.text(), /Connected to GitHub as acme, 2 repositories/);
+    assert.match(await done.text(), /Connected to GitHub as acme\./);
     await until(
       async () =>
         (await laptop.records.list(space, { collection: connector.name })).some(
@@ -1264,19 +1280,29 @@ describe('connecting a bot to GitHub', () => {
   test('the library’s own calls lead through it, as the app makes them: connect, then disconnect', async () => {
     const { url, laptop, space, bot, back, said } = await botToConnect();
     const views = await laptop.hosting.space(space);
-    assert.deepEqual(views[0]?.connectors, ['github'], 'the app sees the host connects bots to GitHub');
+    assert.deepEqual(
+      views[0]?.connectors,
+      [{ id: 'github', name: 'GitHub' }],
+      'the app sees the host connects bots to GitHub',
+    );
 
-    const page = await fetch(connectPage(url, await askToConnect(laptop, space, bot)), {
+    const page = await fetch(connectPage(url, await askToConnect(laptop, space, bot, 'github')), {
       redirect: 'manual',
     });
     assert.equal(page.status, 302);
     assert.equal((await back({ installation_id: '42', code: 'good' }, page)).status, 200);
     await until(async () => (await said()).length === 1, 8000, 'connected');
 
-    await askToDisconnect(url, await askToConnect(laptop, space, bot, { disconnect: true }));
+    await askToDisconnect(url, await askToConnect(laptop, space, bot, 'github', { disconnect: true }));
     await until(async () => (await said()).length === 0, 8000, 'disconnected');
     await assert.rejects(
-      askToDisconnect(url, { space, bot, request: 'no-such-request', secret: 'x'.repeat(43) }),
+      askToDisconnect(url, {
+        space,
+        bot,
+        kind: 'github',
+        request: 'no-such-request',
+        secret: 'x'.repeat(43),
+      }),
       /hasn’t reached the host/,
     );
   });
@@ -1298,7 +1324,7 @@ describe('connecting a bot to GitHub', () => {
         200,
       );
       await until(
-        async () => JSON.stringify((await said())[0]?.body).includes('"repos":["acme/site"]'),
+        async () => JSON.stringify((await said())[0]?.body).includes('"reaches":["acme/site"]'),
         8000,
         'the bot to say it reaches one repository now',
       );
@@ -1306,7 +1332,7 @@ describe('connecting a bot to GitHub', () => {
       repos = ['acme/site', 'acme/docs', 'acme/private'];
       assert.equal((await hook('installation_repositories', { action: 'added', installation })).status, 200);
       await new Promise((resolve) => setTimeout(resolve, 300));
-      assert.ok(JSON.stringify((await said())[0]?.body).includes('"repos":["acme/site"]'), 'only narrowed');
+      assert.ok(JSON.stringify((await said())[0]?.body).includes('"reaches":["acme/site"]'), 'only narrowed');
     } finally {
       repos = ['acme/site', 'acme/docs'];
     }

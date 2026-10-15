@@ -53,33 +53,34 @@ them. An app showing a bot's instructions must pick them the same way
 ## Connecting a bot
 
 A host whose description names `connectors` can connect its bots to those
-services. The person never handles a key: they go through the service's own
-consent screen, and the host keeps what reaches the service.
+services: whichever it offers, GitHub, a calendar, a drive. The person never
+handles a key: they go through the service's own consent screen, and the host
+keeps what reaches the service. An app needs to know nothing about a service
+but its id and name.
 
-1. Their app calls `askToConnect(node, space, bot)`: it makes a random
-   32-byte secret, keeps it, and writes a `std.connect` naming the bot, the
-   kind and the secret's hash, valid for nine minutes.
-2. It opens `connectPage(hostUrl, ask)` in a window of its own, opened in the
+1. The app reads what the host offers from its view of the space
+   (`node.hosting.space(space)`, each view's `connectors`: `{ id, name }`).
+2. It calls `askToConnect(node, space, bot, id)`: that makes a random 32-byte
+   secret, keeps it, and writes a `std.connect` naming the bot, the service
+   and the secret's hash, valid for nine minutes.
+3. It opens `connectPage(hostUrl, ask)` in a window of its own, opened in the
    click so the browser doesn't block it. The host checks the request through
    the bot (spec 08 §3.1) and sends the window to the service.
-3. When the service sends it back, the bot writes its own `std.connector`
+4. When the service sends it back, the bot writes its own `std.connector`
    saying what it is connected to, and the window tells the app (a
    `postMessage` of `{ minca: 'connected' }`) and closes.
 
-Disconnecting is `askToConnect(node, space, bot, { disconnect: true })`, then
-`askToDisconnect(hostUrl, ask)`: the host checks it the same way, forgets the
-connection, and the bot deletes its `std.connector`. The App stays installed
-on GitHub, where whoever installed it can remove it.
+Disconnecting is `askToConnect(node, space, bot, id, { disconnect: true })`,
+then `askToDisconnect(hostUrl, ask)`: the host checks it the same way,
+forgets the connection, and the bot deletes its `std.connector`.
 
 An app must show a `std.connector` only when its writer is the bot it names,
-and must define the collections before it writes a request. A host's views
-of a space (`node.hosting.space`) say which connectors it offers
-(`connectors`).
+and must define the collections before it writes a request.
 
-| Collection      | Body                                                                                                                                                                    | Rules                     |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `std.connect`   | **`bot`** DID; **`kind`** `github`; `verifier` base64url(SHA-256(secret)), 43–64 chars; **`expires`** date-time; `disconnect` boolean                                   |                           |
-| `std.connector` | **`bot`** DID; **`kind`** `github`; **`account`** string ≤ 100, the GitHub user or organisation; `repos` owner/name strings, ≤ 100; **`by`** DID; **`since`** date-time | `onePer: [@author, kind]` |
+| Collection      | Body                                                                                                                                                                                  | Rules                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `std.connect`   | **`bot`** DID; **`kind`** the service's id, string 1–40; `verifier` base64url(SHA-256(secret)), 43–64 chars; **`expires`** date-time; `disconnect` boolean                            |                           |
+| `std.connector` | **`bot`** DID; **`kind`** string 1–40; **`account`** string ≤ 100, whose account at the service; `reaches` strings ≤ 200, what it reaches, ≤ 100; **`by`** DID; **`since`** date-time | `onePer: [@author, kind]` |
 
 Example request, for the secret `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA` (43 `A`s):
 
@@ -92,9 +93,48 @@ Example request, for the secret `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA` (4
 }
 ```
 
-## GitHub
+## Writing a connector
 
-The host is a GitHub App. Its operator registers it once, with:
+Each host decides which services it connects its bots to. In the reference
+host a service is one module implementing `HostConnector`
+(`packages/cli/src/connectors/connector.ts`), passed to `startHost` as
+`connectors`:
+
+- `id` and `name`: what the host's description names.
+- `consentUrl(state, callback)`: where the browser goes to consent. It must
+  come back to `callback`, `<host>/host/connect/<id>/callback`, with `state`.
+- `complete(query, callback)`: the browser back, with the callback's query.
+  It answers what was connected (`account`, `reaches`, and `data` the host
+  keeps and never shows, such as a refresh token), or why not. The host has
+  already checked the state, the browser and the request; the connector checks
+  what only the service can say, such as whether this person may give that
+  account to a bot.
+- `tools(connection, { mayWrite, budget })`: what the bot may do on a
+  connection. Tools that write must refuse without `mayWrite`, and each call
+  to the service takes one from `budget`. What the service returns is someone
+  else's words: mark it as data, as the GitHub tools do.
+- Set the host's public address (`MINCA_HOST_URL`) when a connector sends a
+  `redirect_uri`: otherwise `callback` is worked out from each request.
+- `hook(body, headers)`, optional: calls from the service itself, at
+  `<host>/host/connect/<id>/hook`. It answers `unsigned` for a call that isn't
+  the service's, or which connections are gone (`forget`), or what they now
+  reach at most (`reaches`): the host only narrows what a connection reaches,
+  since one account at a service may serve several communities.
+
+Whatever the connector, the reference host stops acting through a
+connection, and forgets it, once the bot holds no role in the space or
+whoever made it may no longer configure the bot; it only ever narrows what a
+connection reaches; and it refuses two connectors with one id.
+
+A Google Calendar connector, say, would send the browser to Google's consent
+screen, exchange the code for tokens in `complete`, keep the refresh token in
+`data`, and offer `calendar_events` and, with `mayWrite`, `calendar_add`.
+
+## GitHub, in the reference host
+
+The reference host's GitHub connector
+(`packages/cli/src/connectors/github-connector.ts`) is a GitHub App. Its
+operator registers it once, with:
 
 - Callback URL `<host>/host/connect/github/callback`, and "Request user
   authorization (OAuth) during installation" ticked.
@@ -109,16 +149,21 @@ The host is a GitHub App. Its operator registers it once, with:
   webhook calls, and learns of an uninstall only when a call fails.
 
 The person picks the organisation and its repositories on GitHub's install
-screen, and must be the account it is installed on or an admin of that
-organisation: GitHub lists an installation to anyone with access to one of
-its repositories, which isn't enough to hand it to a bot. They must come back
-in the same browser that opened the host's page, which a cookie shows. The bot then acts on GitHub as the App, `<slug>[bot]`, with tokens
-that last an hour, on those repositories only. When the App is uninstalled
-or suspended, the host forgets every connection through it. One installation
-may serve several communities of the same account, so a connection keeps the
-repositories it was made with: when GitHub says they changed, the host only
-narrows them, and each bot says so in its `std.connector`. Reaching a
-repository added later means connecting again.
+screen. GitHub doesn't vouch for the installation id it sends back, and lists
+an installation to anyone with access to one of its repositories, so the
+connector exchanges GitHub's code for the user's own token and keeps the
+installation only if it is on that user's account, or an organisation they
+are an active admin of. The bot then acts on GitHub as the App,
+`<slug>[bot]`, with tokens that last an hour, on those repositories only.
+When the App is uninstalled or suspended, the host forgets every connection
+through it. One installation may serve several communities of the same
+account, so a connection keeps the repositories it was made with: when GitHub
+says they changed, the host only narrows them, and each bot says so in its
+`std.connector`. Reaching a repository added later means connecting again.
+Repositories are kept by name: one renamed away, and another made under its
+old name in an installation for all repositories, is reached in its place.
+The App stays installed on GitHub after a disconnect, where whoever installed
+it can remove it.
 
 ### The bot's tools
 
@@ -153,9 +198,10 @@ A bot connected in a space has these there, beside its node actions:
 - The model never sees a token: each call adds one.
 - What GitHub returns was written by people, possibly outside the space, and
   reaches the model marked as data.
-- 200 calls a bot a day, so a loop can't use up the installation's limits.
+- 200 calls a bot a day, across its connectors, so a loop can't use up a
+  service's limits.
 
-_Source: `packages/core/src/schemas/connectors.ts` (`connect`, `connector`, `botSettings`, `mayConfigure`, `askToConnect`, `connectPage`, `askToDisconnect`), `packages/cli/src/host-connect.ts` (`createBotConnect`), `packages/cli/src/connectors/github.ts` (`createGitHubApp`), `packages/cli/src/connectors/github-tools.ts` (`githubTools`), `packages/cli/src/bot-runner.ts` (`runAutomations`, `personaIn`), `packages/cli/src/host-setup.ts` (`githubFromEnv`), `apps/shared/src/BotConnectors.tsx`. Tests: `packages/cli/tests/host.test.ts` ("connecting a bot to GitHub"), `packages/cli/tests/github.test.ts`, `packages/cli/tests/agent-automations.test.ts` ("a bot’s connectors", "a bot’s instructions", "takes instructions only from someone holding every grant of its roles")._
+_Source: `packages/core/src/schemas/connectors.ts` (`connect`, `connector`, `botSettings`, `mayConfigure`, `askToConnect`, `connectPage`, `askToDisconnect`), `packages/core/src/session/hosting.ts` (`connectorOffers`), `packages/cli/src/host-connect.ts` (`createBotConnect`), `packages/cli/src/connectors/connector.ts` (`HostConnector`), `packages/cli/src/connectors/github-connector.ts` (`githubConnector`), `packages/cli/src/connectors/github.ts` (`createGitHubApp`), `packages/cli/src/connectors/github-tools.ts` (`githubTools`), `packages/cli/src/bot-runner.ts` (`runAutomations`, `personaIn`), `packages/cli/src/host-setup.ts` (`githubFromEnv`), `apps/shared/src/BotConnectors.tsx`. Tests: `packages/cli/tests/host.test.ts` ("connecting a bot to GitHub"), `packages/cli/tests/host-connect.test.ts` ("a host’s own connectors"), `packages/cli/tests/github.test.ts`, `packages/cli/tests/agent-automations.test.ts` ("a bot’s connectors", "a bot’s instructions", "takes instructions only from someone holding every grant of its roles")._
 
 ## Planned
 

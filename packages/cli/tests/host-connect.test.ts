@@ -6,14 +6,17 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import type { NodeRecord, P2PNode } from '@minca/core';
-import { createBotConnect, verifierOf } from '../src/host-connect.js';
+import { createBotConnect, verifierOf, type ConnectStep } from '../src/host-connect.js';
+import { githubConnector } from '../src/connectors/github-connector.js';
 import type { GitHubApp } from '../src/connectors/github.js';
+import type { HostConnector } from '../src/connectors/connector.js';
 import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 
 const BOT = 'did:key:zBot';
 const ADMIN = 'did:key:zAdmin';
 const SPACE = 'bspace';
 const SECRET = 'a'.repeat(43);
+const CALLBACK = 'https://host.example/host/connect/github/callback';
 
 /** A space as the bot sees it: who holds which role, who may instruct bots, and the records it holds */
 function botView() {
@@ -93,7 +96,7 @@ async function setUp(bots: ReadonlyArray<string> = [BOT]) {
     store: await memoryStores()('host-connect'),
     botNode: async (did) => (did === BOT ? view.node : null),
     isBot: async (did) => bots.includes(did),
-    github,
+    connectors: [githubConnector(github)],
     waitMs: 0,
     log: () => {},
   });
@@ -110,104 +113,173 @@ async function setUp(bots: ReadonlyArray<string> = [BOT]) {
     );
     return { space: SPACE, request: key, secret: SECRET };
   };
-  return { ...view, connect, ask };
+  const start = async (params: Awaited<ReturnType<typeof ask>>) =>
+    connect.start(BOT, 'github', params, CALLBACK);
+  /** GitHub's return, with `cookies` the browser brings, or the ones `step` gave it */
+  const back = (step: ConnectStep, options: { code?: string; cookies?: Record<string, string> } = {}) => {
+    assert.ok(step.ok);
+    const query = new URLSearchParams({
+      state: new URL(step.to).searchParams.get('state') ?? '',
+      code: options.code ?? 'good',
+      installation_id: '42',
+    });
+    return connect.finish(
+      'github',
+      query,
+      options.cookies ?? { [step.cookie.name]: step.cookie.value },
+      CALLBACK,
+    );
+  };
+  return { ...view, connect, ask, start, back };
 }
 
 describe('connecting a bot: what a host refuses', () => {
   test('GitHub’s return in another browser: someone sent the install link to an admin of another org', async () => {
-    const { connect, ask } = await setUp();
-    const step = await connect.start(BOT, await ask('r1'));
+    const { ask, start, back } = await setUp();
+    const step = await start(await ask('r1'));
     assert.ok(step.ok);
-    const state = new URL(step.to).searchParams.get('state') ?? '';
     // The admin who was sent the link comes back with their own sign-in, and none of the starter's cookie.
-    const done = await connect.finish({ state, code: 'good', installation: 42, cookies: {} });
+    const done = await back(step, { cookies: {} });
     assert.equal(done.ok, false);
     assert.match(done.ok ? '' : done.said, /started in another browser/);
-    const forged = await connect.finish({
-      state,
-      code: 'good',
-      installation: 42,
-      cookies: { [step.cookie.name]: 'b'.repeat(43) },
-    });
+    const forged = await back(step, { cookies: { [step.cookie.name]: 'b'.repeat(43) } });
     assert.equal(forged.ok, false, 'and the state is spent');
   });
 
   test('the same browser comes back, and the bot says what it is connected to', async () => {
-    const { connect, ask, state: space } = await setUp();
-    const step = await connect.start(BOT, await ask('r1'));
+    const { ask, start, back, state: space } = await setUp();
+    const step = await start(await ask('r1'));
     assert.ok(step.ok);
-    const state = new URL(step.to).searchParams.get('state') ?? '';
-    const done = await connect.finish({
-      state,
-      code: 'good',
-      installation: 42,
-      cookies: { [step.cookie.name]: step.cookie.value },
-    });
+    const done = await back(step);
     assert.ok(done.ok);
     assert.ok([...space.records.values()].some((r) => r.collection === 'std.connector'));
   });
 
   test('a request another bot wrote: the host refuses it, as no integration installs another', async () => {
     // The admin's account here is another bot this host runs, which holds every grant it needs.
-    const { connect, ask } = await setUp([BOT, ADMIN]);
-    const step = await connect.start(BOT, await ask('r1'));
+    const { ask, start } = await setUp([BOT, ADMIN]);
+    const step = await start(await ask('r1'));
     assert.equal(step.ok, false);
   });
 
   test('one link used twice at once: only one call passes', async () => {
-    const { connect, ask } = await setUp();
+    const { ask, start } = await setUp();
     const params = await ask('r1');
-    const both = await Promise.all([connect.start(BOT, params), connect.start(BOT, params)]);
+    const both = await Promise.all([start(params), start(params)]);
     assert.deepEqual(both.map((step) => step.ok).sort(), [false, true]);
   });
 
   test('whoever connected it lost the grant at GitHub: the callback asks again', async () => {
-    const { connect, ask, state: space } = await setUp();
-    const step = await connect.start(BOT, await ask('r1'));
+    const { ask, start, back, state: space } = await setUp();
+    const step = await start(await ask('r1'));
     assert.ok(step.ok);
     space.instructors.delete(ADMIN);
-    const done = await connect.finish({
-      state: new URL(step.to).searchParams.get('state') ?? '',
-      code: 'good',
-      installation: 42,
-      cookies: { [step.cookie.name]: step.cookie.value },
-    });
+    const done = await back(step);
     assert.equal(done.ok, false);
   });
 
   test('a read of the space that fails gives no tools for now, and forgets nothing', async () => {
-    const { connect, ask, state: space } = await setUp();
-    const step = await connect.start(BOT, await ask('r1'));
+    const { connect, ask, start, back, state: space } = await setUp();
+    const step = await start(await ask('r1'));
     assert.ok(step.ok);
-    await connect.finish({
-      state: new URL(step.to).searchParams.get('state') ?? '',
-      code: 'good',
-      installation: 42,
-      cookies: { [step.cookie.name]: step.cookie.value },
-    });
+    await back(step);
     space.unreadable = true;
-    assert.equal(await connect.usable(BOT, SPACE), null);
-    assert.ok(await connect.connection(BOT, SPACE), 'kept');
+    assert.deepEqual(await connect.usable(BOT, SPACE), []);
+    assert.ok(await connect.connection(BOT, SPACE, 'github'), 'kept');
     space.unreadable = false;
-    assert.ok(await connect.usable(BOT, SPACE));
+    assert.equal((await connect.usable(BOT, SPACE)).length, 1);
   });
 
   test('a connection stands only while the bot is in the space and whoever connected it still may', async () => {
     for (const lose of ['the bot leaves', 'the admin loses the grant'] as const) {
-      const { connect, ask, state: space } = await setUp();
-      const step = await connect.start(BOT, await ask('r1'));
+      const { connect, ask, start, back, state: space } = await setUp();
+      const step = await start(await ask('r1'));
       assert.ok(step.ok);
-      await connect.finish({
-        state: new URL(step.to).searchParams.get('state') ?? '',
-        code: 'good',
-        installation: 42,
-        cookies: { [step.cookie.name]: step.cookie.value },
-      });
-      assert.ok(await connect.usable(BOT, SPACE), lose);
+      await back(step);
+      assert.equal((await connect.usable(BOT, SPACE)).length, 1, lose);
       if (lose === 'the bot leaves') space.members.delete(BOT);
       else space.instructors.delete(ADMIN);
-      assert.equal(await connect.usable(BOT, SPACE), null, lose);
-      assert.equal(await connect.connection(BOT, SPACE), null, `${lose}: forgotten`);
+      assert.deepEqual(await connect.usable(BOT, SPACE), [], lose);
+      assert.equal(await connect.connection(BOT, SPACE, 'github'), null, `${lose}: forgotten`);
     }
+  });
+});
+
+describe('a host’s own connectors', () => {
+  test('a service of its own, beside GitHub: the same exchange, its own consent, its own tools', async () => {
+    const view = botView();
+    // A calendar this host offers: its consent screen, what it keeps, and what the bot may do there.
+    const calendar: HostConnector = {
+      id: 'calendar',
+      name: 'Calendar',
+      consentUrl: (state, callback) =>
+        `https://calendar.example/consent?state=${state}&back=${encodeURIComponent(callback)}`,
+      complete: async (query) =>
+        query.get('grant') === 'yes'
+          ? { account: 'team@acme.example', reaches: ['Team'], data: { token: 'kept by the host' } }
+          : { status: 403, said: 'Not granted.' },
+      tools: (connection, { mayWrite }) => [
+        {
+          name: 'calendar_next',
+          description: 'The next event',
+          input: { type: 'object', properties: {} },
+          run: async () => ({ text: `${connection.reaches.join()} · may write: ${mayWrite}` }),
+        },
+      ],
+    };
+    const connect = createBotConnect({
+      store: await memoryStores()('host-connect'),
+      botNode: async (did) => (did === BOT ? view.node : null),
+      connectors: [githubConnector(github), calendar],
+      waitMs: 0,
+      log: () => {},
+    });
+    const ask = async (key: string, kind: string) => {
+      view.state.records.set(
+        key,
+        request(key, ADMIN, {
+          bot: BOT,
+          kind,
+          verifier: await verifierOf(SECRET),
+          expires: new Date(Date.now() + 300_000).toISOString(),
+        }),
+      );
+      return { space: SPACE, request: key, secret: SECRET };
+    };
+    const callback = 'https://host.example/host/connect/calendar/callback';
+
+    // A request for GitHub opens no calendar, and a service the host doesn't offer is refused.
+    assert.equal((await connect.start(BOT, 'calendar', await ask('r1', 'github'), callback)).ok, false);
+    assert.equal((await connect.start(BOT, 'notion', await ask('r2', 'notion'), callback)).ok, false);
+
+    const step = await connect.start(BOT, 'calendar', await ask('r3', 'calendar'), callback);
+    assert.ok(step.ok);
+    assert.match(step.to, /^https:\/\/calendar\.example\/consent\?state=/);
+    const state = new URL(step.to).searchParams.get('state') ?? '';
+    const done = await connect.finish(
+      'calendar',
+      new URLSearchParams({ state, grant: 'yes' }),
+      { [step.cookie.name]: step.cookie.value },
+      callback,
+    );
+    assert.ok(done.ok);
+    assert.equal(done.name, 'Calendar');
+    const said = [...view.state.records.values()].find((r) => r.collection === 'std.connector');
+    // The bot says what it is connected to; what the host keeps to act on it stays with the host.
+    assert.equal(
+      JSON.stringify(said?.body),
+      JSON.stringify({
+        bot: BOT,
+        kind: 'calendar',
+        account: 'team@acme.example',
+        reaches: ['Team'],
+        by: ADMIN,
+        since: done.connection.since,
+      }),
+    );
+    const [standing] = await connect.usable(BOT, SPACE);
+    assert.ok(standing);
+    const [tool] = calendar.tools(standing, { mayWrite: false, budget: () => true });
+    assert.equal((await tool?.run({}))?.text, 'Team · may write: false');
   });
 });

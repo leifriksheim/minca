@@ -184,8 +184,32 @@ export interface HostDescription {
   readonly bots?: boolean;
   /** How a community pays for itself here: a fund anyone adds to. Absent: communities can't pay here. */
   readonly fund?: FundOffer;
-  /** The services its bots can be connected to, at `/host/bots/<bot>/connect/<kind>` */
-  readonly connectors?: ReadonlyArray<'github'>;
+  /** The services its bots can be connected to, at `/host/bots/<bot>/connect/<id>` (spec 08 §3.1) */
+  readonly connectors?: ReadonlyArray<HostConnectorOffer>;
+}
+
+/** A service a host connects its bots to: `id` in its addresses and records, `name` for people */
+export interface HostConnectorOffer {
+  readonly id: string;
+  readonly name: string;
+}
+
+/** The connectors a host description names that are well formed: an id of lowercase letters, digits and dashes, and a name */
+export function connectorOffers(described: unknown): ReadonlyArray<HostConnectorOffer> {
+  if (!Array.isArray(described)) return [];
+  return described.flatMap((one: unknown) =>
+    typeof one === 'object' &&
+    one !== null &&
+    'id' in one &&
+    'name' in one &&
+    typeof one.id === 'string' &&
+    /^[a-z0-9-]{1,40}$/.test(one.id) &&
+    typeof one.name === 'string' &&
+    one.name.length > 0 &&
+    one.name.length <= 60
+      ? [{ id: one.id, name: one.name }]
+      : [],
+  );
 }
 
 /** What a host says about community funds: what keeping one online costs, and how people add to it */

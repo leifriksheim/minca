@@ -19,10 +19,11 @@ import { useAction } from './action';
 import { styles, palette } from './styles';
 
 /**
- * A hosted bot's connectors: GitHub, connected through the host's page and
- * GitHub's own install screen (packages/core/docs/bots.md). What it shows is
- * the bot's own word, its `std.connector`; who may connect it is the host's
- * check, so the button only hides where it would surely be refused.
+ * A hosted bot's connectors: the services its host offers, each connected
+ * through the host's page and the service's own consent screen
+ * (packages/core/docs/bots.md). What it shows is the bot's own word, its
+ * `std.connector`; who may connect it is the host's check, so the buttons only
+ * hide where they would surely be refused.
  */
 export function BotConnectors({
   spaceId,
@@ -43,16 +44,15 @@ export function BotConnectors({
   const popup = useRef<Window | null>(null);
   const defined = (name: string) => collections.some((c) => c.name === name && c.version !== null);
 
-  const github = useLive(
+  // Only the bot's own records say what it is connected to: by service.
+  const said = useLive(
     spaceId,
     async (n) => {
-      if (!defined(connector.name)) return null;
-      const records = await n.records.list<Connector>(spaceId, { collection: connector.name });
-      // Only the bot's own record says what it is connected to.
-      return (
-        records.find((r) => r.root === bot && r.createdBy === bot && r.verified && r.body?.kind === 'github')
-          ?.body ?? null
-      );
+      const found = new Map<string, Connector>();
+      if (!defined(connector.name)) return found;
+      for (const r of await n.records.list<Connector>(spaceId, { collection: connector.name }))
+        if (r.root === bot && r.createdBy === bot && r.verified && r.body) found.set(r.body.kind, r.body);
+      return found;
     },
     [bot, collections.length],
   );
@@ -67,7 +67,7 @@ export function BotConnectors({
     return () => globalThis.removeEventListener('message', heard);
   }, [host.url]);
 
-  if (!host.connectors.includes('github')) return null;
+  if (!host.connectors.length) return null;
 
   const ready = async () => {
     for (const definition of [connect, connector])
@@ -77,15 +77,14 @@ export function BotConnectors({
       }
   };
 
-  const connectGitHub = () => {
+  const connectTo = (kind: string) => {
     // Opened now, in the click, or the browser blocks it; it goes to the host once the request is written.
     const opened = globalThis.open('about:blank', 'minca-connect', 'popup,width=760,height=820');
     popup.current = opened;
     void run(async () => {
       try {
         await ready();
-        const ask = await askToConnect(node, spaceId, bot);
-        const page = connectPage(host.url, ask);
+        const page = connectPage(host.url, await askToConnect(node, spaceId, bot, kind));
         if (opened) opened.location.href = page;
         else globalThis.location.assign(page);
       } catch (e) {
@@ -94,43 +93,55 @@ export function BotConnectors({
       }
     });
   };
-  const disconnect = () =>
+  const disconnect = (kind: string) =>
     void run(async () => {
       await ready();
-      await askToDisconnect(host.url, await askToConnect(node, spaceId, bot, { disconnect: true }));
+      await askToDisconnect(host.url, await askToConnect(node, spaceId, bot, kind, { disconnect: true }));
     });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 14px 10px 54px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: palette.ink.muted }}>
-          {github ? (
-            <>
-              GitHub · <strong style={{ color: palette.ink.body }}>{github.account}</strong>
-              {github.repos?.length
-                ? ` · ${github.repos.length} ${github.repos.length === 1 ? 'repository' : 'repositories'}`
-                : ''}
-            </>
-          ) : (
-            'Not connected to GitHub'
-          )}
-        </span>
-        {instructs &&
-          (github ? (
-            <button onClick={disconnect} disabled={busy} data-variant="quiet" style={styles.smallButton}>
-              Disconnect
-            </button>
-          ) : (
-            <button onClick={connectGitHub} disabled={busy} data-variant="quiet" style={styles.smallButton}>
-              Connect GitHub
-            </button>
-          ))}
-      </div>
+      {host.connectors.map(({ id, name }) => {
+        const connected = said?.get(id);
+        return (
+          <div key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: palette.ink.muted }}>
+              {connected ? (
+                <>
+                  {name} · <strong style={{ color: palette.ink.body }}>{connected.account}</strong>
+                  {connected.reaches?.length ? ` · ${connected.reaches.join(', ')}` : ''}
+                </>
+              ) : (
+                `Not connected to ${name}`
+              )}
+            </span>
+            {instructs &&
+              (connected ? (
+                <button
+                  onClick={() => disconnect(id)}
+                  disabled={busy}
+                  data-variant="quiet"
+                  style={styles.smallButton}
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  onClick={() => connectTo(id)}
+                  disabled={busy}
+                  data-variant="quiet"
+                  style={styles.smallButton}
+                >
+                  Connect {name}
+                </button>
+              ))}
+          </div>
+        );
+      })}
       {instructs && (
         <p style={{ fontSize: 12, color: palette.ink.faint }}>
-          Anyone here who can set the bot off can ask what is in the repositories it reaches, and set off what
-          your automations do on GitHub.
-          {github ? ` Pick its repositories, or remove it, in GitHub’s settings for ${github.account}.` : ''}
+          Anyone here who can set the bot off can ask about what it reaches, and set off what your automations
+          do there. {host.name} keeps what reaches each service.
         </p>
       )}
       {error && <p style={{ ...styles.error, fontSize: 12 }}>{error}</p>}

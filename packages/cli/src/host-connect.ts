@@ -1,30 +1,33 @@
 /**
- * Connecting a bot a host runs to GitHub (spec/08-hosting.md §3.1,
- * packages/core/docs/bots.md).
+ * Connecting a bot a host runs to a service (spec/08-hosting.md §3.1,
+ * packages/core/docs/bots.md). Which services, and everything about each, is
+ * its connector's (`packages/cli/src/connectors/connector.ts`); this is the
+ * exchange with the person's app around them.
  *
  * Someone who may configure the bot writes a `std.connect` in the space with
  * the hash of a secret only their browser holds, and opens the host's connect
  * page with the secret. The host reads the request through the bot, which is
  * a member, and checks it the way any peer would; then sends the browser to
- * GitHub's install screen. GitHub sends it back with an installation, which
- * the host confirms with the GitHub user's own token before it keeps it. The
- * bot then says in its own `std.connector` what it is connected to.
+ * the service's consent screen, tied to that browser by a cookie. When it
+ * comes back, the connector says what was connected, and the bot says so in
+ * its own `std.connector`.
  *
  * Disconnecting is the same request with `disconnect`, checked the same way.
- * GitHub's webhook says when an installation goes or its repositories change.
+ * A service's own calls (webhooks) may forget a connection, or narrow what it
+ * reaches, never widen it.
  */
 import type { NodeRecord, P2PNode, StorageAdapter } from '@minca/core';
 import { CONNECT_REQUEST_SECONDS, connector, mayConfigure, type Connect } from '@minca/core/schemas';
+import type { IncomingMessage } from 'node:http';
 import { isRecord } from './json.js';
-import type { GitHubApp } from './connectors/github.js';
+import type { Connected, HostConnector } from './connectors/connector.js';
 
-/** What a host keeps of a bot's connection: GitHub's installation, and who made it */
-export interface Connection {
+/** What a host keeps of a bot's connection to a service, and who made it */
+export interface Connection extends Connected {
   readonly bot: string;
   readonly space: string;
-  readonly installation: number;
-  readonly account: string;
-  readonly repos: ReadonlyArray<string>;
+  /** The connector's id */
+  readonly kind: string;
   readonly by: string;
   readonly since: string;
 }
@@ -35,11 +38,12 @@ export type ConnectStep =
   | {
       readonly ok: true;
       readonly to: string;
-      /** A cookie to set on the browser going to GitHub, which it must bring back: `name=value` */
+      /** A cookie to set on the browser going to the service, which it must bring back */
       readonly cookie: { readonly name: string; readonly value: string };
     }
   | Refusal;
-export type ConnectDone = { readonly ok: true; readonly connection: Connection } | Refusal;
+export type ConnectDone =
+  { readonly ok: true; readonly connection: Connection; readonly name: string } | Refusal;
 
 /** What a request names, as the page that opens it passes it on */
 export interface ConnectParams {
@@ -49,41 +53,43 @@ export interface ConnectParams {
 }
 
 export interface BotConnect {
-  /** The connect page: checks the request, and answers GitHub's install screen */
-  start(bot: string, params: ConnectParams): Promise<ConnectStep>;
+  /** The connectors this host offers */
+  readonly offered: ReadonlyArray<HostConnector>;
+  /** The connect page: checks the request, and answers the service's consent screen */
+  start(bot: string, kind: string, params: ConnectParams, callback: string): Promise<ConnectStep>;
   /**
-   * GitHub's redirect back, with what was installed, and the cookies the
-   * browser brought: only the browser that opened the connect page finishes.
+   * The browser back from the service, with the callback's query, and the
+   * cookies it brought: only the browser that opened the connect page finishes.
    */
-  finish(params: {
-    state: string;
-    code: string;
-    installation: number;
-    cookies: Readonly<Record<string, string>>;
-  }): Promise<ConnectDone>;
-  /** Disconnects a bot in a space, for a request with `disconnect` */
-  disconnect(bot: string, params: ConnectParams): Promise<{ readonly ok: true } | Refusal>;
-  /** What GitHub's webhook said happened; what the host did about it, for its log */
-  hook(event: string, payload: unknown): Promise<string>;
-  /** A bot's connection in a space, if it has one */
-  connection(bot: string, space: string): Promise<Connection | null>;
+  finish(
+    kind: string,
+    query: URLSearchParams,
+    cookies: Readonly<Record<string, string>>,
+    callback: string,
+  ): Promise<ConnectDone>;
+  /** Disconnects a bot from a service in a space, for a request with `disconnect` */
+  disconnect(bot: string, kind: string, params: ConnectParams): Promise<{ readonly ok: true } | Refusal>;
+  /** A call from the service itself; null when it isn't the service's, otherwise what the host did */
+  hook(kind: string, body: string, headers: IncomingMessage['headers']): Promise<string | null>;
+  /** A bot's connection to a service in a space, if it has one */
+  connection(bot: string, space: string, kind: string): Promise<Connection | null>;
   /**
-   * A bot's connection in a space if it still stands: the bot holds a role
-   * there and whoever connected it may still configure it. Otherwise the
-   * host forgets it, and the bot takes back its record where it can.
+   * A bot's connections in a space that still stand: the bot holds a role
+   * there and whoever connected each may still configure it. The host forgets
+   * one that doesn't, and the bot takes back its record where it can.
    */
-  usable(bot: string, space: string): Promise<Connection | null>;
+  usable(bot: string, space: string): Promise<ReadonlyArray<Connection>>;
 }
 
 /** A secret's length at least: 32 bytes, in base64url */
 const MIN_SECRET = 43;
 
-/** How long a browser may take at GitHub's install screen */
+/** How long a browser may take at the service's consent screen */
 const STATE_SECONDS = 900;
 
-const PREFIX = 'connection:github:';
+const PREFIX = 'connection:';
 
-/** The cookie that ties GitHub's return to the browser that left: named for its state, so two at once don't collide */
+/** The cookie that ties the service's return to the browser that left: named for its state, so two at once don't collide */
 const cookieName = (state: string) => `minca_connect_${state.slice(0, 16)}`;
 
 const refuse = (status: number, said: string): Refusal => ({ ok: false, status, said });
@@ -117,15 +123,17 @@ function isConnection(value: unknown): value is Connection {
     isRecord(value) &&
     typeof value.bot === 'string' &&
     typeof value.space === 'string' &&
-    typeof value.installation === 'number' &&
+    typeof value.kind === 'string' &&
     typeof value.account === 'string' &&
-    Array.isArray(value.repos)
+    Array.isArray(value.reaches) &&
+    isRecord(value.data)
   );
 }
 
 interface Pending {
   readonly bot: string;
   readonly space: string;
+  readonly kind: string;
   readonly by: string;
   readonly until: number;
   /** SHA-256 of the cookie the browser was given */
@@ -138,15 +146,16 @@ export function createBotConnect(options: {
   readonly botNode: (did: string) => Promise<P2PNode | null>;
   /** Whether this host runs an account as a bot: never one to connect another */
   readonly isBot?: (did: string) => Promise<boolean>;
-  readonly github: GitHubApp;
+  readonly connectors: ReadonlyArray<HostConnector>;
   /** How long to wait for a request to reach the bot. Default 8 s. */
   readonly waitMs?: number;
   readonly now?: () => number;
   readonly log: (line: string) => void;
 }): BotConnect {
-  const { store, github, log } = options;
+  const { store, log } = options;
   const now = options.now ?? Date.now;
   const waitMs = options.waitMs ?? 8000;
+  const byKind = new Map(options.connectors.map((one) => [one.id, one]));
   /** Requests being checked now: a second call with one waits for nothing, it is refused */
   const checking = new Set<string>();
 
@@ -156,10 +165,10 @@ export function createBotConnect(options: {
   };
   const put = (key: string, value: unknown) =>
     store.put(key, new TextEncoder().encode(JSON.stringify(value)));
-  const connectionKey = (bot: string, space: string) => `${PREFIX}${bot}:${space}`;
-  const connections = async (): Promise<Connection[]> => {
+  const connectionKey = (kind: string, bot: string, space: string) => `${PREFIX}${kind}:${bot}:${space}`;
+  const connections = async (prefix = PREFIX): Promise<Connection[]> => {
     const found: Connection[] = [];
-    for (const key of await store.list(PREFIX)) {
+    for (const key of await store.list(prefix)) {
       const kept = await get(key);
       if (isConnection(kept)) found.push(kept);
     }
@@ -182,9 +191,11 @@ export function createBotConnect(options: {
    */
   async function check(
     bot: string,
+    kind: string,
     params: ConnectParams,
     disconnect: boolean,
   ): Promise<{ readonly ok: true; readonly node: P2PNode; readonly writer: string } | Refusal> {
+    if (!byKind.has(kind)) return refuse(404, 'This host connects bots to no such service.');
     // 32 random bytes at least, so the verifier in the space can't be worked back to it.
     if (params.secret.length < MIN_SECRET)
       return refuse(400, 'This link is incomplete. Start again from the app.');
@@ -198,7 +209,7 @@ export function createBotConnect(options: {
     checking.add(usedKey);
     try {
       if (await get(usedKey)) return refuse(403, 'This link has been used. Start again from the app.');
-      const checked = await checkRecord(node, bot, params, disconnect);
+      const checked = await checkRecord(node, bot, kind, params, disconnect);
       if (checked.ok) await put(usedKey, { at: now() });
       return checked;
     } finally {
@@ -209,6 +220,7 @@ export function createBotConnect(options: {
   async function checkRecord(
     node: P2PNode,
     bot: string,
+    kind: string,
     params: ConnectParams,
     disconnect: boolean,
   ): Promise<{ readonly ok: true; readonly node: P2PNode; readonly writer: string } | Refusal> {
@@ -228,11 +240,8 @@ export function createBotConnect(options: {
       !isConnect(body)
     )
       return refuse(403, 'That isn’t a request about this bot.');
-    if (body.bot !== bot || body.kind !== 'github' || !!body.disconnect !== disconnect || !body.verifier)
-      return refuse(
-        403,
-        `That isn’t a request to ${disconnect ? 'disconnect' : 'connect'} this bot and GitHub.`,
-      );
+    if (body.bot !== bot || body.kind !== kind || !!body.disconnect !== disconnect || !body.verifier)
+      return refuse(403, `That isn’t a request to ${disconnect ? 'disconnect' : 'connect'} this bot there.`);
     const expires = Date.parse(body.expires);
     if (!(expires > now()) || expires > now() + CONNECT_REQUEST_SECONDS * 1000)
       return refuse(403, 'This request has run out. Start again from the app.');
@@ -251,28 +260,30 @@ export function createBotConnect(options: {
     const node = await options.botNode(connection.bot);
     await node?.records.put(connection.space, connector, {
       bot: connection.bot,
-      kind: 'github',
+      kind: connection.kind,
       account: connection.account,
-      repos: [...connection.repos].slice(0, 100),
+      reaches: [...connection.reaches].slice(0, 100),
       by: connection.by,
       since: connection.since,
     });
   }
 
-  /** Forgets a bot's connection in a space, and the bot takes back its record of it */
-  async function forget(bot: string, space: string): Promise<void> {
-    await store.delete(connectionKey(bot, space));
+  /** Forgets a bot's connection to a service in a space, and the bot takes back its record of it */
+  async function forget(kind: string, bot: string, space: string): Promise<void> {
+    await store.delete(connectionKey(kind, bot, space));
     const node = await options.botNode(bot);
     if (!node) return;
     const records = await node.records.list(space, { collection: connector.name }).catch(() => []);
     for (const record of records)
-      if (record.root === bot && isRecord(record.body) && record.body.kind === 'github')
+      if (record.root === bot && isRecord(record.body) && record.body.kind === kind)
         await node.records.delete(space, record.key);
   }
 
   return Object.freeze({
-    async start(bot: string, params: ConnectParams) {
-      const checked = await check(bot, params, false);
+    offered: options.connectors,
+
+    async start(bot: string, kind: string, params: ConnectParams, callback: string) {
+      const checked = await check(bot, kind, params, false);
       if (!checked.ok) return checked;
       const random = () =>
         Buffer.from(globalThis.crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
@@ -281,6 +292,7 @@ export function createBotConnect(options: {
       const pending: Pending = {
         bot,
         space: params.space,
+        kind,
         by: checked.writer,
         until: now() + STATE_SECONDS * 1000,
         browser: await verifierOf(browser),
@@ -288,135 +300,127 @@ export function createBotConnect(options: {
       await put(`state:${state}`, pending);
       return {
         ok: true,
-        to: github.installUrl(state),
+        to: byKind.get(kind)!.consentUrl(state, callback),
         cookie: { name: cookieName(state), value: browser },
       } as const;
     },
 
-    async finish(params: {
-      state: string;
-      code: string;
-      installation: number;
-      cookies: Readonly<Record<string, string>>;
-    }) {
-      const kept = await get(`state:${params.state}`);
+    async finish(
+      kind: string,
+      query: URLSearchParams,
+      cookies: Readonly<Record<string, string>>,
+      callback: string,
+    ) {
+      const service = byKind.get(kind);
+      if (!service) return refuse(404, 'This host connects bots to no such service.');
+      const state = query.get('state') ?? '';
+      const kept = await get(`state:${state}`);
       // One use, whatever happens next.
-      await store.delete(`state:${params.state}`);
+      await store.delete(`state:${state}`);
       if (
         !isRecord(kept) ||
         typeof kept.bot !== 'string' ||
         typeof kept.space !== 'string' ||
+        kept.kind !== kind ||
         typeof kept.by !== 'string' ||
         typeof kept.until !== 'number' ||
         typeof kept.browser !== 'string' ||
         kept.until < now()
       )
         return refuse(403, 'This link has run out. Start again from the app.');
-      // The browser that opened the connect page, not one someone sent GitHub's link to.
-      const cookie = params.cookies[cookieName(params.state)];
+      // The browser that opened the connect page, not one someone sent the service's link to.
+      const cookie = cookies[cookieName(state)];
       if (!cookie || !same(await verifierOf(cookie), kept.browser))
         return refuse(
           403,
           'This was started in another browser. Connect from your Minca app, in this browser.',
         );
-      if (!params.code)
-        return refuse(
-          400,
-          'GitHub sent no sign-in. The host’s GitHub App must ask for it during installation.',
-        );
-      const confirmed = await github.confirm(params.code, params.installation).catch(() => null);
-      if (!confirmed)
-        return refuse(
-          403,
-          'Only the GitHub account it was installed on, or an admin of that organisation, may connect it.',
-        );
+      const done = await service.complete(query, callback);
+      if ('status' in done) return refuse(done.status, done.said);
       const node = await options.botNode(kept.bot);
       if (!node) return refuse(404, 'This host runs no such bot.');
-      // Asked again: a quarter of an hour may have passed at GitHub.
+      // Asked again: a quarter of an hour may have passed at the service.
       if (!(await mayConfigure(node, kept.space, kept.bot, kept.by)))
         return refuse(403, 'You may no longer configure this bot.');
 
       const connection: Connection = {
         bot: kept.bot,
         space: kept.space,
-        installation: params.installation,
-        account: confirmed.account,
-        repos: await github.repos(params.installation),
+        kind,
+        account: done.account,
+        reaches: done.reaches,
+        data: done.data,
         by: kept.by,
         since: new Date(now()).toISOString(),
       };
-      await put(connectionKey(kept.bot, kept.space), connection);
+      await put(connectionKey(kind, kept.bot, kept.space), connection);
       await announce(connection);
-      log(`bot ${kept.bot} connected to GitHub ${connection.account} in space ${kept.space}`);
-      return { ok: true, connection } as const;
+      log(`bot ${kept.bot} connected to ${service.name} ${connection.account} in space ${kept.space}`);
+      return { ok: true, connection, name: service.name } as const;
     },
 
-    async disconnect(bot: string, params: ConnectParams) {
-      const checked = await check(bot, params, true);
+    async disconnect(bot: string, kind: string, params: ConnectParams) {
+      const checked = await check(bot, kind, params, true);
       if (!checked.ok) return checked;
-      await forget(bot, params.space);
-      log(`bot ${bot} disconnected from GitHub in space ${params.space}`);
+      await forget(kind, bot, params.space);
+      log(`bot ${bot} disconnected from ${kind} in space ${params.space}`);
       return { ok: true } as const;
     },
 
-    async hook(event: string, payload: unknown) {
-      if (!isRecord(payload) || !isRecord(payload.installation)) return 'nothing to do';
-      const installation = payload.installation.id;
-      if (typeof installation !== 'number') return 'nothing to do';
-      const affected = (await connections()).filter((one) => one.installation === installation);
-      if (!affected.length) return 'no bot uses that installation';
-      // Uninstalled or suspended on GitHub: the bots it reached are connected no more.
-      if (event === 'installation' && (payload.action === 'deleted' || payload.action === 'suspend')) {
-        for (const one of affected) await forget(one.bot, one.space);
-        return `installation ${installation} ${String(payload.action)}: ${affected.length} connection(s) gone`;
-      }
-      // Repositories added or taken away: what each bot may reach, and says it reaches, follows.
-      if (
-        event === 'installation_repositories' ||
-        (event === 'installation' && payload.action === 'unsuspend')
-      ) {
-        const repos = new Set(await github.repos(installation));
-        for (const one of affected) {
-          // Only narrowed: one installation may serve several communities, and what one adds isn't another's.
-          const next = { ...one, repos: one.repos.filter((repo) => repos.has(repo)) };
-          await put(connectionKey(one.bot, one.space), next);
-          await announce(next);
+    async hook(kind: string, body: string, headers: IncomingMessage['headers']) {
+      const service = byKind.get(kind);
+      if (!service?.hook) return null;
+      const change = await service.hook(body, headers);
+      if (change.kind === 'unsigned') return null;
+      if (change.kind === 'nothing') return change.said;
+      const affected = (await connections(`${PREFIX}${kind}:`)).filter((one) => change.which(one.data));
+      for (const one of affected) {
+        if (change.kind === 'forget') {
+          await forget(kind, one.bot, one.space);
+          continue;
         }
-        return `installation ${installation}: ${repos.size} repositories now`;
+        // Only narrowed: one account at a service may serve several communities, and what one adds isn't another's.
+        const reaches = new Set(change.reaches);
+        const next = { ...one, reaches: one.reaches.filter((item) => reaches.has(item)) };
+        await put(connectionKey(kind, one.bot, one.space), next);
+        await announce(next);
       }
-      return 'nothing to do';
+      return `${change.said}: ${affected.length} connection(s) ${change.kind === 'forget' ? 'gone' : 'narrowed'}`;
     },
 
-    async connection(bot: string, space: string) {
-      const kept = await get(connectionKey(bot, space));
+    async connection(bot: string, space: string, kind: string) {
+      const kept = await get(connectionKey(kind, bot, space));
       return isConnection(kept) ? kept : null;
     },
 
     async usable(bot: string, space: string) {
-      const kept = await get(connectionKey(bot, space));
-      if (!isConnection(kept)) return null;
+      const kept = (await connections()).filter((one) => one.bot === bot && one.space === space);
+      if (!kept.length) return [];
       const node = await options.botNode(bot);
-      // A read that fails says nothing either way: the bot gets no tools now, and the connection stays.
+      // A read that fails says nothing either way: the bot gets no tools now, and the connections stay.
       const access = node ? await node.spaces.access(space).catch(() => null) : null;
-      if (!node || !access) return null;
+      if (!node || !access) return [];
       const member = access.members.some((m) => m.did === bot && m.roles.length > 0);
-      if (member && (await mayConfigure(node, space, bot, kept.by).catch(() => false))) {
-        // Someone who may edit others' records could take back what the bot said while it still acts: it says it again.
-        const said = (await node.records.list(space, { collection: connector.name }).catch(() => [])).find(
-          (record) => record.root === bot && isRecord(record.body) && record.body.kind === 'github',
-        );
-        const body = isRecord(said?.body) ? said.body : null;
-        if (
-          !body ||
-          body.account !== kept.account ||
-          JSON.stringify(body.repos) !== JSON.stringify(kept.repos.slice(0, 100))
-        )
-          await announce(kept).catch(() => {});
-        return kept;
+      const said = await node.records.list(space, { collection: connector.name }).catch(() => []);
+      const standing: Connection[] = [];
+      for (const one of kept) {
+        if (member && (await mayConfigure(node, space, bot, one.by).catch(() => false))) {
+          // Someone who may edit others' records could take back what the bot said while it still acts: it says it again.
+          const record = said.find((r) => r.root === bot && isRecord(r.body) && r.body.kind === one.kind);
+          const body = isRecord(record?.body) ? record.body : null;
+          if (
+            !body ||
+            body.account !== one.account ||
+            JSON.stringify(body.reaches) !== JSON.stringify(one.reaches.slice(0, 100))
+          )
+            await announce(one).catch(() => {});
+          standing.push(one);
+          continue;
+        }
+        log(`bot ${bot}'s ${one.kind} connection in space ${space} no longer stands: forgotten`);
+        await forget(one.kind, bot, space).catch(() => store.delete(connectionKey(one.kind, bot, space)));
       }
-      log(`bot ${bot}'s GitHub connection in space ${space} no longer stands: forgotten`);
-      await forget(bot, space).catch(() => store.delete(connectionKey(bot, space)));
-      return null;
+      return standing;
     },
   });
 }

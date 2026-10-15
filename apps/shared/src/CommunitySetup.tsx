@@ -147,8 +147,8 @@ export function AddBotDialog({
                 ? `Its AI use comes from the community fund, up to $${cap ?? '1'} a day and usually far less. `
                 : ''}
               {host.name} runs the bot's account, so it can read what the bot can read
-              {host.connectors.includes('github')
-                ? ', and act on GitHub for your community once you connect it there.'
+              {host.connectors.length
+                ? `, and act for your community in the services you connect it to (${host.connectors.map((one) => one.name).join(', ')}).`
                 : '.'}
             </p>
             <button

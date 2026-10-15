@@ -748,7 +748,7 @@ export interface SpaceHostingView {
   /** The bots it runs in this space, and whether each is running, as its signed status says */
   readonly bots: ReadonlyArray<import('../session/hosting.js').HostedBot>;
   /** The services its bots can be connected to (spec 08 §3.1) */
-  readonly connectors: ReadonlyArray<'github'>;
+  readonly connectors: ReadonlyArray<import('../session/hosting.js').HostConnectorOffer>;
   /** Why it could not be asked, when it couldn't */
   readonly error?: string;
 }

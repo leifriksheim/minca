@@ -1,6 +1,7 @@
 /**
- * Connectors: a bot reaching a service outside the space for its community,
- * GitHub first. Someone who may configure the bot asks with a `std.connect`;
+ * Connectors: a bot reaching a service outside the space for its community.
+ * Which services is each host's to offer, named in its description by an id
+ * (`kind`) and a name. Someone who may configure the bot asks with a `std.connect`;
  * the bot's host checks it, sends them through the service's own consent
  * screen, and the bot says what is connected in its own `std.connector`.
  *
@@ -44,10 +45,6 @@ export async function holdsBotRoles(
   return true;
 }
 
-/** The services a bot may be connected to */
-export const CONNECTOR_KINDS = ['github'] as const;
-export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
-
 /** How long a request may stand, from when it was written: long enough for a consent screen */
 export const CONNECT_REQUEST_SECONDS = 600;
 
@@ -63,7 +60,11 @@ export const connect = define({
     type: 'object',
     properties: {
       bot: person('The bot to connect'),
-      kind: { type: 'string', enum: [...CONNECTOR_KINDS] },
+      kind: text(
+        40,
+        'The service: a connector id the host names, of lowercase letters, digits and dashes',
+        1,
+      ),
       verifier: text(64, 'base64url(SHA-256(secret)): the secret stays in the asker’s browser', 43),
       expires: when('After this it counts for nothing'),
       disconnect: { type: 'boolean' },
@@ -82,9 +83,14 @@ export const connector = define({
     type: 'object',
     properties: {
       bot: person('The bot, which writes this'),
-      kind: { type: 'string', enum: [...CONNECTOR_KINDS] },
-      account: words(100, 'Whose account at the service: a GitHub user or organisation'),
-      repos: { type: 'array', items: words(200), maxItems: 100 },
+      kind: text(40, 'The service, as in the request', 1),
+      account: words(100, 'Whose account at the service: an organisation, a user, an email address'),
+      reaches: {
+        type: 'array',
+        items: words(200),
+        maxItems: 100,
+        description: 'What it reaches there, as people read it: repositories, calendars, folders',
+      },
       by: person('Who connected it'),
       since: when(),
     },
@@ -123,6 +129,8 @@ export type BotSettings = BodyOf<typeof botSettings>;
 export interface ConnectAsk {
   readonly space: string;
   readonly bot: string;
+  /** The service: a connector id the bot's host names */
+  readonly kind: string;
   readonly request: string;
   readonly secret: string;
 }
@@ -136,7 +144,8 @@ export async function askToConnect(
   node: P2PNode,
   space: string,
   bot: string,
-  options: { readonly kind?: ConnectorKind; readonly disconnect?: boolean } = {},
+  kind: string,
+  options: { readonly disconnect?: boolean } = {},
 ): Promise<ConnectAsk> {
   const secret = base64UrlEncode(globalThis.crypto.getRandomValues(new Uint8Array(32)));
   const hash = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
@@ -144,28 +153,24 @@ export async function askToConnect(
   const expires = new Date(Date.now() + (CONNECT_REQUEST_SECONDS - 60) * 1000).toISOString();
   const record = await node.records.put(space, connect, {
     bot,
-    kind: options.kind ?? 'github',
+    kind,
     verifier: base64UrlEncode(new Uint8Array(hash)),
     expires,
     ...(options.disconnect ? { disconnect: true } : {}),
   });
-  return { space, bot, request: record.key, secret };
+  return { space, bot, kind, request: record.key, secret };
 }
 
 /** The host's page that connects a bot, for a request `askToConnect` wrote */
-export function connectPage(hostUrl: string, ask: ConnectAsk, kind: ConnectorKind = 'github'): string {
+export function connectPage(hostUrl: string, ask: ConnectAsk): string {
   const query = new URLSearchParams({ space: ask.space, request: ask.request, secret: ask.secret });
-  return `${hostUrl.replace(/\/+$/, '')}/host/bots/${encodeURIComponent(ask.bot)}/connect/${kind}?${query}`;
+  return `${hostUrl.replace(/\/+$/, '')}/host/bots/${encodeURIComponent(ask.bot)}/connect/${encodeURIComponent(ask.kind)}?${query}`;
 }
 
 /** Asks a bot's host to disconnect it, for a request `askToConnect` wrote with `disconnect` */
-export async function askToDisconnect(
-  hostUrl: string,
-  ask: ConnectAsk,
-  kind: ConnectorKind = 'github',
-): Promise<void> {
+export async function askToDisconnect(hostUrl: string, ask: ConnectAsk): Promise<void> {
   const res = await fetch(
-    `${hostUrl.replace(/\/+$/, '')}/host/bots/${encodeURIComponent(ask.bot)}/disconnect/${kind}`,
+    `${hostUrl.replace(/\/+$/, '')}/host/bots/${encodeURIComponent(ask.bot)}/disconnect/${encodeURIComponent(ask.kind)}`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

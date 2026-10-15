@@ -5,7 +5,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac, generateKeyPairSync, verify } from 'node:crypto';
 import { createGitHubApp } from '../src/connectors/github.js';
-import { dailyBudget, githubTools } from '../src/connectors/github-tools.js';
+import { githubTools } from '../src/connectors/github-tools.js';
+import { dailyBudget } from '../src/connectors/connector.js';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 // GitHub hands out PKCS#1 keys: the client must take them as they come.
