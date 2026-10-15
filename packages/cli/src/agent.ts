@@ -6,9 +6,12 @@
  * Kept in `<home>/agent/`, readable only by this user: `key.json`,
  * `grant.json`, `data/`, and `minca agent`'s model keys and `spend.json`.
  */
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
 import {
   CLOSE_DID_TAKEN,
   createNode,
@@ -23,7 +26,7 @@ import { base64UrlDecode } from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
-import { holdLock } from './writer-keys.js';
+import { holdLock, lockHolder } from './writer-keys.js';
 
 /** The relay the apps meet on unless told otherwise */
 const DEFAULT_RELAYS: ReadonlyArray<string> = ['wss://minca.fly.dev'];
@@ -155,10 +158,96 @@ export function daysLeft(grant: Grant): number {
   return Math.max(0, Math.ceil((grant.expiresAt - Date.now() / 1000) / 86_400));
 }
 
+const agentLock = (home: string) => path.join(agentDir(home), 'lock');
+
+/** Thrown when another process on this computer already runs its agent */
+export class AgentBusy extends Error {
+  /** That process's id */
+  readonly holder: number;
+  constructor(holder: number) {
+    super(
+      `This computer’s agent is already running (pid ${holder}, another \`minca agent\` or \`minca mcp\`). Stop it first: two at once would sign with one key.`,
+    );
+    this.name = 'AgentBusy';
+    this.holder = holder;
+  }
+}
+
+/** The process running this computer's agent, or null when none is */
+export const agentRunning = (home: string): Promise<number | null> => lockHolder(agentLock(home));
+
+const run = promisify(execFile);
+const psField = async (pid: number, field: string) =>
+  (await run('ps', ['-o', `${field}=`, '-p', String(pid)])).stdout.trim();
+
+/** The apps that start `minca mcp`, by their command line */
+const CLIENTS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/Claude\.app\//, 'Claude Desktop'],
+  [/(^|\/)claude(\s|$)/, 'a Claude Code session'],
+  [/Cursor/, 'Cursor'],
+  [/Code( - Insiders)?\.app\/|(^|\/)code(\s|$)/, 'VS Code'],
+  [/Windsurf/, 'Windsurf'],
+];
+/** What starts a process on the way to the app that asked for it, so skipped */
+const LAUNCHERS = /^(npm|npx|node|bun|sh|bash|zsh|fish|env)$/;
+
+/**
+ * Says who runs the agent, for a person to recognise: "`minca mcp` (pid
+ * 14578), started Thu Oct 15 17:57:54 2026 by a Claude Code session".
+ * Read from `ps`; where there is none, just the pid.
+ */
+export async function describeAgentProcess(pid: number): Promise<string> {
+  try {
+    const command = await psField(pid, 'command');
+    const what = /\bagent\b/.test(command) && !/\bmcp\b/.test(command) ? '`minca agent`' : '`minca mcp`';
+    const started = await psField(pid, 'lstart');
+    // Up past npx, node and shells to what launched it.
+    let by = '';
+    let parent = Number(await psField(pid, 'ppid'));
+    for (let depth = 0; depth < 5 && parent > 1 && !by; depth += 1) {
+      const line = await psField(parent, 'command');
+      const name = path.basename(line.split(' ')[0] ?? '');
+      by = CLIENTS.find(([pattern]) => pattern.test(line))?.[1] ?? (LAUNCHERS.test(name) ? '' : name);
+      parent = Number(await psField(parent, 'ppid'));
+    }
+    return `${what} (pid ${pid}), started ${started}${by ? ` by ${by}` : ''}`;
+  } catch {
+    return `pid ${pid}`;
+  }
+}
+
+/**
+ * Stops the process running this computer's agent, waits for it to let go,
+ * and starts the agent here instead.
+ * @throws When it doesn't stop in time, or isn't this user's to stop
+ */
+export async function takeOverAgent(
+  home: string,
+  options: { readonly nodes?: ReadonlyArray<string> } = {},
+): Promise<{ node: P2PNode; grant: Grant; close(): Promise<void> }> {
+  const holder = await agentRunning(home);
+  if (holder !== null) {
+    try {
+      // It closes its node and lets go of the lock on SIGTERM.
+      process.kill(holder, 'SIGTERM');
+    } catch (error) {
+      if (errorCode(error) !== 'ESRCH') throw new Error(`Couldn't stop pid ${holder}: ${messageOf(error)}`);
+    }
+    for (let waited = 0; (await agentRunning(home)) !== null; waited += 200) {
+      if (waited >= 10_000)
+        throw new Error(
+          `pid ${holder} didn't stop within 10 seconds. Stop it by hand (kill ${holder}), then try again.`,
+        );
+      await delay(200);
+    }
+  }
+  return startAgentNode(home, options);
+}
+
 /**
  * Starts this computer's agent: a node of its own, following the account,
  * acting as the agent.
- * @throws Before `minca connect`, or once the note has run out
+ * @throws Before `minca connect`, or once the note has run out; {@link AgentBusy} while another process runs it
  */
 export async function startAgentNode(
   home: string,
@@ -180,11 +269,8 @@ export async function startAgentNode(
   const key = await agentKey(home);
   await checkGrant(grant, key.did, { recordsOnly: true });
   // One key, so one process signing with it: two at once would fork its log (spec 02 §4.10).
-  const release = await holdLock(path.join(agentDir(home), 'lock'));
-  if (!release)
-    throw new Error(
-      'This computer’s agent is already running (another `minca agent` or `minca mcp`). Stop it first: two at once would sign with one key.',
-    );
+  const release = await holdLock(agentLock(home));
+  if (!release) throw new AgentBusy((await agentRunning(home)) ?? 0);
   try {
     return await startWithKey(home, grant, key, options, release);
   } catch (error) {

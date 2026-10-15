@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { fileWriterKeys, holdLock } from '../src/writer-keys.js';
+import { fileWriterKeys, holdLock, lockHolder } from '../src/writer-keys.js';
 import { openHome, createAccount, unlock, chooseAccount, nodeFor } from '../src/home.js';
 import { tempDir } from './helpers/nodes.js';
 
@@ -99,7 +99,9 @@ describe('writer keys on disk', () => {
     const release = await holdLock(file);
     assert.ok(release);
     assert.equal(await holdLock(file), null, 'held: a second agent is turned away');
+    assert.equal(await lockHolder(file), process.pid, 'and can be told who holds it');
     await release();
+    assert.equal(await lockHolder(file), null);
     const again = await holdLock(file);
     assert.ok(again);
     await again();
