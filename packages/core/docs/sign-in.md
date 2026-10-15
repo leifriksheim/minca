@@ -100,8 +100,10 @@ _Source: `packages/core/src/session/auth.ts`. Tests: `packages/core/tests/auth.t
   any other, except the CLI's (label `CLI passphrase`, `CLI_PASSPHRASE_LABEL`),
   which is for unattended unlocking and is kept; the CLI account home
   (`packages/cli/src/home.ts`) makes those. Signing in by password tries every
-  passphrase wrap. At least `MIN_PASSWORD_LENGTH` (10) characters, since a
-  copied pod can be attacked offline. `signInWithPassword` also accepts a
+  passphrase wrap. Any password but an empty one is taken: a copied vault can
+  be guessed at offline, so the forms show how strong it is as it is typed
+  (`passwordStrength`, weak under 40 bits, strong from 60) and warn, but leave
+  the choice to the person. `signInWithPassword` also accepts a
   recovery code, which password managers may hold as this site's login from
   before passwords existed.
 - **A passkey** is a gate, not a key: the WebAuthn ceremony proves presence,

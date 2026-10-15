@@ -514,6 +514,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - derives the account key, and from it every member key, so it reads every
     private space the account was, is or will be a reader of; and the local
     key, so it reads the account's data at rest (01 §11.1, 03 §9.1, 05 §15).
+- **By design.** Whoever copies an account's vault (a pod in a synced drive,
+  say) becomes its root thief once it guesses a passphrase wrap's password
+  offline, at the cost of its PBKDF2 rounds per guess (01 §11). The reference
+  library takes any password but an empty one and only warns when it is weak
+  (`packages/core/docs/sign-in.md`), so a weak password is the person's choice.
 
 ### 3.6 App or program
 

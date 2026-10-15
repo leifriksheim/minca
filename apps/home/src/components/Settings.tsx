@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CarrierSummary } from '@minca/core/node';
 import {
-  MIN_PASSWORD_LENGTH,
   STAY_SIGNED_IN_CHOICES,
+  passwordStrength,
   accountCredentialName,
   offerToSave,
   recoveryKit,
@@ -521,13 +521,14 @@ function PasswordForm({
         name="password"
         autoComplete="new-password"
         placeholder="New password"
-        minLength={MIN_PASSWORD_LENGTH}
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         autoFocus
         aria-label="New password"
+        aria-describedby="password-strength"
         style={styles.input}
       />
+      <Strength password={password} />
       <input
         type="password"
         name="confirm-password"
@@ -539,9 +540,6 @@ function PasswordForm({
         style={styles.input}
       />
       {mismatch && <p style={styles.error}>Those two do not match.</p>}
-      <p style={styles.errorHint}>
-        At least {MIN_PASSWORD_LENGTH} characters. Let your password manager make one.
-      </p>
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="submit" disabled={busy || !password} data-variant="primary" style={styles.darkSmall}>
           {busy ? 'Saving…' : 'Save password'}
@@ -720,3 +718,41 @@ const segmented = {
 } as const;
 const segment = { ...styles.segment, flex: 'none' } as const;
 const segmentOn = { ...styles.segmentActive, flex: 'none' } as const;
+
+/** How strong a new password is, as it is typed: a warning, never a refusal */
+function Strength({ password }: { password: string }) {
+  const check = passwordStrength(password);
+  const filled = password ? { weak: 1, fair: 2, strong: 3 }[check.strength] : 0;
+  const colour = { weak: palette.accent.danger, fair: palette.accent.warn, strong: palette.accent.good }[
+    check.strength
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div aria-hidden style={{ display: 'flex', gap: 4 }}>
+        {[1, 2, 3].map((step) => (
+          <span
+            key={step}
+            style={{
+              flex: 1,
+              height: 4,
+              borderRadius: 2,
+              background: step <= filled ? colour : palette.surface.line,
+              transition: 'background-color .15s ease',
+            }}
+          />
+        ))}
+      </div>
+      <p
+        id="password-strength"
+        aria-live="polite"
+        style={{
+          ...styles.errorHint,
+          marginTop: 0,
+          color: password && check.strength === 'weak' ? palette.accent.danger : styles.errorHint.color,
+        }}
+      >
+        {check.hint || 'Any password works. Let your password manager make a strong one.'}
+      </p>
+    </div>
+  );
+}

@@ -95,15 +95,29 @@ describe('createMincaAuth', () => {
     assert.equal(auth.getState().entry?.hasPassword, true);
   });
 
-  test('a short password is refused, and the flow waits', async () => {
+  test('a short password is taken, and opens the account again', async () => {
     const auth = started();
     await auth.start();
     await auth.createAccount('Ada');
     auth.codeSaved();
 
-    assert.equal(await auth.setPassword('short'), false);
+    assert.equal(await auth.setPassword('abc'), true, auth.getState().error?.message ?? 'no reason given');
+    const did = auth.getState().session!.did;
+    await auth.signOut();
+    await auth.signInWithPassword('abc');
+    assert.equal(auth.getState().stage, 'ready');
+    assert.equal(auth.getState().session?.did, did);
+  });
+
+  test('an empty password is refused, and the flow waits', async () => {
+    const auth = started();
+    await auth.start();
+    await auth.createAccount('Ada');
+    auth.codeSaved();
+
+    assert.equal(await auth.setPassword(''), false);
     assert.equal(auth.getState().stage, 'unlock');
-    assert.match(auth.getState().error?.message ?? '', /at least 10/);
+    assert.match(auth.getState().error?.message ?? '', /Choose a password/);
   });
 
   test('signing out and back in with the password is the same account', async () => {
