@@ -9,7 +9,8 @@
  */
 import * as z from 'zod';
 import type { Contract } from '../../packages/core/src/records/contracts.js';
-import { contract } from '../../packages/core/src/records/contract-builder.js';
+import { storedContract } from '../../packages/core/src/records/contract-builder.js';
+import { collection } from '../../packages/core/src/schema/collection-def.js';
 import type { DefineCollection } from '../../packages/core/src/node/types.js';
 import type { Version } from '../../packages/core/src/types.js';
 import { lineKey } from '../../packages/core/src/records/key.js';
@@ -32,22 +33,20 @@ const WHY = {
   limit: 'No account goes below −100',
 };
 
-/** Built in TypeScript, typed from the schema */
-const payContract: Contract[] = [
-  contract(Payment, ({ body, author }) => body.amount.gte(0).and(body.to.ne(author)), WHY.amount),
-  contract(
-    Payment,
-    ({ body, author, versions }) =>
-      versions(body.received)
+/** Built in TypeScript, in the collection, typed from the schema */
+const pay = collection({
+  name: 'app.pay',
+  schema: Payment,
+  contract: {
+    check: ({ body, prev, author, versions, when }) => ({
+      [WHY.amount]: body.amount.gte(0).and(body.to.ne(author)),
+      // Every citation must be a payment to this account: one of anything else refuses the payment,
+      // where cited() would leave it out.
+      [WHY.claims]: versions(body.received)
         .of(Payment)
         .all((r) => r.collection.eq('app.pay').and(r.body.to.eq(author))),
-    WHY.claims,
-  ),
-  contract(
-    Payment,
-    // `sum([])` is `0.0`: a payment that claims nothing adds up without padding.
-    ({ body, prev, versions, when }) =>
-      body.balance.eq(
+      // `sum([])` is `0.0`: a payment that claims nothing adds up without padding.
+      [WHY.balance]: body.balance.eq(
         when(prev.eq(null), 0, prev.body.balance)
           .sub(body.amount)
           .add(
@@ -57,10 +56,12 @@ const payContract: Contract[] = [
               .sum(),
           ),
       ),
-    WHY.balance,
-  ),
-  contract(Payment, ({ body }) => body.balance.gte(-100), WHY.limit),
-];
+      [WHY.limit]: body.balance.gte(-100),
+    }),
+    line: { once: ['received'] },
+  },
+});
+const payContract: ReadonlyArray<Contract> = storedContract(pay)!.check!;
 
 /** The same, written by hand: the tests check that both give the same verdicts */
 const payContractByHand: Contract[] = [

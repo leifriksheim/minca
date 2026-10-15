@@ -151,6 +151,11 @@ _Source: `packages/core/src/records/rules.ts` (`checkRules`, `onePerKey`). Tests
 
 ## Contracts
 
+What only needs to look the same in every app, like a todo that is done
+once two people react 👍, is a [computed field](computed.md): every node
+derives it from what it holds, with nothing to cite. A contract is for what
+must be fixed and the same on every node.
+
 Grants say who may write, and the rules above what a record must keep to;
 every peer enforces both. A contract, the definition's `contract`, says
 what a version must be to count: conditions over the body, the version before
@@ -166,15 +171,15 @@ export const passed = collection({
   links: { about: { to: ['app.proposal'], cardinality: 'one' } },
   rules: { onePer: ['link:about'] }, // one "passed" per proposal
   contract: {
-    check: [
-      {
-        // At least three members' yes votes on this proposal, among those cited
-        that: `versions(body.votes)
-          .filter(v, v.collection == "app.proposal.vote" && v.link("about") == link("about") && v.body.choice == "yes")
-          .map(v, v.author).distinct().size() >= 3`,
-        else: 'A proposal passes with yes votes from at least three members',
-      },
-    ],
+    // Each key is why a version failing its condition doesn't count
+    check: ({ body, cited, link }) => ({
+      'A proposal passes with yes votes from at least three members': cited(body.votes, vote)
+        .where((v) => v.link('about').eq(link('about')).and(v.body.choice.eq('yes')))
+        .map((v) => v.author)
+        .distinct()
+        .count()
+        .gte(3),
+    }),
   },
 });
 
@@ -229,11 +234,12 @@ macros nested three deep, or `versions()` called inside a macro. A condition
 over more than its limits is refused, so one that passes on small
 records can fail on large ones; the hints say where to look.
 
-To write a condition in TypeScript instead, typed from the schema, use
-`contract(schema, that, else)`, which builds the CEL
-([contracts.md](contracts.md#writing-one-in-typescript)). Either way,
-`collections.define` refuses a condition that misreads the schema, like a
-misspelled field or a string compared with a number.
+`check` written as a function, as above, builds that CEL from TypeScript,
+typed from the collection's own schema and, through `cited(ids, collection)`,
+from the schemas of what it cites: a misspelled field is a compile error
+([contracts.md](contracts.md#writing-one-in-typescript)). A list of
+`{ that, else }` with the CEL written by hand is stored the same way. Either
+way, `collections.define` refuses a condition that misreads the schema.
 
 Bytes, timestamps, durations, regular expressions and types as values are
 left out. The exact subset, and its limits, are in [spec 09](../../../spec/09-contracts.md).

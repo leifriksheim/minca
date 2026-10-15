@@ -1848,7 +1848,8 @@ entry lets any version through; an empty entry lets none through.
 
 What a wake is made from, and how a device works out its tags, is the
 library's: it keeps the account's own automations in the registry
-(`sys.automation`, §13.2) and makes one wake from each
+(`sys.automation`, §13.2) and makes one wake from each, and one more for
+each collection a computed field it names reads
 ([automations](../packages/core/docs/automations.md#the-accounts-own)). A
 wake carries no words of the person's and no topic values, only their tags,
 at most 16 for a space; a device that would need more leaves that space
@@ -1856,7 +1857,7 @@ without an entry.
 No carrier shows a notification yet; a wake is what a carrier needs to wake
 an app that is closed ([06](06-nodes-and-sessions.md) §4.4).
 
-_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`), `packages/core/src/node/node.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else")._
+_Source: `packages/core/src/space/own-automations.ts` (`readWake`, `wakes`, `wakeFor`, `linkedWakes`), `packages/core/src/node/node.ts` (`syncPasses`), `packages/core/src/node/carrier.ts` (`arrived`). Tests: `packages/core/tests/carrier.test.ts` ("a carrier gets tags, never the values it matches", "someone mentions you in a private space: the carrier says so, and nothing else"), `packages/core/tests/computed.test.ts` ("a wake for a filter on a computed field also wakes on what that field reads")._
 
 > **Planned: devices deliver wakes, by Web Push.** Issue:
 > [#60](https://github.com/leifriksheim/minca/issues/60). Delivery moves to

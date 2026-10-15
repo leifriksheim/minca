@@ -183,7 +183,9 @@ function Home({
 /** An assembly on the home screen: how many are in it, and how many proposals are open */
 function Tile({ space, onOpen }: { space: SpaceSummary; onOpen: () => void }) {
   const access = useAccess(space.id);
-  const open = useQuery(space.id, { collection: proposal, where: { closed: { $ne: true } } }).result;
+  // Every proposal, decided or not: a proposal has no field saying it is closed, so the filter
+  // this had (`closed: { $ne: true }`) matched them all. Counting only open ones needs the votes.
+  const open = useQuery(space.id, { collection: proposal }).result;
   const members = access?.members.length;
   return (
     <button className="lq-card lq-tile" data-interactive onClick={onOpen}>

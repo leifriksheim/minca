@@ -450,6 +450,8 @@ const ACCESS_LATER: Standing = Object.freeze({
 /** Whether a version goes in the store: it stands, or stood until a later change withdrew it */
 /** How a version fares under its collection's contract, as this node reads them */
 import type { RecordContracts } from './types.js';
+import { checkComputed, checkComputedTypes, type ComputedFields } from '../query/computed.js';
+import { storedComputed, storedContract } from '../records/contract-builder.js';
 type ChecksVerdict =
   | { readonly passes: true }
   | { readonly passes: false; readonly reason: string }
@@ -2004,6 +2006,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       definedBy: entry?.definedBy ?? null,
       rules: definition?.rules ?? {},
       ...(definition?.contract !== undefined ? { contract: definition.contract } : {}),
+      ...(definition?.computed !== undefined ? { computed: definition.computed } : {}),
       topics: definition?.topics ?? [],
       records,
     });
@@ -4028,6 +4031,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       return Promise.all(versions.map((version) => view<T>(version)));
     },
 
+    /** A collection's computed fields, as its definition says now; a malformed member reads as none */
+    async computed(collection: string): Promise<ComputedFields | undefined> {
+      const fields = (await definitionOf(collection))?.computed;
+      return fields !== undefined && checkComputed(fields) === null ? fields : undefined;
+    },
+
     async collections(): Promise<ReadonlyArray<NodeCollection>> {
       const counts = new Map<string, number>();
       for (const version of await everyCurrent()) {
@@ -4049,6 +4058,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       const after =
         current && Number.isSafeInteger(current.definition.version + 1) ? current.definition.version : 0;
       const version = input.version ?? after + 1;
+      const described = await catalog();
       const definition: StoredCollection = {
         name: input.name,
         ...(input.title !== undefined ? { title: input.title } : {}),
@@ -4059,7 +4069,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         ...(input.links !== undefined ? { links: input.links } : {}),
         ...(input.rules !== undefined ? { rules: input.rules } : {}),
         ...(input.topics !== undefined ? { topics: input.topics } : {}),
-        ...(input.contract !== undefined ? { contract: input.contract } : {}),
+        ...(input.contract !== undefined ? { contract: storedContract(input) } : {}),
+        ...(input.computed !== undefined ? { computed: storedComputed(input) } : {}),
       };
       const contract = definition.contract;
       const shapeProblem = contract !== undefined ? checkContractShape(contract) : null;
@@ -4072,7 +4083,14 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
             // The library's own care, not protocol: a contract that misreads the schema is refused here.
             checkContractTypes(contract.check, definition.schema, 'contract.check'))
           : null) ??
-        (lineProblem === 'unknown' ? 'contract.line takes only "once"' : lineProblem);
+        (lineProblem === 'unknown' ? 'contract.line takes only "once"' : lineProblem) ??
+        (definition.computed !== undefined
+          ? (checkComputed(definition.computed) ??
+            // The library's care, as for contracts: read against the schemas of what it links to.
+            checkComputedTypes(definition.name, definition.computed, definition.schema, (name) =>
+              name === definition.name ? definition : (described.get(name)?.definition ?? null),
+            ))
+          : null);
       if (problem) throw new Error(problem);
       if (!Number.isSafeInteger(version)) throw new Error(`version must be a whole number below 2^53`);
       if (current && version <= after) {

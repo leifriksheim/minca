@@ -30,6 +30,7 @@ import { standardDefinition } from './standard.js';
 import { isObject } from '../utils/guards.js';
 import { canonicalize } from '../schema/version.js';
 import { describeCollection } from '../records/describe.js';
+import { storedContract } from '../records/contract-builder.js';
 import { blueprint, type Blueprint, type DraftCollection } from './library/collections.js';
 
 /** Why this can't be a blueprint, or null when it can */
@@ -91,7 +92,7 @@ export function standardCollections(collections: unknown): unknown {
       ...(standard.history !== undefined ? { history: standard.history } : {}),
       ...(standard.links !== undefined ? { links: standard.links } : {}),
       ...(standard.rules !== undefined ? { rules: standard.rules } : {}),
-      ...(standard.contract !== undefined ? { contract: standard.contract } : {}),
+      ...(standard.contract !== undefined ? { contract: storedContract(standard) } : {}),
       ...(standard.topics !== undefined ? { topics: standard.topics } : {}),
     };
     if (typeof draft === 'string') return library;

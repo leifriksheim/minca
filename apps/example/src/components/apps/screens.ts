@@ -15,7 +15,7 @@
  * navigates somewhere else leaves it behind, so a page it navigates to hears
  * nothing.
  */
-import type { Link, NodeRecord, P2PNode } from '@minca/core';
+import { checkFilter, type Filter, type Link, type NodeRecord, type P2PNode } from '@minca/core';
 import { accent, display, ink, radius, surface } from '@minca/app-shared/tokens';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -67,6 +67,8 @@ interface ScreenRecord {
   readonly body: unknown;
   /** The same as `body` */
   readonly data: unknown;
+  /** What its collection's computed fields work out for it, on this device */
+  readonly computed: Readonly<Record<string, unknown>>;
   readonly links: ReadonlyArray<Link>;
   /** The account that created it */
   readonly createdBy: string | null;
@@ -107,8 +109,9 @@ Ask for no more than it needs.
 Inside it, window.minca is:
   minca.me                          { did, name } — who is looking
   minca.collections                 the collection names this screen may use (its app's "collections")
-  await minca.list(collection, { where? })   records, oldest first: { key, collection, body, links, createdBy, createdAt, updatedAt, mine, viaAgent }
-                                    where: { "link:<rel>": "<record key>" } for records linking there, { field: value } for a field's value
+  await minca.list(collection, { where? })   records, oldest first: { key, collection, body, computed, links, createdBy, createdAt, updatedAt, mine, viaAgent }
+                                    where: { "link:<rel>": "<record key>" } for records linking there, { field: value } for a field's value,
+                                    a computed field's too; computed holds the values the collection's definition works out, like { done: true }
   await minca.get(key)              one record, or null
   await minca.put(collection, body, { links?, key? })   → the record written, as the person looking
   await minca.update(key, body, { links? })             → the next version
@@ -235,12 +238,16 @@ export function screenDocument(screen: string, network: ReadonlyArray<string> = 
   return `<meta http-equiv="Content-Security-Policy" content="${screenPolicy(network)}">\n<script>${SCREEN_CLIENT}</script>\n${screen}`;
 }
 
-const toScreen = (record: NodeRecord, viewer: string): ScreenRecord => ({
+const toScreen = (
+  record: NodeRecord & { readonly computed?: Readonly<Record<string, unknown>> },
+  viewer: string,
+): ScreenRecord => ({
   key: record.key,
   id: record.key,
   collection: record.collection,
   body: record.body,
   data: record.body,
+  computed: record.computed ?? {},
   links: record.links,
   createdBy: record.createdBy,
   createdAt: record.createdAt,
@@ -318,15 +325,8 @@ export function createScreenBridge(params: {
     }
     return Object.fromEntries(keys.map((k, i) => [k, args[i]]));
   };
-  /** `{ "link:game": key }` for records linking there, `{ field: value }` for a field's value */
-  const matches = (record: NodeRecord, where: unknown) => {
-    if (!isObject(where)) return true;
-    return Object.entries(where).every(([field, value]) =>
-      field.startsWith('link:')
-        ? record.links.some((link) => link.rel === field.slice(5) && link.to === value)
-        : fieldOf(record.body, field) === value,
-    );
-  };
+  /** A screen's `where`, as a query takes it; anything else is a mistake to tell the screen about */
+  const isFilter = (where: unknown): where is Filter => checkFilter(where) === null;
 
   const methods: Record<string, (...args: unknown[]) => Promise<unknown>> = {
     list: async (...args) => {
@@ -334,8 +334,13 @@ export function createScreenBridge(params: {
       const { collection, where } = isObject(first)
         ? { collection: first.collection, where: first.where }
         : { collection: first, where: fieldOf(args[1], 'where') };
-      const records = await node.records.list(spaceId, { collection: collectionOf(collection) });
-      return records.filter((record) => matches(record, where)).map((record) => toScreen(record, node.did));
+      if (where !== undefined && !isFilter(where))
+        throw new Error(`minca.list: ${checkFilter(where, 'where')}`);
+      const { records } = await node.records.query(spaceId, {
+        collection: collectionOf(collection),
+        ...(where !== undefined ? { where } : {}),
+      });
+      return records.map((record) => toScreen(record, node.did));
     },
     get: async (...args) => {
       const { key } = spread(args, ['key']);

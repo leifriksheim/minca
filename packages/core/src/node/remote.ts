@@ -16,8 +16,8 @@
 import type { MeshStatus } from '../network/mesh.js';
 import { parseDelegation, type Delegation } from '../identity/ucan.js';
 import type { RootSigner } from '../identity/root-signer.js';
-import type { Query, ResultOf } from '../query/types.js';
-import { plainQuery } from '../query/types.js';
+import type { Query } from '../query/types.js';
+import { plainQuery, type CollectionRef, type IncludeMap, type ResultFor } from '../query/types.js';
 import { toJsonSchema } from '../schema/collection-def.js';
 import { previewInvite } from '../space/space-manager.js';
 import { isRecord } from '../utils/guards.js';
@@ -344,18 +344,20 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
         // Either overload: the record comes back typed as the call asked.
         put: (...args: unknown[]) =>
           ask<never>(handle, 'records.put', [args[0], collectionName(args[1]), ...args.slice(2)]),
-        query: <const Q extends Query>(spaceId: string, query: Q) =>
-          ask<ResultOf<Q>>(handle, 'records.query', [spaceId, plainQuery(query)]),
-        watch: <const Q extends Query>(
+        query: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
           spaceId: string,
-          query: Q,
-          onResult: (result: ResultOf<Q>) => void,
+          query: Query<C, I>,
+        ) => ask<ResultFor<C, I>>(handle, 'records.query', [spaceId, plainQuery(query)]),
+        watch: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
+          spaceId: string,
+          query: Query<C, I>,
+          onResult: (result: ResultFor<C, I>) => void,
           onError?: (error: Error) => void,
         ) => {
           const watch = ++nextId;
           watchers.set(watch, {
             // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the served node ran this query
-            onResult: (result) => onResult(result as ResultOf<Q>),
+            onResult: (result) => onResult(result as ResultFor<C, I>),
             onError: onError ?? ((error) => console.error(error)),
           });
           try {

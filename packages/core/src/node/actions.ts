@@ -29,6 +29,7 @@ import { standardDefinition, standardGroups } from '../schemas/standard.js';
 import { toJsonSchema } from '../schema/collection-def.js';
 import { ACTIVITY_STATES, setActivity } from '../schemas/automations.js';
 import { describeCollection } from '../records/describe.js';
+import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { isRecord } from '../utils/guards.js';
 
 /** The subset of JSON Schema these inputs use */
@@ -440,8 +441,16 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       return names.map((name) => {
         const definition = standardDefinition(name);
         if (!definition) throw new Error(`${name} is not in the standard library`);
-        const { schema, ...rest } = definition;
-        return { ...rest, schema: toJsonSchema(schema), summary: describeCollection(definition) };
+        const { schema, contract: _built, computed: _derived, ...rest } = definition;
+        const contract = storedContract(definition);
+        const computed = storedComputed(definition);
+        const stored = {
+          ...rest,
+          schema: toJsonSchema(schema),
+          ...(contract !== undefined ? { contract } : {}),
+          ...(computed !== undefined ? { computed } : {}),
+        };
+        return { ...stored, summary: describeCollection(stored) };
       });
     },
   },

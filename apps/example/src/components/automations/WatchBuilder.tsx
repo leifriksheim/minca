@@ -5,6 +5,7 @@ import { ME } from '@minca/core/schemas';
 import { Modal } from '@minca/app-shared/Modal';
 import { Loader } from '@minca/app-shared/Loader';
 import { clauseFields, clausesWords, whereOf, type Clause } from '../../derive/conditions';
+import { computedFieldsOf, withComputed } from '../../derive/schema-ui';
 import { collectionLabel, recordLabel } from '../../derive/schema-ui';
 import { nameOf } from '../../derive/people';
 import { ago } from '../../derive/time';
@@ -63,7 +64,17 @@ export function WatchBuilder({
   const [done, setDone] = useState(false);
 
   const chosen = offered.find((c) => c.name === collection);
-  const fields = useMemo(() => (chosen ? clauseFields(chosen) : []), [chosen]);
+  // A computed field is a condition like any other: "when a todo is done".
+  const fields = useMemo(
+    () =>
+      chosen
+        ? clauseFields({
+            ...chosen,
+            schema: withComputed(chosen.schema, computedFieldsOf(chosen, collections)),
+          })
+        : [],
+    [chosen, collections],
+  );
   // Where a record is, like a message's channel: only within one space, where its channels are.
   const placesHere = useMemo(
     () => (collection && where === 'space' ? places(collections, collection) : []),
@@ -87,9 +98,10 @@ export function WatchBuilder({
     if (!collection) return;
     let live = true;
     const condition = allOf([whereOf(clauses, did), ...within.map(linkedTo)].filter((c) => c !== undefined));
+    // A query, so a condition on a computed field reads what this device works out.
     void node.records
-      .list(space.id, { collection, newestFirst: true, limit: LOOK_BACK })
-      .then(async (records) => {
+      .query(space.id, { collection, sort: { '@createdAt': 'desc' }, limit: LOOK_BACK })
+      .then(async ({ records }) => {
         const matched: NodeRecord[] = [];
         for (const record of records) {
           if (!record.verified || record.body === null) continue;

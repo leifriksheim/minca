@@ -18,6 +18,11 @@ export type FilterSubject = Pick<
 > &
   Partial<Pick<NodeRecord, 'author' | 'root' | 'updatedAt' | 'seq'>> & {
     readonly included?: Readonly<Record<string, unknown>>;
+    /**
+     * Its collection's computed fields (packages/core/docs/computed.md). A
+     * field named here is read from here, never from the body.
+     */
+    readonly computed?: Readonly<Record<string, unknown>>;
   };
 
 const META: Record<string, (r: FilterSubject) => unknown> = {
@@ -49,7 +54,8 @@ const OPERATORS = new Set([
 /**
  * A field of a record: `@…` for the record itself, `link:<rel>` for where its
  * first link of that role points (missing when it has none), a dotted path
- * into its body otherwise.
+ * otherwise: into a computed field when the first part names one, else into
+ * its body. A body can't stand in for a computed field by holding its name.
  */
 export function fieldValue(record: FilterSubject, path: string): unknown {
   if (path.startsWith('include:')) {
@@ -66,8 +72,13 @@ export function fieldValue(record: FilterSubject, path: string): unknown {
     if (!read) throw new Error(`Unknown record field "${path}" — use one of ${Object.keys(META).join(', ')}`);
     return read(record);
   }
+  const parts = path.split('.');
   let value: unknown = record.body;
-  for (const part of path.split('.')) {
+  if (record.computed && Object.hasOwn(record.computed, parts[0]!)) {
+    value = record.computed[parts[0]!];
+    parts.shift();
+  }
+  for (const part of parts) {
     // Own members only, nothing a runtime adds to every object; and of a list, only its positions.
     if (Array.isArray(value)) {
       const items: ReadonlyArray<unknown> = value;

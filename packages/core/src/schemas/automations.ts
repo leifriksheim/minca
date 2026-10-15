@@ -32,6 +32,7 @@ import {
   type QueryRecord,
 } from '../query/types.js';
 import { checkFilter, checkQuery, matches } from '../query/filter.js';
+import { lastRead, readsComputed } from '../query/computed.js';
 import { quickAddBody } from '../schema/quick-add.js';
 import { schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { isObject } from '../utils/guards.js';
@@ -353,7 +354,10 @@ export interface AutomationMatch {
   readonly record: QueryRecord;
   /** What its query's `include` found, as the condition read it: a count as a number */
   readonly included: Readonly<Record<string, unknown>>;
-  /** When it came to hold, as far as can be told: its last change, or the newest record an include found */
+  /**
+   * When it came to hold, as far as can be told: its last change, the newest
+   * record an include found, or the newest its computed fields read
+   */
   readonly moment: number;
 }
 
@@ -386,9 +390,18 @@ export async function matching(
     sort: query.sort ?? { '@updatedAt': 'desc' },
     limit: query.limit ?? limit,
   });
+  // A computed field the automation reads changes when what it reads is written: a 👍 can make a todo done.
+  const name = nameOf(query.collection);
+  const fields = (await node.collections.list(space)).find((c) => c.name === name)?.computed ?? {};
+  const reads = readsComputed(fields, query.where) || readsComputed(fields, when.holds);
+  const source = {
+    linked: (key: string, o: { rel?: string; collection?: string }) => node.records.linked(space, key, o),
+  };
   const found: AutomationMatch[] = [];
   for (const record of records) {
     let latest = Date.parse(record.updatedAt);
+    const last = reads ? await lastRead(source, record.key, fields) : null;
+    if (last) latest = Math.max(latest, Date.parse(last.updatedAt));
     const included: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(record.included)) {
       if (typeof value === 'number') {

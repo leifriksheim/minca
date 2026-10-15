@@ -12,59 +12,64 @@ library builds, checks and runs them.
 
 ## Writing one in TypeScript
 
-`contract(schema, that, else)` builds one condition from TypeScript, typed
-from the collection's schema, and gives the `{ that, else }` that
-`contract.check` holds. Peers still see CEL: the builder writes it, as a query
-builder writes SQL.
+Write `check` as a function in the collection. It gets the version's names,
+typed from the collection's own schema, and gives an object: each key says
+why a version failing its condition doesn't count, and each value is the
+condition. Peers still see CEL: `define` builds it, as a query builder writes
+SQL.
 
 ```ts
 import * as z from 'zod';
-import { collection, contract } from '@minca/core';
+import { collection } from '@minca/core';
 
-const Reaction = z.object({ emoji: z.string() });
-const Fame = z.object({ reactions: z.array(z.string()) });
+const reaction = collection({
+  name: 'app.reaction',
+  schema: z.object({ emoji: z.string() }),
+  links: { on: { to: ['app.comment'], cardinality: 'one' } },
+});
 
 export const fame = collection({
   name: 'app.fame',
-  schema: Fame,
+  schema: z.object({ reactions: z.array(z.string()) }),
   links: { on: { to: ['app.comment'], cardinality: 'one' } },
   contract: {
-    check: [
-      contract(
-        Fame,
-        ({ body, versions, link }) =>
-          versions(body.reactions)
-            .of(Reaction)
-            .where((r) =>
-              r.collection.eq('app.reaction').and(r.link('on').eq(link('on')), r.body.emoji.eq('🙂')),
-            )
-            .map((r) => r.author)
-            .distinct()
-            .count()
-            .gte(5),
-        'Needs five different people',
-      ),
-    ],
+    check: ({ body, cited, link }) => ({
+      'Needs five different people': cited(body.reactions, reaction)
+        .where((r) => r.link('on').eq(link('on')).and(r.body.emoji.eq('🙂')))
+        .map((r) => r.author)
+        .distinct()
+        .count()
+        .gte(5),
+    }),
   },
 });
 ```
 
 That stores:
 
-```
-versions(body.reactions).filter(x0, x0.collection == "app.reaction" && x0.link("on") == link("on") && x0.body.emoji == "🙂").map(x0, x0.author).distinct().size() >= 5
+```json
+[
+  {
+    "that": "versions(body.reactions).filter(x0, x0.collection == \"app.reaction\").filter(x0, x0.link(\"on\") == link(\"on\") && x0.body.emoji == \"🙂\").map(x0, x0.author).distinct().size() >= 5",
+    "else": "Needs five different people"
+  }
+]
 ```
 
-- **Typed from the schema.** The first argument is the collection's schema
-  (a validator with Standard Schema types, or JSON Schema), or a definition
-  that has one. `body.` completes its fields, and `body.amont`,
-  `body.to.eq(1)` or `versions(body.game)` on a string are type errors. A
-  cited version is generic, its body untyped, until `.of(collection)` types
-  it. `.of` is a promise, not a check: test `collection` too.
+- **Typed from the schemas.** `body.` completes the collection's fields, and
+  `body.amont`, `body.to.eq(1)` or a condition that gives a number are type
+  errors.
+- **`cited(ids, collection)`** reads the versions cited by `ids` that are in
+  `collection`, typed from its schema, so `r.body.emojii` is a type error
+  too. Versions of any other collection are left out, so nothing can be cited
+  in their place. Where a citation of anything else must refuse the version
+  instead, use `versions(ids)`, untyped until `.of(collection)`, and test
+  `collection` yourself.
 - **What it reads:** `body`, `prev` (`prev.eq(null)` on a first version),
   `links`, `key`, `seq`, `collection`, `author`, `creator`, `createdAt`, and
-  the functions `versions(ids)`, `link(rel)`, `member(did)`, `hash(x)`,
-  `has(field)`, `when(test, then, otherwise)` and `raw(cel)`.
+  the functions `cited(ids, collection)`, `versions(ids)`, `link(rel)`,
+  `member(did)`, `hash(x)`, `has(field)`, `when(test, then, otherwise)` and
+  `raw(cel)`.
 - **Methods by type.** Comparison: `eq` `ne` `lt` `lte` `gt` `gte` `in`.
   Numbers: `add` `sub` `mul` `div` `neg`, ints also `mod`, and `toInt`,
   `toDouble`. Bools: `and` `or` `not`. Strings: `size` `contains`
@@ -77,13 +82,17 @@ versions(body.reactions).filter(x0, x0.collection == "app.reaction" && x0.link("
 - **`raw(cel)`** writes CEL by hand for what the builder doesn't cover:
   `math.greatest`, map literals, `string()`, indexing a map. Its result is
   untyped unless you say: `raw<boolean>('…')`.
-- `contract` throws when what it builds isn't a condition `define` would
-  take, saying why, with the CEL.
+- `define` throws when what it builds isn't a condition it would take,
+  saying why.
 
 What it can't express, and `raw` covers: map literals, `math.greatest` and
 `math.least`, `string()`, `bool()`, `uint` values, `.map` with a filter
 (`map(x, p, t)`), and a field of an untyped value whose name is one of the
 methods above (use `.get('size')`).
+
+`contract(schema, that, else)` builds one condition outside a collection,
+for one shared by several, and gives the `{ that, else }` that a `check`
+list holds.
 
 ## Writing it by hand
 
@@ -114,7 +123,7 @@ await node.records.update(space, line, { to: other, amount: 20, balance: -50, re
 
 A contract is the definition's `contract`, apart from its `rules`: peers
 check `rules` and refuse `check` there, and never read `contract`
-(spec 09 §1). The functions and types are `Contract`, `CollectionContract`,
+(spec 09 §1). The functions and types are `Contract`, `CollectionContract`, `ContractContext`,
 `contract`, `contractCostHints` and `node.records.contracts`.
 
 ## Checked against the schema when defined
@@ -184,4 +193,4 @@ A line is checked by walking its counted chain for each version judged, so a
 very long line costs time in proportion to its length squared, once; the
 verdicts are cached.
 
-_Source: `packages/core/src/records/contract-builder.ts` (`contract`), `packages/core/src/records/cel-types.ts` (`typeCheckCel`, `typeOfSchema`), `packages/core/src/records/contracts.ts` (`checkContracts`, `checkContractShape`, `checkContractTypes`, `runContracts`, `contractCostHints`, `checkLine`), `packages/core/src/node/space-runtime.ts` (`checksOf`, `lineBreak`, `contractsFor`, `counts`, `recordsChanged`, `after`, `write`, `define`), `packages/core/src/node/node.ts` (`records.contracts`). Tests: `packages/core/tests/contract-builder.test.ts`, `packages/core/tests/contracts.test.ts`, `packages/core/tests/contracts-shape.test.ts`, `packages/core/tests/contracts-line.test.ts`, `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-reads.test.ts`, `scenarios/tests/fame.test.ts` and `scenarios/tests/credit.test.ts` (each case with the built contract and the hand-written one)._
+_Source: `packages/core/src/records/contract-builder.ts` (`contract`, `buildChecks`, `storedContract`), `packages/core/src/records/cel-types.ts` (`typeCheckCel`, `typeOfSchema`), `packages/core/src/records/contracts.ts` (`checkContracts`, `checkContractShape`, `checkContractTypes`, `runContracts`, `contractCostHints`, `checkLine`), `packages/core/src/node/space-runtime.ts` (`checksOf`, `lineBreak`, `contractsFor`, `counts`, `recordsChanged`, `after`, `write`, `define`), `packages/core/src/node/node.ts` (`records.contracts`). Tests: `packages/core/tests/contract-builder.test.ts`, `packages/core/tests/contracts.test.ts`, `packages/core/tests/contracts-shape.test.ts`, `packages/core/tests/contracts-line.test.ts`, `packages/core/tests/contracts-pending.test.ts`, `packages/core/tests/contracts-reads.test.ts`, `scenarios/tests/fame.test.ts` and `scenarios/tests/credit.test.ts` (each case with the built contract and the hand-written one)._

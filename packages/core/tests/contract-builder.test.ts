@@ -7,7 +7,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import * as z from 'zod';
 
-import { contract, type ContractContext } from '../src/records/contract-builder.js';
+import { contract, storedContract, type ContractContext } from '../src/records/contract-builder.js';
+import { collection } from '../src/schema/collection-def.js';
 import { parseCel } from '../src/records/cel.js';
 import {
   checkContracts,
@@ -432,5 +433,99 @@ describe('collections.define: contracts checked against the schema', () => {
       contract: { check: [contract(Payment, ({ body }) => body.amount.gte(0), 'x')] },
     });
     assert.equal(ok.name, 'app.pay');
+  });
+});
+
+describe('contracts: written in the collection', () => {
+  const reaction = collection({
+    name: 'app.reaction',
+    schema: Reaction,
+    links: { on: { to: ['app.comment'], cardinality: 'one' } },
+  });
+  const fame = collection({
+    name: 'app.fame',
+    schema: Fame,
+    links: { on: { to: ['app.comment'], cardinality: 'one' } },
+    contract: {
+      check: ({ body, cited, link }) => ({
+        'Needs five different people': cited(body.reactions, reaction)
+          .where((r) => r.link('on').eq(link('on')).and(r.body.emoji.eq('🙂')))
+          .map((r) => r.author)
+          .distinct()
+          .count()
+          .gte(5),
+      }),
+    },
+  });
+
+  test('each key is why a version failing its condition does not count', () => {
+    assert.deepEqual(storedContract(fame)?.check, [
+      {
+        that: 'versions(body.reactions).filter(x0, x0.collection == "app.reaction").filter(x0, x0.link("on") == link("on") && x0.body.emoji == "🙂").map(x0, x0.author).distinct().size() >= 5',
+        else: 'Needs five different people',
+      },
+    ]);
+  });
+
+  test('cited() leaves out versions of any other collection, so nothing else can stand in for them', async () => {
+    const [check] = storedContract(fame)?.check ?? [];
+    assert.ok(check);
+    const versions = (ids: string[], collection: string): CitedVersion[] =>
+      ids.map((id) => ({
+        id,
+        key: `k-${id}`,
+        collection,
+        seq: 0,
+        author: `did:key:z${id}`,
+        createdAt: '2026-10-01T00:00:00.000Z',
+        deleted: false,
+        body: { emoji: '🙂' },
+        links: [{ rel: 'on', to: 'c1' }],
+      }));
+    const judge = (cited: CitedVersion[]) =>
+      runContracts([check], {
+        values: { body: { reactions: cited.map((v) => v.id) }, links: [{ rel: 'on', to: 'c1' }] },
+        cite: async (id) => cited.find((v) => v.id === id) ?? { later: true },
+        member: () => true,
+      });
+    assert.deepEqual(await judge(versions(['a', 'b', 'c', 'd', 'e'], 'app.reaction')), { passed: true });
+    // Five 🙂, one of them from another collection, written to look like a reaction: four count.
+    const forged = [...versions(['a', 'b', 'c', 'd'], 'app.reaction'), ...versions(['e'], 'app.note')];
+    assert.deepEqual(await judge(forged), { passed: false, reason: 'Needs five different people' });
+  });
+
+  test('the conditions are typed from the collection’s own schema, and what they cite from its', () => {
+    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment -- these lines are type errors on purpose */
+    const wrong = collection({
+      name: 'app.fame',
+      schema: Fame,
+      contract: {
+        check: ({ body, cited }) => ({
+          // @ts-expect-error — a fame's body has no field "reactionz"
+          'Typo in the body': body.reactionz.size().gt(0),
+          // @ts-expect-error — a reaction's body has no field "emojii"
+          'Typo in what it cites': cited(body.reactions, reaction).exists((r) => r.body.emojii.eq('🙂')),
+        }),
+      },
+    });
+    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment */
+    const notBool = collection({
+      name: 'app.fame',
+      schema: Fame,
+      contract: {
+        // @ts-expect-error — a condition gives a bool, and a size is a number
+        check: ({ body }) => ({ 'Not a condition': body.reactions.size() }),
+      },
+    });
+    assert.ok(wrong && notBool);
+  });
+
+  test('a condition that misreads the schema is refused when built, saying where', () => {
+    const typo = collection({
+      name: 'app.fame',
+      schema: Fame,
+      contract: { check: ({ raw }) => ({ 'Hand-written': raw<boolean>('body.reactionz.size() > 0') }) },
+    });
+    assert.throws(() => storedContract(typo), /reactionz/);
   });
 });

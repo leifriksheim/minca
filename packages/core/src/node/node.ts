@@ -14,7 +14,8 @@ import {
   type CollectionRef,
   type Include,
   type Query,
-  type ResultOf,
+  type IncludeMap,
+  type ResultFor,
 } from '../query/types.js';
 import { createP256Provider } from '../identity/crypto-p256.js';
 import type { Link, SpaceRole } from '../types.js';
@@ -114,6 +115,7 @@ import {
   checkOwnAutomation,
   OWN_AUTOMATIONS,
   WAKE_COLLECTION,
+  linkedWakes,
   wakeFor,
   type WakeSpace,
 } from '../space/own-automations.js';
@@ -668,13 +670,14 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const record = await registry.get(membership.body.space);
       if (!record) continue;
       const declared = new Map(
-        (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c.topics]),
+        (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c]),
       );
       spaces.push({
         id: record.space.id,
         key: record.key,
         visibility: record.space.visibility,
-        topics: (collection) => declared.get(collection) ?? [],
+        topics: (collection) => declared.get(collection)?.topics ?? [],
+        computed: (collection) => declared.get(collection)?.computed,
       });
       try {
         passes.set(await passKey(record.space.id), await makePass(record));
@@ -685,8 +688,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const carry = await runtime(carrier.space);
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
     const wakes = new Map<string, unknown>();
-    for (const own of await ownAutomations())
-      wakes.set(`wake:${own.id}`, await wakeFor(own, spaces, config.signer.did));
+    for (const own of await ownAutomations()) {
+      const wake = await wakeFor(own, spaces, config.signer.did);
+      wakes.set(`wake:${own.id}`, wake);
+      // A 👍 can make a todo done: what a computed field the automation names reads wakes too.
+      for (const also of linkedWakes(own, wake, spaces)) wakes.set(`wake:${own.id}:${also.collection}`, also);
+    }
     await writeExactly(carry, WAKE_COLLECTION, wakes, () => true);
   }
 
@@ -2346,26 +2353,30 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         (await runtime(spaceId)).remove(key, as ? { as } : undefined),
       history: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).history<T>(key),
       can: perSpace((rt, action: 'create' | 'edit' | 'delete', target: string) => rt.can(action, target)),
-      async query<Q extends Query>(spaceId: string, query: Q): Promise<ResultOf<Q>> {
+      async query<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
+        spaceId: string,
+        query: Query<C, I>,
+      ): Promise<ResultFor<C, I>> {
         const space = await runtime(spaceId);
         // Asked before running, so a node holding part of the space starts fetching what it lacks.
-        const complete = space.use(collectionsOf(query));
+        const complete = space.use(collectionsOf(plainQuery(query)));
         const result = await runQuery(
           {
             list: (collection) => space.list({ collection }),
             get: (key) => space.get(key),
             linked: (key, options) => space.linked(key, options),
+            computed: (collection) => space.computed(collection),
           },
           query,
         );
         // The query's type says what it finds; running it can't prove that.
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- typed from the query
-        return { ...result, complete } as ResultOf<Q>;
+        return { ...result, complete } as ResultFor<C, I>;
       },
-      watch<Q extends Query>(
+      watch<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
         spaceId: string,
-        query: Q,
-        onResult: (result: ResultOf<Q>) => void,
+        query: Query<C, I>,
+        onResult: (result: ResultFor<C, I>) => void,
         onError?: (error: Error) => void,
       ) {
         let stopped = false;

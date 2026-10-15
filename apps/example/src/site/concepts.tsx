@@ -269,17 +269,22 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
           five (or an always-on bot does), and every device checks the proof the same way. A claim that
           doesn’t add up syncs, but counts for no one: smart contracts without a blockchain.
         </p>
-        <p>Just showing it? A live query is enough. A claim makes it a fact that others can build on.</p>
+        <p>
+          Just showing it? A computed field is enough: every device counts what it holds. A claim makes it a
+          fact that others can build on.
+        </p>
       </>
     ),
     code: `const fame = collection({
   name: 'app.fame',
   schema: Fame, // the reactions it cites
-  contract: { check: [contract(Fame, ({ body, versions }) =>
-    versions(body.reactions).of(Reaction)
-      .where((r) => r.body.emoji.eq('🙂'))
-      .map((r) => r.author).distinct().count().gte(5),
-    'Needs five different people')] },
+  contract: {
+    check: ({ body, cited }) => ({
+      'Needs five different people': cited(body.reactions, reaction)
+        .where((r) => r.body.emoji.eq('🙂'))
+        .map((r) => r.author).distinct().count().gte(5),
+    }),
+  },
 });`,
     visual: CONTRACTS,
   },

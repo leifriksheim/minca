@@ -1,5 +1,6 @@
 // What a screen can work out from a collection's own definition, knowing nothing about what it holds.
 import {
+  computedSchemas,
   quickAddBody,
   recordTitle,
   titleField,
@@ -90,6 +91,46 @@ export function fieldsOf(schema: JsonSchema | null): ReadonlyArray<Field> {
       label: typeof field.title === 'string' ? field.title : humanize(name),
     };
   });
+}
+
+/**
+ * A collection's computed fields, as fields to show and filter on: each one
+ * worked out by this device from what links to a record. Never written, so
+ * never in a form; `isComputed` tells them apart.
+ */
+export function computedFieldsOf(
+  collection: Pick<NodeCollection, 'name' | 'schema' | 'computed'> | null | undefined,
+  collections: ReadonlyArray<Pick<NodeCollection, 'name' | 'schema' | 'links' | 'version'>>,
+): ReadonlyArray<Field> {
+  if (!collection?.computed || Object.keys(collection.computed).length === 0) return [];
+  const schemas = computedSchemas(
+    collection,
+    (name) => collections.find((c) => c.name === name && c.version !== null) ?? null,
+  );
+  return fieldsOf({ type: 'object', properties: schemas });
+}
+
+/** Whether a field is computed: a value worked out here, not one anyone wrote */
+export const isComputed = (field: Field): boolean => field.schema.readOnly === true;
+
+/** A record's value for a field: a computed field's from what this device worked out, any other from its body */
+export function valueOf(
+  record: { readonly body: unknown; readonly computed?: object },
+  field: Field,
+): unknown {
+  const computed: Readonly<Record<string, unknown>> = isObject(record.computed) ? record.computed : {};
+  return isComputed(field) ? computed[field.name] : bodyOf(record)[field.name];
+}
+
+/** The schema with its computed fields beside the body's: what a query can filter and sort on */
+export function withComputed(schema: JsonSchema | null, computed: ReadonlyArray<Field>): JsonSchema | null {
+  if (computed.length === 0) return schema;
+  const properties = isObject(schema?.properties) ? schema.properties : {};
+  return {
+    ...schema,
+    type: 'object',
+    properties: { ...properties, ...Object.fromEntries(computed.map((f) => [f.name, f.schema])) },
+  };
 }
 
 /** What a table shows: short fields, at most four */

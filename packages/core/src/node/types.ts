@@ -4,9 +4,11 @@
  * purpose: the same calls cross a port, and are actions for a CLI, MCP and WebMCP.
  */
 import type { MailboxClient } from '../network/mailbox.js';
-import type { BodyOf, Query, ResultOf } from '../query/types.js';
+import type { BodyOf, CollectionRef, IncludeMap, Query, ResultFor } from '../query/types.js';
 import type { CollectionRules } from '../records/rules.js';
-import type { CollectionContract } from '../records/contracts.js';
+import type { CollectionContract, Contract, Line } from '../records/contracts.js';
+import type { ComputedFields } from '../query/computed.js';
+import type { ComputedResult } from '../records/contract-builder.js';
 import type {
   CollectionDef,
   CryptoProvider,
@@ -293,6 +295,8 @@ export interface NodeCollection {
   readonly rules: CollectionRules;
   /** What a version must be to count, judged by readers; absent when it has none */
   readonly contract?: CollectionContract;
+  /** Values derived from what links to its records; absent when it has none */
+  readonly computed?: ComputedFields;
   /** Fields whose values are topics, tagged on the outside of each record so keepers can match them unread */
   readonly topics: ReadonlyArray<string>;
   readonly records: number;
@@ -315,10 +319,21 @@ export interface DefineCollection {
   /** Fields whose values are topics — `channel`, `mentions` — so a keeper can match them without reading (`StoredCollection.topics`) */
   readonly topics?: ReadonlyArray<string>;
   /**
-   * What a version must be to count, judged by readers: `check`, conditions in CEL, and `line`,
-   * one line per account at `lineKey(account, name)` (packages/core/docs/contracts.md)
+   * What a version must be to count, judged by readers: `check`, conditions in CEL or built
+   * in TypeScript, and `line`, one line per account at `lineKey(account, name)`
+   * (packages/core/docs/contracts.md)
    */
-  readonly contract?: CollectionContract;
+  readonly contract?:
+    | CollectionContract
+    | {
+        readonly check?: ReadonlyArray<Contract> | ((scope: never) => Readonly<Record<string, unknown>>);
+        readonly line?: Line;
+      };
+  /**
+   * Values every app derives the same way from what links to its records, in CEL or built in
+   * TypeScript (packages/core/docs/computed.md)
+   */
+  readonly computed?: ComputedFields | ((scope: never) => ComputedResult);
 }
 
 export interface NodeCollections {
@@ -573,12 +588,15 @@ export interface NodeRecords {
    * Records matching a query, typed when it names a collection by its definition.
    * @throws When the query is malformed, saying what to fix
    */
-  query<const Q extends Query>(spaceId: string, query: Q): Promise<ResultOf<Q>>;
-  /** Runs a query now and whenever the space's records change; returns a function that stops it */
-  watch<const Q extends Query>(
+  query<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
     spaceId: string,
-    query: Q,
-    onResult: (result: ResultOf<Q>) => void,
+    query: Query<C, I>,
+  ): Promise<ResultFor<C, I>>;
+  /** Runs a query now and whenever the space's records change; returns a function that stops it */
+  watch<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
+    spaceId: string,
+    query: Query<C, I>,
+    onResult: (result: ResultFor<C, I>) => void,
     onError?: (error: Error) => void,
   ): () => void;
 }

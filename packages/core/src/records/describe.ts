@@ -13,7 +13,8 @@
  * lie it exists to prevent.
  */
 import type { CollectionRules } from './rules.js';
-import type { CollectionContract } from './contracts.js';
+import type { DefineCollection } from '../node/types.js';
+import { storedContract } from './contract-builder.js';
 import type { LinkDeclaration } from './links.js';
 import { isList, isObject } from '../utils/guards.js';
 
@@ -26,7 +27,8 @@ export interface Describable {
   readonly history?: 'latest' | 'all';
   readonly links?: Readonly<Record<string, LinkDeclaration>>;
   readonly rules?: CollectionRules;
-  readonly contract?: CollectionContract;
+  /** As stored, or built in TypeScript */
+  readonly contract?: DefineCollection['contract'];
 }
 
 /** Every rule there is. A new one in `CollectionRules` must be added here, with its sentence. */
@@ -109,7 +111,11 @@ export function describeCollection(definition: Describable): ReadonlyArray<strin
   }
 
   // Checks: their own words, which are what a refusal says
-  for (const check of definition.contract?.check ?? [])
+  for (const check of storedContract({
+    name: definition.name,
+    schema: definition.schema,
+    ...(definition.contract ? { contract: definition.contract } : {}),
+  })?.check ?? [])
     sentences.push(`Every change is checked: “${check.else.trim()}”`);
 
   // What it points at

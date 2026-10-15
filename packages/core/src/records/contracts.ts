@@ -265,7 +265,7 @@ export type ContractOutcome =
   | { readonly unjudged: true };
 
 /** A version as a check reads it */
-function versionValue(v: CitedVersion): CelValue {
+export function versionValue(v: CitedVersion): CelValue {
   return celMap([
     ['id', v.id],
     ['key', v.key],

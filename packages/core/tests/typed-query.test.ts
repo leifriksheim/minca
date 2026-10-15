@@ -90,6 +90,41 @@ describe('typed queries', () => {
     const { records } = await me.records.query(space, { collection: polls });
     assert.ok(records.every((r) => r.body !== null));
   });
+
+  test('where and sort name only fields the collection has, with values of their type', async () => {
+    const me = await person();
+    const { id: space } = await me.spaces.create({ name: 'Trip', ...team, visibility: 'private' });
+    await me.collections.define(space, polls);
+    await me.collections.define(space, votes);
+    const asked = await me.records.put(space, polls, { question: 'Where?', options: ['Oslo', 'Lisbon'] });
+    await me.records.put(space, votes, { choice: 1 }, { links: [{ rel: 'about', to: asked.key }] });
+
+    const found = await me.records.query(space, {
+      collection: votes,
+      where: { choice: { $gte: 1 }, 'link:about': asked.key, $or: [{ '@seq': 0 }] },
+      sort: { choice: 'desc', '@createdAt': 'asc' },
+    });
+    assert.equal(found.records.length, 1);
+    await me.records.query(space, { collection: polls, where: { options: { $contains: 'Oslo' } } });
+
+    // Each of these is a mistake an agent could make; the types refuse it before it runs.
+    // @ts-expect-error — a vote has no field "choise"
+    await me.records.query(space, { collection: votes, where: { choise: 1 } });
+    // @ts-expect-error — a choice is a number
+    await me.records.query(space, { collection: votes, where: { choice: 'one' } });
+    // @ts-expect-error — $gte takes a number here
+    await me.records.query(space, { collection: votes, where: { choice: { $gte: '1' } } });
+    // @ts-expect-error — a vote's only link role is "about"
+    await me.records.query(space, { collection: votes, where: { 'link:poll': asked.key } });
+    // @ts-expect-error — a vote has no field or computed field "done"
+    await me.records.query(space, { collection: votes, where: { done: true } });
+    // @ts-expect-error — nested filters are typed too
+    await me.records.query(space, { collection: votes, where: { $or: [{ choise: 1 }] } });
+    // @ts-expect-error — and so is sort
+    await me.records.query(space, { collection: votes, sort: { choise: 'asc' } });
+    // A bare name is untyped: anything goes, and the engine says what's wrong.
+    await me.records.query(space, { collection: 'app.poll.vote', where: { choise: 1 } });
+  });
 });
 
 // Checked with: npx tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck tests/typed-query.test.ts
