@@ -4,7 +4,7 @@
  */
 import type { CarriedSpace } from '@minca/core/node';
 import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
-import { avatarCells } from '@minca/app-shared/avatar-cells';
+import { avatarShape } from '@minca/app-shared/avatar';
 import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';
 import type { CarrierStatus, PodState } from './shared';
 
@@ -47,25 +47,23 @@ export function mark(): HTMLElement {
 }
 
 /**
- * The account's avatar, drawn exactly as the home draws it (`apps/shared/src/avatar-cells.ts`),
+ * The account's avatar, drawn exactly as the home draws it (`apps/shared/src/avatar.ts`),
  * so the account here and the account there are recognisably the same one — or
  * recognisably not.
  */
 function avatar(did: string, size = 32): SVGSVGElement {
-  const { hue, cells } = avatarCells(did);
+  const { d, fill, ground } = avatarShape(did);
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
-  svg.setAttribute('viewBox', '0 0 5 5');
+  svg.setAttribute('viewBox', '0 0 100 100');
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', 'Account avatar');
-  svg.style.cssText = `border-radius:${size / 4}px;background:hsl(${hue} 46% 92%);flex-shrink:0;display:block`;
-  for (const { x, y } of cells) {
-    const cell = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    for (const [name, value] of Object.entries({ x, y, width: 1, height: 1, fill: `hsl(${hue} 62% 48%)` }))
-      cell.setAttribute(name, String(value));
-    svg.append(cell);
-  }
+  svg.style.cssText = `border-radius:${size / 4}px;background:${ground};flex-shrink:0;display:block`;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill', fill);
+  svg.append(path);
   return svg;
 }
 

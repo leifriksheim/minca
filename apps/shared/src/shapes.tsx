@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
+import { ROUND, ROUND_KINDS, radial, type RoundKind } from './round';
 import { shapeColours, type ShapeColour } from './tokens';
 
 /**
@@ -6,56 +7,13 @@ import { shapeColours, type ShapeColour } from './tokens';
  * round, a little odd, and different from its neighbours. They are drawn
  * here from formulas rather than shipped as files, on a 100 × 100 canvas.
  *
- * The round ones are each a radius for every angle, so any two can melt into
- * each other: `Morph` blends one into the next.
+ * The round ones are each a radius for every angle (`round.ts`), so any two
+ * can melt into each other: `Morph` blends one into the next.
  *
  * Shared by every UI (DESIGN.md beside this file says where each is used).
  * Give a shape a `colour` from the tokens, or leave it out and it fills with
  * the CSS custom property `--c`, as the site's colour classes set it.
  */
-
-type Radius = (angle: number) => number;
-
-/** How far round from one tip to the next, 1 at a tip and 0 halfway between */
-const tip = (angle: number, tips: number) => {
-  const x = (((angle + Math.PI / 2) / (Math.PI * 2)) * tips) % 1;
-  return Math.abs(x - 0.5) * 2;
-};
-
-/** The shapes that can turn into each other */
-const ROUND = {
-  /** A circle with a scalloped edge */
-  scallop: (a) => 40 + 8 * Math.abs(Math.sin(7 * a)),
-  /** Eight round petals */
-  flower: (a) => 16 + 32 * Math.abs(Math.cos(4 * a)) ** 0.6,
-  /** Twelve thin petals */
-  daisy: (a) => 8 + 40 * Math.abs(Math.cos(6 * a)) ** 2.2,
-  /** Four fat lobes */
-  clover: (a) => 26 + 22 * Math.abs(Math.cos(2 * a)) ** 0.5,
-  /** A many-pointed seal */
-  burst: (a) => 36 + 12 * tip(a, 14),
-  /** An eight-pointed star */
-  star: (a) => 18 + 30 * tip(a, 8) ** 1.4,
-  /** A four-pointed twinkle with curved sides */
-  sparkle: (a) => 10 + 38 * Math.abs(Math.cos(2 * a)) ** 8,
-  /** A square with soft corners */
-  squircle: (a) => 44 / (Math.abs(Math.cos(a)) ** 4 + Math.abs(Math.sin(a)) ** 4) ** 0.25,
-} as const satisfies Record<string, Radius>;
-
-export type RoundKind = keyof typeof ROUND;
-
-const STEPS = 240;
-
-/** A closed outline whose distance from the centre follows `radius(angle)` */
-function radial(radius: Radius): string {
-  let d = '';
-  for (let i = 0; i < STEPS; i++) {
-    const angle = (i / STEPS) * Math.PI * 2;
-    const r = radius(angle);
-    d += `${i === 0 ? 'M' : 'L'}${(50 + r * Math.cos(angle)).toFixed(2)} ${(50 + r * Math.sin(angle)).toFixed(2)}`;
-  }
-  return `${d}Z`;
-}
 
 /** A band whose two sides wave, top to bottom */
 function wave(): string {
@@ -196,6 +154,8 @@ const PATHS = {
   coin: disc(50, 50, 46) + circle(50, 50, 35) + disc(50, 50, 28),
 } as const;
 
+export type { RoundKind };
+
 export type ShapeKind = keyof typeof PATHS;
 
 /** One shape, in one of the shapes' colours, or in `--c` when no colour is given */
@@ -320,16 +280,6 @@ export const APP_SHAPES: Readonly<Record<string, { kind: ShapeKind; colour: Shap
   calls: { kind: 'arch', colour: 'coral' },
 };
 
-const ROUND_KINDS: readonly RoundKind[] = [
-  'scallop',
-  'flower',
-  'daisy',
-  'clover',
-  'burst',
-  'star',
-  'sparkle',
-  'squircle',
-];
 const CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
 
 /**
