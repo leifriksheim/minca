@@ -1,5 +1,5 @@
 /**
- * Bots a host runs for the spaces it carries (spec/06-nodes-and-sessions.md, Hosts: bots).
+ * Bots a host runs for the spaces it carries (spec/08-hosting.md §3).
  *
  * An admin asks for one from the app with a name and an invite for the role
  * it should hold. The host makes the bot an account of its own, in a folder
@@ -24,7 +24,7 @@ import path from 'node:path';
 import { parseSpaceInvite, type P2PNode, type StorageAdapter } from '@minca/core';
 import { createAccount, openHome, unlock } from './home.js';
 import { startBotNode } from './agent.js';
-import { fileSpend, type Price, type Think } from './agent-chat.js';
+import { fileSpend, type ChatTool, type Price, type Think } from './agent-chat.js';
 import { capEachOf, runAutomations } from './bot-runner.js';
 import { isRecord, messageOf } from './json.js';
 
@@ -57,6 +57,10 @@ export interface HostedBots {
   start(name: string, invite: string): Promise<{ readonly did: string; readonly name: string }>;
   /** The bots asked to join a space */
   list(spaceId: string): Promise<ReadonlyArray<{ readonly did: string; readonly name: string }>>;
+  /** Whether this host runs an account as a bot */
+  runs(did: string): Promise<boolean>;
+  /** A bot's node, when this host runs it: how the host reads a space as the bot does */
+  node(did: string): Promise<P2PNode | null>;
   /** Whether a bot is running its automations now */
   running(did: string): boolean;
   /** Starts or stops each bot's automations as its community's fund says: `funded` is asked with the space's id */
@@ -79,6 +83,8 @@ export function createHostedBots(options: {
   readonly model: BotModel;
   /** Takes what a bot spent, in dollars, from the fund of the space it runs in */
   readonly charge?: (spaceId: string, usd: number, bot: string) => Promise<void>;
+  /** A bot's tools in a space beyond the node's actions: its connectors' */
+  readonly tools?: (bot: string, spaceId: string, mayWrite: boolean) => Promise<ReadonlyArray<ChatTool>>;
   readonly log: (line: string) => void;
 }): HostedBots {
   const { store, log } = options;
@@ -173,6 +179,13 @@ export function createHostedBots(options: {
         .map(({ did, name }) => ({ did, name }));
     },
 
+    runs: async (did: string) => (await read(did)) !== null,
+
+    async node(did: string) {
+      const kept = await read(did);
+      return kept ? open(kept) : null;
+    },
+
     running: (did: string) => runners.has(did),
 
     async sync(funded: (spaceId: string) => Promise<boolean>) {
@@ -207,6 +220,14 @@ export function createHostedBots(options: {
               spend,
               dailyCap: options.model.dailyCap,
               capEach: capEachOf(options.model.dailyCap),
+              // Another bot here is never one to configure this one.
+              isBot: async (did: string) => (await read(did)) !== null,
+              ...(options.tools
+                ? {
+                    tools: (spaceId: string, mayWrite: boolean) =>
+                      options.tools!(kept.did, spaceId, mayWrite),
+                  }
+                : {}),
               log: (line) => log(`bot ${kept.name}:${line}`),
             }),
           );

@@ -266,6 +266,13 @@ to be a certain way, or at set times, and what each automation did. An
 account keeps automations of its own in its registry too, which notify it. Described in
 [automations.md](automations.md).
 
+**Bots**
+
+`std.bot`, `std.connect` and `std.connector`: how a community wants its bot
+to be, someone asking a bot's host to connect the bot to a service such as
+GitHub, and the bot saying what it is connected to. Described in
+[bots.md](bots.md).
+
 **Activity.** `std.activity` is someone at work on a record, for apps to show
 while it lasts: "My bot is working on it…" under a message, a spinner on a
 task. Anyone may write one, only about their own work, and apps show it as

@@ -20,6 +20,10 @@
  *   GET    /host/spaces/:space/bots               the bots it runs there, each with its signed status
  *   GET    /host/bots/:did                        a bot's subscription: its status, to anyone
  *   POST   /host/bots/:did/pay                    { plan } — anyone may pay for a bot
+ *   GET    /host/bots/:did/connect/:kind?space=&request=&secret=   connect a bot to a service: a page
+ *   GET    /host/connect/:kind/callback           where the service's consent screen sends people back to
+ *   POST   /host/bots/:did/disconnect/:kind       { space, request, secret } — disconnect it
+ *   POST   /host/connect/:kind/hook               the service's own calls: uninstalls, what it reaches
  *   POST   /host/billing/webhook                  the payment provider, telling us someone paid
  *   GET    /host/paid                             where a checkout page sends people back to
  *   GET    /host/remind/confirm?t=…, /host/remind/stop?t=…   the links in reminder mails
@@ -56,6 +60,9 @@ import type { WalletPayments } from './wallet.js';
 import { isEmail, type Reminders } from './reminders.js';
 import { createHostedBots, type BotModel } from './hosted-bots.js';
 import { createFunds } from './fund.js';
+import { createBotConnect } from './host-connect.js';
+import { dailyBudget, isConnectorId, type HostConnector } from './connectors/connector.js';
+import type { BotConnect } from './host-connect.js';
 
 /** What the host needs from a payment provider */
 export interface Billing {
@@ -120,6 +127,8 @@ export interface HostOptions {
   readonly watchMs?: number;
   /** Bots for the spaces it carries, each an account of its own under `folder`, thinking with `model` */
   readonly bots?: { readonly folder: string; readonly model: BotModel } | null;
+  /** The services this host connects its bots to: GitHub, a calendar, whatever it offers. Needs `bots`. */
+  readonly connectors?: ReadonlyArray<HostConnector>;
   /** Bots one space may have here, paid or not. Default 5. */
   readonly botsPerSpace?: number;
   /** What keeping a community online takes from its fund a month, in dollars. Default "4". */
@@ -213,8 +222,12 @@ function originOf(req: IncomingMessage, configured?: string): string {
   return `${proto}://${req.headers.host ?? 'localhost'}`;
 }
 
-/** A page that says one thing: that a payment went through, or what a link in a reminder mail did */
-function noticeHtml(name: string, said: string): string {
+/**
+ * A page that says one thing: that a payment went through, what a link in a
+ * reminder mail did, or how connecting a bot went. `done` tells the app that
+ * opened it, and closes it.
+ */
+function noticeHtml(name: string, said: string, done = false): string {
   const escape = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   // Minca's paper, navy ink and rainbow mark, inline so the page needs nothing from the apps
   // or anyone else: system faces, so no font request tells a third party who paid this host.
@@ -225,8 +238,28 @@ function noticeHtml(name: string, said: string): string {
     'main{max-width:440px;margin:0 auto;padding:72px 20px}' +
     'h1{margin:28px 0 12px;font:700 30px/1.1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-0.04em;color:#13214a}' +
     'p{margin:0}';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(name)}</title><style>${css}</style></head><body><main>${mark}<h1>${escape(name)}</h1><p>${escape(said)}</p></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(name)}</title><style>${css}</style></head><body><main>${mark}<h1>${escape(name)}</h1><p>${escape(said)}</p></main>${done ? CLOSE_SCRIPT : ''}</body></html>`;
 }
+
+/** Tells the app that opened a connect page it is done, then closes; says nothing more than that */
+const CLOSE_SCRIPT =
+  "<script>if(window.opener)window.opener.postMessage({minca:'connected'},'*');setTimeout(function(){window.close()},1500)</script>";
+
+/** The cookies a request carries, by name */
+function cookiesOf(req: IncomingMessage): Record<string, string> {
+  const found: Record<string, string> = {};
+  for (const part of (req.headers.cookie ?? '').split(';')) {
+    const at = part.indexOf('=');
+    if (at > 0) found[part.slice(0, at).trim()] = part.slice(at + 1).trim();
+  }
+  return found;
+}
+
+// A connector's id: lowercase letters, digits and dashes (`isConnectorId`).
+const CONNECT_PATH = /^\/host\/bots\/([^/]+)\/connect\/([a-z0-9-]{1,40})$/;
+const CALLBACK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/callback$/;
+const DISCONNECT_PATH = /^\/host\/bots\/([^/]+)\/disconnect\/([a-z0-9-]{1,40})$/;
+const HOOK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/hook$/;
 
 /** "$4 a month or $36 a year", from the wallet's prices */
 function priceText(wallet: WalletPayments | null): string | undefined {
@@ -400,6 +433,11 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     monthly: Number(monthly) * 1e6,
     mirror: options.mirror ?? null,
   });
+  const ids = (options.connectors ?? []).map((one) => one.id);
+  if (new Set(ids).size !== ids.length) throw new Error(`Two connectors share an id: ${ids.join(', ')}`);
+  for (const one of options.connectors ?? [])
+    if (!isConnectorId(one.id))
+      throw new Error(`A connector id is lowercase letters, digits and dashes, not "${one.id}"`);
   const description: HostDescription = {
     minca: 'host/1',
     did: node.did,
@@ -414,10 +452,16 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     // Only where a bot can be paid for, from a fund, or costs nothing.
     ...(options.bots && (options.free || fundOffer) ? { bots: true } : {}),
     ...(options.terms ? { terms: options.terms } : {}),
+    ...(options.bots && (options.free || fundOffer) && options.connectors?.length
+      ? { connectors: options.connectors.map(({ id, name }) => ({ id, name })) }
+      : {}),
   };
 
   // Bots reach the spaces this host carries through its own socket, known once it listens.
   let listening = 0;
+  // Made after the bots, which it reads through; asked only once they run.
+  let connect: BotConnect | null = null;
+  const budgets = new Map<string, () => boolean>();
   const bots =
     options.bots && description.bots
       ? createHostedBots({
@@ -433,6 +477,32 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
             const state = await funds.charge(`space:${spaceId}`, usd * markup * 1e6, bot);
             if (state.balance <= 0) await refreshFund(`space:${spaceId}`);
           },
+          // A bot connected to a service in a space gets that connector's tools there.
+          ...(options.connectors?.length
+            ? {
+                tools: async (bot: string, spaceId: string, mayWrite: boolean) => {
+                  // Only while the bot is in the space and whoever connected it still may.
+                  const standing = (await connect?.usable(bot, spaceId)) ?? [];
+                  let budget = budgets.get(bot);
+                  if (!budget) budgets.set(bot, (budget = dailyBudget()));
+                  const day = budget;
+                  return standing.flatMap((connection) => {
+                    const service = options.connectors?.find((one) => one.id === connection.kind);
+                    return service ? service.tools(connection, { mayWrite, budget: day }) : [];
+                  });
+                },
+              }
+            : {}),
+          log,
+        })
+      : null;
+  connect =
+    bots && description.connectors
+      ? createBotConnect({
+          store: await options.stores('host-connect'),
+          botNode: (did) => bots.node(did),
+          isBot: (did) => bots.runs(did),
+          connectors: options.connectors ?? [],
           log,
         })
       : null;
@@ -688,6 +758,70 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     }
 
     if (url.pathname === '/host/bots') return answerBot(req, res, method);
+    const disconnecting = DISCONNECT_PATH.exec(url.pathname);
+    if (disconnecting && method === 'POST') {
+      if (!connect) throw refusal(404, 'This host connects no bots to services');
+      const input = jsonFields(await readBody(req));
+      const done = await connect.disconnect(decodeURIComponent(disconnecting[1]!), disconnecting[2]!, {
+        space: typeof input.space === 'string' ? input.space : '',
+        request: typeof input.request === 'string' ? input.request : '',
+        secret: typeof input.secret === 'string' ? input.secret : '',
+      });
+      if (!done.ok) throw refusal(done.status, done.said);
+      return send(res, 200, { disconnected: true });
+    }
+    const hooked = HOOK_PATH.exec(url.pathname);
+    if (hooked && method === 'POST') {
+      if (!connect) throw refusal(404, 'This host connects no bots to services');
+      const did = await connect.hook(hooked[1]!, await readBody(req), req.headers);
+      if (did === null) throw refusal(401, 'Not from that service');
+      log(`${hooked[1]}: ${did}`);
+      return send(res, 200, { received: true });
+    }
+    const connecting = CONNECT_PATH.exec(url.pathname);
+    const returning = CALLBACK_PATH.exec(url.pathname);
+    if ((connecting || returning) && method === 'GET') {
+      if (!connect) throw refusal(404, 'This host connects no bots to services');
+      const html = (status: number, said: string, done = false) => {
+        res.writeHead(status, {
+          'content-type': 'text/html; charset=utf-8',
+          'x-content-type-options': 'nosniff',
+          ...page,
+        });
+        res.end(noticeHtml(name, said, done));
+      };
+      const kind = (connecting?.[2] ?? returning?.[1])!;
+      const callback = `${originOf(req, options.publicUrl)}/host/connect/${kind}/callback`;
+      const params = url.searchParams;
+      if (connecting) {
+        const step = await connect.start(
+          decodeURIComponent(connecting[1]!),
+          kind,
+          {
+            space: params.get('space') ?? '',
+            request: params.get('request') ?? '',
+            secret: params.get('secret') ?? '',
+          },
+          callback,
+        );
+        if (!step.ok) return html(step.status, step.said);
+        // The service sends this browser back; the cookie is how the host knows it is the same one.
+        const secure = originOf(req, options.publicUrl).startsWith('https:') ? '; Secure' : '';
+        res.writeHead(302, {
+          location: step.to,
+          'set-cookie': `${step.cookie.name}=${step.cookie.value}; Path=/host/connect/${kind}/callback; Max-Age=900; HttpOnly; SameSite=Lax${secure}`,
+          ...page,
+        });
+        return void res.end();
+      }
+      const done = await connect.finish(kind, params, cookiesOf(req), callback);
+      if (!done.ok) return html(done.status, done.said);
+      return html(
+        200,
+        `Connected to ${done.name} as ${done.connection.account}. You can close this window.`,
+        true,
+      );
+    }
 
     const spaceMatch = SPACE_PATH.exec(url.pathname);
     if (spaceMatch) return answerSpace(req, res, method, spaceMatch[1]!, spaceMatch[2] ?? null);

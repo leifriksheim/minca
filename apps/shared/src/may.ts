@@ -60,9 +60,14 @@ export function describeGrant(grant: Grant): string {
  */
 export function useAssignable(
   spaceId: string,
-  options: { readonly held?: boolean } = {},
+  options: {
+    readonly held?: boolean;
+    /** Leave out roles that grant a command: for a bot, the grant to instruct bots */
+    readonly without?: string;
+  } = {},
 ): ReadonlyArray<{ readonly name: string; readonly title?: string }> {
   const held = !!options.held;
+  const without = options.without ?? '';
   return (
     useLive(
       spaceId,
@@ -73,11 +78,14 @@ export function useAssignable(
           if (!(await node.spaces.may(spaceId, '/role/assign', { role: role.name, self: false, roles: [] })))
             continue;
           if (held && !(await node.spaces.holdsRole(spaceId, role.name))) continue;
+          // Granted directly, or by a command above it (`/`, `/std.automation`).
+          const covers = (cmd: string) => cmd === '/' || without === cmd || without.startsWith(`${cmd}/`);
+          if (without && role.definitions.some((d) => d.grants.some((grant) => covers(grant.cmd)))) continue;
           out.push({ name: role.name, ...(role.title !== undefined ? { title: role.title } : {}) });
         }
         return out.sort((a, b) => Number(b.name === 'member') - Number(a.name === 'member'));
       },
-      [held],
+      [held, without],
     ) ?? []
   );
 }

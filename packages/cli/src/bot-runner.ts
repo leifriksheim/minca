@@ -7,14 +7,24 @@
  */
 import { PEER_CONTENT_NOTE, type P2PNode } from '@minca/core';
 import {
+  BOT_INSTRUCTIONS_MAX,
+  botSettings,
+  mayConfigure,
   setActivity,
   startAutomations,
   type ActivityState,
   type AutomationTrigger,
 } from '@minca/core/schemas';
-import { createAgentChat, spendFor, type Price, type Spend, type Think } from './agent-chat.js';
+import {
+  createAgentChat,
+  spendFor,
+  type ChatTool,
+  type Price,
+  type Spend,
+  type Think,
+} from './agent-chat.js';
 import { openTrigger, ruleContext, triggerPrompt, writerInstructs } from './agent-automations.js';
-import { messageOf } from './json.js';
+import { isRecord, messageOf } from './json.js';
 
 export interface RuleRunnerOptions {
   readonly node: P2PNode;
@@ -34,8 +44,52 @@ export interface RuleRunnerOptions {
   /** Dollars a day for what each person sets off; null for no limit of their own */
   readonly capEach: number | null;
   readonly log: (line: string) => void;
+  /**
+   * Tools a bot has in a space beyond the node's actions: its connectors'.
+   * `mayWrite` says whether this run's instructions come from someone who may
+   * configure the bot, so it may act outside the space for them.
+   */
+  readonly tools?: (space: string, mayWrite: boolean) => Promise<ReadonlyArray<ChatTool>>;
+  /**
+   * Whether an account is a bot: never one to configure another, as no chat
+   * app lets one integration reprogram the next. A host knows the bots it runs.
+   */
+  readonly isBot?: (did: string) => Promise<boolean>;
   /** Told the automations this runs, each time they change */
   readonly onRules?: (names: ReadonlyArray<string>) => void;
+}
+
+/**
+ * A bot's instructions in a space: the newest `std.bot` naming it whose
+ * current version was written by someone who may configure it, as a person
+ * and not an agent.
+ */
+export async function personaIn(
+  node: P2PNode,
+  space: string,
+  bot: string,
+  isBot?: (did: string) => Promise<boolean>,
+): Promise<{ readonly instructions: string; readonly by: string } | null> {
+  const records = await node.records.list(space, { collection: botSettings.name });
+  const newest = records
+    .filter(
+      (record) =>
+        record.verified &&
+        !record.deleted &&
+        !record.recordsOnly &&
+        record.root &&
+        isRecord(record.body) &&
+        record.body.bot === bot &&
+        typeof record.body.instructions === 'string' &&
+        record.body.instructions.trim(),
+    )
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  for (const record of newest) {
+    if (!record.root || !isRecord(record.body) || typeof record.body.instructions !== 'string') continue;
+    if (!(await isBot?.(record.root)) && (await mayConfigure(node, space, bot, record.root)))
+      return { instructions: record.body.instructions.slice(0, BOT_INSTRUCTIONS_MAX), by: record.root };
+  }
+  return null;
 }
 
 /** What each person who sets a bot off may spend a day unless told: a quarter of its cap, so nobody spends the day for everyone */
@@ -97,7 +151,35 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
         return { did, ok: false };
       }
     }
+    // The automation's words are whoever wrote its current version: for a bot, they must be someone who
+    // may configure it, or the words it would read as its maker's are someone else's.
+    const current = options.bot
+      ? await node.records.get(space, trigger.automation.key).catch(() => null)
+      : null;
+    const author = current?.recordsOnly ? null : (current?.root ?? null);
+    // Never the bot itself, nor an agent (`mayConfigure`): what it wrote for itself runs, but writes nothing outside.
+    const authorMay =
+      !!author &&
+      !(await options.isBot?.(author)) &&
+      (await mayConfigure(node, space, options.account, author).catch(() => false));
+    if (options.bot && author !== trigger.automation.maker && !authorMay) {
+      const did = 'Its words were changed by someone who may not instruct this bot: not run';
+      log(`  [${name}] ${did}`);
+      await mark(sealed, 'failed');
+      return { did, ok: false };
+    }
     log(`  [${name}] set off${by}${trigger.match ? '' : ' by the time'}`);
+    const instructs = await writerInstructs(node, trigger, {
+      account: options.account,
+      bot: !!options.bot,
+    }).catch(() => false);
+    // Like an app a workspace installs: an automation made by someone who may configure the bot may act
+    // outside the space, whoever sets it off. What sets it off is in the prompt as data, and can steer it.
+    const mayWrite = !!options.bot && authorMay;
+    const extra = options.tools ? await options.tools(space, mayWrite).catch(() => []) : [];
+    const persona = options.bot
+      ? await personaIn(node, space, options.account, options.isBot).catch(() => null)
+      : null;
     const run = createAgentChat({
       node,
       think: options.think(),
@@ -111,6 +193,10 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
       maxSteps: 15,
       unattended: true,
       ...(options.bot ? { bot: options.bot } : {}),
+      ...(extra.length ? { extra } : {}),
+      ...(persona
+        ? { persona: { instructions: persona.instructions, by: await nameOf(space, persona.by) } }
+        : {}),
     });
     const shown = await mark(sealed, 'working');
     const context = await ruleContext(node, trigger).catch(() => undefined);
@@ -119,10 +205,7 @@ export function runAutomations(options: RuleRunnerOptions): () => void {
         triggerPrompt(trigger, PEER_CONTENT_NOTE, {
           ...(context ? { context } : {}),
           ...(shown ? { activityOn: sealed.match?.record.key ?? sealed.automation.key } : {}),
-          writerInstructs: await writerInstructs(node, trigger, {
-            account: options.account,
-            bot: !!options.bot,
-          }).catch(() => false),
+          writerInstructs: instructs,
         }),
       );
       log(`  [${name}] ${text || 'Done.'} · $${cost.toFixed(3)} · ${await today()}`);

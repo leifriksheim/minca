@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { COLLECTION_DEFINE, SPACE_KEEPERS } from '@minca/core';
+import { COLLECTION_DEFINE, SPACE_KEEPERS, type SpaceHostingView } from '@minca/core';
 import { useCollections, useNode } from '@minca/core/react';
 import { useAssignable, useMay } from './may';
-import { activity, profile } from '@minca/core/schemas';
+import { activity, INSTRUCT, profile } from '@minca/core/schemas';
 import { Modal } from './Modal';
 import { Benefit, FeatureIcon, Glyph, StatusPill } from './Feature';
 import { KeepOnline, onlineHost, useSpaceHosts } from './SpaceHosting';
+import { BotConnectors, BotInstructions } from './BotConnectors';
 import { message, useAction, useCopy } from './action';
 import { styles, palette } from './styles';
 
@@ -44,7 +45,8 @@ export function AddBotDialog({
   const mayDefine = useMay(spaceId, COLLECTION_DEFINE, { collection: profile.name });
   // The roles one may give and holds every grant of, `member` first: a bot does what members
   // ask, so it holds no more than whoever adds it, and needs no more than it must.
-  const roles = useAssignable(spaceId, { held: true });
+  // A bot never gets the grant to instruct bots: no integration reprograms another.
+  const roles = useAssignable(spaceId, { held: true, without: INSTRUCT });
   const [role, setRole] = useState<string | null>(null);
   const [name, setName] = useState('');
   const { run, busy, error: problem, setError: setProblem } = useAction();
@@ -144,7 +146,10 @@ export function AddBotDialog({
               {host.fund
                 ? `Its AI use comes from the community fund, up to $${cap ?? '1'} a day and usually far less. `
                 : ''}
-              {host.name} runs the bot's account, so it can read what the bot can read.
+              {host.name} runs the bot's account, so it can read what the bot can read
+              {host.connectors.length
+                ? `, and act for your community in the services you connect it to (${host.connectors.map((one) => one.name).join(', ')}).`
+                : '.'}
             </p>
             <button
               onClick={() => setView('yourself')}
@@ -373,24 +378,21 @@ export function SpaceBots({
           }}
         >
           {listed.map((bot, i) => (
-            <div
-              key={bot.did}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '10px 14px',
-                borderTop: i ? `1px solid ${palette.surface.line}` : 'none',
-              }}
-            >
-              <FeatureIcon kind="bot" size={28} />
-              <strong style={{ flex: 1, fontSize: 14, color: palette.ink.strong }}>{bot.name}</strong>
-              {bot.state === 'on' ? (
-                <StatusPill tone="good">Running</StatusPill>
-              ) : bot.state === 'waiting' ? (
-                <StatusPill tone="warn">Fund empty</StatusPill>
-              ) : (
-                <StatusPill tone="neutral">Run by a member</StatusPill>
+            <div key={bot.did} style={{ borderTop: i ? `1px solid ${palette.surface.line}` : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
+                <FeatureIcon kind="bot" size={28} />
+                <strong style={{ flex: 1, fontSize: 14, color: palette.ink.strong }}>{bot.name}</strong>
+                {bot.state === 'on' ? (
+                  <StatusPill tone="good">Running</StatusPill>
+                ) : bot.state === 'waiting' ? (
+                  <StatusPill tone="warn">Fund empty</StatusPill>
+                ) : (
+                  <StatusPill tone="neutral">Run by a member</StatusPill>
+                )}
+              </div>
+              <BotInstructions spaceId={spaceId} bot={bot.did} writable={writable} />
+              {bot.host && (
+                <BotConnectors spaceId={spaceId} bot={bot.did} host={bot.host} writable={writable} />
               )}
             </div>
           ))}
@@ -433,12 +435,19 @@ export function useSpaceBots(spaceId: string, writable: boolean) {
     void botsIn(node, spaceId).then(setOwn, () => setOwn([]));
   }, [node, spaceId]);
   useEffect(() => lookBots(), [lookBots]);
-  const hosted = hosts?.flatMap((host) => host.bots) ?? [];
-  const bots: ReadonlyArray<{ did: string; name: string; state: 'on' | 'waiting' | 'own' }> = [
+  const hosted = hosts?.flatMap((host) => host.bots.map((bot) => ({ ...bot, host }))) ?? [];
+  const bots: ReadonlyArray<{
+    did: string;
+    name: string;
+    state: 'on' | 'waiting' | 'own';
+    /** The host that runs it, for a hosted bot */
+    host?: SpaceHostingView;
+  }> = [
     ...hosted.map((bot) => ({
       did: bot.bot,
       name: bot.name,
       state: bot.running ? ('on' as const) : ('waiting' as const),
+      host: bot.host,
     })),
     ...own
       .filter((bot) => !hosted.some((h) => h.bot === bot.did))

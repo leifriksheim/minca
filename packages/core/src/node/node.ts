@@ -122,6 +122,7 @@ import {
 import type { Automation } from '../schemas/automations.js';
 import {
   createHostClient,
+  connectorOffers,
   createSpaceHostClient,
   describeHost,
   hostPeerAddress,
@@ -1356,6 +1357,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         reminds: description.remind === true,
         runsBots: description.bots === true,
         bots: status.bots ?? [],
+        connectors: description.bots === true ? connectorOffers(description.connectors) : [],
       };
     } catch (error) {
       return {
@@ -1368,6 +1370,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         reminds: false,
         runsBots: false,
         bots: [],
+        connectors: [],
         error: error instanceof Error ? error.message : String(error),
       };
     }
