@@ -6,9 +6,9 @@ import { useAccess, useAccount, useNetwork, useNode } from '@minca/core/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import {
   duration,
+  groupPeers,
   healthOf,
   nextRetry,
-  peerKind,
   relayLine,
   relayName,
   type Health,
@@ -196,42 +196,84 @@ function Peers({ status }: { status: SpaceStatus }) {
       .catch(() => {});
   }, [node, carrierKeys]);
 
+  const groups = groupPeers(status, me);
   return (
     <Section title="In this space" hint="Devices syncing this space with you right now, and whose they are.">
-      {status.peers.length === 0 ? (
+      {groups.length === 0 ? (
         <p style={empty}>Nobody else right now.</p>
       ) : (
         <ul style={list}>
-          {status.peers.map((peer) => {
-            const kind = peerKind(peer, status, me);
-            const account = status.accounts[peer];
-            const carrier = carriers.find((c) => c.did === peer);
+          {groups.map((group) => {
+            const name =
+              group.kind === 'mine' ? (
+                'You, on another device'
+              ) : group.kind === 'carrier' ? (
+                (carriers.find((c) => c.did === group.did)?.name ?? 'A carrier')
+              ) : group.kind === 'person' ? (
+                <Person did={group.did} />
+              ) : (
+                'A server'
+              );
+            const [only] = group.peers;
+            if (only !== undefined && group.peers.length === 1)
+              return (
+                <li key={group.did} style={row}>
+                  <PeerLine
+                    did={group.did}
+                    name={name}
+                    meta={
+                      <>
+                        {KIND_LABEL[group.kind]} · <Mono>{short(only)}</Mono>
+                      </>
+                    }
+                  />
+                </li>
+              );
+            // An account on more than one device: one row for the account, its devices folded under it.
             return (
-              <li key={peer} style={row}>
-                <Avatar did={account ?? peer} size={24} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, color: palette.ink.strong }}>
-                    {kind === 'mine' ? (
-                      'You, on another device'
-                    ) : kind === 'carrier' ? (
-                      (carrier?.name ?? 'A carrier')
-                    ) : account ? (
-                      <Person did={account} />
-                    ) : (
-                      'A server'
-                    )}
-                  </div>
-                  <div style={meta}>
-                    {KIND_LABEL[kind]} · <Mono>{short(peer)}</Mono>
-                  </div>
-                </div>
-                <Dot color={palette.accent.good} />
+              <li key={group.did} style={{ borderBottom: `1px solid ${palette.surface.line}` }}>
+                <details className="peer-fold">
+                  <summary style={{ ...row, borderBottom: 'none', cursor: 'pointer' }}>
+                    <PeerLine
+                      did={group.did}
+                      name={group.kind === 'mine' ? 'You, on other devices' : name}
+                      meta={`${group.peers.length} devices online`}
+                    />
+                  </summary>
+                  <ul style={{ listStyle: 'none', margin: 0, padding: '0 14px 8px 50px' }}>
+                    {group.peers.map((peer) => (
+                      <li
+                        key={peer}
+                        style={{ ...meta, display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}
+                      >
+                        <span style={{ flex: 1 }}>
+                          {group.kind === 'mine' ? 'Your device' : 'Device'} · <Mono>{short(peer)}</Mono>
+                        </span>
+                        <Dot color={palette.accent.good} size={6} />
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               </li>
             );
           })}
         </ul>
       )}
     </Section>
+  );
+}
+
+/** Whose a peer is, in one row: the account's avatar, a name, and what it is */
+function PeerLine({ did, name, meta: line }: { did: string; name: ReactNode; meta: ReactNode }) {
+  return (
+    <>
+      <Avatar did={did} size={24} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, color: palette.ink.strong }}>{name}</div>
+        <div style={meta}>{line}</div>
+      </div>
+      <Dot color={palette.accent.good} />
+    </>
   );
 }
 
