@@ -17,7 +17,8 @@ npm run dev         # at the repository root: this site on :5185, beside the app
 
 `netlify.toml` at the repository root builds it, and zips the Chrome
 extension (`apps/extension`) into it first, for `/extension` to offer.
-`public/_redirects` sends every path to `index.html`.
+`public/_redirects` sends every path to `index.html`, and `public/_headers` sets
+the security headers.
 
 ## Layout
 

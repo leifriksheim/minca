@@ -23,6 +23,7 @@ import { RecordPanel } from './RecordPanel';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
 import { NotifyButton } from './apps/NotifyButton';
+import { MadeAppScreen } from './apps/MadeApps';
 import { Bell } from './Bell';
 import { fills, useSpaceApps, type AppEntry } from './apps/entries';
 import { moveApp } from './apps/launcher';
@@ -89,18 +90,11 @@ export const SECTIONS = [
   { to: '/spaces/$spaceId/automations', label: 'Automations', icon: 'bolt' },
 ] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
 
-/** Every part of a space, by its route in `router.tsx` */
-type SpacePath =
-  | '/spaces/$spaceId'
-  | '/spaces/$spaceId/new'
-  | '/spaces/$spaceId/people'
-  | '/spaces/$spaceId/hosting'
-  | '/spaces/$spaceId/automations'
-  | '/spaces/$spaceId/more'
-  | '/spaces/$spaceId/data'
-  | '/spaces/$spaceId/explore'
-  | '/spaces/$spaceId/query'
-  | '/spaces/$spaceId/network';
+/** Every part of a space you can go to with only its id */
+type SpacePath = Exclude<
+  Extract<keyof RegisteredRouter['routesByPath'], `/spaces/${string}`>,
+  `${string}$appId` | `${string}/`
+>;
 
 /** Every route in the app, by its id */
 type RouteId = keyof RegisteredRouter['routesById'];
@@ -110,13 +104,15 @@ const APPS_ROUTE: RouteId = '/spaces/$spaceId/';
 const APP_ROUTE: RouteId = '/spaces/$spaceId/apps/$appId';
 
 /** What a space's pages share, from the layout around them */
-interface SpaceScreen {
+export interface SpaceScreen {
   readonly space: SpaceSummary;
   readonly collections: ReturnType<typeof useCollections>;
   readonly apps: ReturnType<typeof useSpaceApps>;
   readonly unread: ReturnType<typeof useUnread>;
   readonly status: ReturnType<typeof useSpaceStatus>;
   readonly mayDefine: boolean;
+  /** The app open, at `/apps/<id>`, when the space has it */
+  readonly open: AppEntry | undefined;
   /** Go to another part of this space */
   readonly go: (to: SpacePath) => void;
   readonly openApp: (id: string) => void;
@@ -323,6 +319,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
     unread,
     status,
     mayDefine,
+    open,
     go,
     openApp,
     openRecord,
@@ -632,6 +629,19 @@ function SpaceView({ space }: { space: SpaceSummary }) {
       )}
     </PersonScopeProvider>
   );
+}
+
+/** An open app: a built-in one's own view, or one made for the space */
+export function OpenApp({ app }: { app: AppEntry }) {
+  const { space, collections, openRecord } = useSpaceScreen();
+  // What was new when it opened stays marked as new while it is open, though opening marks it seen.
+  const seen = useSeen();
+  const [since] = useState(() => seenAt(seen, space.id, app.id));
+  if (app.made)
+    return <MadeAppScreen space={space} record={app.made} collections={collections} onOpen={openRecord} />;
+  if (!app.builtIn) return null;
+  const View = app.builtIn.View;
+  return <View space={space} collections={collections} onOpen={openRecord} since={since} />;
 }
 
 /** Who can read the space, in a word */
