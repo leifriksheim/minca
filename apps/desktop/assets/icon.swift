@@ -47,9 +47,10 @@ func draw(_ size: Int) -> CGImage {
   context.saveGState()
   context.addPath(shape)
   context.clip()
-  // The rainbow, 23 of the mark's units 600 pixels wide, its middle a little under the tile's, where the eye puts it.
+  // The rainbow, 23 of the mark's units 600 pixels wide. Its middle sits above the tile's: centred
+  // exactly, its heavy flat base and the shadow under the tile make it look low.
   let unit: CGFloat = 600 / 23
-  let center = CGPoint(x: 512, y: 512 - 11.5 * unit / 2 - 12)
+  let center = CGPoint(x: 512, y: 512 - 11.5 * unit / 2 + 36)
   for band in bands {
     let path = CGMutablePath()
     path.addArc(
