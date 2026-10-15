@@ -533,7 +533,7 @@ function Walkthrough() {
 export function Developers() {
   return (
     <Page page="developers">
-      <section className="hero">
+      <section className="hero big-hero">
         <div className="wrap">
           <h1>
             A backend that

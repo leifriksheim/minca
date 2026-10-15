@@ -1425,7 +1425,8 @@
   -webkit-mask-image: radial-gradient(ellipse 75% 46% at 50% 32%, #000 40%, transparent 100%);
   mask-image: radial-gradient(ellipse 75% 46% at 50% 32%, #000 40%, transparent 100%);
 }
-.site .home-hero h1 {
+.site .home-hero h1,
+.site .big-hero h1 {
   font-size: clamp(56px, 11vw, 148px);
   line-height: 0.92;
   letter-spacing: -0.055em;

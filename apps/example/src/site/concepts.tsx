@@ -175,9 +175,9 @@ const PERMISSIONS = (
 );
 
 const CONTRACTS = (
-  <div className="viz" role="img" aria-label="A claim cites its proof, and every device checks it">
+  <div className="viz" role="img" aria-label="A claim attaches its proof, and every device checks it">
     <div className="viz-flow">
-      <Box ink name="Claim: in the hall of fame" sub="cites 5 reactions">
+      <Box ink name="Claim: “this comment is in”" sub="proof: 5 reactions">
         <span className="viz-cites">
           {['Ann', 'Bea', 'Cy', 'Dee', 'Eve'].map((who) => (
             <span key={who}>🙂 {who}</span>
@@ -192,7 +192,7 @@ const CONTRACTS = (
       </div>
     </div>
     <div className="viz-caption">
-      a claim with four reactions, or one person twice: it syncs, and counts for no one
+      bad proof, like four reactions or one person twice: the claim arrives, but counts for no one
     </div>
   </div>
 );
@@ -264,14 +264,18 @@ export const CONCEPTS: ReadonlyArray<Concept> = [
     intro: (
       <>
         <p>
-          A contract is a rule stored with a collection: “a comment is in the hall of fame once five different
-          people react 🙂”. When someone adds the fifth 🙂, their app writes a claim along with it, citing the
-          five (or an always-on bot does), and every device checks the proof the same way. A claim that
-          doesn’t add up syncs, but counts for no one: smart contracts without a blockchain.
+          A contract is a rule that every device checks the same way. Say a comment makes the hall of fame
+          once five different people react 🙂. When the fifth 🙂 comes in, the app writes a claim, “this
+          comment is in”, and attaches the five reactions as proof.
         </p>
         <p>
-          Just showing it? A computed field is enough: every device counts what it holds. A claim makes it a
-          fact that others can build on.
+          Every device checks the proof for itself. If it holds, the claim counts. If it doesn’t, say four
+          reactions, or one person twice, the claim still arrives but counts for no one. Like a smart
+          contract, without a blockchain.
+        </p>
+        <p>
+          Only showing a number? A computed field is enough: each device counts what it has. A contract is for
+          when the result has to be a fact everyone agrees on.
         </p>
       </>
     ),
