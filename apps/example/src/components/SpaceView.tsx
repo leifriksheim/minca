@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import {
-  Navigate,
+  Link,
   Outlet,
   useNavigate,
   useParams,
@@ -139,10 +139,21 @@ export function useSpaceScreen(): SpaceScreen {
 export function SpaceLayout() {
   const { spaceId } = useParams({ from: '/spaces/$spaceId' });
   const { spaces, loading, create, join, openSpace } = useWorkspace();
+  const navigate = useNavigate();
   // Always the list's current copy, so a join that finishes, or a role that
   // changes, never leaves a stale one on screen.
   const space = spaces.find((found) => found.id === spaceId);
-  if (!space) return loading ? null : <Navigate to="/" replace />;
+  // Said rather than redirected: a list a moment behind (a refresh that
+  // overlapped a join) shows the space as soon as it catches up.
+  if (!space)
+    return loading ? null : (
+      <div className="page">
+        <div style={styles.app}>
+          <p style={styles.emptyState}>This space isn't on this device.</p>
+          <Link to="/">Your spaces</Link>
+        </div>
+      </div>
+    );
   // The space takes the whole window beside the rail, the way chat apps are laid out.
   return (
     <div className="shell">
@@ -150,7 +161,7 @@ export function SpaceLayout() {
         spaces={spaces}
         current={space.id}
         onOpen={(other) => openSpace(other.id)}
-        onHome={() => openSpace('')}
+        onHome={() => void navigate({ to: '/' })}
         onCreate={create}
         onJoin={join}
       />

@@ -36,8 +36,8 @@ becomes `any`.
 
 Links from when the app lived at `minca.social/app` still open it: `/app` and
 any other path it doesn't know go to `/`, keeping the fragment that carries an
-invite or a door; a door goes on to `/contacts`. A space you don't have goes
-to `/` too.
+invite or a door; a door goes on to `/contacts`. A space this device doesn't
+have says so, with a link to your spaces, and shows itself if it turns up.
 
 ```bash
 npm run dev         # at the repository root: this app on :5173, the account home on :5174, a node and relay on :8787
