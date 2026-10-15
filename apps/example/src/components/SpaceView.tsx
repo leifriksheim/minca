@@ -60,6 +60,8 @@ type Hood = (typeof HOOD)[number]['id'];
 
 /** How many apps the sidebar lists before the rest fold behind one row, so the space's own sections stay in view */
 const SIDEBAR_APPS = 10;
+/** Where the seen store keeps when All apps, and the proposals on it, were last looked at; no app has this id */
+const PROPOSALS = ':proposals';
 
 /** Whether Under the hood was left open in the sidebar, in this browser */
 const HOOD_OPEN_KEY = 'minca:hood-open';
@@ -169,6 +171,27 @@ export function SpaceView({
     return () => globalThis.document.removeEventListener('visibilitychange', look);
   }, [account.did, space.id, openId, newInOpen]);
 
+  // Proposed apps others, or an agent, wrote since All apps was last looked at.
+  const proposalsSeen = Date.parse(seenAt(seen, space.id, PROPOSALS));
+  const newProposals: Unread = {
+    count: apps.proposed.filter(
+      (record) =>
+        (record.createdBy !== account.did || record.recordsOnly) &&
+        Date.parse(record.updatedAt) > proposalsSeen,
+    ).length,
+    forMe: 0,
+  };
+  const onApps = view.kind === 'apps';
+  useEffect(() => {
+    if (!onApps) return;
+    const look = () => {
+      if (globalThis.document.visibilityState === 'visible') markSeen(account.did, space.id, PROPOSALS);
+    };
+    look();
+    globalThis.document.addEventListener('visibilitychange', look);
+    return () => globalThis.document.removeEventListener('visibilitychange', look);
+  }, [account.did, space.id, onApps, newProposals.count]);
+
   // The sidebar's apps: the first few, and the open one wherever it sits; the rest behind "more", with what is new in them.
   const folds = apps.ready.length > SIDEBAR_APPS;
   const listed =
@@ -250,6 +273,7 @@ export function SpaceView({
               <SideItem
                 icon={<Icon name="apps" size={16} />}
                 label="All apps"
+                unread={newProposals}
                 on={view.kind === 'apps'}
                 onClick={() => setView({ kind: 'apps' })}
               />
@@ -552,7 +576,12 @@ export function SpaceView({
             <span style={{ position: 'relative', display: 'inline-flex' }}>
               <Icon name="apps" size={20} />
               <span className="tab-count">
-                <Count unread={totalOf(unread)} />
+                <Count
+                  unread={{
+                    count: totalOf(unread).count + newProposals.count,
+                    forMe: totalOf(unread).forMe,
+                  }}
+                />
               </span>
             </span>
             Apps
