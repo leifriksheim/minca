@@ -1,5 +1,5 @@
-import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
-import type { NewSpace, SpaceSummary } from '@minca/core';
+import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import type { NewSpace } from '@minca/core';
 import {
   CallsProvider,
   inviteFromLink,
@@ -15,20 +15,18 @@ import { Bell } from './components/Bell';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
 import { ContactsView } from './components/ContactsView';
-import { RelayDown, RelayNotice } from './components/RelayNotice';
+import { RelayDown } from './components/RelayNotice';
 import { DocsNote } from './components/DocsNote';
-import { InviteBanner } from './components/InviteBanner';
 import { SpaceList } from './components/SpaceList';
-import { SpaceRail } from './components/SpaceRail';
-import { SpaceView } from './components/SpaceView';
 import { CallLayer } from './components/calls/Calls';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 
 import { takeBack } from './contacts';
 import { styles, palette } from './styles';
 import { ask } from '@minca/app-shared/Ask';
+import { Notices, useWorkspace, WorkspaceContext, type Workspace as WorkspaceValue } from './workspace';
 
-/** The app: connect to your account home, then your spaces */
+/** The app: connect to your account home, then your spaces, wherever the address says (`router.tsx`) */
 export function App() {
   const { state } = useConnection();
   // Calls sit above the workspace, so moving between spaces never touches one.
@@ -41,26 +39,14 @@ export function App() {
   );
 }
 
-/** The two lists on the home screen, and where each lives */
-const HOME = { spaces: '/', contacts: '/contacts' } as const;
-
-/** Connected: your spaces or your contacts, or one space opened, as the address says (`router.tsx`). */
+/** Connected: your spaces for every page, notifications and automations running, and calls drawn over it all */
 function Workspace() {
   const mine = useSpaces();
   const { spaces, loading, error } = mine;
   const navigate = useNavigate();
-  const { spaceId } = useParams({ strict: false });
-  const home =
-    useLocation({ select: (location) => location.pathname }) === HOME.contacts ? 'contacts' : 'spaces';
-  // The opened space, always the list's current copy, so a join that
-  // finishes, or a role that changes, never leaves a stale one on screen. A
-  // space the list doesn't have (yet, or any more) leaves you on your spaces.
-  const open = spaces.find((space) => space.id === spaceId) ?? null;
-  const openById = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });
-  const setOpen = (space: SpaceSummary | null) =>
-    space ? openById(space.id) : void navigate({ to: HOME.spaces });
+  const openSpace = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
-  useShowNotifications(openById);
+  useShowNotifications(openSpace);
   useRunAutomations();
 
   /**
@@ -100,101 +86,97 @@ function Workspace() {
     await mine.leave(id);
   };
 
-  const inSpace = open !== null;
+  const workspace: WorkspaceValue = {
+    spaces,
+    loading,
+    error,
+    create: (params: NewSpace) => void mine.create(params).then((space) => space && openSpace(space.id)),
+    join: (link: string) => void joinLink(link).then((space) => space && openSpace(space.id)),
+    joinLink,
+    forget: (id: string) => void forget(id),
+    openSpace,
+  };
 
-  const create = (params: NewSpace) => void mine.create(params).then((space) => space && setOpen(space));
-  const join = (link: string) => void joinLink(link).then((space) => space && setOpen(space));
-  const notices = (
-    <>
-      {inSpace && error && (
-        <div style={{ ...styles.errorBox, marginTop: 0, marginBottom: 16 }}>
-          <p style={styles.error}>{error}</p>
-        </div>
-      )}
-      <InviteBanner onJoin={(link) => joinLink(link).then((space) => (space && setOpen(space), space))} />
-      <RelayNotice />
-    </>
+  return (
+    <WorkspaceContext value={workspace}>
+      <Outlet />
+      <CallLayer spaces={spaces} onGoTo={(space) => openSpace(space.id)} />
+    </WorkspaceContext>
   );
+}
 
-  // In a space, the space takes the whole window beside the rail, the way chat apps are laid out.
-  if (open) {
-    return (
-      <div className="shell">
-        <SpaceRail
-          spaces={spaces}
-          current={open.id}
-          onOpen={setOpen}
-          onHome={() => setOpen(null)}
-          onCreate={create}
-          onJoin={join}
-        />
-        <SpaceView
-          key={open.id}
-          space={open}
-          spaces={spaces}
-          notices={notices}
-          onOpenSpace={openById}
-          onHome={() => setOpen(null)}
-        />
-        <CallLayer spaces={spaces} onGoTo={setOpen} />
-      </div>
-    );
-  }
+/** A tab on the home screen, the colour of where you are */
+const tab = (on: boolean) =>
+  ({
+    ...styles.appTitle,
+    textDecoration: 'none',
+    color: on ? palette.ink.strong : palette.ink.faint,
+  }) as const;
 
+/** The home screen: your spaces or your contacts, under one header */
+export function HomeLayout() {
+  const { spaces, openSpace } = useWorkspace();
   return (
     <div className="page">
       <div style={styles.app}>
-        {notices}
+        <Notices />
         <RelayDown />
-        <>
-          <header style={styles.headerRow}>
-            <Wordmark compact />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Bell spaces={spaces} onOpenSpace={openById} />
-              <AccountMenu />
-            </span>
-          </header>
-          <nav role="tablist" aria-label="Home" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
-            {(['spaces', 'contacts'] as const).map((id) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={home === id}
-                onClick={() => void navigate({ to: HOME[id] })}
-                style={{
-                  ...styles.appTitle,
-                  border: 'none',
-                  background: 'none',
-                  padding: 0,
-                  color: home === id ? palette.ink.strong : palette.ink.faint,
-                }}
-              >
-                {id === 'spaces' ? 'Spaces' : 'Contacts'}
-              </button>
-            ))}
-          </nav>
-          {home === 'spaces' ? (
-            <>
-              <SpaceList
-                spaces={spaces}
-                loading={loading}
-                error={error}
-                onOpen={setOpen}
-                onCreate={create}
-                onJoin={join}
-                onRemove={(id) => void forget(id)}
-              />
-              <AgentCard />
-              <DocsNote path="packages/core/docs/spaces.md" style={{ marginTop: 16 }}>
-                Each space keeps its own store and sync, and an invite carries its key in the link.
-              </DocsNote>
-            </>
-          ) : (
-            <ContactsView spaces={spaces} onOpen={openById} />
-          )}
-        </>
+        <header style={styles.headerRow}>
+          <Wordmark compact />
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Bell spaces={spaces} onOpenSpace={openSpace} />
+            <AccountMenu />
+          </span>
+        </header>
+        <nav role="tablist" aria-label="Home" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+          <Link
+            to="/"
+            role="tab"
+            activeOptions={{ exact: true }}
+            activeProps={{ 'aria-selected': true, style: tab(true) }}
+            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
+          >
+            Spaces
+          </Link>
+          <Link
+            to="/contacts"
+            role="tab"
+            activeProps={{ 'aria-selected': true, style: tab(true) }}
+            inactiveProps={{ 'aria-selected': false, style: tab(false) }}
+          >
+            Contacts
+          </Link>
+        </nav>
+        <Outlet />
       </div>
-      <CallLayer spaces={spaces} onGoTo={setOpen} />
     </div>
   );
+}
+
+/** Your spaces, at `/` */
+export function SpacesPage() {
+  const { spaces, loading, error, create, join, forget, openSpace } = useWorkspace();
+  return (
+    <>
+      <SpaceList
+        spaces={spaces}
+        loading={loading}
+        error={error}
+        onOpen={(space) => openSpace(space.id)}
+        onCreate={create}
+        onJoin={join}
+        onRemove={forget}
+      />
+      <AgentCard />
+      <DocsNote path="packages/core/docs/spaces.md" style={{ marginTop: 16 }}>
+        Each space keeps its own store and sync, and an invite carries its key in the link.
+      </DocsNote>
+    </>
+  );
+}
+
+/** Your contacts, at `/contacts` */
+export function ContactsPage() {
+  const { spaces, openSpace } = useWorkspace();
+  return <ContactsView spaces={spaces} onOpen={openSpace} />;
 }

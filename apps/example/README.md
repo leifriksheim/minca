@@ -4,15 +4,40 @@ The Minca app, at app.minca.social: a general-purpose app for your Minca
 spaces, which shows any kind of data from what each space says about itself.
 The website is [apps/site](../site/README.md), at minca.social.
 
-A Vite + React app on top of [`@minca/core`](../../README.md), routed with
-TanStack Router (`src/router.tsx`): your spaces at `/`, your contacts at
-`/contacts`, and one space at `/spaces/<id>`. Links from when it lived at
-`minca.social/app` still open it: `/app` and any other path it doesn't know go
-to `/`, with the fragment that carries an invite or a door. `public/_redirects`
-sends every path to `index.html` on Netlify, and `netlify.toml` builds it for a
-site whose base directory is `apps/example`. It imports the protocol straight
-from its source in the workspace (`packages/core/src`), so edits to the library
-hot-reload here.
+A Vite + React app on top of [`@minca/core`](../../README.md). It imports the
+protocol straight from its source in the workspace (`packages/core/src`), so
+edits to the library hot-reload here. `public/_redirects` sends every path to
+`index.html` on Netlify, and `netlify.toml` builds it for a site whose base
+directory is `apps/example`.
+
+## Routes
+
+TanStack Router, with code-based routes in `src/router.tsx`, typed throughout:
+paths, params and search params. The address holds where you are and the small
+state that goes with it; what lives longer (your spaces, a call) sits above
+the routes, in `App.tsx`.
+
+| Route                                                         | What                                   |
+| ------------------------------------------------------------- | -------------------------------------- |
+| `/`, `/contacts`                                              | Your spaces, your contacts             |
+| `/spaces/<id>`                                                | A space's apps                         |
+| `/spaces/<id>/apps/<app>`                                     | One app, open                          |
+| `/spaces/<id>/new`                                            | Adding an app                          |
+| `/spaces/<id>/people`, `…/hosting`, `…/automations`, `…/more` | The space's own sections               |
+| `/spaces/<id>/data`, `…/explore`, `…/query`, `…/network`      | Under the hood                         |
+| `?record=<key>`, in a space                                   | The record open in the panel beside it |
+| `?collection=<name>`, in Data                                 | The collection Data shows              |
+
+A space's layout (`SpaceLayout` in `src/components/SpaceView.tsx`) hands its
+pages (`src/components/SpacePages.tsx`) the space through `useSpaceScreen`.
+Keep each route a named constant before `addChildren`: a `createRoute` written
+inline in the list loses the router's types, and every path and param quietly
+becomes `any`.
+
+Links from when the app lived at `minca.social/app` still open it: `/app` and
+any other path it doesn't know go to `/`, keeping the fragment that carries an
+invite or a door; a door goes on to `/contacts`. A space you don't have goes
+to `/` too.
 
 ```bash
 npm run dev         # at the repository root: this app on :5173, the account home on :5174, a node and relay on :8787
@@ -256,9 +281,10 @@ exports a `MiniApp`, plus one line in `APPS`.
 ```
 src/
   main.tsx                 # base styles, WebMCP tools, then the router
-  router.tsx               # routes: / (spaces), /contacts, /spaces/<id>; anything else to /
+  router.tsx               # the routes, and the search params they hold
+  workspace.tsx            # your spaces, for every page: what the routes share
   minca.ts                 # this app's Minca setup: one sign-in flow, and where peers meet
-  App.tsx                  # sign in (<MincaAuth />), then your spaces and contacts
+  App.tsx                  # connect, then the workspace; the home screen's layout and pages
   spaces.ts                # invite links
   contacts.ts              # door links, and the contact list kept current
   webmcp.ts                # node operations as WebMCP tools
