@@ -208,11 +208,23 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
     every member's device works out for each record a query filters or
     sorts on them, and that grow with every record a member links to it.
     Each automation of an account's own that names one makes up to four more
-    wakes for its carriers to check. A definition `define` would refuse is
-    read as having none, however it arrived
+    wakes for its carriers to check, in the spaces whose definition reads
+    them. A `computed` member that is malformed, too large or named like a
+    field of the body's schema is read as having none, however it arrived;
+    one that misreads the schemas, which `define` also refuses, is used, and
+    gives null
     (`packages/core/docs/computed.md`; `packages/core/tests/computed.test.ts`,
     "computed: what review found")
     ([#33](https://github.com/leifriksheim/minca/issues/33)).
+  - What made a record hold, for an automation on a computed field, is told
+    by the writers' clocks, which no peer checks: of two members whose
+    records together made it hold, either can date theirs to have been the
+    last, and so be the one its `from` and `others` judge. Neither can make
+    a record that held before it fire, nor one their records didn't help
+    make hold (`causeOf` in `packages/core/src/query/computed.ts`;
+    `packages/core/tests/computed.test.ts`, "what made it hold sets it off,
+    not whatever came after", `scenarios/tests/chores.test.ts`). By design,
+    as times are the writer's everywhere else.
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - A removal or unassignment signed offline can arrive at any time and withdraw
@@ -645,8 +657,11 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - From the account's wakes it learns a collection, spaces, topic tags,
     whether only others' records wake, since when, whether paused, and which
     app's address a click leads to; for a `where` on a computed field, also
-    the collections that field reads, and from the keys
-    (`wake:<id>:<collection>`) that they belong to one automation; never the values behind a private
+    the collections that field reads, in the spaces whose definition reads
+    them, untagged, and from the keys (`wake:<id>:<collection>`) that they
+    belong to one automation (`packages/core/tests/computed.test.ts`, "a
+    wake for a filter on a computed field also wakes on what that field
+    reads"); never the values behind a private
     space's tags nor the person's words for what they want to hear about
     (03 §15; `packages/core/tests/carrier.test.ts`, "a carrier gets tags,
     never the values it matches"). Any `where` condition on a field declared

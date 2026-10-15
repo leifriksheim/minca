@@ -32,7 +32,7 @@ import {
   type QueryRecord,
 } from '../query/types.js';
 import { checkFilter, checkQuery, matches } from '../query/filter.js';
-import { lastRead, namedComputed } from '../query/computed.js';
+import { causeOf, namedComputed } from '../query/computed.js';
 import { quickAddBody } from '../schema/quick-add.js';
 import { schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { isObject } from '../utils/guards.js';
@@ -360,11 +360,12 @@ export interface AutomationMatch {
    */
   readonly moment: number;
   /**
-   * What set it off: the record itself, or the newest record a computed field
-   * its filter names read, when that came later. `from`, `others` and "not
-   * by the runner's own agent" judge this one's writer. Absent: the record.
+   * What made it hold: the record itself, or, for a filter on a computed
+   * field, the record that field read whose coming made it hold (`causeOf`).
+   * `from`, `others` and "not by the runner's own agent" judge this one's
+   * writer. Absent: the record.
    */
-  readonly trigger?: NodeRecord;
+  readonly cause?: NodeRecord;
 }
 
 /**
@@ -407,9 +408,6 @@ export async function matching(
   const found: AutomationMatch[] = [];
   for (const record of records) {
     let latest = Date.parse(record.updatedAt);
-    const last = reads ? await lastRead(source, record.key, named) : null;
-    const trigger = last && last.updatedAt > record.updatedAt ? last : record;
-    if (last) latest = Math.max(latest, Date.parse(last.updatedAt));
     const included: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(record.included)) {
       if (typeof value === 'number') {
@@ -420,7 +418,19 @@ export async function matching(
       included[name] = counted.has(name) ? value.length : value;
     }
     if (when.holds !== undefined && !matches({ ...record, included }, when.holds)) continue;
-    found.push({ record, included, moment: latest, trigger });
+    // What made it hold, not what came last: a 😡 after the second 👍 sets nothing off.
+    const cause = reads
+      ? await causeOf(source, record, named, (computed) => {
+          const subject = { ...record, included, computed };
+          return (
+            matches(subject, query.where ?? {}) && (when.holds === undefined || matches(subject, when.holds))
+          );
+        })
+      : record;
+    // What made it hold can't be told: better quiet than set off by the wrong one.
+    if (!cause) continue;
+    if (cause !== record) latest = Math.max(latest, Date.parse(cause.updatedAt));
+    found.push({ record, included, moment: latest, cause });
   }
   return found;
 }
@@ -657,8 +667,8 @@ export async function runAutomations(
     const since = Date.parse(active.body.since);
     for (const match of await matching(node, space, when, account)) {
       const record = match.record;
-      const trigger = match.trigger ?? record;
-      const by = trigger.createdBy ?? trigger.root;
+      const cause = match.cause ?? record;
+      const by = cause.createdBy ?? cause.root;
       const claim = `${active.key} ${record.key}`;
       if (
         match.moment < since ||
@@ -668,7 +678,7 @@ export async function runAutomations(
       )
         continue;
       // What the runner's agent, or the bot, wrote itself never sets an automation off: an agent asked to act can't set itself off.
-      if (by === account && (trigger.recordsOnly || options.bot)) continue;
+      if (by === account && (cause.recordsOnly || options.bot)) continue;
       if (when.from && !holdsOneOf(access, by ?? '', when.from)) continue;
       if (when.others && by === account) continue;
       busy.add(claim);

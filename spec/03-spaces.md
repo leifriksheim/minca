@@ -1851,8 +1851,9 @@ What a wake is made from, and how a device works out its tags, is the
 library's: it keeps the account's own automations in the registry
 (`sys.automation`, §13.2) and makes one wake from each, at `wake:<id>`.
 When its `where` names a computed field, it makes one more for each
-collection that field reads, at `wake:<id>:<collection>`, and none when
-they would be more than four
+collection that field reads, other than its own and `sys.*` ones, at
+`wake:<id>:<collection>`, naming only the spaces whose definition reads it,
+and none when they would be more than four
 ([automations](../packages/core/docs/automations.md#the-accounts-own)).
 A carrier treats every wake alike, whatever its key. A
 wake carries no words of the person's and no topic values, only their tags,

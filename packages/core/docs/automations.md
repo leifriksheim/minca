@@ -56,8 +56,12 @@ names; only records written by someone holding one of them set the automation of
 and `"member"` is any member at all, the founders included. With `others`,
 only records someone other than its runner wrote set it off. What sets it off
 is the record, or, when a computed field its filter names made it hold, the
-newest record that field read: Bob's 👍 that made Alice's todo done is
-Bob's, so `others` lets it through and `from` asks Bob's roles.
+record that field read whose coming made it hold: Bob's 👍 that made Alice's
+todo done is Bob's, so `others` lets it through and `from` asks Bob's roles.
+A 😡 after it changes nothing, so it sets nothing off, and a todo done before
+the automation was made never does. Which came last goes by the writers'
+clocks, so of two people whose 👍s made it done, either can claim to have
+been the last.
 
 `every` uses `*`, a number, a range `a-b`, a step `/n` and lists with commas;
 weekday 0 or 7 is Sunday; a day and a weekday both given means either. At

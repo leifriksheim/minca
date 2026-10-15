@@ -13,7 +13,7 @@
  * never news.
  */
 import { holdsFor, ownQuery, setsOff, type Trigger } from '../space/own-automations.js';
-import { lastRead, linkedReads, namedComputed } from '../query/computed.js';
+import { causeOf, linkedReads, namedComputed } from '../query/computed.js';
 import type { NodeRecord, OwnAutomationView, P2PNode } from './types.js';
 import { serial } from '../utils/serial.js';
 
@@ -83,11 +83,15 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
       if (!holdsFor(own, record, node.did) || held.has(record.key)) continue;
       held.add(record.key);
       if (first) continue;
-      const last = reads ? await lastRead({ linked }, record.key, named) : null;
+      // What made it hold, not what came last: a 😡 after the second 👍 tells no one anything.
+      const cause = reads
+        ? await causeOf({ linked }, record, named, (computed) =>
+            holdsFor(own, { ...record, computed }, node.did),
+          )
+        : record;
+      if (!cause) continue;
       const trigger: Trigger =
-        last && last.updatedAt > record.createdAt
-          ? { createdAt: last.updatedAt, createdBy: last.root ?? last.createdBy }
-          : record;
+        cause === record ? record : { createdAt: cause.updatedAt, createdBy: cause.root ?? cause.createdBy };
       if (setsOff(own, space, trigger, node.did)) options.onNotify({ automation: own, record });
     }
   }

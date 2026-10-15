@@ -50,6 +50,44 @@ describe('chores: done is a view', () => {
   });
 });
 
+describe('chores: what sets an automation off', () => {
+  test('a chore done before the automation was made stays quiet, whatever comes after', async () => {
+    const { c, dishes, nodAt, automate } = await story();
+    await c.add(dishes, await nodAt(1), await nodAt(2));
+    const run = await automate();
+    await c.add(await nodAt(3, dishes, '😐'));
+    assert.deepEqual(await run(), []);
+  });
+
+  test('the nod that makes it done sets it off, once', async () => {
+    const { c, dishes, nodAt, automate } = await story();
+    await c.add(dishes, await nodAt(1));
+    const run = await automate();
+    await c.add(await nodAt(2));
+    await run();
+    await c.add(await nodAt(3));
+    assert.deepEqual(await run(), ['Dishes is done']);
+  });
+
+  test('admins only: the children make it done, and a parent’s 😐 after sets nothing off', async () => {
+    const { c, alice, dishes, nodAt, nodBy, automate } = await story();
+    await c.add(dishes);
+    const run = await automate({ from: ['admin'] });
+    await c.add(await nodAt(1), await nodAt(2));
+    await run();
+    await c.add(await nodBy(alice, dishes, '😐'));
+    assert.deepEqual(await run(), []);
+  });
+
+  test('admins only: a parent’s 👍 that makes it done sets it off', async () => {
+    const { c, alice, dishes, nodAt, nodBy, automate } = await story();
+    await c.add(dishes, await nodAt(1));
+    const run = await automate({ from: ['admin'] });
+    await c.add(await nodBy(alice));
+    assert.deepEqual(await run(), ['Dishes is done']);
+  });
+});
+
 describe('chores: promoted, done is a verdict', () => {
   test('a claim citing the 👍s the view counted passes', async () => {
     const { c, dishes, nodAt, promote } = await story();

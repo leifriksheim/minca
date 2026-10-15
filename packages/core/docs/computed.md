@@ -115,10 +115,11 @@ writes the same:
 A contract can't call `linked()`: what it reads must be the same on every
 node.
 
-Whatever reads them reads them as `define` would take them: a definition
-another implementation wrote, or one written by hand, whose `computed` is
-malformed, too large, or names a field like the body's, is read as having
-none.
+Whatever reads them reads a definition another implementation wrote, or one
+written by hand, as having none when its `computed` is malformed, too large,
+or names a field the body's schema declares. A body member the schema
+doesn't declare can still share a computed field's name, and a query reads
+the computed field: whoever defines the collection decides both anyway.
 
 ## Reading them
 

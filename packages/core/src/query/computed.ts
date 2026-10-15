@@ -301,24 +301,47 @@ export function linkedReads(fields: ComputedFields): ReadonlyArray<LinkedRead> {
   return [...reads.values()];
 }
 
+/** At most this many of the newest records a cause is looked for among: each costs working the fields out again */
+const MAX_CAUSES = 64;
+
 /**
- * The newest record these computed fields read for the record `key`: the
- * last thing that could have changed their values, or null when they read
- * none. A record comes to match a filter on them when it is written, or
- * when this is.
+ * What made a filter on these computed fields hold for a record: of the
+ * records they read, the newest whose taking away, with every newer one,
+ * stops it holding. A 😡 after the second 👍 changes nothing, so the 👍 is
+ * the cause, and who wrote it and when is what an automation judges. The
+ * record itself when it holds with none of them; null when it doesn't hold,
+ * or when it would still hold without the 64 newest, so what made it hold
+ * can't be told. Newest goes by the writers' clocks, which no peer checks.
  */
-export async function lastRead(
+export async function causeOf(
   source: LinkedSource,
-  key: string,
+  record: NodeRecord,
   fields: ComputedFields,
+  holds: (computed: ComputedValues) => boolean,
 ): Promise<NodeRecord | null> {
-  let newest: NodeRecord | null = null;
+  // Each collection and role looked up once; taking records away filters what was found.
+  const found = new Map<string, ReadonlyArray<NodeRecord>>();
   for (const { collection, rel } of linkedReads(fields)) {
-    for (const r of await source.linked(key, { rel, collection })) {
-      if (readable(r) && (!newest || r.updatedAt > newest.updatedAt)) newest = r;
-    }
+    found.set(
+      `${collection}\u0000${rel}`,
+      (await source.linked(record.key, { rel, collection })).filter(readable),
+    );
   }
-  return newest;
+  const gone = new Set<string>();
+  const without: LinkedSource = {
+    linked: async (_key, { rel, collection }) =>
+      (found.get(`${collection}\u0000${rel}`) ?? []).filter((r) => !gone.has(r.key)),
+  };
+  if (!holds(await computeValues(without, record, fields))) return null;
+  const byKey = new Map([...found.values()].flat().map((r) => [r.key, r]));
+  const newestFirst = [...byKey.values()].sort(
+    (a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.key.localeCompare(a.key),
+  );
+  for (const r of newestFirst.slice(0, MAX_CAUSES)) {
+    gone.add(r.key);
+    if (!holds(await computeValues(without, record, fields))) return r;
+  }
+  return newestFirst.length <= MAX_CAUSES ? record : null;
 }
 
 /** Only records whose body this device could open */

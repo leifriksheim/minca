@@ -47,7 +47,7 @@ import {
 import { isObject } from '../utils/guards.js';
 import { linkedReads, namedComputed, type ComputedFields } from '../query/computed.js';
 
-/** Wakes, as a carrier holds them in its carry space: key `wake:<the automation's key>` */
+/** Wakes, as a carrier holds them in its carry space: key `wake:<the automation's key>`, and `wake:<that key>:<collection>` for what a computed field reads */
 export const WAKE_COLLECTION = 'sys.wake';
 
 /** The record fields an account's own automation may read besides the body: what an app sees of any record */
@@ -383,6 +383,8 @@ export function readWake(body: unknown): Wake | null {
 
 /** At most this many collections an automation's computed fields wake on besides its own; past it, none */
 const MAX_LINKED_WAKES = 4;
+/** At most this many spaces a wake names (spec 03 §15) */
+const MAX_WAKE_SPACES = 256;
 
 /**
  * The wakes an automation needs besides its own, made from it: when its
@@ -400,20 +402,31 @@ export function linkedWakes(
 ): ReadonlyArray<Wake> {
   const { collection, where } = ownQuery(own);
   const only = own.spaces ?? 'all';
-  const read = new Set<string>();
+  // Each collection read, and the spaces whose definition reads it: a definer in one space can't widen the others.
+  const read = new Map<string, string[]>();
   for (const space of only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id))) {
     const named = namedComputed(space.computed?.(collection) ?? {}, where);
-    for (const { collection: from } of linkedReads(named)) if (!from.startsWith('sys.')) read.add(from);
+    for (const { collection: from } of linkedReads(named)) {
+      if (from.startsWith('sys.') || from === collection) continue;
+      const ids = read.get(from) ?? [];
+      if (!ids.includes(space.id)) ids.push(space.id);
+      read.set(from, ids);
+    }
   }
-  read.delete(collection);
   if (read.size > MAX_LINKED_WAKES) return [];
   const { tags, ...rest } = wake;
-  const quiet = Object.entries(tags ?? {}).filter(([, list]) => list.length === 0);
-  return [...read].map((from) => ({
-    ...rest,
-    collection: from,
-    ...(quiet.length > 0 ? { tags: Object.fromEntries(quiet) } : {}),
-  }));
+  return [...read]
+    .filter(([, ids]) => ids.length <= MAX_WAKE_SPACES)
+    .map(([from, ids]) => {
+      // Its tags are the automation's collection's; only the spaces it must stay quiet in carry over.
+      const quiet = ids.filter((id) => tags?.[id]?.length === 0);
+      return {
+        ...rest,
+        collection: from,
+        spaces: ids,
+        ...(quiet.length > 0 ? { tags: Object.fromEntries(quiet.map((id) => [id, []])) } : {}),
+      };
+    });
 }
 
 /** Who a version was written for: the account that issued its note, else its own key */

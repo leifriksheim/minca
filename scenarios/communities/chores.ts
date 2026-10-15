@@ -8,7 +8,12 @@
  */
 import * as z from 'zod';
 import { collection } from '../../packages/core/src/schema/collection-def.js';
-import { matching } from '../../packages/core/src/schemas/automations.js';
+import {
+  automation,
+  automationRun,
+  matching,
+  runAutomations,
+} from '../../packages/core/src/schemas/automations.js';
 import type { Version } from '../../packages/core/src/types.js';
 import { communityNode } from '../../packages/core/tests/helpers/community.js';
 import type { Person } from '../../packages/core/tests/helpers/person.js';
@@ -59,14 +64,16 @@ const completion = collection({
 
 /** Alice runs the household; m1–m3 live there. Alice writes the dishes and the laundry. */
 export async function story() {
-  const c = await communityNode(3, [nod, chore, completion]);
+  const c = await communityNode(3, [nod, chore, completion, automation, automationRun]);
   const alice = c.founder;
   const m = (i: number): Person => c.members[i - 1]!;
   const dishes = await c.sign(alice, { collection: chore.name, body: { text: 'Dishes' } });
   const laundry = await c.sign(alice, { collection: chore.name, body: { text: 'Laundry' } });
-  /** A nod by member `i`: a 👍 on the dishes unless said otherwise */
-  const nodAt = (i: number, on: Version = dishes, emoji = '👍') =>
-    c.sign(m(i), { collection: nod.name, body: { emoji }, links: [{ rel: 'on', to: on.key }] });
+  /** A nod by anyone: a 👍 on the dishes unless said otherwise */
+  const nodBy = (who: Person, on: Version = dishes, emoji = '👍') =>
+    c.sign(who, { collection: nod.name, body: { emoji }, links: [{ rel: 'on', to: on.key }] });
+  /** A nod by member `i` */
+  const nodAt = (i: number, on: Version = dishes, emoji = '👍') => nodBy(m(i), on, emoji);
   /** A claim that a chore is complete, citing nods: Alice's unless someone else's is given */
   const claim = (on: Version, nods: ReadonlyArray<Version>, who: Person = alice) =>
     c.sign(who, {
@@ -110,5 +117,28 @@ export async function story() {
       links: [{ rel: 'chore', to: of.key }],
     });
   };
-  return { c, alice, m, dishes, laundry, nodAt, claim, withdraw, view, done, promote };
+  /**
+   * An automation of Alice's on `{ done: true }`, from now, with `when` added:
+   * `from: ['admin']` for one only the household's admins set off. Its runs
+   * give what it said so far.
+   */
+  const automate = async (when: Record<string, unknown> = {}) => {
+    // Clocks count milliseconds: what came before must not share one with `since`.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await alice.node.records.put(c.space, automation.name, {
+      name: 'Done',
+      when: { query: { collection: chore.name, where: { done: true } }, ...when },
+      then: { kind: 'notify', text: '{title} is done' },
+      since: new Date().toISOString(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const told: string[] = [];
+    return async () => {
+      await runAutomations(alice.node, c.space, alice.me.did, {
+        notify: (_name, text) => (told.push(text), true),
+      });
+      return [...told];
+    };
+  };
+  return { c, alice, m, dishes, laundry, nodAt, nodBy, claim, withdraw, view, done, promote, automate };
 }

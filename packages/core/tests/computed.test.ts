@@ -597,4 +597,94 @@ describe('computed: what review found', () => {
     await run();
     assert.deepEqual(told, ['Dishes is done']);
   });
+
+  test('what made it hold sets it off, not whatever came after: others, from and since hold', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const bob = await person(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Home', ...team, visibility: 'private' });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    for (const definition of [nod, chore, automation, automationRun])
+      await alice.node.collections.define(space, definition);
+    await hold(alice.node, space);
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    await until(
+      async () => (await bob.node.collections.list(space)).filter((c) => c.version !== null).length === 4,
+      4000,
+      'definitions to reach Bob',
+    );
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 5));
+    const nodBy = async (who: typeof alice, key: string) => {
+      const made = await who.node.records.put(space, nod, {}, { links: [{ rel: 'on', to: key }] });
+      await until(async () => (await alice.node.records.get(space, made.key)) !== null, 4000, 'the nod');
+      await pause();
+    };
+    const chores = async (who: typeof alice, ...texts: string[]) => {
+      const made = [];
+      for (const text of texts) made.push(await who.node.records.put(space, chore, { text }));
+      for (const c of made)
+        await until(async () => (await alice.node.records.get(space, c.key)) !== null, 4000, 'chore');
+      return made;
+    };
+    // Done before any automation was made.
+    const [old] = await chores(alice, 'Laundry');
+    await nodBy(alice, old!.key);
+    await nodBy(alice, old!.key);
+    const [mine] = await chores(alice, 'Dishes');
+    const [his] = await chores(bob, 'Bins');
+    const told: string[] = [];
+    const make = (name: string, when: Record<string, unknown>) =>
+      alice.node.records.put(space, automation.name, {
+        name,
+        when: { query: { collection: chore.name, where: { done: true } }, ...when },
+        then: { kind: 'notify', text: `${name}: {title}` },
+        since: new Date().toISOString(),
+      });
+    await make('Others', { others: true });
+    await make('Admins', { from: ['admin'] });
+    await make('Any', {});
+    await pause();
+    const run = () =>
+      runAutomations(alice.node, space, alice.me.did, { notify: (_name, text) => (told.push(text), true) });
+
+    await nodBy(alice, mine!.key);
+    await nodBy(alice, mine!.key);
+    await nodBy(bob, his!.key);
+    await nodBy(bob, his!.key);
+    await run();
+    // A nod after, by someone else, changes nothing, and so sets nothing off.
+    await nodBy(bob, mine!.key);
+    await nodBy(alice, his!.key);
+    await nodBy(bob, old!.key);
+    await run();
+    assert.deepEqual(
+      told.sort(),
+      ['Admins: Dishes', 'Any: Bins', 'Any: Dishes', 'Others: Bins'],
+      [
+        'Alice made the dishes done: not for Others, though Bob nodded after',
+        'Bob made the bins done: not for Admins, though Alice, an admin, nodded after',
+        'the laundry was done before: for none, whatever came after',
+      ].join('; '),
+    );
+  });
+
+  test('an extra wake looks only at the spaces whose definition reads that collection', async () => {
+    const own = {
+      name: 'Done',
+      when: { query: { collection: 'app.chore', where: { done: true } } },
+      then: { kind: 'notify' as const, text: 'Done' },
+      spaces: 'all' as const,
+      since: new Date().toISOString(),
+    };
+    const reads = (name: string) =>
+      name === 'app.chore' ? { done: 'linked("std.message", "on").size() > 0' } : undefined;
+    const spaces = [
+      { id: 'club', key: null, visibility: 'public' as const, topics: () => [], computed: reads },
+      { id: 'family', key: null, visibility: 'public' as const, topics: () => [], computed: () => undefined },
+    ];
+    const wake = await wakeFor(own, spaces, 'did:key:zMe');
+    const [also] = linkedWakes(own, wake, spaces);
+    assert.deepEqual(also?.spaces, ['club'], 'a message in the family space wakes nothing');
+  });
 });
