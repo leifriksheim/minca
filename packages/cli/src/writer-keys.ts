@@ -46,6 +46,12 @@ export async function holdLock(file: string): Promise<(() => Promise<void>) | nu
   return (await lock(file)) ? () => rm(file, { force: true }) : null;
 }
 
+/** The running process that holds a lock file, or null when none does */
+export async function lockHolder(file: string): Promise<number | null> {
+  const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
+  return Number.isSafeInteger(holder) && holder > 0 && alive(holder) ? holder : null;
+}
+
 /** Takes a slot's lock, or says another running process holds it */
 async function lock(file: string): Promise<boolean> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -56,8 +62,7 @@ async function lock(file: string): Promise<boolean> {
       return true;
     } catch (error) {
       if (errorCode(error) !== 'EEXIST') throw error;
-      const holder = Number((await readFile(file, 'utf8').catch(() => '')).trim());
-      if (Number.isSafeInteger(holder) && holder > 0 && alive(holder)) return false;
+      if ((await lockHolder(file)) !== null) return false;
       // Left by a process that is gone.
       await rm(file, { force: true });
     }

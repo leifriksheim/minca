@@ -140,14 +140,22 @@ export async function handleMcpMessage(
   }
 }
 
+type Outgoing = JsonRpcResponse | { jsonrpc: '2.0'; method: string };
+const send = (message: Outgoing) => process.stdout.write(`${JSON.stringify(message)}\n`);
+
 /** Serves MCP over stdin/stdout until stdin closes. */
 export async function runMcpStdio(
   node: P2PNode,
   serverInfo: { name: string; version: string },
   options: McpOptions = {},
 ): Promise<void> {
+  await serveStdio((message) => handleMcpMessage(node, message, serverInfo, options));
+}
+
+async function serveStdio(
+  handle: (message: JsonRpcRequest) => Promise<JsonRpcResponse | null>,
+): Promise<void> {
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  const write = (response: JsonRpcResponse) => process.stdout.write(`${JSON.stringify(response)}\n`);
 
   for await (const line of lines) {
     if (!line.trim()) continue;
@@ -155,16 +163,155 @@ export async function runMcpStdio(
     try {
       message = JSON.parse(line);
     } catch {
-      write({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
+      send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
       continue;
     }
     if (!isJsonRpcRequest(message)) {
-      write({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } });
+      send({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } });
       continue;
     }
     // Handled concurrently, answered as each finishes — ids tie them together.
-    void handleMcpMessage(node, message, serverInfo, options).then((response) => {
-      if (response) write(response);
+    void handle(message).then((response) => {
+      if (response) send(response);
     });
   }
+}
+
+/** The one tool offered while another process runs the agent */
+export const TAKE_OVER = 'agent_take_over';
+
+/** Another process runs this computer's agent: how to get it here */
+export interface Waiting {
+  /** Who runs it, for the person to recognise (`describeAgentProcess`) */
+  readonly holder: string;
+  /** Starts the agent here if the other has stopped, or gives null while it runs */
+  readonly tryStart: () => Promise<P2PNode | null>;
+  /** Stops the other and starts the agent here */
+  readonly takeOver: () => Promise<P2PNode>;
+}
+
+/** How often a waiting server looks for the other to have stopped */
+const RETRY_MS = 5_000;
+
+/**
+ * Answers MCP while another process runs this computer's agent. Exiting
+ * would leave the client with only "connection closed"; this says who has
+ * the agent and offers one tool, {@link TAKE_OVER}. Once the agent runs here,
+ * taken over or let go of by the other, the node's own tools replace it and
+ * the client is told (`notifications/tools/list_changed`).
+ */
+export function waitingMcp(
+  waiting: Waiting,
+  serverInfo: { name: string; version: string },
+  options: McpOptions,
+  notify: (message: Outgoing) => void,
+) {
+  let node: P2PNode | null = null;
+  // One start at a time: the retry and a take-over never race for the lock.
+  let queue: Promise<unknown> = Promise.resolve();
+  const exclusive = (start: () => Promise<P2PNode | null>): Promise<P2PNode | null> => {
+    const next = queue.then(async () => {
+      if (node) return node;
+      node = await start();
+      if (node) {
+        clearInterval(timer);
+        notify({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
+      }
+      return node;
+    });
+    queue = next.catch(() => {});
+    return next;
+  };
+  const attempt = () => exclusive(waiting.tryStart).catch(() => null);
+  const timer = setInterval(() => void attempt(), RETRY_MS);
+  timer.unref();
+
+  const unavailable =
+    `Minca isn't available in this session: this computer's agent is already running in ${waiting.holder}. ` +
+    'Only one process may run it at a time, since two would sign with the same key. ' +
+    `Tell the user, and ask them before calling ${TAKE_OVER}: it stops the other one, which then loses Minca. ` +
+    'If they close that one instead, this session gets Minca by itself within a few seconds.';
+  const takeOverTool = {
+    name: TAKE_OVER,
+    description:
+      `Stop the other process running this computer's Minca agent (${waiting.holder}) and run it here instead, ` +
+      'which brings every Minca tool to this session. The other one loses Minca. Ask the user first.',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  };
+
+  async function handle(message: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+    if (node) return handleMcpMessage(node, message, serverInfo, options);
+    const id = message.id ?? null;
+    const reply = (result: unknown): JsonRpcResponse | null =>
+      message.id === undefined ? null : { jsonrpc: '2.0', id, result };
+    const text = (said: string, isError: boolean) =>
+      reply({ content: [{ type: 'text', text: said }], isError });
+
+    switch (message.method) {
+      case 'initialize': {
+        const requested = message.params?.protocolVersion;
+        return reply({
+          protocolVersion:
+            typeof requested === 'string' && SUPPORTED_VERSIONS.includes(requested)
+              ? requested
+              : SUPPORTED_VERSIONS[0],
+          capabilities: { tools: { listChanged: true } },
+          serverInfo,
+          instructions: unavailable,
+        });
+      }
+      case 'tools/list': {
+        const started = await attempt();
+        return started
+          ? handleMcpMessage(started, message, serverInfo, options)
+          : reply({ tools: [takeOverTool] });
+      }
+      case 'tools/call': {
+        if (message.params?.name === TAKE_OVER) {
+          try {
+            await exclusive(waiting.takeOver);
+            const count = mcpTools(options).length;
+            return text(
+              `Done: Minca runs in this session now, with ${count} tools. The other one was stopped.`,
+              false,
+            );
+          } catch (error) {
+            return text(error instanceof Error ? error.message : String(error), true);
+          }
+        }
+        const started = await attempt();
+        return started ? handleMcpMessage(started, message, serverInfo, options) : text(unavailable, true);
+      }
+      case 'ping':
+        return reply({});
+      default:
+        return message.id === undefined
+          ? null
+          : { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${message.method}` } };
+    }
+  }
+
+  return {
+    handle,
+    /** The node, once the agent runs here */
+    node: () => node,
+    stop: () => clearInterval(timer),
+  };
+}
+
+/**
+ * Serves MCP over stdin/stdout while another process runs the agent, until
+ * stdin closes ({@link waitingMcp}).
+ * @returns The node, if the agent came to run here, for the caller to close
+ */
+export async function runWaitingMcpStdio(
+  waiting: Waiting,
+  serverInfo: { name: string; version: string },
+  options: McpOptions = {},
+): Promise<P2PNode | null> {
+  const server = waitingMcp(waiting, serverInfo, options, send);
+  await serveStdio(server.handle);
+  server.stop();
+  return server.node();
 }

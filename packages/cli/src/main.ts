@@ -59,10 +59,13 @@ import {
   spaceSize,
   walletFromEnv,
 } from './host-setup.js';
-import { runMcpStdio } from './mcp.js';
+import { runMcpStdio, runWaitingMcpStdio, TAKE_OVER } from './mcp.js';
 import {
+  AgentBusy,
+  agentRunning,
   configuredRelays,
   connectAgent,
+  describeAgentProcess,
   daysLeft,
   defaultAgentName,
   forgetAgent,
@@ -71,6 +74,7 @@ import {
   saveModelKey,
   startAgentNode,
   startBotNode,
+  takeOverAgent,
   watchRelayRefusal,
 } from './agent.js';
 import { createAgentChat, DEFAULT_MODEL, fileSpend, priceOf } from './agent-chat.js';
@@ -886,14 +890,48 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
 
   if (command === 'mcp' && !args.includes('--account')) {
     // The connected agent: a node of its own, online, acting as the agent.
-    const agent = await startAgentNode(homePath(globals.home), { nodes: commaList(process.env.MINCA_NODES) });
-    stderr(
-      `minca mcp: an agent for ${agent.grant.name} (${agent.grant.did}), ${daysLeft(agent.grant)} days left`,
-    );
-    // A socket left with the agent's key, or a copy of the agent elsewhere, keeps this one out of a relay's rooms.
-    sayRelayRefusal(agent.node, 'minca mcp', 'Writes are kept here and sync once that one stops');
-    await runMcpStdio(agent.node, { name: 'minca', version: VERSION }, { agent: true });
-    await agent.close();
+    const home = homePath(globals.home);
+    const nodes = commaList(process.env.MINCA_NODES);
+    const info = { name: 'minca', version: VERSION };
+    // Set here or, once it stops or is taken over, from the waiting server.
+    const here: { agent: Awaited<ReturnType<typeof startAgentNode>> | null } = { agent: null };
+    const started = (running: Awaited<ReturnType<typeof startAgentNode>>) => {
+      here.agent = running;
+      stderr(
+        `minca mcp: an agent for ${running.grant.name} (${running.grant.did}), ${daysLeft(running.grant)} days left`,
+      );
+      // A socket left with the agent's key, or a copy of the agent elsewhere, keeps this one out of a relay's rooms.
+      sayRelayRefusal(running.node, 'minca mcp', 'Writes are kept here and sync once that one stops');
+      return running.node;
+    };
+    // Taken over by another session (agent_take_over): close, so the lock and the writes are left in order.
+    process.once('SIGTERM', () => {
+      stderr('minca mcp: stopped, by another session taking the agent over');
+      void (here.agent?.close() ?? Promise.resolve()).then(() => process.exit(0));
+    });
+    let busy: AgentBusy | null = null;
+    try {
+      started(await startAgentNode(home, { nodes }));
+    } catch (error) {
+      if (!(error instanceof AgentBusy)) throw error;
+      busy = error;
+    }
+    if (busy) {
+      // Rather than exit, which the client shows as only "connection closed": say why, and offer to take over.
+      const holder = await describeAgentProcess(busy.holder);
+      stderr(`minca mcp: the agent already runs in ${holder}; offering only ${TAKE_OVER} until it stops`);
+      await runWaitingMcpStdio(
+        {
+          holder,
+          tryStart: async () =>
+            (await agentRunning(home)) === null ? started(await startAgentNode(home, { nodes })) : null,
+          takeOver: async () => started(await takeOverAgent(home, { nodes })),
+        },
+        info,
+        { agent: true },
+      );
+    } else if (here.agent) await runMcpStdio(here.agent.node, info, { agent: true });
+    await here.agent?.close();
     // WebRTC keeps the process alive; the agent closed stdin, so it's done.
     process.exit(0);
   }
@@ -980,7 +1018,13 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
         close: () => started.close(),
       };
     } else {
-      const agent = await startAgentNode(home, { nodes });
+      const agent = await startAgentNode(home, { nodes }).catch(async (error: unknown) => {
+        if (!(error instanceof AgentBusy)) throw error;
+        const holder = await describeAgentProcess(error.holder);
+        const question = `The agent already runs in ${holder}. Stop it and run it here instead?`;
+        if (!(await ask.confirm(question, { otherwise: false }))) throw error;
+        return takeOverAgent(home, { nodes });
+      });
       runner = {
         node: agent.node,
         account: agent.grant.did,

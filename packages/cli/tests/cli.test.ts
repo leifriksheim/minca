@@ -15,7 +15,7 @@ import { openFsDirectory } from '../src/fs-directory.js';
 import { openHome, createAccount, unlock, chooseAccount } from '../src/home.js';
 import { startDaemon, type Daemon } from '../src/daemon.js';
 import { enableWebRTC, holdEverySpace } from '../src/agent.js';
-import { handleMcpMessage } from '../src/mcp.js';
+import { handleMcpMessage, TAKE_OVER, waitingMcp } from '../src/mcp.js';
 import { aNode, tempDir } from './helpers/nodes.js';
 import { loadModelSetting } from '../src/guide.js';
 import { createNode } from '../../core/src/node/node.js';
@@ -465,6 +465,92 @@ describe('MCP', () => {
       agent,
     );
     assert.match(String(at(refused, 'error', 'message')), /Unknown tool/);
+  });
+
+  test('while another process runs the agent, it says who and offers to take over, then serves the tools', async () => {
+    const node = await aNode(5);
+    const sent: unknown[] = [];
+    let otherRunning = true;
+    const server = waitingMcp(
+      {
+        holder: '`minca mcp` (pid 42), started by a Claude Code session',
+        tryStart: async () => (otherRunning ? null : node),
+        takeOver: async () => {
+          otherRunning = false;
+          return node;
+        },
+      },
+      info,
+      { agent: true },
+      (message) => sent.push(message),
+    );
+    try {
+      const init = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+      assert.match(String(at(init, 'result', 'instructions')), /pid 42.*Claude Code/);
+      assert.equal(at(init, 'result', 'capabilities', 'tools', 'listChanged'), true);
+
+      const listed = at(
+        await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+        'result',
+        'tools',
+      );
+      assert.deepEqual(Array.isArray(listed) && listed.map((tool: unknown) => at(tool, 'name')), [TAKE_OVER]);
+
+      const early = await server.handle({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'spaces_list', arguments: {} },
+      });
+      assert.equal(at(early, 'result', 'isError'), true);
+      assert.match(String(at(early, 'result', 'content', 0, 'text')), /already running/);
+
+      const taken = await server.handle({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: TAKE_OVER },
+      });
+      assert.equal(at(taken, 'result', 'isError'), false);
+      assert.deepEqual(sent, [{ jsonrpc: '2.0', method: 'notifications/tools/list_changed' }]);
+      assert.equal(server.node(), node);
+
+      const tools = at(
+        await server.handle({ jsonrpc: '2.0', id: 5, method: 'tools/list' }),
+        'result',
+        'tools',
+      );
+      assert.ok(Array.isArray(tools) && tools.some((tool: unknown) => at(tool, 'name') === 'records_put'));
+    } finally {
+      server.stop();
+    }
+  });
+
+  test('a waiting server starts by itself once the other process stops', async () => {
+    const node = await aNode(6);
+    let otherRunning = true;
+    const server = waitingMcp(
+      {
+        holder: 'pid 42',
+        tryStart: async () => (otherRunning ? null : node),
+        takeOver: () => Promise.reject(new Error('not asked')),
+      },
+      info,
+      { agent: true },
+      () => {},
+    );
+    try {
+      otherRunning = false;
+      const tools = at(
+        await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+        'result',
+        'tools',
+      );
+      assert.ok(Array.isArray(tools) && tools.length > 1);
+      assert.equal(server.node(), node);
+    } finally {
+      server.stop();
+    }
   });
 });
 
