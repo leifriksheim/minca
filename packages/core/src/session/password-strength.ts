@@ -47,11 +47,38 @@ const COMMON = new Set([
   'login',
   'abc',
   'minca',
+  'summer',
+  'winter',
+  'spring',
+  'autumn',
+  'hello',
+  'freedom',
+  'shadow',
+  'superman',
+  'batman',
+  'trustno',
 ]);
 
-/** A guess at how hard `password` is to guess, and a line saying so */
+/** Letters people write as digits or symbols (p@ssw0rd), read back as letters */
+const LEET: Readonly<Record<string, string>> = {
+  '@': 'a',
+  '4': 'a',
+  '3': 'e',
+  '0': 'o',
+  $: 's',
+  '5': 's',
+  '7': 't',
+  '1': 'l',
+  '!': 'i',
+};
+
+/**
+ * A guess at how hard `password` is to guess, and a line saying so. It reads
+ * the password as the vault does, NFKC-normalised (01 §11.3), so a fullwidth
+ * "ｐａｓｓｗｏｒｄ" is judged as the "password" that opens it.
+ */
 export function passwordStrength(password: string): PasswordCheck {
-  const bits = estimateBits(password);
+  const bits = Math.round(estimateBits(password.normalize('NFKC')));
   if (!password) return { strength: 'weak', bits, hint: '' };
   if (bits < FAIR_BITS) {
     return {
@@ -71,7 +98,22 @@ export function passwordStrength(password: string): PasswordCheck {
 }
 
 function estimateBits(password: string): number {
+  // The same chunk over and over (abcabc, password1password1) is the chunk and a count.
+  const lower = password.toLowerCase();
   const chars = [...password];
+  for (let size = 1; size <= chars.length / 2; size++) {
+    if (chars.length % size !== 0) continue;
+    const chunk = [...lower].slice(0, size).join('');
+    if (chunk.repeat(chars.length / size) !== lower) continue;
+    const once = estimateBits(chars.slice(0, size).join(''));
+    // Saying a weak password twice keeps it weak.
+    return Math.min(once + Math.log2(chars.length / size), once < FAIR_BITS ? FAIR_BITS - 1 : Infinity);
+  }
+
+  // A common word, perhaps in leetspeak, with digits or symbols around it is guessed early.
+  const core = [...lower.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')].map((c) => LEET[c] ?? c).join('');
+  const cap = COMMON.has(core) ? FAIR_BITS - 1 : Infinity;
+
   let pool = 0;
   if (chars.some((c) => c >= 'a' && c <= 'z')) pool += 26;
   if (chars.some((c) => c >= 'A' && c <= 'Z')) pool += 26;
@@ -82,20 +124,15 @@ function estimateBits(password: string): number {
 
   // A character that repeats the last one, or carries on a run (abc, 321), adds next to nothing.
   const each = Math.log2(pool);
-  const points = chars.map((c) => c.codePointAt(0) ?? 0);
   let bits = 0;
   let before: number | null = null;
   let step: number | null = null;
-  for (const here of points) {
+  for (const here of chars.map((c) => c.codePointAt(0) ?? 0)) {
     const diff = before === null ? null : here - before;
     const run = diff === 1 || diff === -1;
     bits += diff === 0 || (run && (step === null || step === diff)) ? 1 : each;
     step = run ? diff : null;
     before = here;
   }
-
-  // A common word with digits or symbols around it is guessed early.
-  const core = password.toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g, '');
-  if (COMMON.has(core)) bits = Math.min(bits, FAIR_BITS - 1);
-  return Math.round(bits);
+  return Math.min(bits, cap);
 }
