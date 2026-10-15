@@ -66,6 +66,15 @@ export const shapeColours = {
 
 export type ShapeColour = keyof typeof shapeColours;
 
+/** Each shape colour mixed into paper, for a ground a shape sits on (an avatar's) */
+export const shapeGrounds = {
+  cobalt: '#dfe3f7',
+  coral: '#fde0d6',
+  peach: '#fcecd0',
+  sage: '#dce9df',
+  lilac: '#f6e3f2',
+} as const;
+
 /** The five that take turns, in order */
 export const SHAPE_CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
 

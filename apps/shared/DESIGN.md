@@ -14,6 +14,8 @@ screen.** Retro in the shapes and the type, clean everywhere else.
 | ------------------ | ------------------------------------------------------------------------------------------------ |
 | `src/tokens.ts`    | Every colour, face, corner and shadow, as values and as `--minca-*` CSS custom properties        |
 | `src/shapes.tsx`   | The shapes (`Shape`), the morph between them (`Morph`), and which shape each app has             |
+| `src/round.ts`     | The round shapes as formulas, for `shapes.tsx`, the avatar and non-React pages                   |
+| `src/Avatar.tsx`   | An account's avatar, two round shapes blended by its DID; `src/avatar.ts` has it as data         |
 | `src/Loader.tsx`   | The loader: five shapes hopping in turn, for anything on its way                                 |
 | `src/Wordmark.tsx` | The mark (a four-band rainbow) and the wordmark; `src/mark.ts` has its bands for non-React pages |
 | `src/styles.ts`    | Inline styles and base CSS for React UIs, built from the tokens                                  |
@@ -102,8 +104,11 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
   stand for; add another the same way when a point needs one.
 - `Morph` melts one round shape into the next. Use it where the point is that
   something can become anything, and only once per screen.
-- Use shapes for identity (an app, a space), for empty states, and for marking
-  points in a list. Not as decoration for its own sake.
+- An account's avatar is a shape too: two round shapes melted together at a
+  point its DID picks, on a ground (`Avatar`). It is how people tell accounts
+  apart before reading a name, so use it wherever an account appears.
+- Use shapes for identity (an app, a space, an account), for empty states, and
+  for marking points in a list. Not as decoration for its own sake.
 
 ## Motion
 

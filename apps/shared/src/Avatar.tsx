@@ -1,4 +1,4 @@
-import { avatarCells } from './avatar-cells';
+import { avatarShape } from './avatar';
 
 /**
  * A visual fingerprint for an account.
@@ -9,22 +9,18 @@ import { avatarCells } from './avatar-cells';
  * read the name.
  */
 export function Avatar({ did, size = 32 }: { did: string; size?: number }) {
-  const { hue, cells } = avatarCells(did);
-  const ink = `hsl(${hue} 62% 48%)`;
-  const paper = `hsl(${hue} 46% 92%)`;
+  const { d, fill, ground } = avatarShape(did);
 
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 5 5"
+      viewBox="0 0 100 100"
       role="img"
       aria-label="Account avatar"
-      style={{ borderRadius: size / 4, background: paper, flexShrink: 0, display: 'block' }}
+      style={{ borderRadius: size / 4, background: ground, flexShrink: 0, display: 'block' }}
     >
-      {cells.map(({ x, y }) => (
-        <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={ink} />
-      ))}
+      <path d={d} fill={fill} />
     </svg>
   );
 }
