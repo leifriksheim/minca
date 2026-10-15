@@ -13,6 +13,7 @@
     "@mcp-b/webmcp-polyfill": "^4.0.0",
     "@minca/app-shared": "*",
     "@minca/core": "*",
+    "@tanstack/react-router": "^1.170.44",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sugar-high": "^2.4.1"

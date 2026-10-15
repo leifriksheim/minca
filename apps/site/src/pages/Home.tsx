@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Band, Page, Points } from './Site';
+import { Link } from '@tanstack/react-router';
+import { APP, Band, Page, Points } from './Site';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
@@ -221,7 +222,7 @@ export function Home() {
             something that doesn’t exist yet? Ask for it, and it’s yours.
           </p>
           <div className="actions">
-            <a href="/app" className="btn btn-primary btn-lg">
+            <a href={APP} className="btn btn-primary btn-lg">
               Start a minca
             </a>
             <a href="#mend" className="btn btn-secondary btn-lg">
@@ -364,13 +365,13 @@ export function Home() {
             <h2>Call your people.</h2>
             <p>Start a minca and make it yours.</p>
             <div className="actions">
-              <a href="/app" className="btn btn-primary btn-lg">
+              <a href={APP} className="btn btn-primary btn-lg">
                 Start a minca
               </a>
             </div>
-            <a href="/developers" className="aside-link">
+            <Link to="/developers" className="aside-link">
               Building apps? Minca is an open protocol too →
-            </a>
+            </Link>
             <Rainbow />
           </div>
         </div>

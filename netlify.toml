@@ -1,9 +1,11 @@
-# The example app, from the repository root. One install covers the whole
-# workspace; the example compiles the protocol from packages/core/src. The
+# The website (apps/site), from the repository root. One install covers the
+# whole workspace; the site compiles the protocol from packages/core/src. The
 # Chrome extension is zipped into the site first, for /extension to offer.
+# The app (apps/example) and the account home (apps/home) deploy as sites of
+# their own, from the netlify.toml in their folders.
 [build]
-  command = "npm ci && npm run package -w apps/extension -- ../example/public/minca-chrome.zip && npm run build -w apps/example"
-  publish = "apps/example/dist"
+  command = "npm ci && npm run package -w apps/extension -- ../site/public/minca-chrome.zip && npm run build -w apps/site"
+  publish = "apps/site/dist"
 
 [build.environment]
   NODE_VERSION = "22"

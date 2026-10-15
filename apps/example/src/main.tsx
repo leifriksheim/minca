@@ -1,57 +1,27 @@
 import { createRoot } from 'react-dom/client';
-import { App } from './App';
+import { RouterProvider } from '@tanstack/react-router';
 import { injectBaseStyles } from './styles';
 import { exposeToAgents } from './webmcp';
-import { Developers } from './site/Site';
-import { Home } from './site/Home';
-import { Protocol } from './site/Protocol';
-import { Extension } from './site/Extension';
 import { MincaProvider } from '@minca/core/react';
 import { connection } from './minca';
 import { tellDesktop } from './desktop';
-
-/** The site's pages, and the app at `/app`; a link with an invite, door or pairing code in its fragment still opens the app */
-const path = globalThis.location.pathname.replace(/\/+$/, '') || '/';
-const carriesAppLink = /[#&](invite|door)=/.test(globalThis.location.hash);
-const page = carriesAppLink
-  ? 'app'
-  : path === '/' || path === '/why'
-    ? 'home'
-    : path === '/developers'
-      ? 'developers'
-      : path === '/protocol'
-        ? 'protocol'
-        : path === '/extension'
-          ? 'extension'
-          : 'app';
+import { router } from './router';
 
 // Hover, focus and placeholder states, plus the page background — the things
 // inline styles cannot express.
 injectBaseStyles();
 
-if (page === 'app') {
-  // The node's operations as WebMCP tools, from the start — agents and
-  // extensions read the list on load. They act for whoever signs in.
-  exposeToAgents();
-  // In the desktop app, its menu bar follows the account this app is connected as.
-  tellDesktop(connection);
-}
+// The node's operations as WebMCP tools, from the start — agents and
+// extensions read the list on load. They act for whoever signs in.
+exposeToAgents();
+// In the desktop app, its menu bar follows the account this app is connected as.
+tellDesktop(connection);
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element not found');
 createRoot(root).render(
-  page === 'home' ? (
-    <Home />
-  ) : page === 'developers' ? (
-    <Developers />
-  ) : page === 'protocol' ? (
-    <Protocol />
-  ) : page === 'extension' ? (
-    <Extension />
-  ) : (
-    // Every component in the app asks this for Minca.
-    <MincaProvider connection={connection}>
-      <App />
-    </MincaProvider>
-  ),
+  // Every component in the app asks this for Minca.
+  <MincaProvider connection={connection}>
+    <RouterProvider router={router} />
+  </MincaProvider>,
 );

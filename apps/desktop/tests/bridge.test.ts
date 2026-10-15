@@ -77,7 +77,7 @@ function delivered(win: FakeWindow) {
 
 function withHome() {
   const t = setup();
-  t.bridge.openWindow('http://127.0.0.1:47830/app', { width: 1200, height: 820 });
+  t.bridge.openWindow('http://127.0.0.1:47830/', { width: 1200, height: 820 });
   const app = t.windows[0];
   assert.ok(app);
   t.send(app, { t: 'open', ref: 'w1', url: 'https://home.example/connect', name: 'minca-home' });
@@ -269,7 +269,7 @@ test('a window the shell opens hears the shell as its opener, at the origin the 
 
 test('a window brings another to the front at most once a second', () => {
   const t = setup();
-  t.bridge.openWindow('http://127.0.0.1:47830/app', { width: 1200, height: 820 });
+  t.bridge.openWindow('http://127.0.0.1:47830/', { width: 1200, height: 820 });
   const app = t.windows[0];
   assert.ok(app);
   t.send(app, { t: 'open', ref: 'w1', url: 'https://popup.example/', name: '' });
@@ -318,7 +318,7 @@ test('a node token stops counting once its window closes', () => {
   t.app.close();
   assert.ok(!t.bridge.isNodeToken(node));
   // The app's window opened again has a token of its own.
-  t.bridge.openWindow('http://127.0.0.1:47830/app', { width: 1200, height: 820 });
+  t.bridge.openWindow('http://127.0.0.1:47830/', { width: 1200, height: 820 });
   const again = t.windows.at(-1);
   assert.ok(again && again.node !== node && t.bridge.isNodeToken(again.node));
 });

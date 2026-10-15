@@ -107,7 +107,7 @@ test('after the app page loads again, it opens a new window, and the old one is 
   flush();
   const oldHome = windows[1];
   assert.ok(oldHome);
-  app.load('http://127.0.0.1:47830/app');
+  app.load('http://127.0.0.1:47830/');
   app.page.click();
   const again = call(app.page, 'open', 'https://other-home.example/connect', 'other', 'popup');
   flush();
@@ -301,7 +301,7 @@ test('the app’s page loaded again takes over the socket; once its window close
   const app = openApp();
   flush();
   const first = [...sockets];
-  app.load('http://127.0.0.1:47830/app');
+  app.load('http://127.0.0.1:47830/');
   flush();
   assert.equal(sockets.size, 1);
   assert.ok(!first.some((socket) => sockets.has(socket)), 'the last page’s socket was closed');
