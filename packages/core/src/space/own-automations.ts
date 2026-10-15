@@ -45,7 +45,7 @@ import {
   type AutomationSpaces,
 } from '../schemas/automations.js';
 import { isObject } from '../utils/guards.js';
-import { linkedReads, readsComputed, type ComputedFields } from '../query/computed.js';
+import { linkedReads, namedComputed, type ComputedFields } from '../query/computed.js';
 
 /** Wakes, as a carrier holds them in its carry space: key `wake:<the automation's key>` */
 export const WAKE_COLLECTION = 'sys.wake';
@@ -381,12 +381,17 @@ export function readWake(body: unknown): Wake | null {
   return body as unknown as Wake;
 }
 
+/** At most this many collections an automation's computed fields wake on besides its own; past it, none */
+const MAX_LINKED_WAKES = 4;
+
 /**
  * The wakes an automation needs besides its own, made from it: when its
- * `where` names a computed field, one for each collection those fields read
+ * `where` names a computed field, one for each collection that field reads
  * in the spaces it looks at, since a new 👍 can make a todo done. Their tags
  * would be the todo's, so they keep only the spaces they must stay quiet in;
- * any new record elsewhere wakes, and the app judges.
+ * any new record elsewhere wakes, and the app judges. A filter whose fields
+ * read more than four collections gets none: whoever defines the collection
+ * could otherwise have every member's devices write a wake per name.
  */
 export function linkedWakes(
   own: Automation,
@@ -397,11 +402,11 @@ export function linkedWakes(
   const only = own.spaces ?? 'all';
   const read = new Set<string>();
   for (const space of only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id))) {
-    const fields = space.computed?.(collection) ?? {};
-    if (!readsComputed(fields, where)) continue;
-    for (const { collection: from } of linkedReads(fields)) if (!from.startsWith('sys.')) read.add(from);
+    const named = namedComputed(space.computed?.(collection) ?? {}, where);
+    for (const { collection: from } of linkedReads(named)) if (!from.startsWith('sys.')) read.add(from);
   }
   read.delete(collection);
+  if (read.size > MAX_LINKED_WAKES) return [];
   const { tags, ...rest } = wake;
   const quiet = Object.entries(tags ?? {}).filter(([, list]) => list.length === 0);
   return [...read].map((from) => ({

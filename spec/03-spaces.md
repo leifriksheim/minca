@@ -1807,7 +1807,8 @@ Each device of the account holding the account key writes the wakes into
 every carry space (§14), one record each:
 
 ```
-sys.wake at wake:<id>
+sys.wake at wake:<id>                  ; <id>: the key of the automation it is made from
+sys.wake at wake:<id>:<collection>     ; made from the same one, waking on another collection
 Wake = { v: 1, collection, spaces: "all" | spaceId[], tags?: { <spaceId>: [tag] },
          others: boolean, open?: url, paused: boolean, since: ISO date }
 ```
@@ -1848,9 +1849,12 @@ entry lets any version through; an empty entry lets none through.
 
 What a wake is made from, and how a device works out its tags, is the
 library's: it keeps the account's own automations in the registry
-(`sys.automation`, §13.2) and makes one wake from each, and one more for
-each collection a computed field it names reads
-([automations](../packages/core/docs/automations.md#the-accounts-own)). A
+(`sys.automation`, §13.2) and makes one wake from each, at `wake:<id>`.
+When its `where` names a computed field, it makes one more for each
+collection that field reads, at `wake:<id>:<collection>`, and none when
+they would be more than four
+([automations](../packages/core/docs/automations.md#the-accounts-own)).
+A carrier treats every wake alike, whatever its key. A
 wake carries no words of the person's and no topic values, only their tags,
 at most 16 for a space; a device that would need more leaves that space
 without an entry.

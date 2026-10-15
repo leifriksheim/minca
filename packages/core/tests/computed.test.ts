@@ -21,6 +21,8 @@ import { team } from '../src/space/presets.js';
 import { automation, automationRun, runAutomations } from '../src/schemas/automations.js';
 import { linkedWakes, wakeFor, wakes } from '../src/space/own-automations.js';
 import { runAction } from '../src/node/actions.js';
+import { usableComputed } from '../src/query/computed.js';
+import { remoteNode, serveNode } from '../src/node/remote.js';
 
 const reaction = collection({
   name: 'app.reaction',
@@ -493,5 +495,106 @@ describe('computed: an agent, through the actions', () => {
       }),
       /computed\.text: the body has a field "text" too/,
     );
+  });
+});
+
+/** Found by adversarial review: each test fails without its fix */
+describe('computed: what review found', () => {
+  test('a wake is made only for the fields a filter names, and none past four collections', async () => {
+    const reads = (n: number, from = 0) =>
+      `[${Array.from({ length: n }, (_, i) => `linked("std.z${from + i}", "o")`).join(', ')}].size() > 0`;
+    const fields = { done: 'linked("app.nod", "on").size() >= 2', noise: reads(12) };
+    const own = (field: string) => ({
+      name: 'Done',
+      when: { query: { collection: 'app.chore', where: { [field]: true } } },
+      then: { kind: 'notify' as const, text: 'Done' },
+      spaces: 'all' as const,
+      since: new Date().toISOString(),
+    });
+    const spaces = [
+      { id: 'home', key: null, visibility: 'public' as const, topics: () => [], computed: () => fields },
+    ];
+    const wake = await wakeFor(own('done'), spaces, 'did:key:zMe');
+    assert.deepEqual(
+      linkedWakes(own('done'), wake, spaces).map((w) => w.collection),
+      ['app.nod'],
+      'what the other fields read is no reason to wake',
+    );
+    assert.deepEqual(linkedWakes(own('noise'), wake, spaces), [], 'twelve collections: no wakes but its own');
+  });
+
+  test("linked()'s arguments count towards the limit on parts", () => {
+    const calls = (from: number) =>
+      `[${Array.from({ length: 160 }, (_, i) => `linked("std.z${from + i}", "o")`).join(',')}].size() > 0`;
+    const fields = Object.fromEntries([0, 1, 2, 3, 4].map((f) => [`f${f}`, calls(f * 160)]));
+    assert.match(checkComputed(fields) ?? '', /too large/);
+  });
+
+  test('a computed member define would refuse is read as none, however it arrived', () => {
+    const schema = { type: 'object', properties: { text: { type: 'string' } } };
+    assert.deepEqual(usableComputed({ n: 'body.text.size()' }, schema), { n: 'body.text.size()' });
+    assert.equal(usableComputed({ text: 'body.text.size()' }, schema), undefined, 'named like a body field');
+    assert.equal(usableComputed({ n: 'prev.body' }, schema), undefined, 'outside the subset');
+    assert.equal(usableComputed({ n: 7 }, schema), undefined);
+  });
+
+  test('a collection with computed fields built in TypeScript can be defined across a port', async () => {
+    const { node } = await person();
+    const channel = new MessageChannel();
+    const stop = serveNode(node, channel.port1);
+    const far = await remoteNode(channel.port2);
+    try {
+      const { id: space } = await node.spaces.create({ name: 'Home', ...team, visibility: 'private' });
+      await far.collections.define(space, nod);
+      await far.collections.define(space, chore);
+      const listed = (await node.collections.list(space)).find((c) => c.name === chore.name);
+      assert.deepEqual(Object.keys(listed?.computed ?? {}), ['nods', 'done']);
+    } finally {
+      stop();
+      channel.port1.close();
+      channel.port2.close();
+    }
+  });
+
+  test('others, in a space automation, judges whoever wrote what made it hold', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const alice = await person(hub);
+    const bob = await person(hub);
+    const { id: space } = await alice.node.spaces.create({ name: 'Home', ...team, visibility: 'private' });
+    await bob.node.spaces.join(await alice.node.spaces.invite(space));
+    for (const definition of [nod, chore, automation, automationRun])
+      await alice.node.collections.define(space, definition);
+    await hold(alice.node, space);
+    await hold(bob.node, space);
+    await joined(bob.node, space);
+    await until(
+      async () => (await bob.node.collections.list(space)).filter((c) => c.version !== null).length === 4,
+      4000,
+      'definitions to reach Bob',
+    );
+    const nodBy = async (who: typeof alice, key: string) => {
+      const made = await who.node.records.put(space, nod, {}, { links: [{ rel: 'on', to: key }] });
+      await until(async () => (await alice.node.records.get(space, made.key)) !== null, 4000, 'the nod');
+    };
+    const dishes = await alice.node.records.put(space, chore, { text: 'Dishes' });
+    const laundry = await alice.node.records.put(space, chore, { text: 'Laundry' });
+    await until(async () => (await bob.node.records.get(space, laundry.key)) !== null, 4000, 'the chores');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await alice.node.records.put(space, automation.name, {
+      name: 'Done',
+      when: { query: { collection: chore.name, where: { done: true } }, others: true },
+      then: { kind: 'notify', text: '{title} is done' },
+      since: new Date().toISOString(),
+    });
+    const told: string[] = [];
+    const run = () =>
+      runAutomations(alice.node, space, alice.me.did, { notify: (_name, text) => (told.push(text), true) });
+    // Alice's chores, both: Bob's nod makes the dishes done, Alice's own the laundry.
+    await nodBy(alice, dishes.key);
+    await nodBy(bob, dishes.key);
+    await nodBy(bob, laundry.key);
+    await nodBy(alice, laundry.key);
+    await run();
+    assert.deepEqual(told, ['Dishes is done']);
   });
 });

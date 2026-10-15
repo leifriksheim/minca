@@ -19,11 +19,25 @@ import type { RootSigner } from '../identity/root-signer.js';
 import type { Query } from '../query/types.js';
 import { plainQuery, type CollectionRef, type IncludeMap, type ResultFor } from '../query/types.js';
 import { toJsonSchema } from '../schema/collection-def.js';
+import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { previewInvite } from '../space/space-manager.js';
 import { isRecord } from '../utils/guards.js';
 import type { MessagePortLike } from '../utils/port.js';
 import type { DefineCollection, NodeCollection, NodeEvent, P2PNode } from './types.js';
 import { API, buildNamespaces, callMethod, givenFor, type Namespace } from './api.js';
+
+/** A definition as plain data: its schema as JSON Schema, a contract or computed fields built in TypeScript as their CEL */
+function storedDefinition(definition: DefineCollection): DefineCollection {
+  const { contract: _built, computed: _derived, ...rest } = definition;
+  const contract = storedContract(definition);
+  const computed = storedComputed(definition);
+  return {
+    ...rest,
+    schema: toJsonSchema(definition.schema),
+    ...(contract !== undefined ? { contract } : {}),
+    ...(computed !== undefined ? { computed } : {}),
+  };
+}
 
 /** What `remoteNode` keeps of a node, to answer the calls that can't wait */
 interface NodeState {
@@ -376,7 +390,8 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
         define: async (spaceId: string, definition: DefineCollection) =>
           ask<NodeCollection>(handle, 'collections.define', [
             spaceId,
-            { ...definition, schema: toJsonSchema(definition.schema) },
+            // Plain data: a contract or computed fields built in TypeScript are functions, which can't be posted.
+            storedDefinition(definition),
           ]),
       },
       network: {

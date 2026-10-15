@@ -44,7 +44,8 @@ records[0]?.computed.done; // what this node works out: boolean | null
 Each node works computed fields out from what it holds. Two nodes holding
 different records read different values until they have synced: Bob reads
 `done` as soon as he has reacted, and Alice only once his reaction reaches
-her. A withdrawn reaction, or a removed member's, turns `done` back. A node
+her. A withdrawn reaction turns `done` back, as does a removed member's,
+where the removal keeps nothing of theirs (spec 03 §6.3). A node
 holding only some collections counts only what it holds.
 
 That is right for what an app shows: done flags, like counts, tallies,
@@ -113,6 +114,11 @@ writes the same:
 
 A contract can't call `linked()`: what it reads must be the same on every
 node.
+
+Whatever reads them reads them as `define` would take them: a definition
+another implementation wrote, or one written by hand, whose `computed` is
+malformed, too large, or names a field like the body's, is read as having
+none.
 
 ## Reading them
 

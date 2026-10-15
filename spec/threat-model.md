@@ -204,6 +204,15 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/
   - Each warrant costs every member's node a replay of the offending
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/minca/issues/33)).
+  - Someone who may define a collection can give it computed fields that
+    every member's device works out for each record a query filters or
+    sorts on them, and that grow with every record a member links to it.
+    Each automation of an account's own that names one makes up to four more
+    wakes for its carriers to check. A definition `define` would refuse is
+    read as having none, however it arrived
+    (`packages/core/docs/computed.md`; `packages/core/tests/computed.test.ts`,
+    "computed: what review found")
+    ([#33](https://github.com/leifriksheim/minca/issues/33)).
   - Which changes a peer holds can differ for good, and verdicts depend on a
     peer's keys, or the order it runs checks in ([#10](https://github.com/leifriksheim/minca/issues/10)).
   - A removal or unassignment signed offline can arrive at any time and withdraw
@@ -635,7 +644,9 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     how (02 §7.3, 03 §8.6).
   - From the account's wakes it learns a collection, spaces, topic tags,
     whether only others' records wake, since when, whether paused, and which
-    app's address a click leads to; never the values behind a private
+    app's address a click leads to; for a `where` on a computed field, also
+    the collections that field reads, and from the keys
+    (`wake:<id>:<collection>`) that they belong to one automation; never the values behind a private
     space's tags nor the person's words for what they want to hear about
     (03 §15; `packages/core/tests/carrier.test.ts`, "a carrier gets tags,
     never the values it matches"). Any `where` condition on a field declared

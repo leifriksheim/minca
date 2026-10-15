@@ -82,6 +82,9 @@ That stores:
 - **`raw(cel)`** writes CEL by hand for what the builder doesn't cover:
   `math.greatest`, map literals, `string()`, indexing a map. Its result is
   untyped unless you say: `raw<boolean>('…')`.
+- **Each reason once.** Two conditions under the same reason are one key,
+  and the later replaces the earlier, so a contract loses a condition
+  without a word. Give each its own reason, or join them with `and`.
 - `define` throws when what it builds isn't a condition it would take,
   saying why.
 

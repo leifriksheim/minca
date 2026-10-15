@@ -102,6 +102,18 @@ function fakeNode(when = DM, others = false) {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a fake with only the members the watcher reaches
     node: node as unknown as P2PNode,
     add: (record: NodeRecord) => records.push(record),
+    /** Its next version: the same record, another body */
+    edit: (key: string, body: unknown) => {
+      const at = records.findIndex((r) => r.key === key);
+      const was = records[at]!;
+      records[at] = {
+        ...was,
+        seq: was.seq + 1,
+        version: `${was.version}+`,
+        body,
+        updatedAt: new Date().toISOString(),
+      };
+    },
     emit: (event: NodeEvent) => listeners.forEach((listener) => listener(event)),
   };
 }
@@ -172,6 +184,28 @@ describe('an app showing its own notifications', () => {
     emit({ type: 'records', space: 'club' });
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.deepEqual(heard, []);
+    stop();
+  });
+
+  test('a record edited out of matching and back in is news once', async () => {
+    const { node, add, emit, edit } = fakeNode();
+    const heard: string[] = [];
+    const stop = watchNotifications(node, {
+      origin: ORIGIN,
+      onNotify: (match) => heard.push(match.record.key),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    add(dm('hello'));
+    emit({ type: 'records', space: 'club' });
+    await until(() => heard.length > 0, 1000, 'the message');
+    for (let i = 0; i < 3; i++) {
+      for (const to of [[], [ME]]) {
+        edit('hello', { to });
+        emit({ type: 'records', space: 'club' });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+    assert.deepEqual(heard, ['hello']);
     stop();
   });
 });

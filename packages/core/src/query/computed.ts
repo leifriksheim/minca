@@ -142,12 +142,9 @@ function typesOfComputed(
   definitionOf: (collection: string) => LinkingCollection | null,
   at = 'computed',
 ): Readonly<Record<string, CelType>> | string {
+  const clash = computedClash(computed, schema, at);
+  if (clash) return clash;
   const body = typeOfSchema(schema);
-  // A bare name in a query reads the computed field, so a body field of the same name could never be read.
-  for (const field of Object.keys(computed)) {
-    if (body.t === 'object' && Object.hasOwn(body.fields, field))
-      return `${at}.${field}: the body has a field "${field}" too; give the computed field another name`;
-  }
   const version = versionType(body);
   const fields = version.t === 'object' ? version.fields : {};
   const names = new Map<string, CelType>(Object.entries(fields));
@@ -223,18 +220,59 @@ export function computedSchemas(
   );
 }
 
-/** Whether a filter or sort names one of these computed fields: a field whose first part is its name */
-export function readsComputed(fields: ComputedFields, where: unknown, sort?: unknown): boolean {
-  const named = (field: string) => Object.hasOwn(fields, field.split('.')[0]!);
-  const walk = (filter: unknown): boolean => {
-    if (Array.isArray(filter)) return filter.some(walk);
-    if (!isRecord(filter)) return false;
-    return Object.entries(filter).some(([field, condition]) =>
-      field === '$and' || field === '$or' || field === '$not' ? walk(condition) : named(field),
-    );
-  };
-  return walk(where) || (isRecord(sort) && Object.keys(sort).some(named));
+/**
+ * A computed field named like a field of the body's schema, or null. A bare
+ * name in a query reads the computed field, so the body's could never be read.
+ */
+function computedClash(computed: ComputedFields, schema: unknown, at = 'computed'): string | null {
+  const body = typeOfSchema(schema);
+  if (body.t !== 'object') return null;
+  for (const field of Object.keys(computed)) {
+    if (Object.hasOwn(body.fields, field))
+      return `${at}.${field}: the body has a field "${field}" too; give the computed field another name`;
+  }
+  return null;
 }
+
+/**
+ * A definition's computed fields as everything that reads them takes them:
+ * none when the member is malformed, too large, or names a field like the
+ * body's. `define` refuses those, but a definition written by another
+ * implementation, or by hand, arrives unchecked.
+ */
+export function usableComputed(computed: unknown, schema: unknown): ComputedFields | undefined {
+  if (computed === undefined || checkComputed(computed) !== null || !isRecord(computed)) return undefined;
+  const fields = Object.fromEntries(
+    Object.entries(computed).flatMap(([name, source]) =>
+      typeof source === 'string' ? [[name, source]] : [],
+    ),
+  );
+  return computedClash(fields, schema) === null ? fields : undefined;
+}
+
+/** Those of these computed fields a filter or sort names: a field whose first part is one's name */
+export function namedComputed(fields: ComputedFields, where: unknown, sort?: unknown): ComputedFields {
+  const named: Record<string, string> = {};
+  const name = (field: string) => {
+    const first = field.split('.')[0]!;
+    if (Object.hasOwn(fields, first)) named[first] = fields[first]!;
+  };
+  const walk = (filter: unknown): void => {
+    if (Array.isArray(filter)) return filter.forEach(walk);
+    if (!isRecord(filter)) return;
+    for (const [field, condition] of Object.entries(filter)) {
+      if (field === '$and' || field === '$or' || field === '$not') walk(condition);
+      else name(field);
+    }
+  };
+  walk(where);
+  if (isRecord(sort)) Object.keys(sort).forEach(name);
+  return named;
+}
+
+/** Whether a filter or sort names one of these computed fields */
+export const readsComputed = (fields: ComputedFields, where: unknown, sort?: unknown): boolean =>
+  Object.keys(namedComputed(fields, where, sort)).length > 0;
 
 /** What a computed field needs from the node: what links to a record */
 export interface LinkedSource {

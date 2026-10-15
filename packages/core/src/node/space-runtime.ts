@@ -450,7 +450,7 @@ const ACCESS_LATER: Standing = Object.freeze({
 /** Whether a version goes in the store: it stands, or stood until a later change withdrew it */
 /** How a version fares under its collection's contract, as this node reads them */
 import type { RecordContracts } from './types.js';
-import { checkComputed, checkComputedTypes, type ComputedFields } from '../query/computed.js';
+import { checkComputed, checkComputedTypes, usableComputed, type ComputedFields } from '../query/computed.js';
 import { storedComputed, storedContract } from '../records/contract-builder.js';
 type ChecksVerdict =
   | { readonly passes: true }
@@ -1995,6 +1995,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   function describe(name: string, entry: CatalogEntry | null, records: number): NodeCollection {
     const definition = entry?.definition;
+    const usable = usableComputed(definition?.computed, definition?.schema);
     return Object.freeze({
       name,
       ...(definition?.title !== undefined ? { title: definition.title } : {}),
@@ -2006,7 +2007,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       definedBy: entry?.definedBy ?? null,
       rules: definition?.rules ?? {},
       ...(definition?.contract !== undefined ? { contract: definition.contract } : {}),
-      ...(definition?.computed !== undefined ? { computed: definition.computed } : {}),
+      // Only what every reader can use: a definition written by hand arrives unchecked.
+      ...(usable !== undefined ? { computed: usable } : {}),
       topics: definition?.topics ?? [],
       records,
     });
@@ -4033,8 +4035,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     /** A collection's computed fields, as its definition says now; a malformed member reads as none */
     async computed(collection: string): Promise<ComputedFields | undefined> {
-      const fields = (await definitionOf(collection))?.computed;
-      return fields !== undefined && checkComputed(fields) === null ? fields : undefined;
+      const definition = await definitionOf(collection);
+      return usableComputed(definition?.computed, definition?.schema);
     },
 
     async collections(): Promise<ReadonlyArray<NodeCollection>> {

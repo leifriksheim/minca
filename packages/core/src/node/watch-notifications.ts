@@ -8,10 +8,12 @@
  * follows every space they look at, and hands each record that comes to
  * match to the app — which decides how to show it. A record comes to match
  * when it is written, or when something its computed fields read is: a new
- * 👍 can make a todo done. What already matched when it started is never news.
+ * 👍 can make a todo done. Each record is news once per automation, however
+ * often it is edited out and back in. What already matched when it started is
+ * never news.
  */
 import { holdsFor, ownQuery, setsOff, type Trigger } from '../space/own-automations.js';
-import { lastRead, linkedReads, readsComputed } from '../query/computed.js';
+import { lastRead, linkedReads, namedComputed } from '../query/computed.js';
 import type { NodeRecord, OwnAutomationView, P2PNode } from './types.js';
 import { serial } from '../utils/serial.js';
 
@@ -41,7 +43,7 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
   let stopped = false;
   let automations: ReadonlyArray<OwnAutomationView> = [];
   let spaces = new Set<string>();
-  /** The records each automation holds for, by space: one that joins them is news */
+  /** The records each automation has held for, by space: one that joins them is news, once */
   const holding = new Map<string, Set<string>>();
   /** Spaces with a change not yet looked at; null means the automations or spaces changed */
   const dirty = new Set<string | null>([null]);
@@ -59,12 +61,14 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
     holding.set(at, held);
     const { collection, where } = ownQuery(own);
     const fields = (await node.collections.list(space)).find((c) => c.name === collection)?.computed ?? {};
-    const reads = readsComputed(fields, where);
+    // Only the fields the filter names: what the others read can't change whether it holds.
+    const named = namedComputed(fields, where);
+    const reads = Object.keys(named).length > 0;
     // The newest records, and those the newest of what their computed fields read link to.
     const newest = (name: string) =>
       node.records.list(space, { collection: name, newestFirst: true, limit: LOOK_BACK });
     const keys = new Set((await newest(collection)).map((r) => r.key));
-    for (const { collection: from, rel } of reads ? linkedReads(fields) : []) {
+    for (const { collection: from, rel } of linkedReads(named)) {
       for (const r of await newest(from)) for (const link of r.links) if (link.rel === rel) keys.add(link.to);
     }
     if (keys.size === 0) return;
@@ -76,14 +80,10 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
       node.records.linked(space, key, o);
     for (const record of records) {
       if (stopped) return;
-      if (!holdsFor(own, record, node.did)) {
-        held.delete(record.key);
-        continue;
-      }
-      if (held.has(record.key)) continue;
+      if (!holdsFor(own, record, node.did) || held.has(record.key)) continue;
       held.add(record.key);
       if (first) continue;
-      const last = reads ? await lastRead({ linked }, record.key, fields) : null;
+      const last = reads ? await lastRead({ linked }, record.key, named) : null;
       const trigger: Trigger =
         last && last.updatedAt > record.createdAt
           ? { createdAt: last.updatedAt, createdBy: last.root ?? last.createdBy }

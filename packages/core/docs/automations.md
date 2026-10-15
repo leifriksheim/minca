@@ -54,7 +54,10 @@ or the bot in `by`. So "a message mentioning me" is `{ "mentions":
 { "$contains": "$me" } }` for a person and for a bot alike. `from` lists role
 names; only records written by someone holding one of them set the automation off,
 and `"member"` is any member at all, the founders included. With `others`,
-only records someone other than its runner wrote set it off.
+only records someone other than its runner wrote set it off. What sets it off
+is the record, or, when a computed field its filter names made it hold, the
+newest record that field read: Bob's 👍 that made Alice's todo done is
+Bob's, so `others` lets it through and `from` asks Bob's roles.
 
 `every` uses `*`, a number, a range `a-b`, a step `/n` and lists with commas;
 weekday 0 or 7 is Sunday; a day and a weekday both given means either. At
@@ -221,10 +224,11 @@ alone (its body, its [computed fields](computed.md), `link:<role>`, `@key`,
 
 It notifies about a record when the record **comes to match**: when it is
 written, or, for a `where` that names a computed field, when something that
-field reads is, as a 👍 can make a todo done. Once per record while it keeps
-matching: a record that stops and matches again is news again. What sets it
-off must be written after `since` and within the last day, and with
-`others`, by someone else.
+field reads is, as a 👍 can make a todo done. Once per record: one edited
+out of matching and back in is not news again, so no one can notify the
+account over and over with one record. What sets it off must be written
+after `since` and within the last day, and with `others`, by someone else.
+"Newest" and "within the last day" go by the clock of whoever wrote it.
 
 **Apps propose them**, the person says yes in the account home, and the home
 writes them, naming the app ([spec 06 §2.11](../../../spec/06-nodes-and-sessions.md), whose `Proposal` is the shape below).
@@ -260,9 +264,12 @@ A private space whose key the device lacks gets an empty list, and wakes
 nothing.
 
 A `where` that names a computed field changes when what the field reads is
-written, so each device also writes a wake for each collection those fields
-read (`wake:<id>:<collection>`), with no tags but the empty lists: any new 👍
-in those spaces wakes the app, which works the field out and judges.
+written, so each device also writes a wake for each collection that field
+reads (`wake:<id>:<collection>`), with no tags but the empty lists: any new 👍
+in those spaces wakes the app, which works the field out and judges. Only
+the fields the `where` names count, and a filter whose fields read more than
+four collections gets no more wakes than its own, so a definition can't make
+every member's devices write a wake per name it lists.
 
 A wake can only let through more than the app would, never less, with one
 exception: `$contains` on a text field matches part of it, and a tag only a

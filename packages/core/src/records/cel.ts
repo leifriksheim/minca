@@ -853,7 +853,8 @@ export function checkCel(node: CelNode, scope: CelScope, count = { nodes: 0 }): 
             return 'linked() reads what one node holds, so only a computed field may: a contract cites versions instead';
           if (!n.args.every((a) => a.k === 'lit' && typeof a.v === 'string'))
             return 'linked() takes a literal collection name and link role, like linked("app.reaction", "on")';
-          return null;
+          // Its arguments count towards the limit on parts like any others.
+          return first(n.args.map((a) => () => walk(a, bound)));
         }
         if (!n.target && SPACE_FUNCTIONS.has(n.fn) && !scope.space)
           return `${n.fn}() asks the space, which this can't`;
