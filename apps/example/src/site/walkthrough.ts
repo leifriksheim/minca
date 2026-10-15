@@ -309,6 +309,24 @@ await node.records.put(space.id, reactions, { emoji: '🙂' }, { links: on });
 `,
       },
       {
+        label: 'What it shows',
+        text: 'Before anyone claims it, every device can count the smiles it holds: a computed field. It is a view, so it can change as reactions come and go.',
+        file: 'count.ts',
+        code: `
+// In the comment's definition
+computed: ({ linked }) => ({
+  smiles: linked(reactions, 'on')
+    .where((r) => r.body.emoji.eq('🙂'))
+    .map((r) => r.author).distinct().count(),
+}),
+
+const { records } = await node.records.query(space.id, {
+  collection: comments, where: { smiles: { $gte: 5 } },
+});
+records[0].computed.smiles; // 5
+`,
+      },
+      {
         label: 'What it proves',
         text: 'Whoever sees the fifth writes the claim, citing all five. Every device runs the same contract and reaches the same verdict. No server, no blockchain.',
         file: 'claim.ts',

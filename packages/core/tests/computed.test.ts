@@ -20,6 +20,7 @@ import { person } from './helpers/person.js';
 import { team } from '../src/space/presets.js';
 import { automation, automationRun, runAutomations } from '../src/schemas/automations.js';
 import { linkedWakes, wakeFor, wakes } from '../src/space/own-automations.js';
+import { runAction } from '../src/node/actions.js';
 
 const reaction = collection({
   name: 'app.reaction',
@@ -436,6 +437,61 @@ describe('computed: what watches a filter on them', () => {
       ),
       [],
       'a filter on the body alone needs no more',
+    );
+  });
+});
+
+describe('computed: an agent, through the actions', () => {
+  test('defines computed fields as JSON, queries by them, and is told what to fix', async () => {
+    const { node } = await person();
+    const { id: space } = await node.spaces.create({ name: 'Chores', ...team, visibility: 'private' });
+    await runAction(node, 'collections_define', {
+      space,
+      name: 'app.reaction',
+      schema: { type: 'object', properties: { emoji: { type: 'string' } } },
+      links: { on: { to: ['app.todo'], cardinality: 'one' } },
+    });
+    // As the tool's description shows it.
+    await runAction(node, 'collections_define', {
+      space,
+      name: 'app.todo',
+      schema: { type: 'object', properties: { text: { type: 'string' } } },
+      computed: {
+        thumbs:
+          "linked('app.reaction', 'on').filter(r, r.body.emoji == '👍').map(r, r.author).distinct().size()",
+        done: "linked('app.reaction', 'on').size() >= 1",
+      },
+    });
+    const todo = z
+      .object({ key: z.string() })
+      .parse(
+        await runAction(node, 'records_put', { space, collection: 'app.todo', body: { text: 'Dishes' } }),
+      );
+    await runAction(node, 'records_put', {
+      space,
+      collection: 'app.reaction',
+      body: { emoji: '👍' },
+      links: [{ rel: 'on', to: todo.key }],
+    });
+    const found = z
+      .object({
+        records: z.array(z.object({ key: z.string(), computed: z.record(z.string(), z.unknown()) })),
+      })
+      .parse(
+        await runAction(node, 'records_query', { space, collection: 'app.todo', where: { done: true } }),
+      );
+    assert.deepEqual(
+      found.records.map((r) => [r.key, r.computed]),
+      [[todo.key, { thumbs: 1, done: true }]],
+    );
+    await assert.rejects(
+      runAction(node, 'collections_define', {
+        space,
+        name: 'app.note',
+        schema: { type: 'object', properties: { text: { type: 'string' } } },
+        computed: { text: 'size(body.text)' },
+      }),
+      /computed\.text: the body has a field "text" too/,
     );
   });
 });

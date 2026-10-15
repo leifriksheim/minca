@@ -104,6 +104,10 @@ The roles a record may carry are declared on its collection
 }
 ```
 
+A query's records also have `computed`, what the collection's
+[computed fields](computed.md) work out for each on this device (`{}`
+without any), and `included`, what its `include` found.
+
 Show `root` or `createdBy` as the author, not `author`, which is the session
 key that signed. `node.spaces.profiles(space)` maps accounts to names.
 
@@ -124,9 +128,12 @@ const { records, cursor, complete } = await node.records.query(space.id, {
 });
 ```
 
-- **Fields.** A bare name is a field of the body (`done`, `address.city`). A
-  name starting with `@` is about the record: `@key`, `@author`, `@root`,
-  `@createdBy`, `@createdAt`, `@updatedAt`, `@seq`.
+- **Fields.** A bare name is a field of the body (`question`,
+  `address.city`), or one of the collection's [computed fields](computed.md)
+  (`done`), which never share a name. A name starting with `@` is about the
+  record: `@key`, `@author`, `@root`, `@createdBy`, `@createdAt`,
+  `@updatedAt`, `@seq`. `link:<role>` is where its first link of that role
+  points.
 - **Operators.** `$eq`, `$ne` (true for a missing field too), `$gt`, `$gte`,
   `$lt`, `$lte`, `$in`, `$nin`, `$exists`, `$contains` (a case-insensitive
   substring, or an element of a list). Combine with `$and`, `$or`, `$not`. A
@@ -139,7 +146,9 @@ const { records, cursor, complete } = await node.records.query(space.id, {
   `where`, `limit`, nested `include`, or `count: true` for just the number.
   What it finds is on each record's `included`.
 - Name collections by their definitions and the results are typed, includes
-  too.
+  and computed fields too, and so are `where` and `sort`: a field the
+  collection doesn't have, or a value of the wrong type, is a compile error.
+  A collection named as a bare string is untyped.
 - `complete` is false while a node that holds only part of a space is still
   fetching a collection the query needs. Show "Loading…", not "Nothing here".
 - A malformed query throws, saying what to fix.
