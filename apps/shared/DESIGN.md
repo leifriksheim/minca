@@ -1,7 +1,7 @@
 # Minca's design system
 
-Every UI with Minca's name on it (the site, the app, the account home, Liquid,
-the Chrome extension) is built from what is in this folder. When something
+Every UI with Minca's name on it (the site, the app, the account home, the
+Chrome extension) is built from what is in this folder. When something
 looks different from one UI to the next, one of them is wrong.
 
 The look in one line: **warm paper, navy ink, thin navy rules and flat shapes,
@@ -113,7 +113,13 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
   `decorative` keeps the row as ornament, as the site's closing call does.
 
 Small and calm. Shapes may turn a little on hover; controls only change
-colour, they don't move. Demos play on their own, and stop under
+colour, they don't move.
+
+A button's look is its inline style; its hover is its `data-variant`
+(`hoverCss`). They are separate, so give each button the pair that match:
+`primary` with `button` or `darkSmall`, `quiet` with `smallButton`, `danger`
+with `smallButton` in `accent.danger`, `ghost` with `linkButton`. A white
+button marked `primary` turns cobalt only under the pointer. Demos play on their own, and stop under
 `prefers-reduced-motion`, where they show their final state.
 
 ## Words

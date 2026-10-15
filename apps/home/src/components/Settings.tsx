@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CarrierSummary } from '@minca/core/node';
 import {
-  MIN_PASSWORD_LENGTH,
   STAY_SIGNED_IN_CHOICES,
+  passwordStrength,
   accountCredentialName,
   offerToSave,
   recoveryKit,
@@ -315,7 +315,7 @@ export function Settings() {
       {state.folderAvailable && (
         <Section
           title="Where your data lives"
-          description="A pod is a folder on your computer that holds your account and spaces. Copy it, back it up, or put it in iCloud or Dropbox."
+          description="A pod is a folder on your computer that keeps your account and spaces. Copy it, back it up, or put it in iCloud or Dropbox."
         >
           <Row
             label={place?.kind === 'folder' ? `Pod: ${place.directory?.name ?? 'folder'}` : 'In this browser'}
@@ -329,6 +329,12 @@ export function Settings() {
               {place?.kind === 'folder' ? 'Change pod' : 'Move to a pod'}
             </button>
           </Row>
+          {/* Which carriers were given the folder is the extension's to know, not the home's: say what is true either way. */}
+          <p style={styles.errorHint}>
+            {place?.kind === 'folder'
+              ? 'Your pod is brought up to date while this page is open, and by the Minca browser extension if you gave it this folder. Apps keep their own copy, so without it, what you do in them reaches the pod the next time you come back here.'
+              : 'A pod is brought up to date while this page is open, or all the time with the Minca browser extension.'}
+          </p>
         </Section>
       )}
 
@@ -404,7 +410,7 @@ function SignOut() {
           onClick={() => signOut({ disconnect })}
           disabled={busy}
           data-variant="primary"
-          style={styles.smallButton}
+          style={styles.darkSmall}
         >
           {busy ? 'Signing out…' : 'Sign out'}
         </button>
@@ -521,13 +527,14 @@ function PasswordForm({
         name="password"
         autoComplete="new-password"
         placeholder="New password"
-        minLength={MIN_PASSWORD_LENGTH}
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         autoFocus
         aria-label="New password"
+        aria-describedby="password-strength"
         style={styles.input}
       />
+      <Strength password={password} />
       <input
         type="password"
         name="confirm-password"
@@ -539,9 +546,6 @@ function PasswordForm({
         style={styles.input}
       />
       {mismatch && <p style={styles.error}>Those two do not match.</p>}
-      <p style={styles.errorHint}>
-        At least {MIN_PASSWORD_LENGTH} characters. Let your password manager make one.
-      </p>
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="submit" disabled={busy || !password} data-variant="primary" style={styles.darkSmall}>
           {busy ? 'Saving…' : 'Save password'}
@@ -720,3 +724,41 @@ const segmented = {
 } as const;
 const segment = { ...styles.segment, flex: 'none' } as const;
 const segmentOn = { ...styles.segmentActive, flex: 'none' } as const;
+
+/** How strong a new password is, as it is typed: a warning, never a refusal */
+function Strength({ password }: { password: string }) {
+  const check = passwordStrength(password);
+  const filled = password ? { weak: 1, fair: 2, strong: 3 }[check.strength] : 0;
+  const colour = { weak: palette.accent.danger, fair: palette.accent.warn, strong: palette.accent.good }[
+    check.strength
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div aria-hidden style={{ display: 'flex', gap: 4 }}>
+        {[1, 2, 3].map((step) => (
+          <span
+            key={step}
+            style={{
+              flex: 1,
+              height: 4,
+              borderRadius: 2,
+              background: step <= filled ? colour : palette.surface.line,
+              transition: 'background-color .15s ease',
+            }}
+          />
+        ))}
+      </div>
+      <p
+        id="password-strength"
+        aria-live="polite"
+        style={{
+          ...styles.errorHint,
+          marginTop: 0,
+          color: password && check.strength === 'weak' ? palette.accent.danger : styles.errorHint.color,
+        }}
+      >
+        {check.hint || 'Any password works. Let your password manager make a strong one.'}
+      </p>
+    </div>
+  );
+}

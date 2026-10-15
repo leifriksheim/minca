@@ -399,7 +399,7 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
         <button
           onClick={() => incoming.deny('It is not connected to this account here. Connect it first.')}
           data-variant="quiet"
-          style={styles.button}
+          style={{ ...styles.button, background: palette.surface.card, color: palette.ink.strong }}
         >
           Close
         </button>

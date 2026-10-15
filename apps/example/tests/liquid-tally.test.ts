@@ -19,8 +19,8 @@ import {
   type FollowInput,
   type PartyStand,
   type Votes,
-} from '../src/tally';
-import type { Choice } from '../src/schema';
+} from '../src/components/apps/liquid/tally';
+import type { Choice } from '../src/components/apps/liquid/schema';
 
 const HOUSING = 'topic-housing';
 const PARKS = 'topic-parks';

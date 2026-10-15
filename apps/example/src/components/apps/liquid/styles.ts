@@ -1,10 +1,10 @@
-import { baseCss, hoverCss, palette } from '@minca/app-shared/styles';
+import { palette } from '@minca/app-shared/styles';
 import { SHAPE_CYCLE, type ShapeColour } from '@minca/app-shared/tokens';
 import { shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
 
 export { palette };
 
-const { ink, surface, accent, radius, shadow, display } = palette;
+const { ink, surface, accent, radius, display } = palette;
 
 /** The three answers, in the colours every bar and button uses */
 export const tone = {
@@ -54,26 +54,11 @@ export const partyMarkOf = (name: string, hue: number): { kind: ShapeKind; colou
 export const onShape = (colour: ShapeColour): string =>
   colour === 'peach' || colour === 'lilac' || colour === 'paper' ? ink.strong : surface.card;
 
-/** Standalone, Liquid owns the page: Minca's base styles, then its own */
-export function injectStandaloneStyles(): void {
-  if (!globalThis.document.getElementById('liquid-base')) {
-    const style = globalThis.document.createElement('style');
-    style.id = 'liquid-base';
-    style.textContent = `
-      ${baseCss}
-      @media (hover: hover) { ${hoverCss} }
-      body { background: ${surface.page}; }
-    `;
-    globalThis.document.head.appendChild(style);
-  }
-  injectAppStyles();
-}
-
 /**
  * Liquid's own rules, all under `lq-`, for what inline styles cannot say:
- * hover, focus, motion and the phone layout. A host that mounts Liquid
- * already has Minca's base styles (`baseCss`), so this adds only these, and
- * touches nothing outside its own classes.
+ * hover, focus, motion and the phone layout. The example already has
+ * Minca's base styles (`baseCss`), so this adds only these, and touches
+ * nothing outside its own classes.
  */
 export function injectAppStyles(): void {
   if (globalThis.document.getElementById('liquid-styles')) return;
@@ -91,24 +76,11 @@ export function injectAppStyles(): void {
       .lq-tab:not([aria-selected="true"]):hover { color: ${ink.strong}; }
       .lq-pick:hover { background: ${surface.sunken}; }
       .lq-chip[data-filter]:not([aria-pressed="true"]):hover { border-color: ${surface.rule}; color: ${ink.strong}; }
-      .lq-link:hover { color: ${ink.strong}; text-decoration-color: ${ink.muted}; }
-      .lq-tile-new:hover { color: ${ink.strong}; }
     }
 
     .lq-tabbar { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid ${surface.rule}; margin-bottom: 24px; }
 
-    .lq-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
-    /* Paper, not frosted glass: nothing blurs */
-    .lq-header {
-      position: sticky; top: 0; z-index: 20;
-      background: ${surface.page};
-      border-bottom: 1px solid ${surface.rule};
-    }
-    .lq-header-inner { max-width: 820px; margin: 0 auto; padding: 0 24px; }
-    .lq-bar { display: flex; align-items: center; gap: 12px; height: 60px; }
-    .lq-main { width: 100%; max-width: 820px; margin: 0 auto; padding: 28px 24px 96px; flex: 1; }
-
-    /* Titles in the display face, wherever Liquid is mounted */
+    /* Titles in the display face */
     .lq-display { font-family: ${display}; font-weight: 700; letter-spacing: -0.04em; color: ${ink.strong}; }
 
     .lq-tabs { display: flex; gap: 22px; margin-bottom: -1px; }
@@ -162,7 +134,6 @@ export function injectAppStyles(): void {
     .lq-card[data-interactive] { cursor: pointer; }
     .lq-card .shape { transition: transform .5s cubic-bezier(.3, 1.6, .5, 1); }
     /* What floats over the page: a navy frame and a flat shadow */
-    .lq-float { border: 1px solid ${surface.rule}; border-radius: ${radius.lg}px; background: ${surface.card}; box-shadow: ${shadow.float}; }
 
     .lq-proposal { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 14px; padding: 16px 18px 16px 14px; }
     .lq-upvote {
@@ -218,7 +189,6 @@ export function injectAppStyles(): void {
     .lq-muted { color: ${ink.muted}; }
     .lq-faint { color: ${ink.faint}; }
     .lq-num { font-variant-numeric: tabular-nums; }
-    .lq-link { background: none; border: none; padding: 0; font: inherit; color: ${ink.body}; text-decoration: underline; text-decoration-color: ${surface.lineStrong}; text-underline-offset: 3px; }
 
     .lq-empty {
       display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
@@ -243,9 +213,6 @@ export function injectAppStyles(): void {
       margin: 0 -1px -1px 0; border: none !important; border-radius: ${radius.none} !important;
       border-right: 1px solid ${surface.rule} !important; border-bottom: 1px solid ${surface.rule} !important;
     }
-    .lq-tile { position: relative; display: flex; flex-direction: column; gap: 14px; padding: 18px; min-height: 160px; text-align: left; font: inherit; color: inherit; }
-    .lq-tile-new { align-items: center; justify-content: center; gap: 8px; color: ${ink.muted}; background: none; }
-    .lq-cell-num { font-size: 13px; font-style: italic; color: ${ink.strong}; }
 
     .lq-path { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; }
     .lq-path-arrow { color: ${ink.faint}; }
@@ -253,10 +220,7 @@ export function injectAppStyles(): void {
     .lq-rise { animation: minca-rise .22s cubic-bezier(.2, .8, .2, 1) both; }
     .lq-fade { animation: minca-fade .2s ease both; }
 
-    .lq-hero-art { width: 100%; max-width: 440px; height: auto; }
-    /* How far below the top a column sticks: under the standalone header, or at the top of a host's frame */
-    .lq-aside { position: sticky; top: var(--lq-sticky-top, 16px); }
-    .lq-shell { --lq-sticky-top: 84px; }
+    .lq-aside { position: sticky; top: 16px; }
     .lq-two { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
     .lq-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .lq-scroll-x { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
@@ -272,8 +236,6 @@ export function injectAppStyles(): void {
       .lq-aside { position: static; }
     }
     @media (max-width: 640px) {
-      .lq-header-inner { padding: 0 16px; }
-      .lq-main { padding: 20px 16px 88px; }
       .lq-proposal { grid-template-columns: 42px minmax(0, 1fr); gap: 12px; padding: 14px 14px 14px 12px; }
       .lq-upvote { width: 42px; height: 50px; }
       .lq-tabs { gap: 18px; }

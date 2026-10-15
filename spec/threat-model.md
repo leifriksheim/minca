@@ -535,6 +535,19 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - derives the account key, and from it every member key, so it reads every
     private space the account was, is or will be a reader of; and the local
     key, so it reads the account's data at rest (01 §11.1, 03 §9.1, 05 §15).
+- **By design.** Whoever reads a copy of an account's vault becomes its root
+  thief once it guesses a passphrase wrap's password offline, at the cost of
+  its PBKDF2 rounds per guess (01 §11.3). That is anyone who copies a pod
+  (a synced drive, a backup, an old copy of the folder) and any app or site
+  the person opens their pod in (§3.6). The reference library takes any
+  password but an empty one and only warns when it is weak
+  (`packages/core/docs/sign-in.md`). The person chooses, but the cost is
+  shared: co-members of every space that names the account are exposed to
+  the thief, without being told. Changing the password later protects no copy
+  already taken, and a pod merged with an older copy keeps the older wraps
+  (01 §11.4); the seed never rotates
+  ([#9](https://github.com/leifriksheim/minca/issues/9)), so a vault copied
+  under a weak password is lost for good.
 
 ### 3.6 App or program
 
@@ -579,6 +592,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     at a key of a `onePer` key's form outside a `onePer` that gives it
     (02 §4.1).
 - **Does not hold yet.**
+  - An app or site the person opens their pod in reads the vault, and can
+    guess its password offline; a weak one makes it the root thief (§3.5,
+    By design).
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
     keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/minca/issues/165)).

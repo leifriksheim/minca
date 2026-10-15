@@ -169,7 +169,7 @@ const chosen: unknown =
   typeof settings === 'object' && settings !== null ? Reflect.get(settings, 'carrierFolder') : null;
 const carrierFolder = typeof chosen === 'string' && chosen ? chosen : join(Utils.paths.userData, 'carrier');
 const { runtime } = await BuildConfig.get();
-const home = typeof runtime?.home === 'string' ? runtime.home : 'https://minca-home.netlify.app/connect';
+const home = typeof runtime?.home === 'string' ? runtime.home : 'https://home.minca.social/connect';
 /** The relays, nodes and hosts the app was built with, so the node meets the same peers */
 const listed = (value: unknown) =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];

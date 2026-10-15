@@ -19,13 +19,13 @@
  */
 import {
   createMincaAuth,
-  MIN_PASSWORD_LENGTH,
   type AuthError,
   type AuthState,
   type MincaAuth,
   type MincaSession,
 } from '../session/auth.js';
 import { accountCredentialName, offerToSave, recoveryKit } from '../session/credentials.js';
+import { passwordStrength } from '../session/password-strength.js';
 import type { PairingStage } from '../session/pairing.js';
 import type { AccountSummary } from '../identity/account-store.js';
 import { adoptStyles, h, svg, type Child } from './dom.js';
@@ -812,10 +812,21 @@ export class MincaAuthElement extends Base {
         placeholder: 'Password',
         autocomplete: 'new-password',
         autofocus: true,
-        minlength: String(MIN_PASSWORD_LENGTH),
         'aria-label': 'Password',
+        'aria-describedby': 'wa-strength',
         disabled: state.busy,
       });
+      // How strong it is, as it is typed: a warning, never a refusal.
+      const meter = h('div', { class: 'wa-meter', 'aria-hidden': 'true' }, h('span'), h('span'), h('span'));
+      const strength = h('p', { id: 'wa-strength', class: 'wa-small', 'aria-live': 'polite' });
+      const measure = () => {
+        const check = passwordStrength(password.value);
+        meter.dataset.strength = password.value ? check.strength : '';
+        strength.dataset.strength = password.value ? check.strength : '';
+        strength.textContent = check.hint || 'Any password works. A password manager can make a strong one.';
+      };
+      password.addEventListener('input', measure);
+      measure();
       const confirm = this.#input('confirm-password', {
         type: 'password',
         name: 'confirm-password',
@@ -846,14 +857,11 @@ export class MincaAuthElement extends Base {
           'aria-label': 'Account',
         }),
         password,
+        meter,
+        strength,
         confirm,
         this.#mismatch ? h('p', { class: 'wa-error' }, 'Those two do not match.') : null,
         submit(state.busy, 'Use this password', 'Saving…'),
-        h(
-          'p',
-          { class: 'wa-small', style: 'margin-top:0' },
-          `At least ${MIN_PASSWORD_LENGTH} characters. Let your password manager make one.`,
-        ),
       );
     };
 
@@ -913,7 +921,7 @@ export class MincaAuthElement extends Base {
       h(
         'p',
         { class: 'wa-hint' },
-        'A pod is a folder on your computer that holds your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Minca app you point at it opens the same account.',
+        'A pod is a folder on your computer that keeps your account and spaces. Back it up, or put it in iCloud or Dropbox. Any Minca app you point at it opens the same account. It is brought up to date while this page is open.',
       ),
       h(
         'div',

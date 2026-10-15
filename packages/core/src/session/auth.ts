@@ -121,6 +121,13 @@ export interface MincaAuthConfig {
    * can't be handed.
    */
   readonly worker?: () => WorkerLike;
+  /**
+   * Whether a new account is offered a pod before it goes in (`pod`). Default
+   * true. Turn it off where the page closes once signed in, as when an app
+   * opened it to connect: the pod is only kept up to date while this page
+   * runs, so it is better offered where the person comes back.
+   */
+  readonly offerPod?: boolean;
 }
 
 /**
@@ -159,9 +166,6 @@ export type AuthStage =
  * link. Decides which of the setup screens are shown.
  */
 export type AuthSetup = 'new' | 'restored' | 'paired';
-
-/** The shortest password `setPassword` takes. It guards a copy of the seed in a folder that may be copied. */
-export const MIN_PASSWORD_LENGTH = 10;
 
 /** A failure, in the shape a screen needs to explain it */
 export interface AuthError {
@@ -835,7 +839,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
   /** After a way in is set up: offer a pod to a new account that could use one, or go in. */
   function afterUnlock(): void {
-    const offerPod = state.setup === 'new' && state.folderAvailable && state.place?.kind === 'browser';
+    const offerPod =
+      config.offerPod !== false &&
+      state.setup === 'new' &&
+      state.folderAvailable &&
+      state.place?.kind === 'browser';
     update(offerPod ? { stage: 'pod' } : { stage: 'ready', setup: null });
   }
 
@@ -1234,11 +1242,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     setPassword: (password) =>
       changeShortcut(async (unlocked) => {
-        if (password.length < MIN_PASSWORD_LENGTH) {
-          throw new Error(
-            `Use at least ${MIN_PASSWORD_LENGTH} characters. Your password manager can make one for you.`,
-          );
-        }
+        // Any password will do; the form warns about weak ones (`passwordStrength`).
+        if (!password) throw new Error('Choose a password.');
         const wrap = await wrapSeedWithPassphrase(unlocked, password, 'Password');
         // One password: the new one replaces the last. The CLI's passphrase is its own, and stays.
         await updateVault(async (vault) => ({

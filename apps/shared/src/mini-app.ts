@@ -1,12 +1,9 @@
 /**
- * A mini app: one job, written once, run two ways.
- *
- * - **Standalone**, as its own site: it connects to the person's account
- *   home, and wraps `Space` in a shell of its own (a list of its spaces, a
- *   header, invites). `apps/liquid` is one.
- * - **Inside a host**, like the example app: the host lists it beside its
- *   other apps, defines `needs` when someone adds it to a space, and renders
- *   `Space` in its own frame (`fromMiniApp` in `apps/example/src/components/apps/index.tsx`).
+ * A mini app: one job, in a folder of its own, that a host like the example
+ * app lists beside its other apps. The host defines `needs` when someone adds
+ * it to a space, and renders `Space` in its own frame (`fromMiniApp` in
+ * `apps/example/src/components/apps/index.tsx`). Liquid
+ * (`apps/example/src/components/apps/liquid/`) is one.
  *
  * A mini app reads and writes only through `@minca/core/react`
  * below the host's `MincaProvider`, and only in the collections it names in

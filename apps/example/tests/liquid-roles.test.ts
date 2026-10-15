@@ -8,7 +8,13 @@ import assert from 'node:assert/strict';
 import { may, replayAccess, type AccessGenesis } from '../../../packages/core/src/space/roles.js';
 import { RECORD_DELETE, RECORD_READ, RECORD_WRITE } from '../../../packages/core/src/space/grants.js';
 import { assign } from '../../../packages/core/tests/helpers/access.js';
-import { assemblyRoles, delegation, membership, proposal, support } from '../src/schema';
+import {
+  assemblyRoles,
+  delegation,
+  membership,
+  proposal,
+  support,
+} from '../src/components/apps/liquid/schema';
 
 describe('an assembly’s roles', () => {
   const genesis: AccessGenesis = {

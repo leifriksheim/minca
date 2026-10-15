@@ -7,7 +7,9 @@
  * API when used — so it lives on its own entry point, away from the
  * isomorphic core.
  */
-export { createMincaAuth, MIN_PASSWORD_LENGTH } from './auth.js';
+export { createMincaAuth } from './auth.js';
+export { passwordStrength } from './password-strength.js';
+export type { PasswordCheck, PasswordStrength } from './password-strength.js';
 export type {
   MincaAuth,
   MincaAuthConfig,

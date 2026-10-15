@@ -19,7 +19,7 @@ export default {
     // Closing the window leaves the carrier running in the menu bar.
     exitOnLastWindowClosed: false,
     // The account home the carrier connects to: the app's, from the same setting.
-    home: process.env.VITE_MINCA_HOME ?? 'https://minca-home.netlify.app/connect',
+    home: process.env.VITE_MINCA_HOME ?? 'https://home.minca.social/connect',
     // Where the app's node meets peers: the same settings the app is built with (apps/shared/src/relay.ts).
     relays: list(process.env.VITE_SIGNALING_URL),
     nodes: list(process.env.VITE_MINCA_NODES),

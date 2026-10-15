@@ -32,7 +32,7 @@ import {
   proposal,
   vote,
   type Choice,
-} from '../src/schema';
+} from '../src/components/apps/liquid/schema';
 
 const open: P2PNode[] = [];
 after(async () => {

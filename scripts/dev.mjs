@@ -8,8 +8,7 @@
  *   yours in packages/cli/.env.host.local. Wallet payments on Base Sepolia by default.
  * - stripe: when .env.host.local has a Stripe test key, the Stripe CLI
  *   forwards Stripe's webhooks to the host, and the host gets its secret.
- * - home (5174), app (5173) and liquid (5190), the standalone example; their
- *   .env.development point at the rest.
+ * - home (5174) and app (5173); their .env.development point at the rest.
  *
  * Ctrl-C stops them all.
  */
@@ -25,7 +24,6 @@ const colour = {
   stripe: '\x1b[34m',
   home: '\x1b[33m',
   app: '\x1b[36m',
-  liquid: '\x1b[94m',
   reset: '\x1b[0m',
 };
 
@@ -131,7 +129,6 @@ const children = [
   ...extra.map((begin) => begin()),
   start('home', 'npm', ['run', 'dev'], `${root}apps/home`),
   start('app', 'npm', ['run', 'dev'], `${root}apps/example`),
-  start('liquid', 'npm', ['run', 'dev'], `${root}apps/liquid`),
 ];
 say('host', `http://localhost:${hostPort}: pay it from the home (Settings, Keep my spaces online)`);
 
