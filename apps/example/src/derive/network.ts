@@ -34,7 +34,7 @@ export function healthOf(status: SpaceStatus | undefined, network: MeshStatus): 
 /** Who a connected peer is, as far as its proof says */
 export type PeerKind = 'mine' | 'person' | 'carrier' | 'server';
 
-export function peerKind(peer: string, status: SpaceStatus, me: string): PeerKind {
+function peerKind(peer: string, status: SpaceStatus, me: string): PeerKind {
   if (status.carriers.includes(peer)) return 'carrier';
   if (status.own.includes(peer) || status.accounts[peer] === me) return 'mine';
   return status.accounts[peer] ? 'person' : 'server';
