@@ -218,7 +218,7 @@ export function setupHarness() {
 
   /** Opens the app's window, and returns it */
   function openApp(): Win {
-    bridge.openWindow('http://127.0.0.1:47830/app', { width: 1200, height: 820 });
+    bridge.openWindow('http://127.0.0.1:47830/', { width: 1200, height: 820 });
     const app = windows[windows.length - 1];
     if (!app) throw new Error('no window opened');
     return app;

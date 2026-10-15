@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
 import { Band, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
 
 /**
@@ -447,9 +448,9 @@ export function Protocol() {
             <a href={SPEC} {...EXTERNAL} className="btn btn-primary">
               Read the spec
             </a>
-            <a href="/developers" className="btn btn-secondary">
+            <Link to="/developers" className="btn btn-secondary">
               Build with it
-            </a>
+            </Link>
           </div>
         </div>
       </section>
@@ -522,9 +523,9 @@ export function Protocol() {
             <a href={SPEC} {...EXTERNAL} className="btn btn-primary">
               Read the spec
             </a>
-            <a href="/developers" className="btn btn-secondary">
+            <Link to="/developers" className="btn btn-secondary">
               For developers
-            </a>
+            </Link>
           </div>
         </div>
       </section>

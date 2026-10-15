@@ -1,4 +1,13 @@
-import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+  useRouterState,
+  useSearch,
+  type RegisteredRouter,
+} from '@tanstack/react-router';
 import { useMayDefine } from '@minca/app-shared/may';
 import type { NodeRecord, SpaceSummary } from '@minca/core';
 import {
@@ -11,28 +20,22 @@ import {
   useSpaceStatus,
 } from '@minca/core/react';
 import { RecordPanel } from './RecordPanel';
-import { GraphView } from './GraphView';
-import { QueryPlayground } from './QueryPlayground';
-import { RolesView } from './RolesView';
-import { AppsView } from './apps/AppsView';
 import { AppIcon, Count } from './apps/AppIcon';
 import { CreateApp } from './apps/CreateApp';
-import { NewApp } from './apps/NewApp';
-import { MadeAppScreen } from './apps/MadeApps';
 import { NotifyButton } from './apps/NotifyButton';
-import { AutomationsView } from './automations/AutomationsView';
+import { MadeAppScreen } from './apps/MadeApps';
 import { Bell } from './Bell';
-import { HostingView } from './HostingView';
 import { fills, useSpaceApps, type AppEntry } from './apps/entries';
 import { moveApp } from './apps/launcher';
-import { DataView, NEW, type Place } from './DataView';
+import { NEW } from './DataView';
+import { SpaceRail } from './SpaceRail';
 import { SpaceMark } from './SpaceList';
 import { AccountMenu } from './AccountMenu';
 import { styles, palette } from '../styles';
 import { Icon, type IconName } from './Icon';
 import { WhoIsHere } from './WhoIsHere';
-import { NetworkView } from './NetworkView';
 import { RelayDown } from './RelayNotice';
+import { Notices, useWorkspace } from '../workspace';
 import { CallButton } from './calls/Calls';
 import { peopleFrom } from '../derive/people';
 import { useBots } from '../bots';
@@ -40,23 +43,30 @@ import { PersonScopeProvider } from './Person';
 import { markSeen, seenAt, totalOf, unreadOf, useSeen, useUnread, type Unread } from '../seen';
 
 /** Under the hood: the views for the curious, folded at the foot of the sidebar */
-const HOOD = [
+export const HOOD = [
   {
     id: 'data',
+    to: '/spaces/$spaceId/data',
     label: 'Data',
     icon: 'table',
     about: 'Every record in this space, collection by collection: what the apps read and write.',
   },
-  { id: 'explore', label: 'Explore', icon: 'compass' },
-  { id: 'query', label: 'Query', icon: 'search' },
+  { id: 'explore', to: '/spaces/$spaceId/explore', label: 'Explore', icon: 'compass' },
+  { id: 'query', to: '/spaces/$spaceId/query', label: 'Query', icon: 'search' },
   {
     id: 'network',
+    to: '/spaces/$spaceId/network',
     label: 'Network',
     icon: 'network',
     about: 'Which devices this one syncs with, and how records travel between them.',
   },
-] as const satisfies ReadonlyArray<{ id: string; label: string; icon: IconName; about?: string }>;
-type Hood = (typeof HOOD)[number]['id'];
+] as const satisfies ReadonlyArray<{
+  id: string;
+  to: SpacePath;
+  label: string;
+  icon: IconName;
+  about?: string;
+}>;
 
 /** How many apps the sidebar lists before the rest fold behind one row, so the space's own sections stay in view */
 const SIDEBAR_APPS = 10;
@@ -74,51 +84,111 @@ const hoodWasOpen = (): boolean => {
 };
 
 /** What belongs to the space rather than to one app, in sidebar order */
-const SECTIONS = [
-  { kind: 'people', label: 'People', icon: 'people' },
-  { kind: 'hosting', label: 'Hosting', icon: 'cloud' },
-  { kind: 'automations', label: 'Automations', icon: 'bolt' },
-] as const satisfies ReadonlyArray<{ kind: string; label: string; icon: IconName }>;
+export const SECTIONS = [
+  { to: '/spaces/$spaceId/people', label: 'People', icon: 'people' },
+  { to: '/spaces/$spaceId/hosting', label: 'Hosting', icon: 'cloud' },
+  { to: '/spaces/$spaceId/automations', label: 'Automations', icon: 'bolt' },
+] as const satisfies ReadonlyArray<{ to: SpacePath; label: string; icon: IconName }>;
 
-/** What the main area shows: the apps, one of them open, the people, or a view under the hood */
-type View =
-  | { readonly kind: 'apps' }
-  | { readonly kind: 'new' }
-  | { readonly kind: 'app'; readonly id: string; readonly since: string }
-  | { readonly kind: 'people' }
-  | { readonly kind: 'hosting' }
-  | { readonly kind: 'automations' }
-  /** A phone's list of the sections that have no tab of their own */
-  | { readonly kind: 'more' }
-  | { readonly kind: 'hood'; readonly hood: Hood };
+/** Every part of a space you can go to with only its id */
+type SpacePath = Exclude<
+  Extract<keyof RegisteredRouter['routesByPath'], `/spaces/${string}`>,
+  `${string}$appId` | `${string}/`
+>;
 
-/** One space, laid out like a chat app: its apps down a sidebar, the open one beside them */
-export function SpaceView({
-  space,
-  spaces,
-  notices,
-  onOpenSpace,
-  onHome,
-}: {
-  space: SpaceSummary;
-  /** Every space, for the bell */
-  spaces: ReadonlyArray<SpaceSummary>;
-  /** Banners about the connection and invites, above whatever is open */
-  notices?: ReactNode;
-  onOpenSpace?: (id: string) => void;
-  /** Back to every space; on a phone the tab bar carries it */
-  onHome: () => void;
-}) {
+/** Every route in the app, by its id */
+type RouteId = keyof RegisteredRouter['routesById'];
+
+/** The route that is a space's apps, and the one that is one app open */
+const APPS_ROUTE: RouteId = '/spaces/$spaceId/';
+const APP_ROUTE: RouteId = '/spaces/$spaceId/apps/$appId';
+
+/** What a space's pages share, from the layout around them */
+export interface SpaceScreen {
+  readonly space: SpaceSummary;
+  readonly collections: ReturnType<typeof useCollections>;
+  readonly apps: ReturnType<typeof useSpaceApps>;
+  readonly unread: ReturnType<typeof useUnread>;
+  readonly status: ReturnType<typeof useSpaceStatus>;
+  readonly mayDefine: boolean;
+  /** The app open, at `/apps/<id>`, when the space has it */
+  readonly open: AppEntry | undefined;
+  /** Go to another part of this space */
+  readonly go: (to: SpacePath) => void;
+  readonly openApp: (id: string) => void;
+  /** Open a record in the panel beside whatever is open */
+  readonly openRecord: (record: NodeRecord) => void;
+  /** Ask an agent to make an app, or make one by hand */
+  readonly startCreating: () => void;
+}
+
+const SpaceScreenContext = createContext<SpaceScreen | null>(null);
+
+/** The space a page is in, and what it can do there */
+export function useSpaceScreen(): SpaceScreen {
+  const screen = useContext(SpaceScreenContext);
+  if (!screen) throw new Error('useSpaceScreen needs a space (SpaceLayout) above it');
+  return screen;
+}
+
+/** `/spaces/<id>`: the space beside the rail of every space, or your spaces when you don't have it */
+export function SpaceLayout() {
+  const { spaceId } = useParams({ from: '/spaces/$spaceId' });
+  const { spaces, loading, create, join, openSpace } = useWorkspace();
+  const navigate = useNavigate();
+  // Always the list's current copy, so a join that finishes, or a role that
+  // changes, never leaves a stale one on screen.
+  const space = spaces.find((found) => found.id === spaceId);
+  // Said rather than redirected: a list a moment behind (a refresh that
+  // overlapped a join) shows the space as soon as it catches up.
+  if (!space)
+    return loading ? null : (
+      <div className="page">
+        <div style={styles.app}>
+          <p style={styles.emptyState}>This space isn't on this device.</p>
+          <Link to="/">Your spaces</Link>
+        </div>
+      </div>
+    );
+  // The space takes the whole window beside the rail, the way chat apps are laid out.
+  return (
+    <div className="shell">
+      <SpaceRail
+        spaces={spaces}
+        current={space.id}
+        onOpen={(other) => openSpace(other.id)}
+        onHome={() => void navigate({ to: '/' })}
+        onCreate={create}
+        onJoin={join}
+      />
+      <SpaceView key={space.id} space={space} />
+    </div>
+  );
+}
+
+/** One space, laid out like a chat app: its apps down a sidebar, the part you're in beside them */
+function SpaceView({ space }: { space: SpaceSummary }) {
+  const { spaces, openSpace } = useWorkspace();
   const account = useAccount();
   const node = useNode();
-  const [view, setView] = useState<View>({ kind: 'apps' });
+  const navigate = useNavigate();
+  const goHome = () => void navigate({ to: '/' });
+  // Where in the space you are, and the record open beside it: the address holds both.
+  const leaf = useRouterState({ select: (state) => state.matches.at(-1)?.routeId });
+  const openId = useParams({ strict: false }).appId;
+  const { record } = useSearch({ from: '/spaces/$spaceId' });
+  const onApps = leaf === APPS_ROUTE;
+  const onApp = leaf === APP_ROUTE;
+  const hood = HOOD.find((h) => h.to === leaf);
+  const onNew = leaf === '/spaces/$spaceId/new';
+  const onPeople = leaf === '/spaces/$spaceId/people';
+
   // The app being dragged to a new place in the sidebar, by its launcher record, and why a move failed
   const [dragging, setDragging] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const [place, setPlace] = useState<Place>({ collection: null, key: null });
   const [creating, setCreating] = useState(false);
   const [everyApp, setEveryApp] = useState(false);
-  const [hoodOpen, setHoodOpen] = useState(hoodWasOpen);
+  const [hoodOpen, setHoodOpen] = useState(() => hoodWasOpen() || hood !== undefined);
   const openHood = (open: boolean) => {
     setHoodOpen(open);
     try {
@@ -127,6 +197,13 @@ export function SpaceView({
       // Only remembering it is lost.
     }
   };
+  // Wherever a view under the hood is opened from, the sidebar unfolds to show where one is.
+  // Adjusted while rendering rather than in an effect, so the folded sidebar is never painted.
+  const [wasHood, setWasHood] = useState(hood?.id);
+  if (hood?.id !== wasHood) {
+    setWasHood(hood?.id);
+    if (hood) setHoodOpen(true);
+  }
 
   // Syncing while it is on screen. Opening writes nothing: standard schemas
   // are added only when someone picks them from the library.
@@ -148,40 +225,46 @@ export function SpaceView({
   const apps = useSpaceApps(space, collections);
   const unread = useUnread(space.id, apps.ready);
   const seen = useSeen();
-  const open = view.kind === 'app' ? apps.ready.find((app) => app.id === view.id) : undefined;
-  const openApp = (id: string) => setView({ kind: 'app', id, since: seenAt(seen, space.id, id) });
-  // Wherever a view under the hood is opened from, the sidebar unfolds to show where one is.
-  const goHood = (hood: Hood) => {
-    setView({ kind: 'hood', hood });
-    setHoodOpen(true);
-  };
+  const open = onApp ? apps.ready.find((app) => app.id === openId) : undefined;
+
+  const params = { spaceId: space.id };
+  const go = (to: SpacePath) => void navigate({ to, params });
+  const openApp = (appId: string) =>
+    void navigate({ to: '/spaces/$spaceId/apps/$appId', params: { spaceId: space.id, appId } });
+  // In Data, a record opens in its own collection; anywhere else, beside what is open.
   const openRecord = (r: NodeRecord) =>
-    setPlace((was) => ({ collection: view.kind === 'hood' ? r.collection : was.collection, key: r.key }));
+    void (hood?.id === 'data'
+      ? navigate({
+          to: '/spaces/$spaceId/data',
+          params,
+          search: { collection: r.collection, record: r.key },
+        })
+      : navigate({ to: '.', search: (was) => ({ ...was, record: r.key }) }));
+  const closeRecord = () => void navigate({ to: '.', search: (was) => ({ ...was, record: undefined }) });
 
   // An open app is looked at, as long as the page is: what arrives while it is counts as seen.
-  const openId = open?.id;
-  const newInOpen = openId ? unreadOf(unread, openId).count : 0;
+  const lookingAt = open?.id;
+  const newInOpen = lookingAt ? unreadOf(unread, lookingAt).count : 0;
   useEffect(() => {
-    if (!openId) return;
+    if (!lookingAt) return;
     const look = () => {
-      if (globalThis.document.visibilityState === 'visible') markSeen(account.did, space.id, openId);
+      if (globalThis.document.visibilityState === 'visible') markSeen(account.did, space.id, lookingAt);
     };
     look();
     globalThis.document.addEventListener('visibilitychange', look);
     return () => globalThis.document.removeEventListener('visibilitychange', look);
-  }, [account.did, space.id, openId, newInOpen]);
+  }, [account.did, space.id, lookingAt, newInOpen]);
 
   // Proposed apps others, or an agent, wrote since All apps was last looked at.
   const proposalsSeen = Date.parse(seenAt(seen, space.id, PROPOSALS));
   const newProposals: Unread = {
     count: apps.proposed.filter(
-      (record) =>
-        (record.createdBy !== account.did || record.recordsOnly) &&
-        Date.parse(record.updatedAt) > proposalsSeen,
+      (proposed) =>
+        (proposed.createdBy !== account.did || proposed.recordsOnly) &&
+        Date.parse(proposed.updatedAt) > proposalsSeen,
     ).length,
     forMe: 0,
   };
-  const onApps = view.kind === 'apps';
   useEffect(() => {
     if (!onApps) return;
     const look = () => {
@@ -213,7 +296,7 @@ export function SpaceView({
     const key = dragging;
     setDragging(null);
     if (!key || key === target.record.key) return;
-    const to = apps.placed.findIndex((record) => record.key === target.record.key);
+    const to = apps.placed.findIndex((placed) => placed.key === target.record.key);
     setMoveError(null);
     moveApp(node, space.id, apps.placed, key, to).catch((error: unknown) =>
       setMoveError(error instanceof Error ? error.message : String(error)),
@@ -221,26 +304,30 @@ export function SpaceView({
   };
   const title =
     open?.title ??
-    (view.kind === 'people'
-      ? 'People'
-      : view.kind === 'new'
-        ? 'New app'
-        : view.kind === 'automations'
-          ? 'Automations'
-          : view.kind === 'more'
-            ? 'More'
-            : view.kind === 'hood'
-              ? HOOD.find((h) => h.id === view.hood)!.label
-              : space.name);
+    [
+      ...SECTIONS,
+      ...HOOD,
+      { to: '/spaces/$spaceId/new', label: 'New app' },
+      { to: '/spaces/$spaceId/more', label: 'More' },
+    ].find((part) => part.to === leaf)?.label ??
+    space.name;
+
+  const screen: SpaceScreen = {
+    space,
+    collections,
+    apps,
+    unread,
+    status,
+    mayDefine,
+    open,
+    go,
+    openApp,
+    openRecord,
+    startCreating: () => setCreating(true),
+  };
 
   return (
-    <PersonScopeProvider
-      space={space}
-      people={people}
-      roles={roleOf}
-      me={account.did}
-      {...(onOpenSpace ? { openSpace: onOpenSpace } : {})}
-    >
+    <PersonScopeProvider space={space} people={people} roles={roleOf} me={account.did} openSpace={openSpace}>
       <div className="space-shell" data-app-open={open ? '' : undefined}>
         <aside className="space-sidebar" aria-label={space.name}>
           <div className="space-sidebar-scroll">
@@ -265,7 +352,7 @@ export function SpaceView({
             </div>
             {status && (
               <div style={{ padding: '0 8px 12px' }}>
-                <WhoIsHere status={status} people={people} onOpen={() => goHood('network')} />
+                <WhoIsHere status={status} people={people} onOpen={() => go('/spaces/$spaceId/network')} />
               </div>
             )}
 
@@ -274,8 +361,8 @@ export function SpaceView({
                 icon={<Icon name="apps" size={16} />}
                 label="All apps"
                 unread={newProposals}
-                on={view.kind === 'apps'}
-                onClick={() => setView({ kind: 'apps' })}
+                on={onApps}
+                onClick={() => go('/spaces/$spaceId')}
               />
               <SideHeading>Apps</SideHeading>
               {listed.map((app) => (
@@ -327,18 +414,18 @@ export function SpaceView({
                   icon={<Icon name="plus" size={16} />}
                   label="New app"
                   quiet
-                  on={view.kind === 'new'}
-                  onClick={() => setView({ kind: 'new' })}
+                  on={onNew}
+                  onClick={() => go('/spaces/$spaceId/new')}
                 />
               )}
               <SideHeading>Space</SideHeading>
               {SECTIONS.map((section) => (
                 <SideItem
-                  key={section.kind}
+                  key={section.to}
                   icon={<Icon name={section.icon} size={16} />}
                   label={section.label}
-                  on={view.kind === section.kind}
-                  onClick={() => setView({ kind: section.kind })}
+                  on={leaf === section.to}
+                  onClick={() => go(section.to)}
                 />
               ))}
             </nav>
@@ -350,7 +437,7 @@ export function SpaceView({
               <button
                 onClick={() => openHood(!hoodOpen)}
                 aria-expanded={hoodOpen}
-                aria-current={!hoodOpen && view.kind === 'hood' ? 'page' : undefined}
+                aria-current={!hoodOpen && hood ? 'page' : undefined}
                 data-nav
                 className="side-item"
                 style={{ color: palette.ink.faint, fontSize: 13 }}
@@ -376,8 +463,8 @@ export function SpaceView({
                     icon={<Icon name={h.icon} size={16} />}
                     label={h.label}
                     quiet
-                    on={view.kind === 'hood' && view.hood === h.id}
-                    onClick={() => goHood(h.id)}
+                    on={hood?.id === h.id}
+                    onClick={() => go(h.to)}
                   />
                 ))}
             </nav>
@@ -386,15 +473,15 @@ export function SpaceView({
           {/* You, the way chat apps put you: at the foot of the sidebar, with what's new for you. */}
           <div className="you-bar">
             <AccountMenu place="sidebar" />
-            <Bell spaces={spaces} here={space} place="above" onOpenSpace={onOpenSpace ?? (() => {})} />
+            <Bell spaces={spaces} here={space} place="above" onOpenSpace={openSpace} />
           </div>
         </aside>
 
         <main className="space-main">
           <header className="space-bar">
-            {view.kind === 'app' ? (
+            {onApp ? (
               <button
-                onClick={() => setView({ kind: 'apps' })}
+                onClick={() => go('/spaces/$spaceId')}
                 aria-label="All apps"
                 data-variant="quiet"
                 className="phone-only"
@@ -414,22 +501,26 @@ export function SpaceView({
             {/* A phone has no sidebar, so you are in its top bar instead. */}
             <span className="phone-only">
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Bell spaces={spaces} here={space} onOpenSpace={onOpenSpace ?? (() => {})} />
+                <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
                 <AccountMenu />
               </span>
             </span>
           </header>
 
           <div className="space-content" data-fill={fill || undefined}>
-            <div className="space-inner" data-wide={view.kind === 'hood' || undefined}>
-              {notices}
-              {view.kind !== 'hood' && <RelayDown />}
-              {view.kind === 'apps' && (
+            <div className="space-inner" data-wide={hood ? true : undefined}>
+              <Notices inSpace />
+              {!hood && <RelayDown />}
+              {onApps && (
                 <div className="phone-only" style={{ marginBottom: 16 }}>
                   <Privacy space={space} />
                   {status && (
                     <div style={{ marginTop: 6 }}>
-                      <WhoIsHere status={status} people={people} onOpen={() => goHood('network')} />
+                      <WhoIsHere
+                        status={status}
+                        people={people}
+                        onOpen={() => go('/spaces/$spaceId/network')}
+                      />
                     </div>
                   )}
                 </div>
@@ -441,9 +532,9 @@ export function SpaceView({
                     : "You're following this space: you can see it but not change it. Someone who runs it can give you a role."}
                 </p>
               )}
-              {status && status.rejected > 0 && view.kind !== 'app' && (
+              {status && status.rejected > 0 && !onApp && (
                 <button
-                  onClick={() => goHood('network')}
+                  onClick={() => go('/spaces/$spaceId/network')}
                   style={{
                     ...styles.badge,
                     color: palette.accent.danger,
@@ -457,121 +548,36 @@ export function SpaceView({
                 </button>
               )}
 
-              {view.kind === 'hood' && (
+              {hood && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
                   <div role="tablist" aria-label="Under the hood" className="segmented phone-only scroll-x">
                     {HOOD.map((h) => (
-                      <button
-                        key={h.id}
-                        role="tab"
-                        aria-selected={view.hood === h.id}
-                        onClick={() => goHood(h.id)}
-                      >
+                      <button key={h.id} role="tab" aria-selected={hood.id === h.id} onClick={() => go(h.to)}>
                         <Icon name={h.icon} size={14} />
                         {h.label}
                       </button>
                     ))}
                   </div>
-                  {HOOD.map(
-                    (h) =>
-                      h.id === view.hood &&
-                      'about' in h && (
-                        <p key={h.id} style={{ fontSize: 13, color: palette.ink.muted }}>
-                          {h.about}
-                        </p>
-                      ),
-                  )}
+                  {'about' in hood && <p style={{ fontSize: 13, color: palette.ink.muted }}>{hood.about}</p>}
                 </div>
               )}
 
-              {view.kind === 'apps' && (
-                <AppsView
-                  space={space}
-                  collections={collections}
-                  apps={apps}
-                  unread={unread}
-                  mayDefine={mayDefine}
-                  onOpenApp={openApp}
-                  onCreate={() => setView({ kind: 'new' })}
-                />
-              )}
-              {view.kind === 'new' && (
-                <NewApp
-                  space={space}
-                  collections={collections}
-                  apps={apps}
-                  mayDefine={mayDefine}
-                  onOpenApp={openApp}
-                  onOwn={() => setCreating(true)}
-                />
-              )}
-              {open && view.kind === 'app' && (
-                <OpenApp
-                  key={open.id}
-                  space={space}
-                  app={open}
-                  collections={collections}
-                  since={view.since}
-                  onOpen={openRecord}
-                />
-              )}
-              {view.kind === 'app' && !open && !apps.loading && (
-                <p style={styles.emptyState}>This app isn't in the space any more.</p>
-              )}
-              {view.kind === 'more' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {SECTIONS.filter((section) => section.kind !== 'people').map((section) => (
-                    <MoreRow
-                      key={section.kind}
-                      icon={section.icon}
-                      label={section.label}
-                      onClick={() => setView({ kind: section.kind })}
-                    />
-                  ))}
-                  <SideHeading>Under the hood</SideHeading>
-                  {HOOD.map((h) => (
-                    <MoreRow key={h.id} icon={h.icon} label={h.label} quiet onClick={() => goHood(h.id)} />
-                  ))}
-                </div>
-              )}
-              {view.kind === 'people' && <RolesView space={space} collections={collections} />}
-              {view.kind === 'hosting' && (
-                <HostingView space={space} onAutomations={() => setView({ kind: 'automations' })} />
-              )}
-              {view.kind === 'automations' && <AutomationsView space={space} collections={collections} />}
-              {view.kind === 'hood' && view.hood === 'data' && (
-                <DataView
-                  space={space}
-                  collections={collections}
-                  place={place}
-                  onPlace={setPlace}
-                  onOpen={openRecord}
-                />
-              )}
-              {view.kind === 'hood' && view.hood === 'explore' && (
-                <GraphView space={space} collections={collections} />
-              )}
-              {view.kind === 'hood' && view.hood === 'query' && (
-                <QueryPlayground space={space} collections={collections} onOpen={openRecord} />
-              )}
-              {view.kind === 'hood' && view.hood === 'network' && (
-                <NetworkView space={space} status={status} />
-              )}
+              <SpaceScreenContext value={screen}>
+                <Outlet />
+              </SpaceScreenContext>
             </div>
           </div>
         </main>
 
         {/* On a phone the sections move under the thumb, with the way home. */}
         <nav aria-label="This space" className="tabbar">
-          <button onClick={onHome}>
+          <button onClick={goHome}>
             <Icon name="home" size={20} />
             Spaces
           </button>
           <button
-            onClick={() => setView({ kind: 'apps' })}
-            aria-current={
-              view.kind === 'apps' || view.kind === 'app' || view.kind === 'new' ? 'page' : undefined
-            }
+            onClick={() => go('/spaces/$spaceId')}
+            aria-current={onApps || onApp || onNew ? 'page' : undefined}
           >
             <span style={{ position: 'relative', display: 'inline-flex' }}>
               <Icon name="apps" size={20} />
@@ -586,20 +592,13 @@ export function SpaceView({
             </span>
             Apps
           </button>
-          <button
-            onClick={() => setView({ kind: 'people' })}
-            aria-current={view.kind === 'people' ? 'page' : undefined}
-          >
+          <button onClick={() => go('/spaces/$spaceId/people')} aria-current={onPeople ? 'page' : undefined}>
             <Icon name="people" size={20} />
             People
           </button>
           <button
-            onClick={() => setView({ kind: 'more' })}
-            aria-current={
-              view.kind !== 'apps' && view.kind !== 'app' && view.kind !== 'new' && view.kind !== 'people'
-                ? 'page'
-                : undefined
-            }
+            onClick={() => go('/spaces/$spaceId/more')}
+            aria-current={!onApps && !onApp && !onNew && !onPeople ? 'page' : undefined}
           >
             <Icon name="menu" size={20} />
             More
@@ -607,13 +606,13 @@ export function SpaceView({
         </nav>
       </div>
 
-      {place.key && (
+      {record && (
         <RecordPanel
           space={space}
-          recordKey={place.key}
+          recordKey={record}
           collections={collections}
           onOpen={openRecord}
-          onClose={() => setPlace((was) => ({ ...was, key: null }))}
+          onClose={closeRecord}
         />
       )}
 
@@ -622,11 +621,10 @@ export function SpaceView({
           space={space}
           mayDefine={mayDefine}
           onClose={() => setCreating(false)}
-          onReview={() => setView({ kind: 'apps' })}
-          onBuildByHand={() => {
-            goHood('data');
-            setPlace({ collection: NEW, key: null });
-          }}
+          onReview={() => go('/spaces/$spaceId')}
+          onBuildByHand={() =>
+            void navigate({ to: '/spaces/$spaceId/data', params, search: { collection: NEW } })
+          }
         />
       )}
     </PersonScopeProvider>
@@ -634,24 +632,16 @@ export function SpaceView({
 }
 
 /** An open app: a built-in one's own view, or one made for the space */
-function OpenApp({
-  space,
-  app,
-  collections,
-  since,
-  onOpen,
-}: {
-  space: SpaceSummary;
-  app: AppEntry;
-  collections: Parameters<typeof MadeAppScreen>[0]['collections'];
-  since: string;
-  onOpen: (record: NodeRecord) => void;
-}) {
+export function OpenApp({ app }: { app: AppEntry }) {
+  const { space, collections, openRecord } = useSpaceScreen();
+  // What was new when it opened stays marked as new while it is open, though opening marks it seen.
+  const seen = useSeen();
+  const [since] = useState(() => seenAt(seen, space.id, app.id));
   if (app.made)
-    return <MadeAppScreen space={space} record={app.made} collections={collections} onOpen={onOpen} />;
+    return <MadeAppScreen space={space} record={app.made} collections={collections} onOpen={openRecord} />;
   if (!app.builtIn) return null;
   const View = app.builtIn.View;
-  return <View space={space} collections={collections} onOpen={onOpen} since={since} />;
+  return <View space={space} collections={collections} onOpen={openRecord} since={since} />;
 }
 
 /** Who can read the space, in a word */
@@ -678,7 +668,7 @@ function Privacy({ space }: { space: SpaceSummary }) {
   );
 }
 
-function SideHeading({ children }: { children: ReactNode }) {
+export function SideHeading({ children }: { children: ReactNode }) {
   return (
     <span
       style={{
@@ -694,7 +684,7 @@ function SideHeading({ children }: { children: ReactNode }) {
 }
 
 /** A row of a phone's More: a section to open, tall enough for a thumb */
-function MoreRow({
+export function MoreRow({
   icon,
   label,
   quiet,

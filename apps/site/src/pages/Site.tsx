@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { parse, render } from 'sugar-high/core';
 import * as typescript from 'sugar-high/lang/typescript';
 import * as shell from 'sugar-high/lang/shell';
@@ -14,11 +15,13 @@ import './site.css';
 /** Syntax highlighting: sugar-high's core and just the two languages used here */
 const LANGUAGES = { typescript: { ...typescript, typescript: true }, shell } as const;
 
-/** The site's pages (`/`, `/developers`, `/protocol`, `/extension`), sharing the example app's fonts and deploy */
+/** The site's pages (`/`, `/developers`, `/protocol`, `/extension`), on the same design system as the app */
 export const GITHUB = 'https://github.com/leifriksheim/minca';
 export const SPEC = `${GITHUB}/tree/main/spec`;
 /** Links off the site open in a tab of their own */
 export const EXTERNAL = { target: '_blank', rel: 'noreferrer' } as const;
+/** The app, a site of its own (`apps/example`), which every "Open Minca" opens */
+export const APP = import.meta.env.VITE_MINCA_APP ?? 'https://app.minca.social';
 
 type PageName = 'home' | 'developers' | 'protocol' | 'extension';
 
@@ -35,19 +38,19 @@ function Nav({ page }: { page: PageName }) {
   return (
     <header className="nav">
       <div className="wrap">
-        <a href="/" className="brand">
+        <Link to="/" className="brand">
           <Mark />
           minca
-        </a>
+        </Link>
         <nav className="nav-links">
-          <a href="/developers" aria-current={page === 'developers' ? 'page' : undefined}>
+          <Link to="/developers" aria-current={page === 'developers' ? 'page' : undefined}>
             For nerds
-          </a>
+          </Link>
           <a href={GITHUB} {...EXTERNAL}>
             <GitHubMark />
             GitHub
           </a>
-          <a href="/app" className="btn btn-primary" style={{ marginLeft: 8 }}>
+          <a href={APP} className="btn btn-primary" style={{ marginLeft: 8 }}>
             Open Minca
           </a>
         </nav>
@@ -65,17 +68,17 @@ function Footer() {
           Many hands, one minca.
         </span>
         <span style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <a href="/">Communities</a>
-          <a href="/developers">For nerds</a>
-          <a href="/protocol">Protocol</a>
-          <a href="/extension">Chrome extension</a>
+          <Link to="/">Communities</Link>
+          <Link to="/developers">For nerds</Link>
+          <Link to="/protocol">Protocol</Link>
+          <Link to="/extension">Chrome extension</Link>
           <a href={SPEC} {...EXTERNAL}>
             Spec
           </a>
           <a href={GITHUB} {...EXTERNAL}>
             GitHub
           </a>
-          <a href="/app">Open Minca</a>
+          <a href={APP}>Open Minca</a>
         </span>
       </div>
     </footer>
@@ -319,10 +322,9 @@ const STEP_NUMBER: Readonly<Record<string, number>> = {
   'What it proves': 5,
 };
 
-/** The scenario the URL's hash names (`#coop`), or the first */
-function scenarioFromHash(): string {
-  const id = typeof location === 'undefined' ? '' : location.hash.slice(1);
-  return SCENARIOS.some((s) => s.id === id) ? id : (SCENARIOS[0]?.id ?? '');
+/** The scenario a hash names (`coop`), or the first */
+function scenarioFrom(hash: string): string {
+  return SCENARIOS.some((s) => s.id === hash) ? hash : (SCENARIOS[0]?.id ?? '');
 }
 
 /** The index arrow keys, Home and End move to from `index`, or null for any other key */
@@ -461,19 +463,16 @@ function Preset({ name }: { name: Parameters<typeof describePreset>[0] }) {
 
 /** One tab per scenario, the chosen one kept in the URL's hash */
 function Walkthrough() {
-  const [selected, setSelected] = useState(scenarioFromHash);
+  const hash = useLocation({ select: (location) => location.hash });
+  const selected = scenarioFrom(hash);
+  const navigate = useNavigate();
+  const [linked] = useState(() => hash === selected);
   useEffect(() => {
     // A link to #coop opens the walkthrough on the co-op
-    if (location.hash.slice(1) === scenarioFromHash())
-      document.getElementById('walkthrough')?.scrollIntoView();
-    const onHash = () => setSelected(scenarioFromHash());
-    addEventListener('hashchange', onHash);
-    return () => removeEventListener('hashchange', onHash);
-  }, []);
-  const choose = (id: string) => {
-    setSelected(id);
-    history.replaceState(null, '', `#${id}`);
-  };
+    if (linked) document.getElementById('walkthrough')?.scrollIntoView();
+  }, [linked]);
+  const choose = (id: string) =>
+    void navigate({ hash: id, replace: true, resetScroll: false, hashScrollIntoView: false });
   return (
     <>
       <div className="split walk-step">
@@ -540,7 +539,7 @@ export function Developers() {
               <span>$</span>
               <code>npm install @minca/core</code>
             </span>
-            <a href="/app" className="btn btn-secondary">
+            <a href={APP} className="btn btn-secondary">
               See the example app
             </a>
           </div>
@@ -665,12 +664,12 @@ export function Developers() {
             A general app for any Minca data — every screen worked out from what a space says about itself.
           </p>
           <div className="actions">
-            <a href="/app" className="btn btn-primary">
+            <a href={APP} className="btn btn-primary">
               Open the example app
             </a>
-            <a href="/protocol" className="btn btn-secondary">
+            <Link to="/protocol" className="btn btn-secondary">
               How it works
-            </a>
+            </Link>
           </div>
         </div>
       </section>

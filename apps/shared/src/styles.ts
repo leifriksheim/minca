@@ -10,7 +10,7 @@ import { accent, display, font, ink, mono, radius, shadow, shapeColours, surface
  * (a card, a frame, the nav, a secondary button) has round corners and the
  * navy rule; hairlines only separate things inside a surface; controls are
  * pills; only what floats casts a soft navy shadow. The landing page
- * (`apps/example/src/site`) draws the same pieces. Colour beyond that comes from the shapes (`shapes.tsx`), never
+ * (`apps/site`) draws the same pieces. Colour beyond that comes from the shapes (`shapes.tsx`), never
  * from the chrome, so nothing competes with what people put in their spaces.
  *
  * Inline styles cannot express hover, focus or placeholders, so those live in

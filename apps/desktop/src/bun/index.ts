@@ -156,7 +156,7 @@ function openHome() {
 function openApp() {
   if (app) return app.activate();
   Utils.setDockIconVisible(true);
-  app = bridge.openWindow(`${APP_URL}/app`, { width: 1200, height: 820 });
+  app = bridge.openWindow(`${APP_URL}/`, { width: 1200, height: 820 });
 }
 
 // The carrier. Its folder is a setting (`settings.json`, `carrierFolder`), in the

@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import type { ContactView, P2PNode } from '@minca/core';
 import { useLive, useNode } from '@minca/core/react';
 
-/** A link that knocks on a door: this app, with the code after `#door=` */
+/** A link that knocks on a door: this app's contacts, with the code after `#door=` */
 export function doorLink(code: string): string {
-  return `${globalThis.location.origin}/app#door=${code}`;
+  return `${globalThis.location.origin}/contacts#door=${code}`;
 }
 
 /** The door code in this page's URL, if someone opened a door link */
