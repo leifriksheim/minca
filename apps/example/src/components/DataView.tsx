@@ -164,7 +164,14 @@ export function DataView({
             onOpen={(name) => onPlace({ collection: name, key: null })}
           />
         ) : selected ? (
-          <CollectionView key={selected} space={space} name={selected} collection={current} onOpen={onOpen} />
+          <CollectionView
+            key={selected}
+            space={space}
+            name={selected}
+            collection={current}
+            collections={collections}
+            onOpen={onOpen}
+          />
         ) : (
           <div
             style={{

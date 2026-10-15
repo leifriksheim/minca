@@ -23,7 +23,7 @@ import {
   versionType,
   type CelType,
 } from './cel-types.js';
-import { checkContracts, checkContractTypes, type Contract } from './contracts.js';
+import { checkContracts, checkContractTypes, type CollectionContract, type Contract } from './contracts.js';
 
 // -- Types --------------------------------------------------------------------
 
@@ -56,7 +56,7 @@ interface LinkValue {
 
 type Literal = string | number | boolean | null;
 type Operand = Literal | CelExpr | ReadonlyArray<Literal | CelExpr>;
-type BoolLike = boolean | BoolExpr | DynExpr;
+export type BoolLike = boolean | BoolExpr | DynExpr;
 type NumberLike = number | NumExpr | IntExpr | DynExpr;
 type StringLike<S extends string = string> = S | StrExpr<S> | DynExpr;
 type TypeOf<R> = R extends CelExpr<infer T> ? T : unknown;
@@ -253,7 +253,16 @@ export interface ContractContext<B> {
   /** The account that wrote the record's first version */
   readonly creator: StrExpr;
   readonly createdAt: StrExpr;
-  /** The versions cited by these ids, in order: generic until narrowed with `.of(collection)` */
+  /**
+   * The versions cited by these ids that are in `collection`, typed from its
+   * schema: `cited(body.votes, vote)`. Versions of any other collection are
+   * left out, so a claim can't pass on something else cited in their place.
+   */
+  readonly cited: <L extends Linking>(
+    ids: ListExpr<string> | ReadonlyArray<StringLike> | DynExpr,
+    collection: L,
+  ) => ListExpr<Cited<BodyIn<L>>>;
+  /** The versions cited by these ids, in order: generic until narrowed with `.of(collection)`. `cited` is usually what you want */
   readonly versions: (
     ids: ListExpr<string> | ReadonlyArray<StringLike> | DynExpr,
   ) => ListExpr<Cited<unknown>>;
@@ -506,6 +515,20 @@ function context(body: CelType): Record<string, unknown> {
     creator: name('creator', STRING),
     createdAt: name('createdAt', STRING),
     versions: (ids: unknown) => call('versions', [operand(ids, listOf(STRING))], listOf(versionType(DYN))),
+    cited: (ids: unknown, collection: unknown) => {
+      const name = nameOfLinking(collection);
+      const list = built(
+        `versions(${operand(ids, listOf(STRING)).text})`,
+        MEMBER,
+        listOf(versionType(bodyType(collection))),
+      );
+      return macro(
+        list,
+        'filter',
+        (v: unknown) => binary(fieldOf(v, 'collection'), '==', operand(name, STRING), REL, BOOL),
+        () => list.type,
+      );
+    },
     link: (rel: unknown) => call('link', [operand(rel, STRING)], STRING),
     member: (did: unknown) => call('member', [operand(did, STRING)], BOOL),
     hash: (value: unknown) => call('hash', [operand(value, DYN)], STRING),
@@ -560,4 +583,207 @@ export function contract<C extends Schematic>(
   const problem = checkContracts([made], 'contract') ?? checkContractTypes([made], json, 'contract');
   if (problem) throw new Error(`${problem}\n  in: ${made.that}`);
   return made;
+}
+
+// -- In a collection ----------------------------------------------------------
+
+/** A collection by name, or by its definition, which carries its schema and links */
+type Linking = string | { readonly name: string };
+
+function nameOfLinking(x: unknown): string {
+  if (typeof x === 'string') return x;
+  if (isObject(x) && typeof x.name === 'string') return x.name;
+  throw new Error('a collection is its name, or its definition');
+}
+
+/** The built part of a field selected on an expression made here */
+function fieldOf(on: unknown, name: string): Built {
+  const field: unknown = isObject(on) ? Reflect.get(on, name) : undefined;
+  if (!isExpr(field)) throw new Error(`${name} is not a field here`);
+  return field['~cel'];
+}
+
+type LinksOf<L> = L extends { readonly links?: infer X } ? NonNullable<X> : Record<never, never>;
+type PointsAt<D, N extends string> = D extends { readonly to: infer T }
+  ? T extends '*'
+    ? true
+    : string extends N
+      ? true
+      : T extends ReadonlyArray<infer E>
+        ? N extends E
+          ? true
+          : string extends E
+            ? true
+            : false
+        : true
+  : true;
+/** The link roles of `L` whose records may point at collection `N` */
+export type RolesTo<L, N extends string> = L extends string
+  ? string
+  : {
+      [K in keyof LinksOf<L> & string]: PointsAt<LinksOf<L>[K], N> extends true ? K : never;
+    }[keyof LinksOf<L> & string];
+
+/** What a computed field reads of its record, and the functions it calls */
+export interface ComputedContext<B, N extends string = string> {
+  readonly body: Expr<B>;
+  readonly links: ListExpr<LinkValue>;
+  readonly key: StrExpr;
+  readonly seq: IntExpr;
+  readonly collection: StrExpr;
+  /** The account that wrote this version */
+  readonly author: StrExpr;
+  /** The account that wrote the record's first version */
+  readonly creator: StrExpr;
+  /** When the record was made, by its creator's clock */
+  readonly createdAt: StrExpr;
+  /** When this version was written, by its writer's clock */
+  readonly updatedAt: StrExpr;
+  /**
+   * The records of `collection` that link to this one with role `rel`, as
+   * this node holds them: `linked(reaction, 'on')`. Pass the definition, and
+   * `rel` is one of its link roles that may point here, and each record's
+   * body is typed from its schema.
+   */
+  readonly linked: <L extends Linking>(collection: L, rel: RolesTo<L, N>) => ListExpr<Cited<BodyIn<L>>>;
+  /** What this record's first link with that role points at, or null */
+  readonly link: (rel: string) => StrExpr;
+  readonly hash: (value: Operand) => StrExpr;
+  /** `has(body.note)`: whether a field is there */
+  readonly has: (field: CelExpr) => BoolExpr;
+  /** `test ? then : otherwise` */
+  readonly when: <R extends CelExpr>(test: BoolLike, then: R | Literal, otherwise: R | Literal) => R;
+  /** CEL written by hand, for what the builder doesn't cover. Its type is yours to say */
+  readonly raw: <T = unknown>(cel: string) => Expr<T>;
+}
+
+/** What a computed-fields builder gives: each field's expression, or a constant */
+export type ComputedResult = Readonly<Record<string, CelExpr | Literal>>;
+
+type ValueOf<X> =
+  X extends CelExpr<infer T>
+    ? [T] extends [CelInt]
+      ? number
+      : [T] extends [ReadonlyArray<CelInt>]
+        ? number[]
+        : T
+    : X;
+
+/**
+ * What a record's computed fields hold, from what the builder gives. Null
+ * where a field can't be worked out for a record, as when a body lacks a
+ * field it reads.
+ */
+export type ComputedOf<M> = { readonly [K in keyof M]: ValueOf<M[K]> | null };
+
+/** A definition's schema and name, as the builders need them */
+interface Building {
+  readonly name: string;
+  readonly schema: unknown;
+}
+
+/**
+ * A collection's computed fields, built in TypeScript: what `define` stores
+ * for `computed: ({ linked }) => ({ … })`.
+ */
+function buildComputed(
+  definition: Building,
+  fields: (scope: never) => unknown,
+): Readonly<Record<string, string>> {
+  const json = schemaOf(definition);
+  const self = definition.name;
+  const scope: Record<string, unknown> = {
+    ...context(typeOfSchema(json)),
+    updatedAt: expr(built('updatedAt', MEMBER, STRING)),
+    linked: (collection: unknown, rel: unknown) => {
+      const name = nameOfLinking(collection);
+      if (typeof rel !== 'string') throw new Error(`linked(${name}, …) takes a link role, like "on"`);
+      const links: unknown = isObject(collection) ? collection.links : undefined;
+      if (isObject(links)) {
+        const role: unknown = Object.hasOwn(links, rel) ? links[rel] : undefined;
+        if (!isObject(role)) {
+          const roles = Object.keys(links).map((r) => `"${r}"`);
+          throw new Error(
+            `${name} declares no link role "${rel}"; it declares ${roles.join(', ') || 'none'}`,
+          );
+        }
+        const to = role.to;
+        if (Array.isArray(to) && !to.includes(self))
+          throw new Error(`${name}'s "${rel}" links point at ${to.join(', ')}, not ${self}`);
+      }
+      return call(
+        'linked',
+        [operand(name, STRING), operand(rel, STRING)],
+        listOf(versionType(bodyType(collection))),
+      );
+    },
+  };
+  // What only a contract reads: the version before, and what a version cites.
+  for (const name of ['prev', 'versions', 'cited', 'member']) Reflect.deleteProperty(scope, name);
+  depth = 0;
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the builder's own scope, made at run time to match ComputedContext
+  const made = fields(scope as never);
+  if (!isObject(made) || Array.isArray(made))
+    throw new Error(
+      'computed: ({ linked }) => ({ … }) gives an object: each field, and how it is worked out',
+    );
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(made)) {
+    try {
+      out[name] = operand(value, DYN).text;
+    } catch (error) {
+      throw new Error(`computed.${name}: ${error instanceof Error ? error.message : String(error)}`, {
+        cause: error,
+      });
+    }
+  }
+  return Object.freeze(out);
+}
+
+/**
+ * A collection's contract conditions, built in TypeScript: what `define`
+ * stores for `contract: { check: ({ body }) => ({ 'Why it is refused': condition }) }`.
+ * Each key says why a version that fails its condition doesn't count.
+ */
+function buildChecks(definition: Building, checks: (scope: never) => unknown): ReadonlyArray<Contract> {
+  const json = schemaOf(definition);
+  depth = 0;
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the builder's own scope, made at run time to match ContractContext
+  const made = checks(context(typeOfSchema(json)) as never);
+  if (!isObject(made) || Array.isArray(made))
+    throw new Error(
+      "contract.check: ({ body }) => ({ 'Why it is refused': condition }) gives an object: each condition, under why a version failing it doesn't count",
+    );
+  const out: Contract[] = Object.entries(made).map(([why, that]) =>
+    Object.freeze({ that: operand(that, BOOL).text, else: why }),
+  );
+  const problem = checkContracts(out, 'contract.check') ?? checkContractTypes(out, json, 'contract.check');
+  if (problem) throw new Error(problem);
+  return Object.freeze(out);
+}
+
+/** What `storedContract` and `storedComputed` read of a definition */
+interface Defining extends Building {
+  readonly contract?: {
+    readonly check?: ReadonlyArray<Contract> | ((scope: never) => unknown);
+    readonly line?: unknown;
+  };
+  readonly computed?: Readonly<Record<string, string>> | ((scope: never) => unknown);
+}
+
+/** A definition's contract as stored: conditions built in TypeScript become their CEL */
+export function storedContract(definition: Defining): CollectionContract | undefined {
+  const given = definition.contract;
+  if (given === undefined) return undefined;
+  const { check, ...rest } = given;
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- kept as written, unknown keys and all, for checkContractShape to judge
+  const kept = rest as CollectionContract;
+  if (check === undefined) return kept;
+  return { ...kept, check: typeof check === 'function' ? buildChecks(definition, check) : check };
+}
+
+/** A definition's computed fields as stored: fields built in TypeScript become their CEL */
+export function storedComputed(definition: Defining): Readonly<Record<string, string>> | undefined {
+  const given = definition.computed;
+  return typeof given === 'function' ? buildComputed(definition, given) : given;
 }

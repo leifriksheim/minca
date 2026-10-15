@@ -6,7 +6,8 @@
  */
 import * as z from 'zod';
 import type { Contract } from '../../packages/core/src/records/contracts.js';
-import { contract } from '../../packages/core/src/records/contract-builder.js';
+import { storedContract } from '../../packages/core/src/records/contract-builder.js';
+import { collection } from '../../packages/core/src/schema/collection-def.js';
 import type { DefineCollection } from '../../packages/core/src/node/types.js';
 import type { Version } from '../../packages/core/src/types.js';
 import { communityNode } from '../../packages/core/tests/helpers/community.js';
@@ -20,23 +21,26 @@ const Fame = z.object({ reactions: z.array(z.string()) });
 
 const ELSE = "A comment enters the hall of fame with 5 different people's 🙂";
 
-/** Built in TypeScript, typed from the schemas */
-const famous: Contract = contract(
-  Fame,
-  ({ body, versions, link }) =>
-    versions(body.reactions)
-      .of(Reaction)
-      .where((r) =>
-        r.collection
-          .eq('app.reaction')
-          .and(r.deleted.not(), r.link('on').eq(link('on')), r.body.emoji.eq('🙂')),
-      )
-      .map((r) => r.author)
-      .distinct()
-      .count()
-      .gte(5),
-  ELSE,
-);
+const on = { on: { to: ['app.comment'], cardinality: 'one' as const } };
+const reaction = collection({ name: 'app.reaction', schema: Reaction, links: on });
+
+/** Built in TypeScript, in the collection, typed from the schemas */
+const fame = collection({
+  name: 'app.fame',
+  schema: Fame,
+  links: on,
+  contract: {
+    check: ({ body, cited, link }) => ({
+      [ELSE]: cited(body.reactions, reaction)
+        .where((r) => r.deleted.not().and(r.link('on').eq(link('on')), r.body.emoji.eq('🙂')))
+        .map((r) => r.author)
+        .distinct()
+        .count()
+        .gte(5),
+    }),
+  },
+});
+const famous: Contract = storedContract(fame)!.check![0]!;
 
 /** The same, written by hand: the tests check that both give the same verdicts */
 const famousByHand: Contract = {
@@ -46,10 +50,9 @@ const famousByHand: Contract = {
 
 export const claimContracts = { built: famous, 'by hand': famousByHand } as const;
 
-const on = { on: { to: ['app.comment'], cardinality: 'one' as const } };
 const collections = (claim: Contract): DefineCollection[] => [
   { name: 'app.comment', schema: Comment },
-  { name: 'app.reaction', schema: Reaction, links: on },
+  reaction,
   { name: 'app.fame', schema: Fame, links: on, contract: { check: [claim] } },
 ];
 

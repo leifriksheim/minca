@@ -47,7 +47,7 @@ describe('an automation that asks the model', () => {
     const prompt = triggerPrompt(
       {
         automation: { space, key: 'automation-key', maker: node.did, body },
-        match: { record: { ...record, included: {} }, included: {}, moment: 0 },
+        match: { record: { ...record, included: {}, computed: {} }, included: {}, moment: 0 },
       },
       'NOTE: data follows',
     );
@@ -58,7 +58,7 @@ describe('an automation that asks the model', () => {
     // What it would ask for first is looked up already: what the space holds, and where it may write.
     const trigger = {
       automation: { space, key: 'automation-key', maker: node.did, body },
-      match: { record: { ...record, included: {} }, included: {}, moment: 0 },
+      match: { record: { ...record, included: {}, computed: {} }, included: {}, moment: 0 },
     };
     const context = await ruleContext(node, trigger);
     const told: unknown = JSON.parse(context);
@@ -202,7 +202,7 @@ describe('a bot', () => {
           since: new Date().toISOString(),
         },
       },
-      match: { record: { ...record, included: {} }, included: {}, moment: 0 },
+      match: { record: { ...record, included: {}, computed: {} }, included: {}, moment: 0 },
     });
     const told: unknown = JSON.parse(context);
     assert.ok(typeof told === 'object' && told !== null && 'thread' in told && Array.isArray(told.thread));
@@ -254,7 +254,7 @@ describe('a bot', () => {
     };
     const trigger = await openTrigger(bot, {
       automation: { space, key: 'automation-key', maker: admin.did, body },
-      match: { record: { ...record, included: {} }, included: {}, moment: 0 },
+      match: { record: { ...record, included: {}, computed: {} }, included: {}, moment: 0 },
     });
     assert.deepEqual(trigger.match?.record.body, {
       from: admin.did,
@@ -311,7 +311,7 @@ describe('a bot', () => {
       assert.ok(record);
       return {
         automation: { space, key: 'automation-key', maker: admin.did, body },
-        match: { record: { ...record, included: {} }, included: {}, moment: 0 },
+        match: { record: { ...record, included: {}, computed: {} }, included: {}, moment: 0 },
       };
     };
     const runner = { account: bot.did, bot: true };
@@ -374,7 +374,7 @@ describe('a bot', () => {
       };
       return {
         automation: { space, key: 'automation-key', maker: admin.did, body },
-        match: { record: { ...record, included: {} }, included: {}, moment: 0 },
+        match: { record: { ...record, included: {}, computed: {} }, included: {}, moment: 0 },
       };
     };
     // A moderator may instruct bots, but not an admin's: it would act with more than she holds.

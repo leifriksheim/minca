@@ -200,7 +200,12 @@ export {
   toJsonSchema,
   collection,
 } from './schema/collection-def.js';
-export type { StoredCollection, JsonSchema, SchemaIssue } from './schema/collection-def.js';
+export type {
+  StoredCollection,
+  JsonSchema,
+  SchemaIssue,
+  CollectionDefinition,
+} from './schema/collection-def.js';
 export { titleField, recordTitle, quickAddBody } from './schema/quick-add.js';
 export type { Membership } from './space/account-registry.js';
 export type {
@@ -466,6 +471,17 @@ export type {
 
 // Queries: plain-data filters, sorting, paging and includes over a space
 export { runQuery } from './query/engine.js';
+export { checkComputed, computedSchemas } from './query/computed.js';
+export type { ComputedFields, ComputedValues } from './query/computed.js';
+export type {
+  ComputedIn,
+  FilterOf,
+  IncludeMap,
+  OperatorsFor,
+  ResultFor,
+  SortOf,
+  TypedFilter,
+} from './query/types.js';
 export type { QuerySource } from './query/engine.js';
 export {
   matches,
@@ -507,6 +523,11 @@ export type {
   CelInt,
   Cited,
   ContractContext,
+  ComputedContext,
+  ComputedOf,
+  ComputedResult,
+  BoolLike,
+  RolesTo,
   Expr,
   BoolExpr,
   NumExpr,

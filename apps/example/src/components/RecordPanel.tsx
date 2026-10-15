@@ -8,6 +8,7 @@ import {
   byRel,
   choicesFrom,
   collectionLabel,
+  computedFieldsOf,
   fieldsOf,
   humanize,
   labelOf,
@@ -15,6 +16,7 @@ import {
   tally,
   textOf,
   titleField,
+  valueOf,
   type Field,
   type LinkedByRel,
 } from '../derive/schema-ui';
@@ -81,12 +83,23 @@ export function RecordPanel({
     async () => {
       const record = await node.records.get(space.id, recordKey);
       const linked = await node.records.linked(space.id, recordKey);
+      // Its computed fields come with a query, worked out from what this device holds.
+      const definition = record ? collections.find((c) => c.name === record.collection) : undefined;
+      const computed =
+        record && definition?.computed && Object.keys(definition.computed).length > 0
+          ? ((
+              await node.records.query(space.id, {
+                collection: record.collection,
+                where: { '@key': record.key },
+              })
+            ).records[0]?.computed ?? {})
+          : {};
       const targets = record
         ? await Promise.all(
             record.links.map(async (link) => ({ link, target: await node.records.get(space.id, link.to) })),
           )
         : [];
-      return { record, linked, targets };
+      return { record, linked, targets, computed };
     },
     [recordKey],
   );
@@ -100,6 +113,7 @@ export function RecordPanel({
   const body = bodyOf(record);
   const title = titleField(schema);
   const fields = fieldsOf(schema).filter((f) => f.name !== title);
+  const computed = computedFieldsOf(collection, collections);
   const extra = Object.keys(body).filter((k) => k !== title && !fieldsOf(schema).some((f) => f.name === k));
   const linkedHere: LinkedByRel =
     record && data
@@ -247,6 +261,19 @@ export function RecordPanel({
               {extra.map((name) => (
                 <Property key={name} label={humanize(name)}>
                   <Value value={body[name]} />
+                </Property>
+              ))}
+              {computed.map((f) => (
+                <Property key={f.name} label={`${f.label} ƒ`}>
+                  <span
+                    title={`Worked out by this device from what it holds — no one wrote it.\n${collection?.computed?.[f.name] ?? ''}`}
+                  >
+                    <Value
+                      field={f}
+                      value={valueOf({ body, computed: data.computed }, f)}
+                      linked={linkedHere}
+                    />
+                  </span>
                 </Property>
               ))}
               {/* Each kind of link the definition allows, with what this record points at in it */}

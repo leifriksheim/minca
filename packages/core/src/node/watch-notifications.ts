@@ -5,11 +5,15 @@
  *
  * They live in the account registry (`space/own-automations.ts`), which a
  * node given the whole account can open. This reads the ones naming the app,
- * follows every space they look at, and hands each new record that matches
- * to the app — which decides how to show it. What was already there when it
- * started is never news.
+ * follows every space they look at, and hands each record that comes to
+ * match to the app — which decides how to show it. A record comes to match
+ * when it is written, or when something its computed fields read is: a new
+ * 👍 can make a todo done. Each record is news once per automation, however
+ * often it is edited out and back in. What already matched when it started is
+ * never news.
  */
-import { matchesRecord, ownQuery } from '../space/own-automations.js';
+import { holdsFor, ownQuery, setsOff, type Trigger } from '../space/own-automations.js';
+import { causeOf, linkedReads, namedComputed } from '../query/computed.js';
 import type { NodeRecord, OwnAutomationView, P2PNode } from './types.js';
 import { serial } from '../utils/serial.js';
 
@@ -39,33 +43,56 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
   let stopped = false;
   let automations: ReadonlyArray<OwnAutomationView> = [];
   let spaces = new Set<string>();
-  /** Record keys already seen, by space and collection: anything else is new */
-  const seen = new Map<string, Set<string>>();
+  /** The records each automation has held for, by space: one that joins them is news, once */
+  const holding = new Map<string, Set<string>>();
   /** Spaces with a change not yet looked at; null means the automations or spaces changed */
   const dirty = new Set<string | null>([null]);
 
-  const collectionsIn = (space: string) =>
-    new Set(
-      automations
-        .filter((own) => own.spaces === undefined || own.spaces === 'all' || own.spaces.includes(space))
-        .map((own) => ownQuery(own).collection),
+  const lookingAt = (space: string) =>
+    automations.filter(
+      (own) => own.spaces === undefined || own.spaces === 'all' || own.spaces.includes(space),
     );
 
-  /** Hands on what is new in one collection; the first look at one only learns what is there */
-  async function look(space: string, collection: string): Promise<void> {
-    const where = `${space}\n${collection}`;
-    const first = !seen.has(where);
-    const known = seen.get(where) ?? new Set<string>();
-    seen.set(where, known);
-    const records = await node.records.list(space, { collection, newestFirst: true, limit: LOOK_BACK });
+  /** Hands on each record an automation has come to hold for; the first look in a space only learns which */
+  async function look(space: string, own: OwnAutomationView): Promise<void> {
+    const at = `${space}\n${own.id}`;
+    const first = !holding.has(at);
+    const held = holding.get(at) ?? new Set<string>();
+    holding.set(at, held);
+    const { collection, where } = ownQuery(own);
+    const fields = (await node.collections.list(space)).find((c) => c.name === collection)?.computed ?? {};
+    // Only the fields the filter names: what the others read can't change whether it holds.
+    const named = namedComputed(fields, where);
+    const reads = Object.keys(named).length > 0;
+    // The newest records, and those the newest of what their computed fields read link to.
+    const newest = (name: string) =>
+      node.records.list(space, { collection: name, newestFirst: true, limit: LOOK_BACK });
+    const keys = new Set((await newest(collection)).map((r) => r.key));
+    for (const { collection: from, rel } of linkedReads(named)) {
+      for (const r of await newest(from)) for (const link of r.links) if (link.rel === rel) keys.add(link.to);
+    }
+    if (keys.size === 0) return;
+    const { records } = await node.records.query(space, {
+      collection,
+      where: { '@key': { $in: [...keys] } },
+    });
+    const linked = (key: string, o: { rel?: string; collection?: string }) =>
+      node.records.linked(space, key, o);
     for (const record of records) {
-      if (known.has(record.key)) continue;
-      known.add(record.key);
+      if (stopped) return;
+      if (!holdsFor(own, record, node.did) || held.has(record.key)) continue;
+      held.add(record.key);
       if (first) continue;
-      for (const automation of automations) {
-        if (stopped) return;
-        if (matchesRecord(automation, record, node.did)) options.onNotify({ automation, record });
-      }
+      // What made it hold, not what came last: a 😡 after the second 👍 tells no one anything.
+      const cause = reads
+        ? await causeOf({ linked }, record, named, (computed) =>
+            holdsFor(own, { ...record, computed }, node.did),
+          )
+        : record;
+      if (!cause) continue;
+      const trigger: Trigger =
+        cause === record ? record : { createdAt: cause.updatedAt, createdBy: cause.root ?? cause.createdBy };
+      if (setsOff(own, space, trigger, node.did)) options.onNotify({ automation: own, record });
     }
   }
 
@@ -74,7 +101,7 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
     spaces = new Set((await node.spaces.list()).map((space) => space.id));
     // Anything newly looked at starts from what is there now. What was looked at before still
     // reports what arrived since: the account changes all the time, and that is no reason to drop news.
-    for (const space of spaces) for (const collection of collectionsIn(space)) await look(space, collection);
+    for (const space of spaces) for (const own of lookingAt(space)) await look(space, own);
   }
 
   // One look at a time; asked meanwhile, it looks once more after.
@@ -86,7 +113,7 @@ export function watchNotifications(node: P2PNode, options: WatchNotificationsOpt
       if (changed.includes(null)) await reload();
       for (const space of changed) {
         if (space === null || !spaces.has(space)) continue;
-        for (const collection of collectionsIn(space)) await look(space, collection);
+        for (const own of lookingAt(space)) await look(space, own);
       }
     } catch (error) {
       options.onError?.(error);

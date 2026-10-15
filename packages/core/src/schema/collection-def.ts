@@ -34,24 +34,87 @@ import type { StandardJSONSchemaV1, StandardSchemaV1 } from '../types.js';
 import { LINK_REL_PATTERN, type LinkDeclaration } from '../records/links.js';
 import type { DefineCollection } from '../node/types.js';
 import { checkRules, type CollectionRules } from '../records/rules.js';
-import type { CollectionContract } from '../records/contracts.js';
+import type { CollectionContract, Contract, Line } from '../records/contracts.js';
+import type { ComputedFields } from '../query/computed.js';
+import type {
+  BoolLike,
+  ComputedContext,
+  ComputedResult,
+  ContractContext,
+} from '../records/contract-builder.js';
+import type { BodyOf } from '../query/types.js';
 import { checkTopics } from '../records/topics.js';
 import { isObject, isRecord } from '../utils/guards.js';
 
 export type JsonSchema = { readonly [keyword: string]: unknown };
 
+type BodyOfSchema<S> = BodyOf<{ readonly schema: S }>;
+
 /**
- * A collection definition, kept exactly as written: its validator's type
- * comes along, so querying or writing with it is typed, and its rules stay
- * the literals `define` expects.
+ * A collection definition as `collection()` takes it: its computed fields and
+ * contract built in TypeScript, typed from its own schema and name.
+ */
+export interface CollectionDefinition<
+  N extends string = string,
+  S = JsonSchema | StandardJSONSchemaV1,
+  L = Readonly<Record<string, LinkDeclaration>>,
+  M extends ComputedResult = ComputedResult,
+> extends Omit<DefineCollection, 'name' | 'schema' | 'links' | 'computed' | 'contract'> {
+  readonly name: N;
+  readonly schema: S;
+  readonly links?: L;
+  /**
+   * Values every app derives the same way from what links to its records:
+   * `({ linked }) => ({ thumbs: linked(reaction, 'on').count() })`. A view of
+   * what a node holds, not a verdict (packages/core/docs/computed.md).
+   */
+  readonly computed?: ComputedFields | ((scope: ComputedContext<BodyOfSchema<S>, N>) => M);
+  /**
+   * What a version must be to count, judged by every reader:
+   * `check: ({ body }) => ({ 'Why it is refused': body.amount.gte(0) })`, and
+   * whether the collection is a `line` (packages/core/docs/contracts.md).
+   */
+  readonly contract?: {
+    readonly check?:
+      | ReadonlyArray<Contract>
+      | ((scope: ContractContext<BodyOfSchema<S>>) => Readonly<Record<string, BoolLike>>);
+    readonly line?: Line;
+  };
+}
+
+/** Computed fields named like a body field: a query reads a computed field by its bare name */
+type Clash<S, M> = string extends keyof NonNullable<BodyOfSchema<S>>
+  ? never
+  : Extract<keyof M, keyof NonNullable<BodyOfSchema<S>>> & string;
+type NoClash<S, M> = [Clash<S, M>] extends [never]
+  ? unknown
+  : { readonly computed: `"${Clash<S, M>}" is a body field too: give the computed field another name` };
+
+/**
+ * A collection definition, kept as written: its validator's type comes along,
+ * so querying or writing with it is typed, and its computed fields and
+ * contract are typed from its schema, its name and the collections they read.
  *
  * ```ts
- * const polls = collection({ name: 'app.poll', schema: Poll, rules: { edit: 'creator' } });
- * await node.collections.define(space.id, polls);
- * const { records } = await node.records.query(space.id, { collection: polls }); // bodies are z.infer<typeof Poll>
+ * const todo = collection({
+ *   name: 'app.todo',
+ *   schema: z.object({ text: z.string() }),
+ *   computed: ({ linked }) => {
+ *     const thumbs = linked(reaction, 'on').where((r) => r.body.emoji.eq('👍')).count();
+ *     return { thumbs, done: thumbs.gte(2) };
+ *   },
+ * });
+ * await node.collections.define(space.id, todo);
+ * const { records } = await node.records.query(space.id, { collection: todo });
+ * records[0]?.computed.done; // boolean | null
  * ```
  */
-export function collection<const C extends DefineCollection>(definition: C): C {
+export function collection<
+  const N extends string,
+  const S extends JsonSchema | StandardJSONSchemaV1,
+  const L extends Readonly<Record<string, LinkDeclaration>> = Record<never, never>,
+  const M extends ComputedResult = Record<never, never>,
+>(definition: CollectionDefinition<N, S, L, M> & NoClash<S, M>): CollectionDefinition<N, S, L, M> {
   return definition;
 }
 
@@ -120,6 +183,12 @@ export interface StoredCollection {
    * collection)`. Judged by readers (spec 09); peers keep it and don't read it.
    */
   readonly contract?: CollectionContract;
+  /**
+   * Values derived from the records a node holds, the same way in every app:
+   * counts of linked records, and filters over them. Not protocol: peers keep
+   * it and never read it (packages/core/docs/computed.md).
+   */
+  readonly computed?: ComputedFields;
 }
 
 /** The reserved collection that collection definitions live in. */

@@ -28,8 +28,13 @@ specified in `spec/` in the repository: https://github.com/leifriksheim/minca/tr
   is no server to write. **Contracts** say what a record must be, citing
   other records as evidence; every reader counts only records that pass
   them (spec 09).
+- **Computed fields** are values a collection's definition works out from
+  what links to a record, like a todo done once two people react 👍. Each
+  device works them out from what it holds: a view, where a contract is a
+  verdict.
 - **Queries** are plain JSON: Mongo-style filters, sorting, paging, and
-  `include` to follow links.
+  `include` to follow links. Name the collection by its definition and
+  `where` and `sort` are typed: a misspelled field is a compile error.
 
 ## Guides
 
@@ -58,6 +63,7 @@ the others wrote.
 | [standard-library.md](standard-library.md)           | Every `std.*` collection, and the conventions they follow                                                                                                                                |
 | [direct-messages.md](direct-messages.md)             | `std.direct` and `node.direct`: text sealed for some members of a space                                                                                                                  |
 | [blueprints-and-guides.md](blueprints-and-guides.md) | `std.blueprint` and `std.guide`: proposing collections, the review, updates, guides, compatibility                                                                                       |
+| [computed.md](computed.md)                           | `computed`: values every app derives the same way from what links to a record, like done once two people react 👍                                                                        |
 | [contracts.md](contracts.md)                         | `contract` (`check` and `line`): how the library runs contracts (spec 09), counts only versions that pass, and refuses its own failing ones                                              |
 | [automations.md](automations.md)                     | `std.automation`: when a query finds records, or at set times, do something: in an app, an agent or a bot; and the account's own, which notify it                                        |
 | [calls.md](calls.md)                                 | Voice and video calls in a space: the `call.*` messages, ringing, joining, leaving                                                                                                       |
@@ -86,10 +92,12 @@ the others wrote.
 What the protocol still has planned is in [the spec](https://github.com/leifriksheim/minca/blob/main/spec/README.md),
 under **Planned** in each part. Library work that isn't protocol:
 
-- **Typed queries, further.** Typed field paths and operator values in
-  `where`, a misspelled collection name as a compile error, typed link roles,
-  types generated from a space's stored definitions, and a dev-time warning
-  when declared schemas differ from the space's catalogue.
+- **Typed queries, further.** Typed `where` inside an `include`, a
+  misspelled collection name as a compile error, types generated from a
+  space's stored definitions, and a dev-time warning when declared schemas
+  differ from the space's catalogue.
+- **Computed fields, further.** On `records.get` and `records.list`, not
+  only queries; and a `linked()` that follows a record's own links out.
 - **Typed handles.** `collection()` already emits the schema, the rules and
   the types from one builder; what's left is a handle bound to a space,
   `node.use(space, Poll)`.

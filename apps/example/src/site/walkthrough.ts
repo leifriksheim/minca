@@ -36,7 +36,7 @@ export const CONNECT = `
 import * as z from 'zod'; // or Valibot, ArkType, plain JSON Schema
 import {
   createNode, createIdentityManager, createLocalRootSigner,
-  indexedDBStores, rolePresets, collection, contract, lineKey,
+  indexedDBStores, rolePresets, collection, lineKey,
 } from '@minca/core';
 
 const manager = createIdentityManager();
@@ -286,12 +286,13 @@ const reactions = collection({
 const Fame = z.object({ reactions: z.array(z.string()) });
 const fame = collection({
   name: 'app.fame', schema: Fame, links: onComment,
-  contract: { check: [contract(Fame, ({ body, versions, link }) =>
-    versions(body.reactions).of(Reaction)
-      .where((r) => r.collection.eq('app.reaction')
-        .and(r.link('on').eq(link('on')), r.body.emoji.eq('🙂')))
-      .map((r) => r.author).distinct().count().gte(5),
-    'Needs five different people')] },
+  contract: {
+    check: ({ body, cited, link }) => ({
+      'Needs five different people': cited(body.reactions, reactions)
+        .where((r) => r.link('on').eq(link('on')).and(r.body.emoji.eq('🙂')))
+        .map((r) => r.author).distinct().count().gte(5),
+    }),
+  },
 });
 for (const c of [comments, reactions, fame]) await node.collections.define(space.id, c);
 `,
@@ -305,6 +306,24 @@ const post = await node.records.put(space.id, comments, { text: 'gg' });
 const on = [{ rel: 'on', to: post.key }];
 
 await node.records.put(space.id, reactions, { emoji: '🙂' }, { links: on });
+`,
+      },
+      {
+        label: 'What it shows',
+        text: 'Before anyone claims it, every device can count the smiles it holds: a computed field. It is a view, so it can change as reactions come and go.',
+        file: 'count.ts',
+        code: `
+// In the comment's definition
+computed: ({ linked }) => ({
+  smiles: linked(reactions, 'on')
+    .where((r) => r.body.emoji.eq('🙂'))
+    .map((r) => r.author).distinct().count(),
+}),
+
+const { records } = await node.records.query(space.id, {
+  collection: comments, where: { smiles: { $gte: 5 } },
+});
+records[0].computed.smiles; // 5
 `,
       },
       {
@@ -353,13 +372,12 @@ const pay = collection({
   name: 'app.pay', schema: Payment,
   contract: {
     line: { once: ['received'] }, // a payment is claimed once
-    check: [
-      contract(Payment, ({ body, prev, versions, when }) => body.balance.eq(
+    check: ({ body, prev, versions, when }) => ({
+      'The balance follows from the one before': body.balance.eq(
         when(prev.eq(null), 0, prev.body.balance).sub(body.amount)
           .add(versions(body.received).of(Payment).map((r) => r.body.amount).sum())),
-        'The balance follows from the one before'),
-      contract(Payment, ({ body }) => body.balance.gte(-100), 'No one goes below −100'),
-    ], // and more: see scenarios/communities/credit.ts
+      'No one goes below −100': body.balance.gte(-100),
+    }), // and more: see scenarios/communities/credit.ts
   },
 });
 `,

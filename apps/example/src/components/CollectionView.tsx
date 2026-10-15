@@ -10,13 +10,17 @@ import {
   choicesOf,
   collectionLabel,
   columnsOf,
+  computedFieldsOf,
   groupFields,
+  isComputed,
   metaFields,
   quickAddBody,
   recordLabel,
   textOf,
   titleField,
   labelOf,
+  valueOf,
+  withComputed,
   type Field,
   type LinkedByRel,
 } from '../derive/schema-ui';
@@ -75,15 +79,20 @@ export function CollectionView({
   space,
   name,
   collection,
+  collections,
   onOpen,
 }: {
   space: SpaceSummary;
   name: string;
   collection: NodeCollection | null;
+  /** The space's collections: what a computed field reads, to know its type */
+  collections: ReadonlyArray<NodeCollection>;
   onOpen: (record: NodeRecord) => void;
 }) {
   const node = useNode();
   const schema = collection?.schema ?? null;
+  // Worked out on this device from what links to each record: shown, filtered and sorted on, never written.
+  const computed = computedFieldsOf(collection, collections);
   const title = titleField(schema);
   const groups = groupFields(schema);
   const [groupName, setGroupName] = useState(() => remembered(groupKey(space.id, name)));
@@ -125,7 +134,7 @@ export function CollectionView({
 
   // Choices that live in a linked record (a vote's poll) need that record to show their label.
   const needsLinked = [...columnsOf(schema), ...metaFields(schema)].some((f) => choicesFrom(f.schema));
-  const fields = clauseFields({ schema, topics: [] }, { query: true });
+  const fields = clauseFields({ schema: withComputed(schema, computed), topics: [] }, { query: true });
   const picked = whereOf(clauses, did);
   const parts: Filter[] = [
     ...(search.trim() && title ? [{ [title]: { $contains: search.trim() } }] : []),
@@ -306,10 +315,17 @@ export function CollectionView({
       )}
 
       {visible.length > 0 && layout === 'list' && (
-        <ListLayout rows={visible} schema={schema} people={people} space={space} onOpen={onOpen} />
+        <ListLayout
+          rows={visible}
+          schema={schema}
+          computed={computed}
+          people={people}
+          space={space}
+          onOpen={onOpen}
+        />
       )}
       {visible.length > 0 && layout === 'table' && (
-        <TableLayout rows={visible} schema={schema} onOpen={onOpen} />
+        <TableLayout rows={visible} schema={schema} computed={computed} onOpen={onOpen} />
       )}
       {layout === 'board' && !group && (
         <p style={styles.emptyState}>
@@ -321,6 +337,7 @@ export function CollectionView({
         <BoardLayout
           rows={visible}
           schema={schema}
+          computed={computed}
           field={group}
           people={people}
           space={space}
@@ -429,19 +446,22 @@ function QuickAdd({
 function ListLayout({
   rows,
   schema,
+  computed,
   people,
   space,
   onOpen,
 }: {
   rows: Row[];
   schema: NodeCollection['schema'];
+  computed: ReadonlyArray<Field>;
   people: People;
   space: SpaceSummary;
   onOpen: (r: NodeRecord) => void;
 }) {
   const node = useNode();
-  const check = checkField(schema);
-  const meta = metaFields(schema);
+  // Without a yes/no field to tick, a computed one shows as a box that ticks itself.
+  const check = checkField(schema) ?? computed.find((f) => f.kind === 'boolean') ?? null;
+  const meta = [...metaFields(schema), ...shortOf(computed).filter((f) => f !== check)];
   return (
     <div
       role="list"
@@ -453,7 +473,7 @@ function ListLayout({
     >
       {rows.map(({ record, linked }, i) => {
         const body = bodyOf(record);
-        const done = check ? body[check.name] === true : false;
+        const done = check ? valueOf(record, check) === true : false;
         return (
           <div
             key={record.key}
@@ -472,7 +492,7 @@ function ListLayout({
             {check && (
               <Check
                 checked={done}
-                disabled={!space.writable}
+                disabled={!space.writable || isComputed(check)}
                 label={`${check.label}: ${recordLabel(record, schema)}`}
                 onChange={(checked) =>
                   node.records.update(space.id, record.key, { ...body, [check.name]: checked })
@@ -534,13 +554,15 @@ function Check({
 function TableLayout({
   rows,
   schema,
+  computed,
   onOpen,
 }: {
   rows: Row[];
   schema: NodeCollection['schema'];
+  computed: ReadonlyArray<Field>;
   onOpen: (r: NodeRecord) => void;
 }) {
-  const columns = columnsOf(schema);
+  const columns = [...columnsOf(schema), ...shortOf(computed)];
   return (
     <div
       style={{
@@ -552,11 +574,16 @@ function TableLayout({
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 14 }}>
         <thead>
           <tr>
-            {(columns.length ? columns.map((c) => c.label) : ['Record']).map((h) => (
-              <th key={h} style={ui.th}>
-                {h}
-              </th>
-            ))}
+            {columns.length ? (
+              columns.map((c) => (
+                <th key={c.name} style={ui.th} title={isComputed(c) ? COMPUTED_HINT : undefined}>
+                  {c.label}
+                  {isComputed(c) && <span style={{ color: palette.ink.faint, fontWeight: 400 }}> ƒ</span>}
+                </th>
+              ))
+            ) : (
+              <th style={ui.th}>Record</th>
+            )}
             <th style={ui.th}>By</th>
             <th style={{ ...ui.th, textAlign: 'right' }}>Added</th>
           </tr>
@@ -572,7 +599,7 @@ function TableLayout({
               {columns.length ? (
                 columns.map((c) => (
                   <td key={c.name} style={ui.td}>
-                    <Value field={c} value={bodyOf(record)[c.name]} linked={linked} compact />
+                    <Value field={c} value={valueOf(record, c)} linked={linked} compact />
                   </td>
                 ))
               ) : (
@@ -596,6 +623,7 @@ function TableLayout({
 function BoardLayout({
   rows,
   schema,
+  computed,
   field,
   people,
   space,
@@ -603,6 +631,7 @@ function BoardLayout({
 }: {
   rows: Row[];
   schema: NodeCollection['schema'];
+  computed: ReadonlyArray<Field>;
   field: Field;
   people: People;
   space: SpaceSummary;
@@ -615,7 +644,7 @@ function BoardLayout({
     ...choices.map((c, i) => ({ id: String(i), label: c.label, value: c.value })),
     { id: 'none', label: `No ${field.label.toLowerCase()}`, value: undefined },
   ];
-  const meta = metaFields(schema).filter((f) => f.name !== field.name);
+  const meta = [...metaFields(schema).filter((f) => f.name !== field.name), ...shortOf(computed)];
   const columnOf = (r: Row) => {
     const i = choices.findIndex((c) => c.value === bodyOf(r.record)[field.name]);
     return i < 0 ? 'none' : String(i);
@@ -689,6 +718,15 @@ function BoardLayout({
 
 // ─── Row pieces ────────────────────────────────────────────────────
 
+/** Said wherever a computed field shows: whose view it is */
+const COMPUTED_HINT = 'Worked out by this device from what it holds — no one wrote it';
+
+/** Computed fields short enough for a row or a cell, at most three */
+const shortOf = (computed: ReadonlyArray<Field>): ReadonlyArray<Field> =>
+  computed
+    .filter((f) => ['text', 'number', 'integer', 'boolean', 'choice', 'list'].includes(f.kind))
+    .slice(0, 3);
+
 /** A row's short fields and tags, as small chips */
 function Meta({
   record,
@@ -699,18 +737,20 @@ function Meta({
   fields: ReadonlyArray<Field>;
   linked: LinkedByRel;
 }) {
-  const body = bodyOf(record);
   const included = record.included?.tags;
   const tags = typeof included === 'object' ? included : [];
   const parts: ReactNode[] = [];
   for (const f of fields) {
-    const value = body[f.name];
+    const value = valueOf(record, f);
     if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0))
       continue;
     const shown = labelOf(f, value, linked) ?? (Array.isArray(value) ? value.join(', ') : textOf(value));
     parts.push(
       <span key={f.name} style={{ fontSize: 12, color: palette.ink.muted }}>
-        <span style={{ color: palette.ink.faint }}>{f.label}</span> {shown}
+        <span style={{ color: palette.ink.faint }} title={isComputed(f) ? COMPUTED_HINT : undefined}>
+          {f.label}
+        </span>{' '}
+        {shown}
       </span>,
     );
   }

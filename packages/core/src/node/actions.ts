@@ -29,6 +29,7 @@ import { standardDefinition, standardGroups } from '../schemas/standard.js';
 import { toJsonSchema } from '../schema/collection-def.js';
 import { ACTIVITY_STATES, setActivity } from '../schemas/automations.js';
 import { describeCollection } from '../records/describe.js';
+import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { isRecord } from '../utils/guards.js';
 
 /** The subset of JSON Schema these inputs use */
@@ -440,8 +441,16 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       return names.map((name) => {
         const definition = standardDefinition(name);
         if (!definition) throw new Error(`${name} is not in the standard library`);
-        const { schema, ...rest } = definition;
-        return { ...rest, schema: toJsonSchema(schema), summary: describeCollection(definition) };
+        const { schema, contract: _built, computed: _derived, ...rest } = definition;
+        const contract = storedContract(definition);
+        const computed = storedComputed(definition);
+        const stored = {
+          ...rest,
+          schema: toJsonSchema(schema),
+          ...(contract !== undefined ? { contract } : {}),
+          ...(computed !== undefined ? { computed } : {}),
+        };
+        return { ...stored, summary: describeCollection(stored) };
       });
     },
   },
@@ -494,6 +503,17 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
             'over the body, the version before (prev) and versions it cites by id (versions(body.votes)); ' +
             'and "line": { "once": ["received"] } for one sequence per account, where two versions after the same one cancel.',
         },
+        computed: {
+          type: 'object',
+          description:
+            'Optional: values worked out from what links to each record, the same way in every app, each a CEL expression: ' +
+            "{ \"thumbs\": \"linked('app.reaction', 'on').filter(r, r.body.emoji == '👍').map(r, r.author).distinct().size()\", " +
+            '"done": "linked(\'app.reaction\', \'on\').size() >= 2" }. linked(collection, rel) is the records of that collection ' +
+            'linking here with that role, each with key, author, createdAt, body and links; the rest is the CEL contracts use. ' +
+            'Each device works them out from what it holds, so they are a view, not a verdict: use a contract for what must be ' +
+            'the same everywhere. Lower camel names, at most 16, none named like a body field. Queries read them by name, like ' +
+            'body fields: where { "done": true }.',
+        },
         topics: {
           type: 'array',
           items: { type: 'string' },
@@ -523,7 +543,7 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
       'needs, such as a carpool, a sign-up sheet or a decision log. It writes one std.blueprint record: a title, a line on ' +
       'what it is for, and the collections. Use standard ones wherever they fit: read collections_standard and pass each ' +
       'by name ("std.event"); it is then exactly the standard shape, so other apps read its records. Give each collection ' +
-      'of your own exactly as collections_define takes it (name, title, description, schema, links, rules, contract, ' +
+      'of your own exactly as collections_define takes it (name, title, description, schema, links, rules, contract, computed, ' +
       'topics, no version), named after what it is for ("carpool.ride"); std.* names are only the library\'s. Nothing is ' +
       'defined yet: everyone in the space sees it, with what each collection allows worked out from its rules. ' +
       'Read collections_list first and reuse what the space already has rather than inventing a twin; the guides it ' +
@@ -671,7 +691,8 @@ const ACTIONS: ReadonlyArray<ActionDefinition> = [
     name: 'records_query',
     description:
       'Find records: filter, sort, page, and pull in what links to them. ' +
-      'where: { done: false, "@author": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested), ' +
+      'where: { done: false, "@author": "did:…", amount: { "$gt": 10 } } — bare names are body fields (dotted for nested) ' +
+      "or the collection's computed fields, which each result carries as computed; " +
       '"@key", "@author", "@root", "@createdAt", "@updatedAt", "@seq" are about the record; ' +
       'operators $eq $ne $gt $gte $lt $lte $in $nin $exists $contains, combined with $and $or $not. ' +
       'include: { reactions: { rel: "about", from: "std.reaction", count: true } } — records linking to each result ' +

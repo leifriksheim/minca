@@ -7,13 +7,12 @@ produced by an agent. It runs against the records one node holds of one space.
 > offer any query language, and a better one later is not a protocol change.
 > Ideas for later, from
 > [#28](https://github.com/leifriksheim/minca/issues/28): the interface another query language plugs into, which reports the collections
-> it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them; and the
-> small filter a screen's `minca.list(collection, { where })` takes (field
-> equality and `link:<rel>`, `apps/example/src/components/apps/screens.ts`), which
-> apps that run [screens](blueprints-and-guides.md#apps-with-a-screen-of-their-own) have to agree on.
-> An [automation](automations.md) keeps a query in a record, so everything that runs automations
-> has to read this format the same way; peers that only sync and judge the
-> record still never read it.
+> it read so a cache ([holding part of a space](node.md#holding-part-of-a-space)) keeps them.
+> An [automation](automations.md) keeps a query in a record, and a
+> [screen](blueprints-and-guides.md#apps-with-a-screen-of-their-own) passes a `where` to `minca.list`
+> (`apps/example/src/components/apps/screens.ts`), so everything that runs
+> automations or screens has to read this format the same way; peers that
+> only sync and judge the record still never read it.
 
 ## Grammar
 
@@ -39,12 +38,12 @@ Operators  = { 1*( "$eq": Value | "$ne": Value
                  | "$exists": boolean
                  | "$contains": Value ) }
 
-Field      = MetaField | LinkField | IncludeField | BodyPath
+Field      = MetaField | LinkField | IncludeField | Path
 MetaField  = "@key" | "@author" | "@root" | "@createdBy" | "@createdAt"
            | "@updatedAt" | "@seq" | "@collection"
 LinkField  = "link:" rel                  ; rel as spec 02 §5.1
 IncludeField = "include:" name            ; in an automation's `holds` only: what its query included
-BodyPath   = segment *( "." segment )     ; not starting with "@", "$" or "link:"
+Path       = segment *( "." segment )     ; a computed field, or into the body; not starting with "@", "$" or "link:"
 
 IncludeMap = { *( Name: Include ) }
 Include    = { "rel": string,
@@ -67,6 +66,10 @@ non-negative integer; `cursor` is not a string.
 
 _Implementation detail:_ the TypeScript API also accepts a definition object
 as `collection` or `from`; it is replaced by its `name` before the query runs.
+With a definition whose records' type is known, `where` and `sort` are typed
+from it: each field a body path, computed field, `@` field or `link:<role>`
+it has, each value of that field's type. A misspelled field
+or a number compared with a string is a type error. A bare name is untyped.
 
 ## Candidates
 
@@ -85,19 +88,19 @@ never `null`.
 
 ## Field values
 
-| Field            | Value                                                                                                                                                                                                                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@key`           | the record key                                                                                                                                                                                                                                  |
-| `@author`        | the DID that signed this version                                                                                                                                                                                                                |
-| `@root`          | the account it acted for                                                                                                                                                                                                                        |
-| `@createdBy`     | the root of the record's first version (or null)                                                                                                                                                                                                |
-| `@createdAt`     | `createdAt` of the record's first version (the creator's clock)                                                                                                                                                                                 |
-| `@updatedAt`     | `createdAt` of this version                                                                                                                                                                                                                     |
-| `@seq`           | `seq`                                                                                                                                                                                                                                           |
-| `@collection`    | `collection`                                                                                                                                                                                                                                    |
-| `link:<rel>`     | the `to` of the record's first link with that `rel`, as contracts' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel. |
-| `include:<name>` | in an [automation](automations.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                           |
-| body path        | Walk the body: at each segment, the current value must be a non-null object or array, and the segment one of its own member names, or of an array a position (`0`, `1`, …; nothing else, not `length`); otherwise the value is _missing_.       |
+| Field            | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@key`           | the record key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `@author`        | the DID that signed this version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `@root`          | the account it acted for                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `@createdBy`     | the root of the record's first version (or null)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `@createdAt`     | `createdAt` of the record's first version (the creator's clock)                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `@updatedAt`     | `createdAt` of this version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `@seq`           | `seq`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `@collection`    | `collection`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `link:<rel>`     | the `to` of the record's first link with that `rel`, as contracts' `link` and `onePer` read it; missing when it has none. `{ "link:channel": key }` finds a channel's messages, `{ "link:channel": { "$exists": false } }` those in no channel.                                                                                                                                                                                                                                                                   |
+| `include:<name>` | in an [automation](automations.md)'s `holds` only: what the query's `include` of that name found for the record, a number for a count                                                                                                                                                                                                                                                                                                                                                                             |
+| path             | When its first segment names one of the collection's [computed fields](computed.md), start from that field's value and walk the rest; otherwise walk the body. A body member with a computed field's name is never read: a writer can't stand in for what the node works out. Walking: at each segment, the current value must be a non-null object or array, and the segment one of its own member names, or of an array a position (`0`, `1`, …; nothing else, not `length`); otherwise the value is _missing_. |
 
 ## Operators
 

@@ -167,15 +167,48 @@ const isMistake = (e: unknown): e is Error => e instanceof Error && 'celType' in
  * hold (`body`'s type, from the collection's schema), or null. Run only on a
  * condition `checkCel` accepted.
  */
-export function typeCheckCel(node: CelNode, names: ReadonlyMap<string, CelType>): string | null {
+export function typeCheckCel(
+  node: CelNode,
+  names: ReadonlyMap<string, CelType>,
+  options: {
+    /** What `linked(collection, rel)` finds the bodies of, or why it can't: for computed fields */
+    readonly linked?: LinkedBodies;
+    /** Any value, not only a bool: a computed field's */
+    readonly anything?: boolean;
+  } = {},
+): string | null {
+  linkedBodies = options.linked;
   try {
     const result = typeOf(node, names);
-    if (known(result) && result.t !== 'bool')
+    if (!options.anything && known(result) && result.t !== 'bool')
       return `gives ${named(result)}, so it is never true: a condition must give a bool`;
     return null;
   } catch (error) {
     if (isMistake(error)) return error.message;
     throw error;
+  } finally {
+    linkedBodies = undefined;
+  }
+}
+
+/** The body type of what `linked(collection, rel)` finds, or why that can't link here */
+export type LinkedBodies = (collection: string, rel: string) => CelType | string;
+let linkedBodies: LinkedBodies | undefined;
+
+/** The type a whole expression gives, or a mistake in it: what a computed field holds */
+export function typeOfCel(
+  node: CelNode,
+  names: ReadonlyMap<string, CelType>,
+  linked?: LinkedBodies,
+): CelType | string {
+  linkedBodies = linked;
+  try {
+    return typeOf(node, names);
+  } catch (error) {
+    if (isMistake(error)) return error.message;
+    throw error;
+  } finally {
+    linkedBodies = undefined;
   }
 }
 
@@ -389,6 +422,20 @@ function callType(n: Extract<CelNode, { k: 'call' }>, of: (n: CelNode) => CelTyp
       if (known(a) && a.t !== 'string')
         fail(`member() takes an account's DID, and ${shown(an)} is ${named(a)}`);
       return BOOL;
+    case 'linked': {
+      const [c, r] = n.args;
+      if (
+        !linkedBodies ||
+        c?.k !== 'lit' ||
+        r?.k !== 'lit' ||
+        typeof c.v !== 'string' ||
+        typeof r.v !== 'string'
+      )
+        return listOf(versionType(DYN));
+      const body = linkedBodies(c.v, r.v);
+      if (typeof body === 'string') fail(`${shown(n)}: ${body}`);
+      return listOf(versionType(body));
+    }
     case 'link':
       return STRING;
   }

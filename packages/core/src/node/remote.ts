@@ -16,14 +16,28 @@
 import type { MeshStatus } from '../network/mesh.js';
 import { parseDelegation, type Delegation } from '../identity/ucan.js';
 import type { RootSigner } from '../identity/root-signer.js';
-import type { Query, ResultOf } from '../query/types.js';
-import { plainQuery } from '../query/types.js';
+import type { Query } from '../query/types.js';
+import { plainQuery, type CollectionRef, type IncludeMap, type ResultFor } from '../query/types.js';
 import { toJsonSchema } from '../schema/collection-def.js';
+import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { previewInvite } from '../space/space-manager.js';
 import { isRecord } from '../utils/guards.js';
 import type { MessagePortLike } from '../utils/port.js';
 import type { DefineCollection, NodeCollection, NodeEvent, P2PNode } from './types.js';
 import { API, buildNamespaces, callMethod, givenFor, type Namespace } from './api.js';
+
+/** A definition as plain data: its schema as JSON Schema, a contract or computed fields built in TypeScript as their CEL */
+function storedDefinition(definition: DefineCollection): DefineCollection {
+  const { contract: _built, computed: _derived, ...rest } = definition;
+  const contract = storedContract(definition);
+  const computed = storedComputed(definition);
+  return {
+    ...rest,
+    schema: toJsonSchema(definition.schema),
+    ...(contract !== undefined ? { contract } : {}),
+    ...(computed !== undefined ? { computed } : {}),
+  };
+}
 
 /** What `remoteNode` keeps of a node, to answer the calls that can't wait */
 interface NodeState {
@@ -344,18 +358,20 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
         // Either overload: the record comes back typed as the call asked.
         put: (...args: unknown[]) =>
           ask<never>(handle, 'records.put', [args[0], collectionName(args[1]), ...args.slice(2)]),
-        query: <const Q extends Query>(spaceId: string, query: Q) =>
-          ask<ResultOf<Q>>(handle, 'records.query', [spaceId, plainQuery(query)]),
-        watch: <const Q extends Query>(
+        query: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
           spaceId: string,
-          query: Q,
-          onResult: (result: ResultOf<Q>) => void,
+          query: Query<C, I>,
+        ) => ask<ResultFor<C, I>>(handle, 'records.query', [spaceId, plainQuery(query)]),
+        watch: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
+          spaceId: string,
+          query: Query<C, I>,
+          onResult: (result: ResultFor<C, I>) => void,
           onError?: (error: Error) => void,
         ) => {
           const watch = ++nextId;
           watchers.set(watch, {
             // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the served node ran this query
-            onResult: (result) => onResult(result as ResultOf<Q>),
+            onResult: (result) => onResult(result as ResultFor<C, I>),
             onError: onError ?? ((error) => console.error(error)),
           });
           try {
@@ -374,7 +390,8 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
         define: async (spaceId: string, definition: DefineCollection) =>
           ask<NodeCollection>(handle, 'collections.define', [
             spaceId,
-            { ...definition, schema: toJsonSchema(definition.schema) },
+            // Plain data: a contract or computed fields built in TypeScript are functions, which can't be posted.
+            storedDefinition(definition),
           ]),
       },
       network: {

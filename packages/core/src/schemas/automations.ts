@@ -32,6 +32,7 @@ import {
   type QueryRecord,
 } from '../query/types.js';
 import { checkFilter, checkQuery, matches } from '../query/filter.js';
+import { causeOf, namedComputed } from '../query/computed.js';
 import { quickAddBody } from '../schema/quick-add.js';
 import { schemaProblem, type JsonSchema } from '../schema/collection-def.js';
 import { isObject } from '../utils/guards.js';
@@ -353,8 +354,18 @@ export interface AutomationMatch {
   readonly record: QueryRecord;
   /** What its query's `include` found, as the condition read it: a count as a number */
   readonly included: Readonly<Record<string, unknown>>;
-  /** When it came to hold, as far as can be told: its last change, or the newest record an include found */
+  /**
+   * When it came to hold, as far as can be told: its last change, the newest
+   * record an include found, or the newest its computed fields read
+   */
   readonly moment: number;
+  /**
+   * What made it hold: the record itself, or, for a filter on a computed
+   * field, the record that field read whose coming made it hold (`causeOf`).
+   * `from`, `others` and "not by the runner's own agent" judge this one's
+   * writer. Absent: the record.
+   */
+  readonly cause?: NodeRecord;
 }
 
 /**
@@ -386,6 +397,14 @@ export async function matching(
     sort: query.sort ?? { '@updatedAt': 'desc' },
     limit: query.limit ?? limit,
   });
+  // A computed field the automation reads changes when what it reads is written: a 👍 can make a todo done.
+  const name = nameOf(query.collection);
+  const fields = (await node.collections.list(space)).find((c) => c.name === name)?.computed ?? {};
+  const named = { ...namedComputed(fields, query.where), ...namedComputed(fields, when.holds) };
+  const reads = Object.keys(named).length > 0;
+  const source = {
+    linked: (key: string, o: { rel?: string; collection?: string }) => node.records.linked(space, key, o),
+  };
   const found: AutomationMatch[] = [];
   for (const record of records) {
     let latest = Date.parse(record.updatedAt);
@@ -399,7 +418,19 @@ export async function matching(
       included[name] = counted.has(name) ? value.length : value;
     }
     if (when.holds !== undefined && !matches({ ...record, included }, when.holds)) continue;
-    found.push({ record, included, moment: latest });
+    // What made it hold, not what came last: a 😡 after the second 👍 sets nothing off.
+    const cause = reads
+      ? await causeOf(source, record, named, (computed) => {
+          const subject = { ...record, included, computed };
+          return (
+            matches(subject, query.where ?? {}) && (when.holds === undefined || matches(subject, when.holds))
+          );
+        })
+      : record;
+    // What made it hold can't be told: better quiet than set off by the wrong one.
+    if (!cause) continue;
+    if (cause !== record) latest = Math.max(latest, Date.parse(cause.updatedAt));
+    found.push({ record, included, moment: latest, cause });
   }
   return found;
 }
@@ -636,6 +667,8 @@ export async function runAutomations(
     const since = Date.parse(active.body.since);
     for (const match of await matching(node, space, when, account)) {
       const record = match.record;
+      const cause = match.cause ?? record;
+      const by = cause.createdBy ?? cause.root;
       const claim = `${active.key} ${record.key}`;
       if (
         match.moment < since ||
@@ -645,9 +678,9 @@ export async function runAutomations(
       )
         continue;
       // What the runner's agent, or the bot, wrote itself never sets an automation off: an agent asked to act can't set itself off.
-      if (record.createdBy === account && (record.recordsOnly || options.bot)) continue;
-      if (when.from && !holdsOneOf(access, record.createdBy ?? '', when.from)) continue;
-      if (when.others && record.createdBy === account) continue;
+      if (by === account && (cause.recordsOnly || options.bot)) continue;
+      if (when.from && !holdsOneOf(access, by ?? '', when.from)) continue;
+      if (when.others && by === account) continue;
       busy.add(claim);
       try {
         const links = [

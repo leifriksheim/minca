@@ -38,23 +38,30 @@ who made it:
 }
 ```
 
-| Field    | Meaning                                                                                                                                                                     |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`   | What people call it                                                                                                                                                         |
-| `when`   | `query`: a query in [the query format](query-format.md). `holds`, optional: a filter each result must match. `from` and `others`, optional: below.                          |
-| `every`  | Optional. Five cron fields, minute hour day month weekday, in the runner's local time: the automation also runs by itself then. An automation has `when`, `every`, or both. |
-| `then`   | What it does, below                                                                                                                                                         |
-| `by`     | Optional. The DID of the bot that runs it; without it, its maker's own devices and agent do ([Who runs an automation](#who-runs-an-automation))                             |
-| `picked` | Optional. How an app's builder showed the automation, so it can show it in words and open it again. Never read to run it.                                                   |
-| `paused` | Optional. Kept, but not run.                                                                                                                                                |
-| `since`  | Nothing that came to hold before this sets it off: a record whose last change, and the newest record any include found, are older is left alone.                            |
+| Field    | Meaning                                                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`   | What people call it                                                                                                                                                                  |
+| `when`   | `query`: a query in [the query format](query-format.md). `holds`, optional: a filter each result must match. `from` and `others`, optional: below.                                   |
+| `every`  | Optional. Five cron fields, minute hour day month weekday, in the runner's local time: the automation also runs by itself then. An automation has `when`, `every`, or both.          |
+| `then`   | What it does, below                                                                                                                                                                  |
+| `by`     | Optional. The DID of the bot that runs it; without it, its maker's own devices and agent do ([Who runs an automation](#who-runs-an-automation))                                      |
+| `picked` | Optional. How an app's builder showed the automation, so it can show it in words and open it again. Never read to run it.                                                            |
+| `paused` | Optional. Kept, but not run.                                                                                                                                                         |
+| `since`  | Nothing that came to hold before this sets it off: a record whose last change, the newest record any include found, and the newest its computed fields read are older is left alone. |
 
 `"$me"`, anywhere in `query` or `holds`, is whoever runs the automation: its maker,
 or the bot in `by`. So "a message mentioning me" is `{ "mentions":
 { "$contains": "$me" } }` for a person and for a bot alike. `from` lists role
 names; only records written by someone holding one of them set the automation off,
 and `"member"` is any member at all, the founders included. With `others`,
-only records someone other than its runner wrote set it off.
+only records someone other than its runner wrote set it off. What sets it off
+is the record, or, when a computed field its filter names made it hold, the
+record that field read whose coming made it hold: Bob's 👍 that made Alice's
+todo done is Bob's, so `others` lets it through and `from` asks Bob's roles.
+A 😡 after it changes nothing, so it sets nothing off, and a todo done before
+the automation was made never does. Which came last goes by the writers'
+clocks, so of two people whose 👍s made it done, either can claim to have
+been the last.
 
 `every` uses `*`, a number, a range `a-b`, a step `/n` and lists with commas;
 weekday 0 or 7 is Sunday; a day and a weekday both given means either. At
@@ -213,11 +220,19 @@ now it only notifies:
 | `app`    | Optional. The app that proposed it, `{ origin, name? }`, by the origin the browser reported. |
 
 It must check out as one (`checkOwnAutomation`): `then.kind` is `notify`; no
-`every` and no `by`, since the account runs it on new records; `when.query`
-is one collection and, optionally, a `where` over each record alone (its
-body, `link:<role>`, `@key`, `@collection`, `@createdBy`, `@createdAt`), with
-no `include`, and no `holds` or `from`. `$me` is the account. It looks at new
-records only: `seq` 0, written after `since` and within the last day.
+`every` and no `by`, since the account runs it as records are written;
+`when.query` is one collection and, optionally, a `where` over each record
+alone (its body, its [computed fields](computed.md), `link:<role>`, `@key`,
+`@collection`, `@createdBy`, `@createdAt`), with no `include`, and no
+`holds` or `from`. `$me` is the account.
+
+It notifies about a record when the record **comes to match**: when it is
+written, or, for a `where` that names a computed field, when something that
+field reads is, as a 👍 can make a todo done. Once per record: one edited
+out of matching and back in is not news again, so no one can notify the
+account over and over with one record. What sets it off must be written
+after `since` and within the last day, and with `others`, by someone else.
+"Newest" and "within the last day" go by the clock of whoever wrote it.
 
 **Apps propose them**, the person says yes in the account home, and the home
 writes them, naming the app ([spec 06 §2.11](../../../spec/06-nodes-and-sessions.md), whose `Proposal` is the shape below).
@@ -252,9 +267,17 @@ collection wakes the app, which then turns down what `where` doesn't match.
 A private space whose key the device lacks gets an empty list, and wakes
 nothing.
 
+A `where` that names a computed field changes when what the field reads is
+written, so each device also writes a wake for each collection that field
+reads (`wake:<id>:<collection>`), with no tags but the empty lists: any new 👍
+in those spaces wakes the app, which works the field out and judges. Only
+the fields the `where` names count, and a filter whose fields read more than
+four collections gets no more wakes than its own, so a definition can't make
+every member's devices write a wake per name it lists.
+
 A wake can only let through more than the app would, never less, with one
 exception: `$contains` on a text field matches part of it, and a tag only a
 whole value. Mark as topics only fields that hold whole values: people,
 links, cells.
 
-_Source: `packages/core/src/space/own-automations.ts` (`checkOwnAutomation`, `notifyOn`, `checkProposal`, `fromProposal`, `wakeFor`, `matchesRecord`), `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/watch-notifications.ts`. Tests: `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/connect.test.ts` ("an app proposing automations", "an app showing its own notifications"), `packages/core/tests/geo.test.ts`._
+_Source: `packages/core/src/space/own-automations.ts` (`checkOwnAutomation`, `notifyOn`, `checkProposal`, `fromProposal`, `wakeFor`, `linkedWakes`, `holdsFor`, `setsOff`), `packages/core/src/query/computed.ts` (`linkedReads`, `lastRead`), `packages/core/src/node/node.ts` (`automations`, `syncPasses`), `packages/core/src/node/watch-notifications.ts`, `packages/core/src/schemas/automations.ts` (`matching`). Tests: `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/carrier.test.ts` ("notifications through a carrier"), `packages/core/tests/connect.test.ts` ("an app proposing automations", "an app showing its own notifications"), `packages/core/tests/watch-notifications.test.ts`, `packages/core/tests/computed.test.ts` ("computed: what watches a filter on them"), `packages/core/tests/geo.test.ts`._

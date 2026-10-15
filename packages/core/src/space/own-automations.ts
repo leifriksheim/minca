@@ -45,8 +45,9 @@ import {
   type AutomationSpaces,
 } from '../schemas/automations.js';
 import { isObject } from '../utils/guards.js';
+import { linkedReads, namedComputed, type ComputedFields } from '../query/computed.js';
 
-/** Wakes, as a carrier holds them in its carry space: key `wake:<the automation's key>` */
+/** Wakes, as a carrier holds them in its carry space: key `wake:<the automation's key>`, and `wake:<that key>:<collection>` for what a computed field reads */
 export const WAKE_COLLECTION = 'sys.wake';
 
 /** The record fields an account's own automation may read besides the body: what an app sees of any record */
@@ -248,6 +249,8 @@ export interface WakeSpace {
   readonly visibility: 'public' | 'private';
   /** The topic fields a collection declares in this space */
   readonly topics: (collection: string) => ReadonlyArray<string>;
+  /** A collection's computed fields in this space, when it has any */
+  readonly computed?: (collection: string) => ComputedFields | undefined;
 }
 
 /** At most this many tags a wake holds for one space; a `where` that names more values wakes on any record there */
@@ -378,6 +381,54 @@ export function readWake(body: unknown): Wake | null {
   return body as unknown as Wake;
 }
 
+/** At most this many collections an automation's computed fields wake on besides its own; past it, none */
+const MAX_LINKED_WAKES = 4;
+/** At most this many spaces a wake names (spec 03 §15) */
+const MAX_WAKE_SPACES = 256;
+
+/**
+ * The wakes an automation needs besides its own, made from it: when its
+ * `where` names a computed field, one for each collection that field reads
+ * in the spaces it looks at, since a new 👍 can make a todo done. Their tags
+ * would be the todo's, so they keep only the spaces they must stay quiet in;
+ * any new record elsewhere wakes, and the app judges. A filter whose fields
+ * read more than four collections gets none: whoever defines the collection
+ * could otherwise have every member's devices write a wake per name.
+ */
+export function linkedWakes(
+  own: Automation,
+  wake: Wake,
+  spaces: ReadonlyArray<WakeSpace>,
+): ReadonlyArray<Wake> {
+  const { collection, where } = ownQuery(own);
+  const only = own.spaces ?? 'all';
+  // Each collection read, and the spaces whose definition reads it: a definer in one space can't widen the others.
+  const read = new Map<string, string[]>();
+  for (const space of only === 'all' ? spaces : spaces.filter((s) => only.includes(s.id))) {
+    const named = namedComputed(space.computed?.(collection) ?? {}, where);
+    for (const { collection: from } of linkedReads(named)) {
+      if (from.startsWith('sys.') || from === collection) continue;
+      const ids = read.get(from) ?? [];
+      if (!ids.includes(space.id)) ids.push(space.id);
+      read.set(from, ids);
+    }
+  }
+  if (read.size > MAX_LINKED_WAKES) return [];
+  const { tags, ...rest } = wake;
+  return [...read]
+    .filter(([, ids]) => ids.length <= MAX_WAKE_SPACES)
+    .map(([from, ids]) => {
+      // Its tags are the automation's collection's; only the spaces it must stay quiet in carry over.
+      const quiet = ids.filter((id) => tags?.[id]?.length === 0);
+      return {
+        ...rest,
+        collection: from,
+        spaces: ids,
+        ...(quiet.length > 0 ? { tags: Object.fromEntries(quiet.map((id) => [id, []])) } : {}),
+      };
+    });
+}
+
 /** Who a version was written for: the account that issued its note, else its own key */
 function rootOf(version: Version): string {
   if (!version.proof) return version.author;
@@ -432,23 +483,26 @@ export interface ReadableRecord {
   readonly links?: ReadonlyArray<Link>;
   readonly verified: boolean;
   readonly deleted?: true;
+  /** Its collection's computed fields, as a query works them out, for a `where` that names one */
+  readonly computed?: Readonly<Record<string, unknown>>;
+}
+
+/** What was written that set a notification off: the record itself, or something its computed fields read */
+export interface Trigger {
+  readonly createdAt: string;
+  /** Who wrote it: the account, not the key that signed */
+  readonly createdBy: string | null;
 }
 
 /**
- * Whether a record an app just saw is one of the account's own automations
- * asks about. The app can read, so `where` is judged on the body: never
- * fewer records than a carrier's wake lets through, only fewer.
+ * Whether one of the account's own automations holds for a record: it is in
+ * the collection, and `where` holds of its body and computed fields. The app
+ * can read, so this is judged on the body: never fewer records than a
+ * carrier's wake lets through, only fewer.
  */
-export function matchesRecord(
-  own: Automation,
-  record: ReadableRecord,
-  account: string,
-  now = Date.now(),
-): boolean {
+export function holdsFor(own: Automation, record: ReadableRecord, account: string): boolean {
   const { collection, where } = ownQuery(own);
   if (!record.verified || record.deleted || record.collection !== collection) return false;
-  if (!inWindow(own, record.space, record.createdAt, now)) return false;
-  if (own.when?.others && record.createdBy === account) return false;
   if (where === undefined) return true;
   return matches(
     {
@@ -458,9 +512,36 @@ export function matchesRecord(
       links: record.links ?? [],
       createdBy: record.createdBy,
       createdAt: record.createdAt,
+      ...(record.computed ? { computed: record.computed } : {}),
     },
     asRunner(where, account),
   );
+}
+
+/**
+ * Whether what was written may set one of the account's own automations off
+ * in a space: it is on, looks there, the writing is new enough, and, with
+ * `others`, someone else's. A carrier checks the same of a record's outside.
+ */
+export function setsOff(
+  own: Automation,
+  space: string,
+  trigger: Trigger,
+  account: string,
+  now = Date.now(),
+): boolean {
+  if (!inWindow(own, space, trigger.createdAt, now)) return false;
+  return !(own.when?.others && trigger.createdBy === account);
+}
+
+/** Whether a new record an app just saw is one an automation of the account's own asks about */
+export function matchesRecord(
+  own: Automation,
+  record: ReadableRecord,
+  account: string,
+  now = Date.now(),
+): boolean {
+  return holdsFor(own, record, account) && setsOff(own, record.space, record, account, now);
 }
 
 /**

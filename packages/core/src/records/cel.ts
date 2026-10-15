@@ -151,7 +151,7 @@ function convert(value: unknown): CelValue {
 }
 
 /** A value as JSON, for `hash`: ints as numbers when exact, maps only with string keys */
-function toJson(v: CelValue): unknown {
+export function toJson(v: CelValue): unknown {
   if (v === null || typeof v === 'boolean' || typeof v === 'string') return v;
   if (typeof v === 'number') {
     if (!Number.isFinite(v)) throw new TypeError('not finite');
@@ -759,6 +759,7 @@ const GLOBALS: Readonly<Record<string, ReadonlyArray<number>>> = {
   versions: [1],
   link: [1],
   member: [1],
+  linked: [2],
   '==': [2],
   '!=': [2],
   '<': [2],
@@ -794,6 +795,12 @@ export interface CelScope {
   readonly space?: boolean;
   /** Literal link roles `link` accepts */
   readonly linkRel?: RegExp;
+  /**
+   * Whether it may call `linked(collection, rel)`: what links to the record,
+   * as a node holds it. Only computed fields may; a contract cites instead,
+   * so its verdict doesn't depend on what a node happens to hold.
+   */
+  readonly linked?: boolean;
 }
 
 /** Problems with an expression for a scope, or null. Counts its nodes into `count`. */
@@ -841,6 +848,14 @@ export function checkCel(node: CelNode, scope: CelScope, count = { nodes: 0 }): 
         const arity = Object.hasOwn(table, n.fn) ? table[n.fn] : undefined;
         if (!arity) return `${n.target ? '.' : ''}${n.fn}() is not in the subset`;
         if (!arity.includes(n.args.length)) return `${n.fn}() takes ${arity.join(' or ')} arguments`;
+        if (!n.target && n.fn === 'linked') {
+          if (!scope.linked)
+            return 'linked() reads what one node holds, so only a computed field may: a contract cites versions instead';
+          if (!n.args.every((a) => a.k === 'lit' && typeof a.v === 'string'))
+            return 'linked() takes a literal collection name and link role, like linked("app.reaction", "on")';
+          // Its arguments count towards the limit on parts like any others.
+          return first(n.args.map((a) => () => walk(a, bound)));
+        }
         if (!n.target && SPACE_FUNCTIONS.has(n.fn) && !scope.space)
           return `${n.fn}() asks the space, which this can't`;
         if (n.fn === 'link') {
@@ -884,6 +899,8 @@ export interface CelEnv {
   /** Cited versions, as CEL values; may throw a `CelStop` */
   readonly versions?: (ids: ReadonlyArray<string>) => Promise<CelValue>;
   readonly member?: (did: string) => boolean;
+  /** The records of a collection that link to this one with a role, as versions */
+  readonly linked?: (collection: string, rel: string) => Promise<CelValue>;
 }
 
 /**
@@ -921,6 +938,7 @@ const CHARGED = new Set([
   'hash',
   'link',
   'versions',
+  'linked',
 ]);
 
 /**
@@ -1290,6 +1308,10 @@ async function callGlobal(fn: string, args: ReadonlyArray<CelValue>, env: CelEnv
     case 'member':
       if (typeof a !== 'string' || !a.startsWith('did:')) return err('no matching overload');
       return env.member ? env.member(a) : false;
+    case 'linked':
+      if (typeof a !== 'string' || typeof b !== 'string') return err('no matching overload');
+      if (!env.linked) return err('nothing links here');
+      return env.linked(a, b);
   }
   return err(`no function ${fn}`);
 }
