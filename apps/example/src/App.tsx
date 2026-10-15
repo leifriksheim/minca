@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLocation, useNavigate, useParams } from '@tanstack/react-router';
 import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
   CallsProvider,
@@ -24,7 +24,7 @@ import { SpaceView } from './components/SpaceView';
 import { CallLayer } from './components/calls/Calls';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 
-import { readDoorFromUrl, takeBack } from './contacts';
+import { takeBack } from './contacts';
 import { styles, palette } from './styles';
 import { ask } from '@minca/app-shared/Ask';
 
@@ -41,20 +41,24 @@ export function App() {
   );
 }
 
-/** The two lists on the home screen */
-type Home = 'spaces' | 'contacts';
+/** The two lists on the home screen, and where each lives */
+const HOME = { spaces: '/', contacts: '/contacts' } as const;
 
-/** Connected: your spaces or your contacts, or one space opened. */
+/** Connected: your spaces or your contacts, or one space opened, as the address says (`router.tsx`). */
 function Workspace() {
   const mine = useSpaces();
   const { spaces, loading, error } = mine;
-  const [open, setOpen] = useState<SpaceSummary | null>(null);
-  // A door link is someone asking you to knock, which happens among your contacts.
-  const [home, setHome] = useState<Home>(() => (readDoorFromUrl() ? 'contacts' : 'spaces'));
-  const openById = (id: string) => {
-    const space = spaces.find((found) => found.id === id);
-    if (space) setOpen(space);
-  };
+  const navigate = useNavigate();
+  const { spaceId } = useParams({ strict: false });
+  const home =
+    useLocation({ select: (location) => location.pathname }) === HOME.contacts ? 'contacts' : 'spaces';
+  // The opened space, always the list's current copy, so a join that
+  // finishes, or a role that changes, never leaves a stale one on screen. A
+  // space the list doesn't have (yet, or any more) leaves you on your spaces.
+  const open = spaces.find((space) => space.id === spaceId) ?? null;
+  const openById = (id: string) => void navigate({ to: '/spaces/$spaceId', params: { spaceId: id } });
+  const setOpen = (space: SpaceSummary | null) =>
+    space ? openById(space.id) : void navigate({ to: HOME.spaces });
   const joinLink = (link: string) => mine.join(inviteFromLink(link));
   useShowNotifications(openById);
   useRunAutomations();
@@ -95,17 +99,6 @@ function Workspace() {
       return;
     await mine.leave(id);
   };
-
-  // Keep the opened space in step with the list, so a join that finishes, or
-  // a role that changes, does not leave a stale copy on screen.
-  // Adjusted while rendering rather than in an effect, so the stale copy is
-  // never painted.
-  const fresh = open && spaces.find((space) => space.id === open.id);
-  if (
-    fresh &&
-    (fresh.role !== open.role || fresh.writable !== open.writable || fresh.joining !== open.joining)
-  )
-    setOpen(fresh);
 
   const inSpace = open !== null;
 
@@ -167,7 +160,7 @@ function Workspace() {
                 key={id}
                 role="tab"
                 aria-selected={home === id}
-                onClick={() => setHome(id)}
+                onClick={() => void navigate({ to: HOME[id] })}
                 style={{
                   ...styles.appTitle,
                   border: 'none',

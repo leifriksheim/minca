@@ -47,7 +47,7 @@ app-node` from the CLI (`packages/cli/src/app-node.ts`), with the Bun
   closed, what the account's automations match shows as a notification in
   the app's own words; the carrier's notifications (where, not what) show
   only while the app's node isn't connected.
-- Shows it at `/app` in a window with no title bar (`titleBarStyle:
+- Shows it in a window with no title bar (`titleBarStyle:
 'hiddenInset'`). An empty spot in the top 28 points drags the window, and a
   double click there zooms it. The page gets `data-desktop` on `<html>`, so
   the app can make room for the window's buttons

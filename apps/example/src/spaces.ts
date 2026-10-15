@@ -2,7 +2,12 @@
 import type { P2PNode } from '@minca/core';
 import { inviteLink } from '@minca/core/react';
 
-/** A link that lets someone else open this space — joining with `role`, or with none, only to read it. */
+/**
+ * A link that lets someone else open this space — joining with `role`, or with
+ * none, only to read it. It opens the app's front page, not the space you are
+ * in, which they don't have yet.
+ */
 export async function createInviteLink(node: P2PNode, spaceId: string, role: string | null): Promise<string> {
-  return inviteLink(await node.spaces.invite(spaceId, role ? { role } : { write: false }));
+  const invite = await node.spaces.invite(spaceId, role ? { role } : { write: false });
+  return inviteLink(invite, `${globalThis.location.origin}/`);
 }

@@ -14,7 +14,8 @@ the docs, a change touches before changing the code.
 | `packages/core`                               | `@minca/core`: the protocol library, its tests (`tests/*.test.ts`) and docs (`docs/`)          |
 | `packages/cli`                                | `@minca/cli`: `minca`, the always-on node, hosting, agents, MCP                                |
 | `packages/relay`                              | The signaling relay and its mailbox                                                            |
-| `apps/home`, `apps/example`, `apps/extension` | The account home, the website and example app (Liquid among its apps), the Chrome extension    |
+| `apps/home`, `apps/example`, `apps/extension` | The account home, the app (Liquid among its apps), the Chrome extension                        |
+| `apps/site`                                   | The website, minca.social                                                                      |
 | `apps/shared`                                 | What the apps share: styles, relay settings, components, the mini app contract                 |
 | `scenarios`                                   | Kinds of community written as tests: grants, contracts and their attacks (`npm run scenarios`) |
 
@@ -223,6 +224,12 @@ Elsewhere:
   two small dependencies. Never import it from `packages/core` or the apps.
   Other providers need no SDK: Chat Completions is plain `fetch`
   (`packages/cli/src/agent-openai.ts`).
+- `@tanstack/react-router` in `apps/example` and `apps/site`
+  (`apps/example/src/router.tsx`, `apps/site/src/router.tsx`): routing,
+  with typed paths and params, redirects and scroll restoration. Released
+  since 2022, very widely used, and its few dependencies are TanStack's own
+  plus `isbot`. Code-based routes only, so no build plugin or generated
+  files. Apps only, never `packages/core`.
 - `qrcode-generator` in `apps/shared` (`apps/shared/src/Payment.tsx`): a QR code
   for a wallet to scan when paying a host. QR encoding (ISO 18004) is a spec
   with a long tail; this one has no dependencies, has been released since

@@ -154,7 +154,7 @@ await node.spaces.closeInvite(space.id, invite); // nobody else joins with that 
 | Network: the relay, TURN, meeting peers, introductions, pairing a phone                                                      | [node](packages/core/docs/node.md#the-network), [packages/relay](packages/relay/README.md)                                                                                                                                                                                                                                              | [04 Network](spec/04-network.md)                                                         |
 | Sync, storage adapters, data folders and locking them, mirrors                                                               | [storage](packages/core/docs/storage.md)                                                                                                                                                                                                                                                                                                | [05 Sync and storage](spec/05-sync-and-storage.md)                                       |
 | The CLI, the always-on node, hosting, agents and MCP                                                                         | [packages/cli](packages/cli/README.md), [agents](packages/core/docs/agents.md)                                                                                                                                                                                                                                                          | [06 Nodes and sessions](spec/06-nodes-and-sessions.md)                                   |
-| The example app, Liquid and mini apps                                                                                        | [apps/example](apps/example/README.md)                                                                                                                                                                                                                                                                                                  | —                                                                                        |
+| The app, Liquid and mini apps                                                                                                | [apps/example](apps/example/README.md)                                                                                                                                                                                                                                                                                                  | —                                                                                        |
 | Planned work                                                                                                                 | [docs](packages/core/docs/README.md#planned-in-the-library)                                                                                                                                                                                                                                                                             | [spec](spec/README.md)                                                                   |
 
 ## Running it locally
@@ -168,8 +168,9 @@ That starts everything, with coloured output per part, and Ctrl-C stops it all:
 
 | Part   | Where                 | What                                                                                                                         |
 | ------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| app    | http://localhost:5173 | The example app                                                                                                              |
+| app    | http://localhost:5173 | The app (app.minca.social)                                                                                                   |
 | home   | http://localhost:5174 | The account home it connects to                                                                                              |
+| site   | http://localhost:5185 | The website (minca.social)                                                                                                   |
 | node   | port 8787             | An always-on node that is also the relay; a throwaway identity on first run (`packages/cli/.env.dev`, data in `.minca-dev/`) |
 | host   | http://localhost:8788 | `minca host`, what "Keep my spaces online" uses and what spaces chip in for; settings in `packages/cli/.env.host.dev`        |
 | stripe | —                     | Only when you add a Stripe test key: forwards Stripe's webhooks to the host                                                  |
@@ -186,10 +187,11 @@ One npm workspace, installed once at the root (`npm install`):
 | `packages/core`  | `@minca/core` (published)     | The protocol library, and its tests                                         |
 | `packages/cli`   | `@minca/cli` (published)      | `minca`: the always-on node, hosting, agents, MCP                           |
 | `packages/relay` | `@minca/relay` (private)      | The signaling relay and its mailbox, run alone on Fly and inside every node |
-| `apps/home`      | —                             | The account home                                                            |
-| `apps/example`   | —                             | The website and the example app                                             |
+| `apps/home`      | —                             | The account home, at home.minca.social                                      |
+| `apps/example`   | —                             | The app, at app.minca.social                                                |
+| `apps/site`      | —                             | The website, at minca.social                                                |
 | `apps/extension` | —                             | The Chrome extension                                                        |
-| `apps/shared`    | `@minca/app-shared` (private) | Styles, relay settings and components the home and the website share        |
+| `apps/shared`    | `@minca/app-shared` (private) | Styles, relay settings and components the apps and the website share        |
 | `spec`           | —                             | The protocol specification                                                  |
 
 Everything imports the protocol by name, `@minca/core`, and only

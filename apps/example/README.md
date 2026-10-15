@@ -1,14 +1,18 @@
-# Minca example
+# Minca app
 
-A general-purpose app for your Minca spaces: it shows any kind of data from
-what each space says about itself.
+The Minca app, at app.minca.social: a general-purpose app for your Minca
+spaces, which shows any kind of data from what each space says about itself.
+The website is [apps/site](../site/README.md), at minca.social.
 
-It also serves the landing pages for now: `/` for communities (`/why` too, for
-older links), `/developers` for developers, and the app itself at `/app`
-(`src/site/`). Links made before the move — an invite at `/` — still open the app.
-`public/_redirects` sends every path to `index.html` on Netlify. A Vite + React app on top of [`@minca/core`](../../README.md). It imports the
-protocol straight from its source in the workspace (`packages/core/src`), so
-edits to the library hot-reload here.
+A Vite + React app on top of [`@minca/core`](../../README.md), routed with
+TanStack Router (`src/router.tsx`): your spaces at `/`, your contacts at
+`/contacts`, and one space at `/spaces/<id>`. Links from when it lived at
+`minca.social/app` still open it: `/app` and any other path it doesn't know go
+to `/`, with the fragment that carries an invite or a door. `public/_redirects`
+sends every path to `index.html` on Netlify, and `netlify.toml` builds it for a
+site whose base directory is `apps/example`. It imports the protocol straight
+from its source in the workspace (`packages/core/src`), so edits to the library
+hot-reload here.
 
 ```bash
 npm run dev         # at the repository root: this app on :5173, the account home on :5174, a node and relay on :8787
@@ -213,7 +217,7 @@ changes as you move around.
 
 ### Agents
 
-**In the browser (WebMCP).** When `/app` loads, it registers every node
+**In the browser (WebMCP).** When the app loads, it registers every node
 operation as a WebMCP tool on `document.modelContext` (`src/webmcp.ts`, with
 `@mcp-b/webmcp-polyfill`: Chrome's own WebMCP when present, a polyfill
 otherwise). A browser agent sees the same tools as the CLI and `minca mcp`,
@@ -251,7 +255,8 @@ exports a `MiniApp`, plus one line in `APPS`.
 
 ```
 src/
-  main.tsx                 # routes: /, /why and /developers (site/), /app (the app), /connect (the account home)
+  main.tsx                 # base styles, WebMCP tools, then the router
+  router.tsx               # routes: / (spaces), /contacts, /spaces/<id>; anything else to /
   minca.ts                 # this app's Minca setup: one sign-in flow, and where peers meet
   App.tsx                  # sign in (<MincaAuth />), then your spaces and contacts
   spaces.ts                # invite links
@@ -259,7 +264,6 @@ src/
   webmcp.ts                # node operations as WebMCP tools
   derive/                  # pure helpers: UI from schemas and links, names from profiles
   components/              # spaces, collections, records, security (sign-in is <minca-auth>)
-  site/                    # the landing pages
 ```
 
 ## Still to do
