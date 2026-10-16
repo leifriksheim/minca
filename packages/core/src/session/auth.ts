@@ -64,6 +64,7 @@ import {
   createStaySignedIn,
   defaultStorage,
   guardedStorage,
+  rememberedSessionKey,
   type KeyValueStore,
   type StaySignedIn,
 } from './stay-signed-in.js';
@@ -791,16 +792,77 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     return session;
   }
 
+  /** Where a signed-out tab only waits for the person to choose, so taking up a sign-in interrupts nothing */
+  const IDLE_STAGES: ReadonlySet<AuthStage> = new Set(['welcome', 'existing', 'signIn']);
+  /** The session a take-up started: it goes when the sign-in it took up does */
+  let takenUp: MincaSession | null = null;
+  /** Which kept sign-in the record holds: its account and the device key that opens it */
+  const keptNow = () => {
+    const kept = read<{ accountId?: unknown; wrap?: { deviceKeyId?: unknown } }>(
+      rememberedSessionKey(prefix),
+    );
+    return kept ? `${String(kept.accountId)} ${String(kept.wrap?.deviceKeyId)}` : null;
+  };
+  /** Whether `start()` has finished: before that, it is the one signing in */
+  let settledStart = false;
+  /** The take-up under way; sign-ins wait for it, so two never start a node at once */
+  let takingUp: Promise<void> | null = null;
+  /** Sign-ins under way through `run` */
+  let running = 0;
+
+  /**
+   * Signs in with the sign-in another tab of this browser kept, while this one
+   * is signed out and only waiting. A phone pairs in the tab its camera
+   * opened, while the app that sent it to sign in waits here; a refresh would
+   * do the same.
+   */
+  function takeUpKept(): void {
+    const place = state.place;
+    if (takingUp || running > 0 || !settledStart || state.session || state.busy || !place) return;
+    if (!IDLE_STAGES.has(state.stage)) return;
+    takingUp = (async () => {
+      update({ busy: true });
+      let started: MincaSession | null = null;
+      try {
+        const before = keptNow();
+        const kept = await stay.recall(place.kind).catch(() => null);
+        if (!kept) return;
+        // Choosing an account here is the person's answer: another one signed in elsewhere is not.
+        if (state.stage === 'signIn' && state.selectedId && state.selectedId !== kept.accountId) return;
+        const summary = (await listAccounts(place)).find((account) => account.id === kept.accountId);
+        if (!summary) return;
+        // The record is already kept; remembering again would replace the key other tabs read.
+        set(LAST_ACCOUNT, summary.id);
+        started = await startSession(place, summary, kept.seed);
+        // Signed out, or into another account, in another tab meanwhile: that wins.
+        if (!stay.until() || keptNow() !== before) throw new Error('signed out');
+        takenUp = started;
+        update({ session: started, stage: 'ready', error: null });
+        await refresh(place);
+      } catch {
+        // Signing in here by hand still works.
+        if (started && state.session !== started) await stopNode(started.node).catch(() => {});
+      } finally {
+        update({ busy: false });
+      }
+    })().finally(() => {
+      takingUp = null;
+    });
+  }
+
   /** Runs something that may fail, showing the failure; true when it worked. */
   async function run(work: () => Promise<void>): Promise<boolean> {
-    update({ busy: true, error: null });
+    running++;
     try {
+      while (takingUp) await takingUp;
+      update({ busy: true, error: null });
       await work();
       return true;
     } catch (error) {
       update({ error: describe(error) });
       return false;
     } finally {
+      running--;
       update({ busy: false });
     }
   }
@@ -978,6 +1040,13 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     start() {
       started ??= (async () => {
+        // Only `localStorage` tells other tabs, and only on a page.
+        globalThis.addEventListener?.('storage', (event: StorageEvent) => {
+          if (event.key !== rememberedSessionKey(prefix)) return;
+          if (event.newValue) takeUpKept();
+          // The sign-in this tab took up is gone: signed out elsewhere, so here too.
+          else if (takenUp && state.session === takenUp) void auth.signOut();
+        });
         try {
           // Asks nothing of the person: only whether what was granted before is still live.
           const pod = await recallPod(false).catch(() => null);
@@ -1003,6 +1072,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
           update({ stage: afterStorage(accounts) });
         } catch (error) {
           update({ error: describe(error), stage: 'welcome' });
+        } finally {
+          settledStart = true;
         }
       })();
       return started;
@@ -1180,6 +1251,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const opened = await run(async () => {
         const handover = await receiveFromDesktop(ticket, onStage);
         spaces = handover.spaces;
+        // Starting the node takes a moment; the code on screen is done with.
+        onStage({ kind: 'sending' });
         await arrive(await openWithCode(seedToRecoveryCode(handover.seed), null), 'paired');
       });
       clearPairingTicket();
@@ -1187,7 +1260,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const session = state.session;
       if (!opened || !session) return;
       let joined = 0;
-      for (const invite of spaces) {
+      for (const [index, invite] of spaces.entries()) {
+        onStage({ kind: 'joining', joined: index, total: spaces.length });
         if (
           await session.node.spaces.join(invite).then(
             () => true,

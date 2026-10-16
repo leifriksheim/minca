@@ -103,6 +103,9 @@ export interface StaySignedInStore {
   forget(): Promise<void>;
 }
 
+/** The key the kept sign-in is stored under: a change to it is another tab signing in or out */
+export const rememberedSessionKey = (prefix = 'minca'): string => `${prefix}.remembered-session`;
+
 /** `prefix` namespaces the keys, so two apps on one origin do not share a sign-in */
 export function createStaySignedIn(
   storage: KeyValueStore | null,
@@ -110,7 +113,7 @@ export function createStaySignedIn(
   prefix = 'minca',
 ): StaySignedInStore {
   const SETTING = `${prefix}.stay-signed-in`;
-  const RECORD = `${prefix}.remembered-session`;
+  const RECORD = rememberedSessionKey(prefix);
 
   const { read, write } = guardedStorage(storage);
 

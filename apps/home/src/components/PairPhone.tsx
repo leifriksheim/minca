@@ -14,6 +14,8 @@ function describe(stage: PairingStage): string {
     case 'confirm':
     case 'compare':
       return 'Does your phone show the same code?';
+    // Only the phone joins.
+    case 'joining':
     case 'sending':
       return 'Sending your account…';
     case 'sent':
