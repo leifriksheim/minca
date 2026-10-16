@@ -54,9 +54,10 @@ a change was landing is not kept.
 When another writer changed the same store, the node re-reads all of it
 (`invalidate`). Other tabs of one browser are told through a
 `BroadcastChannel` named `minca-node:<root DID>:<space id>`. Where a browser
-has shared workers, the apps in this repository run one node for all of a
-site's tabs in a `SharedWorker`, so those tabs share one store and have
-nothing to tell each other; the channel remains for browsers without them,
+has shared workers that work, the apps in this repository run one node for all
+of a site's tabs in a `SharedWorker`, so those tabs share one store and have
+nothing to tell each other; the channel remains for the rest (Chrome on
+Android has none; WebKit drops a message to one that holds a `CryptoKey`),
 where each tab's node runs in a worker of its own
 (`packages/core/src/node/worker.ts`). Writers on a shared folder are found by
 re-reading it ([data folders](#data-folders)).
