@@ -32,7 +32,11 @@ export function ConnectScreen() {
               data-variant="primary"
               style={styles.button}
             >
-              {state.status === 'connecting' ? 'Waiting for your account home…' : 'Connect with Minca'}
+              {state.status === 'starting'
+                ? 'Opening your account…'
+                : state.status === 'connecting'
+                  ? 'Waiting for your account home…'
+                  : 'Connect with Minca'}
             </button>
             <p style={{ ...styles.errorHint, marginTop: 16 }}>
               Opens <strong style={{ color: palette.ink.strong }}>{home}</strong>, where you sign in. This app

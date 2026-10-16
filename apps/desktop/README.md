@@ -141,9 +141,9 @@ SharedWorker that holds a `CryptoKey`, and a node's worker is started with its
 session key. Every page waited 30 s for a worker that never started, then ran
 its node itself: "Looking for your accounts…" in the home, then "Waiting for
 your account home…" in the app. The preload hides `SharedWorker`, so pages use
-a dedicated worker: the app is connected about a second after it loads. Whether
-Safari drops these messages too is worth checking: there, every page with a
-shared worker would wait the same 30 s.
+a dedicated worker: the app is connected about a second after it loads.
+Safari does the same, so the app and the home skip shared workers in any
+WebKit browser too (`apps/example/src/minca.ts`).
 
 ## Checked on macOS (arm64)
 
