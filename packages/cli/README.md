@@ -289,7 +289,9 @@ and keeps working with every tab closed. What it writes is marked as written
 under a records-only note, which the example app shows as "via agent". It
 isn't offered what needs a person (making, joining or leaving spaces, invites,
 roles, defining collections), and its note doesn't let it: it proposes
-collections with `collections_propose`, and you add them. `minca disconnect`
+collections with `collections_propose`, and you add them. Connected from
+npx, the agent starts `npx -y @minca/cli@latest mcp`, so restarting it picks
+up a new release. `minca disconnect`
 forgets it on this computer and takes `minca` out of the agents connecting
 added it to (an entry you added by hand stays); disconnecting it in your
 account home stops its note working everywhere.
