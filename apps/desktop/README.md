@@ -33,6 +33,11 @@ resources aren't sealed and macOS calls a downloaded copy "damaged", with no
 way to open it. Signed ad hoc, System Settings → Privacy & Security → **Open
 Anyway** opens it.
 
+The app runs on macOS 14 and later. Electrobun's Zig-built binaries (the
+`.dmg`'s extractor, `libasar`, `zig-zstd`) come marked with the macOS they
+were built on, 14.8, which 14.0–14.7 refuse to open; `scripts/macos-floor.ts`
+(the `preBuild` hook) marks them 14.0, what the rest of the app needs.
+
 ## What it does
 
 - Serves the example app at `http://127.0.0.1:47830`. The port is fixed: a new

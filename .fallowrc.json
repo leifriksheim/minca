@@ -3,7 +3,7 @@
   "entry": [
     "apps/desktop/src/bun/index.ts",
     "apps/desktop/electrobun.config.ts",
-    "apps/desktop/scripts/sign-adhoc.ts",
+    "apps/desktop/scripts/*.ts",
     "apps/extension/src/{worker,offscreen,welcome,popup}.ts",
     "bump.config.ts",
     "packages/cli/tests/bench/**/*.ts",

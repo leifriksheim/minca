@@ -13,7 +13,7 @@ export function Download() {
   const mac = (
     <div className="platform" key="mac">
       <h3>Mac</h3>
-      <p>For Macs with Apple silicon (M1 and later).</p>
+      <p>For Macs with Apple silicon (M1 and later), on macOS 14 Sonoma or newer.</p>
       <a href={DOWNLOADS.mac} className={`btn ${windowsFirst ? 'btn-secondary' : 'btn-primary'}`}>
         Download for Mac
       </a>

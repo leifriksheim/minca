@@ -9,7 +9,9 @@ permissions:
 
 jobs:
   # A PR that changes the protocol says what its adversarial review found (CLAUDE.md).
+  # Dependabot's version bumps are skipped: it can't write the sections.
   adversarial-review:
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
