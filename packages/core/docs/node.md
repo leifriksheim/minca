@@ -608,9 +608,14 @@ meet this one.
 then 30 s between attempts, each ±25% so peers that dropped together do not
 return together, and never stops until `disconnect`. After a `4009` it emits
 `refused` and waits 10 s, doubling with each refusal in a row up to 60 s. It
-tries at once when the browser reports `online` or the page becomes visible
-again, since both follow a network change or a sleep, and when asked
-(`reconnect`). A successful open resets the count. Each relay's state
+tries at once when the page becomes visible again, and when asked
+(`reconnect`). A successful open resets the count. A socket can die without
+closing, and after a sleep it has: so the client looks at the clock every
+5 s, and a look more than 30 s after the last means the device slept; it
+then lets go of its socket and dials again at once, as it does when the
+browser reports `online`. An open socket that has heard nothing for 30 s
+also sends `ping`; once its relay has answered one, two going unanswered end
+the socket ("The relay stopped answering.") and it redials. Each relay's state
 (`connecting`, `open`, `waiting` with the time of the next attempt and why the
 last one failed, `stopped`) is readable as `RelayStatus`, and through a node
 as `network.status()`.
@@ -799,7 +804,12 @@ are protocol ([spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec
 **Carriers.** `node.carriers.add({ did, name })` (needs the account key) makes
 the carry space, named `Carried by <name>` (name trimmed to 80, default
 `Carrier`), writes the `sys.carrier` record, fills the carry space, and returns
-`{ space, invite }` for the carrier to join with. `node.carriers.remove(carrySpace)`
+`{ space, invite }` for the carrier to join with; for a carrier it already
+has, by `did`, it returns that one's. `node.carriers.reached(carrySpace, waitMs)`
+waits up to `waitMs` for the node to be level with the carrier in the carry
+space and then the account registry, and says whether it was: a node about to
+close (the home's window, once it has answered) waits on it, so what it wrote
+for the carrier is not left with nobody (spec 06 §4.3). `node.carriers.remove(carrySpace)`
 writes `carry:closed` and deletes the record; the node keeps the carry space
 open for 30 days after, so a carrier that is offline still hears it.
 

@@ -668,8 +668,15 @@ export interface IncomingRequest {
   readonly request: ConnectRequest | ProposeRequest;
   /** Where it came from, as the browser reports it — the only name to trust */
   readonly origin: string;
-  /** Sends the answer back to that origin, and closes the window */
-  approve(answer: Omit<Grant, 'home'> | Omit<CarryGrant, 'home'> | Proposed): void;
+  /**
+   * Sends the answer back to that origin, and closes the window — once
+   * `closeAfter` settles, when given: what this window's node wrote for the
+   * asker may still have to reach it.
+   */
+  approve(
+    answer: Omit<Grant, 'home'> | Omit<CarryGrant, 'home'> | Proposed,
+    closeAfter?: Promise<unknown>,
+  ): void;
   /** Says no, and closes the window */
   deny(reason?: string): void;
 }
@@ -714,15 +721,16 @@ export function receiveConnectRequest(timeoutMs = 10 * 60_000): Promise<Incoming
       }
 
       const origin = event.origin;
-      const reply = (message: unknown) => {
+      const reply = (message: unknown, closeAfter?: Promise<unknown>) => {
         opener.postMessage(message, origin);
         // A moment's grace, so the answer is delivered before the window goes.
-        globalThis.setTimeout(() => globalThis.close(), 100);
+        const close = () => void globalThis.setTimeout(() => globalThis.close(), 100);
+        void (closeAfter ?? Promise.resolve()).then(close, close);
       };
       resolve({
         request: data.request,
         origin,
-        approve: (answer) => reply({ type: GRANT, grant: answer }),
+        approve: (answer, closeAfter) => reply({ type: GRANT, grant: answer }, closeAfter),
         deny: (reason) => reply({ type: DENIED, reason: reason ?? 'Access was not given.' }),
       });
     };

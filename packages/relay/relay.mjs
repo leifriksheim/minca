@@ -229,6 +229,12 @@ export function createRelay(options = {}) {
       return;
     }
 
+    // A browser can't see WebSocket pings, so a client asks in a message whether its socket still reaches us.
+    if (message.type === 'ping') {
+      send(client, '{"type":"pong"}');
+      return;
+    }
+
     if (message.type === 'ice') {
       if (client.did) offerTurn(client);
       return;

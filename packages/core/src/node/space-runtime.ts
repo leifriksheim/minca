@@ -4255,6 +4255,29 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
     },
 
+    /**
+     * Waits up to `waitMs` for this node to be level with `peer` here: nothing
+     * left in flight either way, so the peer holds everything this node does.
+     * False when that long passed first.
+     */
+    syncedWith(peer: string, waitMs: number): Promise<boolean> {
+      if (sync.levelWith(peer)) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const done = (level: boolean) => {
+          clearTimeout(timer);
+          sync.off('synced', onSynced);
+          resolve(level);
+        };
+        const onSynced = (from: string) => {
+          if (from === peer) done(true);
+        };
+        const timer = setTimeout(() => done(false), waitMs);
+        sync.on('synced', onSynced);
+        // Behind, it would start catching up only at the next heartbeat.
+        sync.notifyPeers([peer]);
+      });
+    },
+
     /** Writes a role's definition: its grants, issued by this account, and the roles it nests */
     async defineRole(role: FoundingRole) {
       const problem = checkFoundingRole(role);

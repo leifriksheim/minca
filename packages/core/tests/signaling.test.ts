@@ -17,6 +17,8 @@ import { createEmitter } from '../src/utils/events.js';
 let relayUp = true;
 /** What the pretend relay closes a newly opened socket with, if anything */
 let refuseWith: number | null = null;
+/** Whether the pretend relay answers pings (an older one doesn't) */
+let answersPings = false;
 let sockets: FakeWebSocket[] = [];
 
 class FakeWebSocket {
@@ -46,7 +48,14 @@ class FakeWebSocket {
     });
   }
 
-  send = (data: string) => void this.sent.push(data);
+  /** The relay is gone, but nothing told this end: what is sent goes nowhere, and nothing comes back */
+  deaf = false;
+
+  send = (data: string) => {
+    this.sent.push(data);
+    if (this.deaf || !answersPings || !data.includes('"type":"ping"')) return;
+    queueMicrotask(() => this.onmessage?.({ data: '{"type":"pong"}' }));
+  };
 
   close = () => this.drop(1000);
 
@@ -81,9 +90,10 @@ describe('signaling reconnects', () => {
   beforeEach(() => {
     relayUp = true;
     refuseWith = null;
+    answersPings = false;
     sockets = [];
     global.WebSocket = FakeWebSocket;
-    mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
     client = createSignalingClient('ws://relay.example', 'did:key:zMe');
   });
 
@@ -115,7 +125,9 @@ describe('signaling reconnects', () => {
     assert.equal(client.status().state, 'open');
     assert.equal(client.status().failures, 0);
     // And the room is joined again on the new socket.
-    const joins = opened()[0]!.sent.map((message): unknown => JSON.parse(message));
+    const joins = opened()[0]!
+      .sent.filter((message) => message.includes('"type":"join"'))
+      .map((message): unknown => JSON.parse(message));
     assert.deepEqual(joins, [{ type: 'join', room: 'room-a', from: 'did:key:zMe' }]);
   });
 
@@ -180,6 +192,53 @@ describe('signaling reconnects', () => {
     assert.equal(client.status().state, 'open');
   });
 
+  test('waking from a sleep dials again, with nothing asked of the relay', async () => {
+    // A laptop asleep: the relay dropped its socket and its rooms, and no close ever came.
+    await client.connect();
+    client.join('room-a');
+    const dead = sockets.at(-1)!;
+    dead.deaf = true;
+    // Asleep for ten minutes: the clock moves on, and no timer fires.
+    mock.timers.setTime(Date.now() + 10 * 60_000);
+    await pass(5_000);
+    const live = sockets.at(-1)!;
+    assert.notEqual(live, dead);
+    assert.equal(client.status().state, 'open');
+    assert.ok(
+      live.sent.some((message) => message.includes('"join"') && message.includes('room-a')),
+      'the room is joined again',
+    );
+  });
+
+  test('a socket that dies while awake is found out by a relay that answers pings', async () => {
+    answersPings = true;
+    await client.connect();
+    client.join('room-a');
+    await pass(2 * 60_000);
+    assert.equal(client.status().state, 'open', 'a relay that answers keeps its socket');
+    assert.equal(sockets.length, 1);
+
+    const dead = sockets.at(-1)!;
+    dead.deaf = true;
+    await pass(3 * 60_000);
+    const live = sockets.at(-1)!;
+    assert.notEqual(live, dead);
+    assert.equal(client.status().state, 'open');
+    assert.ok(
+      live.sent.some((message) => message.includes('"join"') && message.includes('room-a')),
+      'the room is joined again',
+    );
+  });
+
+  test('a relay that never answers pings is not held to them', async () => {
+    await client.connect();
+    const first = sockets.at(-1)!;
+    await pass(5 * 60_000);
+    assert.equal(sockets.at(-1), first);
+    assert.equal(client.status().state, 'open');
+    assert.ok(first.sent.some((message) => message.includes('"ping"')));
+  });
+
   test('says why when the relay still holds an earlier socket', async () => {
     await client.connect();
     const seen: RelayStatus[] = [];
@@ -232,9 +291,10 @@ describe('the mesh offers again', () => {
   beforeEach(() => {
     relayUp = true;
     refuseWith = null;
+    answersPings = false;
     sockets = [];
     global.WebSocket = FakeWebSocket;
-    mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
   });
 
   afterEach(() => {

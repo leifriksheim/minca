@@ -117,6 +117,8 @@ export interface SyncEngine {
   handleMessage(peerId: string, message: unknown): Promise<void>;
   /** Says hello to these peers now, rather than at the next heartbeat. */
   notifyPeers(peers: ReadonlyArray<string>): void;
+  /** Whether the peer was last found level with this node, and this node has taken in nothing since */
+  levelWith(peerId: string): boolean;
   /** Asks every peer that holds the collection for these versions, by id, ahead of the rest */
   ask(collection: string, ids: ReadonlyArray<string>): void;
   onLocalChange(version: Version): void;
@@ -381,7 +383,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       }
       for (const [collection, ids] of byCollection) want(peerId, collection, ids, true);
     }
-    if (intake.placed.length > 0) emit('received', intake.placed);
+    if (intake.placed.length > 0) {
+      level.clear();
+      emit('received', intake.placed);
+    }
   };
 
   // ─── Hello ─────────────────────────────────────────────────────────
@@ -431,7 +436,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
     const differing = shared.filter((c) => theirs[c] !== ours[c]);
     for (const c of shared) if (theirs[c] === ours[c]) emit('level', peerId, c, state.holds === 'all');
     if (differing.length === 0) {
-      if (!busy(peerId)) emit('synced', peerId, state.holds === 'all');
+      if (!busy(peerId)) synced(peerId);
       return;
     }
     if (self !== undefined && self > peerId) {
@@ -450,7 +455,14 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
   };
 
   const settleIfDone = (peerId: string) => {
-    if (!busy(peerId)) emit('synced', peerId, states.get(peerId)?.holds === 'all');
+    if (!busy(peerId)) synced(peerId);
+  };
+
+  /** Peers found level with this node, until it takes in or writes anything more */
+  const level = new Set<string>();
+  const synced = (peerId: string) => {
+    level.add(peerId);
+    emit('synced', peerId, states.get(peerId)?.holds === 'all');
   };
 
   const begin = async (peerId: string, collection: string) => {
@@ -718,7 +730,10 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
         if (holdsCollection(states.get(peer)?.holds ?? 'all', collection)) want(peer, collection, ids, true);
     },
 
+    levelWith: (peerId: string) => level.has(peerId),
+
     onLocalChange(version: Version) {
+      level.clear();
       // Not to a peer whose hello said it doesn't hold the collection: it would pass it by.
       for (const peer of peers) {
         if (holdsCollection(states.get(peer)?.holds ?? 'all', version.collection))
@@ -730,6 +745,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       // A new connection: nothing half-finished from an earlier one carries over.
       connections.set(peerId, ++lastConnection);
       states.delete(peerId);
+      level.delete(peerId);
       peers.add(peerId);
     },
 
@@ -738,6 +754,7 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
       connections.delete(peerId);
       peers.delete(peerId);
       states.delete(peerId);
+      level.delete(peerId);
     },
 
     on,

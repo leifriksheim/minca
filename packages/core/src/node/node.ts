@@ -1092,6 +1092,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     async add(carrier) {
       const registryRt = await requireAccount('Using a carrier');
+      // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
+      const known = (await liveCarriers()).find((c) => c.did === carrier.did);
+      if (known) {
+        await syncPasses(known);
+        return { space: known.space, invite: known.invite };
+      }
       const name = carrier.name.trim().slice(0, 80) || 'Carrier';
       // Private, so the passes in it are sealed; the account alone may write there.
       const record = await registry.create({
@@ -1111,6 +1117,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, await carrierKey(record.space.id), body);
       await syncPasses(body);
       return { space: record.space.id, invite };
+    },
+
+    async reached(spaceId, waitMs) {
+      const carrier = (await liveCarriers()).find((c) => c.space === spaceId);
+      if (!carrier || !accountSpaceId) return false;
+      const deadline = Date.now() + waitMs;
+      // Its passes first: only through them does it come to the registry, and hold its own record there.
+      if (!(await (await runtime(spaceId)).syncedWith(carrier.did, waitMs))) return false;
+      return (await runtime(accountSpaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()));
     },
 
     async remove(spaceId) {

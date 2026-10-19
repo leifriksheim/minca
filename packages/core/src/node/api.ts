@@ -76,7 +76,7 @@ export const API = Object.freeze({
   },
   collections: { list: 'scoped', define: 'own', delete: 'remove collections', tag: 'scoped' },
   account: { profile: 'pass', setName: 'rename the account', revoke: 'revoke notes' },
-  carriers: { list: 'pass', add: 'add a carrier', remove: 'remove a carrier' },
+  carriers: { list: 'pass', add: 'add a carrier', reached: 'add a carrier', remove: 'remove a carrier' },
   automations: {
     list: 'look at your automations',
     add: 'make automations of your own',
