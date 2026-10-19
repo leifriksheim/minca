@@ -987,7 +987,7 @@ export class MincaAuthElement extends Base {
         ? h(
             'p',
             { class: 'wa-hint' },
-            `This phone is signed in as ${state.session.account.name}. Continuing switches it to the account on your computer; ${state.session.account.name} stays here, to switch back to from the sign-in screen.`,
+            `This phone is signed in as ${state.session.account.name}. To add the account from your computer, sign out first. ${state.session.account.name} stays on this phone, to sign back in to.`,
           )
         : null,
       state.accounts.length > 0 && !code && !arriving
@@ -997,7 +997,14 @@ export class MincaAuthElement extends Base {
             'Only continue if the code is on your own screen, in front of you. A link someone sent you would put this phone in their account instead of yours.',
           )
         : null,
-      state.pairing && !code && !arriving
+      state.pairing && state.session && !code && !arriving
+        ? h(
+            'button',
+            { type: 'button', class: 'wa-button', disabled: state.busy, onclick: () => void auth.signOut() },
+            `Sign out of ${state.session.account.name}`,
+          )
+        : null,
+      state.pairing && !state.session && !code && !arriving
         ? h(
             'button',
             {

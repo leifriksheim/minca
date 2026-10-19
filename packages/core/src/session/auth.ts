@@ -348,6 +348,7 @@ export interface MincaAuth {
   codeSaved(): void;
   /** Leaves the optional `pod` step with the data in this browser */
   finishSetup(): void;
+  /** Meets the computer the pairing link names. Signed in, it refuses: sign out first. */
   acceptPairing(): Promise<void>;
   dismissPairing(): void;
   clearError(): void;
@@ -1243,6 +1244,18 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     async acceptPairing() {
       const ticket = state.pairing;
       if (!ticket) return;
+      // Signed in, a link from anyone would switch this device to their account
+      // in a tap: signing out first makes switching a choice of its own.
+      const signedIn = state.session;
+      if (signedIn) {
+        update({
+          error: {
+            message: `Sign out of ${signedIn.account.name} first.`,
+            hint: 'This device is signed in to another account. Pairing would switch it.',
+          },
+        });
+        return;
+      }
       if (!state.place) update({ place: await browserPlace() });
       const onStage = (stage: PairingStage) => update({ pairingStage: stage });
       let spaces: ReadonlyArray<string> = [];
@@ -1691,7 +1704,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       });
       await stopNode(leaving).catch(() => {});
       const place = state.place;
-      update({ stage: place ? afterStorage(await refresh(place)) : 'welcome' });
+      const accounts = place ? await refresh(place) : [];
+      // Signed out to pair: back to the pairing link that asked for it.
+      update({ stage: state.pairing ? 'pair' : place ? afterStorage(accounts) : 'welcome' });
     },
   };
 

@@ -285,4 +285,23 @@ describe('a pairing link opened where a sign-in is kept', () => {
     await phone.signOut();
     await first.signOut();
   });
+
+  test('will not switch a signed-in device until it signs out, then asks again', async () => {
+    const { config } = browser();
+    const first = await signedInTab(config);
+    const did = first.getState().session?.did;
+
+    const phone = openedFromPairingLink(config);
+    await phone.start();
+    await phone.acceptPairing();
+    assert.match(phone.getState().error?.message ?? '', /Sign out/, 'a tap on a link alone switches nothing');
+    assert.equal(phone.getState().session?.did, did);
+    assert.equal(phone.getState().pairingStage, null, 'it never went looking for the computer');
+
+    await phone.signOut();
+    assert.equal(phone.getState().stage, 'pair', 'signed out, the link asks again');
+    assert.equal(phone.getState().session, null);
+    assert.ok(phone.getState().pairing);
+    await first.signOut();
+  });
 });
