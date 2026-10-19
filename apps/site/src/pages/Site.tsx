@@ -67,30 +67,109 @@ export function ChromeMark({ size = 16 }: { size?: number }) {
   );
 }
 
-function Nav({ page }: { page: PageName }) {
+/** Three lines, or a cross while the menu they open is open */
+function MenuMark({ open }: { open: boolean }) {
   return (
-    <header className="nav">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      {open ? <path d="M4 4l10 10M14 4L4 14" /> : <path d="M2.5 5h13M2.5 9h13M2.5 13h13" />}
+    </svg>
+  );
+}
+
+function Nav({ page }: { page: PageName }) {
+  // On a phone the links fold into a menu under the bar.
+  const [open, setOpen] = useState(false);
+  const header = useRef<HTMLElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const menu = useId();
+  const current = (name: PageName) => (page === name ? 'page' : undefined);
+
+  // It closes on Escape, giving focus back to the button, and on a tap anywhere else.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      toggle.current?.focus();
+    };
+    const onPointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !header.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [open]);
+
+  return (
+    <header className="nav" ref={header}>
       <div className="wrap">
         <Link to="/" className="brand">
           <Mark />
           minca
         </Link>
         <nav className="nav-links">
-          <Link to="/developers" aria-current={page === 'developers' ? 'page' : undefined}>
+          <Link to="/developers" aria-current={current('developers')}>
             For nerds
           </Link>
-          <Link to="/download" aria-current={page === 'download' ? 'page' : undefined}>
+          <Link to="/download" aria-current={current('download')}>
             Download
           </Link>
           <a href={GITHUB} {...EXTERNAL}>
             <GitHubMark />
             GitHub
           </a>
-          <a href={APP} {...EXTERNAL} className="btn btn-primary" style={{ marginLeft: 8 }}>
+          <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
             Open Minca
           </a>
+          <button
+            ref={toggle}
+            type="button"
+            className="nav-toggle"
+            aria-expanded={open}
+            aria-controls={menu}
+            aria-label={open ? 'Close menu' : 'Menu'}
+            onClick={() => setOpen(!open)}
+          >
+            <MenuMark open={open} />
+          </button>
         </nav>
       </div>
+      {open && (
+        // Following any link in it closes it, the same page's included.
+        <nav id={menu} className="nav-menu" aria-label="Menu" onClick={() => setOpen(false)}>
+          <Link to="/" aria-current={current('home')}>
+            Communities
+          </Link>
+          <Link to="/developers" aria-current={current('developers')}>
+            For nerds
+          </Link>
+          <Link to="/protocol" aria-current={current('protocol')}>
+            Protocol
+          </Link>
+          <Link to="/download" aria-current={current('download')}>
+            Download
+          </Link>
+          <Link to="/extension" aria-current={current('extension')}>
+            Chrome extension
+          </Link>
+          <a href={GITHUB} {...EXTERNAL}>
+            GitHub
+            <GitHubMark />
+          </a>
+        </nav>
+      )}
     </header>
   );
 }

@@ -176,6 +176,72 @@
 .site .nav-links svg {
   flex: none;
 }
+.site .nav-open {
+  margin-left: 8px;
+}
+/* The menu a phone folds the links into: a button beside Open Minca, and
+   a list under the bar in the same frame */
+.site .nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.site .nav-toggle[aria-expanded='true'] {
+  background: var(--sunken);
+}
+@media (hover: hover) {
+  .site .nav-toggle:hover {
+    background: var(--sunken);
+  }
+}
+.site .nav-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  right: 8px;
+  flex-direction: column;
+  margin-top: 8px;
+  padding: 8px;
+  border: var(--edge);
+  border-radius: var(--r-xl);
+  background: var(--paper);
+  animation: nav-menu-in 0.15s ease;
+}
+.site .nav-menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--body);
+}
+.site .nav-menu a[aria-current='page'] {
+  background: var(--sunken);
+  color: var(--ink);
+}
+.site .nav-menu a:not([aria-current='page']):hover {
+  color: var(--accent);
+}
+@keyframes nav-menu-in {
+  from {
+    opacity: 0;
+  }
+}
 
 /* ─── Buttons: pills that change colour, and nothing else ─────────── */
 
@@ -2349,9 +2415,46 @@
   }
 }
 
-@media (max-width: 400px) {
+/* Too narrow for the links in the bar: they go in the menu */
+@media (max-width: 640px) {
   .site .nav-links a:not(.btn) {
     display: none;
+  }
+  .site .nav-toggle {
+    display: inline-flex;
+  }
+  .site .nav-menu {
+    display: flex;
+  }
+  /* The row names stay put while the protocols scroll past them */
+  .site .table {
+    min-width: 620px;
+    font-size: 13.5px;
+  }
+  .site .table th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: 116px;
+    background: var(--card);
+    box-shadow: inset -1px 0 0 var(--line);
+  }
+  .site .table th,
+  .site .table td {
+    padding: 12px 14px;
+  }
+  /* The remixes' cells keep room for their version under the corner */
+  .site .ruled > .remix {
+    padding-top: 44px;
+  }
+  .site .remix .cell-num {
+    top: 14px;
+    left: 20px;
+  }
+  /* Footer links far enough apart for a thumb */
+  .site footer a {
+    display: inline-block;
+    padding: 6px 0;
   }
 }
 

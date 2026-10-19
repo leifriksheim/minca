@@ -364,6 +364,7 @@ function SpaceView({ space }: { space: SpaceSummary }) {
                 on={onApps}
                 onClick={() => go('/spaces/$spaceId')}
               />
+              <CallButton space={space} place="sidebar" />
               <SideHeading>Apps</SideHeading>
               {listed.map((app) => (
                 <SideItem
@@ -495,16 +496,25 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               </span>
             )}
             {open && <AppIcon id={open.id} size={28} />}
-            <h1 style={{ ...styles.appTitle, ...ellipsis, fontSize: 18, flex: 1, minWidth: 0 }}>{title}</h1>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <h1 style={{ ...styles.appTitle, ...ellipsis, fontSize: 18 }}>{title}</h1>
+              {/* Under the space's name on a phone, as the sidebar has it beside a wide screen. */}
+              {onApps && (
+                <span className="phone-only">
+                  <Privacy space={space} />
+                </span>
+              )}
+            </div>
             {open && <NotifyButton space={space} app={open} collections={collections} />}
-            <CallButton space={space} />
-            {/* A phone has no sidebar, so you are in its top bar instead. */}
-            <span className="phone-only">
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
-                <AccountMenu />
+            {/* A phone has no sidebar, so you are in its top bar instead; an open app has the bar to itself. */}
+            {!onApp && (
+              <span className="phone-only">
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Bell spaces={spaces} here={space} onOpenSpace={openSpace} />
+                  <AccountMenu />
+                </span>
               </span>
-            </span>
+            )}
           </header>
 
           <div className="space-content" data-fill={fill || undefined}>
@@ -512,17 +522,19 @@ function SpaceView({ space }: { space: SpaceSummary }) {
               <Notices inSpace />
               {!hood && <RelayDown />}
               {onApps && (
-                <div className="phone-only" style={{ marginBottom: 16 }}>
-                  <Privacy space={space} />
-                  {status && (
-                    <div style={{ marginTop: 6 }}>
+                <div className="phone-only">
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, minWidth: 0 }}
+                  >
+                    {status && (
                       <WhoIsHere
                         status={status}
                         people={people}
                         onOpen={() => go('/spaces/$spaceId/network')}
                       />
-                    </div>
-                  )}
+                    )}
+                    <CallButton space={space} place="chip" />
+                  </div>
                 </div>
               )}
               {!space.writable && (

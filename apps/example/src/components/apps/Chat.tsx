@@ -1,6 +1,8 @@
 import {
+  createContext,
   Fragment,
   useCallback,
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -51,6 +53,9 @@ interface Conversation {
   readonly messages: ReadonlyArray<DirectMessage>;
 }
 
+/** On a phone, the way from a conversation back to the list of them; null where there is no list */
+const BackToList = createContext<(() => void) | null>(null);
+
 /** A team chat: the space's own room, its channels (`std.channel`) and sealed direct messages (`std.direct`). */
 export function Chat(props: AppProps) {
   const { space, collections } = props;
@@ -86,6 +91,12 @@ export function Chat(props: AppProps) {
   );
 
   const [place, setPlace] = useState<Place>({ kind: 'room', channel: null });
+  // A phone shows the list or one conversation, never both: this is which (`.chat-shell[data-view]`).
+  const [inPlace, setInPlace] = useState(false);
+  const goTo = (to: Place) => {
+    setPlace(to);
+    setInPlace(true);
+  };
   const open = place.kind === 'room' ? (channels?.find((c) => c.key === place.channel) ?? null) : null;
   // Nothing to choose between: the space is the room, as it always was.
   const listed = directs || mayAddChannel || (channels?.length ?? 0) > 0;
@@ -97,12 +108,13 @@ export function Chat(props: AppProps) {
       await node.collections.define(space.id, message);
     const last = channels?.at(-1)?.body?.position ?? null;
     const made = await node.records.put(space.id, channel.name, { name, position: positionBetween(last) });
-    setPlace({ kind: 'room', channel: made.key });
+    goTo({ kind: 'room', channel: made.key });
   };
 
   return (
     <div
       className={listed ? 'chat-shell' : undefined}
+      data-view={inPlace ? 'room' : 'list'}
       style={{
         display: listed ? undefined : 'flex',
         flex: 1,
@@ -118,21 +130,25 @@ export function Chat(props: AppProps) {
           conversations={conversations ?? []}
           reachable={directs ? (reachable ?? []) : null}
           place={place}
-          onPlace={setPlace}
+          onPlace={goTo}
           onAddChannel={mayAddChannel ? addChannel : undefined}
         />
       )}
-      {place.kind === 'room' ? (
-        <Room key={place.channel ?? ''} {...props} channel={open} titled={listed} />
-      ) : (
-        <DirectRoom
-          key={place.with.join(',')}
-          space={space}
-          people={people}
-          with={place.with}
-          messages={conversations?.find((c) => sameGroup(c.with, place.with))?.messages ?? []}
-        />
-      )}
+      <div className="chat-room" style={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0 }}>
+        <BackToList value={listed ? () => setInPlace(false) : null}>
+          {place.kind === 'room' ? (
+            <Room key={place.channel ?? ''} {...props} channel={open} titled={listed} />
+          ) : (
+            <DirectRoom
+              key={place.with.join(',')}
+              space={space}
+              people={people}
+              with={place.with}
+              messages={conversations?.find((c) => sameGroup(c.with, place.with))?.messages ?? []}
+            />
+          )}
+        </BackToList>
+      </div>
     </div>
   );
 }
@@ -588,6 +604,9 @@ function Line({
   return (
     <div
       data-row
+      // Focusable so a tap on a touchscreen, which has no hover, can bring up its actions (`.chat-line`).
+      tabIndex={-1}
+      className="chat-line"
       style={{
         display: 'flex',
         gap: 10,
@@ -761,17 +780,38 @@ function NewSince() {
 const GENERAL = 'general';
 
 function RoomTitle({ name, detail }: { name: string; detail?: string | undefined }) {
+  const back = useContext(BackToList);
   return (
     <div
+      className="chat-room-title"
       style={{
         display: 'flex',
-        alignItems: 'baseline',
+        alignItems: 'center',
         gap: 10,
         minWidth: 0,
         padding: '10px 16px',
         borderBottom: `1px solid ${palette.surface.line}`,
       }}
     >
+      {back && (
+        <button
+          type="button"
+          onClick={back}
+          aria-label="All conversations"
+          className="phone-only"
+          style={{
+            border: 'none',
+            background: 'none',
+            padding: 0,
+            marginLeft: -4,
+            color: palette.ink.muted,
+          }}
+        >
+          <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+            <Icon name="chevron" size={16} />
+          </span>
+        </button>
+      )}
       <strong style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong, whiteSpace: 'nowrap' }}>
         {name}
       </strong>
@@ -792,7 +832,7 @@ function RoomTitle({ name, detail }: { name: string; detail?: string | undefined
   );
 }
 
-/** The list beside the chat: rooms, then direct conversations; a row above it on a phone */
+/** The list beside the chat: rooms, then direct conversations; a row above it on a narrow screen, a screen of its own on a phone */
 function Places({
   space,
   people,
