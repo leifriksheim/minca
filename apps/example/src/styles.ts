@@ -298,7 +298,11 @@ export function injectBaseStyles(): void {
       .collection-nav [data-nav] { border: 1px solid ${surface.line} !important; border-radius: ${radius.pill}px !important; padding: 0 12px !important; }
       .collection-nav [data-nav][aria-current] { border-color: ${ink.strong} !important; }
       .collection-nav-heading { display: none; }
-      /* The chat's list becomes a row of tabs above it, as the side column's does. */
+    }
+
+    /* Between a phone and a laptop, the chat's list becomes a row of tabs
+       above it, as the side column's does. A phone gives each a screen (below). */
+    @media (min-width: 641px) and (max-width: 760px) {
       .chat-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
       .chat-places {
         flex-direction: row; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none;
@@ -337,7 +341,22 @@ export function injectBaseStyles(): void {
       .space-shell[data-app-open] .space-content { overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
       .space-shell[data-app-open] .space-main { display: flex; height: 100dvh; }
       .space-shell[data-app-open] .space-bar { position: static; }
-      .space-content[data-fill] { padding: 0 0 env(safe-area-inset-bottom); }
+      .space-content[data-fill], .space-shell[data-app-open] .space-content[data-fill] { padding: 0 0 env(safe-area-inset-bottom); }
+
+      /* Chat, the way a phone's messaging apps are: the list of conversations
+         is a screen, and one opens over it with the way back at its top. */
+      .chat-shell { grid-template-columns: minmax(0, 1fr); }
+      .chat-shell[data-view="list"] > .chat-room, .chat-shell[data-view="room"] > .chat-places { display: none !important; }
+      .chat-places { padding: 8px 12px 24px; border-right: none; background: none; }
+      .chat-places [data-nav] { height: 48px !important; padding: 0 12px !important; gap: 10px !important; font-size: 16px !important; }
+      .chat-places-heading { padding: 10px 2px 2px 12px !important; }
+      .chat-places-heading > span { font-size: 13px !important; }
+      .chat-places-heading > button { padding: 10px !important; }
+      .chat-shell[data-view="list"] .chat-places [aria-current] { background: none !important; box-shadow: none !important; font-weight: 400 !important; }
+      .chat-places-note { padding: 4px 12px !important; font-size: 13px !important; }
+      .chat-places-form > input { height: 40px !important; font-size: 16px !important; }
+      .chat-places-form > button { height: 40px !important; }
+      .chat-room-title { min-height: 48px; padding: 8px 14px !important; }
 
       .tabbar {
         position: fixed;
@@ -427,9 +446,31 @@ export function injectBaseStyles(): void {
         font-size: 14px !important;
       }
 
+      /* A panel that drops from a button in the top bar spans the screen
+         under the bar, so it never runs off the side it wasn't anchored to. */
+      .drop {
+        position: fixed !important;
+        top: calc(64px + env(safe-area-inset-top)) !important;
+        left: max(12px, env(safe-area-inset-left)) !important;
+        right: max(12px, env(safe-area-inset-right)) !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: calc(100dvh - 160px);
+        overflow-y: auto !important;
+      }
+
       /* Two labels beside each other leave too little room for the value. */
       .property { grid-template-columns: minmax(0, 1fr) !important; gap: 2px !important; }
       .property > dt { padding-top: 0 !important; }
+    }
+
+    /* No hover to bring up a message's actions: they wait for a tap on it,
+       so the text gets the whole width the rest of the time. */
+    .chat-line:focus { outline: none; }
+    @media (hover: none) {
+      .chat-line [data-row-action] { display: none; }
+      .chat-line:focus-within { background-color: ${surface.sunken}; }
+      .chat-line:focus-within [data-row-action] { display: inline-flex; align-items: center; opacity: 1; }
     }
 
     /* Fingers, not a mouse: bigger targets, and no text field under 16px,

@@ -480,7 +480,8 @@ function Members({
     return (
       <li key={did} style={{ ...styles.row, padding: '8px 4px', flexWrap: 'wrap' }}>
         <Avatar did={did} size={28} />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* Room for a name at least; past that, what can be done with them wraps under it. */}
+        <div style={{ flex: '1 1 160px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={{ color: palette.ink.strong, fontSize: 14 }}>
             {self ? <MyName name={people.get(did)?.name ?? name} /> : <Person did={did} />}{' '}
             {self && <span style={{ color: palette.ink.faint, fontWeight: 400 }}>· you</span>}

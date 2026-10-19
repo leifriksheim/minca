@@ -72,6 +72,7 @@ export function Bell({
         <div
           role="dialog"
           aria-label="Notifications"
+          className={place === 'below' ? 'drop' : undefined}
           style={{ ...panel, ...(place === 'below' ? below : above) }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 10px 6px 14px' }}>

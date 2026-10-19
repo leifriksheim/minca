@@ -150,10 +150,22 @@
   text-decoration: none;
   color: var(--ink);
 }
+/* A popover on a phone (below); in the bar on a wide screen, so none of
+   the browser's popover look applies there. */
 .site .nav-links {
   display: flex;
   gap: 2px;
   align-items: center;
+  position: static;
+  inset: auto;
+  width: auto;
+  height: auto;
+  margin: 0 0 0 auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: none;
+  color: inherit;
 }
 /* Plain words that turn cobalt on hover; only the button is a pill */
 .site .nav-links a:not(.btn) {
@@ -175,6 +187,45 @@
 }
 .site .nav-links svg {
   flex: none;
+}
+.site .nav-open {
+  margin-left: 8px;
+}
+/* The button that opens the links on a phone, beside Open Minca */
+.site .nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.site .nav-toggle .menu-opened,
+.site .nav:has(.nav-links:popover-open) .nav-toggle .menu-closed {
+  display: none;
+}
+.site .nav:has(.nav-links:popover-open) .nav-toggle .menu-opened {
+  display: inline;
+}
+.site .nav:has(.nav-links:popover-open) .nav-toggle {
+  background: var(--sunken);
+}
+@media (hover: hover) {
+  .site .nav-toggle:hover {
+    background: var(--sunken);
+  }
+}
+@keyframes nav-menu-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* ─── Buttons: pills that change colour, and nothing else ─────────── */
@@ -1159,6 +1210,59 @@
 }
 .site .spec-link:hover {
   text-decoration: underline;
+}
+
+/* What a part of the spec stands on: each standard, and what it is used for */
+.site .built-on {
+  margin-top: 32px;
+}
+.site .built-on h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.site .built-on ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site .built-on li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: 100%;
+  padding: 7px 14px;
+  border: var(--hair);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 13.5px;
+}
+.site .built-on a {
+  flex: none;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+.site .built-on a:hover {
+  color: var(--accent);
+}
+.site .built-on span {
+  min-width: 0;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  /* One to a line, so a long reason wraps inside its own row */
+  .site .built-on ul {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .site .built-on li {
+    border-radius: var(--r-lg);
+  }
 }
 
 /* Comparison: a plain table, scrolling sideways on its own on a phone */
@@ -2349,9 +2453,71 @@
   }
 }
 
-@media (max-width: 400px) {
-  .site .nav-links a:not(.btn) {
+/* Too narrow for the links in the bar: they go in the menu */
+@media (max-width: 640px) {
+  .site .nav-links:not(:popover-open) {
     display: none;
+  }
+  .site .nav-open {
+    margin-left: auto;
+  }
+  .site .nav-toggle {
+    display: inline-flex;
+  }
+  /* Under the bar, in the same frame */
+  .site .nav-links:popover-open {
+    position: fixed;
+    top: 72px;
+    left: 8px;
+    right: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+    padding: 8px;
+    border: var(--edge);
+    border-radius: var(--r-xl);
+    background: var(--paper);
+    animation: nav-menu-in 0.15s ease;
+  }
+  .site .nav-links:popover-open a:not(.btn) {
+    min-height: 48px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 17px;
+  }
+  .site .nav-links:popover-open a[aria-current='page'] {
+    background: var(--sunken);
+  }
+  /* The row names stay put while the protocols scroll past them */
+  .site .table {
+    min-width: 620px;
+    font-size: 13.5px;
+  }
+  .site .table th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: 116px;
+    background: var(--card);
+    box-shadow: inset -1px 0 0 var(--line);
+  }
+  .site .table th,
+  .site .table td {
+    padding: 12px 14px;
+  }
+  /* The remixes' cells keep room for their version under the corner */
+  .site .ruled > .remix {
+    padding-top: 44px;
+  }
+  .site .remix .cell-num {
+    top: 14px;
+    left: 20px;
+  }
+  /* Footer links far enough apart for a thumb */
+  .site footer a {
+    display: inline-block;
+    padding: 6px 0;
   }
 }
 

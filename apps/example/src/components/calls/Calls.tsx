@@ -470,13 +470,81 @@ function Rejoin({ call, spaceName }: { call: CallAround; spaceName: string }) {
 
 // ─── In a space ──────────────────────────────────────────────────────
 
-/** "Start a call", or "Join call · 3" when one is going on — for the top of a space */
-export function CallButton({ space }: { space: SpaceSummary }) {
+const whoCanJoin = (space: SpaceSummary) =>
+  space.visibility === 'public'
+    ? 'Anyone who joins this space with a role can join the call'
+    : 'Only people in this space can join';
+
+/** "Start a call", or "Join call · 3" when one is going on: in the space's sidebar, beside who is here on a phone, or on its own */
+export function CallButton({
+  space,
+  place = 'button',
+}: {
+  space: SpaceSummary;
+  place?: 'button' | 'sidebar' | 'chip';
+}) {
   const { state, calls } = useCalls();
   const [busy, setBusy] = useState(false);
   if (!calls || !space.writable) return null;
   const here = state.current?.space === space.id;
   const going = state.around.find((c) => c.space === space.id);
+  const startHere = async () => {
+    if (!(await mayLeaveFor(state.current, going ? 'join this one' : 'start one here'))) return;
+    setBusy(true);
+    void calls.start(space.id).finally(() => setBusy(false));
+  };
+  const label = here ? 'In the call' : going ? `Join call · ${going.people.length}` : 'Start a call';
+  const live = here || going !== undefined;
+  if (place === 'sidebar')
+    return (
+      <button
+        onClick={() => void startHere()}
+        disabled={busy || here}
+        data-nav
+        className="side-item"
+        title={whoCanJoin(space)}
+        style={{
+          width: '100%',
+          color: live ? palette.accent.good : palette.ink.body,
+          fontWeight: going && !here ? 600 : 400,
+          cursor: here ? 'default' : undefined,
+        }}
+      >
+        <span style={{ width: 20, display: 'inline-flex', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name="phone" size={15} />
+        </span>
+        <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>{label}</span>
+      </button>
+    );
+  if (place === 'chip')
+    return (
+      <button
+        type="button"
+        onClick={() => void startHere()}
+        disabled={busy || here}
+        title={whoCanJoin(space)}
+        style={{
+          ...styles.badge,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          font: 'inherit',
+          fontSize: 12,
+          cursor: here ? 'default' : 'pointer',
+          ...(here ? { color: palette.accent.good, borderColor: palette.accent.good } : {}),
+          ...(going && !here
+            ? {
+                background: palette.accent.good,
+                borderColor: palette.accent.good,
+                color: palette.surface.card,
+                fontWeight: 600,
+              }
+            : {}),
+        }}
+      >
+        <Icon name="phone" size={12} /> {live ? label : 'Call'}
+      </button>
+    );
   if (here) {
     return (
       <span
@@ -493,14 +561,9 @@ export function CallButton({ space }: { space: SpaceSummary }) {
       </span>
     );
   }
-  const start = async () => {
-    if (!(await mayLeaveFor(state.current, going ? 'join this one' : 'start one here'))) return;
-    setBusy(true);
-    void calls.start(space.id).finally(() => setBusy(false));
-  };
   return (
     <button
-      onClick={() => void start()}
+      onClick={() => void startHere()}
       disabled={busy}
       data-variant={going ? 'primary' : 'quiet'}
       style={{
@@ -517,11 +580,7 @@ export function CallButton({ space }: { space: SpaceSummary }) {
             }
           : {}),
       }}
-      title={
-        space.visibility === 'public'
-          ? 'Anyone who joins this space with a role can join the call'
-          : 'Only people in this space can join'
-      }
+      title={whoCanJoin(space)}
     >
       <Icon name="phone" size={12} />
       {going ? `Join call · ${going.people.length}` : <span className="call-label">Start a call</span>}

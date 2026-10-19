@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { parse, render } from 'sugar-high/core';
 import * as typescript from 'sugar-high/lang/typescript';
@@ -67,7 +75,48 @@ export function ChromeMark({ size = 16 }: { size?: number }) {
   );
 }
 
+/** Three lines, or a cross while the menu they open is open (which shows is up to the CSS) */
+function MenuMark() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path className="menu-closed" d="M2.5 5h13M2.5 9h13M2.5 13h13" />
+      <path className="menu-opened" d="M4 4l10 10M14 4L4 14" />
+    </svg>
+  );
+}
+
+/** The links in the bar: the same ones whether they sit in it or, on a phone, drop from the menu */
+const NAV_LINKS: ReadonlyArray<{
+  readonly to: '/developers' | '/download';
+  readonly page: PageName;
+  readonly label: string;
+}> = [
+  { to: '/developers', page: 'developers', label: 'For nerds' },
+  { to: '/download', page: 'download', label: 'Download' },
+];
+
+const MENU = 'site-menu';
+
+/**
+ * The bar. On a wide screen its links sit in it; on a phone (site.css) the
+ * same list is a popover the menu button opens, so the browser closes it on
+ * Escape or a tap elsewhere and nothing here measures the screen.
+ */
 function Nav({ page }: { page: PageName }) {
+  // A link moves to another page without reloading it, so it closes the menu itself.
+  const close = (event: MouseEvent<HTMLElement>) => {
+    const menu = event.currentTarget;
+    if (menu.matches(':popover-open')) menu.hidePopover();
+  };
   return (
     <header className="nav">
       <div className="wrap">
@@ -75,21 +124,23 @@ function Nav({ page }: { page: PageName }) {
           <Mark />
           minca
         </Link>
-        <nav className="nav-links">
-          <Link to="/developers" aria-current={page === 'developers' ? 'page' : undefined}>
-            For nerds
-          </Link>
-          <Link to="/download" aria-current={page === 'download' ? 'page' : undefined}>
-            Download
-          </Link>
+        <nav id={MENU} className="nav-links" popover="auto" aria-label="Site" onClick={close}>
+          {NAV_LINKS.map((link) => (
+            <Link key={link.to} to={link.to} aria-current={page === link.page ? 'page' : undefined}>
+              {link.label}
+            </Link>
+          ))}
           <a href={GITHUB} {...EXTERNAL}>
             <GitHubMark />
             GitHub
           </a>
-          <a href={APP} {...EXTERNAL} className="btn btn-primary" style={{ marginLeft: 8 }}>
-            Open Minca
-          </a>
         </nav>
+        <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
+          Open Minca
+        </a>
+        <button type="button" className="nav-toggle" popoverTarget={MENU} aria-label="Menu">
+          <MenuMark />
+        </button>
       </div>
     </header>
   );
@@ -574,6 +625,9 @@ export function Developers() {
             <a href={APP} className="btn btn-secondary">
               See the example app
             </a>
+            <Link to="/protocol" className="btn btn-secondary">
+              For supernerds
+            </Link>
           </div>
         </div>
       </section>
