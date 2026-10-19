@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { APP, Band, Page, Points } from './Site';
+import { APP, Band, EXTERNAL, Page, Points } from './Site';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
@@ -237,7 +237,7 @@ function HeroActions() {
             {desktop}
           </Link>
         ) : null}
-        <a href={APP} className={`btn btn-lg ${desktop ? 'btn-secondary' : 'btn-primary'}`}>
+        <a href={APP} {...EXTERNAL} className={`btn btn-lg ${desktop ? 'btn-secondary' : 'btn-primary'}`}>
           Open Minca in your browser
         </a>
       </div>
