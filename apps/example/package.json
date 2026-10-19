@@ -10,7 +10,7 @@
     "test": "node --conditions=@minca/source --import tsx --test --test-concurrency=4 --test-timeout=60000 --test-force-exit tests/*.test.ts"
   },
   "dependencies": {
-    "@mcp-b/webmcp-polyfill": "^4.0.0",
+    "@mcp-b/webmcp-polyfill": "^6.0.3",
     "@minca/app-shared": "*",
     "@minca/core": "*",
     "@tanstack/react-router": "^1.170.44",
