@@ -39,7 +39,7 @@ npm run dev          # node, host, home and example together (scripts/dev.mjs)
 node --experimental-vm-modules --import tsx --test tests/sync.test.ts
 ```
 
-Releasing is `npm run release`; see the README before running it.
+Releasing is `npm run release`; see CONTRIBUTING.md before running it.
 
 A pre-commit hook runs oxlint and Prettier on staged files.
 
