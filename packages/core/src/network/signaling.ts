@@ -5,6 +5,11 @@
  * spaces open and close, and joins them all again after a reconnect. It
  * reconnects for as long as it is wanted: a relay unreachable for a minute,
  * a laptop asleep, a network switched, all end with the socket back.
+ *
+ * A socket can die without closing: after a sleep or a network switch the
+ * relay has dropped it and its rooms, but nothing tells this end, which goes
+ * on looking open to a room with nobody in it. So an open socket pings the
+ * relay, and one that stops answering is let go of and dialled again.
  */
 import { createEmitter } from '../utils/events.js';
 import { isObject } from '../utils/guards.js';
@@ -14,7 +19,7 @@ import { backoff, createRetry } from '../utils/backoff.js';
 export type SignalKind = 'offer' | 'answer' | 'candidate';
 
 export interface SignalingMessage {
-  readonly type: SignalKind | 'join' | 'leave' | 'ice';
+  readonly type: SignalKind | 'join' | 'leave' | 'ice' | 'ping';
   readonly from: string;
   readonly to?: string;
   readonly room?: string;
@@ -133,6 +138,10 @@ const MAX_BACKOFF_MS = 30_000;
  */
 const DID_TAKEN_WAIT_MS = 10_000;
 const MAX_DID_TAKEN_WAIT_MS = 60_000;
+/** How often an open socket pings the relay */
+const PING_MS = 15_000;
+/** Pings in a row a relay may leave unanswered before its socket is taken for dead */
+const MAX_UNANSWERED = 2;
 
 /** Why a socket closed, for a person to read */
 function closeReason(code: number | undefined, reason: string | undefined, opened: boolean): string {
@@ -154,6 +163,8 @@ export function createSignalingClient(url: string, did: string): SignalingClient
   /** Refusals in a row; the count of failures cannot tell them, since a refused socket did open */
   let refusals = 0;
   const rooms = new Set<string>();
+  /** The open socket's pings; there is one socket at a time */
+  let pinging: ReturnType<typeof setInterval> | undefined;
   const { on, off, emit } = createEmitter<SignalingEvents>();
 
   let status: RelayStatus = Object.freeze({
@@ -207,6 +218,10 @@ export function createSignalingClient(url: string, did: string): SignalingClient
       }
       ws = socket;
       let opened = false;
+      /** Whether this relay answers pings: one that never has (an older relay) is not held to it */
+      let answers = false;
+      /** Pings sent since the relay last said anything */
+      let unanswered = 0;
       setStatus({ state: 'connecting', retryAt: null });
 
       socket.onopen = () => {
@@ -215,15 +230,30 @@ export function createSignalingClient(url: string, did: string): SignalingClient
         setStatus({ state: 'open', openedAt: Date.now(), failures: 0, problem: null, closeCode: null });
         emit('connected');
         for (const room of rooms) sendMessage({ type: 'join', room });
+        pinging = setInterval(() => {
+          if (answers && unanswered >= MAX_UNANSWERED) {
+            // Its close may never come, so it is ended here, and the late one finds it replaced.
+            ended({ reason: 'The relay stopped answering.' });
+            socket.close();
+            return;
+          }
+          unanswered++;
+          sendMessage({ type: 'ping' });
+        }, PING_MS);
         resolve();
       };
 
       socket.onmessage = (event) => {
         if (ws !== socket) return;
+        unanswered = 0;
         try {
           const msg: unknown = JSON.parse(String(event.data));
           if (!isObject(msg)) throw new Error('Not a signaling message');
           const { type, from, room, to, payload } = msg;
+          if (type === 'pong') {
+            answers = true;
+            return;
+          }
           if (type === 'ice') {
             const offered = iceFrom(payload);
             if (offered) emit('ice', offered.servers, offered.expiresAt);
@@ -255,9 +285,10 @@ export function createSignalingClient(url: string, did: string): SignalingClient
       };
 
       // A socket already replaced or let go of says nothing about the one in use.
-      socket.onclose = (event: Partial<CloseEvent> | undefined) => {
+      const ended = (event: Partial<CloseEvent> | undefined) => {
         if (ws !== socket) return;
         ws = null;
+        clearInterval(pinging);
         const failures = opened ? 0 : status.failures + 1;
         const problem = closeReason(event?.code, event?.reason, opened);
         setStatus({ failures, problem, closeCode: event?.code ?? null });
@@ -278,6 +309,7 @@ export function createSignalingClient(url: string, did: string): SignalingClient
             : backoff(failures, MAX_BACKOFF_MS),
         );
       };
+      socket.onclose = ended;
     });
 
   /** Tries now rather than at the scheduled time, and from a fresh backoff. */
@@ -310,6 +342,7 @@ export function createSignalingClient(url: string, did: string): SignalingClient
     if (wanted) listen(false);
     wanted = false;
     retry.clear();
+    clearInterval(pinging);
     const socket = ws;
     ws = null;
     socket?.close();

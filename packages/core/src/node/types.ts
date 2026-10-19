@@ -620,11 +620,22 @@ export interface CarrierSummary {
 /** Nodes that keep the account's spaces online without reading them (`space/pass.ts`). Needs the account key */
 export interface NodeCarriers {
   list(): Promise<ReadonlyArray<CarrierSummary>>;
-  /** Starts using a carrier: a carry space with a pass for every space, kept current by every device. Its invite is the carrier's */
+  /**
+   * Starts using a carrier: a carry space with a pass for every space, kept
+   * current by every device. Its invite is the carrier's. The same carrier
+   * again, by DID, gets the carry space it has.
+   */
   add(carrier: {
     readonly did: string;
     readonly name: string;
   }): Promise<{ readonly space: string; readonly invite: string }>;
+  /**
+   * Waits up to `waitMs` for the carrier to hold what this node wrote for it:
+   * level with it in its carry space, then in the account registry. A node
+   * about to close — the home's window, once it has answered — waits for this,
+   * or nobody may hand the carrier its passes until the home opens again.
+   */
+  reached(space: string, waitMs: number): Promise<boolean>;
   /** Stops using a carrier: its passes go, and it is told to forget what it held */
   remove(space: string): Promise<void>;
 }

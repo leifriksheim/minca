@@ -155,6 +155,7 @@ and are not forwarded (forwarded messages are rebuilt from known fields).
 | `leave`                        | `room`: string                 | Leave `room`, if in it. Every other socket in the room receives a relay `leave`.                                                                                                                                                                                              |
 | `offer`, `answer`, `candidate` | `to`: DID, `payload`: any JSON | Delivered to the socket holding `to` in the first room it shares with the sender (in the sender's join order), as the relay form below. Dropped if the sender has not joined, or shares no room with `to`, or `to` is the sender itself.                                      |
 | `ice`                          | —                              | Ask for TURN servers (§1.6). Ignored before the socket's first join, and by a relay without TURN.                                                                                                                                                                             |
+| `ping`                         | —                              | Ask whether the socket still reaches the relay. The relay MUST answer `pong`, joined or not (§2).                                                                                                                                                                             |
 
 The reference client adds `from` (its DID) to every message it sends,
 including `leave`, `ice` and the signals; the relay reads `from` only on
@@ -172,6 +173,7 @@ dropped silently (except the `4009` close of §1.2 and the flood cut-off of
 | `leave`                        | `from`: DID, `room`: string                                 | `from` left `room` — by `leave`, or because its socket closed or was reaped.   |
 | `offer`, `answer`, `candidate` | `from`: DID (the sender's, as joined), `to`: DID, `payload` | A signal from `from`. The relay does not say which room it was routed through. |
 | `ice`                          | `payload`: `{ servers: RTCIceServer[], expiresAt: number }` | TURN servers and when their passwords stop working (ms since the epoch).       |
+| `pong`                         | —                                                           | The answer to a `ping`.                                                        |
 
 Only peers already in a room hear about a newcomer; the newcomer hears of
 nobody. So exactly one side of each pair learns of the other through the
@@ -192,11 +194,13 @@ Examples (DIDs shortened for readability; real ones are full `did:key`s):
 → {"type":"candidate","to":"did:key:zDnaeV1Sz…","payload":{"candidate":"candidate:1 1 udp 2122260223 192.168.1.2 54321 typ host","sdpMid":"0","sdpMLineIndex":0},"from":"did:key:zDnaebEo…"}
 → {"type":"leave","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p","from":"did:key:zDnaeV1Sz…"}
 ← {"type":"leave","from":"did:key:zDnaeV1Sz…","room":"tr3o3btwwyb36pwbt3bcr3za7o5kn76p"}
+→ {"type":"ping","from":"did:key:zDnaeV1Sz…"}
+← {"type":"pong"}
 → {"type":"ice","from":"did:key:zDnaeV1Sz…"}
 ← {"type":"ice","payload":{"servers":[{"urls":["turn:turn.example.com:3478"],"username":"1790000000:3q2-7wX0aBcD","credential":"n3Jk…="}],"expiresAt":1790000000000}}
 ```
 
-_Source: `packages/relay/relay.mjs` (`handleMessage`, `announce`, `offerTurn`), `packages/core/src/network/signaling.ts`. Tests: `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/introductions.test.ts` ("several relays at once")._
+_Source: `packages/relay/relay.mjs` (`handleMessage`, `announce`, `offerTurn`), `packages/core/src/network/signaling.ts`. Tests: `packages/core/tests/network-manager.test.ts` ("the mesh, through real relays"), `packages/core/tests/relay-turn.test.ts`, `packages/core/tests/introductions.test.ts` ("several relays at once"), `packages/core/tests/relay-refusal.test.ts` ("the relay answers a ping")._
 
 ### 1.5 Limits
 
@@ -285,6 +289,13 @@ per channel: pairing, or connecting by code) on it.
   socket closed, however many attempts fail. A client that stops is still
   signed in and still looks online, but no peer can find it until it
   restarts, and it has no way to tell.
+- A socket can die without closing: after a sleep or a network change the
+  relay has reaped it (§1.5) and left its rooms, while the client, which
+  never sees WebSocket pings, still holds it open, alone. So a client SHOULD
+  send `ping` on an open socket every **15 s**, and SHOULD close a socket
+  whose relay has answered a `ping` before but has sent nothing since the
+  last two, and redial. A relay that has never answered one (an older relay)
+  is not held to it.
 - A socket closed with `4009` (§1.2) means the relay already has this DID
   in the room: its previous socket, which the relay drops within two
   heartbeats, or another node signing with the same key. The client MUST NOT
@@ -296,7 +307,7 @@ per channel: pairing, or connecting by code) on it.
 How often the reference client redials, and how it reports each relay's
 state, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`), `packages/core/src/network/multi-signaling.ts` (`relays`). Tests: `packages/core/tests/signaling.test.ts` ("signaling reconnects"), `packages/core/tests/relay-refusal.test.ts` ("one DID per room"), `packages/core/tests/introductions.test.ts` ("several relays at once")._
+_Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`), `packages/core/src/network/multi-signaling.ts` (`relays`). Tests: `packages/core/tests/signaling.test.ts` ("signaling reconnects", among them "a socket that dies without closing is found out"), `packages/core/tests/relay-refusal.test.ts` ("one DID per room"), `packages/core/tests/introductions.test.ts` ("several relays at once")._
 
 ---
 

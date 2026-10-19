@@ -18,7 +18,7 @@ import { team } from '../src/space/presets.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { hold } from './helpers/hold.js';
 import { until } from './helpers/until.js';
-import { portOf } from './helpers/net.js';
+import { portOf, textOf } from './helpers/net.js';
 
 describe('one DID per room', () => {
   const relay = createRelay({});
@@ -44,6 +44,15 @@ describe('one DID per room', () => {
     ws.send(JSON.stringify({ type: 'join', from: did, room: 'room' }));
     return ws;
   };
+
+  test('the relay answers a ping, joined or not, so a client can tell its socket still reaches it', async () => {
+    const ws = new WsSocket(url);
+    await new Promise((resolve) => ws.once('open', resolve));
+    const answer = new Promise<string>((resolve) => ws.once('message', (data) => resolve(textOf(data))));
+    ws.send(JSON.stringify({ type: 'ping', from: 'did:key:zPinger' }));
+    assert.equal(await answer, '{"type":"pong"}');
+    ws.close();
+  });
 
   test('the relay closes a second socket claiming a DID in a room with 4009', async () => {
     const first = await joinAs('did:key:zSame');

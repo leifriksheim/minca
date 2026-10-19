@@ -286,6 +286,9 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   );
 }
 
+/** How long the window stays open for the extension to take its passes, at most */
+const HAND_OVER_MS = 30_000;
+
 /**
  * A carrier — the browser extension — asking to keep the spaces online. It
  * gets a pass for each space, never a key: it can hold and pass on what it
@@ -300,7 +303,17 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
   // One extension carries one account: allowing it here moves it off another one.
   const elsewhere = auth.connectedElsewhere(origin);
 
-  const allow = () => run(async () => incoming.approve(await auth.grantCarry({ origin, request })));
+  const [handing, setHanding] = useState(false);
+
+  const allow = () =>
+    run(async () => {
+      const grant = await auth.grantCarry({ origin, request });
+      // Until the extension has its passes, this window's node may be the only one holding them.
+      const reached = session.node.carriers.reached(grant.carry.space, HAND_OVER_MS);
+      incoming.approve(grant, reached);
+      setHanding(true);
+      await reached;
+    });
 
   return (
     <Frame>
@@ -350,7 +363,7 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
       <Answer
         error={error}
         busy={busy}
-        allowLabel={busy ? 'Connecting…' : 'Allow'}
+        allowLabel={handing ? 'Handing your spaces over…' : busy ? 'Connecting…' : 'Allow'}
         onAllow={() => void allow()}
         onDeny={() => incoming.deny()}
       />

@@ -364,6 +364,58 @@ describe('a carrier', () => {
     assert.deepEqual(await home.carriers.list(), []);
   });
 
+  test('a home that closes once the carrier is reached leaves it everything, with no other device online', async () => {
+    // The account home's window adds the carrier, answers, and goes: nothing else holds what it wrote.
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const popup = await device(me, hub);
+    const notes = await popup.spaces.create({ name: 'Notes', visibility: 'private' });
+    const { did, keys } = await carrierKey();
+    const added = await popup.carriers.add({ did, name: 'Chrome' });
+    // The extension starts its carrier once the answer reaches it, while the window waits.
+    const reached = popup.carriers.reached(added.space, 5000);
+    const node = await carrier(me, added.invite, hub, memoryStores(), keys);
+    assert.equal(await reached, true);
+    await popup.close();
+
+    await until(carries(node, notes.id), 5000, 'Notes to be carried once the home has closed');
+    // A device that comes later hears of the carrier from the carrier itself.
+    const laptop = await device(me, hub);
+    await until(
+      async () => (await laptop.carriers.list()).some((c) => c.did === did),
+      5000,
+      'the next device to learn of the carrier',
+    );
+  });
+
+  test('reached is false when the carrier never comes', async () => {
+    const me = await account();
+    const home = await device(me, createFakeHub({ latencyMs: 1 }));
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    assert.equal(await home.carriers.reached(added.space, 200), false);
+  });
+
+  test('the same carrier connecting again keeps its carry space, and is not told to forget', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const home = await device(me, hub);
+    const notes = await home.spaces.create({ name: 'Notes', visibility: 'private' });
+    const { did, keys } = await carrierKey();
+    const first = await home.carriers.add({ did, name: 'Chrome' });
+    const node = await carrier(me, first.invite, hub, memoryStores(), keys);
+    await until(carries(node, notes.id), 5000, 'Notes to be carried');
+    let closed = false;
+    node.subscribe((event) => {
+      if (event.type === 'closed') closed = true;
+    });
+
+    const again = await home.carriers.add({ did, name: 'Chrome' });
+    assert.deepEqual(again, first);
+    assert.equal((await home.carriers.list()).length, 1);
+    assert.equal(await home.carriers.reached(again.space, 5000), true);
+    assert.equal(closed, false);
+  });
+
   test('a device without the account key does not see carriers, and apps cannot write passes', async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });

@@ -90,13 +90,14 @@ const nameOf = (space: CarriedSpace) =>
 /** The spaces being carried, with whether each is reaching anyone */
 export function spaceList(status: CarrierStatus): HTMLElement {
   const spaces = status.spaces.filter((space) => !space.carry);
+  // Every account passes on at least its list of spaces, so none at all means no device has handed them over yet.
   if (spaces.length === 0) {
     return h(
       'p',
       { class: 'hint' },
       status.state === 'starting'
         ? 'Starting…'
-        : 'No spaces yet. They appear here as your account adds them.',
+        : 'Waiting to hear from one of your devices. Open Minca on any of them, and your spaces arrive here.',
     );
   }
   return h(

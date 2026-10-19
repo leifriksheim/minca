@@ -610,7 +610,10 @@ return together, and never stops until `disconnect`. After a `4009` it emits
 `refused` and waits 10 s, doubling with each refusal in a row up to 60 s. It
 tries at once when the browser reports `online` or the page becomes visible
 again, since both follow a network change or a sleep, and when asked
-(`reconnect`). A successful open resets the count. Each relay's state
+(`reconnect`). A successful open resets the count. An open socket sends
+`ping` every 15 s; once its relay has answered one, two going unanswered
+end the socket ("The relay stopped answering.") and it redials, since after a
+sleep the relay has long let go of it and no close may ever arrive. Each relay's state
 (`connecting`, `open`, `waiting` with the time of the next attempt and why the
 last one failed, `stopped`) is readable as `RelayStatus`, and through a node
 as `network.status()`.
@@ -799,7 +802,12 @@ are protocol ([spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec
 **Carriers.** `node.carriers.add({ did, name })` (needs the account key) makes
 the carry space, named `Carried by <name>` (name trimmed to 80, default
 `Carrier`), writes the `sys.carrier` record, fills the carry space, and returns
-`{ space, invite }` for the carrier to join with. `node.carriers.remove(carrySpace)`
+`{ space, invite }` for the carrier to join with; for a carrier it already
+has, by `did`, it returns that one's. `node.carriers.reached(carrySpace, waitMs)`
+waits up to `waitMs` for the node to be level with the carrier in the carry
+space and then the account registry, and says whether it was: a node about to
+close (the home's window, once it has answered) waits on it, so what it wrote
+for the carrier is not left with nobody (spec 06 §4.3). `node.carriers.remove(carrySpace)`
 writes `carry:closed` and deletes the record; the node keeps the carry space
 open for 30 days after, so a carrier that is offline still hears it.
 

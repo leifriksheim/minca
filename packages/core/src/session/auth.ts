@@ -1585,10 +1585,12 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const { node } = session;
       const problem = await audienceProblem(request, origin);
       if (problem) throw new Error(problem);
-      // Connecting again replaces the old one: one carrier per origin. An app at the same origin is not it, and stays (§2.10).
+      // One carrier per origin: a new key there replaces the old one. The same key again keeps its
+      // carry space (`carriers.add`). An app at the same origin is not it, and stays (§2.10).
       const carrierHere = (known: Connection) => known.origin === origin && known.access === 'carry';
       const previous = auth.connections().find(carrierHere);
-      if (previous?.carrySpace) await node.carriers.remove(previous.carrySpace).catch(() => {});
+      if (previous?.carrySpace && previous.audience !== request.audience)
+        await node.carriers.remove(previous.carrySpace).catch(() => {});
 
       const name = request.name?.slice(0, 80) || 'Browser extension';
       const carry = await node.carriers.add({ did: request.audience, name });
