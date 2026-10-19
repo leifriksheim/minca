@@ -21,8 +21,6 @@ const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact',
 
 const supported = () => typeof globalThis.Notification === 'function';
 
-/** Where the account home keeps the person's notifications */
-
 /** What an automation looks for, as the same thing asked for again would be */
 const lookingFor = (own: Pick<AppAutomation, 'when'>) =>
   `${own.when.query.collection} ${JSON.stringify(own.when.query.where ?? null)}`;

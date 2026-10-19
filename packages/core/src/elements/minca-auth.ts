@@ -987,7 +987,7 @@ export class MincaAuthElement extends Base {
         ? h(
             'p',
             { class: 'wa-hint' },
-            `This phone is signed in as ${state.session.account.name}. To add the account from your computer, sign out first. ${state.session.account.name} stays on this phone, to sign back in to.`,
+            `This phone is signed in as ${state.session.account.name}. If the code is on your own computer, sign out to add that account; ${state.session.account.name} stays on this phone, to sign back in to.`,
           )
         : null,
       state.accounts.length > 0 && !code && !arriving
@@ -997,11 +997,17 @@ export class MincaAuthElement extends Base {
             'Only continue if the code is on your own screen, in front of you. A link someone sent you would put this phone in their account instead of yours.',
           )
         : null,
+      // Signed in, staying put is the safe choice, so it is the main button.
       state.pairing && state.session && !code && !arriving
         ? h(
             'button',
-            { type: 'button', class: 'wa-button', disabled: state.busy, onclick: () => void auth.signOut() },
-            `Sign out of ${state.session.account.name}`,
+            {
+              type: 'button',
+              class: 'wa-button',
+              disabled: state.busy,
+              onclick: () => auth.dismissPairing(),
+            },
+            `Stay as ${state.session.account.name}`,
           )
         : null,
       state.pairing && !state.session && !code && !arriving
@@ -1025,7 +1031,9 @@ export class MincaAuthElement extends Base {
         : null,
       errorBox(state.error),
       h('p', { class: 'wa-small' }, 'Keep the code showing on your computer until this finishes.'),
-      links(link(state.pairing ? 'Not now' : 'Back', () => auth.dismissPairing(), state.busy && !code)),
+      state.pairing && state.session && !code && !arriving
+        ? links(link(`Sign out of ${state.session.account.name}`, () => void auth.signOut(), state.busy))
+        : links(link(state.pairing ? 'Not now' : 'Back', () => auth.dismissPairing(), state.busy && !code)),
     );
   }
 }

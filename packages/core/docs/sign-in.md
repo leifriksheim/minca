@@ -259,13 +259,16 @@ account.
 
 A phone that stays signed in still gets the `pair` stage, with the kept
 account's session open, and `<minca-auth>` names it. `dismissPairing()`
-goes back to it. `acceptPairing()` refuses while signed in, with an `error`
-that says to sign out first: otherwise one tap on a link anyone sent would
-switch the device to their account. `signOut()` then lands on `pair` again,
+goes back to it, and `<minca-auth>` makes it the main button. `acceptPairing()`
+refuses while signed in, with an `error` that says to sign out first:
+otherwise one tap on a link anyone sent would switch the device to their
+account. Only the tab's own session counts: a tab that opens with no kept
+sign-in pairs as a signed-out one does. `signOut()` then lands on `pair` again,
 signed out, and the other account stays filed here, to sign back in to.
 
-An account home ignores a pairing link on its connect page: an app opens that
-page, so a link there is not the person's doing.
+An account home ignores a pairing link on its connect page, so a popup an app
+opened never shows a pairing screen. It is no defence: any page can open the
+account page with the link instead.
 
 The camera opens the link in a new tab, so an app that sent the person to
 sign in is still waiting in another. A flow that is signed out picks up a

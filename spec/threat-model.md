@@ -95,16 +95,17 @@ reference implementation, or any implementation, honestly.
     request, in the window the person opened from the app. The home shows
     that page's origin and grants nothing under the app's; the person
     reading the origin is the only defence (06 §2.3). By design.
-  - A pairing link it makes puts a signed-out device that opens it in its
-    account with one tap: it is the offering side, so it confirms the codes
-    itself, and the code check proves only that the two screens are one
-    exchange, not that the computer is the person's. Any page can deliver the
-    link, by opening the account home with it. The warning before accepting is
-    the only defence (01 §15.3). By design, as with any "scan to log in"
-    link. A signed-in device takes no link until the person signs out
+  - A pairing link it makes puts the device that opens it in its account:
+    it is the offering side, so it confirms the codes itself, and the code
+    check proves only that the two screens are one exchange, not that the
+    computer is the person's. Any page can deliver the link, by opening the
+    account home with it. A tab with no session takes it in one tap: after a
+    warning where the device keeps an account (01 §15.3), with none where it
+    keeps no account. A tab that opens with a kept sign-in takes it only after
+    the person signs out there, which is offered beside staying signed in
     (`packages/core/tests/take-up.test.ts`, "a pairing link opened where a
-    sign-in is kept"), and the reference home ignores one on the connect page
-    an app opens.
+    sign-in is kept"). Those warnings are the only defence. By design, as
+    with any "scan to log in" link.
 
 _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 
