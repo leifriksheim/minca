@@ -12,5 +12,3 @@ dist/
 packages/core/README.md
 
 .claude/worktrees
-# The extension the site offers, zipped at build time (netlify.toml)
-apps/site/public/minca-chrome.zip

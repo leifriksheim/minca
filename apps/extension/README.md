@@ -36,8 +36,9 @@ card after a change (and after a change to `static/`, restart `npm run dev`).
 
 The website offers it for download too, at `/extension`, until it is in the
 Chrome Web Store: `npm run package -w apps/extension -- <out.zip>` builds it
-with `.env.production` (the deployed home and relay) and zips it, and the
-site's build (`netlify.toml`) puts it at `/minca-chrome.zip`.
+with `.env.production` (the deployed home and relay) and zips it. Each
+release puts that zip on GitHub as `minca-chrome.zip`
+(`.github/workflows/release.yml`), and the site links to the latest.
 
 Settings are read at build time, from `extension/.env.local` (not committed;
 copy `.env.example` to start). A variable set in the shell wins over the file.

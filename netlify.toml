@@ -1,10 +1,10 @@
 # The website (apps/site), from the repository root. One install covers the
-# whole workspace; the site compiles the protocol from packages/core/src. The
-# Chrome extension is zipped into the site first, for /extension to offer.
+# whole workspace; the site compiles the protocol from packages/core/src.
+# The downloads it offers are on GitHub Releases (.github/workflows/release.yml).
 # The app (apps/example) and the account home (apps/home) deploy as sites of
 # their own, from the netlify.toml in their folders.
 [build]
-  command = "npm ci && npm run package -w apps/extension -- ../site/public/minca-chrome.zip && npm run build -w apps/site"
+  command = "npm ci && npm run build -w apps/site"
   publish = "apps/site/dist"
 
 [build.environment]

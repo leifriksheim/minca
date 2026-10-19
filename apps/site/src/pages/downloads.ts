@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { GITHUB } from './Site';
 
 /**
- * Where the downloads are. The desktop app is on the latest GitHub Release,
+ * Where the downloads are: the latest GitHub Release, which has each file
  * under a name that stays the same from one release to the next
- * (`.github/workflows/release.yml`), so these links never change. The
- * extension is zipped into the site when it is built (`netlify.toml`), so it
- * matches the home the site points at.
+ * (`.github/workflows/release.yml`), so these links never change.
  */
 export const RELEASES = `${GITHUB}/releases`;
 const latest = (file: string) => `${RELEASES}/latest/download/${file}`;
@@ -14,7 +12,7 @@ const latest = (file: string) => `${RELEASES}/latest/download/${file}`;
 export const DOWNLOADS = {
   mac: latest('Minca-mac-arm64.dmg'),
   windows: latest('Minca-windows-x64.zip'),
-  chrome: '/minca-chrome.zip',
+  chrome: latest('minca-chrome.zip'),
   checksums: latest('SHA256SUMS'),
 } as const;
 

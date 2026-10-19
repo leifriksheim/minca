@@ -157,7 +157,7 @@ export function Download() {
         title="Built in the open."
         intro={
           <p>
-            The desktop app is built from Minca’s public source by GitHub, for the release it belongs to, and
+            Every download is built from Minca’s public source by GitHub, for the release it belongs to, and
             nowhere else.
           </p>
         }

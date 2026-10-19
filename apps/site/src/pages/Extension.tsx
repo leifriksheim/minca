@@ -1,12 +1,12 @@
 import { Band, EXTERNAL, Feature, GITHUB, Page } from './Site';
+import { DOWNLOADS } from './downloads';
 
 /**
  * The Chrome extension (`apps/extension`), and how to install it by hand until
- * it is in the Chrome Web Store. The zip is built with the site
- * (`netlify.toml`), so it always matches what is deployed.
+ * it is in the Chrome Web Store. The zip is the latest release's.
  */
 
-const DOWNLOAD = '/minca-chrome.zip';
+const DOWNLOAD = DOWNLOADS.chrome;
 const SOURCE = `${GITHUB}/tree/main/apps/extension`;
 
 export function Extension() {

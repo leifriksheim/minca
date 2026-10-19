@@ -17,8 +17,8 @@ npm run dev         # at the repository root: this site on :5185, beside the app
 
 ## Deploying it
 
-`netlify.toml` at the repository root builds it, and zips the Chrome
-extension (`apps/extension`) into it first, for `/extension` to offer.
+`netlify.toml` at the repository root builds it. The downloads it offers,
+the Chrome extension among them, are on the latest GitHub Release.
 `public/_redirects` sends every path to `index.html`, and `public/_headers` sets
 the security headers.
 
