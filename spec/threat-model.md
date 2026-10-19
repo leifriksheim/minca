@@ -95,8 +95,16 @@ reference implementation, or any implementation, honestly.
     request, in the window the person opened from the app. The home shows
     that page's origin and grants nothing under the app's; the person
     reading the origin is the only defence (06 §2.3). By design.
+  - A pairing link it sends puts the device that opens it in its account, if
+    the person taps through: the code check proves the two screens are one
+    exchange, not that the computer is theirs. That includes a device signed
+    in to another account, which switches. The warning before accepting,
+    naming the account signed in, is the only defence (01 §15.3). By design,
+    as with any "scan to log in" link. An account home told which account an
+    app wants (`#account=`, which any page can set) only mentions an account
+    it doesn't keep, and never suggests bringing it in.
 
-_Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
+_Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`, `packages/core/tests/take-up.test.ts` ("a pairing link opened where a sign-in is kept")._
 
 ### 3.2 Member
 

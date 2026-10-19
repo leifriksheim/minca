@@ -259,8 +259,9 @@ account.
 A phone that stays signed in still gets the `pair` stage, with the kept
 account's session open, and `<minca-auth>` names it. `dismissPairing()`
 goes back to it; accepting switches the phone to the account that arrives and
-keeps the other filed here, to sign back in to. If the same account arrives,
-the phone only joins its spaces.
+keeps the other filed here, to sign back in to. Switching is not signing out:
+the other account's session key is not revoked, just as when it stays signed
+in. If the same account arrives, the phone only joins its spaces.
 
 The camera opens the link in a new tab, so an app that sent the person to
 sign in is still waiting in another. A flow that is signed out picks up a
@@ -290,11 +291,14 @@ The home may be signed in to another account in that browser, or signed out.
 is not a P-256 `did:key`; `clearAccountHint()` takes it out of the address and
 leaves the section. Any page can open the home with any DID, so a home must
 treat it as a hint: say which account the app uses, pick it on the sign-in
-screen, offer to switch, and never sign out or switch on the hint alone. The
+screen, offer to switch, and never sign out or switch on the hint alone. For
+an account the home doesn't keep, it must not suggest bringing it in: a
+stranger could name their own account, then send a pairing link "to add this
+browser" ([threat model §3.1](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)). The
 account home shows the account by its avatar, drawn from the DID, rather than a
 name the link could have made up.
 
-_Source: `packages/core/src/session/account-hint.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`. Tests: `packages/core/tests/account-hint.test.ts`._
+_Source: `packages/core/src/session/account-hint.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`, `apps/example/src/notifications.ts`. Tests: `packages/core/tests/account-hint.test.ts`._
 
 ## The account home's side
 

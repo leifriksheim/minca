@@ -7,7 +7,8 @@ import { palette, styles } from '../styles';
 /**
  * Which account the app that opened this page acts for, when it is not the one
  * signed in here. Signed out, it picks that account on the sign-in screen;
- * signed in as another, it says so and offers to switch.
+ * signed in as another, it says so and offers to switch. An account this
+ * browser doesn't keep is only mentioned, never offered.
  *
  * The hint comes from whatever page opened this one, so it never signs out or
  * switches by itself, and the account is shown by its avatar (drawn from the
@@ -30,6 +31,25 @@ export function AccountHint() {
   const { session, stage } = state;
   if (session?.did === wantedAccount) return null;
 
+  // Not an account this browser keeps. Any page can name any account, and one
+  // that isn't yours is how a stranger's pairing link would be sold, so this
+  // says what happened and points nowhere.
+  if (!wanted) {
+    if (session ? stage !== 'ready' : stage !== 'signIn' && stage !== 'welcome') return null;
+    return (
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
+        <Avatar did={wantedAccount} size={28} />
+        <p style={{ ...styles.errorHint, margin: 0, flex: 1 }}>
+          The app you came from uses an account that isn't in this browser. If you don't recognise it, ignore
+          this.
+        </p>
+        <button onClick={() => setDismissed(true)} data-variant="quiet" style={styles.smallButton}>
+          OK
+        </button>
+      </div>
+    );
+  }
+
   // Signed in as someone else.
   if (session && stage === 'ready') {
     return (
@@ -38,14 +58,10 @@ export function AccountHint() {
           <Avatar did={wantedAccount} size={32} />
           <div style={{ flex: 1 }}>
             <p style={{ ...styles.ok, color: palette.ink.strong }}>
-              {wanted
-                ? `The app you came from uses ${wanted.name}. You're signed in as ${session.account.name}.`
-                : `The app you came from uses another account, one that isn't in this browser. You're signed in as ${session.account.name}.`}
+              The app you came from uses {wanted.name}. You're signed in as {session.account.name}.
             </p>
             <p style={styles.errorHint}>
-              {wanted
-                ? `What you change here is for ${session.account.name}, not the app's account.`
-                : 'To manage it here, sign out and choose “Another account”: open its pod, use its recovery code, or add this browser from a device it is on.'}
+              What you change here is for {session.account.name}, not the app's account.
             </p>
             <div style={{ ...styles.linkRow, gap: 8 }}>
               <button
@@ -57,7 +73,7 @@ export function AccountHint() {
                 data-variant="quiet"
                 style={styles.smallButton}
               >
-                {wanted ? `Switch to ${wanted.name}` : 'Sign out'}
+                Switch to {wanted.name}
               </button>
               <button onClick={() => setDismissed(true)} data-variant="quiet" style={styles.smallButton}>
                 Stay as {session.account.name}
@@ -65,19 +81,6 @@ export function AccountHint() {
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // Signed out, and the app's account is not one this browser keeps.
-  if (!session && !wanted && (stage === 'signIn' || stage === 'welcome')) {
-    return (
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
-        <Avatar did={wantedAccount} size={28} />
-        <p style={{ ...styles.errorHint, margin: 0 }}>
-          The app you came from uses an account that isn't in this browser yet. Choose{' '}
-          {stage === 'welcome' ? '“I already have one”' : '“Another account”'} to bring it here.
-        </p>
       </div>
     );
   }
