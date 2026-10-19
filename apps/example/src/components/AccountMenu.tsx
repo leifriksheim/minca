@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { useAccount, useConnection } from '@minca/core/react';
+import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
@@ -26,8 +27,9 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
 
   const openHome = () => {
     setOpen(false);
-    // The account page sits beside the connect page, at whichever home the person uses.
-    globalThis.open(new URL('.', state.home).href, 'minca-account', 'popup,width=720,height=820');
+    // The account page sits beside the connect page, at whichever home the person uses. It may
+    // be signed in to another account there, so the link says which one this app acts for.
+    globalThis.open(accountHomeLink(state.home, account.did), 'minca-account', 'popup,width=720,height=820');
   };
 
   return (

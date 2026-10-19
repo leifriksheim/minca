@@ -188,7 +188,7 @@ describe('createMincaAuth', () => {
     assert.equal(auth.getState().stage, 'ready');
   });
 
-  test('restoring on a new device goes on to set up a way in there', async () => {
+  test('restoring on a new device goes straight on to set up a way in there', async () => {
     const auth = started();
     await auth.start();
     const code = await createAccount(auth, 'Ada');
@@ -203,14 +203,9 @@ describe('createMincaAuth', () => {
 
     const restored = elsewhere.getState();
     assert.equal(restored.session?.did, did);
-    assert.equal(
-      restored.stage,
-      'recovery',
-      'a reminder to keep the code apart from the password about to be set',
-    );
+    assert.equal(restored.stage, 'unlock', 'the person just typed the code: it is not shown back to them');
     assert.equal(restored.setup, 'restored');
-    elsewhere.codeSaved();
-    assert.equal(elsewhere.getState().stage, 'unlock');
+    assert.equal(restored.freshCode, null);
     await elsewhere.setPassword(PASSWORD);
     assert.equal(elsewhere.getState().stage, 'ready');
   });
@@ -226,7 +221,7 @@ describe('createMincaAuth', () => {
 
     await auth.signInWithPassword(code);
     assert.equal(auth.getState().session?.did, did);
-    assert.equal(auth.getState().stage, 'recovery');
+    assert.equal(auth.getState().stage, 'unlock');
   });
 
   test('a recovery code for another account is refused with a reason', async () => {

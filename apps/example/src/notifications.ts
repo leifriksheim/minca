@@ -8,6 +8,7 @@ import {
   type AutomationProposal,
   type OwnAutomationView,
 } from '@minca/core';
+import { accountHomeLink } from '@minca/core/session';
 import { notifyOn, type AppAutomation } from '@minca/core/schemas';
 import { APPS } from './components/apps';
 import { isForMe, madeNotify, needsOf } from './components/apps/entries';
@@ -21,7 +22,6 @@ const CONTACTS: AutomationProposal = notifyOn('Someone asks to be your contact',
 const supported = () => typeof globalThis.Notification === 'function';
 
 /** Where the account home keeps the person's notifications */
-const manageUrl = (home: string) => `${new URL('.', home).href}#notifications`;
 
 /** What an automation looks for, as the same thing asked for again would be */
 const lookingFor = (own: Pick<AppAutomation, 'when'>) =>
@@ -121,8 +121,12 @@ export function useAsk() {
   }, []);
 
   const manage = useCallback(() => {
-    globalThis.open(manageUrl(state.home), 'minca-account', 'popup,width=720,height=820');
-  }, [state.home]);
+    const did = state.grant?.did;
+    const url = did
+      ? accountHomeLink(state.home, did, 'notifications')
+      : `${new URL('.', state.home).href}#notifications`;
+    globalThis.open(url, 'minca-account', 'popup,width=720,height=820');
+  }, [state.home, state.grant?.did]);
 
   return { permission, error, asking, kept, ask, allow, manage };
 }

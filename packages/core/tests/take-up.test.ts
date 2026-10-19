@@ -13,6 +13,8 @@ import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { until } from './helpers/until.js';
+import { encodePairingTicket } from '../src/identity/pairing.js';
+import { base64UrlEncode } from '../src/utils/encoding.js';
 
 // ── A page: device keys need IndexedDB, and tabs hear each other through `storage` events ──
 
@@ -249,5 +251,38 @@ describe('a sign-in kept in another tab', () => {
     assert.equal(waiting.getState().session, null, 'still waiting for Ada');
     assert.equal(waiting.getState().selectedId, adaId);
     await other.signOut();
+  });
+});
+
+describe('a pairing link opened where a sign-in is kept', () => {
+  /** A tab opened from a phone-pairing QR code */
+  function openedFromPairingLink(config: MincaAuthConfig) {
+    const ticket = { v: 2, secret: base64UrlEncode(new Uint8Array(16)), relay: '' } as const;
+    const was = { location: scope.location, history: scope.history };
+    scope.location = { hash: `#pair=${encodePairingTicket(ticket)}`, pathname: '/', search: '' };
+    scope.history = { replaceState() {} };
+    try {
+      return createMincaAuth(config);
+    } finally {
+      Object.assign(scope, was);
+    }
+  }
+
+  test('still asks before pairing, signed in, and going back keeps that account', async () => {
+    const { config } = browser();
+    const first = await signedInTab(config);
+    const did = first.getState().session?.did;
+
+    const phone = openedFromPairingLink(config);
+    await phone.start();
+    assert.equal(phone.getState().stage, 'pair', 'the kept sign-in does not skip the warning');
+    assert.ok(phone.getState().pairing);
+    assert.equal(phone.getState().session?.did, did, 'it says who this device is signed in as');
+
+    phone.dismissPairing();
+    assert.equal(phone.getState().stage, 'ready');
+    assert.equal(phone.getState().session?.did, did);
+    await phone.signOut();
+    await first.signOut();
   });
 });

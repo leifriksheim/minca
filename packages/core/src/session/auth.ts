@@ -875,11 +875,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
    * Lands a new session: in, or on through the setup screens.
    *
    * With no reason to set up, or a passkey or password already here, that is
-   * the app. Otherwise the recovery code is shown first — a new account's for
-   * the first time, a restored one's as a reminder to keep it apart from the
-   * password about to be set, which a password manager may file in its place —
-   * then a way in is chosen. A paired device skips the code: it was never
-   * shown one, and the device it came from keeps it.
+   * the app. Otherwise a new account's recovery code is shown first, then a way
+   * in is chosen. A restored account skips the code, since the person just
+   * typed it, and so does a paired device, which was never shown one.
    */
   async function arrive(session: MincaSession, setup: AuthSetup | null): Promise<void> {
     const place = state.place;
@@ -892,8 +890,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     };
     if (setup === null || hasEverydayWay(entry)) {
       update({ ...landed, stage: 'ready', setup: null, freshCode: null });
-    } else if (setup === 'paired') {
-      update({ ...landed, stage: 'unlock', setup });
+    } else if (setup === 'paired' || setup === 'restored') {
+      update({ ...landed, stage: 'unlock', setup, freshCode: null });
     } else {
       update({ ...landed, stage: 'recovery', setup, freshCode: seed ? seedToRecoveryCode(seed) : null });
     }
@@ -1057,7 +1055,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
             const kept = await stay.recall(place.kind).catch(() => null);
             const summary = kept && accounts.find((account) => account.id === kept.accountId);
             if (kept && summary) {
-              update({ session: await begin(place, summary, kept.seed), stage: 'ready' });
+              const session = await begin(place, summary, kept.seed);
+              // A pairing link still asks first: it would put another account here (spec 01 §15.2).
+              update({ session, stage: state.pairing ? 'pair' : 'ready' });
               return;
             }
           }

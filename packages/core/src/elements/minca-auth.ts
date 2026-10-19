@@ -726,15 +726,12 @@ export class MincaAuthElement extends Base {
     const auth = this.auth;
     const code = state.freshCode ?? '';
     const account = state.session?.account;
-    const restored = state.setup === 'restored';
     return card(
-      restored ? 'Keep your recovery code safe' : 'Your recovery code',
+      'Your recovery code',
       h(
         'p',
         { class: 'wa-hint' },
-        restored
-          ? 'You just used it. From now on a passkey or password signs you in here — keep this code for new devices and emergencies.'
-          : 'This code is your account. With it you can restore your account on any device, even if you lose everything else.',
+        'This code is your account. With it you can restore your account on any device, even if you lose everything else.',
         info(
           'Why it matters',
           'Nobody can reissue it: there is no server that knows your account. Anyone who has it can open your account, so keep it private. ',
@@ -901,6 +898,14 @@ export class MincaAuthElement extends Base {
           : null,
       ),
       choosing ? passwordForm() : null,
+      // The code was typed into a password field: saved as this site's login, the password set now would replace it.
+      state.setup === 'restored'
+        ? h(
+            'p',
+            { class: 'wa-small', style: 'margin-top:16px' },
+            'If your browser offered to save the recovery code as a password, don’t — the password you set now would replace it. Keep the code where you had it.',
+          )
+        : null,
       state.setup === 'paired' && state.pairingStage
         ? h(
             'p',
@@ -978,6 +983,13 @@ export class MincaAuthElement extends Base {
               'Your computer and this phone show the same six digits. When you confirm them on the computer, it sends the account here directly — the relay only introduces the two, and sees nothing it could use.',
             ),
           ),
+      state.session && !code && !arriving
+        ? h(
+            'p',
+            { class: 'wa-hint' },
+            `This phone is signed in as ${state.session.account.name}. Continuing switches it to the account on your computer; ${state.session.account.name} stays here, to switch back to from the sign-in screen.`,
+          )
+        : null,
       state.accounts.length > 0 && !code && !arriving
         ? h(
             'p',

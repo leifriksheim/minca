@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { MincaAuth, useMinca } from '@minca/core/react';
+import { AccountHint } from './components/AccountHint';
 import { AccountNotices } from './components/AccountNotices';
 import { Settings } from './components/Settings';
 import { HostingDue } from './components/Hosting';
@@ -14,6 +15,7 @@ export function App() {
     return (
       <Page>
         <Wordmark />
+        <AccountHint />
         <MincaAuth />
       </Page>
     );
@@ -25,6 +27,7 @@ export function App() {
         <Wordmark compact />
         <span style={{ fontSize: 13, color: palette.ink.muted }}>Your account home</span>
       </header>
+      <AccountHint />
       <AccountNotices />
       <HostingDue />
       <Settings />

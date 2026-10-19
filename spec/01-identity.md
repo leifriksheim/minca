@@ -1294,8 +1294,8 @@ Offering device                                       Phone
   taking the account on: the link can come from someone else, and the code
   check cannot tell a stranger's computer from your own.
 
-_Source:_ `packages/core/src/identity/channel.ts` (`deriveChannel`, `channelRoom`, `PAIRING_CHANNEL`, `CODE_CHANNEL`), `packages/core/src/identity/pairing.ts` (`pairingCode`, `pairingCommitment`), `packages/core/src/session/channel-room.ts` (`meetOnChannel`), `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`acceptPairing`).
-_Tests:_ `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open", "someone who learns the secret later cannot open a recording of the exchange", "pairing and connecting by code never open each other’s messages").
+_Source:_ `packages/core/src/identity/channel.ts` (`deriveChannel`, `channelRoom`, `PAIRING_CHANNEL`, `CODE_CHANNEL`), `packages/core/src/identity/pairing.ts` (`pairingCode`, `pairingCommitment`), `packages/core/src/session/channel-room.ts` (`meetOnChannel`), `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`start`, `acceptPairing`).
+_Tests:_ `packages/core/tests/take-up.test.ts` ("a pairing link opened where a sign-in is kept"), `packages/core/tests/pairing.test.ts` ("a message sent back to the side that sealed it does not open there", "a message relabelled as another type does not open", "a message replayed, or delivered out of order, does not open", "someone who learns the secret later cannot open a recording of the exchange", "pairing and connecting by code never open each other’s messages").
 
 ---
 

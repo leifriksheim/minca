@@ -62,8 +62,8 @@ Transitions:
 
 | From                            | Action                                                                                                                | To                                                                                                                   |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `starting`                      | `start()`, a kept sign-in for an account in the place ([the session a sign-in starts](#the-session-a-sign-in-starts)) | `ready`                                                                                                              |
-| `starting`                      | `start()`, a pairing ticket in the URL                                                                                | `pair`                                                                                                               |
+| `starting`                      | `start()`, a kept sign-in for an account in the place ([the session a sign-in starts](#the-session-a-sign-in-starts)) | `ready`, or `pair` (signed in) with a pairing ticket in the URL                                                      |
+| `starting`                      | `start()`, no kept sign-in and a pairing ticket in the URL                                                            | `pair`                                                                                                               |
 | `starting`                      | `start()`, otherwise                                                                                                  | `signIn` if the place has accounts, else `welcome`                                                                   |
 | `starting`                      | `start()` fails                                                                                                       | `welcome` (with `error`)                                                                                             |
 | any                             | `showWelcome()` / `showExisting()` / `showRestore()` / `showSignIn()`                                                 | `welcome` / `existing` / `restore` / `signIn`                                                                        |
@@ -73,7 +73,7 @@ Transitions:
 | `pod`                           | `finishSetup()`                                                                                                       | `ready`                                                                                                              |
 | `welcome`, `existing`, `signIn` | `startCreating()`                                                                                                     | `create`                                                                                                             |
 | `signIn`                        | `signInWithPassword` / `signInWithPasskey` succeeds                                                                   | `ready`                                                                                                              |
-| `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `recovery` with `setup: 'restored'`             |
+| `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `unlock` with `setup: 'restored'`               |
 | `create`                        | `createAccount(name)`                                                                                                 | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                       |
 | `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                             |
 | `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, unless `offerPod` is false; else `ready`                 |
@@ -256,6 +256,12 @@ the person to confirm. Where accounts are already kept here, `<minca-auth>`
 warns before going on: a link someone else sent would put the phone in their
 account.
 
+A phone that stays signed in still gets the `pair` stage, with the kept
+account's session open, and `<minca-auth>` names it. `dismissPairing()`
+goes back to it; accepting switches the phone to the account that arrives and
+keeps the other filed here, to sign back in to. If the same account arrives,
+the phone only joins its spaces.
+
 The camera opens the link in a new tab, so an app that sent the person to
 sign in is still waiting in another. A flow that is signed out picks up a
 sign-in another tab keeps (`storage` events on the remembered session), as a
@@ -269,7 +275,26 @@ tab. It keeps the remembered key as it is, and gives up if the kept sign-in
 changed meanwhile. When the kept sign-in goes, because the person signed out
 in another tab, a tab that took it up signs out too, revoking its own key.
 
-_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`, `packages/core/tests/take-up.test.ts`._
+_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`start`, `offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`, `packages/core/tests/take-up.test.ts` ("a pairing link opened where a sign-in is kept")._
+
+## Linking to the account home
+
+An app that links to the person's account home (for its settings, say) says
+which account it acts for: `accountHomeLink(home, did, section?)` gives the
+account page beside the home's connect page, with `#account=<did>` in the
+fragment, after the section if there is one (`#notifications&account=…`). The
+fragment never reaches the server that serves the home.
+
+The home may be signed in to another account in that browser, or signed out.
+`readAccountHint()` on the home gives the DID, or null when there is none or it
+is not a P-256 `did:key`; `clearAccountHint()` takes it out of the address and
+leaves the section. Any page can open the home with any DID, so a home must
+treat it as a hint: say which account the app uses, pick it on the sign-in
+screen, offer to switch, and never sign out or switch on the hint alone. The
+account home shows the account by its avatar, drawn from the DID, rather than a
+name the link could have made up.
+
+_Source: `packages/core/src/session/account-hint.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`. Tests: `packages/core/tests/account-hint.test.ts`._
 
 ## The account home's side
 
