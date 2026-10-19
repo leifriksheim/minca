@@ -1,131 +1,165 @@
+import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Band, ChromeMark, EXTERNAL, Feature, GITHUB, Page } from './Site';
-import { DOWNLOADS } from './downloads';
+import { Mark } from '@minca/app-shared/Wordmark';
+import { Shape, type ShapeKind } from '@minca/app-shared/shapes';
+import { Band, ChromeMark, EXTERNAL, GITHUB, Marked, Page } from './Site';
 import { downloadLink } from './Install';
 
 /**
  * The Chrome extension (`apps/extension`), and how to install it by hand until
- * it is in the Chrome Web Store. The zip is the latest release's.
+ * it is in the Chrome Web Store. Its download lands on /install/chrome.
  */
 
-const DOWNLOAD = DOWNLOADS.chrome;
 const SOURCE = `${GITHUB}/tree/main/apps/extension`;
+
+/** Chrome's toolbar with Minca pinned in it, its popup open: the download page shows it too */
+export function BrowserMock() {
+  return (
+    <div className="browser" aria-hidden>
+      <div className="toolbar">
+        <span className="toolbar-dots">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="toolbar-url">minca.social</span>
+        <span className="toolbar-icon">
+          <Mark size={26} />
+          <span className="toolbar-badge" />
+        </span>
+      </div>
+      <div className="popup">
+        <span className="toolbar-badge" />4 spaces in sync
+      </div>
+    </div>
+  );
+}
+
+/** The install steps, a colour tile each */
+const STEPS: ReadonlyArray<{ colour: string; shape: ShapeKind; title: string; body: ReactNode }> = [
+  {
+    colour: 'c-peach',
+    shape: 'flower',
+    title: 'Download and unzip',
+    body: (
+      <>
+        <Link {...downloadLink('chrome')}>Get the zip</Link> and unzip it somewhere it can stay, like
+        Documents.
+      </>
+    ),
+  },
+  {
+    colour: 'c-sage',
+    shape: 'clover',
+    title: 'Load it in Chrome',
+    body: (
+      <>
+        Open <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b> and
+        pick the folder.
+      </>
+    ),
+  },
+  {
+    colour: 'c-lilac',
+    shape: 'burst',
+    title: 'Connect your account',
+    body: <>Approve it in your account home, then pin it. A green dot means it’s on.</>,
+  },
+];
 
 export function Extension() {
   return (
     <Page page="extension">
-      <section className="hero">
+      <section className="band ext-hero">
         <div className="wrap">
-          <h1>
-            Your spaces, awake
-            <br />
-            while Chrome is.
-          </h1>
-          <p>
-            The Minca extension keeps your spaces moving with every app closed, and tells you when something
-            you care about happens. It can’t read a word of them.
-          </p>
-          <div className="actions">
-            <Link {...downloadLink('chrome')} className="btn btn-primary">
-              <ChromeMark />
-              Download for Chrome
-            </Link>
-            <a href="#install" className="btn btn-secondary">
-              How to install
-            </a>
+          <div className="tile tile-panel extension c-cobalt">
+            <div>
+              <div className="kicker-inline">
+                <ChromeMark size={14} />
+                Chrome extension
+              </div>
+              <h1>Your spaces, awake while Chrome is.</h1>
+              <p>Everything keeps moving with every app closed, and you hear when something happens.</p>
+              <div className="actions">
+                <Link {...downloadLink('chrome')} className="btn btn-primary btn-lg">
+                  <ChromeMark />
+                  Download for Chrome
+                </Link>
+                <a href="#install" className="quiet-link">
+                  How to install ↓
+                </a>
+              </div>
+            </div>
+            <BrowserMock />
           </div>
         </div>
       </section>
 
       <Band
-        kicker="Why you want it"
-        title="Without it, your data only moves while an app is open."
-        intro={
-          <p>
-            Minca has no server holding your spaces. Write something and close the tab, and it waits until one
-            of your devices and the app are online together. With the extension, Chrome is always there to
-            pass it on.
-          </p>
-        }
+        title="Without it, things only move while an app is open."
+        intro={<p>There’s no server holding your spaces. With the extension, Chrome passes them on.</p>}
       >
-        <div className="grid">
-          <Feature icon="M2 8h3l2-5 2 10 2-5h3" title="Always in sync">
-            Your phone gets your laptop’s changes the moment it comes online, even if the laptop’s tabs are
-            long closed.
-          </Feature>
-          <Feature icon="M2 4.5h4l1.5 1.5H14v7H2z" title="Your pod, kept current">
-            With a pod, everything that arrives is written into your folder, even while every app of yours is
-            closed.
-          </Feature>
-          <Feature icon="M2.5 3.5h11v8h-11zM6 14h4" title="Your friends reach you">
-            A message sent while every app of yours is closed still reaches you, instead of waiting for you to
-            open one.
-          </Feature>
-          <Feature icon="M4 7V5a4 4 0 0 1 8 0v2M3 7h10v7H3z" title="It can’t read them">
-            It holds a pass for each space, not its key. Records stay locked, as they travel. It sees what a
-            relay sees: who, when, and which collection.
-          </Feature>
-          <Feature icon="M8 2l5 2v4c0 3-2.2 5.2-5 6-2.8-.8-5-3-5-6V4z" title="No access to your sites">
-            No content scripts and no host permissions, so Chrome shows no warning about reading your data on
-            websites.
-          </Feature>
-          <Feature icon="M5 4L1.5 8 5 12M11 4l3.5 4-3.5 4" title="Open source">
-            Every line is in the Minca repository, and it checks every record the same way every other device
-            does.
-          </Feature>
-        </div>
+        <Marked
+          columns={3}
+          items={[
+            {
+              title: 'Always in sync',
+              body: 'Your phone gets your laptop’s changes, even with the laptop’s tabs long closed.',
+              shape: 'signal',
+            },
+            {
+              title: 'Your pod, kept current',
+              body: 'Everything that arrives is written into your folder.',
+              shape: 'stack',
+            },
+            {
+              title: 'Friends reach you',
+              body: 'Messages arrive now, not when you next open the app.',
+              shape: 'group',
+            },
+            {
+              title: 'It can’t read them',
+              body: 'It carries your spaces still locked, the way they travel.',
+              shape: 'lock',
+            },
+            {
+              title: 'Hands off your sites',
+              body: 'It never touches the websites you visit, so Chrome shows no warning.',
+              shape: 'shield',
+            },
+            {
+              title: 'Open source',
+              body: 'Every line is on GitHub, and it checks everything like every other device.',
+              shape: 'tick',
+            },
+          ]}
+        />
       </Band>
 
-      <Band
-        id="install"
-        kicker="Install"
-        title="Three steps, until it’s in the Chrome Web Store."
-        intro={
-          <p>
-            The listing is on its way. For now, Chrome loads the extension from a folder on your computer.
-          </p>
-        }
-      >
-        <div className="steps">
-          <div className="step">
-            <h3>Download and unzip</h3>
-            <p>
-              <a href={DOWNLOAD} download>
-                Download the zip
-              </a>{' '}
-              and unzip it somewhere it can stay, like your Documents folder. Chrome runs it from there.
-            </p>
-          </div>
-          <div className="step">
-            <h3>Load it in Chrome</h3>
-            <p>
-              Open <code>chrome://extensions</code>, turn on <b>Developer mode</b> at the top right, click{' '}
-              <b>Load unpacked</b> and choose the folder.
-            </p>
-          </div>
-          <div className="step">
-            <h3>Connect your account</h3>
-            <p>
-              A welcome tab opens. Connect it to your account home and approve it there. Pin it from the
-              puzzle-piece menu: a green dot on its icon means it’s keeping your spaces online.
-            </p>
-          </div>
+      <Band id="install" tone="sunken" title="Three steps, until it’s in the Chrome Web Store.">
+        <div className="tiles">
+          {STEPS.map((step, i) => (
+            <div key={step.title} className={`tile ${step.colour}`}>
+              <Shape kind={step.shape} className="tile-art" />
+              <div className="tile-num">{i + 1}</div>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </div>
+          ))}
         </div>
         <div className="split" style={{ marginTop: 72 }}>
           <div>
-            <div className="kicker-inline">Updating</div>
-            <h3>Replace the folder, then reload.</h3>
+            <h3 className="split-title">Updating?</h3>
           </div>
           <div>
             <p>
-              An extension loaded this way doesn’t update itself. To get a newer one, download the zip again,
-              unzip it over the same folder, and press the reload button on Minca’s card in{' '}
-              <code>chrome://extensions</code>. Keep the folder where it is, and you stay connected.
+              Unzip the new one over the same folder, then press reload on Minca’s card in{' '}
+              <code>chrome://extensions</code>. You stay connected.
             </p>
             <p>
-              Want to build it yourself? The{' '}
+              Want to build it yourself?{' '}
               <a href={SOURCE} {...EXTERNAL}>
-                source and build steps
+                Source and build steps
               </a>{' '}
               are on GitHub.
             </p>

@@ -42,7 +42,8 @@ there, not beside itself.
 - **Cobalt** (`accent.base`) is the one colour for actions: the primary
   button, focus, the selected thing. It turns navy on hover.
 - **The shape colours** (cobalt, coral, peach, sage, lilac) are for shapes and
-  marks only, never for text or surfaces. They take turns in that order.
+  marks, never for text. They take turns in that order. The one surface they
+  colour is a colour tile's ground, mixed into the paper (below).
 - **Danger and good** are for state, sparingly: an error, a check that passed.
 
 ## Type
@@ -72,6 +73,23 @@ there, not beside itself.
 - **Shadows are soft and rare.** Only what floats over the page (a menu, a
   dialog, a popover) has one (`shadow.float`, `shadow.small`). Nothing blurs
   what is behind it.
+
+## Colour tiles
+
+Where a page offers a few things side by side (the platforms to download,
+the steps to install, a panel that sells one idea), each sits on a colour
+tile: one shape colour mixed into the paper, the navy rule round it, the `xl`
+corner, and that colour's shape, big, half off one corner, turning a little
+on hover.
+
+- The ground is the colour at `--minca-tint-tile` (28%) for a tile, or
+  `--minca-tint-panel` (14%) for a wide panel with words to read on it.
+- Text on a tile is navy, as on the page. Never white, and never on solid
+  colour: the front page's panel used to be cobalt, and is a tile now.
+- One shape per tile, the same colour as its ground. Tiles side by side take
+  different colours.
+- The site has them as `.tile` (with a `.c-*` colour, `.tile-panel` for the
+  wide kind and `.tile-art` on the shape) in `apps/site/src/pages/site.css`.
 
 ## Pattern
 
@@ -109,6 +127,8 @@ The shapes are the brand. A space is a grid, and each tool in it is a shape.
   apart before reading a name, so use it wherever an account appears.
 - Use shapes for identity (an app, a space, an account), for empty states, and
   for marking points in a list. Not as decoration for its own sake.
+- Points in a list are marked with these shapes, never with line icons: on
+  the site, `Marked` (`apps/site/src/pages/Site.tsx`) sets them in a ruled grid.
 
 ## Motion
 

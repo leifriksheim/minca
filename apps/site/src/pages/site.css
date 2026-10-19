@@ -29,6 +29,8 @@
   --peach: var(--minca-peach);
   --sage: var(--minca-sage);
   --lilac: var(--minca-lilac);
+  --tint-tile: var(--minca-tint-tile);
+  --tint-panel: var(--minca-tint-panel);
   --display: var(--minca-display);
   --mono: var(--minca-mono);
   --r-sm: var(--minca-radius-sm);
@@ -306,8 +308,7 @@
 /* ─── Ruled grids: cells share navy rules inside one rounded frame ─── */
 
 .site .ruled,
-.site .points,
-.site .grid {
+.site .points {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1px;
@@ -321,14 +322,12 @@
 /* Each cell draws its rule into the 1px gaps, so a grid that doesn't fill its
    last row leaves paper there, not a block of navy */
 .site .ruled > *,
-.site .points > *,
-.site .grid > * {
+.site .points > * {
   padding: 28px;
   box-shadow: 0 0 0 1px var(--rule);
 }
 .site .ruled h3,
-.site .points h3,
-.site .grid h3 {
+.site .points h3 {
   font-family: var(--display);
   font-size: 20px;
   font-weight: 700;
@@ -337,8 +336,7 @@
   color: var(--ink);
 }
 .site .ruled p,
-.site .points p,
-.site .grid p {
+.site .points p {
   margin-top: 6px;
   font-size: 15px;
   color: var(--muted);
@@ -353,8 +351,7 @@
   height: 52px;
   margin-bottom: 20px;
 }
-.site .points code,
-.site .grid code {
+.site .points code {
   font-size: 13.5px;
   padding: 1px 6px;
   border-radius: var(--r-sm);
@@ -370,16 +367,79 @@
   color: var(--ink);
 }
 
-/* A small line icon at the top of a feature cell */
-.site .grid .icon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-bottom: 20px;
+/* ─── Colour tiles: a shape colour mixed into the paper, a shape off a corner ─ */
+
+.site .tile {
+  position: relative;
+  overflow: hidden;
+  padding: 36px;
   border: var(--edge);
-  border-radius: var(--r-md);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--c) var(--tint-tile), var(--paper));
+}
+/* A wide panel with words to read on it takes less of the colour */
+.site .tile-panel {
+  padding: 56px;
+  background: color-mix(in srgb, var(--c) var(--tint-panel), var(--paper));
+}
+/* The shape, big, half off the tile's corner; it turns a little on hover */
+.site .tile-art {
+  position: absolute;
+  right: -48px;
+  bottom: -48px;
+  width: 240px;
+  height: 240px;
+  transition: transform 0.6s ease;
+}
+.site .tile:hover .tile-art {
+  transform: rotate(20deg);
+}
+/* The words sit over the shape where they meet, on a narrow screen */
+.site .tile > :where(:not(.tile-art)) {
+  position: relative;
+  z-index: 1;
+}
+.site .tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.site .tile-num {
+  font-family: var(--display);
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.05em;
   color: var(--ink);
+}
+.site .tiles .tile {
+  min-height: 280px;
+}
+.site .tiles .tile-art {
+  right: -40px;
+  bottom: -40px;
+  width: 160px;
+  height: 160px;
+}
+.site .tiles .tile h3 {
+  margin-top: 20px;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.site .tiles .tile p {
+  margin-top: 8px;
+  max-width: 260px;
+  font-size: 15px;
+  color: var(--body);
+}
+.site .tiles .tile code {
+  font-size: 13.5px;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--card);
 }
 
 /* ─── Download: a card per platform, and a link under the hero's buttons ─ */
@@ -393,7 +453,13 @@
   text-decoration: none;
   color: var(--muted);
 }
-.site .hero-aside:hover {
+.site .quiet-link {
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.site .hero-aside:hover,
+.site .quiet-link:hover {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -432,18 +498,12 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
-/* A tile per platform, on its shape's colour mixed into the paper */
+/* A colour tile per platform */
 .site .platform {
-  position: relative;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   min-height: 300px;
-  padding: 36px;
-  border: var(--edge);
-  border-radius: var(--r-xl);
-  background: color-mix(in srgb, var(--c) 28%, var(--paper));
 }
 .site .platform h2 {
   display: flex;
@@ -462,23 +522,6 @@
 }
 .site .platform .btn {
   margin-top: 32px;
-}
-/* The shape, big, half off the tile's corner */
-.site .platform-art {
-  position: absolute;
-  right: -48px;
-  bottom: -48px;
-  width: 240px;
-  height: 240px;
-  transition: transform 0.6s ease;
-}
-/* The words sit over the shape where they meet, on a narrow screen */
-.site .platform > :not(.platform-art) {
-  position: relative;
-  z-index: 1;
-}
-.site .platform:hover .platform-art {
-  transform: rotate(20deg);
 }
 .site .tag {
   padding: 3px 10px;
@@ -501,11 +544,17 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   gap: 48px;
-  padding: 56px;
-  border: var(--edge);
-  border-radius: var(--r-xl);
-  background: color-mix(in srgb, var(--c) 14%, var(--paper));
 }
+/* The extension page opens on its tile, under the nav */
+.site .ext-hero {
+  padding-top: 48px;
+}
+.site .extension .actions {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 20px;
+}
+.site .extension h1,
 .site .extension h2 {
   font-size: clamp(36px, 5vw, 56px);
   font-weight: 700;
@@ -2008,25 +2057,14 @@
   background: var(--card);
 }
 
-/* ─── Front page: what groups asked for, on cobalt ────────────────── */
+/* ─── Front page: what groups asked for, on a colour tile ─────────── */
 
 .site .panel {
-  position: relative;
-  overflow: hidden;
-  padding: 72px 56px 56px;
-  border-radius: var(--r-xl);
-  background: var(--cobalt);
-  color: #fff;
+  padding-top: 72px;
 }
 .site .panel .section-head {
   position: relative;
   max-width: 620px;
-}
-.site .panel h2 {
-  color: #fff;
-}
-.site .panel .section-head p {
-  color: rgba(255, 255, 255, 0.8);
 }
 .site .panel-morph {
   position: absolute;
@@ -2048,7 +2086,7 @@
   justify-content: space-between;
   gap: 24px;
   padding: 22px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-top: 1px solid color-mix(in srgb, var(--rule) 22%, transparent);
 }
 .site .asks q {
   font-family: var(--display);
@@ -2056,7 +2094,7 @@
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.025em;
-  color: #fff;
+  color: var(--ink);
 }
 .site .asks q::before {
   content: '“';
@@ -2070,8 +2108,9 @@
   align-items: center;
   gap: 8px;
   padding: 6px 16px 6px 8px;
+  border: var(--edge);
   border-radius: 999px;
-  background: var(--paper);
+  background: var(--card);
   font-size: 15px;
   font-weight: 500;
   color: var(--ink);
@@ -2172,7 +2211,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .site .remixes,
-  .site .grid {
+  .site .marked-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .site .marked {
@@ -2180,7 +2219,7 @@
   }
 }
 @media (min-width: 1000px) {
-  .site .marked {
+  .site .marked:not(.marked-3) {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
@@ -2195,15 +2234,18 @@
 
 @media (max-width: 860px) {
   .site .platforms,
+  .site .tiles,
   .site .extension {
     grid-template-columns: minmax(0, 1fr);
   }
-  .site .extension {
+  .site .tile {
+    padding: 28px;
+  }
+  .site .tile-panel {
     padding: 36px 24px;
   }
   .site .platform {
     min-height: 240px;
-    padding: 28px;
   }
   .site .nav {
     padding: 8px 8px 0;
@@ -2253,8 +2295,7 @@
     gap: 4px;
   }
   .site .ruled > *,
-  .site .points > *,
-  .site .grid > * {
+  .site .points > * {
     padding: 22px 20px;
   }
 

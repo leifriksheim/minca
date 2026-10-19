@@ -75,6 +75,12 @@ export const shapeGrounds = {
   lilac: '#f6e3f2',
 } as const;
 
+/**
+ * How much of a shape colour tints a colour tile's ground (DESIGN.md,
+ * Colour tiles): a tile, or a wide panel with words to read on it
+ */
+const tint = { tile: 28, panel: 14 } as const;
+
 /** The five that take turns, in order */
 export const SHAPE_CYCLE: readonly ShapeColour[] = ['cobalt', 'coral', 'peach', 'sage', 'lilac'];
 
@@ -130,6 +136,8 @@ export const tokenCss = `
     --minca-peach: ${shapeColours.peach};
     --minca-sage: ${shapeColours.sage};
     --minca-lilac: ${shapeColours.lilac};
+    --minca-tint-tile: ${tint.tile}%;
+    --minca-tint-panel: ${tint.panel}%;
     --minca-font: ${font};
     --minca-display: ${display};
     --minca-mono: ${mono};

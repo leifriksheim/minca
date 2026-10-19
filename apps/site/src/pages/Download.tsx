@@ -1,9 +1,9 @@
-import { Mark } from '@minca/app-shared/Wordmark';
 import { Shape } from '@minca/app-shared/shapes';
 import { Link } from '@tanstack/react-router';
 import { APP, ChromeMark, EXTERNAL, Page } from './Site';
 import { RELEASES, usePlatform } from './downloads';
 import { downloadLink } from './Install';
+import { BrowserMock } from './Extension';
 
 /**
  * Every way to get Minca: the desktop app, the browser, and the Chrome
@@ -45,16 +45,16 @@ export function Download() {
       <section className="band downloads" id="desktop">
         <div className="wrap">
           <div className="platforms">
-            <div className="platform c-peach">
-              <Shape kind="flower" className="platform-art" />
+            <div className="tile platform c-peach">
+              <Shape kind="flower" className="tile-art" />
               <h2>Mac</h2>
               <p>Apple silicon · macOS 14+</p>
               <Link {...downloadLink('mac')} className="btn btn-primary">
                 Download
               </Link>
             </div>
-            <div className="platform c-sage">
-              <Shape kind="clover" className="platform-art" />
+            <div className="tile platform c-sage">
+              <Shape kind="clover" className="tile-art" />
               <h2>
                 Windows <span className="tag">Preview</span>
               </h2>
@@ -69,7 +69,7 @@ export function Download() {
 
       <section className="band downloads" id="chrome">
         <div className="wrap">
-          <div className="extension c-cobalt">
+          <div className="tile tile-panel extension c-cobalt">
             <div>
               <div className="kicker-inline">
                 <ChromeMark size={14} />
@@ -77,28 +77,17 @@ export function Download() {
               </div>
               <h2>Never miss a thing.</h2>
               <p>Your spaces stay in sync while Chrome is open, even with Minca closed.</p>
-              <Link {...downloadLink('chrome')} className="btn btn-primary">
-                <ChromeMark />
-                Get the extension
-              </Link>
-            </div>
-            <div className="browser" aria-hidden>
-              <div className="toolbar">
-                <span className="toolbar-dots">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <span className="toolbar-url">minca.social</span>
-                <span className="toolbar-icon">
-                  <Mark size={26} />
-                  <span className="toolbar-badge" />
-                </span>
-              </div>
-              <div className="popup">
-                <span className="toolbar-badge" />4 spaces in sync
+              <div className="actions">
+                <Link {...downloadLink('chrome')} className="btn btn-primary">
+                  <ChromeMark />
+                  Get the extension
+                </Link>
+                <Link to="/extension" className="quiet-link">
+                  Read more →
+                </Link>
               </div>
             </div>
+            <BrowserMock />
           </div>
         </div>
       </section>

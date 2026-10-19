@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { APP, Band, ChromeMark, EXTERNAL, Page, Points } from './Site';
+import { APP, Band, ChromeMark, EXTERNAL, Marked, Page, Points } from './Site';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
@@ -174,26 +174,11 @@ const ANYTHING = [
   { kind: 'flower', colour: 'peach' },
   { kind: 'squircle', colour: 'coral' },
   { kind: 'burst', colour: 'lilac' },
-  { kind: 'clover', colour: 'paper' },
+  { kind: 'clover', colour: 'cobalt' },
   { kind: 'star', colour: 'peach' },
   { kind: 'scallop', colour: 'coral' },
   { kind: 'sparkle', colour: 'lilac' },
 ] as const;
-
-/** Short points side by side, each marked with the shape that stands for it */
-function Marked({ items }: { items: ReadonlyArray<{ title: string; body: string; shape: ShapeKind }> }) {
-  return (
-    <div className="ruled marked">
-      {items.map((item, i) => (
-        <div key={item.title}>
-          <Shape kind={item.shape} className={colour(i)} />
-          <h3>{item.title}</h3>
-          <p>{item.body}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /** The mark's canvas, cropped to the bands so they stand on the panel's bottom edge */
 const RAINBOW_VIEWBOX = '0.5 1 23 11.5';
@@ -322,7 +307,7 @@ export function Home() {
 
       <section className="band">
         <div className="wrap">
-          <div className="panel">
+          <div className="tile tile-panel panel c-cobalt">
             <Morph steps={ANYTHING} className="panel-morph" />
             <div className="section-head">
               <h2>If you can say it, you can have it.</h2>

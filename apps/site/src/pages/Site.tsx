@@ -6,7 +6,7 @@ import * as shell from 'sugar-high/lang/shell';
 import { STAFF_COLLECTIONS } from '@minca/core';
 import { Mark } from '@minca/app-shared/Wordmark';
 import { Shape, type ShapeKind } from '@minca/app-shared/shapes';
-import type { ShapeColour } from '@minca/app-shared/tokens';
+import { SHAPE_CYCLE, type ShapeColour } from '@minca/app-shared/tokens';
 import { CONCEPTS } from './concepts';
 
 import { CONNECT, SCENARIOS, describePreset } from './walkthrough';
@@ -114,27 +114,6 @@ export function Page({ page, children }: { page: PageName; children: ReactNode }
   );
 }
 
-/** A small line icon, drawn the same way as the mark */
-function Icon({ d }: { d: string }) {
-  return (
-    <span className="icon">
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <path d={d} />
-      </svg>
-    </span>
-  );
-}
-
 /** A band of a page: a kicker if it needs one, a heading and a line or two on what it is about, then the band itself */
 export function Band({
   id,
@@ -180,12 +159,26 @@ export function Points({ points }: { points: ReadonlyArray<{ title: string; body
   );
 }
 
-export function Feature({ icon, title, children }: { icon: string; title: string; children: ReactNode }) {
+/**
+ * Short points side by side in a ruled grid, each marked with the shape that
+ * stands for it (DESIGN.md, Shapes). `columns` 3 for six points, else 4.
+ */
+export function Marked({
+  items,
+  columns,
+}: {
+  items: ReadonlyArray<{ title: string; body: ReactNode; shape: ShapeKind }>;
+  columns?: 3;
+}) {
   return (
-    <div className="cell">
-      <Icon d={icon} />
-      <h3>{title}</h3>
-      <p>{children}</p>
+    <div className={columns === 3 ? 'ruled marked marked-3' : 'ruled marked'}>
+      {items.map((item, i) => (
+        <div key={item.title}>
+          <Shape kind={item.shape} className={`c-${SHAPE_CYCLE[i % SHAPE_CYCLE.length] ?? 'cobalt'}`} />
+          <h3>{item.title}</h3>
+          <p>{item.body}</p>
+        </div>
+      ))}
     </div>
   );
 }
