@@ -796,6 +796,13 @@ returns its carry space and invite as they are. So a carrier that connects
 again keeps what it holds, and is never sent `carry:closed` (below) for a
 space it is still using.
 
+A removal made on a device that is offline can cross a reconnect made
+through another device that has not heard of it yet. The removal wins: once
+it arrives, the carrier reads `carry:closed`, forgets what it held and says
+the account disconnected it, and connecting it again then makes a new carry
+space. That device could not tell the record was already deleted, so nothing
+it does at the reconnect could prevent this.
+
 Every device holding the account key keeps each live carrier's carry space in
 step with the account (§1.3): one `sys.pass` record per space, and one
 `sys.wake` per automation of the account's own ([03](03-spaces.md) §15).
@@ -872,9 +879,10 @@ The home's window is often the only node that holds the new `sys.carrier`
 record and the passes, and nothing else hears of the carrier until one does.
 So after answering, the home SHOULD stay open until its node has been level
 with the carrier (nothing left in flight, [05](05-sync-and-storage.md)) in
-the carry space and then in the account registry, or 30 s have passed. The
-carrier then holds its passes and its own record, and hands both to the
-account's other devices as they come online.
+the carry space and then in the account registry, or a while has passed
+(the reference home waits at most 30 s in all). Once level, the carrier
+holds its passes and its own record, and hands both to the account's other
+devices as they come online.
 
 _Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/core/src/session/auth.ts` (`grantCarry`), `packages/core/src/node/node.ts` (`carriers.reached`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
 

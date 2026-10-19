@@ -1122,9 +1122,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     async reached(spaceId, waitMs) {
       const carrier = (await liveCarriers()).find((c) => c.space === spaceId);
       if (!carrier || !accountSpaceId) return false;
+      const deadline = Date.now() + waitMs;
       // Its passes first: only through them does it come to the registry, and hold its own record there.
       if (!(await (await runtime(spaceId)).syncedWith(carrier.did, waitMs))) return false;
-      return (await runtime(accountSpaceId)).syncedWith(carrier.did, waitMs);
+      return (await runtime(accountSpaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()));
     },
 
     async remove(spaceId) {

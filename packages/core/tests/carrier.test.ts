@@ -388,6 +388,22 @@ describe('a carrier', () => {
     );
   });
 
+  test('reached is true at once for a carrier already level', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const home = await device(me, hub);
+    const notes = await home.spaces.create({ name: 'Notes', visibility: 'private' });
+    const { did, keys } = await carrierKey();
+    const added = await home.carriers.add({ did, name: 'Chrome' });
+    const node = await carrier(me, added.invite, hub, memoryStores(), keys);
+    await until(carries(node, notes.id), 5000, 'Notes to be carried');
+    await home.carriers.reached(added.space, 5000);
+    // Level, the peer has nothing to say back to a hello: this must not wait for one.
+    const started = Date.now();
+    assert.equal(await home.carriers.reached(added.space, 4000), true);
+    assert.ok(Date.now() - started < 1000, `took ${Date.now() - started} ms`);
+  });
+
   test('reached is false when the carrier never comes', async () => {
     const me = await account();
     const home = await device(me, createFakeHub({ latencyMs: 1 }));

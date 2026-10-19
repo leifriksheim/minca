@@ -4261,6 +4261,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
      * False when that long passed first.
      */
     syncedWith(peer: string, waitMs: number): Promise<boolean> {
+      if (sync.levelWith(peer)) return Promise.resolve(true);
       return new Promise((resolve) => {
         const done = (level: boolean) => {
           clearTimeout(timer);
@@ -4272,7 +4273,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         };
         const timer = setTimeout(() => done(false), waitMs);
         sync.on('synced', onSynced);
-        // Already connected and level, it would say so only at the next heartbeat.
+        // Behind, it would start catching up only at the next heartbeat.
         sync.notifyPeers([peer]);
       });
     },

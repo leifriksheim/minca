@@ -163,8 +163,6 @@ export function createSignalingClient(url: string, did: string): SignalingClient
   /** Refusals in a row; the count of failures cannot tell them, since a refused socket did open */
   let refusals = 0;
   const rooms = new Set<string>();
-  /** The open socket's pings; there is one socket at a time */
-  let pinging: ReturnType<typeof setInterval> | undefined;
   const { on, off, emit } = createEmitter<SignalingEvents>();
 
   let status: RelayStatus = Object.freeze({
@@ -222,6 +220,7 @@ export function createSignalingClient(url: string, did: string): SignalingClient
       let answers = false;
       /** Pings sent since the relay last said anything */
       let unanswered = 0;
+      let pinging: ReturnType<typeof setInterval> | undefined;
       setStatus({ state: 'connecting', retryAt: null });
 
       socket.onopen = () => {
@@ -231,6 +230,8 @@ export function createSignalingClient(url: string, did: string): SignalingClient
         emit('connected');
         for (const room of rooms) sendMessage({ type: 'join', room });
         pinging = setInterval(() => {
+          // Replaced or let go of, with its close still to come.
+          if (ws !== socket) return clearInterval(pinging);
           if (answers && unanswered >= MAX_UNANSWERED) {
             // Its close may never come, so it is ended here, and the late one finds it replaced.
             ended({ reason: 'The relay stopped answering.' });
@@ -286,9 +287,9 @@ export function createSignalingClient(url: string, did: string): SignalingClient
 
       // A socket already replaced or let go of says nothing about the one in use.
       const ended = (event: Partial<CloseEvent> | undefined) => {
+        clearInterval(pinging);
         if (ws !== socket) return;
         ws = null;
-        clearInterval(pinging);
         const failures = opened ? 0 : status.failures + 1;
         const problem = closeReason(event?.code, event?.reason, opened);
         setStatus({ failures, problem, closeCode: event?.code ?? null });
@@ -342,7 +343,6 @@ export function createSignalingClient(url: string, did: string): SignalingClient
     if (wanted) listen(false);
     wanted = false;
     retry.clear();
-    clearInterval(pinging);
     const socket = ws;
     ws = null;
     socket?.close();
