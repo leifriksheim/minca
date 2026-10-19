@@ -1,22 +1,33 @@
-# Updates for the actions the workflows use, and for npm, once a week. Each
-# group is one PR, so a week's updates review together.
+# Updates for the actions the workflows use, and for npm, once a month. Each
+# group is one PR, so a month's updates review together.
+#
+# The cooldown waits a week before offering a new release, so a compromised
+# one is usually pulled before it reaches us. Security updates skip both the
+# schedule and the cooldown.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ['*']
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+      # All majors in one PR, so packages that move together (vite and
+      # @vitejs/plugin-react) arrive together.
+      major:
+        update-types: [major]
     ignore:
       # Pinned on purpose (CLAUDE.md, Dependencies): bumped by hand.
       - dependency-name: electrobun
