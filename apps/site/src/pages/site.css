@@ -272,6 +272,13 @@
   border-bottom: var(--edge);
   background: var(--sunken);
 }
+/* A sunken band that ends the page meets the footer's rule, not a second one */
+.site main > section.band.sunken:last-child {
+  border-bottom: 0;
+}
+.site main:has(> section.band.sunken:last-child) + footer {
+  margin-top: 0;
+}
 .site .section-head {
   max-width: 680px;
   margin-bottom: 48px;
@@ -466,6 +473,9 @@
 }
 .site .chrome-mark {
   flex: none;
+}
+.site .btn .download-mark {
+  margin-right: 10px;
 }
 .site .btn .chrome-mark {
   margin-right: 8px;
@@ -1674,6 +1684,8 @@
 .site .home-hero {
   position: relative;
   isolation: isolate;
+  /* The cursors walk in from past the page's edges */
+  overflow-x: clip;
   margin-top: -68px;
   padding: 176px 0 48px;
 }

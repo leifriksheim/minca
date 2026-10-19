@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { APP, Band, ChromeMark, EXTERNAL, Marked, Page, Points } from './Site';
+import { APP, Band, ChromeMark, DownloadMark, EXTERNAL, Marked, Page, Points } from './Site';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
@@ -219,6 +219,7 @@ function HeroActions() {
       <div className="actions">
         {desktop ? (
           <Link {...downloadLink(desktop)} className="btn btn-primary btn-lg">
+            <DownloadMark />
             {desktop === 'mac' ? 'Download for Mac' : 'Download for Windows'}
           </Link>
         ) : null}

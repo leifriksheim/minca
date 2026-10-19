@@ -233,6 +233,8 @@ export function HeroSpace() {
   const [at, setAt] = useState({ step: still ? LAST : 0, round: 0 });
   const canvas = useRef<HTMLDivElement>(null);
   const cursors = useRef<Partial<Record<Who, HTMLDivElement | null>>>({});
+  /** Whether the cursors have come in from the sides yet */
+  const entered = useRef(false);
 
   useEffect(() => {
     if (still) return;
@@ -252,7 +254,10 @@ export function HeroSpace() {
     if (!frame) return;
     const place = () => {
       const box = frame.getBoundingClientRect();
-      for (const who of WHO) {
+      const page = document.documentElement.clientWidth;
+      const entering = !entered.current && !still;
+      entered.current = true;
+      for (const [i, who] of WHO.entries()) {
         const el = cursors.current[who];
         if (!el) continue;
         const name = step.at[who];
@@ -265,6 +270,17 @@ export function HeroSpace() {
           x = r.left - box.left + Math.min(r.width * 0.55, r.width - 6);
           y = r.top - box.top + r.height * 0.55;
         }
+        if (entering) {
+          // Start past the page's edge on the side it rests on, then walk in, one after another
+          const side = (box.width < NARROW ? PEOPLE[who].narrowHome : PEOPLE[who].home)[0] < 0.5;
+          el.style.transition = 'none';
+          el.style.transform = `translate(${side ? -box.left - 80 : page - box.left + 20}px, ${y}px)`;
+          el.getBoundingClientRect();
+          el.style.transition = '';
+          el.style.transitionDelay = `${0.2 + i * 0.15}s`;
+        } else {
+          el.style.transitionDelay = '';
+        }
         el.style.transform = `translate(${x}px, ${y}px)`;
       }
     };
@@ -272,7 +288,7 @@ export function HeroSpace() {
     const watch = new ResizeObserver(place);
     watch.observe(frame);
     return () => watch.disconnect();
-  }, [step]);
+  }, [step, still]);
 
   const full = step.seats.every(Boolean);
   const sending = Boolean(step.click?.length && step.prompt);

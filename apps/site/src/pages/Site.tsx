@@ -34,6 +34,26 @@ function GitHubMark() {
   );
 }
 
+/** A download: an arrow into a tray, in the colour of the text beside it */
+export function DownloadMark({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="download-mark"
+    >
+      <path d="M9 2.5v8.5M5 7.5l4 4 4-4M3 12.5v2.5h12v-2.5" />
+    </svg>
+  );
+}
+
 /** Chrome's mark, drawn simply: three sectors around a blue centre */
 export function ChromeMark({ size = 16 }: { size?: number }) {
   return (

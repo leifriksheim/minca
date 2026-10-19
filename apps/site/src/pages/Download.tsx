@@ -1,6 +1,6 @@
 import { Shape } from '@minca/app-shared/shapes';
 import { Link } from '@tanstack/react-router';
-import { APP, ChromeMark, EXTERNAL, Page } from './Site';
+import { APP, ChromeMark, DownloadMark, EXTERNAL, Page } from './Site';
 import { RELEASES, usePlatform } from './downloads';
 import { downloadLink } from './Install';
 import { BrowserMock } from './Extension';
@@ -28,6 +28,7 @@ export function Download() {
           <div className="actions">
             {ownDownload ? (
               <Link {...downloadLink(ownDownload.kind)} className="btn btn-primary btn-lg">
+                <DownloadMark />
                 {ownDownload.label}
               </Link>
             ) : null}
