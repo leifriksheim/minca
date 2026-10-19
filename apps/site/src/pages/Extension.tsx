@@ -1,5 +1,7 @@
-import { Band, EXTERNAL, Feature, GITHUB, Page } from './Site';
+import { Link } from '@tanstack/react-router';
+import { Band, ChromeMark, EXTERNAL, Feature, GITHUB, Page } from './Site';
 import { DOWNLOADS } from './downloads';
+import { downloadLink } from './Install';
 
 /**
  * The Chrome extension (`apps/extension`), and how to install it by hand until
@@ -24,9 +26,10 @@ export function Extension() {
             you care about happens. It can’t read a word of them.
           </p>
           <div className="actions">
-            <a href={DOWNLOAD} className="btn btn-primary" download>
+            <Link {...downloadLink('chrome')} className="btn btn-primary">
+              <ChromeMark />
               Download for Chrome
-            </a>
+            </Link>
             <a href="#install" className="btn btn-secondary">
               How to install
             </a>

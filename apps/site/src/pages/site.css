@@ -385,13 +385,46 @@
 /* ─── Download: a card per platform, and a link under the hero's buttons ─ */
 
 .site .hero-aside {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 20px;
   font-size: 14px;
   text-decoration: none;
   color: var(--muted);
 }
 .site .hero-aside:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site .chrome-mark {
+  flex: none;
+}
+.site .btn .chrome-mark {
+  margin-right: 8px;
+}
+.site .kicker-inline .chrome-mark {
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+
+/* ─── Install: where a download lands, three steps under the heading ─ */
+
+.site .install-page .steps {
+  margin-top: 40px;
+  text-align: left;
+}
+.site .install-page .step p {
+  font-size: 16px;
+  color: var(--ink);
+}
+.site .install-again {
+  margin-top: 28px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.site .install-again a {
   color: var(--ink);
 }
 .site .platforms {
@@ -458,37 +491,9 @@
   letter-spacing: 0;
   color: var(--ink);
 }
-.site .first-time {
-  margin-top: 20px;
-  font-size: 15px;
-  color: var(--muted);
-}
-.site .first-time summary {
-  width: fit-content;
-  color: var(--ink);
-  font-weight: 500;
-}
-.site .first-time summary::after {
-  float: none;
-  margin-left: 8px;
-}
 /* The hero says enough: the tiles and the extension sit close under it */
 .site .band.downloads {
   padding: 0 0 32px;
-}
-.site .first-time p,
-.site .first-time ol {
-  max-width: 620px;
-  margin-top: 10px;
-}
-.site .first-time ol {
-  padding-left: 20px;
-}
-.site .first-time code {
-  font-size: 13.5px;
-  padding: 1px 6px;
-  border-radius: var(--r-sm);
-  background: var(--sunken);
 }
 /* The extension: what it does on the left, Chrome's toolbar with it on the right */
 .site .extension {

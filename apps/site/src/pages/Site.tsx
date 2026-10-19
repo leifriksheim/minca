@@ -15,7 +15,7 @@ import './site.css';
 /** Syntax highlighting: sugar-high's core and just the two languages used here */
 const LANGUAGES = { typescript: { ...typescript, typescript: true }, shell } as const;
 
-/** The site's pages (`/`, `/developers`, `/protocol`, `/extension`, `/download`), on the same design system as the app */
+/** The site's pages (`/`, `/developers`, `/protocol`, `/extension`, `/download`, `/install/*`), on the same design system as the app */
 export const GITHUB = 'https://github.com/leifriksheim/minca';
 export const SPEC = `${GITHUB}/tree/main/spec`;
 /** Links off the site open in a tab of their own */
@@ -30,6 +30,19 @@ function GitHubMark() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
+
+/** Chrome's mark, drawn simply: three sectors around a blue centre */
+export function ChromeMark({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden className="chrome-mark">
+      <path d="M8 8L1.07 4A8 8 0 0 1 14.93 4z" fill="#db4437" />
+      <path d="M8 8l6.93-4A8 8 0 0 1 8 16z" fill="#f4b400" />
+      <path d="M8 8v8A8 8 0 0 1 1.07 4z" fill="#0f9d58" />
+      <circle cx="8" cy="8" r="3.7" fill="#fff" />
+      <circle cx="8" cy="8" r="2.9" fill="#4285f4" />
     </svg>
   );
 }
@@ -53,7 +66,7 @@ function Nav({ page }: { page: PageName }) {
             <GitHubMark />
             GitHub
           </a>
-          <a href={APP} className="btn btn-primary" style={{ marginLeft: 8 }}>
+          <a href={APP} {...EXTERNAL} className="btn btn-primary" style={{ marginLeft: 8 }}>
             Open Minca
           </a>
         </nav>
@@ -82,7 +95,9 @@ function Footer() {
           <a href={GITHUB} {...EXTERNAL}>
             GitHub
           </a>
-          <a href={APP}>Open Minca</a>
+          <a href={APP} {...EXTERNAL}>
+            Open Minca
+          </a>
         </span>
       </div>
     </footer>

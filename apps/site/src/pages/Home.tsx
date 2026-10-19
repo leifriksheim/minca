@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { APP, Band, EXTERNAL, Page, Points } from './Site';
+import { APP, Band, ChromeMark, EXTERNAL, Page, Points } from './Site';
 import { HeroSpace } from './HeroSpace';
 import { Loader } from '@minca/app-shared/Loader';
 import { MARK_BANDS } from '@minca/app-shared/mark';
@@ -8,6 +8,7 @@ import { Morph, Shape, type ShapeKind } from '@minca/app-shared/shapes';
 import type { ShapeColour } from '@minca/app-shared/tokens';
 import { Carpool, SchoolRun, type CarpoolChange } from './demos';
 import { usePlatform } from './downloads';
+import { downloadLink } from './Install';
 
 /**
  * The front page, for community builders: it sells the Minca app. A minca
@@ -210,8 +211,8 @@ function Rainbow() {
 
 /**
  * The hero's buttons: the desktop app for the computer the visitor is on, and
- * the browser beside it. The download goes by /download, which says how to
- * open an app that isn't signed yet. A phone gets the app in the browser.
+ * the browser beside it. A download lands on /install, which says how to open
+ * an app that isn't signed yet. A phone gets the app in the browser.
  */
 function HeroActions() {
   const platform = usePlatform();
@@ -227,22 +228,22 @@ function HeroActions() {
       </div>
     );
   }
-  const desktop =
-    platform === 'mac' ? 'Download for Mac' : platform === 'windows' ? 'Download for Windows' : null;
+  const desktop = platform === 'mac' || platform === 'windows' ? platform : null;
   return (
     <>
       <div className="actions">
         {desktop ? (
-          <Link to="/download" hash="desktop" className="btn btn-primary btn-lg">
-            {desktop}
+          <Link {...downloadLink(desktop)} className="btn btn-primary btn-lg">
+            {desktop === 'mac' ? 'Download for Mac' : 'Download for Windows'}
           </Link>
         ) : null}
         <a href={APP} {...EXTERNAL} className={`btn btn-lg ${desktop ? 'btn-secondary' : 'btn-primary'}`}>
           Open Minca in your browser
         </a>
       </div>
-      <Link to="/download" hash={desktop ? 'chrome' : undefined} className="hero-aside">
-        {desktop ? 'Use Chrome? Get the extension too →' : 'Desktop app and Chrome extension →'}
+      <Link {...downloadLink('chrome')} className="hero-aside">
+        <ChromeMark />
+        Get the Chrome extension
       </Link>
     </>
   );

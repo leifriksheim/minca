@@ -1,20 +1,22 @@
 import { Mark } from '@minca/app-shared/Wordmark';
 import { Shape } from '@minca/app-shared/shapes';
-import { APP, EXTERNAL, Page } from './Site';
-import { DOWNLOADS, RELEASES, usePlatform } from './downloads';
+import { Link } from '@tanstack/react-router';
+import { APP, ChromeMark, EXTERNAL, Page } from './Site';
+import { RELEASES, usePlatform } from './downloads';
+import { downloadLink } from './Install';
 
 /**
  * Every way to get Minca: the desktop app, the browser, and the Chrome
- * extension. None is signed or in a store yet, so each says how to get past
- * the warning the first time.
+ * extension. Each download lands on /install, which says how to get past the
+ * warning the first time, since none is signed or in a store yet.
  */
 export function Download() {
   const platform = usePlatform();
   const ownDownload =
     platform === 'mac'
-      ? { href: DOWNLOADS.mac, label: 'Download for Mac' }
+      ? ({ kind: 'mac', label: 'Download for Mac' } as const)
       : platform === 'windows'
-        ? { href: DOWNLOADS.windows, label: 'Download for Windows' }
+        ? ({ kind: 'windows', label: 'Download for Windows' } as const)
         : null;
 
   return (
@@ -25,9 +27,9 @@ export function Download() {
           <p>Your people, your plans, one click away.</p>
           <div className="actions">
             {ownDownload ? (
-              <a href={ownDownload.href} className="btn btn-primary btn-lg">
+              <Link {...downloadLink(ownDownload.kind)} className="btn btn-primary btn-lg">
                 {ownDownload.label}
-              </a>
+              </Link>
             ) : null}
             <a
               href={APP}
@@ -47,9 +49,9 @@ export function Download() {
               <Shape kind="flower" className="platform-art" />
               <h2>Mac</h2>
               <p>Apple silicon · macOS 14+</p>
-              <a href={DOWNLOADS.mac} className="btn btn-primary">
+              <Link {...downloadLink('mac')} className="btn btn-primary">
                 Download
-              </a>
+              </Link>
             </div>
             <div className="platform c-sage">
               <Shape kind="clover" className="platform-art" />
@@ -57,19 +59,11 @@ export function Download() {
                 Windows <span className="tag">Preview</span>
               </h2>
               <p>64-bit</p>
-              <a href={DOWNLOADS.windows} className="btn btn-primary">
+              <Link {...downloadLink('windows')} className="btn btn-primary">
                 Download
-              </a>
+              </Link>
             </div>
           </div>
-          <details className="first-time">
-            <summary>First time opening it?</summary>
-            <p>
-              Minca isn’t signed yet, so your computer double-checks once. On a Mac, go to{' '}
-              <b>System Settings → Privacy &amp; Security</b> and click <b>Open Anyway</b>. On Windows, click{' '}
-              <b>More info → Run anyway</b>.
-            </p>
-          </details>
         </div>
       </section>
 
@@ -77,24 +71,16 @@ export function Download() {
         <div className="wrap">
           <div className="extension c-cobalt">
             <div>
-              <div className="kicker-inline">Chrome extension</div>
+              <div className="kicker-inline">
+                <ChromeMark size={14} />
+                Chrome extension
+              </div>
               <h2>Never miss a thing.</h2>
               <p>Your spaces stay in sync while Chrome is open, even with Minca closed.</p>
-              <a href={DOWNLOADS.chrome} className="btn btn-primary">
+              <Link {...downloadLink('chrome')} className="btn btn-primary">
+                <ChromeMark />
                 Get the extension
-              </a>
-              <details className="first-time">
-                <summary>How to install</summary>
-                <ol>
-                  <li>Unzip it somewhere it can stay.</li>
-                  <li>
-                    Open <code>chrome://extensions</code> and turn on <b>Developer mode</b>.
-                  </li>
-                  <li>
-                    Click <b>Load unpacked</b> and pick the folder.
-                  </li>
-                </ol>
-              </details>
+              </Link>
             </div>
             <div className="browser" aria-hidden>
               <div className="toolbar">
