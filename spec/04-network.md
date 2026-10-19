@@ -155,7 +155,7 @@ and are not forwarded (forwarded messages are rebuilt from known fields).
 | `leave`                        | `room`: string                 | Leave `room`, if in it. Every other socket in the room receives a relay `leave`.                                                                                                                                                                                              |
 | `offer`, `answer`, `candidate` | `to`: DID, `payload`: any JSON | Delivered to the socket holding `to` in the first room it shares with the sender (in the sender's join order), as the relay form below. Dropped if the sender has not joined, or shares no room with `to`, or `to` is the sender itself.                                      |
 | `ice`                          | —                              | Ask for TURN servers (§1.6). Ignored before the socket's first join, and by a relay without TURN.                                                                                                                                                                             |
-| `ping`                         | —                              | Ask whether the socket still reaches the relay. The relay MUST answer `pong`, joined or not (§2).                                                                                                                                                                             |
+| `ping`                         | —                              | Ask whether the socket still reaches the relay. A relay SHOULD answer `pong`, joined or not (§2).                                                                                                                                                                             |
 
 The reference client adds `from` (its DID) to every message it sends,
 including `leave`, `ice` and the signals; the relay reads `from` only on
@@ -292,10 +292,14 @@ per channel: pairing, or connecting by code) on it.
 - A socket can die without closing: after a sleep or a network change the
   relay has reaped it (§1.5) and left its rooms, while the client, which
   never sees WebSocket pings, still holds it open, alone. So a client SHOULD
-  send `ping` on an open socket every **15 s**, and SHOULD close a socket
-  whose relay has answered a `ping` before but has sent nothing since the
-  last two, and redial. A relay that has never answered one (an older relay)
-  is not held to it.
+  close its sockets and redial when it wakes from a sleep longer than the
+  relay keeps a silent socket (two heartbeats, §1.5), or comes back online.
+  That asks nothing of the relay, so it works with any.
+- A client MAY also send `ping` on an open socket that has heard nothing for
+  a while, and close and redial one whose relay has answered a `ping` before
+  but has sent nothing since the last two. That catches a socket that dies
+  while the device is awake. A relay that has never answered one is not held
+  to it.
 - A socket closed with `4009` (§1.2) means the relay already has this DID
   in the room: its previous socket, which the relay drops within two
   heartbeats, or another node signing with the same key. The client MUST NOT
@@ -307,7 +311,7 @@ per channel: pairing, or connecting by code) on it.
 How often the reference client redials, and how it reports each relay's
 state, is in [the node's docs](../packages/core/docs/node.md#the-network).
 
-_Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`), `packages/core/src/network/multi-signaling.ts` (`relays`). Tests: `packages/core/tests/signaling.test.ts` ("signaling reconnects", among them "a socket that dies without closing is found out"), `packages/core/tests/relay-refusal.test.ts` ("one DID per room"), `packages/core/tests/introductions.test.ts` ("several relays at once")._
+_Source: `packages/core/src/network/signaling.ts` (`createSignalingClient`), `packages/core/src/network/multi-signaling.ts` (`relays`). Tests: `packages/core/tests/signaling.test.ts` ("signaling reconnects", among them "waking from a sleep dials again" and "a socket that dies while awake"), `packages/core/tests/relay-refusal.test.ts` ("one DID per room"), `packages/core/tests/introductions.test.ts` ("several relays at once")._
 
 ---
 

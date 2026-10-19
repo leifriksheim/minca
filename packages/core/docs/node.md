@@ -608,12 +608,14 @@ meet this one.
 then 30 s between attempts, each ±25% so peers that dropped together do not
 return together, and never stops until `disconnect`. After a `4009` it emits
 `refused` and waits 10 s, doubling with each refusal in a row up to 60 s. It
-tries at once when the browser reports `online` or the page becomes visible
-again, since both follow a network change or a sleep, and when asked
-(`reconnect`). A successful open resets the count. An open socket sends
-`ping` every 15 s; once its relay has answered one, two going unanswered
-end the socket ("The relay stopped answering.") and it redials, since after a
-sleep the relay has long let go of it and no close may ever arrive. Each relay's state
+tries at once when the page becomes visible again, and when asked
+(`reconnect`). A successful open resets the count. A socket can die without
+closing, and after a sleep it has: so the client looks at the clock every
+5 s, and a look more than 30 s after the last means the device slept; it
+then lets go of its socket and dials again at once, as it does when the
+browser reports `online`. An open socket that has heard nothing for 30 s
+also sends `ping`; once its relay has answered one, two going unanswered end
+the socket ("The relay stopped answering.") and it redials. Each relay's state
 (`connecting`, `open`, `waiting` with the time of the next attempt and why the
 last one failed, `stopped`) is readable as `RelayStatus`, and through a node
 as `network.status()`.

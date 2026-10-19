@@ -192,17 +192,35 @@ describe('signaling reconnects', () => {
     assert.equal(client.status().state, 'open');
   });
 
-  test('a socket that dies without closing is found out, and dialled again', async () => {
+  test('waking from a sleep dials again, with nothing asked of the relay', async () => {
     // A laptop asleep: the relay dropped its socket and its rooms, and no close ever came.
+    await client.connect();
+    client.join('room-a');
+    const dead = sockets.at(-1)!;
+    dead.deaf = true;
+    // Asleep for ten minutes: the clock moves on, and no timer fires.
+    mock.timers.setTime(Date.now() + 10 * 60_000);
+    await pass(5_000);
+    const live = sockets.at(-1)!;
+    assert.notEqual(live, dead);
+    assert.equal(client.status().state, 'open');
+    assert.ok(
+      live.sent.some((message) => message.includes('"join"') && message.includes('room-a')),
+      'the room is joined again',
+    );
+  });
+
+  test('a socket that dies while awake is found out by a relay that answers pings', async () => {
     answersPings = true;
     await client.connect();
     client.join('room-a');
-    await pass(20_000);
+    await pass(2 * 60_000);
     assert.equal(client.status().state, 'open', 'a relay that answers keeps its socket');
+    assert.equal(sockets.length, 1);
 
     const dead = sockets.at(-1)!;
     dead.deaf = true;
-    await pass(60_000);
+    await pass(3 * 60_000);
     const live = sockets.at(-1)!;
     assert.notEqual(live, dead);
     assert.equal(client.status().state, 'open');

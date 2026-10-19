@@ -8,8 +8,11 @@
  *
  * A socket can die without closing: after a sleep or a network switch the
  * relay has dropped it and its rooms, but nothing tells this end, which goes
- * on looking open to a room with nobody in it. So an open socket pings the
- * relay, and one that stops answering is let go of and dialled again.
+ * on looking open to a room with nobody in it. So the client watches its own
+ * clock: timers stop while a device sleeps, and one that fires long after it
+ * was due means the device woke, and every socket is dialled again. That
+ * needs nothing of the relay. Relays that answer `ping` also catch a socket
+ * that dies while awake; one that never has is not held to it.
  */
 import { createEmitter } from '../utils/events.js';
 import { isObject } from '../utils/guards.js';
@@ -138,8 +141,12 @@ const MAX_BACKOFF_MS = 30_000;
  */
 const DID_TAKEN_WAIT_MS = 10_000;
 const MAX_DID_TAKEN_WAIT_MS = 60_000;
-/** How often an open socket pings the relay */
-const PING_MS = 15_000;
+/** How often the clock is looked at, to notice a sleep */
+const WAKE_CHECK_MS = 5_000;
+/** A look this late means the device slept for longer than a relay keeps a silent socket (two 15 s heartbeats) */
+const SLEPT_MS = 30_000;
+/** How often an open socket that has heard nothing pings the relay */
+const PING_MS = 30_000;
 /** Pings in a row a relay may leave unanswered before its socket is taken for dead */
 const MAX_UNANSWERED = 2;
 
@@ -163,6 +170,8 @@ export function createSignalingClient(url: string, did: string): SignalingClient
   /** Refusals in a row; the count of failures cannot tell them, since a refused socket did open */
   let refusals = 0;
   const rooms = new Set<string>();
+  /** Lets go of the socket in use as if it had closed, for one that is likely dead */
+  let drop: ((reason: string) => void) | null = null;
   const { on, off, emit } = createEmitter<SignalingEvents>();
 
   let status: RelayStatus = Object.freeze({
@@ -220,8 +229,15 @@ export function createSignalingClient(url: string, did: string): SignalingClient
       let answers = false;
       /** Pings sent since the relay last said anything */
       let unanswered = 0;
+      /** Whether the relay said anything since the last look: then there is no need to ask */
+      let heard = false;
       let pinging: ReturnType<typeof setInterval> | undefined;
       setStatus({ state: 'connecting', retryAt: null });
+      drop = (reason) => {
+        // Its close may never come, so it is ended here, and the late one finds it replaced.
+        ended({ reason });
+        socket.close();
+      };
 
       socket.onopen = () => {
         if (ws !== socket) return;
@@ -232,12 +248,11 @@ export function createSignalingClient(url: string, did: string): SignalingClient
         pinging = setInterval(() => {
           // Replaced or let go of, with its close still to come.
           if (ws !== socket) return clearInterval(pinging);
-          if (answers && unanswered >= MAX_UNANSWERED) {
-            // Its close may never come, so it is ended here, and the late one finds it replaced.
-            ended({ reason: 'The relay stopped answering.' });
-            socket.close();
+          if (heard) {
+            heard = false;
             return;
           }
+          if (answers && unanswered >= MAX_UNANSWERED) return drop?.('The relay stopped answering.');
           unanswered++;
           sendMessage({ type: 'ping' });
         }, PING_MS);
@@ -247,6 +262,7 @@ export function createSignalingClient(url: string, did: string): SignalingClient
       socket.onmessage = (event) => {
         if (ws !== socket) return;
         unanswered = 0;
+        heard = true;
         try {
           const msg: unknown = JSON.parse(String(event.data));
           if (!isObject(msg)) throw new Error('Not a signaling message');
@@ -290,6 +306,7 @@ export function createSignalingClient(url: string, did: string): SignalingClient
         clearInterval(pinging);
         if (ws !== socket) return;
         ws = null;
+        drop = null;
         const failures = opened ? 0 : status.failures + 1;
         const problem = closeReason(event?.code, event?.reason, opened);
         setStatus({ failures, problem, closeCode: event?.code ?? null });
@@ -320,14 +337,30 @@ export function createSignalingClient(url: string, did: string): SignalingClient
     open().catch(() => {});
   };
 
-  // Back online, or looked at again after a sleep: the network may well be back.
+  /** Awake again, or back online: whatever socket there is most likely died meanwhile. */
+  const redial = (): void => {
+    drop?.('This device was asleep, or its network changed.');
+    reconnect();
+  };
+
+  // Looked at again: the network may well be back.
   const onVisible = (): void => {
     if (globalThis.document?.visibilityState !== 'hidden') reconnect();
   };
+  let lastLook = 0;
+  let looking: ReturnType<typeof setInterval> | undefined;
   const listen = (listening: boolean): void => {
     const method = listening ? 'addEventListener' : 'removeEventListener';
-    if (typeof globalThis.addEventListener === 'function') globalThis[method]('online', reconnect);
+    if (typeof globalThis.addEventListener === 'function') globalThis[method]('online', redial);
     globalThis.document?.[method]('visibilitychange', onVisible);
+    clearInterval(looking);
+    if (!listening) return;
+    lastLook = Date.now();
+    looking = setInterval(() => {
+      const slept = Date.now() - lastLook > SLEPT_MS;
+      lastLook = Date.now();
+      if (slept) redial();
+    }, WAKE_CHECK_MS);
   };
 
   const connect = (): Promise<void> => {
@@ -345,6 +378,7 @@ export function createSignalingClient(url: string, did: string): SignalingClient
     retry.clear();
     const socket = ws;
     ws = null;
+    drop = null;
     socket?.close();
     rooms.clear();
     refusals = 0;
