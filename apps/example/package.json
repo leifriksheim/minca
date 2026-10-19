@@ -19,7 +19,7 @@
     "sugar-high": "^2.4.1"
   },
   "devDependencies": {
-    "@mcp-b/webmcp-types": "^4.0.0",
+    "@mcp-b/webmcp-types": "^6.0.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
