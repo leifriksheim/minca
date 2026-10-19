@@ -223,6 +223,16 @@ yet and publishes what's missing, instead of bumping again. `npm run release
 -- --dry-run` does everything but publish and push. The script is
 `scripts/release.mjs`; bumpp's settings are in `bump.config.ts`.
 
+The desktop app (`apps/desktop`) and the Chrome extension (`apps/extension`)
+carry the same version, and the tag builds them: `.github/workflows/release.yml`
+puts the Mac `.dmg`, the Windows installer (a preview), the extension's zip and
+`SHA256SUMS` on a GitHub Release, each with a build attestation. Their names
+don't change between releases, so the site's `/download` page links to
+`releases/latest/download/<file>`. A tag with a `-` (`v0.2.0-rc.1`) makes a
+pre-release, which those links skip. None of them is signed yet. Every PR
+builds them too (`.github/workflows/build.yml`), the desktop app only when
+something in it changes, and the Actions tab runs that workflow by hand.
+
 ## Tests
 
 ```bash

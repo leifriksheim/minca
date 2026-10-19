@@ -14,6 +14,7 @@
     "src/bun/app-node.ts",
     "src/bun/menu.ts",
     "src/bun/node-link.ts",
+    "scripts",
     "tests"
   ]
 }

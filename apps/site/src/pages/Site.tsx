@@ -15,7 +15,7 @@ import './site.css';
 /** Syntax highlighting: sugar-high's core and just the two languages used here */
 const LANGUAGES = { typescript: { ...typescript, typescript: true }, shell } as const;
 
-/** The site's pages (`/`, `/developers`, `/protocol`, `/extension`), on the same design system as the app */
+/** The site's pages (`/`, `/developers`, `/protocol`, `/extension`, `/download`), on the same design system as the app */
 export const GITHUB = 'https://github.com/leifriksheim/minca';
 export const SPEC = `${GITHUB}/tree/main/spec`;
 /** Links off the site open in a tab of their own */
@@ -23,7 +23,7 @@ export const EXTERNAL = { target: '_blank', rel: 'noreferrer' } as const;
 /** The app, a site of its own (`apps/example`), which every "Open Minca" opens */
 export const APP = import.meta.env.VITE_MINCA_APP ?? 'https://app.minca.social';
 
-type PageName = 'home' | 'developers' | 'protocol' | 'extension';
+type PageName = 'home' | 'developers' | 'protocol' | 'extension' | 'download';
 
 /** GitHub's mark, in the colour of the text beside it */
 function GitHubMark() {
@@ -45,6 +45,9 @@ function Nav({ page }: { page: PageName }) {
         <nav className="nav-links">
           <Link to="/developers" aria-current={page === 'developers' ? 'page' : undefined}>
             For nerds
+          </Link>
+          <Link to="/download" aria-current={page === 'download' ? 'page' : undefined}>
+            Download
           </Link>
           <a href={GITHUB} {...EXTERNAL}>
             <GitHubMark />
@@ -71,6 +74,7 @@ function Footer() {
           <Link to="/">Communities</Link>
           <Link to="/developers">For nerds</Link>
           <Link to="/protocol">Protocol</Link>
+          <Link to="/download">Download</Link>
           <Link to="/extension">Chrome extension</Link>
           <a href={SPEC} {...EXTERNAL}>
             Spec

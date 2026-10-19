@@ -1,13 +1,20 @@
 import { defineConfig } from 'bumpp';
 
 /**
- * Both packages share one version. bumpp asks for the next one, writes it to
- * both, refreshes the lockfile, and commits and tags it (`v0.1.2`), locally.
- * `npm run release` (scripts/release.mjs) runs it only when the current
- * version is already on npm, then publishes and pushes.
+ * Both packages, the desktop app and the Chrome extension share one version.
+ * bumpp asks for the next one, writes it to each, refreshes the lockfile, and
+ * commits and tags it (`v0.1.2`), locally. `npm run release`
+ * (scripts/release.mjs) runs it only when the current version is already on
+ * npm, then publishes and pushes; the tag builds the downloads
+ * (.github/workflows/release.yml).
  */
 export default defineConfig({
-  files: ['packages/core/package.json', 'packages/cli/package.json'],
+  files: [
+    'packages/core/package.json',
+    'packages/cli/package.json',
+    'apps/desktop/electrobun.config.ts',
+    'apps/extension/static/manifest.json',
+  ],
   install: true,
   // The lockfile `install` refreshed goes in the same commit. The tree is clean beforehand (gitCheck), so it's the only other change.
   all: true,

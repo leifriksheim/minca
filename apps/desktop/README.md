@@ -18,6 +18,21 @@ npm test -w apps/desktop        # the popup bridge
 `VITE_MINCA_HOME=http://localhost:5174/connect npm run dev` for `apps/home` on
 this machine.
 
+## Releases
+
+`npm run build` makes the `.dmg` (in `artifacts/`). CI builds it on every PR
+that touches it, and a version tag puts it on a GitHub Release as
+`Minca-mac-arm64.dmg`, beside the Windows build (a preview) as
+`Minca-windows-x64.zip` (`.github/workflows/build.yml`). The version is bumped
+with the packages (`bump.config.ts`).
+
+Neither is signed with a Developer ID yet, so the site tells people how to open
+it the first time. On the Mac, `scripts/sign-adhoc.ts` (Electrobun's `postWrap`
+hook) signs the app ad hoc before it goes into the `.dmg`. Unsigned, its
+resources aren't sealed and macOS calls a downloaded copy "damaged", with no
+way to open it. Signed ad hoc, System Settings → Privacy & Security → **Open
+Anyway** opens it.
+
 ## What it does
 
 - Serves the example app at `http://127.0.0.1:47830`. The port is fixed: a new

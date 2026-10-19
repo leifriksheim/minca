@@ -1,7 +1,9 @@
 # Minca site
 
 The website at minca.social: `/` for communities (`/why` too, for older
-links), `/developers`, `/protocol` and `/extension`. The app is a site of its
+links), `/developers`, `/protocol`, `/extension` and `/download`. The front
+page and `/download` offer the desktop app for the visitor's computer
+(`src/pages/downloads.ts`), from the latest GitHub Release. The app is a site of its
 own ([apps/example](../example/README.md), at app.minca.social); every "Open
 Minca" goes there, by `VITE_MINCA_APP`.
 
