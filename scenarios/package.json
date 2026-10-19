@@ -11,6 +11,6 @@
     "test": "npm run scenarios && npm run datalog"
   },
   "devDependencies": {
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }

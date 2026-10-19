@@ -29,12 +29,12 @@
   },
   "devDependencies": {
     "bumpp": "^12.3.0",
-    "fallow": "^3.30.0",
+    "fallow": "^3.33.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
-    "oxlint": "^1.86.0",
-    "oxlint-tsgolint": "^7.0.2003",
-    "prettier": "^3.9.9",
+    "oxlint": "^1.88.0",
+    "oxlint-tsgolint": "^7.0.2004",
+    "prettier": "^3.9.10",
     "tsx": "^4.19.0",
     "typescript": "^7.0.2"
   },
