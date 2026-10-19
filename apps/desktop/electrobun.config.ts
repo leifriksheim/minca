@@ -1,8 +1,5 @@
 import type { ElectrobunConfig } from 'electrobun';
-
-/** WebRTC for the carrier: node-datachannel, and the binary for the machine this builds on */
-const abi = process.platform === 'win32' ? '-msvc' : process.platform === 'linux' ? '-gnu' : '';
-const webrtc = `@node-datachannel/${process.platform}-${process.arch}${abi}`;
+import { WEBRTC_COPY } from './scripts/webrtc.ts';
 
 const list = (value: string | undefined) =>
   (value ?? '')
@@ -38,8 +35,7 @@ export default {
       'parts/app': 'views/app',
       'parts/minca.js': 'views/minca.js',
       'assets/tray.png': 'views/tray.png',
-      '../../node_modules/node-datachannel': 'views/node_modules/node-datachannel',
-      [`../../node_modules/${webrtc}`]: `views/node_modules/${webrtc}`,
+      ...WEBRTC_COPY,
     },
     // The system's WebKit: no Chromium in the bundle.
     // The dock icon: drawn by assets/icon.swift.
