@@ -4,8 +4,9 @@ import { Band, EXTERNAL, GITHUB, Page, Points, SPEC } from './Site';
 
 /**
  * How it works, for people who want the design before the code: one section
- * per part of the spec, then what Minca gives up. Every claim here comes from
- * `spec/`; when the two disagree, the spec wins and this page is the bug.
+ * per part of the spec, each naming the standards and prior work it stands
+ * on, then what Minca gives up. Every claim here comes from `spec/`; when the
+ * two disagree, the spec wins and this page is the bug.
  */
 
 const specPart = (file: string) => `${GITHUB}/blob/main/spec/${file}`;
@@ -135,13 +136,26 @@ interface Point {
   readonly body: ReactNode;
 }
 
+/** A standard or a piece of prior work a part uses, and what for */
+interface Source {
+  readonly name: string;
+  readonly href: string;
+  readonly for: string;
+}
+
 interface Part {
   readonly kicker: string;
   readonly title: string;
   readonly lead: string;
   readonly points: ReadonlyArray<Point>;
   readonly file: string;
+  readonly builtOn: ReadonlyArray<Source>;
 }
+
+const rfc = (n: number) => `https://www.rfc-editor.org/rfc/rfc${n}`;
+const nip = (n: string) => `https://github.com/nostr-protocol/nips/blob/master/${n}.md`;
+const UCAN = 'https://github.com/ucan-wg/delegation';
+const HPKE = rfc(9180);
 
 const PARTS: ReadonlyArray<Part> = [
   {
@@ -149,6 +163,22 @@ const PARTS: ReadonlyArray<Part> = [
     title: 'Your account is sixteen bytes you keep.',
     lead: 'Nobody hands out accounts. You make one by picking a random number, and you keep it in your password manager.',
     file: '01-identity.md',
+    builtOn: [
+      {
+        name: 'did:key',
+        href: 'https://w3c-ccg.github.io/did-key-spec/',
+        for: 'an account named by its key',
+      },
+      { name: 'UCAN 1.0', href: UCAN, for: 'the notes that hand power to a key' },
+      {
+        name: 'P-256 (FIPS 186-5)',
+        href: 'https://csrc.nist.gov/pubs/fips/186-5/final',
+        for: 'keys and signatures',
+      },
+      { name: 'HKDF (RFC 5869)', href: rfc(5869), for: 'every key from one seed' },
+      { name: 'HPKE (RFC 9180)', href: HPKE, for: 'sealing to a key' },
+      { name: 'WebAuthn', href: 'https://www.w3.org/TR/webauthn-3/', for: 'passkeys' },
+    ],
     points: [
       {
         title: 'One seed, every key',
@@ -182,6 +212,16 @@ const PARTS: ReadonlyArray<Part> = [
     title: 'Everything is signed, and nothing is overwritten.',
     lead: 'Data is JSON, signed by whoever wrote it. An edit is a new version, and every device agrees which version is current.',
     file: '02-records.md',
+    builtOn: [
+      { name: 'JCS (RFC 8785)', href: rfc(8785), for: 'one canonical form of JSON' },
+      { name: 'SHA-256', href: 'https://csrc.nist.gov/pubs/fips/180-4/upd1/final', for: 'ids and hashes' },
+      {
+        name: 'JSON Schema 2020-12',
+        href: 'https://json-schema.org/draft/2020-12',
+        for: 'what a collection holds',
+      },
+      { name: 'I-Regexp (RFC 9485)', href: rfc(9485), for: 'patterns that mean the same in every language' },
+    ],
     points: [
       {
         title: 'The same bytes everywhere',
@@ -220,6 +260,25 @@ const PARTS: ReadonlyArray<Part> = [
     title: 'Every device is the referee.',
     lead: 'A space holds its own rules: a constitution, the roles, who has them, and what each kind of record allows. There’s no server to ask.',
     file: '03-spaces.md',
+    builtOn: [
+      { name: 'UCAN policies', href: `${UCAN}#policy`, for: 'conditions on what a role may do' },
+      {
+        name: 'p2panda',
+        href: 'https://p2panda.org',
+        for: 'strong removal: a removal strikes what was done alongside it',
+      },
+      {
+        name: 'Keyhive',
+        href: 'https://www.inkandswitch.com/keyhive/notebook/',
+        for: 'revocations made at the same time all stand',
+      },
+      {
+        name: 'AES-256-GCM',
+        href: 'https://csrc.nist.gov/pubs/sp/800/38/d/final',
+        for: 'sealing what a space holds',
+      },
+      { name: 'HPKE (RFC 9180)', href: HPKE, for: 'a new key for whoever is left' },
+    ],
     points: [
       {
         title: 'A constitution that never changes',
@@ -260,6 +319,12 @@ const PARTS: ReadonlyArray<Part> = [
     title: 'Relays introduce. They don’t decide.',
     lead: 'Devices talk to each other directly, over WebRTC in the browser or a WebSocket to an always-on node. Relays only help them meet.',
     file: '04-network.md',
+    builtOn: [
+      { name: 'WebRTC', href: 'https://www.w3.org/TR/webrtc/', for: 'browsers talking directly' },
+      { name: 'ICE (RFC 8445)', href: rfc(8445), for: 'finding a way through' },
+      { name: 'TURN (RFC 8656)', href: rfc(8656), for: 'when there is no direct way' },
+      { name: 'WebSocket (RFC 6455)', href: rfc(6455), for: 'relays, and always-on nodes' },
+    ],
     points: [
       {
         title: 'A phone book, not a boss',
@@ -284,6 +349,14 @@ const PARTS: ReadonlyArray<Part> = [
     title: 'Syncing costs about as much as what changed.',
     lead: 'Devices compare what they hold, per collection, and send only the difference. No central log, no merge server.',
     file: '05-sync-and-storage.md',
+    builtOn: [
+      {
+        name: 'Negentropy',
+        href: 'https://github.com/hoytech/negentropy',
+        for: 'range-based set reconciliation',
+      },
+      { name: 'Nostr NIP-77', href: nip('77'), for: 'its wire format, as Nostr uses it' },
+    ],
     points: [
       {
         title: 'Find the difference, fast',
@@ -308,6 +381,19 @@ const PARTS: ReadonlyArray<Part> = [
     title: 'One engine, everywhere.',
     lead: 'A node is the whole stack in one object. A browser tab, the command line, an always-on server and an agent all run the same one.',
     file: '06-nodes-and-sessions.md',
+    builtOn: [
+      { name: 'UCAN 1.0', href: UCAN, for: 'what an app or an agent may do' },
+      {
+        name: 'MCP',
+        href: 'https://modelcontextprotocol.io',
+        for: 'every action, as a tool an agent can call',
+      },
+      {
+        name: 'WebMCP',
+        href: 'https://github.com/webmachinelearning/webmcp',
+        for: 'the same tools, in the page',
+      },
+    ],
     points: [
       {
         title: 'Plain data in and out',
@@ -332,6 +418,16 @@ const PARTS: ReadonlyArray<Part> = [
     title: 'Reachable, but only on purpose.',
     lead: 'Your name is on everything you sign, so knowing it shouldn’t be enough to reach you. A door is an address you hand out, and can close.',
     file: '07-doors.md',
+    builtOn: [
+      { name: 'Nostr outbox (NIP-65)', href: nip('65'), for: 'an address that names its own relays' },
+      { name: 'SimpleX', href: 'https://simplex.chat', for: 'an address that is a queue, not an identity' },
+      {
+        name: 'AT Protocol handles',
+        href: 'https://atproto.com/specs/handle',
+        for: 'a name that leads to a door',
+      },
+      { name: 'HPKE (RFC 9180)', href: HPKE, for: 'knocks only the door can open' },
+    ],
     points: [
       {
         title: 'The code doesn’t say who you are',
@@ -352,10 +448,46 @@ const PARTS: ReadonlyArray<Part> = [
     ],
   },
   {
+    kicker: '08 — Hosting',
+    title: 'Someone keeps the lights on. Nobody reads.',
+    lead: 'A host keeps your spaces online while every device sleeps. You pay it like any service, and it holds what it carries encrypted.',
+    file: '08-hosting.md',
+    builtOn: [
+      { name: 'Stripe Checkout', href: 'https://docs.stripe.com/payments/checkout', for: 'paying by card' },
+      { name: 'ERC-20', href: 'https://eips.ethereum.org/EIPS/eip-20', for: 'paying in USDC, on Base' },
+      {
+        name: 'EIP-681',
+        href: 'https://eips.ethereum.org/EIPS/eip-681',
+        for: 'a payment request a wallet can scan',
+      },
+    ],
+    points: [
+      {
+        title: 'A subscription, not your name',
+        body: 'Each account pays under a key it made for that host. The host learns a subscription, not who pays.',
+      },
+      {
+        title: 'A space can pay for itself',
+        body: 'A space can have a fund anyone in it adds to, so keeping it online doesn’t fall on one person.',
+      },
+      {
+        title: 'Card or wallet',
+        body: 'A host answers with a payment page, or a request a wallet can pay in USDC. Either way, it’s an ordinary service you can leave.',
+      },
+      {
+        title: 'Bots, said out loud',
+        body: 'A host can run bots for a space, paid from its fund. A bot holds a role like anyone, and your device tells you the host can read what the bot can before it asks for one.',
+      },
+    ],
+  },
+  {
     kicker: '09 — Contracts',
     title: 'Proof that every device checks the same way.',
     lead: 'A collection’s contract says what a version must be to count: conditions over its body, the version before it, and records it cites as evidence.',
     file: '09-contracts.md',
+    builtOn: [
+      { name: 'CEL', href: 'https://github.com/google/cel-spec', for: 'a strict subset, with cost limits' },
+    ],
     points: [
       {
         title: 'Readers judge, peers store',
@@ -419,10 +551,30 @@ const LIMITS: ReadonlyArray<Point> = [
   },
 ];
 
+/** What a part stands on, each linked to the standard or the work itself */
+function BuiltOn({ sources }: { sources: ReadonlyArray<Source> }) {
+  return (
+    <div className="built-on">
+      <h3>Built on</h3>
+      <ul>
+        {sources.map((source) => (
+          <li key={source.name}>
+            <a href={source.href} {...EXTERNAL}>
+              {source.name}
+            </a>
+            <span>{source.for}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Section({ part }: { part: Part }) {
   return (
     <Band kicker={part.kicker} title={part.title} intro={<p>{part.lead}</p>}>
       <Points points={part.points} />
+      <BuiltOn sources={part.builtOn} />
       <a href={specPart(part.file)} {...EXTERNAL} className="spec-link">
         Read {part.kicker} →
       </a>
@@ -436,13 +588,15 @@ export function Protocol() {
       <section className="hero">
         <div className="wrap">
           <h1>
-            No company in the middle.
+            Proven protocols,
             <br />
-            Here’s how.
+            put together.
           </h1>
           <p>
-            Your account is a key you keep. Your data is signed records. Every device checks the rules for
-            itself. This is how each piece works, and what it can’t do.
+            Minca invents as little as it can. Accounts are did:key, permissions are UCAN, rules are CEL, sync
+            is Negentropy, encryption is HPKE and AES-GCM. The spec says exactly how they fit, and{' '}
+            <code>@minca/core</code> packs it into one library, so people and agents can build social apps
+            with no server in the middle.
           </p>
           <div className="actions">
             <a href={SPEC} {...EXTERNAL} className="btn btn-primary">

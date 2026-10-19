@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { parse, render } from 'sugar-high/core';
 import * as typescript from 'sugar-high/lang/typescript';
@@ -67,8 +75,8 @@ export function ChromeMark({ size = 16 }: { size?: number }) {
   );
 }
 
-/** Three lines, or a cross while the menu they open is open */
-function MenuMark({ open }: { open: boolean }) {
+/** Three lines, or a cross while the menu they open is open (which shows is up to the CSS) */
+function MenuMark() {
   return (
     <svg
       width="18"
@@ -80,96 +88,60 @@ function MenuMark({ open }: { open: boolean }) {
       strokeLinecap="round"
       aria-hidden
     >
-      {open ? <path d="M4 4l10 10M14 4L4 14" /> : <path d="M2.5 5h13M2.5 9h13M2.5 13h13" />}
+      <path className="menu-closed" d="M2.5 5h13M2.5 9h13M2.5 13h13" />
+      <path className="menu-opened" d="M4 4l10 10M14 4L4 14" />
     </svg>
   );
 }
 
+/** The links in the bar: the same ones whether they sit in it or, on a phone, drop from the menu */
+const NAV_LINKS: ReadonlyArray<{
+  readonly to: '/developers' | '/download';
+  readonly page: PageName;
+  readonly label: string;
+}> = [
+  { to: '/developers', page: 'developers', label: 'For nerds' },
+  { to: '/download', page: 'download', label: 'Download' },
+];
+
+const MENU = 'site-menu';
+
+/**
+ * The bar. On a wide screen its links sit in it; on a phone (site.css) the
+ * same list is a popover the menu button opens, so the browser closes it on
+ * Escape or a tap elsewhere and nothing here measures the screen.
+ */
 function Nav({ page }: { page: PageName }) {
-  // On a phone the links fold into a menu under the bar.
-  const [open, setOpen] = useState(false);
-  const header = useRef<HTMLElement>(null);
-  const toggle = useRef<HTMLButtonElement>(null);
-  const menu = useId();
-  const current = (name: PageName) => (page === name ? 'page' : undefined);
-
-  // It closes on Escape, giving focus back to the button, and on a tap anywhere else.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      toggle.current?.focus();
-    };
-    const onPointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && !header.current?.contains(event.target)) setOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onPointer);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onPointer);
-    };
-  }, [open]);
-
+  // A link moves to another page without reloading it, so it closes the menu itself.
+  const close = (event: MouseEvent<HTMLElement>) => {
+    const menu = event.currentTarget;
+    if (menu.matches(':popover-open')) menu.hidePopover();
+  };
   return (
-    <header className="nav" ref={header}>
+    <header className="nav">
       <div className="wrap">
         <Link to="/" className="brand">
           <Mark />
           minca
         </Link>
-        <nav className="nav-links">
-          <Link to="/developers" aria-current={current('developers')}>
-            For nerds
-          </Link>
-          <Link to="/download" aria-current={current('download')}>
-            Download
-          </Link>
+        <nav id={MENU} className="nav-links" popover="auto" aria-label="Site" onClick={close}>
+          {NAV_LINKS.map((link) => (
+            <Link key={link.to} to={link.to} aria-current={page === link.page ? 'page' : undefined}>
+              {link.label}
+            </Link>
+          ))}
           <a href={GITHUB} {...EXTERNAL}>
             <GitHubMark />
             GitHub
           </a>
-          <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
-            Open Minca
-          </a>
-          <button
-            ref={toggle}
-            type="button"
-            className="nav-toggle"
-            aria-expanded={open}
-            aria-controls={menu}
-            aria-label={open ? 'Close menu' : 'Menu'}
-            onClick={() => setOpen(!open)}
-          >
-            <MenuMark open={open} />
-          </button>
         </nav>
+        <a href={APP} {...EXTERNAL} className="btn btn-primary nav-open">
+          Open Minca
+        </a>
+        <button type="button" className="nav-toggle" popoverTarget={MENU} aria-label="Menu">
+          <MenuMark />
+        </button>
       </div>
-      {open && (
-        // Following any link in it closes it, the same page's included.
-        <nav id={menu} className="nav-menu" aria-label="Menu" onClick={() => setOpen(false)}>
-          <Link to="/" aria-current={current('home')}>
-            Communities
-          </Link>
-          <Link to="/developers" aria-current={current('developers')}>
-            For nerds
-          </Link>
-          <Link to="/protocol" aria-current={current('protocol')}>
-            Protocol
-          </Link>
-          <Link to="/download" aria-current={current('download')}>
-            Download
-          </Link>
-          <Link to="/extension" aria-current={current('extension')}>
-            Chrome extension
-          </Link>
-          <a href={GITHUB} {...EXTERNAL}>
-            GitHub
-            <GitHubMark />
-          </a>
-        </nav>
-      )}
     </header>
   );
 }
@@ -653,6 +625,9 @@ export function Developers() {
             <a href={APP} className="btn btn-secondary">
               See the example app
             </a>
+            <Link to="/protocol" className="btn btn-secondary">
+              For supernerds
+            </Link>
           </div>
         </div>
       </section>
