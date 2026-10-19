@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Minca",
   "short_name": "Minca",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Keeps your Minca spaces online while your browser is open. It can't read them.",
   "minimum_chrome_version": "120",
   "background": {
