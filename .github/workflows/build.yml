@@ -1,0 +1,113 @@
+name: Build
+
+# The downloads: the Chrome extension and the desktop app, for the deployed
+# home and relay. Check.yml calls it on PRs, release.yml on a tag. Each file
+# is a workflow artifact named as the release offers it.
+on:
+  workflow_call:
+    inputs:
+      desktop:
+        description: Build the desktop app too (a macOS runner)
+        type: boolean
+        default: true
+      windows:
+        description: Build the desktop app for Windows too (a preview, not yet tried by hand)
+        type: boolean
+        default: false
+  # By hand, from the Actions tab, to try a build without a tag.
+  workflow_dispatch:
+    inputs:
+      desktop:
+        description: Build the desktop app
+        type: boolean
+        default: true
+      windows:
+        description: Build for Windows too
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci
+      # With .env.production: the deployed home and relay, like the site's copy.
+      - run: npm run package -w apps/extension -- "$RUNNER_TEMP/minca-chrome.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minca-chrome.zip
+          path: ${{ runner.temp }}/minca-chrome.zip
+          if-no-files-found: error
+
+  desktop:
+    if: inputs.desktop
+    name: desktop (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    # Windows is a preview: its build failing doesn't fail the rest.
+    continue-on-error: ${{ matrix.preview }}
+    strategy:
+      fail-fast: false
+      # `built` is what Electrobun writes; `file` is the name it is offered under.
+      matrix:
+        include: ${{ fromJSON(inputs.windows && '[{"name":"macOS arm64","runner":"macos-14","preview":false,"built":"apps/desktop/artifacts/*.dmg","file":"Minca-mac-arm64.dmg"},{"name":"Windows x64","runner":"windows-latest","preview":true,"built":"apps/desktop/artifacts/*.zip","file":"Minca-windows-x64.zip"}]' || '[{"name":"macOS arm64","runner":"macos-14","preview":false,"built":"apps/desktop/artifacts/*.dmg","file":"Minca-mac-arm64.dmg"}]') }}
+    env:
+      # What the app and its carrier connect to (apps/example/.env.production). Vite
+      # reads that file itself; electrobun.config.ts reads only the environment.
+      VITE_SIGNALING_URL: wss://minca.fly.dev
+      VITE_MINCA_HOME: https://home.minca.social/connect
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # `npm run parts` bundles the CLI with Bun.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+      # Electrobun keeps the core binaries it downloads in node_modules, so they're cached with it.
+      - id: modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: desktop-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci
+      - run: npm run build -w apps/desktop
+      - shell: bash
+        env:
+          BUILT: ${{ matrix.built }}
+          FILE: ${{ matrix.file }}
+        run: |
+          shopt -s nullglob
+          built=($BUILT)
+          if [[ ${#built[@]} -ne 1 ]]; then echo "Expected one $BUILT, found: ${built[*]:-none}"; exit 1; fi
+          mkdir -p "$RUNNER_TEMP/out"
+          cp "${built[0]}" "$RUNNER_TEMP/out/$FILE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.file }}
+          path: ${{ runner.temp }}/out/${{ matrix.file }}
+          if-no-files-found: error

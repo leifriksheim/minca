@@ -1,0 +1,60 @@
+name: Release
+
+# A version tag (`npm run release` pushes it once npm has both packages) builds
+# the downloads and puts them on a GitHub Release, under names that stay the
+# same from one release to the next, so the site links to
+# releases/latest/download/<file>. A tag with a `-` (v0.2.0-rc.1) makes a
+# pre-release, which `latest` skips.
+on:
+  push:
+    tags: ['v*']
+
+# Two pushes of one tag never publish over each other.
+concurrency:
+  group: release-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      desktop: true
+      windows: true
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # the release
+      id-token: write # signing the attestations
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - working-directory: out
+        run: |
+          ls -l
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      # Until the apps are signed, this is how anyone can check a download was
+      # built here, from this tag: `gh attestation verify <file> -R <repo>`.
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: out/*
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=()
+          [[ "$TAG" == *-* ]] && flags+=(--prerelease)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/* --clobber
+          else
+            gh release create "$TAG" out/* --verify-tag --generate-notes --title "Minca ${TAG#v}" "${flags[@]}"
+          fi

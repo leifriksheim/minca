@@ -1,7 +1,8 @@
 import type { ElectrobunConfig } from 'electrobun';
 
 /** WebRTC for the carrier: node-datachannel, and the binary for the machine this builds on */
-const webrtc = `@node-datachannel/${process.platform}-${process.arch}`;
+const abi = process.platform === 'win32' ? '-msvc' : process.platform === 'linux' ? '-gnu' : '';
+const webrtc = `@node-datachannel/${process.platform}-${process.arch}${abi}`;
 
 const list = (value: string | undefined) =>
   (value ?? '')
@@ -13,7 +14,8 @@ export default {
   app: {
     name: 'Minca',
     identifier: 'org.minca.desktop',
-    version: '0.1.0',
+    // Bumped with the packages (bump.config.ts), so a release's tag names it.
+    version: '0.1.3',
   },
   runtime: {
     // Closing the window leaves the carrier running in the menu bar.
@@ -25,6 +27,8 @@ export default {
     nodes: list(process.env.VITE_MINCA_NODES),
     hosts: list(process.env.VITE_MINCA_HOST),
   },
+  // Signs the .dmg's app ad hoc, so a downloaded copy opens (scripts/sign-adhoc.ts).
+  scripts: { postWrap: 'scripts/sign-adhoc.ts' },
   build: {
     // The protocol from the workspace, as source, like everything else here.
     bun: { entrypoint: 'src/bun/index.ts', conditions: ['@minca/source'] },

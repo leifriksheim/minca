@@ -1,0 +1,23 @@
+# Updates for the actions the workflows use, and for npm, once a week. Each
+# group is one PR, so a week's updates review together.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Pinned on purpose (CLAUDE.md, Dependencies): bumped by hand.
+      - dependency-name: electrobun
+      - dependency-name: add-mcp

@@ -7,6 +7,7 @@ import { MARK_BANDS } from '@minca/app-shared/mark';
 import { Morph, Shape, type ShapeKind } from '@minca/app-shared/shapes';
 import type { ShapeColour } from '@minca/app-shared/tokens';
 import { Carpool, SchoolRun, type CarpoolChange } from './demos';
+import { usePlatform } from './downloads';
 
 /**
  * The front page, for community builders: it sells the Minca app. A minca
@@ -207,6 +208,46 @@ function Rainbow() {
   );
 }
 
+/**
+ * The hero's buttons: the desktop app for the computer the visitor is on, and
+ * the browser beside it. The download goes by /download, which says how to
+ * open an app that isn't signed yet. A phone gets the app in the browser.
+ */
+function HeroActions() {
+  const platform = usePlatform();
+  if (platform === 'mobile') {
+    return (
+      <div className="actions">
+        <a href={APP} className="btn btn-primary btn-lg">
+          Start a minca
+        </a>
+        <a href="#mend" className="btn btn-secondary btn-lg">
+          See what it does
+        </a>
+      </div>
+    );
+  }
+  const desktop =
+    platform === 'mac' ? 'Download for Mac' : platform === 'windows' ? 'Download for Windows' : null;
+  return (
+    <>
+      <div className="actions">
+        {desktop ? (
+          <Link to="/download" hash="desktop" className="btn btn-primary btn-lg">
+            {desktop}
+          </Link>
+        ) : null}
+        <a href={APP} className={`btn btn-lg ${desktop ? 'btn-secondary' : 'btn-primary'}`}>
+          Open Minca in your browser
+        </a>
+      </div>
+      <Link to="/download" hash={desktop ? 'chrome' : undefined} className="hero-aside">
+        {desktop ? 'Use Chrome? Get the extension too →' : 'Desktop app and Chrome extension →'}
+      </Link>
+    </>
+  );
+}
+
 export function Home() {
   return (
     <Page page="home">
@@ -221,14 +262,7 @@ export function Home() {
             One place for your club, your street or your crew to talk, plan and get things done. Need
             something that doesn’t exist yet? Ask for it, and it’s yours.
           </p>
-          <div className="actions">
-            <a href={APP} className="btn btn-primary btn-lg">
-              Start a minca
-            </a>
-            <a href="#mend" className="btn btn-secondary btn-lg">
-              See what it does
-            </a>
-          </div>
+          <HeroActions />
         </div>
         <div className="wrap">
           <HeroSpace />

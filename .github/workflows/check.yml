@@ -47,6 +47,35 @@ jobs:
         run: npm ci
       - run: ${{ matrix.run }}
 
+  # The downloads (build.yml) build on every PR, so a broken one shows before a
+  # release does. The desktop app takes a macOS runner and minutes, so only when
+  # something in it changes.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      desktop: ${{ steps.changed.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: changed
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) || files=apps/desktop/
+          if grep -qE '^(apps/(desktop|example|shared)|packages/(core|cli)|package-lock\.json|\.github/workflows/build\.yml)' <<<"$files"; then
+            echo "desktop=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: changes
+    uses: ./.github/workflows/build.yml
+    with:
+      desktop: ${{ needs.changes.outputs.desktop == 'true' }}
+
   # The scenario suite (scenarios/README.md), as its own check, when the spec,
   # the protocol library or the scenarios change.
   scenarios:
