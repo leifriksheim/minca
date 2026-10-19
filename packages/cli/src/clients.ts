@@ -32,10 +32,12 @@ export function serverCommand(home: string): ServerCommand {
   // A compiled binary is its own runtime.
   if (!script || script === process.execPath || /\$bunfs|~BUN/.test(script))
     return { command: process.execPath, args: tail };
-  // Run from npx: its cache is temporary, so ask npx again.
+  // Run from npx: its cache is temporary, so ask npx again. Naming the tag
+  // makes every npx check the registry when the agent starts the server, so a
+  // new release reaches the user with a restart and no command of their own.
   if (script.includes(`${path.sep}_npx${path.sep}`)) {
     const npx = path.join(path.dirname(process.execPath), process.platform === 'win32' ? 'npx.cmd' : 'npx');
-    return { command: existsSync(npx) ? npx : 'npx', args: ['-y', '@minca/cli', ...tail] };
+    return { command: existsSync(npx) ? npx : 'npx', args: ['-y', '@minca/cli@latest', ...tail] };
   }
   // From the sources: Node needs tsx, found from here rather than from wherever the agent starts.
   const tsx = script.endsWith('.ts') ? import.meta.resolve('tsx') : null;
