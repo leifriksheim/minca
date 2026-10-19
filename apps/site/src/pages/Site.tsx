@@ -26,6 +26,8 @@ const LANGUAGES = { typescript: { ...typescript, typescript: true }, shell } as 
 /** The site's pages (`/`, `/developers`, `/protocol`, `/extension`, `/download`, `/install/*`), on the same design system as the app */
 export const GITHUB = 'https://github.com/leifriksheim/minca';
 export const SPEC = `${GITHUB}/tree/main/spec`;
+/** The guides to building on `@minca/core`, which ship in the package */
+const DOCS = `${GITHUB}/tree/main/packages/core/docs`;
 /** Links off the site open in a tab of their own */
 export const EXTERNAL = { target: '_blank', rel: 'noreferrer' } as const;
 /** The app, a site of its own (`apps/example`), which every "Open Minca" opens */
@@ -622,8 +624,8 @@ export function Developers() {
               <span>$</span>
               <code>npm install @minca/core</code>
             </span>
-            <a href={APP} className="btn btn-secondary">
-              See the example app
+            <a href={DOCS} className="btn btn-secondary" {...EXTERNAL}>
+              Read the docs
             </a>
             <Link to="/protocol" className="btn btn-secondary">
               For supernerds
@@ -745,13 +747,11 @@ export function Developers() {
 
       <section className="cta">
         <div className="wrap">
-          <h2>Start with the example.</h2>
-          <p>
-            A general app for any Minca data — every screen worked out from what a space says about itself.
-          </p>
+          <h2>Build your first app.</h2>
+          <p>Connect to your users' accounts, open a space, read and write. One short guide.</p>
           <div className="actions">
-            <a href={APP} className="btn btn-primary">
-              Open the example app
+            <a href={`${DOCS}/building-an-app.md`} className="btn btn-primary" {...EXTERNAL}>
+              Read the guide
             </a>
             <Link to="/protocol" className="btn btn-secondary">
               How it works
