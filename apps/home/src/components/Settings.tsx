@@ -15,6 +15,7 @@ import { Shape, shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
 import type { ShapeColour } from '@minca/app-shared/tokens';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { PairPhone } from './PairPhone';
+import { ConfirmItsYou } from './ConfirmItsYou';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
 import { styles, palette } from '../styles';
@@ -713,6 +714,7 @@ function PasswordForm({
  */
 function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name: string; did: string }) {
   const [code, setCode] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
   const { copied, copy } = useCopy();
   const download = () => {
     if (!code) return;
@@ -761,9 +763,27 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
           </div>
           <p style={styles.errorHint}>Anyone who sees this can open your account.</p>
         </>
+      ) : asking ? (
+        <ConfirmItsYou
+          why="see your recovery code"
+          onConfirmed={() => {
+            setAsking(false);
+            setCode(reveal());
+          }}
+          onCancel={() => setAsking(false)}
+        />
       ) : (
         <div>
-          <button onClick={() => setCode(reveal())} data-variant="quiet" style={styles.smallButton}>
+          {/* Read straight away within a few minutes of the last confirm; otherwise it asks. */}
+          <button
+            onClick={() => {
+              const now = reveal();
+              if (now) setCode(now);
+              else setAsking(true);
+            }}
+            data-variant="quiet"
+            style={styles.smallButton}
+          >
             Show recovery code
           </button>
         </div>

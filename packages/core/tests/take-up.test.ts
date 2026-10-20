@@ -167,6 +167,7 @@ describe('a sign-in kept in another tab', () => {
     const waiting = createMincaAuth(config);
     await waiting.start();
     const paired = await signedInTab(config);
+    await paired.confirm({ password: 'correct horse battery' });
     const code = paired.recoveryCode()!;
     const seen = sessionsOf(waiting);
 
@@ -302,6 +303,7 @@ describe('a pairing link opened where a sign-in is kept', () => {
     const pairingTransport = (did: string) => hub.transport(did, 'pair');
     const computer = await signedInTab({ ...browser().config, pairingTransport });
     const ada = computer.getState().session!.did;
+    assert.equal(await computer.confirm({ password: 'correct horse battery' }), true);
     const phoneConfig = { ...browser().config, pairingTransport };
     if (options.adaOnPhone) {
       const before = createMincaAuth(phoneConfig);

@@ -380,7 +380,17 @@ export interface MincaAuth {
   /** Removes the copy this browser kept after a move into a pod */
   forgetBrowserCopy(): Promise<void>;
   dismissMoved(): void;
-  /** The recovery code of the open account. Null when signed out. */
+  /**
+   * Asks the person to prove it is them, with the account's password, a
+   * passkey on this device or the recovery code, even though they are signed
+   * in: a page left open, or a sign-in kept for days, is no proof anyone is
+   * there. For a few minutes after, the recovery code can be read and the
+   * account offered to a phone. A wrong answer sets `error`.
+   */
+  confirm(
+    proof: { readonly password: string } | { readonly passkey: true } | { readonly code: string },
+  ): Promise<boolean>;
+  /** The recovery code of the open account, for a few minutes after `confirm`. Null otherwise. */
   recoveryCode(): string | null;
   /** Starts offering this account to a phone */
   offerToPhone(onStage: (stage: PairingStage) => void): Promise<PairingOffer>;
@@ -521,6 +531,8 @@ async function addAutomations(
 const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
 /** How long signing out waits for its revokes to reach the peers here, at most, unless configured: offline, they wait until next time */
 const SIGN_OUT_GRACE_MS = 5000;
+/** How long `confirm` lets the recovery code be read, or the account offered to a phone */
+const CONFIRMED_MS = 5 * 60 * 1000;
 
 /** Creates the sign-in flow for this page. */
 export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
@@ -566,6 +578,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
   /** The seed behind the open session. Never leaves this closure except as the recovery code. */
   let seed: Uint8Array | null = null;
+  /** When the person last proved it is them (`confirm`); nothing that hands out the seed works without it */
+  let confirmedAt = 0;
   let localKey: CryptoKey | null = null;
   let stopFollowingName: (() => void) | null = null;
   let expiryTimer: ReturnType<typeof setInterval> | null = null;
@@ -639,6 +653,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     if (expiryTimer) clearInterval(expiryTimer);
     expiryTimer = null;
     seed = null;
+    confirmedAt = 0;
     localKey = null;
     await node?.close();
   }
@@ -1508,13 +1523,53 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       update({ moved: null });
     },
 
+    confirm(proof) {
+      return run(async () => {
+        const { entry, place } = state;
+        const unlocked = seed;
+        if (!unlocked || !entry || !place) throw new Error('Sign in first.');
+        const same = (other: Uint8Array) =>
+          other.length === unlocked.length && other.every((byte, at) => byte === unlocked[at]);
+        const wrong = (message: string) => protocolError('VAULT_UNLOCK_FAILED', message);
+
+        if ('code' in proof) {
+          if (!isValidRecoveryCode(proof.code) || !same(recoveryCodeToSeed(proof.code)))
+            throw wrong('That is not this account’s recovery code.');
+        } else if ('password' in proof) {
+          const wraps = entry.vault.wraps.filter(
+            (candidate): candidate is PassphraseWrap => candidate.kind === 'passphrase',
+          );
+          let opened = false;
+          for (const wrap of wraps) {
+            const tried = await unwrapSeedWithPassphrase(wrap, proof.password, entry.vault.did).catch(
+              () => null,
+            );
+            if (tried && same(tried)) opened = true;
+          }
+          if (!opened) throw wrong('That is not the password.');
+        } else {
+          const target = entry.shortcuts[entry.shortcuts.length - 1];
+          if (!target) throw wrong('No passkey on this device opens this account.');
+          // The passkey's own check that someone is there: a fingerprint, a face or a PIN.
+          if (target.credentialId) await authenticatePasskey(target.credentialId, { rpId });
+          const key = await getDeviceKey(target.deviceKeyId);
+          if (!key || !same(await unwrapSeedWithDeviceKey(target, key, entry.vault.did)))
+            throw wrong('That passkey does not open this account here.');
+        }
+        confirmedAt = Date.now();
+      });
+    },
+
     recoveryCode() {
-      return seed ? seedToRecoveryCode(seed) : null;
+      return seed && Date.now() - confirmedAt < CONFIRMED_MS ? seedToRecoveryCode(seed) : null;
     },
 
     offerToPhone(onStage) {
       const session = state.session;
       if (!session || !seed) return Promise.reject(new Error('Sign in first.'));
+      // It sends the whole account: the same proof as reading the recovery code.
+      if (Date.now() - confirmedAt >= CONFIRMED_MS)
+        return Promise.reject(new Error('Confirm it is you first.'));
       const location = globalThis.location;
       return offerPairing(
         {

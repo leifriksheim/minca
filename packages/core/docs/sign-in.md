@@ -131,6 +131,20 @@ waits for `ready` does not see the session during `recovery`, `unlock` or
 
 _Source: `packages/core/src/session/auth.ts`, `packages/core/src/session/credentials.ts`, `packages/core/src/identity/account-vault.ts` (`CLI_PASSPHRASE_LABEL`). Tests: `packages/core/tests/auth.test.ts`, `packages/core/tests/account-vault.test.ts`._
 
+## Proving it is you
+
+Being signed in is no proof anyone is there: a page may be left open, and a
+sign-in kept for days. So whatever hands out the whole account asks again.
+`auth.recoveryCode()` returns the code, and `auth.offerToPhone()` starts, only
+within five minutes of `auth.confirm(proof)` succeeding, where `proof` is
+`{ password }`, `{ passkey: true }` (the passkey's own check that someone is
+there: a fingerprint, a face or a PIN) or `{ code }`, the recovery code itself.
+`confirm` resolves false and sets `error` for a wrong answer. A new sign-in, or
+signing out, asks again. The recovery code shown once when an account is made
+needs no confirm.
+
+_Source: `packages/core/src/session/auth.ts` (`confirm`, `recoveryCode`, `offerToPhone`), `apps/home/src/components/ConfirmItsYou.tsx`. Tests: `packages/core/tests/auth.test.ts` ("reading the recovery code or offering the account to a phone takes proof it is you")._
+
 ## Device keys and passkeys
 
 A device key ([spec 01 §12](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md))

@@ -88,7 +88,7 @@ describe('createMincaAuth', () => {
     assert.equal(made.setup, 'new');
     assert.ok(made.freshCode, 'the recovery code is shown');
     assert.equal(made.session?.account.name, 'Ada');
-    assert.equal(auth.recoveryCode(), made.freshCode);
+    assert.equal(auth.recoveryCode(), null, 'shown once here; reading it later takes proof it is you');
 
     auth.codeSaved();
     assert.equal(auth.getState().stage, 'unlock', 'a passkey or password is not optional');
@@ -288,6 +288,31 @@ describe('createMincaAuth', () => {
     } finally {
       Reflect.deleteProperty(globalThis, 'showDirectoryPicker');
     }
+  });
+
+  test('reading the recovery code or offering the account to a phone takes proof it is you', async () => {
+    const auth = started();
+    await auth.start();
+    const code = await createAccount(auth, 'Ada');
+    assert.equal(auth.recoveryCode(), null, 'a page left open hands out nothing');
+    await assert.rejects(
+      auth.offerToPhone(() => {}),
+      /Confirm it is you/,
+    );
+
+    assert.equal(await auth.confirm({ password: 'not the password' }), false);
+    assert.equal(auth.recoveryCode(), null);
+    assert.ok(auth.getState().error, 'a wrong answer says so');
+    assert.equal(await auth.confirm({ code: '0000-0000-0000-0000-0000-0000-00' }), false, 'nor another code');
+
+    assert.equal(await auth.confirm({ password: PASSWORD }), true);
+    assert.equal(auth.recoveryCode(), code);
+
+    await auth.signOut();
+    await auth.signInWithPassword(PASSWORD);
+    assert.equal(auth.recoveryCode(), null, 'a new sign-in asks again');
+    assert.equal(await auth.confirm({ code }), true, 'the recovery code is proof too');
+    assert.equal(auth.recoveryCode(), code);
   });
 
   test('subscribers hear every change', async () => {
