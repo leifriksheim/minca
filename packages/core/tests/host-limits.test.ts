@@ -438,8 +438,11 @@ describe('the free line', () => {
     clock += 30 * DAY;
     assert.deepEqual((await node.evaluate()).stopped, [], 'under the line when its grace ran out');
     assert.equal(await carries(node, club.id)(), true);
-    // A whole window well under, and the notice goes.
+    // A whole window well under, and the notice goes. (Removing them changed the key, so a look
+    // that found the space being opened again judged nothing: one more after a window.)
     clock += 30 * DAY;
+    await node.evaluate();
+    clock += 31 * DAY;
     await node.evaluate();
     assert.deepEqual(await node.overFor(id), []);
   });
