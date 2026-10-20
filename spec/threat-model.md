@@ -122,7 +122,8 @@ reference implementation, or any implementation, honestly.
     proxy without its header set or carrier-grade NAT, a stranger can spend
     the day's 5 for everyone there. The free line counts accounts, which
     members may share, so a community writing as a few accounts stays under
-    it. A community can also move to a successor space (03), which the line
+    it. A host whose disk is new counts a large space's history again if it
+    takes longer than the first minutes to come back. A community can also move to a successor space (03), which the line
     counts from nothing, with a whole grace. Nor is one account's room
     bounded in bytes: past its quota a host takes no new space for it, but
     what it carries keeps growing, and a space its own fund pays for has no
@@ -131,7 +132,11 @@ reference implementation, or any implementation, honestly.
   - Anyone holding an invite link that is still open can push a community
     over a host's free line by joining more accounts and writing from them,
     and join again with new keys as fast as they are removed, so a community
-    with an open link may have to close it, or pay (08 §1.1). Letting go of
+    with an open link may have to close it, or pay (08 §1.1). Paying a
+    little into its fund, which anyone may, hides the notice from members
+    while it pays, so their carrying can stop when it lapses with no notice
+    after. Accepted: it costs the stranger money, and the fund's status says
+    when it runs out. Letting go of
     a space for an hour does not reset its line ("a space nobody names for a
     while keeps its line").
   - Anyone who knows a space's id learns from the host's open status
@@ -473,8 +478,9 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     once the host forgets it. A space whose grace is spent gets only 7 days'
     notice when pushed over again, which is the time its members have to
     remove whoever did it. Handing a shared space over as a carry space
-    does not escape the line ("a shared space handed over as someone's carry
-    space is held to the line too"). Any member can also put a space several write
+    neither escapes the line nor hides its notice from the other members: a
+    host with limits refuses it ("a shared space handed over as someone's
+    carry space is refused"). Any member can also put a space several write
     in over on bytes, and removing them leaves what they wrote. After `graceDays` only the space's fund
     keeps it at that host. Readers never put a space over, as they cost
     nothing to make up ("readers alone never put a space over the line"),

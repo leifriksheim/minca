@@ -124,6 +124,13 @@ describe('the usage meter', () => {
     assert.equal((await meter.usage('club')).writers, 1_000);
   });
 
+  test('a day that reached the cap counts as full, however many of its writers were removed since', async () => {
+    const meter = await createUsageMeter({ store: createMemoryAdapter(), windowDays: 30 });
+    for (let i = 0; i < 1_000; i += 1) await meter.wrote('club', `did:key:zDnaeThrowaway${i}`);
+    await meter.wrote('club', alice);
+    assert.equal((await meter.usage('club', [alice])).writers, 1_000);
+  });
+
   test('forgetting a space drops its counts', async () => {
     const store = createMemoryAdapter();
     const meter = await createUsageMeter({ store, windowDays: 30 });

@@ -325,7 +325,8 @@ it carries for members' subscriptions, carry spaces among them:
   for a space over its window, and a million over every space, so made-up
   keys cost it no more memory past that; one account with many spaces can
   fill the million, after which readers stop growing anywhere. It keeps at
-  most 1 000 writers for a space a day, far past any line.
+  most 1 000 writers for a space a day, and a day that reaches that counts
+  as 1 000 writers whoever is a member later.
 - **bytes**: what the space takes at the host.
 
 A space is **over the line** when `writers` exceeds `space.writers` (and at
@@ -368,6 +369,14 @@ and sync with each other directly, and a subscription that names the space
 still names it. The host keeps what it held for `keepDays`, unserved, so
 that once the space's own subscription is paid it carries it again from
 where it was.
+
+A carry space is the account's alone (06 §4.2): at a host with `limits`, one
+in which another account is a founder or holds a role is refused as a
+carry space, and let go should one come to, so that every member's own
+pass carries it and every member is told of the line.
+
+A host with `limits` takes payments for communities (§2 `fund`): a line
+that stops carrying a community needs a way for it to pay for itself.
 
 **Status.** For an account's subscription, `over` lists the spaces its
 carry space names that are over the line, and those it no longer carries

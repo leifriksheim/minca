@@ -10,8 +10,9 @@
  * meter's own entries name nobody. Readers stay in memory: they only ever
  * hint, and a restart that forgets some counts fewer, never more.
  *
- * Not mirrored to the bucket. A lost disk counts from nothing again, which
- * errs toward a space staying free.
+ * Not mirrored to the bucket. A lost disk counts from nothing again; the
+ * history a space brings back then is skipped only for the first minutes,
+ * so a large space restored slowly may count its old writers once.
  */
 import type { StorageAdapter } from '../types.js';
 import { utf8Decode, utf8Encode } from '../utils/encoding.js';
@@ -25,7 +26,11 @@ const FIRST_PREFIX = 'first:';
 const MAX_READERS_A_SPACE = 10_000;
 /** Readers kept for every space together, however many spaces someone makes to read */
 const MAX_READERS = 1_000_000;
-/** Writers kept for one space on one day: far past any free line, so counting on past it changes nothing */
+/**
+ * Writers kept for one space on one day. A day that reaches it counts as that
+ * many writers whoever is a member later, so joining and removing throwaway
+ * accounts to fill it hides no one.
+ */
 const MAX_WRITERS_A_DAY = 1_000;
 
 export interface UsageMeterConfig {
@@ -192,8 +197,10 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     async usage(spaceId: string, members?: ReadonlyArray<string>): Promise<Counted> {
       const within = window();
       const only = members ? await hashesOf(spaceId, members) : undefined;
+      const days = writers.get(spaceId);
+      const full = [...(days ?? [])].some(([day, set]) => within.has(day) && set.size >= MAX_WRITERS_A_DAY);
       return {
-        writers: distinct(writers.get(spaceId), within, only),
+        writers: full ? MAX_WRITERS_A_DAY : distinct(days, within, only),
         readers: distinct(readers.get(spaceId), within),
         windowDays: config.windowDays,
       };

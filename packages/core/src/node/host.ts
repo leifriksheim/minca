@@ -321,6 +321,24 @@ export async function createHostNode(config: HostConfig) {
       if (!(await config.ignore?.(account))) await meter.wrote(spaceId, account);
     })().catch(() => {});
   };
+  /** Whether anyone but the account holds a role in its carry space: then it is a shared space */
+  const sharedCarry = async (carrySpace: string, account: string): Promise<boolean> => {
+    const entry = core.carried.get(carrySpace);
+    if (!entry) return false;
+    return (await entry.runtime.access()).members.some(
+      (member) => member.did !== account && (member.founder || member.roles.length > 0),
+    );
+  };
+  /** Stops a carry space being any subscription's */
+  const letCarryGo = async (carrySpace: string) => {
+    for (const subscription of await list()) {
+      if (subscription.carry?.space !== carrySpace) continue;
+      const { carry: _gone, ...rest } = subscription;
+      await write(rest);
+    }
+    await core.removeCarry(carrySpace);
+  };
+
   /** The accounts that are members of a carried space now: only their writes count */
   const membersOf = async (spaceId: string): Promise<ReadonlyArray<string> | undefined> => {
     const entry = core.carried.get(spaceId);
@@ -512,14 +530,13 @@ export async function createHostNode(config: HostConfig) {
         changed.stopped.push(spaceId);
         await strike(spaceId, after.stopped);
         // A shared space handed over as someone's carry space: it stops being theirs to carry.
-        if (core.carries.has(spaceId))
-          for (const subscription of await list()) {
-            if (subscription.carry?.space !== spaceId) continue;
-            const { carry: _stopped, ...rest } = subscription;
-            await write(rest);
-            await core.removeCarry(spaceId);
-          }
+        // Skipped first, so letting it go keeps the bucket's copy.
+        skipped.add(spaceId);
+        if (core.carries.has(spaceId)) await letCarryGo(spaceId);
       }
+      // A carry space someone else came to hold a role in is let go: it is a shared space.
+      const account = core.carries.get(spaceId)?.account;
+      if (account && (await sharedCarry(spaceId, account))) await letCarryGo(spaceId);
       if (before && !after) changed.under.push(spaceId);
       // Free again after a whole window well under: its grace is its own again.
       if (before && !after && before.stopped === undefined) await unstrike(spaceId);
@@ -651,6 +668,12 @@ export async function createHostNode(config: HostConfig) {
       if (lines.get(asked)?.stopped !== undefined && !(await paysItself(asked)))
         throw new Error('That space is over this host’s free line: only its own fund carries it');
       const space = await core.addCarry(account, invite);
+      // A carry space is the account's alone: anyone else holding a role there makes it a shared
+      // space, which members' own passes carry, each told of the line.
+      if (limits && (await sharedCarry(space, account))) {
+        if (!(await carriedByOther(space, id))) await core.removeCarry(space);
+        throw new Error('That is a space others are members of, not a carry space');
+      }
       const before = subscription.carry;
       const attached = await write({ ...subscription, carry: { account, space, invite } });
       if (before && before.space !== space && !(await carriedByOther(before.space, id)))

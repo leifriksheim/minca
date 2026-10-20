@@ -798,6 +798,10 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     const billing = billingFromEnv(process.env);
     const wallet = walletFromEnv(process.env);
     const limits = limitsFromEnv(process.env, !!values.free);
+    if (limits && !billing && !wallet)
+      throw new Error(
+        'MINCA_HOST_FREE_GB stops carrying communities past the free line for free, so they need a way to pay for themselves: Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET) or a wallet (MINCA_WALLET_ADDRESS).',
+      );
     if (!billing && !wallet && !values.free && !limits) {
       throw new Error(
         'minca host needs a way to take payments — Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET), a wallet (MINCA_WALLET_ADDRESS), or both — or --free to host without them, or MINCA_HOST_FREE_GB to host for free within limits.',
