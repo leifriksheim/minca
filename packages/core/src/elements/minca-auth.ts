@@ -988,7 +988,7 @@ export class MincaAuthElement extends Base {
             'p',
             { class: 'wa-hint' },
             state.session
-              ? `This phone is signed in as ${state.session.account.name}. Pairing brings the account from your computer here too; you choose whether to add it once it arrives.`
+              ? `This phone is signed in as ${state.session.account.name}. Pairing brings the account on the computer showing the code; you choose whether to add it once it arrives.`
               : 'This phone becomes the same account, with its own copy of your spaces.',
             info(
               'What happens next',
@@ -1045,8 +1045,8 @@ export class MincaAuthElement extends Base {
           'p',
           { class: 'wa-hint', style: 'margin:0' },
           known
-            ? `Your computer sent ${known.name}, which is already on this phone. Switch to it? ${current} stays here, to switch back to.`
-            : `Your computer sent an account this phone doesn't have yet. Add it and switch to it? ${current} stays here, to switch back to.`,
+            ? `The computer that showed the code sent ${known.name}, which is already on this phone. Switch to it? ${current} stays here, to switch back to.`
+            : `The computer that showed the code sent a different account from ${current}, one this phone doesn't have. Add it only if it is yours: if you meant to add this phone to ${current}, it already is, and this account is someone else's.`,
         ),
       ),
       h(

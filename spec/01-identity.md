@@ -1265,8 +1265,9 @@ Offering device                                       Phone
   shows code                                          shows code
   the person confirms the codes match
   pair:handover  sealed { "seed", "spaces" } ──▶
-                                                      opens, checks, signs in, joins each invite
+                                                      opens, checks
                          ◀── pair:done    sealed { "spaces": n }
+                                                      signs in, joins each invite
 ```
 
 - **Handover plaintext:** UTF-8 JSON `{ "seed": base64url(seed), "spaces":
@@ -1289,7 +1290,9 @@ Offering device                                       Phone
 - **Phone:** ignores messages of other types, and answers only the first
   `pair:key`. It shows the code and waits for `pair:handover` from the peer
   that sent the key. If the payload does not open, or is not a handover, it
-  finishes with a failure. It sends `pair:done` after a handover it accepts.
+  finishes with a failure. It sends `pair:done`, with the number of invites
+  the handover carried, once a handover opens and checks out, before it signs
+  in: it says the account arrived, not that the person kept it.
 - A device that holds an account and opens a `#pair=` link SHOULD warn before
   taking the account on: the link can come from someone else, and the code
   check cannot tell a stranger's computer from your own.

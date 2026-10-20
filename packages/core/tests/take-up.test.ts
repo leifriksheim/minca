@@ -7,7 +7,12 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMincaAuth, type MincaAuthConfig, type MincaSession } from '../src/session/auth.js';
+import {
+  createMincaAuth,
+  type MincaAuth,
+  type MincaAuthConfig,
+  type MincaSession,
+} from '../src/session/auth.js';
 import type { KeyValueStore } from '../src/session/stay-signed-in.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
@@ -290,7 +295,9 @@ describe('a pairing link opened where a sign-in is kept', () => {
   });
 
   /** A computer signed in as Ada showing a pairing code, and a phone signed in as Bob that opened it */
-  async function pairing(options: { adaOnPhone?: boolean } = {}) {
+  async function pairing(
+    options: { adaOnPhone?: boolean; signedIn?: boolean; beforeConfirm?: (phone: MincaAuth) => void } = {},
+  ) {
     const hub = createFakeHub({ latencyMs: 1 });
     const pairingTransport = (did: string) => hub.transport(did, 'pair');
     const computer = await signedInTab({ ...browser().config, pairingTransport });
@@ -303,23 +310,24 @@ describe('a pairing link opened where a sign-in is kept', () => {
       await before.setPassword('correct horse battery');
       await before.signOut();
     }
-    const bobTab = await signedInTab(phoneConfig, 'Bob');
-    const bob = bobTab.getState().session!.did;
+    const bobTab = options.signedIn === false ? null : await signedInTab(phoneConfig, 'Bob');
+    const bob = bobTab?.getState().session?.did ?? null;
     const stages: PairingStage[] = [];
     const offer = await computer.offerToPhone((stage) => stages.push(stage));
     const phone = openedFromPairingLink(phoneConfig, offer.url);
     await phone.start();
-    assert.equal(phone.getState().session?.did, bob);
+    assert.equal(phone.getState().session?.did ?? null, bob);
 
     const accepting = phone.acceptPairing();
     await until(() => stages.some((stage) => stage.kind === 'compare'), 5000, 'the codes to show');
     const compare = stages.find((stage) => stage.kind === 'compare');
     assert.ok(compare?.kind === 'compare');
+    options.beforeConfirm?.(phone);
     compare.same();
     await accepting;
     const done = async () => {
       offer.stop();
-      await Promise.all([phone.signOut(), bobTab.signOut(), computer.signOut()]);
+      await Promise.all([phone.signOut(), bobTab?.signOut(), computer.signOut()]);
     };
     return { phone, ada, bob, done };
   }
@@ -333,7 +341,7 @@ describe('a pairing link opened where a sign-in is kept', () => {
     await phone.answerPairing(true);
     assert.equal(phone.getState().session?.did, ada);
     const kept = phone.getState().accounts.map((account) => account.did);
-    assert.ok(kept.includes(bob) && kept.includes(ada), 'both accounts are on the phone');
+    assert.ok(bob && kept.includes(bob) && kept.includes(ada), 'both accounts are on the phone');
     await done();
   });
 
@@ -353,6 +361,17 @@ describe('a pairing link opened where a sign-in is kept', () => {
     await phone.answerPairing(false);
     assert.equal(phone.getState().session?.did, bob);
     assert.equal(phone.getState().stage, 'ready');
+    assert.ok(!phone.getState().accounts.some((account) => account.did === ada), 'the account was not filed');
+    await done();
+  });
+  test('"Not now" while the code shows stops the pairing, even if the computer confirms after', async () => {
+    const { phone, ada, done } = await pairing({
+      signedIn: false,
+      beforeConfirm: (tab) => tab.dismissPairing(),
+    });
+    await new Promise((settle) => setTimeout(settle, 200));
+    assert.equal(phone.getState().session, null, 'nothing was signed in');
+    assert.equal(phone.getState().pairingArrival, null);
     assert.ok(!phone.getState().accounts.some((account) => account.did === ada), 'the account was not filed');
     await done();
   });

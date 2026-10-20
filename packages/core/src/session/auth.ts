@@ -1045,6 +1045,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
   /** An account a pairing brought, held while a signed-in device asks whether to take it */
   let heldHandover: Handover | null = null;
+  /** Counts pairings begun and dismissed: one that ends after a dismiss is dropped */
+  let pairingRun = 0;
 
   /** Signs in with what a pairing brought, then joins its spaces */
   async function takeHandover(handover: Handover): Promise<void> {
@@ -1289,15 +1291,21 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (!ticket) return;
       if (!state.place) update({ place: await browserPlace() });
       const onStage = (stage: PairingStage) => update({ pairingStage: stage });
+      const mine = ++pairingRun;
       const got: { handover: Handover | null } = { handover: null };
       // The account arrives over the exchange, after the person has compared
       // the codes; the link only says where to meet.
       await run(async () => {
         got.handover = await receiveFromDesktop(ticket, onStage, { transport: config.pairingTransport });
       });
+      const arrived = got.handover;
+      // "Not now" while the code showed: the computer may still have sent it, but it is not taken.
+      if (mine !== pairingRun) {
+        arrived?.seed.fill(0);
+        return;
+      }
       clearPairingTicket();
       update({ pairing: null });
-      const arrived = got.handover;
       if (!arrived) return;
 
       // Signed in to another account, the device asks first: add the one that
@@ -1327,6 +1335,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     },
 
     dismissPairing() {
+      pairingRun++;
       clearPairingTicket();
       heldHandover?.seed.fill(0);
       heldHandover = null;

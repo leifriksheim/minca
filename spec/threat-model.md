@@ -105,8 +105,10 @@ reference implementation, or any implementation, honestly.
     account has arrived, naming it by its avatar: add it, or switch to it if
     the device keeps it already; the account signed in stays filed either way
     (`packages/core/tests/take-up.test.ts`, "a pairing link opened where a
-    sign-in is kept"). Those warnings and that question are the only defence.
-    By design, as with any "scan to log in" link.
+    sign-in is kept"). "Not now", even once the code shows, drops an account
+    that arrives after it (same file, "… while the code shows stops the
+    pairing, even if the computer confirms after"). Those warnings and that question are the only defence. By
+    design, as with any "scan to log in" link.
 
 _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 

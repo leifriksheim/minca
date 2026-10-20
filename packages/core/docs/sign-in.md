@@ -273,7 +273,9 @@ switches to it) and the one signed in stays filed, to switch back to;
 `answerPairing(false)` lets it go and goes back to the account signed in.
 `<minca-auth>` asks "Add this account?" or "Switch to <name>?", with the
 account's avatar. Only the tab's own session counts: a tab that opens with no
-kept sign-in pairs as a signed-out one does.
+kept sign-in pairs as a signed-out one does. `dismissPairing()` stops a
+pairing at any point before the account is taken: one that arrives after it,
+because the computer confirmed anyway, is dropped.
 
 `pairingTransport` in `createMincaAuth`'s config sets how the two sides of a
 pairing reach each other (default: the relay in the ticket), for tests or a
