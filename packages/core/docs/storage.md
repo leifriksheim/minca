@@ -326,10 +326,11 @@ _Source: `packages/core/src/storage/mirror.ts`,
 - **What a node fetches.** A node holding a whole space (a host, a keeper,
   the CLI) fetches every file of every version it keeps whole. A browser
   fetches a file when it is shown, and keeps it while it is kept whole. A
-  writer keeps its own files and pushes them to its mirrors.
+  writer keeps its own files and pushes them, with their chunk lists, to its
+  mirrors.
 - **The API.** `node.files.add(space, bytes, { mime, name })` seals the file
-  if the space is private, works out its root, keeps it and returns the
-  `blob` reference; `records.put(…, { files })` names it on the version.
+  under a key of its own, works out its root, keeps it and returns the
+  `blob` reference, with its `key`; `records.put(…, { files })` names it on the version.
   `node.files.url(space, ref)` gives a URL that fetches, checks and opens
   only the chunks read.
 - **Video.** That URL is served by a service worker answering the browser's
