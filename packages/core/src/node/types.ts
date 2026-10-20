@@ -636,6 +636,12 @@ export interface NodeCarriers {
    * or nobody may hand the carrier its passes until the home opens again.
    */
   reached(space: string, waitMs: number): Promise<boolean>;
+  /**
+   * Resolves once every carrier holds the passes and wakes as they are now.
+   * They are written in the background: adding a carrier or an automation
+   * doesn't wait, so a node about to close waits on this.
+   */
+  settled(): Promise<void>;
   /** Stops using a carrier: its passes go, and it is told to forget what it held */
   remove(space: string): Promise<void>;
 }

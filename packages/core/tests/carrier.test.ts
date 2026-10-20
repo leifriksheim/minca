@@ -159,6 +159,21 @@ describe('passes', () => {
 });
 
 describe('a carrier', () => {
+  test('adding one that fails leaves no carry space behind, to come back as a space the account uses', async () => {
+    const me = await account();
+    const stores = memoryStores();
+    const home = await device(me, null, stores);
+    // A home whose key the account revoked: every write to the registry is refused.
+    await home.account.revoke(home.sessionDid);
+    await assert.rejects(home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' }), /revoked/);
+    assert.deepEqual(await home.spaces.list(), []);
+    await home.close();
+
+    // Started again with a new key, it finds nothing it holds but never recorded.
+    const again = await device(me, null, stores);
+    assert.deepEqual(await again.spaces.list(), []);
+  });
+
   test("carries every space of the account, and holds no key but its carry space's", async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });

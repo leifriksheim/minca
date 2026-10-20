@@ -542,8 +542,14 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
     return names.join(', ');
   };
 
+  // The app hears at once; this window stays until the browser extension has the new wakes.
   const allow = () =>
-    run(async () => incoming.approve(await auth.propose({ origin, request, kept: [...kept] })));
+    run(async () =>
+      incoming.approve(
+        await auth.propose({ origin, request, kept: [...kept] }),
+        session.node.carriers.settled().catch(() => {}),
+      ),
+    );
 
   if (!connection) {
     return (

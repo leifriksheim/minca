@@ -663,6 +663,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!account || narrowNote) return;
     const passes = new Map<string, SpacePass>();
     const spaces: WakeSpace[] = [];
+    const owned = await ownAutomations();
     // The registry and the contacts too, so a restore can come through the carrier.
     passes.set(await passKey(account.space.id), await makePass(account));
     if (contactsRecord) passes.set(await passKey(contactsRecord.space.id), await makePass(contactsRecord));
@@ -670,8 +671,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (membership.deleted || !membership.body || hidden(membership.body.space)) continue;
       const record = await registry.get(membership.body.space);
       if (!record) continue;
+      // Only wakes need what a space declares: with none, no space is opened for it, which from a data folder is slow.
       const declared = new Map(
-        (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c]),
+        owned.length ? (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c]) : [],
       );
       spaces.push({
         id: record.space.id,
@@ -689,7 +691,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const carry = await runtime(carrier.space);
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
     const wakes = new Map<string, unknown>();
-    for (const own of await ownAutomations()) {
+    for (const own of owned) {
       const wake = await wakeFor(own, spaces, config.signer.did);
       wakes.set(`wake:${own.id}`, wake);
       // A 👍 can make a todo done: what a computed field the automation names reads wakes too.
@@ -735,11 +737,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   /** The carriers the account uses now */
   const liveCarriers = async (): Promise<Carrier[]> =>
     (await carrierRecords()).flatMap(({ record }) => (!record.deleted && record.body ? [record.body] : []));
-
-  /** Every carrier gets the wakes as they are now */
-  async function passWakesOn(): Promise<void> {
-    for (const carrier of await liveCarriers()) await syncPasses(carrier).catch(() => {});
-  }
 
   /**
    * Names the account's carriers — its extensions, its hosts — as keepers of
@@ -830,11 +827,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (!known.has(spaceId)) await remember(spaceId);
     }
 
-    for (const { record, space: spaceId } of carriers) {
-      if (record.deleted || !record.body || !held.has(spaceId)) continue;
-      // Only a device that may write in the carry space can do this; others leave it to one that can.
-      await syncPasses(record.body).catch(() => {});
-    }
+    // Not awaited: it opens every space the account holds, which from a data
+    // folder takes long, and nothing here needs it done. Signing in waits on this.
+    void passAll().catch(() => {});
     // Carriers came or went: the open spaces this account manages say so.
     for (const [spaceId, open] of runtimes) void open.then((rt) => nameKeepers(spaceId, rt)).catch(() => {});
     // Not awaited: a host that is slow to answer must not hold up the rest.
@@ -844,6 +839,16 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     if (changed) emit({ type: 'spaces' });
   }
+
+  /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
+  const passAll = serial(async () => {
+    for (const { record, space: spaceId } of await carrierRecords()) {
+      if (closed) return;
+      if (record.deleted || !record.body || !(await registry.get(spaceId))) continue;
+      // Only a device that may write in the carry space can do this; others leave it to one that can.
+      await syncPasses(record.body).catch(() => {});
+    }
+  });
 
   const reconcile = serial(() =>
     reconcileOnce().catch((error: unknown) => {
@@ -1028,7 +1033,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (problem) throw new Error(problem);
     // A system collection: nothing defines it, so no other key of the account can make it final.
     await registryRt.upsertSystem<Automation>(OWN_AUTOMATIONS, id, body);
-    await passWakesOn();
+    // Every carrier gets the wakes as they are now, in the background (`carriers.settled`).
+    void passAll().catch(() => {});
     return { ...body, id };
   }
 
@@ -1058,7 +1064,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const registryRt = await requireAccount('Making an automation');
       if (!(await ownAutomations()).some((view) => view.id === id)) return;
       await registryRt.removeSystem(id);
-      await passWakesOn();
+      void passAll().catch(() => {});
     },
 
     async versions(ids) {
@@ -1081,7 +1087,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       );
       if (mine.length === 0) return 0;
       const taken = await (await runtime(accountSpaceId)).take(mine);
-      if (taken > 0) await passWakesOn();
+      if (taken > 0) void passAll().catch(() => {});
       return taken;
     },
   });
@@ -1095,7 +1101,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
       const known = (await liveCarriers()).find((c) => c.did === carrier.did);
       if (known) {
-        await syncPasses(known);
+        void passAll().catch(() => {});
         return { space: known.space, invite: known.invite };
       }
       const name = carrier.name.trim().slice(0, 80) || 'Carrier';
@@ -1106,23 +1112,30 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         creator: config.signer.did,
       });
       carrySpaces.add(record.space.id);
-      const invite = await registry.createInvite(record.space.id, config.signer.did);
-      const body: Carrier = {
-        space: record.space.id,
-        invite,
-        did: carrier.did,
-        name,
-        since: new Date().toISOString(),
-      };
-      await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, await carrierKey(record.space.id), body);
-      await syncPasses(body);
-      return { space: record.space.id, invite };
+      let body: Carrier;
+      try {
+        const invite = await registry.createInvite(record.space.id, config.signer.did);
+        body = { space: record.space.id, invite, did: carrier.did, name, since: new Date().toISOString() };
+        await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, await carrierKey(record.space.id), body);
+      } catch (error) {
+        // Without its record nothing says it is a carry space: held, a restart would list it as one the account uses.
+        await closeRuntime(record.space.id);
+        await registry.remove(record.space.id);
+        carrySpaces.delete(record.space.id);
+        throw error;
+      }
+      void passAll().catch(() => {});
+      return { space: record.space.id, invite: body.invite };
     },
+
+    settled: () => passAll.done(),
 
     async reached(spaceId, waitMs) {
       const carrier = (await liveCarriers()).find((c) => c.space === spaceId);
       if (!carrier || !accountSpaceId) return false;
       const deadline = Date.now() + waitMs;
+      // What it is to be level with: its passes written first.
+      await passAll.done();
       // Its passes first: only through them does it come to the registry, and hold its own record there.
       if (!(await (await runtime(spaceId)).syncedWith(carrier.did, waitMs))) return false;
       return (await runtime(accountSpaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()));
