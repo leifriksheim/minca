@@ -1156,9 +1156,8 @@ _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirr
   Together with compaction, this is the only deleting there is. Open: how to
   date a segment without trusting the store's modified times, which services
   report differently.
-- **Files and avatars** fit the same store later, as
-  `<space id>/files/<hash>`: content-addressed and immutable, so any store
-  writer may write the same one. Not designed further.
+- **Files and avatars** fit the same store, under each store writer's own
+  prefix (§16.6).
 
 Open: mirrors laid out per collection, so a node holding part of a space
 (§9) could read only what it holds; today only whole-space nodes mirror.
@@ -1176,9 +1175,13 @@ and attachments are all files; what they mean is the library's.
 **Naming files** (a version member, [02](02-records.md) §3.1). `files`: an
 array of 1 to 16 objects with distinct `hash`es, each
 `{ "hash": <root>, "size": <bytes> }`: `hash` the file's root (below) as 64
-lower-case hex characters, `size` an integer from 1 to 2³¹. Signed, and
-outside the body, as `links` and `tags` are, so a keeper that cannot read a
-private body still knows which files a version needs and how big they are.
+lower-case hex characters, `size` an integer from 1 to 2³¹. Absent on a
+delete. Signed, and outside the body, as `links` and `tags` are, so a keeper
+that cannot read a body still knows which files a version needs and how big
+they are. A peer MUST refuse a version whose `files` breaks this shape
+([02](02-records.md) §4.6); since a peer of today keeps it as an unknown
+member, the sync and segment version (§4, §16.3) goes up when this is built,
+as it did for `contract`.
 
 ```json
 "files": [
@@ -1186,87 +1189,105 @@ private body still knows which files a version needs and how big they are.
 ]
 ```
 
-The body says what each file is, sealed with it in a private space; the
-standard library's `blob` fragment becomes `{ hash, size, mime, name?, key? }`.
+The body says what each file is and holds its key, sealed with it in a
+private space; the standard library's `blob` fragment becomes
+`{ hash, size, mime, name?, key }`. Where the body's `hash` and the
+envelope's disagree, the envelope is what peers fetch and keep.
 
-**Chunks and the root.** A file is cut into chunks of `CHUNK` = 262,144
-bytes (256 KiB); the last may be shorter. Each chunk's leaf is
-`SHA-256(0x00 ‖ chunk)`. The root of one chunk is its leaf. Otherwise leaves
-are paired in order into `SHA-256(0x01 ‖ left ‖ right)`, a last one without a
-pair carried up unchanged, level by level, until one remains. A file's
-**chunk list** is its leaves, concatenated: 32 bytes per chunk, 128 KiB for a
-GiB.
+**Chunks and the root.** A file is cut into `n = ceil(size / CHUNK)` chunks
+of `CHUNK` = 262,144 bytes (256 KiB), the last one `size − (n−1)·CHUNK`
+bytes. Each chunk's leaf is `SHA-256(0x00 ‖ chunk)`. The root of one chunk is
+its leaf. Otherwise leaves are paired in order into
+`SHA-256(0x01 ‖ left ‖ right)`, a last one without a pair carried up
+unchanged, level by level, until one remains. A file's **chunk list** is its
+`n` leaves, concatenated: 32 bytes per chunk, 128 KiB for a GiB. A reader
+MUST refuse a chunk list that is not exactly `32·n` bytes or does not give
+the root: a shorter list of inner nodes could otherwise pass for the real
+one.
 
 > Rationale: chunks let a reader check what arrives as it arrives, so a
 > video plays and seeks before it is whole, a broken transfer resumes, and
 > several peers serve one file at once; a bad peer wastes at most a chunk.
 > The tree is BitTorrent v2's idea ([BEP 52](https://bittorrent.org/beps/bep_0052.html),
 > SHA-256 over chunks, a layer of piece hashes sent first); the `0x00` and
-> `0x01` prefixes are Certificate Transparency's ([RFC 6962](https://www.rfc-editor.org/rfc/rfc6962) §2.1),
-> so a leaf can never pass for an inner node. One hash over a whole file
-> would have to be replaced the day files are videos.
+> `0x01` prefixes are Certificate Transparency's ([RFC 6962](https://www.rfc-editor.org/rfc/rfc6962) §2.1).
+> One hash over a whole file would have to be replaced the day files are
+> videos.
 
-**Encryption** (not checked by peers; the library's, stated so that two
-implementations read each other's files). In a private space the writer
-encrypts each file under a fresh random 256-bit key, carried as `key`
-(base64url) in the sealed body. The file is cut into plaintext pieces of
-`CHUNK` − 16 bytes; piece `i` is sealed with AES-256-GCM under that key,
-with a 12-byte nonce of `i` as an 11-byte big-endian integer followed by
-`0x01` for the last piece and `0x00` for any other, and no additional data.
-Each sealed piece is then exactly one chunk, so `hash` and `size` are of the
-ciphertext. In a public space files are not encrypted, and the same bytes
-have the same root everywhere.
+**Encryption** (not checked by peers; stated so that two implementations
+read each other's files). Every file is encrypted, in a public space too,
+under a fresh random 256-bit key carried as `key` (base64url) in the body.
+The file is cut into plaintext pieces of `CHUNK` − 16 bytes; piece `i` is
+sealed with AES-256-GCM under that key, with a 12-byte nonce of `i` as an
+11-byte big-endian integer followed by `0x01` for the last piece and `0x00`
+for any other, and no additional data. Each sealed piece is then exactly one
+chunk, so `hash` and `size` are of the ciphertext.
 
-> Rationale: a key per file, inside the sealed body, is how Matrix and
-> Signal encrypt attachments: changing the space key never touches a file,
-> and a removed member keeps what it could already read, as with records.
-> Sealing piece by piece (the STREAM construction, as in age) lets any chunk
-> be opened on its own; the flag on the last piece, with `size` signed in
-> the envelope, stops a file being cut short.
+> Rationale: a key per file, inside the body, is how Matrix and Signal
+> encrypt attachments: changing the space key never touches a file, and a
+> removed member keeps what it could already read, as with records.
+> Encrypting public files too costs only deduplication: a stub keeps its
+> signed `files` but not its body, so a deleted file's root is useless to
+> anyone who never had the body, and a guess of what it was can't be tested
+> against it ([02](02-records.md) §4.9). Sealing piece by piece (the STREAM
+> construction, as in age) lets any chunk be opened on its own; the flag on
+> the last piece, with `size` signed, stops a file being cut short.
 
-**Asking for chunks** (two sync messages, §4):
+**Asking for chunks** (three sync messages, §4):
 
-| Message      | Fields                                                                                                                                 |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `want-file`  | `id`; `hash`; either `chunks: [from, to]` (indices, inclusive, at most 64), or `list: true` for the chunk list                         |
-| `file`       | `id`; `hash`; `chunk` (an index, or `"list"`); `at` (byte offset within it); `bytes` (base64url, at most 24,000 bytes before encoding) |
-| `files-none` | `id`; `hash`: the responder holds none of what was asked, or will not serve it                                                         |
+| Message     | Fields                                                                                                                                           |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `want-file` | `id`; `hash`; either `chunks: [from, to]` (indices, inclusive, `0 ≤ from ≤ to < n`, at most 64 of them), or `list: true`                         |
+| `file`      | `id`; `hash`; `chunk` (an index, or `"list"`); `at` (byte offset within it); `bytes` (base64url, at most 24,000 bytes before encoding)           |
+| `file-done` | `id`; `hash`; `missing`: the indices asked for that the responder did not send (`["list"]` for the list). Always the last reply to a `want-file` |
 
-- A peer MUST ask only for a file named by a version it keeps whole, and
-  MUST check each chunk against the chunk list (and the list against the
-  root) before keeping it, discarding what fails and asking elsewhere. A
-  file of one chunk is checked against the root directly.
-- A peer MUST serve only files named by a version it keeps whole in that
-  space, over a session the space admitted (§6), and answers the rest with
-  `files-none`. It serves whatever chunks it holds; a reader asks another
-  peer for the rest.
+- A peer MUST ask only for a file named by a version it keeps whole in that
+  space. It MUST take a `file` only for a `want-file` it has in flight with
+  that peer, with that `id`, for a chunk it asked, with `at` plus the bytes
+  inside that chunk's length (or the list's), and MUST check each whole
+  chunk against the chunk list (the list against the root; a file of one
+  chunk against the root) before keeping it, discarding what fails and
+  asking elsewhere.
+- A peer MUST serve only chunks it holds for that space, of files named by
+  a version it keeps whole in that space, over a session the space admitted
+  (§6), and MUST end every reply with `file-done`. It never answers from
+  another space's holdings, so a root can't be used to learn who holds what
+  elsewhere.
+- `file` messages are interleaved with sync's own, a frame at a time, so a
+  file never holds up a sync round (§6.1).
 
 **Keeping.** A node keeps a file's chunks while it keeps whole (§10) a
 version naming it, and drops them when it keeps none: a file goes with the
 body that names it, so a superseded version's stub ([02](02-records.md)
-§4.5) frees its files. Which files a node fetches, and when, is its own
+§4.5) frees its files. A node's own file not yet named by a version it has
+written is its own to keep. Which files a node fetches, and when, is its own
 (the library's plans are in
 [Sync and storage in the library](../packages/core/docs/storage.md#planned-files)).
 A node MUST NOT refuse a version because it lacks its files: a file's
 absence is about availability, never validity.
 
-**Mirrors.** A file is kept whole at `<space id>/files/<root>`, outside
-every store writer's prefix: its name is its content, so any store writer
-may write it and none can write it differently. A reader of a mirror
-checks chunks exactly as from a peer, and may read a chunk by range where
-the blob store can.
+**Mirrors.** A store writer keeps a file it holds at
+`<space id>/<store writer id>/files/<root>`, its chunk list beside it at
+`<root>.list`, under its own prefix like its segments (§16.2): nothing is
+written twice, and a writer deletes its own copy once no version its store
+keeps whole names it. A data folder gains these under `spaces/` (§14.1). A
+reader finds a file by listing `<space id>/*/files/` only when it needs one,
+and checks the list and every chunk exactly as from a peer, so it may read a
+chunk by range where the blob store can.
 
 **Limits:** 16 files per version; 2³¹ bytes per file; 64 chunks per
 `want-file`; 24,000 bytes per `file` message.
 
 _Open:_
 
-- When a mirror's file may be deleted: no single store writer knows that no
-  other one's versions still name it. Absorbing (§16.5) may answer it.
-- Padding encrypted files to size buckets, so a keeper learns less from
-  `size` than it does today.
-- Bytes per space a keeper must hold, with #33 and the hosting limits
-  ([08](08-hosting.md)).
+- **Costs** ([#33](https://github.com/leifriksheim/minca/issues/33)): bytes
+  served per peer (a short `want-file` asks for 16 MiB), and bytes a keeper
+  must fetch and hold per space, since a member can name 16 large files in
+  every version, and under `history: "all"` keep them all; with the hosting
+  limits ([08](08-hosting.md)).
+- Padding encrypted files to size buckets, so `size` says less.
+- When built, the threat model gains what a keeper learns: each version's
+  file count and sizes, and that versions naming one root share a file.
 
 ---
 
@@ -1277,7 +1298,7 @@ are in [Sync and storage in the library](../packages/core/docs/storage.md#pacing
 
 | Name                           | Value                        | Where                     |
 | ------------------------------ | ---------------------------- | ------------------------- |
-| `SYNC_PROTOCOL_VERSION`        | 7                            | `v` on every sync message |
+| `SYNC_PROTOCOL_VERSION`        | 8                            | `v` on every sync message |
 | Negentropy version byte        | `0x61`                       | §3                        |
 | Id size / fingerprint size     | 32 / 16 bytes                | §3                        |
 | IdList threshold / buckets     | < 32 items / 16              | §3.4                      |
