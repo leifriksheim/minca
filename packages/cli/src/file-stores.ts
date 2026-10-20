@@ -38,6 +38,8 @@ type Op =
 
 /** A lock naming no process (one cut off while written) is left over once this old */
 const STALE_LOCK_MS = 30_000;
+/** A lock naming a live process is taken over once this old: no write holds one this long */
+const HELD_LOCK_MS = 10 * 60_000;
 /** Ops per line of a snapshot */
 const SNAPSHOT_LINE = 500;
 
@@ -84,7 +86,9 @@ async function locked<T>(file: string, work: () => Promise<T>): Promise<T> {
       const pid = Number(holder);
       // A live holder keeps it however long it takes; age only decides for a lock naming nobody.
       const named = Number.isSafeInteger(pid) && pid > 0;
-      const gone = named ? !alive(pid) : !!info && Date.now() - info.mtimeMs > STALE_LOCK_MS;
+      // A live holder keeps it for a long while, but not for ever: its pid may be another process's now.
+      const age = info ? Date.now() - info.mtimeMs : 0;
+      const gone = named ? !alive(pid) || age > HELD_LOCK_MS : age > STALE_LOCK_MS;
       if (gone) await fs.rm(lock, { force: true });
       else await wait(2 + Math.random() * 8);
     }
@@ -107,7 +111,11 @@ function namesOf(storePath: string): string[] {
 /** Reads a store in the former layout: one file per entry in `kv/`, per version in `versions/` */
 async function readFormer(dir: string): Promise<Op[] | null> {
   const ops: Op[] = [];
-  const names = async (sub: string) => (await fs.readdir(path.join(dir, sub)).catch(() => null)) ?? null;
+  // Files only: a link there is not followed out of the directory.
+  const names = async (sub: string) =>
+    (await fs.readdir(path.join(dir, sub), { withFileTypes: true }).catch(() => null))
+      ?.filter((entry) => entry.isFile())
+      .map((entry) => entry.name) ?? null;
   const kv = await names('kv');
   const versions = await names('versions');
   if (!kv && !versions) return null;

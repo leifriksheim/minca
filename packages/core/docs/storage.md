@@ -294,12 +294,13 @@ Today data folders, carriers and hosts mirror.
 A store writer keeps its state in the store `mirrors/<space id>/<n>`, where `n` is
 the mirror's index:
 
-| Key                         | Value                                          |
-| --------------------------- | ---------------------------------------------- |
-| `mirror:writer`             | the writer id                                  |
-| `mirror:counter`            | the segment counter, decimal                   |
-| `mirror:read:<segment key>` | `1`, for each segment read or written          |
-| `mirror:known:<version id>` | `1`, for each version known to be in the store |
+| Key                            | Value                                          |
+| ------------------------------ | ---------------------------------------------- |
+| `mirror:writer`                | the writer id                                  |
+| `mirror:counter`               | the segment counter, decimal                   |
+| `mirror:read:<segment key>`    | `1`, for each segment read or written          |
+| `mirror:known:<version id>`    | `1`, for each version known to be in the store |
+| `mirror:uploaded:<version id>` | `1`, for each version this writer uploaded     |
 
 "Known" is everything this store writer uploaded **or read**, so nobody re-uploads
 everyone else's versions.

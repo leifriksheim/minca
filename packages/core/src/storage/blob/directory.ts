@@ -88,7 +88,8 @@ export function createDirectoryBlobStore(root: DirectoryHandleLike, path = ''): 
       for (let i = chain.length - 1; i >= 0; i--) {
         const child = await find(chain[i]!, [parts[i]!]);
         if (!child || !(await isEmpty(child))) break;
-        await removeFile(chain[i]!, parts[i]!, true);
+        // Not recursive: a segment another process just wrote there keeps its directory.
+        await removeFile(chain[i]!, parts[i]!).catch(() => {});
       }
     },
 

@@ -77,6 +77,7 @@ const WRITER_KEY = 'mirror:writer';
 const COUNTER_KEY = 'mirror:counter';
 const readKey = (name: string) => `mirror:read:${name}`;
 const knownKey = (id: string) => `mirror:known:${id}`;
+const uploadedKey = (id: string) => `mirror:uploaded:${id}`;
 const MARK = utf8Encode('1');
 
 /** A new store writer id: 128 random bits as hex, never a DID, so a listing does not say whose device wrote it */
@@ -157,7 +158,10 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
       if (version) waiting.push(version);
     }
     await writeSegments(waiting, async (batch) => {
-      for (const version of batch) await markKnown(version.id);
+      for (const version of batch) {
+        await markKnown(version.id);
+        await state.put(uploadedKey(version.id), MARK);
+      }
     });
     // Past what the last compaction left times two: a space bigger than `compactAt` segments
     // would otherwise be rewritten whole on every flush, and read again by every other reader.
@@ -172,7 +176,9 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     const old = (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX));
     if (old.length < 2) return;
     // Read again: another process writing as this store writer marks what it uploads here too.
-    const uploaded = new Set((await state.list(knownKey(''))).map((key) => key.slice(knownKey('').length)));
+    const uploaded = new Set(
+      (await state.list(uploadedKey(''))).map((key) => key.slice(uploadedKey('').length)),
+    );
     const keep = new Map<string, Version>();
     for (const key of old) {
       const bytes = await store.get(key).catch(() => null);

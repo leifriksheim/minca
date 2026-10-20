@@ -193,6 +193,22 @@ describe('a mirror', () => {
     assert.deepEqual(await texts(fresh.storage), ['another record', 'v10']);
   });
 
+  test('a refused copy is not counted as there: the version, once held, still goes out', async () => {
+    const shared = createMemoryBlobStore();
+    const who = await author();
+    const version = await note(who, 'refused here at first');
+    const a = await device(shared);
+    await a.storage.addVersion(version);
+    await a.mirror.flush();
+    const b = await device(shared, () => true);
+    await b.mirror.pull();
+    // B comes to hold it another way (a peer), and A's copy is gone from the store.
+    for (const key of await shared.list(`${SPACE}/`)) await shared.delete(key);
+    await b.storage.addVersion(version);
+    await b.mirror.flush();
+    assert.equal((await shared.list(`${SPACE}/`)).length, 1, 'B uploaded it');
+  });
+
   test('compaction carries nothing someone else put under this writer’s prefix', async () => {
     const shared = createMemoryBlobStore();
     const who = await author();

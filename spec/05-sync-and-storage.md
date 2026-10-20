@@ -1112,15 +1112,17 @@ store (§12); the library's keys are in
 
 **Push.** After local changes, and on close: collect every version the store
 keeps (§10) that is not known to be in the blob store; pack them into
-segments; upload each; mark its versions known. "Known" is everything this
-store writer uploaded **or read**, so nobody re-uploads everyone else's versions.
+segments; upload each; mark its versions known, and uploaded. "Known" is
+everything this store writer uploaded **or stored from a segment**, so nobody
+re-uploads everyone else's versions.
 When and how big is the store writer's own.
 
 **Pull.** List `<space id>/`; for every segment not under the store writer's own
 prefix and not yet read, in name order: fetch it (skip it if it is gone —
 its store writer compacted it), and run every version through the gatekeeper (§8),
 passing over the remainder repeatedly while any go in (versions depend on
-each other). Mark each judged version known. Mark the segment read only if
+each other). Mark each version stored known; a refused copy is not, so a
+valid version with the same id still goes out. Mark the segment read only if
 none are still waiting; otherwise it is read again next time.
 
 The blob store is untrusted: it can hide versions (the mesh fills the gap)
@@ -1129,8 +1131,8 @@ but not forge them.
 **Compaction.** A store writer may rewrite its own segments: read them all,
 write into new segments its store's copy of every version in them that the
 store holds (a stub where it holds a stub, so a superseded body is not
-carried forward), and the segment's copy of one it does not hold but knows
-it uploaded, **then** delete the old ones. A reader in between sees
+carried forward), and the segment's copy of one it does not hold but marked
+uploaded, **then** delete the old ones. A reader in between sees
 duplicates, which are harmless. Anything else in its segments was put there
 by someone else, and is not carried.
 

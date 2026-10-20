@@ -661,8 +661,10 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     guess its password offline; a weak one makes it the root thief (§3.5,
     By design).
   - Where it can write a data folder, it can leave segments as large and as
-    many as it likes, and every client of the folder reads each one whole
-    (05 §14.5, §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
+    many as it likes, and every client of the folder reads each one whole;
+    and a file where a space's directory belongs stops every client pushing
+    or pulling that space through the folder, until it is removed (05 §14.5,
+    §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - `minca agent` keeps its key, grant and stores together in the CLI home
     (`<home>/agent`). Where the home is a data folder others write, rolling
     back the stores' `writers.log` has the agent sign at a place it used
