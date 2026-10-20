@@ -261,7 +261,7 @@ export function overSpaces(described: unknown): ReadonlyArray<OverSpace> {
 }
 
 /** A status's usage, when well formed */
-export function spaceUsage(described: unknown): SpaceUsage | null {
+function spaceUsage(described: unknown): SpaceUsage | null {
   if (typeof described !== 'object' || described === null) return null;
   const given: Record<string, unknown> = { ...described };
   return isCount(given.writers) && isCount(given.readers) && isCount(given.bytes) && isCount(given.windowDays)

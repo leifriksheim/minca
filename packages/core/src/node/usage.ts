@@ -29,7 +29,7 @@ export interface UsageMeterConfig {
 }
 
 /** What the meter counted for a space over its window */
-export interface Counted {
+interface Counted {
   readonly writers: number;
   readonly readers: number;
   readonly windowDays: number;
@@ -40,8 +40,6 @@ const dayOf = (seconds: number) =>
   new Date(Math.floor(seconds / DAY) * DAY * 1000).toISOString().slice(0, 10);
 
 const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-
-export type UsageMeter = Awaited<ReturnType<typeof createUsageMeter>>;
 
 /** Opens the meter, reading back what it counted before a restart */
 export async function createUsageMeter(config: UsageMeterConfig) {

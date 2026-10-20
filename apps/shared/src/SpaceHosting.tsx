@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { COLLECTION_DEFINE, KEY_CHANGE, RECORD_WRITE, describeHost } from '@minca/core';
-import type { FundOffer, SpaceHostingView } from '@minca/core';
+import type { FundOffer, OverSpace, SpaceHostingView, SpaceUsage } from '@minca/core';
 import { useAccess, useCollections, useNode } from '@minca/core/react';
 import { useMay } from './may';
 import { host as hostSchema } from '@minca/core/schemas';
 import { DEFAULT_HOST } from './relay';
 import { Modal } from './Modal';
 import { useWanted, type Wanted } from './HostAddress';
-import { HostOfferPicker, HostStatusRow, StopFooter, useAskAgain, useOffer } from './HostOffer';
+import {
+  HostOfferPicker,
+  HostStatusRow,
+  StopFooter,
+  hostTerms,
+  stillFree,
+  useAskAgain,
+  useOffer,
+} from './HostOffer';
 import { ChipIn, RemindMe, dollars, lastsFor } from './Payment';
 import { Benefit, FeatureIcon, Glyph, shortDate, timeLeft, type Tone } from './Feature';
 import { useAction } from './action';
@@ -121,6 +129,9 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
   const [dialog, setDialog] = useState<'keep' | 'stop' | null>(null);
   const host = hosts?.[0];
   const view = host ? standing(host) : null;
+  const outgrown = useOutgrown(spaceId);
+  // Paid for by its own fund: the free line no longer matters.
+  const funded = host?.fund && host.status?.state === 'active';
   const close = () => {
     setDialog(null);
     look();
@@ -179,6 +190,14 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
           )}
         </HostStatusRow>
       </div>
+      {outgrown.length > 0 && !funded && (
+        <Outgrown
+          over={outgrown}
+          usage={host?.status?.usage}
+          mayStart={mayChoose || !!host?.fund}
+          onStart={() => setDialog('keep')}
+        />
+      )}
       {dialog === 'keep' && <KeepOnlineDialog spaceId={spaceId} writable={writable} onClose={close} />}
       {dialog === 'stop' && host && (
         <Modal title={`Stop using ${host.name}?`} onClose={close} width={460}>
@@ -186,6 +205,69 @@ export function SpaceHosting({ spaceId, writable }: { spaceId: string; writable:
         </Modal>
       )}
     </section>
+  );
+}
+
+/** The account's hosts that say this space is over their free line, from what they last signed */
+function useOutgrown(spaceId: string) {
+  const node = useNode();
+  const [over, setOver] = useState<ReadonlyArray<{ name: string; over: OverSpace }>>([]);
+  const ask = useCallback(() => node.hosting.over(spaceId).then(setOver, () => setOver([])), [node, spaceId]);
+  useAskAgain(ask);
+  return over;
+}
+
+/**
+ * A community that has outgrown free hosting: the date its members' host
+ * stops keeping it for free, and a fund to start before then. Nothing is
+ * lost after: it stays on members' devices.
+ */
+function Outgrown({
+  over,
+  usage,
+  mayStart,
+  onStart,
+}: {
+  over: ReadonlyArray<{ name: string; over: OverSpace }>;
+  usage: SpaceUsage | undefined;
+  mayStart: boolean;
+  onStart: () => void;
+}) {
+  const first = over.reduce((soonest, one) => (one.over.until < soonest.over.until ? one : soonest));
+  const ahead = stillFree(first.over);
+  return (
+    <div
+      role="status"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        flexWrap: 'wrap',
+        padding: 14,
+        borderRadius: 12,
+        background: palette.surface.sunken,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: palette.ink.strong }}>
+          {ahead ? `Free until ${shortDate(first.over.until)}` : 'Outgrown free hosting'}
+        </p>
+        <p style={{ fontSize: 13, color: palette.ink.muted, lineHeight: 1.5 }}>
+          {first.over.reasons.includes('writers')
+            ? `More people write here than ${first.name} keeps for free.`
+            : `This community is bigger than ${first.name} keeps for free.`}{' '}
+          {ahead ? 'A fund keeps it online after that.' : 'A fund brings it back online.'}
+          {usage ? ` ${usage.writers} wrote here in the last ${usage.windowDays} days.` : ''}
+        </p>
+      </div>
+      {mayStart ? (
+        <button onClick={onStart} data-variant="primary" style={styles.darkSmall}>
+          Start a fund
+        </button>
+      ) : (
+        <p style={{ fontSize: 12, color: palette.ink.faint }}>Whoever manages the space can start one.</p>
+      )}
+    </div>
   );
 }
 
@@ -402,7 +484,9 @@ export function KeepOnline({
                   ? 'Free'
                   : offer?.fund
                     ? `$${offer.fund.monthly} a month, from the fund`
-                    : (offer?.price ?? '')
+                    : offer
+                      ? hostTerms(offer)
+                      : ''
               }
               busy={busy}
               onContinue={() => void run(() => choose(DEFAULT_HOST ?? '', wanted))}
