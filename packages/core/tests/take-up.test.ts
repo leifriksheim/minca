@@ -329,7 +329,7 @@ describe('a pairing link opened where a sign-in is kept', () => {
       offer.stop();
       await Promise.all([phone.signOut(), bobTab?.signOut(), computer.signOut()]);
     };
-    return { phone, ada, bob, done };
+    return { phone, ada, bob, stages, done };
   }
 
   test('signed in as another, it asks to add the account that arrived, and keeps the other', async () => {
@@ -365,11 +365,14 @@ describe('a pairing link opened where a sign-in is kept', () => {
     await done();
   });
   test('"Not now" while the code shows stops the pairing, even if the computer confirms after', async () => {
-    const { phone, ada, done } = await pairing({
+    const { phone, ada, stages, done } = await pairing({
       signedIn: false,
       beforeConfirm: (tab) => tab.dismissPairing(),
     });
     await new Promise((settle) => setTimeout(settle, 200));
+    assert.equal(phone.getState().busy, false, 'the screen it went back to is not held up');
+    assert.equal(phone.getState().error, null, 'stopping is not an error');
+    assert.ok(!stages.some((stage) => stage.kind === 'sent'), 'the computer is not told it arrived');
     assert.equal(phone.getState().session, null, 'nothing was signed in');
     assert.equal(phone.getState().pairingArrival, null);
     assert.ok(!phone.getState().accounts.some((account) => account.did === ada), 'the account was not filed');

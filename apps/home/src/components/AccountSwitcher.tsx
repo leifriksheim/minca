@@ -23,6 +23,9 @@ export function AccountSwitcher() {
     useCallback(() => setOpen(false), []),
   );
   const others = state.accounts.filter((account) => account.id !== session.account.id);
+  // Two accounts with one name (a profile can name itself anything) are told apart by their ids.
+  const named = (name: string) => state.accounts.filter((account) => account.name === name).length;
+  const shortId = (did: string) => `…${did.slice(-6)}`;
 
   const switchTo = async (accountId: string) => {
     setOpen(false);
@@ -64,7 +67,11 @@ export function AccountSwitcher() {
             <p style={{ fontFamily: palette.display, fontSize: 19, fontWeight: 700, color: ink.strong }}>
               Hi, {session.account.name}
             </p>
-            <p style={{ fontSize: 12, color: ink.faint }}>Signed in here</p>
+            <p style={{ fontSize: 12, color: ink.faint }}>
+              {named(session.account.name) > 1
+                ? `Signed in here · ${shortId(session.did)}`
+                : 'Signed in here'}
+            </p>
           </div>
           {others.length > 0 && (
             <div style={{ borderTop: `1px solid ${surface.line}`, padding: 6 }}>
@@ -82,7 +89,9 @@ export function AccountSwitcher() {
                     <span style={{ display: 'block', fontWeight: 500, color: ink.strong }}>
                       {account.name}
                     </span>
-                    <span style={{ display: 'block', fontSize: 12, color: ink.faint }}>Switch</span>
+                    <span style={{ display: 'block', fontSize: 12, color: ink.faint }}>
+                      {named(account.name) > 1 ? `Switch · ${shortId(account.did)}` : 'Switch'}
+                    </span>
                   </span>
                 </button>
               ))}

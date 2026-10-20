@@ -1047,6 +1047,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   let heldHandover: Handover | null = null;
   /** Counts pairings begun and dismissed: one that ends after a dismiss is dropped */
   let pairingRun = 0;
+  /** Stops the pairing under way, so a dismissed one leaves the room rather than waiting it out */
+  let stopPairing: AbortController | null = null;
 
   /** Signs in with what a pairing brought, then joins its spaces */
   async function takeHandover(handover: Handover): Promise<void> {
@@ -1292,11 +1294,21 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (!state.place) update({ place: await browserPlace() });
       const onStage = (stage: PairingStage) => update({ pairingStage: stage });
       const mine = ++pairingRun;
+      const stop = new AbortController();
+      stopPairing = stop;
       const got: { handover: Handover | null } = { handover: null };
       // The account arrives over the exchange, after the person has compared
       // the codes; the link only says where to meet.
       await run(async () => {
-        got.handover = await receiveFromDesktop(ticket, onStage, { transport: config.pairingTransport });
+        try {
+          got.handover = await receiveFromDesktop(ticket, onStage, {
+            transport: config.pairingTransport,
+            signal: stop.signal,
+          });
+        } catch (error) {
+          // Stopped by "Not now": nothing went wrong to tell the person about.
+          if (!stop.signal.aborted) throw error;
+        }
       });
       const arrived = got.handover;
       // "Not now" while the code showed: the computer may still have sent it, but it is not taken.
@@ -1336,6 +1348,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     dismissPairing() {
       pairingRun++;
+      stopPairing?.abort();
+      stopPairing = null;
       clearPairingTicket();
       heldHandover?.seed.fill(0);
       heldHandover = null;

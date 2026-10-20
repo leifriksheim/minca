@@ -272,10 +272,14 @@ spaces are joined. `answerPairing(true)` adds the account (or, already here,
 switches to it) and the one signed in stays filed, to switch back to;
 `answerPairing(false)` lets it go and goes back to the account signed in.
 `<minca-auth>` asks "Add this account?" or "Switch to <name>?", with the
-account's avatar. Only the tab's own session counts: a tab that opens with no
-kept sign-in pairs as a signed-out one does. `dismissPairing()` stops a
-pairing at any point before the account is taken: one that arrives after it,
-because the computer confirmed anyway, is dropped.
+account's avatar. Only the tab's session when the account arrives counts: a
+tab that opens with no kept sign-in, or a caller that accepts before
+`start()` has finished, pairs as a signed-out one does. Switching this way
+starts the arriving account's session without signing the other out: its
+session key is left unrevoked, as when a tab closes. `dismissPairing()` stops
+a pairing at any point before the account is taken: the phone leaves the
+exchange, and an account that arrives anyway, because the computer confirmed
+first, is dropped.
 
 `pairingTransport` in `createMincaAuth`'s config sets how the two sides of a
 pairing reach each other (default: the relay in the ticket), for tests or a
@@ -316,9 +320,10 @@ treat it as a hint: say which account the app uses, pick it on the sign-in
 screen, offer to switch, and never sign out or switch on the hint alone. For
 an account the home doesn't keep, it must not suggest bringing it in: a
 stranger could name their own account, then send a pairing link "to add this
-browser" ([threat model §3.1](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)). The
-account home shows the account by its avatar, drawn from the DID, rather than a
-name the link could have made up.
+browser" ([threat model §3.1](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)). An
+account the home keeps is named by the name it filed, never one from the
+link; its avatar helps recognise it, but is no proof, since a look-alike
+takes seconds to find.
 
 _Source: `packages/core/src/session/account-hint.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`, `apps/example/src/notifications.ts`. Tests: `packages/core/tests/account-hint.test.ts`._
 
