@@ -331,6 +331,28 @@ describe('createMincaAuth', () => {
     assert.equal(auth.getState().stage, 'ready', 'the owner’s password still opens it');
   });
 
+  test('no call steps back into setup to skip the proof', async () => {
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    auth.codeSaved();
+    auth.finishSetup();
+    assert.equal(auth.getState().stage, 'ready', 'neither reopens setup once it is done');
+    assert.equal(await auth.setPassword('chosen by whoever sat down'), false);
+    assert.equal(await auth.confirm({ password: 'chosen by whoever sat down' }), false);
+  });
+
+  test('proof is for one account, and does not carry over to another', async () => {
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    assert.equal(await auth.confirm({ password: PASSWORD }), true);
+    await auth.signOut();
+    await createAccount(auth, 'Bob');
+    assert.equal(auth.isConfirmed(), false);
+    assert.equal(auth.recoveryCode(), null);
+  });
+
   test('subscribers hear every change', async () => {
     const auth = started();
     const stages: string[] = [];

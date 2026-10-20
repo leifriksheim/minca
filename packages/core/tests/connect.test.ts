@@ -63,7 +63,10 @@ async function home(hub: FakeHub, { signOutGraceMs = 300 } = {}): Promise<MincaA
   });
   await auth.start();
   await auth.createAccount('Ada');
+  const code = auth.getState().freshCode!;
   auth.codeSaved();
+  // Whole-account and contacts grants need the person to have just proved it is them.
+  await auth.confirm({ code });
   cleanup.push(() => auth.signOut());
   return auth;
 }
@@ -191,6 +194,28 @@ describe('connecting an app to an account home', () => {
     });
     const viewer = await app(hub, grant, key);
     await assert.rejects(() => viewer.records.put(shared.id, 'app.note', { text: 'hi' }));
+  });
+
+  test('the whole account, or the contacts, are given only just after proof it is you', async () => {
+    // Their keys read every private space and contact request for good: one click at an open page is not enough.
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const code = auth.recoveryCode()!;
+    await auth.signOut();
+    await auth.signInWithCode(code);
+    assert.equal(auth.isConfirmed(), false, 'a new sign-in has proved nothing yet');
+    const ask = async (extra: { scope?: 'account'; contacts?: true }) => {
+      const key = await appKey();
+      return auth.grant({
+        origin: 'https://browser.test',
+        request: await asked({ v: 1, audience: key.did, access: 'write', ...extra }, key),
+        spaceIds: [],
+      });
+    };
+    await assert.rejects(ask({ scope: 'account' }), /Confirm it is you/);
+    await assert.rejects(ask({ contacts: true }), /Confirm it is you/);
+    assert.equal(await auth.confirm({ code }), true);
+    assert.ok((await ask({ scope: 'account' })).accountKey);
   });
 
   test('whole-account access: the app sees every space, and a space it makes lands in the account', async () => {
@@ -661,6 +686,7 @@ describe('an account home typed by a person', () => {
     });
     await auth.start();
     await auth.createAccount('Ada');
+    await auth.confirm({ code: auth.getState().freshCode! });
     cleanup.push(() => auth.signOut());
     const key = await appKey();
     const grant = await auth.grant({

@@ -822,15 +822,21 @@ raised but has no place above until a test confirms or rules it out.
   body, and shows what a carrier sees (§3.8). A program running as the person
   can still ask the keychain, as it can read a browser profile.
 - **Stopping someone at a device that is signed in.** The reference home asks
-  for the password, a passkey or the recovery code before it shows the
-  recovery code, offers the account to a phone, or changes how the account
-  signs in (`packages/core/tests/auth.test.ts`, "reading the recovery code or
-  offering the account to a phone takes proof it is you", "changing how the
-  account signs in takes proof it is you, once it is set up"). That keeps the
-  seed from someone who only has the open page. The seed is still in the
-  page's memory, so developer tools or a script in the home's origin read it;
-  and anything that hands out notes rather than the seed (approving an app,
-  disconnecting one) asks nothing more than being signed in.
+  for the password, a passkey or the recovery code, given in the last five
+  minutes for this account, before it does only these: show the recovery
+  code, offer the account to a phone, change how the account signs in
+  outside first setup, or give an app the whole account or the contacts,
+  whose keys no revoke takes back (`packages/core/tests/auth.test.ts`,
+  "reading the recovery code or offering the account to a phone takes proof
+  it is you", "changing how the account signs in takes proof it is you, once
+  it is set up", "no call steps back into setup to skip the proof";
+  `packages/core/tests/connect.test.ts`, "the whole account, or the
+  contacts, are given only just after proof it is you"). Anything else at an
+  open page, such as giving an app some spaces or disconnecting one, needs
+  only the sign-in. A passkey's proof is whatever the platform takes for it,
+  which may be the device's own login. And the seed is in the page's memory,
+  so developer tools or a script in the home's origin read it whatever was
+  asked.
 
 ## 5. Reviewing a change against this page
 

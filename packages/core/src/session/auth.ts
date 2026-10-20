@@ -582,6 +582,13 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   let seed: Uint8Array | null = null;
   /** When the person last proved it is them (`confirm`); nothing that hands out the seed works without it */
   let confirmedAt = 0;
+  /** Which account that proof was for, so it never carries over to another */
+  let confirmedFor: string | null = null;
+  /**
+   * Whether a session just landed and is choosing its first way in: only `arrive`
+   * opens this, so no call can step back into setup to skip `confirm`.
+   */
+  let setupOpen = false;
   let localKey: CryptoKey | null = null;
   let stopFollowingName: (() => void) | null = null;
   let expiryTimer: ReturnType<typeof setInterval> | null = null;
@@ -656,6 +663,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     expiryTimer = null;
     seed = null;
     confirmedAt = 0;
+    confirmedFor = null;
+    setupOpen = false;
     localKey = null;
     await node?.close();
   }
@@ -925,14 +934,17 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     if (setup === null || hasEverydayWay(entry)) {
       update({ ...landed, stage: 'ready', setup: null, freshCode: null });
     } else if (setup === 'paired' || setup === 'restored') {
+      setupOpen = true;
       update({ ...landed, stage: 'unlock', setup, freshCode: null });
     } else {
+      setupOpen = true;
       update({ ...landed, stage: 'recovery', setup, freshCode: seed ? seedToRecoveryCode(seed) : null });
     }
   }
 
   /** After a way in is set up: offer a pod to a new account that could use one, or go in. */
   function afterUnlock(): void {
+    setupOpen = false;
     const offerPod =
       config.offerPod !== false &&
       state.setup === 'new' &&
@@ -1035,7 +1047,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   }
 
   /** Whether the person proved it is them (`confirm`) in the last few minutes */
-  const isConfirmed = () => seed !== null && Date.now() - confirmedAt < CONFIRMED_MS;
+  const isConfirmed = () =>
+    seed !== null &&
+    confirmedFor !== null &&
+    state.session?.did === confirmedFor &&
+    Date.now() - confirmedAt < CONFIRMED_MS;
 
   /**
    * Changes to the open account's shortcuts, then re-reads them. During setup,
@@ -1045,7 +1061,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   const changeShortcut = (apply: (unlocked: Uint8Array) => Promise<void>) =>
     run(async () => {
       if (!seed) throw new Error('Not signed in.');
-      if (state.stage !== 'unlock' && !isConfirmed()) throw new Error('Confirm it is you first.');
+      if (!setupOpen && !isConfirmed()) throw new Error('Confirm it is you first.');
       await apply(seed);
       await refreshEntry();
       if (state.stage === 'unlock' && hasEverydayWay(state.entry)) afterUnlock();
@@ -1304,12 +1320,13 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     },
 
     codeSaved() {
-      if (!state.session) return;
+      if (!state.session || state.stage !== 'recovery') return;
       update({ freshCode: null, stage: 'unlock' });
     },
 
     finishSetup() {
-      if (!state.session) return;
+      if (!state.session || state.stage !== 'pod') return;
+      setupOpen = false;
       update({ stage: 'ready', setup: null, error: null });
     },
 
@@ -1568,6 +1585,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
             throw wrong('That passkey does not open this account here.');
         }
         confirmedAt = Date.now();
+        confirmedFor = state.session?.did ?? null;
       });
     },
 
@@ -1616,6 +1634,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (recordsOnly && request.contacts)
         throw new Error('A key given records only is not given your contacts.');
       const whole = request.scope === 'account';
+      // The account key and the contact key are read secrets for good: no revoke takes them back.
+      if ((whole || request.contacts) && !isConfirmed()) throw new Error('Confirm it is you first.');
       const created = [];
       for (const params of request.create ?? []) created.push(await node.spaces.create(params));
       // With the whole account the app derives the contacts space itself; otherwise it is one more space it is given.

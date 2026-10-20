@@ -199,13 +199,19 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                 account={session.account.name}
                 busy={state.busy}
                 onSave={async (password) => {
-                  const ok = await auth.setPassword(password);
-                  if (ok) {
-                    const filedAs = accountCredentialName(session.account.name);
-                    await offerToSave(filedAs, password, filedAs);
-                    setChangingPassword(false);
-                  }
-                  return ok;
+                  const save = async () => {
+                    const ok = await auth.setPassword(password);
+                    if (ok) {
+                      const filedAs = accountCredentialName(session.account.name);
+                      await offerToSave(filedAs, password, filedAs);
+                      setChangingPassword(false);
+                    }
+                    return ok;
+                  };
+                  // Open longer than the proof lasts: ask again, then save.
+                  if (auth.isConfirmed()) return save();
+                  setWaiting({ why: 'change the password', then: () => void save() });
+                  return false;
                 }}
                 onCancel={() => setChangingPassword(false)}
               />
