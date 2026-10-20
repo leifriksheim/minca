@@ -15,7 +15,7 @@ import {
   createLocalRootSigner,
   createNode,
   deriveAccountKey,
-  folderStores,
+  directoryStores,
   generateSeed,
   remoteNode,
   type P2PNode,
@@ -69,7 +69,7 @@ const offline = async (params: StartParams) => {
   const node = await createNode({
     signer: params.signer,
     sessionKey: params.key.keys,
-    stores: folderStores(await openFsDirectory(params.stores), { localKey: params.seal }),
+    stores: directoryStores(await openFsDirectory(params.stores), { localKey: params.seal }),
     watchIntervalMs: 0,
     ...(params.grant.accountKey ? { accountKey: base64UrlDecode(params.grant.accountKey) } : {}),
   });

@@ -21,7 +21,7 @@ import { promisify } from 'node:util';
 import {
   CLOSE_DID_TAKEN,
   createNode,
-  folderStores,
+  directoryStores,
   didOf,
   COLLECTION_DEFINE,
   type NodeConfig,
@@ -398,7 +398,7 @@ async function startWithKey(
   const base = await createNode({
     signer: grantSigner(grant),
     sessionKey: key.keys,
-    stores: folderStores(data),
+    stores: directoryStores(data),
     ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
     network: options.network ?? {
       relays,

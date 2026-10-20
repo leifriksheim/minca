@@ -7,6 +7,7 @@
  * its recovery code or with a passphrase wrap — from a flag, an environment
  * variable, or a prompt — every time a process starts.
  */
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -18,6 +19,7 @@ import {
   deriveLocalKey,
   deriveAccountKey,
   deriveContactKeyBytes,
+  directoryStores,
   folderStores,
   generateSeed,
   newAccountId,
@@ -50,6 +52,19 @@ export interface Home {
 /** `--home`, then `$MINCA_HOME`, then `~/.minca`. */
 export function homePath(flag?: string): string {
   return path.resolve(flag ?? process.env.MINCA_HOME ?? path.join(os.homedir(), '.minca'));
+}
+
+/**
+ * Where this computer keeps an account's own stores and writer keys: never in
+ * the home, which may be a folder a browser shares or a sync service copies,
+ * so whoever writes it could roll them back, and two machines would share
+ * them. `$MINCA_LOCAL`, else `~/.local/state/minca`, under a name worked out
+ * from the home's path. Writer keys left in the home before are not read.
+ */
+export function localPath(home: string, accountId: string): string {
+  const base = process.env.MINCA_LOCAL ?? path.join(os.homedir(), '.local', 'state', 'minca');
+  const which = createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16);
+  return path.join(base, which, accountId);
 }
 
 export async function openHome(flag?: string): Promise<Home> {
@@ -171,10 +186,15 @@ export async function unlock(
   return {
     account,
     signer,
-    stores: folderStores(home.directory, { basePath: account.dataPath, localKey }),
+    // The folder holds the registry and each space's segments; what this computer holds of them is its own.
+    stores: folderStores(home.directory, {
+      basePath: account.dataPath,
+      localKey,
+      local: directoryStores(await openFsDirectory(path.join(localPath(home.path, account.id), 'stores'))),
+    }),
     accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),
-    writerKey: fileWriterKeys(path.join(home.path, 'writers', account.id), localKey, account.did),
+    writerKey: fileWriterKeys(path.join(localPath(home.path, account.id), 'writers'), localKey, account.did),
   };
 }
 

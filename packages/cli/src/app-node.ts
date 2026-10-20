@@ -26,7 +26,7 @@ import {
   base64UrlEncode,
   createNode,
   didOf,
-  folderStores,
+  directoryStores,
   openValue,
   sealValue,
   serveNode,
@@ -583,7 +583,7 @@ async function startDesktopNode(params: StartParams): Promise<P2PNode> {
   const node = await createNode({
     signer: params.signer,
     sessionKey: params.key.keys,
-    stores: folderStores(await openFsDirectory(params.stores), { localKey: params.seal }),
+    stores: directoryStores(await openFsDirectory(params.stores), { localKey: params.seal }),
     cache: {},
     network: {
       relays,

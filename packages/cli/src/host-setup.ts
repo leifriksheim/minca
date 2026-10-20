@@ -8,7 +8,7 @@ import path from 'node:path';
 import {
   createP256Provider,
   createS3BlobStore,
-  folderStores,
+  directoryStores,
   type BlobStore,
   type HostLimits,
   type StoreFactory,
@@ -51,7 +51,7 @@ export async function hostKey(data: string, name = 'host-key'): Promise<CryptoKe
 
 /** The host's stores, in the data folder: its subscriptions, and a copy of every space it carries */
 export async function hostStores(data: string): Promise<StoreFactory> {
-  return folderStores(await openFsDirectory(path.join(data, 'store')));
+  return directoryStores(await openFsDirectory(path.join(data, 'store')));
 }
 
 /** What a carried space takes on disk, in bytes: its folder under `hostStores`, walked */

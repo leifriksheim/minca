@@ -49,6 +49,8 @@ export interface DirectoryHandleLike {
   getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<DirectoryHandleLike>;
   removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>;
   keys(): AsyncIterableIterator<string>;
+  /** Each entry, and whether it is a file or a directory */
+  values(): AsyncIterableIterator<{ readonly kind: 'file' | 'directory'; readonly name: string }>;
 }
 
 /** What changed on disk since the last pass */
@@ -85,7 +87,7 @@ const VERSION_SUFFIX = '.json';
  * this, the keys `space:Abc` and `space:abc` would quietly become one file and
  * one of the two values would be lost.
  */
-function encodeKey(key: string): string {
+export function encodeKey(key: string): string {
   let out = '';
   for (const byte of utf8Encode(key)) {
     const char = String.fromCharCode(byte);
@@ -95,7 +97,7 @@ function encodeKey(key: string): string {
 }
 
 /** Reverses {@link encodeKey}. */
-function decodeKey(name: string): string {
+export function decodeKey(name: string): string {
   const bytes: number[] = [];
   for (let i = 0; i < name.length; i++) {
     if (name[i] === '%') {
@@ -109,12 +111,12 @@ function decodeKey(name: string): string {
 }
 
 /** Whether a rejection means "that file isn't there", which is usually not an error. */
-function isNotFound(error: unknown): boolean {
+export function isNotFound(error: unknown): boolean {
   return error instanceof Error && error.name === 'NotFoundError';
 }
 
 /** Walks — and creates — a chain of subdirectories. */
-async function resolvePath(
+export async function resolvePath(
   root: DirectoryHandleLike,
   segments: ReadonlyArray<string>,
 ): Promise<DirectoryHandleLike> {
@@ -150,7 +152,7 @@ export async function writeFolderFile(
 }
 
 /** Deletes a file, ignoring one that is already gone. */
-async function removeFile(dir: DirectoryHandleLike, name: string): Promise<void> {
+export async function removeFile(dir: DirectoryHandleLike, name: string): Promise<void> {
   try {
     await dir.removeEntry(name);
   } catch (error) {

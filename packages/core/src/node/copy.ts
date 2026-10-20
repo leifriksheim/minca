@@ -14,7 +14,8 @@
 import type { StoreFactory } from './stores.js';
 import { createSpaceManager } from '../space/space-manager.js';
 import { deriveAccountRegistry, deriveContactsSpace } from '../space/account-registry.js';
-import { createStorageProvider } from '../storage/storage-provider.js';
+import { createStorageProvider, type StorageProvider } from '../storage/storage-provider.js';
+import { createMirror } from '../storage/mirror.js';
 
 export interface CopyAccountParams {
   readonly from: StoreFactory;
@@ -40,6 +41,26 @@ export interface CopyResult {
  * Copies every space an account holds, with its key and its records, into
  * another set of stores. Whatever the destination already has is kept.
  */
+/**
+ * A data folder's segments for one space, over these stores (`folderStores`):
+ * what this device holds of a space in a folder is only its own copy, and
+ * the folder is what other devices read.
+ */
+async function folderOf(stores: StoreFactory, spaceId: string, storage: StorageProvider) {
+  if (!stores.folder) return null;
+  return createMirror({
+    store: stores.folder,
+    space: spaceId,
+    storage,
+    state: await stores(`folder/${spaceId}`),
+    // Taken as the rest of a copy is (see the Known defect in docs/node.md).
+    accept: async (version) => {
+      await storage.addVersion(version);
+      return 'stored';
+    },
+  });
+}
+
 export async function copyAccountData(params: CopyAccountParams): Promise<CopyResult> {
   const fromRegistryStore = await params.from('registry', { seal: true });
   const toRegistryStore = await params.to('registry', { seal: true });
@@ -70,7 +91,10 @@ export async function copyAccountData(params: CopyAccountParams): Promise<CopyRe
   for (const [index, spaceId] of spaceIds.entries()) {
     const source = createStorageProvider(await params.from(`spaces/${spaceId}`));
     const target = createStorageProvider(await params.to(`spaces/${spaceId}`));
+    const from = await folderOf(params.from, spaceId, source);
+    const into = await folderOf(params.to, spaceId, target);
     try {
+      await from?.pull();
       // Every version the source keeps — current, first, retained — goes
       // through the ordering rule on arrival, so the target ends up with what
       // it would have reached by syncing with the source.
@@ -83,7 +107,9 @@ export async function copyAccountData(params: CopyAccountParams): Promise<CopyRe
         // Counted only if it stayed: a version the target's own one supersedes is dropped again.
         if (!held && (await target.getVersion(id))) recordsAdded++;
       }
+      await into?.flush();
     } finally {
+      await Promise.all([from?.close(), into?.close()]);
       await Promise.all([source.close(), target.close()]);
     }
     params.onProgress?.(index + 1, spaceIds.length);

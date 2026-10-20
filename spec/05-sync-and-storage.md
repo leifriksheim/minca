@@ -584,7 +584,7 @@ hold its collection, once their hello says so")._
 ## 8. Taking in versions
 
 Nothing a peer sends is taken on trust. Before storing a version from a peer,
-a folder another writer can reach (§14.5), or a mirror (§16), a node MUST run
+a data folder (§14.5), or a mirror (§16), a node MUST run
 it through the validation pipeline of [02 — Records](02-records.md) and the
 access rules of [03 — Spaces](03-spaces.md), and MUST NOT store it unless it
 passes. Shape (schema conformance) is **not** a reason to refuse a version on
@@ -767,8 +767,7 @@ names a version that is not there.
 > ([02](02-records.md) §4.5). It is kept as a stub like any other version,
 > unless retained.
 
-**Removing** a version (used when a folder file vanished, §14.5, or a
-collection is dropped, §9) unsets `r/k` and `g/k` if they name it, unsets its
+**Removing** a version (used when a collection is dropped, §9) unsets `r/k` and `g/k` if they name it, unsets its
 `h/` entry, and drops it. It does not promote an older version.
 
 Changes to one store are applied one at a time, never interleaved, each
@@ -780,8 +779,8 @@ write and does not stop the others.
 ### 10.2 In memory
 
 A node may keep what it read from a store in memory. When another writer
-changed the same store (another tab, another origin or device on a shared
-folder, §14.5) the node MUST read it again before it trusts what it kept. How
+changed the same store (another tab over one database, another process over
+one file) the node MUST read it again before it trusts what it kept. How
 this library caches a store, tells other tabs, and computes the fingerprint it
 shows in status is in
 [Sync and storage in the library](../packages/core/docs/storage.md#the-store-in-memory).
@@ -812,6 +811,7 @@ adapter:
 | `registry`               | the spaces this node holds, and their keys                       | yes, on a node given a local key |
 | `spaces/<space id>`      | one space: §10 entries and bodies, and what the node keeps on it | no                               |
 | `mirrors/<space id>/<n>` | a mirror's store writer state (§16.4); `n` is the mirror's index | no                               |
+| `folder/<space id>`      | the store writer state of a data folder's segments (§14.5)       | no                               |
 
 Other entries a node keeps in a space's store, and what a mirror's store
 writer keeps in its store, are the node's own (the library's are in
@@ -832,10 +832,12 @@ and all sealed (§15):
 
 Forgetting a space deletes all six.
 
-In a data folder, a store at a path is a folder adapter (§14) at
-`<dataPath>/<path>`, and the `registry` store is sealed under the account's
-local key (§15). Where a node keeps its stores otherwise (IndexedDB, and a
-host's own store) is its own; the library's naming is in
+In a data folder, only the `registry` store is kept in the folder, as entry
+files at `<dataPath>/registry` (§14.3), sealed under the account's local key
+(§15). Every other store is the node's own, and MUST NOT be kept in the
+folder: a space is kept there as segments (§14.1), which every client reads
+through the gatekeeper. Where a node keeps its own stores (IndexedDB, a file
+on disk, a host's store) is its own; the library's are in
 [Sync and storage in the library](../packages/core/docs/storage.md#indexeddb).
 
 _Source: `packages/core/src/node/stores.ts`, `packages/core/src/session/places.ts` (`storesFor`),
@@ -860,6 +862,12 @@ or a daemon on the same machine, and other devices behind a file-sync
 service) read and write it at once. Its format is **normative**: a client
 that follows this section can share a folder with this one.
 
+A folder may be synced by a service that charges, slows or fails by the
+file (Google Drive, Dropbox, iCloud), so it holds a few files per space and
+client, not several per version: a space is kept in it exactly as a mirror
+keeps one in a bucket (§16), and each client keeps its own entries (§10)
+where only it reads them.
+
 ### 14.1 Layout
 
 ```
@@ -868,20 +876,22 @@ that follows this section can share a folder with this one.
   accounts/<account id>/account.json    that account's locked keys (01)
   accounts/<account id>/stores/         that account's data path
     registry/
-      kv/<encoded key>                  one file per entry
-      versions/                         (empty for a registry)
+      kv/<encoded key>                  one file per entry, sealed (§15)
+      versions/                         empty
     spaces/<space id>/
-      kv/<encoded key>
-      versions/<version id>.json        one file per version, whole (§14.3)
-    mirrors/<space id>/<n>/kv/…
+      <store writer id>/<counter>-<hash>.seg    a store writer's segments (§16.2, §16.3)
 ```
 
 - `<account id>` matches `^[a-z0-9]{1,12}$`. An account's `dataPath` in
   `accounts.json` MUST be `accounts/<its id>/stores`. A reader MUST skip rows
   with any other id or data path, and MUST NOT resolve a path from them.
-- A store at path `a/b/c` is the directory `<dataPath>/a/b/c`, each segment
-  encoded as in §14.2. Each store directory has exactly two subdirectories,
-  `kv` and `versions`, created on open.
+- The registry store is the directory `<dataPath>/registry`, with exactly
+  two subdirectories, `kv` and `versions`, created on open.
+- `<dataPath>/spaces/` is a blob store (§16.1) whose keys are
+  `<space id>/<store writer id>/<segment name>`: each `/`-separated part of a
+  key is a directory and the last one a file, every part encoded as in §14.2.
+  A client MUST write and read a space's versions there only as §16.2–§16.4
+  say, as its own store writer.
 
 ### 14.2 File name encoding
 
@@ -903,16 +913,12 @@ A writer MUST use exactly this encoding; a reader MUST decode it.
 
 ### 14.3 Files
 
-- **Entry files** `kv/<encoded key>`: the entry value, raw bytes (for the §10
-  entries, the UTF-8 version id; for sealed keys, §15).
-- **Version files** `versions/<encoded id>.json`: the version exactly as on
-  the wire ([02](02-records.md)), as UTF-8 JSON. Version ids are lower-case
-  base32, so the name is the id itself. The file is named by its own content
-  hash and never changes once written. JSON formatting is not significant; a
-  reader MUST parse, not compare bytes. A file that does not parse (for
-  instance half-written) MUST be treated as absent.
+- **Entry files** `registry/kv/<encoded key>`: the entry value, raw bytes
+  (for sealed keys, §15).
+- **Segments** `spaces/<space id>/<store writer id>/<name>.seg`: as in
+  §16.3, written once and never changed.
 - Names that end in `.tmp` are a writer's work in progress and MUST be
-  ignored. Only names ending in `.json` in `versions/` are versions.
+  ignored.
 
 A writer SHOULD replace a file atomically: write it under a name ending in
 `.tmp`, then rename it into place. How the library does it is in
@@ -925,25 +931,34 @@ device's writes. A client MUST NOT let a name read from the folder reach
 outside it: names equal to `""`, `.`, `..`, or containing `/`, `\` or NUL are
 refused as path segments, and symbolic links are neither followed nor listed.
 
+Nothing a client reads from the folder decides what it holds except through
+the gatekeeper (§8): every version in a segment is judged like one from a
+peer, and no client reads another's entries, since none are in the folder.
+
 ### 14.5 Convergence without locks
 
-There is no lock file. Version files are immutable and content-addressed, so
-two writers either write different files or identical ones. The entries are
-derived state, and the rule is: **the set of version files wins.**
+There is no lock file. Each client is a store writer of its own (§16.2):
+its id, counter, the segments it has read and the versions it knows are in
+the folder are kept in its own `folder/<space id>` store (§12), never in the
+folder, so two devices behind a sync service never share an id. It writes
+only under its own prefix, so nothing is written twice, overwritten, or
+needs a lock, and the set of versions only grows.
 
-Any client sharing a folder SHOULD re-read it periodically while a space is
-open, and reconcile:
+While a space is open, a client pushes after local changes and pulls
+(§16.4); it SHOULD pull when the space opens and periodically while it is
+open, since nothing announces another client's writes. A version that
+arrives this way and passes the gatekeeper is placed (§10.1) like any other,
+so every client converges on the same current versions.
 
-1. List `versions/`. Note files that appeared since the last pass and files
-   that vanished. If anything moved, read the store again (§10.2).
-2. For every version file that is not indexed, **or appeared since the last
-   pass**, read it, pass it through the gatekeeper (§8), and place it (§10.1).
-   Placing again is idempotent and corrects a current entry a race left wrong.
-   A version refused now stays on disk and is asked about again next pass.
-3. For every indexed version whose file is gone (and still cannot be read),
-   remove it (§10.1).
+A segment that vanishes from the folder (its writer compacted it, or
+someone deleted it) takes nothing from a client that read it. A version the
+gatekeeper refused is not asked about again through the folder (§16.4); one
+that may count later must be answered _later_, not refused (§8).
 
-With nothing new on disk this is two directory listings and no writes.
+A client MUST keep its own stores outside the folder: one inside it is
+written by whoever can write the folder, and copied with it to other
+machines, which would then share a store writer id and skip each other's
+segments.
 
 ### 14.6 Account files
 
@@ -958,10 +973,28 @@ Not protocol: how a client gets hold of the folder is its own. The library's
 use of `showDirectoryPicker` is in
 [Sync and storage in the library](../packages/core/docs/storage.md#data-folders).
 
-_Source: `packages/core/src/storage/folder-adapter.ts`, `packages/core/src/storage/folder-reconcile.ts`,
+### 14.8 Older layouts
+
+A client reads nothing in the folder but the files of §14.1. A space kept in
+an older layout (a file per entry under `spaces/<space id>/kv`, a file per
+version under `versions/`) is not read: whoever can write the folder could
+have planted it, and its entries would decide what this client holds without
+the gatekeeper. Peers bring such a space back.
+
+> **Known defect:** nothing in the folder says which layout it uses, so a
+> client of an older layout sharing a folder with this one sees none of its
+> writes, and a space the folder alone held in the older layout is not
+> brought over. Before v1 every client of a folder is upgraded together.
+
+_Source: `packages/core/src/node/stores.ts` (`folderStores`),
+`packages/core/src/storage/blob/directory.ts`,
+`packages/core/src/storage/folder-adapter.ts` (the registry, and a device's own directory stores),
+`packages/core/src/storage/folder-reconcile.ts` (a command beside a daemon),
+`packages/core/src/node/space-runtime.ts` ("Mirrors", "Writers outside this process"),
 `packages/core/src/identity/account-store.ts`,
 `packages/cli/src/fs-directory.ts` (path safety). Tests:
-`packages/core/tests/folder-adapter.test.ts`, `packages/cli/tests/path-safety.test.ts`._
+`packages/core/tests/folder-adapter.test.ts` ("a data folder", "two nodes of one account on one folder"),
+`packages/cli/tests/path-safety.test.ts`._
 
 ---
 
@@ -1002,9 +1035,10 @@ _Source: `packages/core/src/storage/encrypted-adapter.ts` (`DEFAULT_ENCRYPTED_PR
 
 ## 16. Blob stores and mirrors
 
-A **mirror** keeps a space in a dumb file store — a bucket or an app folder —
-and syncs with it like a peer that never runs code. This implementation uses
-mirrors for carriers and hosts ([06](06-nodes-and-sessions.md)).
+A **mirror** keeps a space in a dumb file store — a bucket, an app folder or
+a data folder (§14) — and syncs with it like a peer that never runs code.
+This implementation uses mirrors for data folders, carriers and hosts
+([06](06-nodes-and-sessions.md)).
 
 ### 16.1 Blob stores
 
@@ -1070,14 +1104,20 @@ store (§12); the library's keys are in
 **Push.** After local changes, and on close: collect every version the store
 keeps (§10) that is not known to be in the blob store; pack them into
 segments; upload each; mark its versions known. "Known" is everything this
-store writer uploaded **or read**, so nobody re-uploads everyone else's versions.
+store writer uploaded **or stored from a segment**, so nobody re-uploads
+everyone else's versions.
 When and how big is the store writer's own.
 
 **Pull.** List `<space id>/`; for every segment not under the store writer's own
 prefix and not yet read, in name order: fetch it (skip it if it is gone —
-its store writer compacted it), and run every version through the gatekeeper (§8),
+its store writer compacted it). A reader MUST NOT take a segment whose bytes do
+not hash to the hash in its name: it may still be being written, or be half
+delivered by a sync service; it is read again next time. Run every version
+in one through the gatekeeper (§8),
 passing over the remainder repeatedly while any go in (versions depend on
-each other). Mark each judged version known. Mark the segment read only if
+each other). Mark each version stored known; a refused copy is not, nor a
+stub of one the store holds whole, so the whole valid version still goes
+out. Mark the segment read only if
 none are still waiting; otherwise it is read again next time.
 
 The blob store is untrusted: it can hide versions (the mesh fills the gap)

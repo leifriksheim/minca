@@ -193,6 +193,64 @@ describe('a mirror', () => {
     assert.deepEqual(await texts(fresh.storage), ['another record', 'v10']);
   });
 
+  test('a refused copy is not counted as there: the version, once held, still goes out', async () => {
+    const shared = createMemoryBlobStore();
+    const who = await author();
+    const version = await note(who, 'refused here at first');
+    const a = await device(shared);
+    await a.storage.addVersion(version);
+    await a.mirror.flush();
+    const b = await device(shared, () => true);
+    await b.mirror.pull();
+    // B comes to hold it another way (a peer), and A's copy is gone from the store.
+    for (const key of await shared.list(`${SPACE}/`)) await shared.delete(key);
+    await b.storage.addVersion(version);
+    await b.mirror.flush();
+    assert.equal((await shared.list(`${SPACE}/`)).length, 1, 'B uploaded it');
+  });
+
+  test('compaction carries nothing someone else put under this writer’s prefix', async () => {
+    const shared = createMemoryBlobStore();
+    const who = await author();
+    const writer = await device(shared);
+    await writer.storage.addVersion(await note(who, 'mine'));
+    await writer.mirror.flush();
+    const prefix = (await shared.list(`${SPACE}/`))[0]!.split('/').slice(0, 2).join('/');
+    const planted = await note(await author(), 'planted');
+    const bytes = packSegment([planted]);
+    await shared.put(`${prefix}/${await segmentName(9, bytes)}`, bytes);
+
+    await writer.mirror.compact();
+    const left = await shared.list(`${SPACE}/`);
+    assert.equal(left.length, 1);
+    assert.deepEqual(
+      unpackSegment((await shared.get(left[0]!))!).map((version) => textOf(version.body)),
+      ['mine'],
+    );
+  });
+
+  test('a space bigger than the compaction threshold is not rewritten on every flush', async () => {
+    const shared = counted(createMemoryBlobStore(), 0);
+    const who = await author();
+    const storage = createStorageProvider(createMemoryAdapter());
+    const mirror = await createMirror({
+      store: shared.store,
+      space: SPACE,
+      storage,
+      accept: async () => 'stored',
+      state: createMemoryAdapter(),
+      flushBytes: 1,
+      compactAt: 4,
+    });
+    for (let i = 0; i < 6; i++) await storage.addVersion(await note(who, `note ${i}`));
+    await mirror.flush();
+    // Compacted into 6 one-version segments: past the threshold already.
+    const puts = shared.calls.put;
+    await storage.addVersion(await note(who, 'one more'));
+    await mirror.flush();
+    assert.equal(shared.calls.put - puts, 1, 'only the new segment goes up');
+  });
+
   test('changes go out on their own, soon after', async () => {
     const shared = counted(createMemoryBlobStore());
     const who = await author();

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { base64UrlDecode, base64UrlEncode, createNode, folderStores, type P2PNode } from '@minca/core';
+import { base64UrlDecode, base64UrlEncode, createNode, directoryStores, type P2PNode } from '@minca/core';
 import { createMincaAuth } from '../../core/src/session/auth.js';
 import { createFolderAccountStore } from '../../core/src/identity/account-store.js';
 import { team } from '../../core/src/space/presets.js';
@@ -83,7 +83,7 @@ test('renewing from the menu bar keeps what the app wrote while the home could n
     const node = await createNode({
       signer: params.signer,
       sessionKey: params.key.keys,
-      stores: folderStores(await openFsDirectory(params.stores), { localKey: params.seal }),
+      stores: directoryStores(await openFsDirectory(params.stores), { localKey: params.seal }),
       network: { transports: (self: string, peer: string) => [which.transport(peer, self)] },
     });
     for (const space of params.grant.spaces)

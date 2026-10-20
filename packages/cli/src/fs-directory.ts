@@ -96,10 +96,8 @@ function directory(dir: string): DirectoryHandleLike {
     async getFileHandle(name, options) {
       checkName(name);
       const file = path.join(dir, name);
-      if (!(await exists(file))) {
-        if (!options?.create) throw notFound(name);
-        await fs.writeFile(file, new Uint8Array(0), { mode: 0o600 });
-      }
+      // Created when first written, whole: an empty file in between would be read as an empty value.
+      if (!options?.create && !(await exists(file))) throw notFound(name);
       return fileHandle(file);
     },
 
@@ -127,6 +125,14 @@ function directory(dir: string): DirectoryHandleLike {
         // Nor is a link — every other method refuses to follow one.
         if ((await fs.lstat(path.join(dir, entry)).catch(() => null))?.isSymbolicLink()) continue;
         yield entry;
+      }
+    },
+
+    async *values() {
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        if (entry.name.endsWith('.tmp') || entry.isSymbolicLink()) continue;
+        if (entry.isFile()) yield { kind: 'file' as const, name: entry.name };
+        else if (entry.isDirectory()) yield { kind: 'directory' as const, name: entry.name };
       }
     },
   };

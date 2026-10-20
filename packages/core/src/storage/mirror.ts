@@ -30,7 +30,15 @@
 import type { Version, StorageAdapter } from '../types.js';
 import type { BlobStore } from './blob-store.js';
 import type { StorageProvider } from './storage-provider.js';
-import { packSegment, segmentName, SEGMENT_SUFFIX, unpackSegment, versionSize } from './segment.js';
+import {
+  isWholeSegment,
+  packSegment,
+  segmentBatches,
+  segmentName,
+  SEGMENT_SUFFIX,
+  unpackSegment,
+} from './segment.js';
+import { isStub } from '../schema/version.js';
 import { utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { unref } from '../utils/guards.js';
 
@@ -43,7 +51,11 @@ export interface MirrorConfig {
   readonly storage: StorageProvider;
   /** The gates sync uses, and storing what passes: nothing from the store is trusted more than a peer */
   readonly accept: (version: Version) => Promise<Taken>;
-  /** Where this writer keeps its id, what it read and what it knows the store holds */
+  /**
+   * Where this writer keeps its id, what it read and what it knows the store
+   * holds. Never in the blob store: two devices sharing one id would each
+   * skip the other's segments as their own.
+   */
   readonly state: StorageAdapter;
   /** Pack a segment once this much is waiting. Default 256 KiB. */
   readonly flushBytes?: number;
@@ -72,6 +84,12 @@ const readKey = (name: string) => `mirror:read:${name}`;
 const knownKey = (id: string) => `mirror:known:${id}`;
 const MARK = utf8Encode('1');
 
+/** A new store writer id: 128 random bits as hex, never a DID, so a listing does not say whose device wrote it */
+const newWriterId = () =>
+  Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
+
 /** Deletes everything a space keeps in a store — every writer's segments */
 export async function deleteMirrored(store: BlobStore, space: string): Promise<void> {
   for (const key of await store.list(`${space}/`)) await store.delete(key);
@@ -82,15 +100,12 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   const flushBytes = config.flushBytes ?? 256 * 1024;
   const flushMs = config.flushMs ?? 5000;
   const compactAt = config.compactAt ?? 32;
+  /** How many segments the last compaction left, so the next waits for twice that */
+  let left = 0;
 
-  // 128 random bits, never a DID: a folder listing must not say whose device wrote it.
   let writerBytes = await state.get(WRITER_KEY);
   if (!writerBytes) {
-    writerBytes = utf8Encode(
-      Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (b) =>
-        b.toString(16).padStart(2, '0'),
-      ).join(''),
-    );
+    writerBytes = utf8Encode(newWriterId());
     await state.put(WRITER_KEY, writerBytes);
   }
   const writer = utf8Decode(writerBytes);
@@ -99,8 +114,13 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   const counterBytes = await state.get(COUNTER_KEY);
   let counter = counterBytes ? Number(utf8Decode(counterBytes)) : 0;
 
-  const isKnown = async (id: string) => (await state.get(knownKey(id))) !== null;
-  const markKnown = (id: string) => state.put(knownKey(id), MARK);
+  // Read once: a flush asks about every version the store keeps, and a folder flushes every second.
+  const known = new Set((await state.list(knownKey(''))).map((key) => key.slice(knownKey('').length)));
+  const markKnown = async (id: string) => {
+    if (known.has(id)) return;
+    await state.put(knownKey(id), MARK);
+    known.add(id);
+  };
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
@@ -127,54 +147,54 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     versions: Iterable<Version>,
     written: (batch: ReadonlyArray<Version>) => Promise<void> = async () => {},
   ): Promise<void> {
-    let batch: Version[] = [];
-    let size = 0;
-    const send = async () => {
-      if (batch.length === 0) return;
+    for (const batch of segmentBatches(versions, flushBytes)) {
       await writeSegment(batch);
       await written(batch);
-      batch = [];
-      size = 0;
-    };
-    for (const version of versions) {
-      batch.push(version);
-      size += versionSize(version);
-      if (size >= flushBytes) await send();
     }
-    await send();
   }
 
   async function flushNow(): Promise<void> {
     // Every version this store keeps: whole if current or retained, as a stub otherwise.
     const waiting: Version[] = [];
     for (const id of await storage.versionIds()) {
-      if (await isKnown(id)) continue;
+      if (known.has(id)) continue;
       const version = await storage.getVersion(id);
       if (version) waiting.push(version);
     }
     await writeSegments(waiting, async (batch) => {
       for (const version of batch) await markKnown(version.id);
     });
-    if ((await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX)).length >= compactAt)
+    // Past what the last compaction left times two: a space bigger than `compactAt` segments
+    // would otherwise be rewritten whole on every flush, and read again by every other reader.
+    if (
+      (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX)).length >=
+      Math.max(compactAt, 2 * left)
+    )
       await compactNow();
   }
 
   async function compactNow(): Promise<void> {
     const old = (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX));
     if (old.length < 2) return;
-    const wanted = new Set(await storage.versionIds());
     const keep = new Map<string, Version>();
     for (const key of old) {
-      const bytes = await store.get(key);
-      // The store's copy, not the segment's: a version superseded since it was
-      // written is a stub now, and its body is not carried forward.
-      for (const version of bytes ? unpackSegment(bytes) : [])
-        if (wanted.has(version.id) && !keep.has(version.id))
-          keep.set(version.id, (await storage.getVersion(version.id)) ?? version);
+      const bytes = await store.get(key).catch(() => null);
+      // The store's copy: a version superseded since it was written is a stub
+      // now, and its body is not carried forward. One the store does not hold
+      // (asked of it afresh, so another process's write to it is found) was put
+      // there by someone else, and goes.
+      for (const version of bytes ? unpackSegment(bytes) : []) {
+        const held = keep.has(version.id) ? null : await storage.getVersion(version.id);
+        if (held) keep.set(version.id, held);
+      }
     }
     // New first, then delete: a reader in between sees each version twice, which is harmless.
-    await writeSegments(keep.values());
+    let written = 0;
+    await writeSegments(keep.values(), async () => {
+      written += 1;
+    });
     for (const key of old) await store.delete(key);
+    left = written;
   }
 
   async function pullNow(): Promise<{ added: number }> {
@@ -186,9 +206,11 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     }
     let added = 0;
     for (const key of fresh.sort()) {
-      const bytes = await store.get(key);
+      // One segment that can't be fetched must not keep every one after it out: it is tried again next time.
+      const bytes = await store.get(key).catch(() => null);
       // Deleted between listing and fetching — compacted by its writer. Its versions are in a newer segment.
-      if (!bytes) continue;
+      // Or not all there yet (still being written, half synced): read again next time.
+      if (!bytes || !(await isWholeSegment(key, bytes))) continue;
       let pending = unpackSegment(bytes);
       // Versions can depend on each other — a record on its first version, on the access changes it saw.
       // Pass over the rest until nothing more goes in.
@@ -201,8 +223,13 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
             later.push(version);
             continue;
           }
-          if (taken === 'stored') added += 1;
-          await markKnown(version.id);
+          // A refused copy is not known to be there: the valid one with the same id may still need pushing.
+          if (taken === 'stored') {
+            added += 1;
+            // Nor is a stub of one held whole: the whole one still goes out.
+            const held = isStub(version) ? await storage.getVersion(version.id) : null;
+            if (!held || isStub(held)) await markKnown(version.id);
+          }
           progress = true;
         }
         pending = later;

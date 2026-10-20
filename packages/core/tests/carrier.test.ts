@@ -323,7 +323,7 @@ describe('a carrier', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const pod = createMemoryDirectory('pod');
     const dataPath = 'accounts/me/stores';
-    const podStores = () => folderStores(pod.open(), { basePath: dataPath });
+    const podStores = () => folderStores(pod.open(), { basePath: dataPath, local: memoryStores() });
 
     // The home, on the pod.
     const home = await device(me, hub, podStores());

@@ -1,5 +1,6 @@
 /** Nodes and folders for a test file, each closed or removed when its tests end */
 import { after } from 'node:test';
+import { mkdtempSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +14,11 @@ import type { FakeHub } from '../../../core/tests/helpers/fake-transport.js';
 
 const nodes: P2PNode[] = [];
 const dirs: string[] = [];
+// What a home keeps outside itself (`localPath`) goes in a temporary folder too, never the system's own.
+if (!process.env.MINCA_LOCAL) {
+  process.env.MINCA_LOCAL = mkdtempSync(path.join(os.tmpdir(), 'minca-local-'));
+  dirs.push(process.env.MINCA_LOCAL);
+}
 after(async () => {
   await Promise.all(nodes.splice(0).map((node) => node.close()));
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
