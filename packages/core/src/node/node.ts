@@ -53,7 +53,7 @@ import {
 } from './space-runtime.js';
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
-import { deriveInviteKey, deriveReadKey } from '../space/space-access.js';
+import { deriveInviteKey } from '../space/space-access.js';
 import { foundersOf, soleFounder } from '../space/constitution.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
@@ -691,20 +691,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Removed meanwhile, on this device or another: its passes stay deleted.
     if (!(await liveCarriers()).some((live) => live.space === carrier.space)) return;
     const carry = await runtime(carrier.space);
-    // A pass another device wrote for a key this one hasn't learned yet is a
-    // later key's: written over, the carrier would prove the old one and lose the space.
-    for (const held of await ownRecords<SpacePass>(carry, { collection: PASS_COLLECTION }, (r) =>
-      r.key.startsWith('pass:'),
-    )) {
-      const theirs = held.body?.readKey;
-      const ours = passes.get(held.key);
-      if (!theirs || !ours || ours.readKey === theirs || !held.body) continue;
-      const record = await registry.get(held.body.space.id);
-      const known = new Set<string>(record ? [record.space.readKey ?? ''] : []);
-      for (const key of record?.keys ?? (record?.key ? [record.key] : []))
-        known.add((await deriveReadKey(key, provider)).did);
-      if (!known.has(theirs)) passes.set(held.key, held.body);
-    }
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
     const wakes = new Map<string, unknown>();
     for (const own of owned) {
@@ -1169,7 +1155,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         throw error;
       }
       // Its passes before its invite, as one batch: a carrier joining an empty carry space takes spaces as they trickle in.
-      await inCarryTurn(() => syncPasses(body)).catch(() => {});
+      // Not in turn behind a refill: nothing removes a carrier that is only now being added.
+      await syncPasses(body);
       return { space: record.space.id, invite: body.invite };
     },
 
@@ -1179,8 +1166,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const carrier = (await liveCarriers()).find((c) => c.space === spaceId);
       if (!carrier || !accountSpaceId) return false;
       const deadline = Date.now() + waitMs;
-      // What it is to be level with: its passes written first, within the same time.
-      if (!(await within(passAll.done(), waitMs))) return false;
       // Its passes first: only through them does it come to the registry, and hold its own record there.
       if (!(await (await runtime(spaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()))))
         return false;

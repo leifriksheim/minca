@@ -798,7 +798,8 @@ Using a carrier needs the account key:
 > **Known defect:** a node that stops between steps 1 and 2 (a tab closed
 > mid-connect) leaves the carry space held with no record, and a later
 > reconcile records it as a space the account uses, where every app lists it.
-> Nothing in the space says it is a carry space.
+> Nothing in the space says it is a carry space
+> ([#283](https://github.com/leifriksheim/minca/issues/283)).
 
 A carrier the account already uses, by `did`, is not added again: the node
 returns its carry space and invite as they are. So a carrier that connects
@@ -815,10 +816,16 @@ it does at the reconnect could prevent this.
 Every device holding the account key keeps each live carrier's carry space in
 step with the account (§1.3): one `sys.pass` record per space, and one
 `sys.wake` per automation of the account's own ([03](03-spaces.md) §15).
-It writes each pass from the key it holds for the space, so it opens the
-space first, learning any change of key, and never writes a pass for an
-earlier key over one for a later key. It does not write in the carry space of
-a carrier whose record is deleted.
+It writes each pass from the key it holds for the space, opening the space
+first, which is how it learns of a change of key. It writes no pass in the
+carry space of a carrier its registry shows deleted, and a removal on that
+device waits for a refill already under way.
+
+> **Known defect:** a device behind on a key change writes the pass from the
+> key it still holds, over a pass for the later key that another device
+> wrote; the carrier then proves the old read key and stops carrying the space
+> until a device that has caught up refills
+> ([#283](https://github.com/leifriksheim/minca/issues/283)).
 
 **Pass records.** Collection `sys.pass`, key
 `pass:<hex of the first 20 bytes of SHA-256(utf8(space id))>`, body `SpacePass`:
@@ -857,7 +864,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("adding one that fails leaves no carry space behind…"), `packages/core/tests/key-change.test.ts` ("another device of the account never puts the old key’s pass back")._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back")._
 
 ### 4.3 Connecting a carrier through the account home
 
