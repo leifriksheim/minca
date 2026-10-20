@@ -863,6 +863,7 @@ holds. Nothing shows these yet, the browser extension included.
 | `remind(url, email)`                                                                   | Asks the host to email a reminder before paid time runs out; it mails a link to confirm first.                                                                                                                                                                                     |
 | `stop(url)`                                                                            | Sends `DELETE …/carry` (ignoring failure), removes the carrier and deletes the `sys.hosting` record.                                                                                                                                                                               |
 | `space(id)`                                                                            | The hosts a space names in `std.host`, each asked how the space's own subscription stands, with its plans for spaces (below).                                                                                                                                                      |
+| `over(id)`                                                                             | The account's hosts whose last status says the space is over their free line, each `{ url, name, over }` (`over.until`, `over.reasons`), from the receipts in `sys.hosting`: asks no host. An agent may call it for a space it was given.                                          |
 | `payForSpace(id, url, { amount, method, monthly? })`, `remindForSpace(id, url, email)` | Adds to a space's fund at a host it names (dollars, by `checkout` or `request`, monthly by card), and asks for reminders before it runs out. Anyone in it may. `space(id)` gives each host's `fund` offer, and in its status the `balance`, `daily` spend and `bots`.              |
 | `startBot(id, url, { name, role? })`                                                   | Asks a host the space names to run a bot there ([spec 08 §3](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md)): makes an invite for `role` (by default as `spaces.invite` picks one) and hands it over. The host holds the bot's keys, so an app says so first. |
 | `stopForSpace(id, url)`                                                                | Stops a space using a host it names: deletes its `std.host` record, removes the host's bots and changes the key (below).                                                                                                                                                           |
@@ -893,7 +894,18 @@ on a free one). At its quota, an account's carry space takes no new space
 space that waited is taken once a later measure finds room. All of this is the
 host's own policy.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `notifications`, `hosting`), `packages/core/src/node/carrier.ts` (`arrived`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/cli/tests/host.test.ts`._
+With `limits` ([spec 08 §1.1](https://github.com/leifriksheim/minca/blob/main/spec/08-hosting.md),
+`MINCA_HOST_FREE_GB`), an account's subscription is active with nothing paid,
+its `plan` `free` until it pays, and its quota by plan; a device hands such a
+host its carry space as it would a free one. A space its own fund pays for
+takes none of its members' room. The host counts each carried space's writers
+as versions arrive (`onArrived`, in `createCarryCore`) and its readers as
+sockets prove themselves (`onPeer`, `packages/cli/src/serve.ts`), and once an
+hour (`evaluate`) holds each to the free line. Past a space's `until`, every
+account's carry space stops carrying it (`skip`, in `createCarryCore`), while
+its own subscription still may. Each change is a line in the host's log.
+
+_Source: `packages/core/src/node/node.ts` (`carriers`, `notifications`, `hosting`), `packages/core/src/node/carrier.ts` (`arrived`, `skip`, `onArrived`), `packages/core/src/node/host.ts` (`evaluate`), `packages/core/src/session/hosting.ts`, `packages/cli/src/host.ts`. Tests: `packages/core/tests/carrier.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts`._
 
 ### A space paying for itself
 

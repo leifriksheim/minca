@@ -100,6 +100,7 @@ export const API = Object.freeze({
     stop: 'stop using a host',
     // Open to an agent in a space it was given, as reading the space is.
     space: 'own',
+    over: 'own',
     payForSpace: 'pay for hosting',
     remindForSpace: 'pay for hosting',
     stopForSpace: 'stop using a host',

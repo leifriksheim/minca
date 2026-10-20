@@ -5,6 +5,35 @@ import { HostAddressForm, type Wanted } from './HostAddress';
 import { FeatureIcon, StatusPill, type Tone } from './Feature';
 import { styles, palette } from './styles';
 
+/** Bytes as people read them: 12 KB, 3.4 MB, 10 GB */
+export function size(bytes: number): string {
+  const units = ['bytes', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${unit === 0 || value >= 10 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
+/**
+ * What a host keeps an account's spaces for, in a few words: free, free up
+ * to some room with more for its price, or its price. What hosts are
+ * compared by when one is chosen.
+ */
+export function hostTerms(offer: HostDescription): string {
+  if (offer.free) return 'Free';
+  const limits = offer.limits;
+  if (!limits) return offer.price ?? '';
+  const free = `Free up to ${size(limits.accountBytes)}`;
+  const paid = limits.paidAccountBytes ?? limits.accountBytes;
+  return offer.price && paid > limits.accountBytes ? `${free} · ${size(paid)} for ${offer.price}` : free;
+}
+
+/** Whether a space over a host's free line is still kept there for free */
+export const stillFree = (over: { readonly until: number }): boolean => over.until > Date.now() / 1000;
+
 /** The host this build offers, with its name and price; `asked` once it answered or failed to */
 export function useOffer() {
   const [offer, setOffer] = useState<HostDescription | null>(null);

@@ -135,6 +135,7 @@ import {
   type HostDescription,
   type HostPlan,
   type HostStatus,
+  type OverSpace,
   type Hosting,
   type SignedStatus,
 } from '../session/hosting.js';
@@ -1278,6 +1279,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       kept.state === status.state &&
       kept.paidUntil === status.paidUntil &&
       kept.renews === status.renews &&
+      kept.plan === status.plan &&
+      JSON.stringify(kept.over ?? []) === JSON.stringify(status.over ?? []) &&
       hosting.name === name &&
       hosting.peer === peer;
     if (same) return;
@@ -1297,10 +1300,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const description = await describeKnown(hosting);
       let { status, receipt } = await client.status();
       const due = force || Date.now() - (handedAt.get(hosting.url) ?? 0) > HAND_AGAIN_MS;
+      // A host with limits keeps an account's spaces with nothing paid: its free plan.
       const paid =
         status.state === 'active' ||
         status.state === 'grace' ||
-        (description.free && status.state !== 'lapsed');
+        ((description.free || description.limits !== undefined) && status.state !== 'lapsed');
       const inFlight = handing.get(hosting.url);
       if (!status.carrying && inFlight) {
         // Another look is handing the spaces over right now: wait for it,
@@ -1561,6 +1565,16 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     async list() {
       return Promise.all((await hostingRecords()).map((known) => viewHosting(known)));
+    },
+
+    async over(spaceId) {
+      const found: Array<{ url: string; name: string; over: OverSpace }> = [];
+      for (const hosting of await hostingRecords()) {
+        const status = hosting.receipt ? await readStatus(hosting.receipt, hosting.host, provider) : null;
+        const over = status?.over?.find((one) => one.space === spaceId);
+        if (over) found.push({ url: hosting.url, name: hosting.name ?? new URL(hosting.url).host, over });
+      }
+      return found;
     },
 
     async use(address) {
@@ -2543,6 +2557,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
             if (!allowed(spaceId)) throw new Error('That space was not given to this agent');
             return hosting.space(spaceId);
           },
+          over: async (spaceId) => (allowed(spaceId) ? hosting.over(spaceId) : []),
         },
         contacts: {
           space: async () => (contactsGiven() ? contactsSpaceId : null),

@@ -111,6 +111,43 @@ reference implementation, or any implementation, honestly.
     design, as with any "scan to log in" link. Once added, its account can
     look like the person's own: its name follows its profile, and an avatar
     is for recognition only, since a look-alike takes seconds to find.
+  - A host with limits carries for anyone, and an account is only a key, so
+    a stranger can take any number of accounts' free room. The reference
+    host makes at most 5 subscriptions a day for one address (an IPv6 /64
+    counting as one), whichever call makes them, which slows a stranger with
+    many addresses and stops none; one with a /48 of IPv6 holds 65 536 of
+    them (08 §1.1;
+    `packages/cli/tests/host.test.ts`, "asking to pay first makes no
+    subscription past the limit either"). Behind one shared address, as a
+    proxy without its header set or carrier-grade NAT, a stranger can spend
+    the day's 5 for everyone there. The free line counts accounts, which
+    members may share, so a community writing as a few accounts stays under
+    it. A host whose disk is new counts a large space's history again if it
+    takes longer than the first minutes to come back. A community can also move to a successor space (03), which the line
+    counts from nothing, with a whole grace. Nor is one account's room
+    bounded in bytes: past its quota a host takes no new space for it, but
+    what it carries keeps growing, and a space its own fund pays for has no
+    bound at all ([#289](https://github.com/leifriksheim/minca/issues/289)).
+    Accepted otherwise: it is the host's cost.
+  - Anyone holding an invite link that is still open can push a community
+    over a host's free line by joining more accounts and writing from them,
+    and join again with new keys as fast as they are removed, so a community
+    with an open link may have to close it, or pay (08 §1.1). Paying a
+    little into its fund, which anyone may, hides the notice from members
+    while it pays, so their carrying can stop when it lapses with no notice
+    after. Accepted: it costs the stranger money, and the fund's status says
+    when it runs out. Letting go of
+    a space for an hour does not reset its line
+    (`packages/core/tests/host-limits.test.ts`, "a space nobody names for a
+    while keeps its line").
+  - Anyone who knows a space's id learns from the host's open status
+    whether it carries the space, how many wrote and read there, and, asking
+    again and again, when its members are online (08 §1.1).
+  - A free subscription none of whose devices calls for `idleDays` is
+    dropped, and with it the host's copy of the spaces only it named.
+    Someone who lost every device and comes back with the recovery code
+    after that finds the host's copy gone (08 §1.1). Accepted: the devices
+    hold the spaces, and the host is a convenience on top.
 
 _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 
@@ -430,6 +467,33 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     since `/member/remove` has no `role`. A space gets what its policies say;
     the spec says to write what is allowed (01 §7.4, 03 §2.2; `roles.test.ts`,
     "a missing argument reads as null…").
+  - A host's free line counts the members who write in a space, so a member
+    who may invite can push it over by inviting more accounts of their own
+    and writing from them (a stranger holding an open invite link can too:
+    §3.1). Removing
+    them more than 7 days before `until` undoes it, as only members count and
+    a space under the line through its last days is not stopped; removing
+    someone for an hour as the date passes does not ("removing a member for
+    an hour as the date passes buys nothing…")
+    (`packages/core/tests/host-limits.test.ts`, "a member removed no longer
+    counts as a writer", "pushed over by joiners removed within the hour…");
+    after `until` it is stopped, and is free again only through its fund or
+    once the host forgets it. A space whose grace is spent gets only 7 days'
+    notice when pushed over again, which is the time its members have to
+    remove whoever did it. Handing a shared space over as a carry space
+    neither escapes the line nor hides its notice from the other members who
+    use the host, nor drops the host's copy: a host with limits refuses one
+    it carries or others name ("a shared space handed over as someone's
+    carry space is refused"). One no other member uses the host for is
+    refused only once its members are known, at the next look, and a member
+    without a role is not seen as sharing it. Any member can also put a space several write
+    in over on bytes, and removing them leaves what they wrote. After `graceDays` only the space's fund
+    keeps it at that host. Readers never put a space over, as they cost
+    nothing to make up ("readers alone never put a space over the line"),
+    and backdating writes does not keep one under: they count by when they
+    arrive ("…after that, a backdated write counts as any"). Accepted: the
+    line is the host's policy, and a community can pay, or move host (08
+    §1.1).
 
 _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/constitution.test.ts`, `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"; "a backdated rival with a ground-low id does not put its rules in force"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts`, `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
@@ -760,6 +824,13 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     never the values it matches"). Any `where` condition on a field declared
     a topic becomes tags. In a public space a tag can be worked out from the
     space id, so a guessed value can be checked against it (02 §8.2).
+  - A host with limits that stops carrying a space over its free line takes
+    nothing from its members: their copies, and their syncing with each
+    other, are as before, and an account's subscription still names the
+    space (08 §1.1; `packages/core/tests/host-limits.test.ts`, "past until,
+    members' subscriptions no longer carry it; members keep what they hold").
+    What it stops is being there for them: members meet only when two are
+    online, wakes for the space stop, and after `keepDays` its copy goes.
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
@@ -792,7 +863,12 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
-    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)).
+    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)). A host with limits also keeps, for its window, which
+    accounts wrote in each space on each day, as hashes salted with a salt
+    on the same disk, which hides nothing from the host or whoever holds its
+    disk, since every writer is in the space's envelopes anyway, and tells
+    anyone with the space id how many wrote and read; asked again and again,
+    that says when the members are online (08 §1.1).
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#166](https://github.com/leifriksheim/minca/issues/166)) _(traced)_.

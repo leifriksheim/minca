@@ -27,7 +27,13 @@ import { didOf } from '../identity/did.js';
 import { createSigner } from '../schema/signer.js';
 import { createSchemaEngine } from '../schema/schema-engine.js';
 import { createSpaceManager, parseSpaceInvite, type SpaceRecord } from '../space/space-manager.js';
-import { carriedRecord, CARRY_CLOSED_KEY, openPass, PASS_COLLECTION } from '../space/pass.js';
+import {
+  carriedRecord,
+  CARRY_CLOSED_KEY,
+  openPass,
+  PASS_COLLECTION,
+  type OpenedPass,
+} from '../space/pass.js';
 import { readWake, wakes, WAKE_COLLECTION, type Wake } from '../space/own-automations.js';
 import type { Version } from '../types.js';
 import { createLocalHub, type LocalHub } from '../network/local-transport.js';
@@ -119,8 +125,10 @@ interface Carried {
 /** An account's carry space, as a carrying node holds it */
 interface Carry {
   readonly account: string;
-  /** The spaces its passes named last time they were read */
+  /** The spaces it carries for it: those its passes named last time they were read, but those `full` or `skip` held back */
   wants: ReadonlySet<string>;
+  /** Every space its passes named, carried or not */
+  named: ReadonlySet<string>;
   /** Its wakes, by key, as last read */
   wakes: ReadonlyMap<string, Wake>;
 }
@@ -144,6 +152,16 @@ export interface CarryCoreConfig {
    * storage limit
    */
   readonly full?: (carrySpace: string) => boolean;
+  /**
+   * Whether no account's passes carry this space, though they name it: only
+   * a pass handed over alone does — a host's free line, for a community that
+   * has to pay for itself
+   */
+  readonly skip?: (spaceId: string) => boolean;
+  /** Versions that reached a carried space from a peer and passed its gates, a carry space's too */
+  readonly onArrived?: (spaceId: string, version: Version) => void;
+  /** Spaces one carry space may have carried at most: those its passes name past that wait */
+  readonly most?: number;
 }
 
 /**
@@ -236,7 +254,10 @@ export async function createCarryCore(config: CarryCoreConfig) {
         if (event.type === 'records' || event.type === 'status') emit({ type: 'status', space: spaceId });
         if (event.type === 'records' && carries.has(spaceId)) void refresh();
       },
-      (version) => arrived(record, version),
+      (version) => {
+        config.onArrived?.(spaceId, version);
+        arrived(record, version);
+      },
     );
     if (closed) return void (await runtime.close());
     const entry: Carried = { record, hub, runtime, pod: null };
@@ -304,6 +325,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
       );
       if (records.some((record) => record.key === CARRY_CLOSED_KEY)) {
         entry.wants = new Set();
+        entry.named = new Set();
         config.onClosed(carrySpace);
         continue;
       }
@@ -315,13 +337,23 @@ export async function createCarryCore(config: CarryCoreConfig) {
       }
       entry.wakes = found;
       const wants = new Set<string>();
+      const named = new Set<string>();
+      const passes: OpenedPass[] = [];
       for (const record of records) {
         if (!record.key.startsWith('pass:')) continue;
         const pass = await openPass(record.body, provider);
         if (!pass || carries.has(pass.space.id)) continue;
+        named.add(pass.space.id);
+        if (!config.skip?.(pass.space.id)) passes.push(pass);
+      }
+      // What it carries already comes first, so a cap keeps those and turns away only new ones.
+      passes.sort((a, b) => Number(entry.wants.has(b.space.id)) - Number(entry.wants.has(a.space.id)));
+      for (const pass of passes) {
         // Over its limit: no new space, though one held already for someone else costs nothing more.
         const more = !entry.wants.has(pass.space.id) && !carried.has(pass.space.id);
         if (more && config.full?.(carrySpace)) continue;
+        // Counted as it goes, so one handed over with thousands of passes takes no more than it may.
+        if (config.most !== undefined && wants.size >= config.most) continue;
         wants.add(pass.space.id);
         // Two accounts naming one space: a pass for a later key beats one for the space's first,
         // since an account whose pass is behind just hasn't caught up yet.
@@ -331,6 +363,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
           wanted.set(pass.space.id, carriedRecord(pass));
       }
       entry.wants = wants;
+      entry.named = named;
     }
     for (const [spaceId, record] of direct) {
       const known = wanted.get(spaceId);
@@ -362,7 +395,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
     podDid,
     carried: carriedView,
     carries: carriesView,
-    /** Reads every carry space's passes again: after what `full` says changed */
+    /** Reads every carry space's passes again: after what `full` or `skip` says changed */
     refresh,
 
     /**
@@ -378,7 +411,8 @@ export async function createCarryCore(config: CarryCoreConfig) {
         await registry.remove(carrySpace);
         throw new Error('That is not an invite to a carry space.');
       }
-      if (!carries.has(carrySpace)) carries.set(carrySpace, { account, wants: new Set(), wakes: new Map() });
+      if (!carries.has(carrySpace))
+        carries.set(carrySpace, { account, wants: new Set(), named: new Set(), wakes: new Map() });
       await carry(record);
       await refresh();
       return carrySpace;

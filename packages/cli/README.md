@@ -210,6 +210,23 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   paying host, no limit on a free one; 0 is none). Every status says what
   they take, and the home shows it. At the limit the host takes no new space
   for that account; what it carries stays and keeps syncing.
+- **Free within limits.** With `MINCA_HOST_FREE_GB` set, an account needs no
+  payment: it gets that much room for free, and `MINCA_HOST_QUOTA_GB` while
+  it pays. A space several accounts write in stays free up to
+  `MINCA_HOST_SPACE_WRITERS` accounts writing (default 10) and
+  `MINCA_HOST_SPACE_MB` (500) over `MINCA_HOST_WINDOW_DAYS` (30);
+  `MINCA_HOST_SPACE_READERS` (50) is only shown, never enforced. Past the
+  line it is carried for `MINCA_HOST_GRACE_DAYS` (30) more, then only its own
+  fund carries it; the host keeps what it had for `MINCA_HOST_KEEP_DAYS` (90)
+  so a fund brings it straight back. A free subscription none of whose
+  devices called for `MINCA_HOST_IDLE_DAYS` (180) is dropped. One address may
+  make `MINCA_HOST_NEW_PER_DAY` subscriptions a day (5), an IPv6 /64 counting
+  as one address, and one subscription carry
+  `MINCA_HOST_SPACES_PER_SUBSCRIPTION` spaces (200). Behind a proxy other
+  than Fly's, set `MINCA_HOST_CLIENT_IP_HEADER` to the header it puts the
+  asker's address in, or everyone shares the proxy's address and its 5. Not with
+  `MINCA_HOST_FREE=1`, which has no limits at all. How to choose the numbers:
+  [HOSTING.md](HOSTING.md#limits).
 - **Bots.** With `MINCA_HOST_BOTS=1` and a model's key, the host runs
   bots for the spaces it carries: an admin adds one from the app ("Set up this
   community", Add a bot), the host makes its account in `--data`'s `bots/`
