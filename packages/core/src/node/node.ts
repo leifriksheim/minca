@@ -53,7 +53,7 @@ import {
 } from './space-runtime.js';
 import { createServerAuth } from '../network/peer-auth.js';
 import { DEFAULT_ICE_SERVERS } from '../network/rtc-transport.js';
-import { deriveInviteKey } from '../space/space-access.js';
+import { deriveInviteKey, deriveReadKey } from '../space/space-access.js';
 import { foundersOf, soleFounder } from '../space/constitution.js';
 import { base64UrlDecode, base64UrlEncode } from '../utils/encoding.js';
 import { isRecord, unref } from '../utils/guards.js';
@@ -691,6 +691,20 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     // Removed meanwhile, on this device or another: its passes stay deleted.
     if (!(await liveCarriers()).some((live) => live.space === carrier.space)) return;
     const carry = await runtime(carrier.space);
+    // A pass another device wrote for a key this one hasn't learned yet is a
+    // later key's: written over, the carrier would prove the old one and lose the space.
+    for (const held of await ownRecords<SpacePass>(carry, { collection: PASS_COLLECTION }, (r) =>
+      r.key.startsWith('pass:'),
+    )) {
+      const theirs = held.body?.readKey;
+      const ours = passes.get(held.key);
+      if (!theirs || !ours || ours.readKey === theirs || !held.body) continue;
+      const record = await registry.get(held.body.space.id);
+      const known = new Set<string>(record ? [record.space.readKey ?? ''] : []);
+      for (const key of record?.keys ?? (record?.key ? [record.key] : []))
+        known.add((await deriveReadKey(key, provider)).did);
+      if (!known.has(theirs)) passes.set(held.key, held.body);
+    }
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
     const wakes = new Map<string, unknown>();
     for (const own of owned) {
@@ -861,14 +875,24 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     });
 
   /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
-  const passAll = serial(async () => {
-    for (const { record, space: spaceId } of await carrierRecords()) {
-      if (closed) return;
-      if (record.deleted || !record.body || !(await registry.get(spaceId))) continue;
-      // Only a device that may write in the carry space can do this; others leave it to one that can.
-      await syncPasses(record.body).catch(() => {});
-    }
-  });
+  /** Writing in carry spaces, one thing at a time: a removal never lands in the middle of a refill */
+  let carryTurn: Promise<unknown> = Promise.resolve();
+  const inCarryTurn = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = carryTurn.catch(() => {}).then(work);
+    carryTurn = run;
+    return run;
+  };
+
+  const passAll = serial(() =>
+    inCarryTurn(async () => {
+      for (const { record, space: spaceId } of await carrierRecords()) {
+        if (closed) return;
+        if (record.deleted || !record.body || !(await registry.get(spaceId))) continue;
+        // Only a device that may write in the carry space can do this; others leave it to one that can.
+        await syncPasses(record.body).catch(() => {});
+      }
+    }),
+  );
 
   const reconcile = serial(() =>
     reconcileOnce().catch((error: unknown) => {
@@ -1139,12 +1163,13 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, await carrierKey(record.space.id), body);
       } catch (error) {
         // Without its record nothing says it is a carry space: held, a restart would list it as one the account uses.
+        // Left in `carrySpaces`: a reconcile already under way must not record it either.
         await closeRuntime(record.space.id);
         await registry.remove(record.space.id);
-        carrySpaces.delete(record.space.id);
         throw error;
       }
-      void passAll().catch(() => {});
+      // Its passes before its invite, as one batch: a carrier joining an empty carry space takes spaces as they trickle in.
+      await inCarryTurn(() => syncPasses(body)).catch(() => {});
       return { space: record.space.id, invite: body.invite };
     },
 
@@ -1164,18 +1189,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     async remove(spaceId) {
       const registryRt = await requireAccount('Removing a carrier');
-      const found = (await carrierRecords()).find(
-        ({ record, space }) => !record.deleted && space === spaceId,
-      )?.record;
-      if (!found) return;
-      const carry = await runtime(spaceId);
-      // Passes gone first, then the word to forget everything, then the carrier's record.
-      for (const pass of await ownRecords(carry, { collection: PASS_COLLECTION }, (r) =>
-        r.key.startsWith('pass:'),
-      ))
-        await carry.removeSystem(pass.key);
-      await carry.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
-      await registryRt.removeSystem(found.key);
+      // In turn with any refill, which would otherwise put the passes back.
+      await inCarryTurn(async () => {
+        const found = (await carrierRecords()).find(
+          ({ record, space }) => !record.deleted && space === spaceId,
+        )?.record;
+        if (!found) return;
+        const carry = await runtime(spaceId);
+        // Passes gone first, then the word to forget everything, then the carrier's record.
+        for (const pass of await ownRecords(carry, { collection: PASS_COLLECTION }, (r) =>
+          r.key.startsWith('pass:'),
+        ))
+          await carry.removeSystem(pass.key);
+        await carry.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
+        await registryRt.removeSystem(found.key);
+      });
     },
   });
 

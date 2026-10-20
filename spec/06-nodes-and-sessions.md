@@ -791,9 +791,14 @@ Using a carrier needs the account key:
    written, the node removes the carry space it made: nothing else says it
    is one, and held, a later reconcile would record it as a space the
    account uses.
-3. It returns `{ space, invite }`, and fills the carry space (below) in the
-   background; the carrier joins with the invite and takes the passes as
-   they arrive.
+3. It fills the carry space (below) and returns `{ space, invite }`; the
+   carrier joins with the invite. Keeping the other carriers' carry spaces
+   in step (below) needs no waiting for.
+
+> **Known defect:** a node that stops between steps 1 and 2 (a tab closed
+> mid-connect) leaves the carry space held with no record, and a later
+> reconcile records it as a space the account uses, where every app lists it.
+> Nothing in the space says it is a carry space.
 
 A carrier the account already uses, by `did`, is not added again: the node
 returns its carry space and invite as they are. So a carrier that connects

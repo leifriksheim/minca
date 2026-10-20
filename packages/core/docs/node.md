@@ -824,7 +824,8 @@ takes the carry space back out before failing, so a restart never lists it as
 a space the account uses. A node that starts, or hears the registry change,
 refills every carrier's carry space in the background: it opens every space
 the account holds, which from a data folder is slow, and signing in doesn't
-wait for it. Adding a carrier or an automation doesn't either:
+wait for it. Adding an automation doesn't either (adding a carrier writes that
+carrier's passes before it returns):
 `node.carriers.settled(waitMs)` waits up to `waitMs` for the refill under way
 and says whether it finished, for a window about to close. `node.carriers.reached(carrySpace, waitMs)`
 waits up to `waitMs` for the node to be level with the carrier in the carry

@@ -41,6 +41,8 @@ import { createClientAuth, type ReadAccess } from '../src/network/peer-auth.js';
 import { team } from '../src/space/presets.js';
 import { base64UrlDecode, base64UrlEncode } from '../src/utils/encoding.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
+import { createIdentityManager } from '../src/identity/identity-manager.js';
+import type { PeerTransport, PeerTransportEvents } from '../src/network/transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
@@ -512,17 +514,41 @@ describe('everything else that holds a space follows its new key', () => {
     await until(async () => (await passReadKey()) === readKey, 6000, 'the pass to carry the new read key');
   });
 
-  test('another device of the account never puts the old key’s pass back', async () => {
-    // The phone holds the space but never opens it: refilling the carry space must not undo the laptop's new pass.
+  test('another device of the account, behind on a key change, never puts the old key’s pass back', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const laptop = await somebody(hub, { accountKey: true });
-    const phone = await somebody(hub, { seed: laptop.seed, accountKey: true });
+    // The phone: the same account, which can be cut off from one space's room while the rest still syncs.
+    const blocked = new Set<string>();
+    const gate = (transport: PeerTransport, room: string): PeerTransport => ({
+      ...transport,
+      send: (peer, data) => {
+        if (!blocked.has(room)) transport.send(peer, data);
+      },
+      on: (event, callback) => {
+        if (event !== 'data') return transport.on(event, callback);
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checking the event is 'data' doesn't narrow its callback
+        const onData = callback as PeerTransportEvents['data'];
+        transport.on('data', (peer, data) => {
+          if (!blocked.has(room)) onData(peer, data);
+        });
+      },
+    });
+    const manager = createIdentityManager();
+    const phone = await createNode({
+      signer: createLocalRootSigner(await manager.fromSeed(laptop.seed), manager.getProvider()),
+      stores: memoryStores(),
+      watchIntervalMs: 0,
+      accountKey: await deriveAccountKey(laptop.seed),
+      network: { transports: (room, did) => [gate(hub.transport(did, room), room)] },
+    });
+    open.push(phone);
+
     const { id: space } = await laptop.node.spaces.create({ name: 'Notes', visibility: 'private' });
     const added = await laptop.node.carriers.add({ did: 'did:key:zCarrier', name: 'Chrome' });
     await until(
       async () =>
-        (await phone.node.spaces.list()).some((each) => each.id === space) &&
-        (await phone.node.carriers.list()).length === 1,
+        (await phone.spaces.list()).some((each) => each.id === space) &&
+        (await phone.carriers.list()).length === 1,
       8000,
       'the phone to hold the space and know the carrier',
     );
@@ -536,16 +562,16 @@ describe('everything else that holds a space follows its new key', () => {
       return passes.find((pass) => pass.body?.space.id === space)?.body?.readKey ?? null;
     };
 
+    blocked.add(space);
     await laptop.node.spaces.changeKey(space);
     const key = await spaceKeyFromRaw(
       base64UrlDecode(parseSpaceInvite(await laptop.node.spaces.invite(space, { write: false })).key!),
     );
     const readKey = (await deriveReadKey(key, provider)).did;
     await until(async () => (await passReadKey()) === readKey, 6000, 'the pass to carry the new read key');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    // Any change to the registry has the phone refill the carry space.
+    // Any change to the registry has the phone refill the carry space, from the key it still holds.
     await laptop.node.spaces.create({ name: 'More', visibility: 'private' });
-    await new Promise((resolve) => setTimeout(resolve, 4000));
+    await new Promise((resolve) => setTimeout(resolve, 5000));
     assert.equal(await passReadKey(), readKey);
   });
 });

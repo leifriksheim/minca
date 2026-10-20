@@ -360,6 +360,22 @@ describe('a carrier', () => {
     );
   });
 
+  test('removed while a refill runs, no pass is written back', async () => {
+    const me = await account();
+    const home = await device(me, null);
+    for (let i = 0; i < 8; i++) await home.spaces.create({ name: `S${i}`, visibility: 'private' });
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    assert.ok(await home.carriers.settled(10_000));
+    // A new space starts a refill; the removal lands while it runs.
+    await home.spaces.create({ name: 'More', visibility: 'private' });
+    await home.carriers.remove(added.space);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const live = (await home.records.list(added.space, { collection: 'sys.pass' })).filter((r) =>
+      r.key.startsWith('pass:'),
+    );
+    assert.deepEqual(live, []);
+  });
+
   test('removing it tells it to forget, and stops the passes', async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });
