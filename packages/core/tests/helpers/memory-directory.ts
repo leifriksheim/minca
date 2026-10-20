@@ -96,6 +96,11 @@ function handleOver(name: string, node: Node): DirectoryHandleLike {
       // A copy, so deleting while iterating behaves the way a real listing does.
       for (const key of [...node.files.keys(), ...node.dirs.keys()]) yield key;
     },
+
+    async *values() {
+      for (const name of [...node.files.keys()]) yield { kind: 'file' as const, name };
+      for (const name of [...node.dirs.keys()]) yield { kind: 'directory' as const, name };
+    },
   };
 }
 

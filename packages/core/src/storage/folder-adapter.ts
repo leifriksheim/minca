@@ -1,25 +1,12 @@
 /**
- * A StorageAdapter over a directory the user picked on their own disk.
+ * A StorageAdapter over a directory: one file per entry under `kv/`, one per
+ * version under `versions/`.
  *
- * Unlike IndexedDB or OPFS it is not keyed by origin: every app given the
- * folder reads the same files, so an app is a view on the user's data rather
- * than the owner of a copy. The layout is legible, since the folder is theirs:
- *
- * ```
- * <folder>/
- *   accounts.json                    who has an account here
- *   accounts/<id>/account.json       that account's keys, locked
- *   accounts/<id>/stores/<name>/
- *     kv/<key>                       which version is current, what sync compares, space records
- *     versions/<cid>.json
- * ```
- *
- * **Versions are the truth; the entries are an index over them.** That
- * inversion is what lets two origins share one folder with no locking. Every
- * version file is immutable and named by its own content hash, so
- * concurrent writers can only ever add files that agree — the one genuinely
- * mutable thing, which version is current, is derived state that either side
- * can put right. {@link reconcileFolder} is what puts it right.
+ * In a data folder only the registry is kept this way: a handful of sealed
+ * entries per space, which every app and device given the folder reads. A
+ * space's versions go into segments instead (`storage/blob/directory.ts`,
+ * `node/stores.ts`), since a file per version and per entry is more files
+ * than a synced drive or a bucket should be asked to carry.
  */
 
 import type { StorageAdapter, BatchOp, Version } from '../types.js';
@@ -49,30 +36,8 @@ export interface DirectoryHandleLike {
   getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<DirectoryHandleLike>;
   removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>;
   keys(): AsyncIterableIterator<string>;
-}
-
-/** What changed on disk since the last pass */
-export interface FolderReload {
-  /** Version ids that appeared — written by another origin, or another device */
-  readonly added: ReadonlyArray<string>;
-  /** Version ids whose files are gone */
-  readonly removed: ReadonlyArray<string>;
-}
-
-export interface FolderAdapter extends StorageAdapter {
-  /** Where inside the folder this adapter keeps its files */
-  readonly namespace: string;
-  /**
-   * Re-reads the directory, picking up writes made by another origin or device.
-   *
-   * There is no filesystem change notification on the web, so freshness is
-   * something the caller asks for — on an interval, on focus, or after a sync
-   * round. Pair it with {@link reconcileFolder} to fold what turns up into the
-   * local tree.
-   */
-  reload(): Promise<FolderReload>;
-  /** Every version id currently on disk, whatever the entries believe */
-  listVersionIds(): Promise<ReadonlyArray<string>>;
+  /** Each entry, and whether it is a file or a directory */
+  values(): AsyncIterableIterator<{ readonly kind: 'file' | 'directory'; readonly name: string }>;
 }
 
 const VERSION_SUFFIX = '.json';
@@ -85,7 +50,7 @@ const VERSION_SUFFIX = '.json';
  * this, the keys `space:Abc` and `space:abc` would quietly become one file and
  * one of the two values would be lost.
  */
-function encodeKey(key: string): string {
+export function encodeKey(key: string): string {
   let out = '';
   for (const byte of utf8Encode(key)) {
     const char = String.fromCharCode(byte);
@@ -95,7 +60,7 @@ function encodeKey(key: string): string {
 }
 
 /** Reverses {@link encodeKey}. */
-function decodeKey(name: string): string {
+export function decodeKey(name: string): string {
   const bytes: number[] = [];
   for (let i = 0; i < name.length; i++) {
     if (name[i] === '%') {
@@ -109,12 +74,12 @@ function decodeKey(name: string): string {
 }
 
 /** Whether a rejection means "that file isn't there", which is usually not an error. */
-function isNotFound(error: unknown): boolean {
+export function isNotFound(error: unknown): boolean {
   return error instanceof Error && error.name === 'NotFoundError';
 }
 
 /** Walks — and creates — a chain of subdirectories. */
-async function resolvePath(
+export async function resolvePath(
   root: DirectoryHandleLike,
   segments: ReadonlyArray<string>,
 ): Promise<DirectoryHandleLike> {
@@ -149,27 +114,23 @@ export async function writeFolderFile(
   await writable.close();
 }
 
-/** Deletes a file, ignoring one that is already gone. */
-async function removeFile(dir: DirectoryHandleLike, name: string): Promise<void> {
+/** Deletes a file (or a directory and everything in it), ignoring one that is already gone. */
+export async function removeFile(dir: DirectoryHandleLike, name: string, recursive = false): Promise<void> {
   try {
-    await dir.removeEntry(name);
+    await dir.removeEntry(name, recursive ? { recursive } : undefined);
   } catch (error) {
     if (!isNotFound(error)) throw error;
   }
 }
 
 /**
- * Opens a storage adapter backed by a directory on the user's disk.
- *
- * Versions are held in memory as well as on disk — a query would otherwise
- * mean one file read per record, and the example app re-lists on every render.
- * The cost is that the working set has to fit in memory.
+ * Opens a storage adapter backed by a directory.
  *
  * @param path Where to keep these files inside it, `/` separating
  *   subdirectories. The full path from the folder root, so that several
  *   accounts can each have a subtree of their own.
  */
-export async function createFolderAdapter(root: DirectoryHandleLike, path: string): Promise<FolderAdapter> {
+export async function createFolderAdapter(root: DirectoryHandleLike, path: string): Promise<StorageAdapter> {
   const segments = path.split('/').filter(Boolean).map(encodeKey);
   if (segments.length === 0) {
     throw new Error('A folder adapter needs a path to live in.');
@@ -178,11 +139,8 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
   const kvDir = await base.getDirectoryHandle('kv', { create: true });
   const versionsDir = await base.getDirectoryHandle('versions', { create: true });
 
+  // A version never changes under its id, so caching it is free.
   const versions = new Map<string, Version>();
-
-  // Content-addressed nodes never change, so caching them is free. The root
-  // pointer does change, which is why `reload` throws the whole cache away
-  // rather than trying to be clever about which entries are still good.
   const kvCache = new Map<string, Uint8Array | null>();
 
   async function readVersionFile(name: string): Promise<Version | null> {
@@ -198,39 +156,7 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
     }
   }
 
-  async function reload(): Promise<FolderReload> {
-    const seen = new Set<string>();
-    const added: string[] = [];
-
-    for await (const name of versionsDir.keys()) {
-      if (!name.endsWith(VERSION_SUFFIX)) continue;
-      const id = decodeKey(name.slice(0, -VERSION_SUFFIX.length));
-      seen.add(id);
-      if (versions.has(id)) continue;
-
-      const version = await readVersionFile(name);
-      if (!version) continue;
-      versions.set(id, version);
-      added.push(id);
-    }
-
-    const removed = [...versions.keys()].filter((id) => !seen.has(id));
-    for (const id of removed) versions.delete(id);
-
-    kvCache.clear();
-    return { added, removed };
-  }
-
-  await reload();
-
   return Object.freeze({
-    namespace: path,
-    reload,
-
-    async listVersionIds(): Promise<ReadonlyArray<string>> {
-      return [...versions.keys()];
-    },
-
     async get(key: string): Promise<Uint8Array | null> {
       const cached = kvCache.get(key);
       if (cached !== undefined) return cached;
@@ -276,7 +202,6 @@ export async function createFolderAdapter(root: DirectoryHandleLike, path: strin
       const known = versions.get(id);
       if (known) return known;
 
-      // Not in memory: another origin may have written it since the last reload.
       const version = await readVersionFile(encodeKey(id) + VERSION_SUFFIX);
       if (version) versions.set(id, version);
       return version;

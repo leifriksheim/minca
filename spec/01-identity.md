@@ -1084,7 +1084,7 @@ folder.
 <folder>/
   accounts.json                 list of accounts, readable without unlocking
   accounts/<id>/account.json    that account's vault (§11.2)
-  accounts/<id>/stores/…        that account's spaces (05)
+  accounts/<id>/stores/…        that account's registry and spaces (05 §14)
 ```
 
 `accounts.json`:

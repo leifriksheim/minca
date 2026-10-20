@@ -129,6 +129,14 @@ function directory(dir: string): DirectoryHandleLike {
         yield entry;
       }
     },
+
+    async *values() {
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        if (entry.name.endsWith('.tmp') || entry.isSymbolicLink()) continue;
+        if (entry.isFile()) yield { kind: 'file' as const, name: entry.name };
+        else if (entry.isDirectory()) yield { kind: 'directory' as const, name: entry.name };
+      }
+    },
   };
 }
 

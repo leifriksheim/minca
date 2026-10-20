@@ -161,18 +161,16 @@ export { createStorageProvider } from './storage/storage-provider.js';
 export type { StorageProvider } from './storage/storage-provider.js';
 
 // Storage in a folder the user owns — the one store that is not origin-scoped
-export { createFolderAdapter, readFolderFile, writeFolderFile } from './storage/folder-adapter.js';
-export type {
-  FolderAdapter,
-  FolderReload,
-  DirectoryHandleLike,
-  FileHandleLike,
-  WritableFileLike,
+export {
+  createFolderAdapter,
+  readFolderFile,
+  writeFolderFile,
+  encodeKey as encodeFolderName,
+  decodeKey as decodeFolderName,
 } from './storage/folder-adapter.js';
+export type { DirectoryHandleLike, FileHandleLike, WritableFileLike } from './storage/folder-adapter.js';
 export { createEncryptedAdapter, DEFAULT_ENCRYPTED_PREFIXES } from './storage/encrypted-adapter.js';
 export type { EncryptedAdapterOptions } from './storage/encrypted-adapter.js';
-export { reconcileFolder } from './storage/folder-reconcile.js';
-export type { FolderReconciliation } from './storage/folder-reconcile.js';
 export {
   isFolderStorageAvailable,
   pickDataFolder,
@@ -382,6 +380,7 @@ export {
   relayRoom,
   indexedDBStores,
   folderStores,
+  directoryStores,
   browserWriterKeys,
   copyAccountData,
   NODE_ACTIONS,
@@ -577,6 +576,7 @@ export type {
 export type { BlobStore } from './storage/blob-store.js';
 export { createMemoryBlobStore } from './storage/blob/memory.js';
 export { createS3BlobStore } from './storage/blob/s3.js';
+export { createDirectoryBlobStore } from './storage/blob/directory.js';
 export type { S3Config } from './storage/blob/s3.js';
 export { createMirror, deleteMirrored } from './storage/mirror.js';
 export type { Mirror, MirrorConfig, Taken } from './storage/mirror.js';

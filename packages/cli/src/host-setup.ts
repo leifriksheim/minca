@@ -8,11 +8,11 @@ import path from 'node:path';
 import {
   createP256Provider,
   createS3BlobStore,
-  folderStores,
+  encodeFolderName,
   type BlobStore,
   type StoreFactory,
 } from '@minca/core';
-import { openFsDirectory } from './fs-directory.js';
+import { fileStores } from './file-stores.js';
 import type { Billing } from './host.js';
 import { createStripeBilling } from './stripe.js';
 import { createWalletPayments, isNetworkName, NETWORKS, type WalletPayments } from './wallet.js';
@@ -50,10 +50,10 @@ export async function hostKey(data: string, name = 'host-key'): Promise<CryptoKe
 
 /** The host's stores, in the data folder: its subscriptions, and a copy of every space it carries */
 export async function hostStores(data: string): Promise<StoreFactory> {
-  return folderStores(await openFsDirectory(path.join(data, 'store')));
+  return fileStores(path.join(data, 'store'));
 }
 
-/** What a carried space takes on disk, in bytes: its folder under `hostStores`, walked */
+/** What a carried space takes on disk, in bytes: its file under `hostStores`, or its folder from before */
 export function spaceSize(data: string): (spaceId: string) => Promise<number> {
   const walk = async (dir: string): Promise<number> => {
     let bytes = 0;
@@ -64,10 +64,11 @@ export function spaceSize(data: string): (spaceId: string) => Promise<number> {
     }
     return bytes;
   };
-  return (spaceId) =>
-    /^[A-Za-z0-9_-]{1,120}$/.test(spaceId)
-      ? walk(path.join(data, 'store', 'spaces', spaceId))
-      : Promise.resolve(0);
+  return async (spaceId) => {
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(spaceId)) return 0;
+    const at = path.join(data, 'store', 'spaces', encodeFolderName(spaceId));
+    return ((await stat(`${at}.log`).catch(() => null))?.size ?? 0) + (await walk(at));
+  };
 }
 
 /**

@@ -618,6 +618,17 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - Where it can write the account's vault, a wrap of another account it
     plants, or a passphrase wrap it edits to fewer rounds, does not open as
     the account (01 §11.3).
+  - Where it can write the account's data folder, it can't change which
+    version another app or device holds as current, nor have one take a
+    version a peer would refuse, nor make one drop a version it has read: no
+    client takes another's entries from the folder, every version in a
+    segment is judged like a peer's, and a segment deleted takes nothing from
+    a client that read it (05 §14.4, §14.5;
+    `packages/core/tests/folder-adapter.test.ts`, "a version left in the
+    folder is judged before it is taken", "deleting segments from the folder
+    takes nothing from an app that read them", "two nodes of one account on
+    one folder"). It can hide versions from a client that hasn't read them
+    yet, which the mesh fills in.
   - A program connected by code gets what the app it connects through asks
     for and the person allows, never more than its key signed for: the app
     can't use its proof for the app's own connection, nor ask for more than
@@ -642,6 +653,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - An app or site the person opens their pod in reads the vault, and can
     guess its password offline; a weak one makes it the root thief (§3.5,
     By design).
+  - Where it can write a data folder, it can leave segments as large and as
+    many as it likes, and every client of the folder reads each one whole
+    (05 §14.5, §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
     keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/minca/issues/165)).
@@ -668,7 +682,7 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     there. Only the account's own keys and apps can; apps should choose names
     that include their collection (02 §4.1). By design.
 
-_Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/doors.test.ts` ("opens only with its door…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
+_Source: 01 §7.5, §8, §11; 06 §2, §3; 05 §14, §15; 02 §4.1. Tests: `packages/core/tests/live.test.ts` ("a records-only key cannot shed its label by passing its note on"), `packages/core/tests/doors.test.ts` ("opens only with its door…"), `packages/core/tests/record-keys.test.ts` ("a key in another collection"), `packages/core/tests/connect.test.ts` ("an app can only ask for a key it holds, and none the home already uses for something else", "a request with a field it does not know is refused…"), `packages/core/tests/records-only.test.ts`, `packages/core/tests/connect-code.test.ts`, `packages/core/tests/ucan.test.ts`, `packages/core/tests/account-vault.test.ts` ("the account key does not open the registry store's sealed entries", "a wrap from another account does not open as this one", "a passphrase wrap edited to fewer rounds, another salt or another id does not open")._
 
 ### 3.7 Relay
 
@@ -812,11 +826,13 @@ raised but has no place above until a test confirms or rules it out.
 - **Per-message forward secrecy.** A space key opens everything sealed under
   it. Changing keys bounds what a later key opens; ratcheting group keys (MLS,
   say) are not a goal before v1.
-- **Rollback of a data folder** by whoever can write it (a pod in a synced
-  drive, say). Sealing at rest binds an entry's name, not its version, so an
-  older sealed registry entry, such as a space key from before a key change,
-  still opens, and an entry can be deleted (05 §15,
-  [#215](https://github.com/leifriksheim/minca/issues/215)).
+- **Rollback of a data folder's registry** by whoever can write it (a pod in
+  a synced drive, say). Sealing at rest binds an entry's name, not its
+  version, so an older sealed registry entry, such as a space key from before
+  a key change, still opens, and an entry can be deleted (05 §15,
+  [#215](https://github.com/leifriksheim/minca/issues/215)). A space's
+  records can't be rolled back this way: what a client read from the folder
+  stays with it (05 §14.5).
 - **Protecting a device that is already compromised** while it runs. Keeping
   keys from being exported is up to each implementation (see
   `packages/core/docs/node.md`). The desktop app keeps its app's key and grant

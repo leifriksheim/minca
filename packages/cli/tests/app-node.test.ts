@@ -15,7 +15,6 @@ import {
   createLocalRootSigner,
   createNode,
   deriveAccountKey,
-  folderStores,
   generateSeed,
   remoteNode,
   type P2PNode,
@@ -29,7 +28,7 @@ import {
   type AppNodeOut,
   type StartParams,
 } from '../src/app-node.js';
-import { openFsDirectory } from '../src/fs-directory.js';
+import { fileStores } from '../src/file-stores.js';
 import { isRecord } from '../src/json.js';
 
 const ORIGIN = 'http://127.0.0.1:47830';
@@ -69,7 +68,7 @@ const offline = async (params: StartParams) => {
   const node = await createNode({
     signer: params.signer,
     sessionKey: params.key.keys,
-    stores: folderStores(await openFsDirectory(params.stores), { localKey: params.seal }),
+    stores: fileStores(params.stores, { localKey: params.seal }),
     watchIntervalMs: 0,
     ...(params.grant.accountKey ? { accountKey: base64UrlDecode(params.grant.accountKey) } : {}),
   });
@@ -272,7 +271,16 @@ test('the window uses the node over its port; one that loads again gets a sessio
   const made = await first.remote.spaces.create({ name: 'Garden', visibility: 'private' });
   // Its key is in the registry sealed under the keychain's key, never in the clear (spec 05 §15).
   const stores = path.join(data, 'store', who.me.did.replace(/[^A-Za-z0-9]/g, '_'));
-  const sealedKey = await readFile(path.join(stores, 'registry', 'kv', `spacekey%3A${made.id}`));
+  // The registry is one log file; the last line that set the entry holds its value.
+  const sealedKey = Buffer.from(
+    (await readFile(path.join(stores, 'registry.log'), 'utf8'))
+      .split('\n')
+      .filter(Boolean)
+      .flatMap((line): unknown[] => JSON.parse(line))
+      .filter((op): op is [string, string, string] => Array.isArray(op) && op[1] === `spacekey:${made.id}`)
+      .at(-1)![2],
+    'base64url',
+  );
   assert.equal(sealedKey[0], 1, 'an envelope, by its version byte');
   assert.throws(() => JSON.parse(sealedKey.toString('utf8')));
   const second = await attach();

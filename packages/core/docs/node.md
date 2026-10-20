@@ -27,7 +27,7 @@ conveniences.
 | `sessionTtlSeconds` | number, optional            | Lifetime of each session note. Default `3600`.                                                                                                                                                                                                                                                                        |
 | `sessionKey`        | `CryptoKeyPair`, optional   | Sign with this key instead of a fresh one. Used when the signer's note names a specific key (an app's key, an agent's key, [spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md), [spec 06 §3](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). |
 | `writerKey`         | `WriterKeySource`, optional | Keep a signing key across runs, so this device keeps one log in each space ([writer keys](#writer-keys)). Ignored with `sessionKey`.                                                                                                                                                                                  |
-| `watchIntervalMs`   | number, optional            | How often to look for writes another process made to a folder store. `0` disables. Default `2000`. _Implementation detail._                                                                                                                                                                                           |
+| `watchIntervalMs`   | number, optional            | How often to look for writes another app, device or process made: a data folder's segments, a store file another process shares. `0` disables. Default `2000`. _Implementation detail._                                                                                                                               |
 | `cache`             | `CacheConfig`, optional     | Hold only the collections used, in spaces that name a keeper ([holding part of a space](#holding-part-of-a-space)).                                                                                                                                                                                                   |
 | `mailbox`           | `MailboxClient`, optional   | How doors reach relays' mailboxes ([07](https://github.com/leifriksheim/minca/blob/main/spec/07-doors.md)). Default: a WebSocket to each relay.                                                                                                                                                                       |
 
@@ -165,9 +165,15 @@ What a path means is the factory's choice:
 - `indexedDBStores(prefix)` — one IndexedDB database per path, named
   `<prefix>:<path with / replaced by :>`. Never sealed: the browser profile
   already guards it.
-- `folderStores(directory, { basePath?, localKey? })` — a directory tree under
-  `basePath`; the `registry` is sealed under `localKey` (`deriveLocalKey(seed)`)
-  when one is given.
+- `folderStores(directory, { basePath?, localKey?, local? })` — a data folder
+  ([sync and storage](storage.md#data-folders)): the `registry` in the folder
+  under `basePath`, sealed under `localKey` (`deriveLocalKey(seed)`) when one
+  is given; every other path in `local`; and each space mirrored to the
+  folder's segments, which the factory names as `folder`.
+- `directoryStores(directory, { localKey? })` — a directory only this process
+  writes, one file per entry and per version.
+- `fileStores(root, { localKey? })` in `packages/cli` — one log file per path,
+  which several processes on one computer may share.
 
 Every version a node signs in a space takes the next place in its key's line
 for that collection there ([spec 02 §4.10](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
@@ -242,7 +248,8 @@ by default. These names are _implementation details_ ([sync and storage](storage
 a pod's layout is in
 [05](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 A node also opens `mirrors/<spaceId>/<n>` for a mirror's writer state
-([mirrors](storage.md#mirrors)), and a host `host` for its subscriptions.
+([mirrors](storage.md#mirrors)), `folder/<spaceId>` for a data folder's, and
+a host `host` for its subscriptions.
 
 `copyAccountData({ from, to, did, accountKey? })` copies every space an
 account holds, with its key and records, from one set of stores to another —
@@ -881,7 +888,7 @@ others, and an app can say so and offer to ask again or to stop using it.
 The reference host (`minca host`, `packages/cli/src/host.ts`) keeps a lapsed
 subscription for `graceDays` (default 30) after `paidUntil`, and drops lapsed
 ones in a sweep every hour (`sweepMs`). It measures each carried space's
-folder at most every ten minutes, and each status gives the sum as `bytes`,
+store file at most every ten minutes, and each status gives the sum as `bytes`,
 with `quotaBytes` as `quota` (`MINCA_HOST_QUOTA_GB`: 10 on a paying host, none
 on a free one). At its quota, an account's carry space takes no new space
 (`full`, in `createCarryCore`): what it carries stays and keeps syncing, and a

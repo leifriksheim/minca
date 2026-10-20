@@ -44,4 +44,19 @@ export async function segmentName(counter: number, bytes: Uint8Array): Promise<s
 }
 
 /** Roughly how many bytes a version takes in a segment */
-export const versionSize = (version: Version) => utf8Encode(JSON.stringify(version)).length;
+const versionSize = (version: Version) => utf8Encode(JSON.stringify(version)).length;
+
+/** Splits versions into segments' worth: each closed once it reaches `bytes` */
+export function* segmentBatches(versions: Iterable<Version>, bytes: number): Generator<Version[]> {
+  let batch: Version[] = [];
+  let size = 0;
+  for (const version of versions) {
+    batch.push(version);
+    size += versionSize(version);
+    if (size < bytes) continue;
+    yield batch;
+    batch = [];
+    size = 0;
+  }
+  if (batch.length > 0) yield batch;
+}

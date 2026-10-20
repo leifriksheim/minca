@@ -26,7 +26,6 @@ import {
   base64UrlEncode,
   createNode,
   didOf,
-  folderStores,
   openValue,
   sealValue,
   serveNode,
@@ -41,7 +40,8 @@ import {
   type ConnectRequest,
   type Grant,
 } from '@minca/core/session';
-import { openFsDirectory, writeWhole } from './fs-directory.js';
+import { writeWhole } from './fs-directory.js';
+import { fileStores } from './file-stores.js';
 import { configuredRelays, enableWebRTC } from './agent.js';
 import { isRecord, messageOf } from './json.js';
 import { holdLock } from './writer-keys.js';
@@ -583,7 +583,7 @@ async function startDesktopNode(params: StartParams): Promise<P2PNode> {
   const node = await createNode({
     signer: params.signer,
     sessionKey: params.key.keys,
-    stores: folderStores(await openFsDirectory(params.stores), { localKey: params.seal }),
+    stores: fileStores(params.stores, { localKey: params.seal }),
     cache: {},
     network: {
       relays,

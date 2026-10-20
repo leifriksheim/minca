@@ -39,6 +39,7 @@ import {
   type WriterKeySource,
 } from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
+import { fileStores } from './file-stores.js';
 import { fileWriterKeys } from './writer-keys.js';
 
 export interface Home {
@@ -171,7 +172,13 @@ export async function unlock(
   return {
     account,
     signer,
-    stores: folderStores(home.directory, { basePath: account.dataPath, localKey }),
+    // The folder holds the registry and each space's segments; what this computer
+    // holds of them is beside the writer keys, outside the account's data.
+    stores: folderStores(home.directory, {
+      basePath: account.dataPath,
+      localKey,
+      local: fileStores(path.join(home.path, 'local', account.id)),
+    }),
     accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),
     writerKey: fileWriterKeys(path.join(home.path, 'writers', account.id), localKey, account.did),

@@ -73,10 +73,8 @@ import {
 } from '../records/contracts.js';
 import { changedFixedField, onePerKey, onePerSecret } from '../records/rules.js';
 import type { Link } from '../types.js';
-import { reconcileFolder } from '../storage/folder-reconcile.js';
 import type { BlobStore } from '../storage/blob-store.js';
-import { createMirror, type Mirror } from '../storage/mirror.js';
-import type { FolderAdapter } from '../storage/folder-adapter.js';
+import { createMirror, type Mirror, type Taken } from '../storage/mirror.js';
 import { createVersionCheck } from '../validation/check-version.js';
 import type { Writers } from './writers.js';
 import { breaksLine, checkFork, forkProof } from '../records/fork.js';
@@ -485,10 +483,6 @@ const looksEncrypted = isSealedBody;
 /** The key a sealed body names, as the keyring is looked up by */
 function sealedKeyId(body: unknown): string {
   return String(isRecord(body) ? body.keyId : undefined);
-}
-
-function isFolderAdapter(adapter: StorageAdapter): adapter is FolderAdapter {
-  return 'reload' in adapter && typeof adapter.reload === 'function';
 }
 
 const isLinks = (links: unknown): links is ReadonlyArray<Link> => checkLinks(links) === null;
@@ -2471,6 +2465,13 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // Every mirror is one more peer: what it holds goes through the same gates
   // as a peer's records, and what this node holds goes out to it.
 
+  /** What a mirror holds goes through the same gates as a peer's records */
+  const fromMirror = async (version: Version): Promise<Taken> => {
+    const verdict = await admit(version);
+    if (!verdict.ok && !verdict.withdrawn) return verdict.later ? 'later' : 'refused';
+    await storage.addVersion(version);
+    return 'stored';
+  };
   const mirrors: Mirror[] = [];
   for (const [index, store] of (deps.mirrors ?? []).entries()) {
     mirrors.push(
@@ -2479,15 +2480,24 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
         space: space.id,
         storage,
         state: await deps.stores(`mirrors/${space.id}/${index}`),
-        accept: async (version) => {
-          const verdict = await admit(version);
-          if (!verdict.ok && !verdict.withdrawn) return verdict.later ? 'later' : 'refused';
-          await storage.addVersion(version);
-          return 'stored';
-        },
+        accept: fromMirror,
       }),
     );
   }
+  // A data folder is one more: its spaces are segments, like a bucket's, and
+  // what this device holds of them is its own (`node/stores.ts`).
+  const folderMirror = deps.stores.folder
+    ? await createMirror({
+        store: deps.stores.folder,
+        space: space.id,
+        storage,
+        state: await deps.stores(`folder/${space.id}`),
+        accept: fromMirror,
+        // Apps and the CLI on one computer meet through the folder: soon, not in a bucket's time.
+        flushMs: 1000,
+      })
+    : null;
+  if (folderMirror) mirrors.push(folderMirror);
   /** Reads every mirror in the background: a space that opens from nothing — a host that lost its disk — fills in as it goes */
   const pullMirrors = () =>
     Promise.all(
@@ -2782,19 +2792,27 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
   // ─── Writers outside this process ──────────────────────────────────
   //
-  // A folder can be written by another origin, or by another device behind
-  // whatever syncs the folder. Nothing announces it, so it is looked for.
+  // A data folder is written by other apps, and by other devices behind
+  // whatever syncs it; a store on disk by another process (a command beside a
+  // daemon). Nothing announces either, so both are looked for.
 
+  /** Whether another writer changed anything this node holds */
+  const look = async (): Promise<boolean> => {
+    // Another process wrote this store underneath: what sync compares is read again.
+    const rewritten = (await adapter.refresh?.()) ?? false;
+    if (rewritten) storage.invalidate();
+    const pulled = folderMirror ? (await folderMirror.pull()).added > 0 : false;
+    return rewritten || pulled;
+  };
   let watchTimer: ReturnType<typeof setInterval> | null = null;
-  if (deps.watchIntervalMs > 0 && isFolderAdapter(adapter)) {
+  if (deps.watchIntervalMs > 0 && (folderMirror || adapter.refresh)) {
     let running = false;
     watchTimer = setInterval(() => {
       if (running) return;
       running = true;
-      // The same verdict as for a version from a peer.
-      reconcileFolder(storage, adapter, async (version) => storable(await admit(version)))
-        .then((result) => {
-          if (!result.changed) return;
+      look()
+        .then((changed) => {
+          if (!changed) return;
           recordsChanged();
           announceSoon();
         })

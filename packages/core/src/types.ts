@@ -279,6 +279,12 @@ export interface StorageAdapter {
     readonly ops: ReadonlyArray<BatchOp>;
     readonly remove: ReadonlyArray<string>;
   }): Promise<void>;
+  /**
+   * Optional, for a store several processes write (a file on disk): reads
+   * again what the others wrote, and says whether anything changed. Without
+   * it, nothing else writes the store but what is told through `invalidate`.
+   */
+  refresh?(): Promise<boolean>;
 }
 
 export type BatchOp =

@@ -1,7 +1,7 @@
 # Sync and storage in the library
 
 How the library paces sync, keeps a store in memory, talks to IndexedDB, a
-data folder and a blob store, and mirrors a space into one.
+data folder, a file on disk and a blob store, and mirrors a space into one.
 
 > Not protocol. This page describes the reference library, and another
 > implementation may do it differently and still interoperate. What peers must
@@ -89,6 +89,7 @@ methods async):
 | `entries(prefix)`                | _Optional._ Every entry under `prefix` with its bytes, in one read. Without it, `list` then `get` each                                                      |
 | `getVersions(ids)`               | _Optional._ Version bodies by id, null where absent, in the order asked, in one read. Without it, `getVersion` each                                         |
 | `commit({ store, ops, remove })` | _Optional._ Stores these bodies, applies these entry ops and deletes these bodies, atomically. Without it, `putVersion` each, `batch`, `deleteVersion` each |
+| `refresh()`                      | _Optional._ Reads again what another process wrote to the same store; whether anything changed. The space runtime asks every `watchIntervalMs`              |
 
 The optional methods only save round trips: a store gives the same answers
 with or without them. With `commit`, one placement of a version is one atomic
@@ -96,7 +97,8 @@ write; without, versions go first, then the entries in one batch, then the
 deletes, so no entry ever names a version that is not there.
 
 Entry keys are strings; values are bytes. The adapters are IndexedDB (below),
-the data folder, the sealing wrapper, and an in-memory one for tests.
+a directory (the data folder's registry), a log file on disk
+([below](#stores-on-disk)), the sealing wrapper, and memory.
 
 _Source: `packages/core/src/types.ts` (`StorageAdapter`, `BatchOp`). Tests:
 `packages/core/tests/folder-adapter.test.ts`,
@@ -129,6 +131,10 @@ Each database:
   range in one `readonly` transaction; `getVersions` is one `readonly`
   transaction.
 
+A data folder's own stores ([below](#data-folders)) use the prefix
+`minca-pod:<dataPath with / replaced by :>`: not `minca:`, which is deleted
+when the person forgets an account's browser copy.
+
 Accounts kept in a browser live in database `minca-accounts`, object store
 `accounts`. A remembered data-folder handle lives in database `minca-folder`,
 object store `handles`, key `data-folder`.
@@ -146,7 +152,36 @@ adapter needs a browser)._
 
 The folder's layout, file names and the way several writers converge are
 protocol ([spec 05 §14](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
-How this library gets and writes one is not:
+How this library keeps and writes one is not.
+
+`folderStores(directory, { basePath, localKey, local })` keeps the
+`registry` in the folder, one file per entry, sealed under `localKey`, and
+opens every other path in `local`: a space's entries and bodies, what the
+node keeps beside them, and the `folder/<space id>` store writer state. The
+factory names the folder's segments (`<basePath>/spaces/`, a directory blob
+store) as `folder`, and every space runtime opened from it mirrors to them
+([mirrors](#mirrors)): it pulls when the space opens and every
+`watchIntervalMs` (default 2 s, `0` to turn it off), and pushes 1 s after a
+change and on close.
+
+`local` is this device's:
+
+- **In the browser**, IndexedDB under `minca-pod:<dataPath>` (the default).
+- **The CLI** keeps it beside its writer keys, outside the account's data:
+  `<home>/local/<account id>/`, one log file per store
+  ([stores on disk](#stores-on-disk)), so a command and the daemon share it.
+- **Elsewhere**, memory, gone when the process ends: everything is pulled
+  from the folder again next time.
+
+**The former layout.** A space store kept the old way (`spaces/<id>/kv`,
+`versions`) is turned into a segment of a new store writer the first time
+the space opens, and its `kv/` and `versions/` deleted
+([spec 05 §14.8](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
+Any other store kept the old way (`writers`) is copied into `local` while
+`local` holds nothing at that path, and left in the folder: another app
+sharing the folder may need its places too.
+
+Getting the folder:
 
 - **In the browser** the folder comes from `showDirectoryPicker` with
   `id: "minca-pod"`, `mode: "readwrite"`, `startIn: "documents"`, which needs a
@@ -156,19 +191,50 @@ How this library gets and writes one is not:
   instead. The File System Access API replaces a file atomically on `close()`.
 - **The CLI** (Node and Bun) writes `<name>.<uuid>.tmp` with mode `0600` and
   renames it into place. Directories are created with mode `0700`.
-- **Re-reading.** While a space is open, the node re-reads its folder every
-  2 s (`NodeConfig.watchIntervalMs`, `0` to turn it off) to find what other
-  writers did.
 
 A folder is the account: copy it to a USB stick and it is all of it, or put
 it in iCloud, Dropbox or Syncthing and several devices converge with no relay,
 since the set of versions only grows. Being readable by several origins is the
-point, which is why OPFS (origin-private) is not used for it.
+point, which is why OPFS (origin-private) is not used for it. Each device
+adds a folder of segments per space, about one file per 256 KiB of records,
+compacted once it has 32.
 
-_Source: `packages/core/src/storage/directory-access.ts`,
-`packages/cli/src/fs-directory.ts`, `packages/core/src/node/space-runtime.ts`
-(watch loop). Tests: `packages/core/tests/folder-adapter.test.ts`,
+_Source: `packages/core/src/node/stores.ts` (`folderStores`),
+`packages/core/src/storage/blob/directory.ts`,
+`packages/core/src/storage/directory-access.ts`,
+`packages/cli/src/fs-directory.ts`, `packages/cli/src/home.ts` (`unlock`),
+`packages/core/src/node/space-runtime.ts` ("Mirrors", "Writers outside this
+process"). Tests: `packages/core/tests/folder-adapter.test.ts`,
 `packages/cli/tests/path-safety.test.ts`._
+
+## Stores on disk
+
+Nodes the CLI runs (a host, a carrier, an agent, the desktop app's node, and
+an account's own stores beside a data folder) keep each store in one file,
+`fileStores(root)`: `<root>/<path>.log`, every part of the path named as a
+data folder names its files.
+
+- **A log.** Each write is one line of JSON, an array of operations:
+  `["put", key, <base64url value>]`, `["del", key]`, `["ver", <version>]`,
+  `["unver", id]`. A line is applied whole or not at all: one cut off by a
+  crash is skipped, and the next write truncates it first.
+- **In memory.** The file is read whole when opened. Once more lines have
+  been written since the last snapshot than the store holds entries and
+  versions (and at least 1,000), it is rewritten as a snapshot: a temporary
+  file renamed into place.
+- **Shared.** Every write holds `<file>.lock`, naming the process, taken over
+  from a process that is gone or after 30 s, and first reads what other
+  processes appended. Every read does too. `refresh()` says whether another
+  process wrote since it last asked, so the daemon's watch finds what a
+  command did.
+- **The registry** is sealed under `localKey` when one is given, as in a
+  data folder.
+- **The former layout.** A store kept as a directory at the same path, one
+  file per entry and per version, is read into the log the first time it is
+  opened, then deleted.
+
+_Source: `packages/cli/src/file-stores.ts`. Tests:
+`packages/cli/tests/file-stores.test.ts`._
 
 ## Blob stores
 
@@ -186,6 +252,11 @@ and without atomic operations (`BlobStore`):
 Drivers:
 
 - **Memory**, for tests.
+- **Directory**, over a directory handle or a directory on disk
+  (`createDirectoryBlobStore`): each `/`-separated part of a key a
+  directory, the last a file, every part named as a data folder names its
+  files; a directory is removed with the last key in it. What a data folder
+  keeps its spaces in.
 - **S3-compatible** (R2, B2, MinIO, Wasabi, AWS): path-style URLs
   `<endpoint>/<bucket>/<prefix/><key>`, each `/`-separated part
   `encodeURIComponent`-ed; SigV4-signed (`aws4fetch`), region default
@@ -196,6 +267,7 @@ Drivers:
 
 _Source: `packages/core/src/storage/blob-store.ts`,
 `packages/core/src/storage/blob/memory.ts`,
+`packages/core/src/storage/blob/directory.ts`,
 `packages/core/src/storage/blob/s3.ts`. Tests:
 `packages/core/tests/mirror.test.ts`._
 
@@ -203,7 +275,7 @@ _Source: `packages/core/src/storage/blob-store.ts`,
 
 A mirror's segments, where a store writer may write and how it pulls and compacts
 are protocol ([spec 05 §16](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
-Today carriers and hosts mirror.
+Today data folders, carriers and hosts mirror.
 
 A store writer keeps its state in the store `mirrors/<space id>/<n>`, where `n` is
 the mirror's index:
@@ -218,9 +290,11 @@ the mirror's index:
 "Known" is everything this store writer uploaded **or read**, so nobody re-uploads
 everyone else's versions.
 
-A store writer pushes 5 s after the first change and on close, packing what is not
-yet known into segments of about 256 KiB (a segment is closed once it reaches
-that size). Once it has 32 or more segments of its own, it compacts them.
+A store writer pushes 5 s after the first change (1 s for a data folder) and
+on close, packing what is not yet known into segments of about 256 KiB (a
+segment is closed once it reaches that size). It reads the `mirror:known:`
+entries once, when it starts. Once it has 32 or more segments of its own, it
+compacts them, carrying every version in them.
 
 _Source: `packages/core/src/storage/mirror.ts`,
 `packages/core/src/node/space-runtime.ts` ("Mirrors"),
@@ -245,7 +319,6 @@ _Source: `packages/core/src/storage/mirror.ts`,
   and unicode, a 1 MB blob), with shared backoff on 429 and 5xx that honours
   `Retry-After`, never retries a delete that returned 404, and never logs a
   token or signed URL:
-  - _Directory_: a directory handle or a directory on disk.
   - _Google Drive_: everything in one app-created folder, `drive.file` scope
     only (the app sees only its own files). Drive addresses files by id, not
     name, so the driver keeps a name → file id map from one `files.list`,
