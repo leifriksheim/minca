@@ -1177,9 +1177,10 @@ array of objects `{ "hash": <id>, "size": <bytes> }`: `hash` the file's id
 (below) as 64 lower-case hex characters, `size` an integer from 1 to 2³¹.
 Signed, and outside the body, as `links` and `tags` are, so a keeper that
 cannot read a body still knows which files a version needs and how big they
-are. A peer never refuses a version for its `files`: it reads from it only
-the first 16 entries of that shape with distinct `hash`es, on a version that
-is not a delete, and ignores the rest. Every peer ignores the same entries,
+are. A peer never refuses a version for its `files`. On a version that is
+not a delete, it takes entries in order, skipping any that is not an object
+with `hash` and `size` as above (other members are ignored) or repeats an
+earlier `hash`, until it has 16, and ignores the rest. Every peer ignores the same entries,
 so none disagree, and a peer of today, which keeps `files` as an unknown
 member, needs no new sync version.
 
@@ -1255,15 +1256,17 @@ only: an edited file gets a new key, and so a new id.
   asking elsewhere.
 - A peer MUST serve only chunks it holds for that space, of files named by
   a version it keeps whole in that space, over a session the space admitted
-  (§6), and MUST end every reply with `file-done`. It never answers from
+  ([04](04-network.md) §6.3), and MUST end every reply with `file-done`. A
+  peer of today drops an unknown message silently (§4), so a requester gives
+  up on a `want-file` left unanswered, as on a `want`, and asks elsewhere. It never answers from
   another space's holdings, so an id can't be used to learn who holds what
   elsewhere.
 - A sender SHOULD interleave `file` messages with sync's own, a frame at a
   time: a receiver handles a peer's messages in order (§6.1), so only the
   sender keeps a file from holding up a sync round.
-- A node need not fetch or serve the files of a version that does not stand
-  ([02](02-records.md) §9): one a revoked key or a removed member wrote,
-  though it is kept whole, keeps nobody's bandwidth.
+- A node need not fetch, serve or keep the files of a version that does not
+  stand ([02](02-records.md) §9): one a revoked key or a removed member
+  wrote, though it is kept whole, holds nobody's bandwidth or storage.
 
 **Keeping.** A node keeps a file's chunks while it keeps whole (§10) a
 version naming it, and drops them when it keeps none: a file goes with the
@@ -1280,8 +1283,12 @@ absence is about availability, never validity.
 `<id>.list`: its own prefix, as for its segments (§16.2), so nothing is
 written twice and a writer deletes its own copy once no version its store
 keeps whole names it; and apart from `<space id>/`, so pulling segments
-never lists files. In a data folder that is `<dataPath>/files/…`, each part
-encoded as in §14.2 (§14.1 gains it when this is built). A reader lists
+never lists files. §16.2's rule on where a store writer may write gains this
+prefix when this is built. In a data folder it is a second directory blob
+store at `<dataPath>/files/`, beside the segments' at `<dataPath>/spaces/`,
+each part encoded as in §14.2 (§14.1 gains it). A deleted file's chunks stay
+under a store writer that has gone quiet, as its segments do ([02](02-records.md)
+§4.9, forgetting in blob stores). A reader lists
 `files/<space id>/` only when it needs a file, and checks the list and every
 chunk exactly as from a peer, so it may read a chunk by range where the blob
 store can.
@@ -1306,7 +1313,9 @@ _Open:_
 - Padding encrypted files to size buckets, so `size` says less.
 - When built, the threat model gains what a keeper learns: each version's
   file count and sizes, and that versions naming one id share a file, in
-  one space or across the spaces it holds.
+  one space or across the spaces it holds. Unlike `links`, which a private
+  space seals in the body ([02](02-records.md) §3.1), `files` stays outside
+  it there too.
 - AES-GCM does not commit to its key: a later version changing only `key`
   can show other content under the same id. A report or a warrant names the
   version, not the id.

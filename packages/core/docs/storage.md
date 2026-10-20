@@ -332,7 +332,9 @@ _Source: `packages/core/src/storage/mirror.ts`,
   under a key of its own, works out its id, keeps it and returns the
   `blob` reference, with its `key`; `records.put(…, { files })` names it on the version.
   `node.files.url(space, ref)` gives a URL that fetches, checks and opens
-  only the chunks read.
+  only the chunks read. What it opens is cached by version and key, never by id alone:
+  AES-GCM does not commit to its key, so two versions naming one id could
+  show each other's content.
 - **Video.** That URL is served by a service worker answering the browser's
   range requests, so `<video>` plays and seeks with no player of its own:
   MP4 with its index first (H.264/AAC), or WebM. Chunks are asked of several
