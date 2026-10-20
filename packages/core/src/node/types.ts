@@ -636,6 +636,14 @@ export interface NodeCarriers {
    * or nobody may hand the carrier its passes until the home opens again.
    */
   reached(space: string, waitMs: number): Promise<boolean>;
+  /**
+   * Waits up to `waitMs` for every carrier's carry space to hold the passes
+   * and wakes as they are now, written here, and says whether it does. They
+   * are written in the background: adding a carrier or an automation doesn't
+   * wait, so a node about to close waits on this. It covers a refill already
+   * started, or asked for, and is true at once when there is none.
+   */
+  settled(waitMs: number): Promise<boolean>;
   /** Stops using a carrier: its passes go, and it is told to forget what it held */
   remove(space: string): Promise<void>;
 }

@@ -787,9 +787,19 @@ Using a carrier needs the account key:
 2. It writes a `sys.carrier` record in the account registry, key
    `carrier:<hex of the first 20 bytes of SHA-256(utf8(carry space id))>`, body
    `{ space, invite, did, name, since }`, where `invite` is a view-only invite
-   to the carry space ([03](03-spaces.md)).
+   to the carry space ([03](03-spaces.md)). If that record can't be
+   written, the node removes the carry space it made: nothing else says it
+   is one, and held, a later reconcile would record it as a space the
+   account uses.
 3. It fills the carry space (below) and returns `{ space, invite }`; the
-   carrier joins with the invite.
+   carrier joins with the invite. Keeping the other carriers' carry spaces
+   in step (below) needs no waiting for.
+
+> **Known defect:** a node that stops between steps 1 and 2 (a tab closed
+> mid-connect) leaves the carry space held with no record, and a later
+> reconcile records it as a space the account uses, where every app lists it.
+> Nothing in the space says it is a carry space
+> ([#283](https://github.com/leifriksheim/minca/issues/283)).
 
 A carrier the account already uses, by `did`, is not added again: the node
 returns its carry space and invite as they are. So a carrier that connects
@@ -806,6 +816,17 @@ it does at the reconnect could prevent this.
 Every device holding the account key keeps each live carrier's carry space in
 step with the account (§1.3): one `sys.pass` record per space, and one
 `sys.wake` per automation of the account's own ([03](03-spaces.md) §15).
+It writes each pass from the key its registry holds for the space, and opens
+the space, which is how it learns of a change of key; the refill that change
+starts writes the pass for the new key. It writes no pass in the
+carry space of a carrier its registry shows deleted, and a removal on that
+device waits for a refill already under way.
+
+> **Known defect:** a device behind on a key change writes the pass from the
+> key it still holds, over a pass for the later key that another device
+> wrote; the carrier then proves the old read key and stops carrying the space
+> until a device that has caught up refills
+> ([#283](https://github.com/leifriksheim/minca/issues/283)).
 
 **Pass records.** Collection `sys.pass`, key
 `pass:<hex of the first 20 bytes of SHA-256(utf8(space id))>`, body `SpacePass`:
@@ -844,7 +865,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts`._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 
@@ -879,12 +900,12 @@ The home's window is often the only node that holds the new `sys.carrier`
 record and the passes, and nothing else hears of the carrier until one does.
 So after answering, the home SHOULD stay open until its node has been level
 with the carrier (nothing left in flight, [05](05-sync-and-storage.md)) in
-the carry space and then in the account registry, or a while has passed
-(the reference home waits at most 30 s in all). Once level, the carrier
+the carry space and then in the account registry, after writing the passes,
+or a while has passed (the reference home waits at most 30 s in all). Once level, the carrier
 holds its passes and its own record, and hands both to the account's other
 devices as they come online.
 
-_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/core/src/session/auth.ts` (`grantCarry`), `packages/core/src/node/node.ts` (`carriers.reached`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
+_Source: `packages/core/src/session/connect.ts` (`connectCarrier`, `checkCarryGrant`, `CarryGrant`, `receiveConnectRequest`), `packages/core/src/session/auth.ts` (`grantCarry`), `packages/core/src/node/node.ts` (`carriers.reached`, `carriers.settled`), `apps/home/src/components/ConnectPage.tsx` (`ApproveCarrier`, `ApproveProposal`). Tests: `packages/core/tests/connect.test.ts` ("connecting a carrier to an account home"), `packages/core/tests/carrier.test.ts` ("a home that closes once the carrier is reached…", "the same carrier connecting again…")._
 
 ### 4.4 Wakes, and carriers
 

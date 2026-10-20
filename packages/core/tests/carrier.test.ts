@@ -159,6 +159,21 @@ describe('passes', () => {
 });
 
 describe('a carrier', () => {
+  test('adding one that fails leaves no carry space behind, to come back as a space the account uses', async () => {
+    const me = await account();
+    const stores = memoryStores();
+    const home = await device(me, null, stores);
+    // A home whose key the account revoked: every write to the registry is refused.
+    await home.account.revoke(home.sessionDid);
+    await assert.rejects(home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' }), /revoked/);
+    assert.deepEqual(await home.spaces.list(), []);
+    await home.close();
+
+    // Started again with a new key, it finds nothing it holds but never recorded.
+    const again = await device(me, null, stores);
+    assert.deepEqual(await again.spaces.list(), []);
+  });
+
   test("carries every space of the account, and holds no key but its carry space's", async () => {
     const me = await account();
     const hub = createFakeHub({ latencyMs: 1 });
@@ -343,6 +358,22 @@ describe('a carrier', () => {
             path.startsWith(`${dataPath}/registry/`),
         ),
     );
+  });
+
+  test('removed while a refill runs, no pass is written back', async () => {
+    const me = await account();
+    const home = await device(me, null);
+    for (let i = 0; i < 8; i++) await home.spaces.create({ name: `S${i}`, visibility: 'private' });
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    assert.ok(await home.carriers.settled(10_000));
+    // A new space starts a refill; the removal lands while it runs.
+    await home.spaces.create({ name: 'More', visibility: 'private' });
+    await home.carriers.remove(added.space);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const live = (await home.records.list(added.space, { collection: 'sys.pass' })).filter((r) =>
+      r.key.startsWith('pass:'),
+    );
+    assert.deepEqual(live, []);
   });
 
   test('removing it tells it to forget, and stops the passes', async () => {
@@ -641,5 +672,33 @@ describe('notifications through a carrier', () => {
 
     await laptop.automations.remove(mentioned.id);
     await until(async () => (await node.wakes()).length === 1, 5000, 'the removal to reach the carrier');
+  });
+
+  test('a removal reaches the carrier even when the home closes straight after', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const home = await device(me, hub);
+    for (let i = 0; i < 15; i++) await home.spaces.create({ name: `S${i}`, visibility: 'private' });
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    const node = await carrier(me, added.invite, hub);
+    const own = await home.automations.add({
+      name: 'Anything',
+      when: { query: { collection: 'app.chat' }, others: true },
+      then: { kind: 'notify', text: 'Anything' },
+      spaces: 'all',
+    });
+    await until(async () => (await node.wakes()).length === 1, 8000, 'the carrier to hold the wake');
+
+    // As disconnecting an app does, then closing once the carrier is level.
+    await home.automations.remove(own.id);
+    await home.carriers.reached(added.space, 5000);
+    // Level means level with the wakes as they are now, not as they were.
+    assert.deepEqual(
+      (await home.records.list(added.space, { collection: 'sys.wake' })).filter((r) => !r.deleted),
+      [],
+    );
+    await home.close();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal((await node.wakes()).length, 0);
   });
 });

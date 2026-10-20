@@ -739,7 +739,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       }
     }
     writeConnections(auth.connections().filter((known) => !goes(known)));
-    return { delivered: Promise.all(revoked).then((taken) => taken.every(Boolean)) };
+    // A home that closes once delivered must also have taken the removed automations' wakes off its carriers.
+    const refilled = node && waitMs > 0 ? node.carriers.settled(waitMs) : Promise.resolve(true);
+    return {
+      delivered: Promise.all([Promise.all(revoked), refilled]).then(([taken]) => taken.every(Boolean)),
+    };
   }
 
   /**
@@ -1900,6 +1904,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       await Promise.all([
         disconnected?.delivered,
         leaving?.revokeSelf({ waitMs: signOutGraceMs }).catch(() => {}),
+        // Whatever changed for the carriers just now is written for them before the node stops.
+        leaving?.carriers.settled(signOutGraceMs).catch(() => false),
       ]);
       update({
         stage: 'starting',

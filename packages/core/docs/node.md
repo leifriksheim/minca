@@ -819,7 +819,15 @@ are protocol ([spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec
 the carry space, named `Carried by <name>` (name trimmed to 80, default
 `Carrier`), writes the `sys.carrier` record, fills the carry space, and returns
 `{ space, invite }` for the carrier to join with; for a carrier it already
-has, by `did`, it returns that one's. `node.carriers.reached(carrySpace, waitMs)`
+has, by `did`, it returns that one's. If the record can't be written, it
+takes the carry space back out before failing, so a restart never lists it as
+a space the account uses. A node that starts, or hears the registry change,
+refills every carrier's carry space in the background: it opens every space
+the account holds, which from a data folder is slow, and signing in doesn't
+wait for it. Adding an automation doesn't either (adding a carrier writes that
+carrier's passes before it returns):
+`node.carriers.settled(waitMs)` waits up to `waitMs` for the refill under way
+and says whether it finished, for a window about to close. `node.carriers.reached(carrySpace, waitMs)`
 waits up to `waitMs` for the node to be level with the carrier in the carry
 space and then the account registry, and says whether it was: a node about to
 close (the home's window, once it has answered) waits on it, so what it wrote
