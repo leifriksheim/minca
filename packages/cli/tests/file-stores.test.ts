@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileStores, openFileStore } from '../src/file-stores.js';
 import { openFsDirectory } from '../src/fs-directory.js';
 import { tempDir } from './helpers/nodes.js';
+import { createAccount, localPath, openHome, unlock } from '../src/home.js';
 import { createFolderAdapter } from '../../core/src/storage/folder-adapter.js';
 import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
 import { createSigner } from '../../core/src/schema/signer.js';
@@ -134,5 +135,21 @@ describe('a store on disk', () => {
     assert.equal(text(await registry.get('spacekey:abc')), 'the secret key');
     const raw = await readFile(path.join(root, 'registry.log'), 'utf8');
     assert.ok(!raw.includes(Buffer.from('the secret key').toString('base64url')));
+  });
+});
+
+describe('an account in a home', () => {
+  test('keeps what this computer holds outside the home, which a browser or a sync service may share', async () => {
+    const home = await openHome(await tempDir());
+    const { account, code } = await createAccount(home, { name: 'Ada' });
+    const unlocked = await unlock(home, account, { code: code! });
+    const space = await unlocked.stores('spaces/abc');
+    await space.put('r/k', bytes('kept here'));
+    await (await unlocked.stores('writers')).put('lines/x', bytes('{}'));
+
+    const local = localPath(home.path, account.id);
+    assert.ok(path.relative(home.path, local).startsWith('..'), 'not inside the home');
+    assert.ok(!(await files(home.path)).some((file) => file.endsWith('.log')), 'no store file in the home');
+    assert.deepEqual(await files(local), ['spaces/abc.log', 'writers.log']);
   });
 });

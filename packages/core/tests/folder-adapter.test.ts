@@ -249,7 +249,7 @@ describe('a data folder', () => {
     assert.deepEqual(await ids(b.storage), [version.id]);
   });
 
-  test('a version left in the folder is judged before it is taken', async () => {
+  test('a version the gates refuse is not taken from the folder', async () => {
     const folder = createMemoryDirectory();
     const planted = await makeVersion('planted');
     const a = await origin(folder.open());
@@ -282,15 +282,38 @@ describe('a data folder', () => {
     assert.deepEqual(await ids(b.storage), [kept.id]);
   });
 
-  test('another store in the former layout is copied to an empty local store, and left for others', async () => {
+  test('no store but a space is ever read from the folder: a planted writer id or line place is not taken', async () => {
     const folder = createMemoryDirectory();
-    const former = await createFolderAdapter(folder.open(), `${BASE}/writers`);
-    await former.put('lines/did:key:z/space', utf8Encode('{"collections":{}}'));
+    // An honest app's store writer id, as anyone reading the folder sees it.
+    const a = await origin(folder.open());
+    await a.storage.addVersion(await makeVersion('from A'));
+    await a.mirror.flush();
+    const honest = folder
+      .paths()
+      .find((path) => path.endsWith('.seg'))!
+      .split('/')[5]!;
+    // Planted in the former layout, for the next app to open the space to take as its own.
+    const planted = await createFolderAdapter(folder.open(), `${BASE}/folder/${SPACE}`);
+    await planted.put('mirror:writer', utf8Encode(honest));
+    const lines = await createFolderAdapter(folder.open(), `${BASE}/writers`);
+    await lines.put('lines/did:key:z/space', utf8Encode('{"collections":{"x":{"n":0,"id":"old"}}}'));
 
-    const stores = folderStores(folder.open(), { basePath: BASE, local: memoryStores() });
-    const writers = await stores('writers');
-    assert.equal(utf8Decode((await writers.get('lines/did:key:z/space'))!), '{"collections":{}}');
-    assert.ok(folder.paths().includes(`${BASE}/writers/kv/lines%2Fdid%3Akey%3Az%2Fspace`));
+    const b = await origin(folder.open());
+    assert.deepEqual(await (await b.stores('writers')).list(''), []);
+    await b.mirror.pull();
+    assert.equal(
+      (await ids(b.storage)).length,
+      1,
+      'it reads the honest app’s segments, not skipping them as its own',
+    );
+    await b.storage.addVersion(await makeVersion('from B'));
+    await b.mirror.flush();
+    await a.mirror.pull();
+    assert.equal((await ids(a.storage)).length, 2);
+  });
+
+  test('outside a browser, a data folder needs a place for this device’s own stores', () => {
+    assert.throws(() => folderStores(createMemoryDirectory().handle, { basePath: BASE }), /needs `local`/);
   });
 
   test('the registry stays in the folder, sealed, where every app and device reads it', async () => {

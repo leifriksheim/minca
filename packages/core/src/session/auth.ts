@@ -626,7 +626,14 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
   const storesOf = (place: Place, account: AccountSummary, key: CryptoKey): StoreFactory =>
     place.directory
-      ? storesFor(account, { directory: place.directory, localKey: key })
+      ? storesFor(account, {
+          directory: place.directory,
+          localKey: key,
+          // Given stores of its own, this browser keeps a pod's beside them too.
+          ...(config.browser
+            ? { local: config.browser.stores({ ...account, id: `pod-${account.id}` }) }
+            : {}),
+        })
       : browserStores(account);
 
   // ─── Accounts in a place ───────────────────────────────────────────

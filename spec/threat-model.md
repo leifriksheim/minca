@@ -624,11 +624,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     client takes another's entries from the folder, every version in a
     segment is judged like a peer's, and a segment deleted takes nothing from
     a client that read it (05 §14.4, §14.5;
-    `packages/core/tests/folder-adapter.test.ts`, "a version left in the
-    folder is judged before it is taken", "deleting segments from the folder
-    takes nothing from an app that read them", "two nodes of one account on
-    one folder"). It can hide versions from a client that hasn't read them
-    yet, which the mesh fills in.
+    `packages/core/tests/folder-adapter.test.ts`, "two nodes of one account
+    on one folder", "deleting segments from the folder takes nothing from an
+    app that read them", "no store but a space is ever read from the
+    folder"). Clients keep their own stores outside the folder; the CLI's are
+    outside its home (`packages/cli/tests/file-stores.test.ts`, "keeps what
+    this computer holds outside the home"). It can hide versions from a
+    client that hasn't read them yet, which only a peer can then bring.
   - A program connected by code gets what the app it connects through asks
     for and the person allows, never more than its key signed for: the app
     can't use its proof for the app's own connection, nor ask for more than

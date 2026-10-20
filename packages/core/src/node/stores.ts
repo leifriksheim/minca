@@ -23,7 +23,6 @@ import {
 import { createEncryptedAdapter } from '../storage/encrypted-adapter.js';
 import type { BlobStore } from '../storage/blob-store.js';
 import { createDirectoryBlobStore } from '../storage/blob/directory.js';
-import { createMemoryAdapter } from '../storage/memory-adapter.js';
 import { packSegment, segmentBatches, segmentName } from '../storage/segment.js';
 import { newWriterId } from '../storage/mirror.js';
 import { utf8Decode } from '../utils/encoding.js';
@@ -80,17 +79,6 @@ export function directoryStores(
   };
 }
 
-/** Stores in memory, kept while the factory is: gone when the process ends */
-function memoryStores(): StoreFactory {
-  const adapters = new Map<string, StorageAdapter>();
-  return async (path) => {
-    let adapter = adapters.get(path);
-    if (!adapter) adapters.set(path, (adapter = createMemoryAdapter()));
-    // Closing a space must not wipe what it wrote.
-    return { ...adapter, close: async () => {} };
-  };
-}
-
 /** A data folder's segments sit beside the registry, under `spaces/` (spec 05 §14.1) */
 const SEGMENTS = 'spaces';
 
@@ -107,17 +95,19 @@ const SEGMENTS = 'spaces';
  *
  * A space store in the folder's former layout (`spaces/<id>/kv`, `versions`)
  * is turned into a segment when the space is first opened, then removed; the
- * segment's versions are judged like any other. Another store there (`writers`)
- * is copied into `local` while that is empty, and left: another app sharing
- * the folder may need it too.
+ * segment's versions are judged like any other. No other store is ever read
+ * from the folder: whoever can write it could plant one, a store writer id or
+ * a key's last place in its line, and have this device take it as its own.
  *
  * @param directory The folder
  * @param options.basePath Where this account's data starts, e.g. `accounts/<id>/stores`
  * @param options.localKey Seals the registry. Without it nothing is sealed.
- * @param options.local Where this device keeps its own stores. Default: this
- *   origin's IndexedDB under `minca-pod:<basePath>`, or memory where there is
- *   none. Not `minca:`, which is an account kept in the browser, and is
- *   deleted when the person forgets that copy.
+ * @param options.local Where this device keeps its own stores, never inside
+ *   the folder. Default: this origin's IndexedDB under `minca-pod:<basePath>`
+ *   (not `minca:`, which is an account kept in the browser, and is deleted
+ *   when the person forgets that copy). Required where there is no IndexedDB:
+ *   in memory, a lasting key's places would be lost, and a restart would sign
+ *   at a place it signed before.
  */
 export function folderStores(
   directory: DirectoryHandleLike,
@@ -128,12 +118,13 @@ export function folderStores(
   } = {},
 ): StoreFactory {
   const at = (path: string) => (options.basePath ? `${options.basePath}/${path}` : path);
+  // Key ranges too: the IndexedDB adapter lists by them, and a stand-in may lack them.
+  const browser =
+    typeof globalThis.indexedDB !== 'undefined' && typeof globalThis.IDBKeyRange !== 'undefined';
+  if (!options.local && !browser)
+    throw new Error('A data folder needs `local`, somewhere outside it for this device’s own stores.');
   const local =
-    options.local ??
-    // Key ranges too: the IndexedDB adapter lists by them, and a stand-in may lack them.
-    (typeof globalThis.indexedDB === 'undefined' || typeof globalThis.IDBKeyRange === 'undefined'
-      ? memoryStores()
-      : indexedDBStores(`minca-pod:${(options.basePath ?? 'folder').replace(/\//g, ':')}`));
+    options.local ?? indexedDBStores(`minca-pod:${(options.basePath ?? 'folder').replace(/\//g, ':')}`);
   const folder = createDirectoryBlobStore(directory, at(SEGMENTS));
   const factory = async (path: string, storeOptions?: StoreOptions) => {
     if (path === 'registry') {
@@ -143,7 +134,8 @@ export function folderStores(
         : adapter;
     }
     const store = await local(path, storeOptions);
-    await adoptFormerStore(directory, at(path), path, store, folder);
+    const space = /^spaces\/([^/]+)$/.exec(path)?.[1];
+    if (space) await adoptFormerSpace(directory, at(path), space, folder);
     return store;
   };
   return Object.assign(factory, { folder });
@@ -183,44 +175,35 @@ async function readAll(dir: DirectoryHandleLike | null): Promise<Array<[string, 
   return files;
 }
 
-/** Brings a store over from the folder's former layout (see {@link folderStores}) */
-async function adoptFormerStore(
+/** Turns a space kept in the folder's former layout into segments (see {@link folderStores}) */
+async function adoptFormerSpace(
   directory: DirectoryHandleLike,
   full: string,
-  path: string,
-  store: StorageAdapter,
+  space: string,
   folder: BlobStore,
 ): Promise<void> {
   const former = await formerStore(directory, full);
   if (!former) return;
-  const space = /^spaces\/([^/]+)$/.exec(path)?.[1];
-  if (space) {
-    const versions: Version[] = [];
-    for (const [, bytes] of await readAll(await childDir(former, 'versions'))) {
-      try {
-        const parsed: unknown = JSON.parse(utf8Decode(bytes));
-        if (isStoredVersion(parsed)) versions.push(parsed);
-      } catch {
-        // Half-written: it never counted.
-      }
+  const versions: Version[] = [];
+  for (const [, bytes] of await readAll(await childDir(former, 'versions'))) {
+    try {
+      const parsed: unknown = JSON.parse(utf8Decode(bytes));
+      if (isStoredVersion(parsed)) versions.push(parsed);
+    } catch {
+      // Half-written: it never counted.
     }
-    // A store writer of its own, never this device's: its own segments are
-    // skipped when pulling, and these must be judged like anyone else's.
-    const writer = newWriterId();
-    let counter = 0;
-    for (const batch of segmentBatches(versions, 256 * 1024)) {
-      const bytes = packSegment(batch);
-      await folder.put(`${space}/${writer}/${await segmentName(++counter, bytes)}`, bytes);
-    }
-    // Segments first, then delete: in between, the versions are only twice in the folder.
-    await removeFile(former, 'kv', true);
-    await removeFile(former, 'versions', true);
-    return;
   }
-  if ((await store.list('')).length > 0) return;
-  const entries = await readAll(await childDir(former, 'kv'));
-  if (entries.length > 0)
-    await store.batch(entries.map(([key, value]) => ({ type: 'put' as const, key, value })));
+  // A store writer of its own, never this device's: its own segments are
+  // skipped when pulling, and these must be judged like anyone else's.
+  const writer = newWriterId();
+  let counter = 0;
+  for (const batch of segmentBatches(versions, 256 * 1024)) {
+    const bytes = packSegment(batch);
+    await folder.put(`${space}/${writer}/${await segmentName(++counter, bytes)}`, bytes);
+  }
+  // Segments first, then delete: in between, the versions are only twice in the folder.
+  await removeFile(former, 'kv', true);
+  await removeFile(former, 'versions', true);
 }
 
 /** Where a node in a worker keeps its data, said as data: a store factory can't be sent */

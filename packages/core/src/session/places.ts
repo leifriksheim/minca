@@ -17,7 +17,7 @@ import {
   recallDataFolder,
   rememberDataFolder,
 } from '../storage/directory-access.js';
-import { workerStores, type StoreFactory, type WorkerStores } from '../node/stores.js';
+import { folderStores, workerStores, type StoreFactory, type WorkerStores } from '../node/stores.js';
 import type { DirectoryHandleLike } from '../storage/folder-adapter.js';
 
 /** Where accounts and their data are kept */
@@ -125,9 +125,20 @@ export async function inspectPod(pod: Place, current: Place, did: string): Promi
  */
 export function storesFor(
   account: AccountSummary,
-  folder?: { readonly directory: DirectoryHandleLike; readonly localKey: CryptoKey },
+  folder?: {
+    readonly directory: DirectoryHandleLike;
+    readonly localKey: CryptoKey;
+    /** Where this device keeps a pod's own stores; default this origin's IndexedDB (`folderStores`) */
+    readonly local?: StoreFactory;
+  },
 ): StoreFactory {
-  return workerStores(describeStores(account, folder));
+  return folder?.local
+    ? folderStores(folder.directory, {
+        basePath: account.dataPath,
+        localKey: folder.localKey,
+        local: folder.local,
+      })
+    : workerStores(describeStores(account, folder));
 }
 
 /** The same stores as {@link storesFor}, said as data, for a node in a worker to open */

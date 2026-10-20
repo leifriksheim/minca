@@ -167,19 +167,24 @@ change and on close.
 `local` is this device's:
 
 - **In the browser**, IndexedDB under `minca-pod:<dataPath>` (the default).
-- **The CLI** keeps it beside its writer keys, outside the account's data:
-  `<home>/local/<account id>/`, one log file per store
-  ([stores on disk](#stores-on-disk)), so a command and the daemon share it.
-- **Elsewhere**, memory, gone when the process ends: everything is pulled
-  from the folder again next time.
+- **The CLI** keeps it outside the home, which may be the folder a browser
+  uses or one a sync service copies: `$MINCA_LOCAL`, else
+  `~/Library/Application Support/minca` (macOS), `%LOCALAPPDATA%\minca`
+  (Windows) or `$XDG_STATE_HOME/minca` (`~/.local/state/minca`), then
+  `<first 16 hex of SHA-256 of the home's path>/<account id>/`, one log file
+  per store ([stores on disk](#stores-on-disk)), so a command and the daemon
+  share it (`localPath` in `packages/cli/src/home.ts`).
+- **Elsewhere** it must be given: `folderStores` refuses to start without
+  one, since a lasting key's places kept in memory would be handed out again
+  after a restart.
 
 **The former layout.** A space store kept the old way (`spaces/<id>/kv`,
 `versions`) is turned into a segment of a new store writer the first time
 the space opens, and its `kv/` and `versions/` deleted
 ([spec 05 §14.8](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
-Any other store kept the old way (`writers`) is copied into `local` while
-`local` holds nothing at that path, and left in the folder: another app
-sharing the folder may need its places too.
+No other store kept the old way (`writers`, a mirror's state) is read: anyone
+who can write the folder could have planted it. A lasting key whose places
+were only there starts its lines afresh.
 
 Getting the folder:
 

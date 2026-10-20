@@ -7,6 +7,7 @@
  * its recovery code or with a passphrase wrap — from a flag, an environment
  * variable, or a prompt — every time a process starts.
  */
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -51,6 +52,26 @@ export interface Home {
 /** `--home`, then `$MINCA_HOME`, then `~/.minca`. */
 export function homePath(flag?: string): string {
   return path.resolve(flag ?? process.env.MINCA_HOME ?? path.join(os.homedir(), '.minca'));
+}
+
+/**
+ * Where this computer keeps an account's own stores: what it holds of each
+ * space, and its place in each key's line. Never in the home, which may be a
+ * folder a browser shares, or one a sync service copies to other machines:
+ * whoever writes it would write these, and two machines would share them.
+ * `$MINCA_LOCAL`, else the system's place for an app's state, under a name
+ * worked out from the home's path.
+ */
+export function localPath(home: string, accountId: string): string {
+  const base =
+    process.env.MINCA_LOCAL ??
+    (process.platform === 'darwin'
+      ? path.join(os.homedir(), 'Library', 'Application Support', 'minca')
+      : process.platform === 'win32'
+        ? path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'minca')
+        : path.join(process.env.XDG_STATE_HOME ?? path.join(os.homedir(), '.local', 'state'), 'minca'));
+  const which = createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16);
+  return path.join(base, which, accountId);
 }
 
 export async function openHome(flag?: string): Promise<Home> {
@@ -172,12 +193,11 @@ export async function unlock(
   return {
     account,
     signer,
-    // The folder holds the registry and each space's segments; what this computer
-    // holds of them is beside the writer keys, outside the account's data.
+    // The folder holds the registry and each space's segments; what this computer holds of them is its own.
     stores: folderStores(home.directory, {
       basePath: account.dataPath,
       localKey,
-      local: fileStores(path.join(home.path, 'local', account.id)),
+      local: fileStores(localPath(home.path, account.id)),
     }),
     accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),

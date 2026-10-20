@@ -951,7 +951,14 @@ arrives this way and passes the gatekeeper is placed (§10.1) like any other,
 so every client converges on the same current versions.
 
 A segment that vanishes from the folder (its writer compacted it, or
-someone deleted it) takes nothing from a client that read it.
+someone deleted it) takes nothing from a client that read it. A version the
+gatekeeper refused is not asked about again through the folder (§16.4); one
+that may count later must be answered _later_, not refused (§8).
+
+A client MUST keep its own stores outside the folder: one inside it is
+written by whoever can write the folder, and copied with it to other
+machines, which would then share a store writer id and skip each other's
+segments.
 
 ### 14.6 Account files
 
@@ -975,10 +982,19 @@ it the same way. A client MAY read such a store when it opens a space: it
 writes the versions found under `versions/` into segments under a **new**
 store writer id of its own making, never its own, so that every client,
 itself included, judges them on the next pull (§16.4); then it deletes
-`kv/` and `versions/`. It MUST NOT take the former entries as its own: they
-were written by whoever could write the folder. How the library brings over
-another store is in
-[Sync and storage in the library](../packages/core/docs/storage.md#data-folders).
+`kv/` and `versions/`. It MUST NOT take the former entries as its own, nor
+read any other store from the folder (`writers`, a mirror's state): they
+were written by whoever could write the folder, and a store writer id or a
+key's place in its line taken from there would partition clients or fork the
+key.
+
+> **Known defect:** nothing in the folder says which layout it uses. A client
+> of the former layout sharing a folder with this one finds its space files
+> gone and holds nothing until peers fill it in, and what it writes in the
+> former layout becomes another one-off store writer each time it is
+> converted. Before v1 every client of a folder is upgraded together. How the library brings over
+> another store is in
+> [Sync and storage in the library](../packages/core/docs/storage.md#data-folders).
 
 _Source: `packages/core/src/node/stores.ts` (`folderStores`, `adoptFormerStore`),
 `packages/core/src/storage/blob/directory.ts`,
