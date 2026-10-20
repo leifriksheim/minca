@@ -1127,15 +1127,17 @@ The blob store is untrusted: it can hide versions (the mesh fills the gap)
 but not forge them.
 
 **Compaction.** A store writer may rewrite its own segments: read them all,
-write every version in them into new segments, its store's copy where the
-store holds one (a stub where it holds a stub, so a superseded body is not
-carried forward) and the segment's copy where it does not, **then** delete
-the old ones. A reader in between sees duplicates, which are harmless.
+write into new segments its store's copy of every version in them that the
+store holds (a stub where it holds a stub, so a superseded body is not
+carried forward), and the segment's copy of one it does not hold but knows
+it uploaded, **then** delete the old ones. A reader in between sees
+duplicates, which are harmless. Anything else in its segments was put there
+by someone else, and is not carried.
 
-> Rationale: a version the store does not hold is carried, not dropped:
-> several processes can share one store writer's state (two tabs over one
-> IndexedDB, a command beside a daemon), and one may compact a segment
-> another wrote before it has read what is in it.
+> Rationale: several processes can share one store writer's state (two tabs
+> over one IndexedDB, a command beside a daemon), and one may compact a
+> segment another uploaded before it has read what is in it; what was
+> uploaded is in the shared state, what was planted is not.
 
 **Deleting a space** from a blob store deletes every key under
 `<space id>/`.

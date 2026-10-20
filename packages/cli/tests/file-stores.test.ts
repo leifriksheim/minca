@@ -4,7 +4,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFile, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, cp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { fileStores, openFileStore } from '../src/file-stores.js';
@@ -125,6 +125,12 @@ describe('a store on disk', () => {
     assert.deepEqual(await files(root), ['spaces/abc.log']);
   });
 
+  test('a path that would reach outside its root is refused', async () => {
+    const root = await tempDir();
+    for (const bad of ['spaces/../../x', 'spaces/./x', '..', 'a//b'])
+      await assert.rejects(fileStores(root)(bad), /Not a store path/);
+  });
+
   test('the registry is sealed when a local key is given', async () => {
     const root = await tempDir();
     const localKey = await globalThis.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
@@ -164,10 +170,16 @@ describe('a writer key of an account in a home', () => {
     const space = await node.spaces.create({ name: 'Notes', ...team, visibility: 'public' });
     await node.records.put(space.id, 'app.test.note', { text: 'first' });
     await node.close();
-
     assert.ok(!(await files(home.path)).some((file) => file.includes('heads')), 'no key place in the home');
-    // Whoever writes the folder clears what it can reach.
-    await rm(path.join(home.path, 'writers'), { recursive: true, force: true });
+
+    // Whoever writes the folder kept a copy of the slot and its places from then, and puts it in the
+    // home, where slots once lived; this computer's own are gone (cleared, or a second computer).
+    const writers = path.join(localPath(home.path, account.id), 'writers');
+    await cp(writers, path.join(home.path, 'writers', account.id), { recursive: true });
+    node = await nodeFor(await unlock(home, account, { code: code! }), { watchIntervalMs: 0 });
+    await node.records.put(space.id, 'app.test.note', { text: 'between' });
+    await node.close();
+    await rm(writers, { recursive: true, force: true });
     node = await nodeFor(await unlock(home, account, { code: code! }), { watchIntervalMs: 0 });
     await node.records.put(space.id, 'app.test.note', { text: 'second' });
     await node.close();
@@ -185,7 +197,7 @@ describe('a writer key of an account in a home', () => {
           places.set(at, (places.get(at) ?? 0) + 1);
         }
       }
-    assert.equal(places.size, 2, 'two notes at two places');
+    assert.equal(places.size, 3, 'three notes at three places');
     assert.ok(
       [...places.values()].every((count) => count === 1),
       'no place taken twice',

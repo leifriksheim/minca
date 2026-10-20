@@ -630,12 +630,12 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app that read them", "no store but a space is ever read from the
     folder", "a name no key could make, planted in the folder, stops no
     pull"). Clients keep their own stores outside the folder: the CLI keeps
-    an account's stores and its writer keys' places, and `minca agent` its
-    stores, outside its home, so rolling those back can't fork a key
-    (`packages/cli/tests/file-stores.test.ts`, "keeps what this computer
-    holds outside the home", "keeps its places outside the home"). It can
-    hide versions from a client that hasn't read them yet, which only a peer
-    can then bring.
+    an account's stores and its writer keys with their places outside its
+    home, and reads no slot from it, so rolling one back, or putting an old
+    one back, can't fork a key (`packages/cli/tests/file-stores.test.ts`,
+    "keeps what this computer holds outside the home", "keeps its places
+    outside the home"). It can hide versions from a client that hasn't read
+    them yet, which only a peer can then bring.
   - A program connected by code gets what the app it connects through asks
     for and the person allows, never more than its key signed for: the app
     can't use its proof for the app's own connection, nor ask for more than
@@ -663,6 +663,13 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - Where it can write a data folder, it can leave segments as large and as
     many as it likes, and every client of the folder reads each one whole
     (05 §14.5, §16.4; [#33](https://github.com/leifriksheim/minca/issues/33)).
+  - `minca agent` keeps its key, grant and stores together in the CLI home
+    (`<home>/agent`). Where the home is a data folder others write, rolling
+    back the stores' `writers.log` has the agent sign at a place it used
+    before, and its key forks; a copy of the home on a second computer runs
+    the same key. Its stores' entries are its own, unjudged, though what it
+    reads is still judged when shown (`packages/cli/src/agent.ts`, `startWithKey`;
+    [#287](https://github.com/leifriksheim/minca/issues/287)).
   - A records-only grant can write the account's `sys.profile`, and so have
     contact requests sealed to itself; and `sys.memberkey`, to have new space
     keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/minca/issues/165)).

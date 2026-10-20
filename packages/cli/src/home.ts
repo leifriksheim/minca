@@ -8,7 +8,6 @@
  * variable, or a prompt — every time a process starts.
  */
 import { createHash } from 'node:crypto';
-import { cp, mkdir, rename, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -78,28 +77,11 @@ export function localPath(home: string, accountId: string): string {
 /**
  * Where this computer keeps an account's writer keys and their places: under
  * {@link localPath}, never in the home, where whoever writes the folder could
- * roll a key's places back and have it sign at one again. Keys kept in the
- * home before are moved there once.
+ * roll a key's places back, or put an old slot back, and have it sign at a
+ * place twice. Slots kept in the home before are not read: this computer
+ * claims a key of its own, which only starts a new line.
  */
-async function writersPath(home: Home, accountId: string): Promise<string> {
-  return movedOut(
-    path.join(home.path, 'writers', accountId),
-    path.join(localPath(home.path, accountId), 'writers'),
-  );
-}
-
-/** `now`, after moving what was at `before` there, once, if anything was */
-export async function movedOut(before: string, now: string): Promise<string> {
-  if ((await stat(before).catch(() => null)) && !(await stat(now).catch(() => null))) {
-    await mkdir(path.dirname(now), { recursive: true, mode: 0o700 });
-    // Another disk: copy, then remove.
-    await rename(before, now).catch(async () => {
-      await cp(before, now, { recursive: true });
-      await rm(before, { recursive: true, force: true });
-    });
-  }
-  return now;
-}
+const writersPath = (home: Home, accountId: string) => path.join(localPath(home.path, accountId), 'writers');
 
 export async function openHome(flag?: string): Promise<Home> {
   const where = homePath(flag);
@@ -228,7 +210,7 @@ export async function unlock(
     }),
     accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),
-    writerKey: fileWriterKeys(await writersPath(home, account.id), localKey, account.did),
+    writerKey: fileWriterKeys(writersPath(home, account.id), localKey, account.did),
   };
 }
 

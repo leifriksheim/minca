@@ -99,7 +99,8 @@ async function locked<T>(file: string, work: () => Promise<T>): Promise<T> {
 /** A store path's parts as names on disk; a part that would reach outside `root` is refused */
 function namesOf(storePath: string): string[] {
   const parts = storePath.split('/');
-  if (parts.some((part) => part === '')) throw new Error(`Not a store path: ${JSON.stringify(storePath)}`);
+  if (parts.some((part) => part === '' || part === '.' || part === '..'))
+    throw new Error(`Not a store path: ${JSON.stringify(storePath)}`);
   return parts.map(encodeFolderName);
 }
 

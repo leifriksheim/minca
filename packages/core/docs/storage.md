@@ -174,9 +174,10 @@ change and on close.
   `<first 16 hex of SHA-256 of the home's path>/<account id>/`, one log file
   per store ([stores on disk](#stores-on-disk)), so a command and the daemon
   share it (`localPath` in `packages/cli/src/home.ts`).
-  Its writer keys' places (`<local>/writers`) and `minca agent`'s stores
-  (`<local base>/<hash>/agent-data`) are there too, moved once from
-  `<home>/writers/<account id>` and `<home>/agent/data`.
+  Its writer keys and their places are there too (`<local>/writers`); a slot
+  left in the home from before is not read, and the CLI claims a key of its
+  own. `minca agent` still keeps its key and stores together in
+  `<home>/agent`.
 - **Elsewhere** it must be given: `folderStores` refuses to start without
   one, since a lasting key's places kept in memory would be handed out again
   after a restart.
@@ -210,7 +211,7 @@ it in iCloud, Dropbox or Syncthing and several devices converge with no relay,
 since the set of versions only grows. Being readable by several origins is the
 point, which is why OPFS (origin-private) is not used for it. Each device
 adds a folder of segments per space, about one file per 256 KiB of records,
-compacted once it has 32.
+compacted once it has 32 and twice what the last compaction left.
 
 _Source: `packages/core/src/node/stores.ts` (`folderStores`),
 `packages/core/src/storage/blob/directory.ts`,
@@ -306,8 +307,10 @@ everyone else's versions.
 A store writer pushes 5 s after the first change (1 s for a data folder) and
 on close, packing what is not yet known into segments of about 256 KiB (a
 segment is closed once it reaches that size). It reads the `mirror:known:`
-entries once, when it starts. Once it has 32 or more segments of its own, it
-compacts them, carrying every version in them.
+entries once, when it starts. Once it has 32 or more segments of its own,
+and twice as many as its last compaction left, it compacts them: the store's
+copy of what it holds, and what it marked uploaded, read again then; nothing
+else in them.
 
 _Source: `packages/core/src/storage/mirror.ts`,
 `packages/core/src/node/space-runtime.ts` ("Mirrors"),

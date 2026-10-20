@@ -95,6 +95,8 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   const flushBytes = config.flushBytes ?? 256 * 1024;
   const flushMs = config.flushMs ?? 5000;
   const compactAt = config.compactAt ?? 32;
+  /** How many segments the last compaction left, so the next waits for twice that */
+  let left = 0;
 
   let writerBytes = await state.get(WRITER_KEY);
   if (!writerBytes) {
@@ -157,26 +159,42 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     await writeSegments(waiting, async (batch) => {
       for (const version of batch) await markKnown(version.id);
     });
-    if ((await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX)).length >= compactAt)
+    // Past what the last compaction left times two: a space bigger than `compactAt` segments
+    // would otherwise be rewritten whole on every flush, and read again by every other reader.
+    if (
+      (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX)).length >=
+      Math.max(compactAt, 2 * left)
+    )
       await compactNow();
   }
 
   async function compactNow(): Promise<void> {
     const old = (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX));
     if (old.length < 2) return;
+    // Read again: another process writing as this store writer marks what it uploads here too.
+    const uploaded = new Set((await state.list(knownKey(''))).map((key) => key.slice(knownKey('').length)));
     const keep = new Map<string, Version>();
     for (const key of old) {
-      const bytes = await store.get(key);
+      const bytes = await store.get(key).catch(() => null);
       // The store's copy where it holds one: a version superseded since it was
       // written is a stub now, and its body is not carried forward. One it does
-      // not hold is carried as it is, never dropped: another process writing as
-      // this store writer may have put it there.
-      for (const version of bytes ? unpackSegment(bytes) : [])
-        if (!keep.has(version.id)) keep.set(version.id, (await storage.getVersion(version.id)) ?? version);
+      // not hold is carried only if this store writer uploaded it (another
+      // process may have, before this one read it); anything else in its
+      // segments was put there by someone else, and goes.
+      for (const version of bytes ? unpackSegment(bytes) : []) {
+        if (keep.has(version.id)) continue;
+        const held = await storage.getVersion(version.id);
+        if (held) keep.set(version.id, held);
+        else if (uploaded.has(version.id)) keep.set(version.id, version);
+      }
     }
     // New first, then delete: a reader in between sees each version twice, which is harmless.
-    await writeSegments(keep.values());
+    let written = 0;
+    await writeSegments(keep.values(), async () => {
+      written += 1;
+    });
     for (const key of old) await store.delete(key);
+    left = written;
   }
 
   async function pullNow(): Promise<{ added: number }> {
@@ -204,8 +222,11 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
             later.push(version);
             continue;
           }
-          if (taken === 'stored') added += 1;
-          await markKnown(version.id);
+          // A refused copy is not known to be there: the valid one with the same id may still need pushing.
+          if (taken === 'stored') {
+            added += 1;
+            await markKnown(version.id);
+          }
           progress = true;
         }
         pending = later;
