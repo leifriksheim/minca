@@ -798,7 +798,8 @@ Using a carrier needs the account key:
 > **Known defect:** two devices that add the same carrier at once, each before
 > hearing of the other's record, make two carry spaces for it. Both stay live
 > and are kept in step; the carrier holds whichever invite reached it.
-> Removing one could close the one the carrier holds, so neither is removed
+> Nothing removes one on its own, since it could be the one the carrier holds.
+> Removing the carrier removes every carry space with its `did`
 > ([#283](https://github.com/leifriksheim/minca/issues/283)).
 
 > **Known defect:** a node that stops between steps 1 and 2 (a tab closed
@@ -872,7 +873,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "one added on two devices at once is removed whole…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 

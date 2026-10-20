@@ -953,6 +953,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
    * typed it, and so does a paired device, which was never shown one.
    */
   async function arrive(session: MincaSession, setup: AuthSetup | null): Promise<void> {
+    update({ podToReopen: null });
     const place = state.place;
     const entry = place ? await openEntry(place, session.account.id) : null;
     const landed = {
@@ -1217,6 +1218,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     async reopenPod() {
       await run(async () => {
+        // Signed in meanwhile (another tab's sign-in taken up, say): moving pods asks first, through choosePod.
+        if (state.session) {
+          update({ podToReopen: null });
+          return;
+        }
         const pod = await recallPod(true);
         if (!pod)
           throw new Error(

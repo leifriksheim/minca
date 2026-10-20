@@ -372,6 +372,34 @@ describe('a carrier', () => {
     );
   });
 
+  test('one added on two devices at once is removed whole: every carry space it has is closed', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(me, hub);
+    const phoneStores = memoryStores();
+    const offline = await device(me, null, phoneStores);
+    const { did, keys } = await carrierKey();
+    // Neither has heard of the other's when it adds its own.
+    const onLaptop = await laptop.carriers.add({ did, name: 'host.example' });
+    const onPhone = await offline.carriers.add({ did, name: 'host.example' });
+    assert.notEqual(onLaptop.space, onPhone.space);
+    await offline.close();
+    const phone = await device(me, hub, phoneStores);
+    await until(async () => (await laptop.carriers.list()).length === 2, 8000, 'the laptop to hear of both');
+    // The carrier holds the phone's.
+    const node = await carrier(me, onPhone.invite, hub, memoryStores(), keys);
+    let closed = false;
+    node.subscribe((event) => {
+      if (event.type === 'closed') closed = true;
+    });
+    await until(async () => (await node.spaces()).length > 0, 8000, 'the carrier to carry');
+
+    await laptop.carriers.remove(onLaptop.space);
+    assert.deepEqual(await laptop.carriers.list(), []);
+    await until(async () => closed, 8000, 'the carrier to be told to forget');
+    await until(async () => (await phone.carriers.list()).length === 0, 8000, 'the phone to hear');
+  });
+
   test('removed while a refill runs, no pass is written back', async () => {
     const me = await account();
     const home = await device(me, null);

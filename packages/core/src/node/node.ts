@@ -1193,18 +1193,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const registryRt = await requireAccount('Removing a carrier');
       // In turn with any refill, which would otherwise put the passes back.
       await inCarryTurn(async () => {
-        const found = (await carrierRecords()).find(
-          ({ record, space }) => !record.deleted && space === spaceId,
-        )?.record;
-        if (!found) return;
-        const carry = await runtime(spaceId);
-        // Passes gone first, then the word to forget everything, then the carrier's record.
-        for (const pass of await ownRecords(carry, { collection: PASS_COLLECTION }, (r) =>
-          r.key.startsWith('pass:'),
-        ))
-          await carry.removeSystem(pass.key);
-        await carry.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
-        await registryRt.removeSystem(found.key);
+        const live = (await carrierRecords()).filter(({ record }) => !record.deleted && record.body);
+        const did = live.find(({ space }) => space === spaceId)?.record.body?.did;
+        if (!did) return;
+        // Every carry space it has: added on two devices at once, it may hold the other one (spec 06 §4.2).
+        for (const { record, space } of live) {
+          if (record.body?.did !== did) continue;
+          const carry = await runtime(space);
+          // Passes gone first, then the word to forget everything, then the carrier's record.
+          for (const pass of await ownRecords(carry, { collection: PASS_COLLECTION }, (r) =>
+            r.key.startsWith('pass:'),
+          ))
+            await carry.removeSystem(pass.key);
+          await carry.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
+          await registryRt.removeSystem(record.key);
+        }
       });
     },
   });
