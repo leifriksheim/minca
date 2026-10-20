@@ -1173,15 +1173,15 @@ chunk by chunk, for as long as a body that names it is kept.** Images, video
 and attachments are all files; what they mean is the library's.
 
 **Naming files** (a version member, [02](02-records.md) §3.1). `files`: an
-array of 1 to 16 objects with distinct `hash`es, each
-`{ "hash": <root>, "size": <bytes> }`: `hash` the file's root (below) as 64
-lower-case hex characters, `size` an integer from 1 to 2³¹. Absent on a
-delete. Signed, and outside the body, as `links` and `tags` are, so a keeper
-that cannot read a body still knows which files a version needs and how big
-they are. A peer MUST refuse a version whose `files` breaks this shape
-([02](02-records.md) §4.6); since a peer of today keeps it as an unknown
-member, the sync and segment version (§4, §16.3) goes up when this is built,
-as it did for `contract`.
+array of objects `{ "hash": <id>, "size": <bytes> }`: `hash` the file's id
+(below) as 64 lower-case hex characters, `size` an integer from 1 to 2³¹.
+Signed, and outside the body, as `links` and `tags` are, so a keeper that
+cannot read a body still knows which files a version needs and how big they
+are. A peer never refuses a version for its `files`: it reads from it only
+the first 16 entries of that shape with distinct `hash`es, on a version that
+is not a delete, and ignores the rest. Every peer ignores the same entries,
+so none disagree, and a peer of today, which keeps `files` as an unknown
+member, needs no new sync version.
 
 ```json
 "files": [
@@ -1194,23 +1194,25 @@ private space; the standard library's `blob` fragment becomes
 `{ hash, size, mime, name?, key }`. Where the body's `hash` and the
 envelope's disagree, the envelope is what peers fetch and keep.
 
-**Chunks and the root.** A file is cut into `n = ceil(size / CHUNK)` chunks
+**Chunks and the id.** A file is cut into `n = ceil(size / CHUNK)` chunks
 of `CHUNK` = 262,144 bytes (256 KiB), the last one `size − (n−1)·CHUNK`
 bytes. Each chunk's leaf is `SHA-256(0x00 ‖ chunk)`. The root of one chunk is
 its leaf. Otherwise leaves are paired in order into
 `SHA-256(0x01 ‖ left ‖ right)`, a last one without a pair carried up
-unchanged, level by level, until one remains. A file's **chunk list** is its
-`n` leaves, concatenated: 32 bytes per chunk, 128 KiB for a GiB. A reader
-MUST refuse a chunk list that is not exactly `32·n` bytes or does not give
-the root: a shorter list of inner nodes could otherwise pass for the real
-one.
+unchanged, level by level, until one remains: the tree root. A file's
+**id** is `SHA-256(0x02 ‖ size ‖ tree root)`, `size` as 8 bytes big-endian,
+so one id names one length. A file's **chunk list** is its `n` leaves,
+concatenated: 32 bytes per chunk, 128 KiB for a GiB. A reader MUST refuse a
+chunk list that is not exactly `32·n` bytes or does not give the id: with
+the length bound, a list of inner nodes can't pass for the leaves.
 
 > Rationale: chunks let a reader check what arrives as it arrives, so a
 > video plays and seeks before it is whole, a broken transfer resumes, and
 > several peers serve one file at once; a bad peer wastes at most a chunk.
 > The tree is BitTorrent v2's idea ([BEP 52](https://bittorrent.org/beps/bep_0052.html),
-> SHA-256 over chunks, a layer of piece hashes sent first); the `0x00` and
-> `0x01` prefixes are Certificate Transparency's ([RFC 6962](https://www.rfc-editor.org/rfc/rfc6962) §2.1).
+> SHA-256 over chunks, a layer of piece hashes sent first, the length bound
+> to the file); the `0x00` and `0x01` prefixes are Certificate
+> Transparency's ([RFC 6962](https://www.rfc-editor.org/rfc/rfc6962) §2.1).
 > One hash over a whole file would have to be replaced the day files are
 > videos.
 
@@ -1221,7 +1223,8 @@ The file is cut into plaintext pieces of `CHUNK` − 16 bytes; piece `i` is
 sealed with AES-256-GCM under that key, with a 12-byte nonce of `i` as an
 11-byte big-endian integer followed by `0x01` for the last piece and `0x00`
 for any other, and no additional data. Each sealed piece is then exactly one
-chunk, so `hash` and `size` are of the ciphertext.
+chunk, so `hash` and `size` are of the ciphertext. A key seals one file
+only: an edited file gets a new key, and so a new id.
 
 > Rationale: a key per file, inside the body, is how Matrix and Signal
 > encrypt attachments: changing the space key never touches a file, and a
@@ -1243,18 +1246,24 @@ chunk, so `hash` and `size` are of the ciphertext.
 
 - A peer MUST ask only for a file named by a version it keeps whole in that
   space. It MUST take a `file` only for a `want-file` it has in flight with
-  that peer, with that `id`, for a chunk it asked, with `at` plus the bytes
-  inside that chunk's length (or the list's), and MUST check each whole
-  chunk against the chunk list (the list against the root; a file of one
-  chunk against the root) before keeping it, discarding what fails and
+  that peer, with that `id`, for a chunk it asked, with `at` equal to the
+  bytes of that chunk received so far and `at` plus the bytes within the
+  chunk's length (or the list's); the chunk is complete at its length. It
+  MUST check each whole
+  chunk against the chunk list (the list against the id; a file of one
+  chunk against the id) before keeping it, discarding what fails and
   asking elsewhere.
 - A peer MUST serve only chunks it holds for that space, of files named by
   a version it keeps whole in that space, over a session the space admitted
   (§6), and MUST end every reply with `file-done`. It never answers from
   another space's holdings, so a root can't be used to learn who holds what
   elsewhere.
-- `file` messages are interleaved with sync's own, a frame at a time, so a
-  file never holds up a sync round (§6.1).
+- A sender SHOULD interleave `file` messages with sync's own, a frame at a
+  time: a receiver handles a peer's messages in order (§6.1), so only the
+  sender keeps a file from holding up a sync round.
+- A node need not fetch or serve the files of a version that does not stand
+  ([02](02-records.md) §9): one a revoked key or a removed member wrote,
+  though it is kept whole, keeps nobody's bandwidth.
 
 **Keeping.** A node keeps a file's chunks while it keeps whole (§10) a
 version naming it, and drops them when it keeps none: a file goes with the
@@ -1267,27 +1276,40 @@ A node MUST NOT refuse a version because it lacks its files: a file's
 absence is about availability, never validity.
 
 **Mirrors.** A store writer keeps a file it holds at
-`<space id>/<store writer id>/files/<root>`, its chunk list beside it at
-`<root>.list`, under its own prefix like its segments (§16.2): nothing is
-written twice, and a writer deletes its own copy once no version its store
-keeps whole names it. A data folder gains these under `spaces/` (§14.1). A
-reader finds a file by listing `<space id>/*/files/` only when it needs one,
-and checks the list and every chunk exactly as from a peer, so it may read a
-chunk by range where the blob store can.
+`files/<space id>/<store writer id>/<id>`, its chunk list beside it at
+`<id>.list`: its own prefix, as for its segments (§16.2), so nothing is
+written twice and a writer deletes its own copy once no version its store
+keeps whole names it; and apart from `<space id>/`, so pulling segments
+never lists files. In a data folder that is `<dataPath>/files/…`, each part
+encoded as in §14.2 (§14.1 gains it when this is built). A reader lists
+`files/<space id>/` only when it needs a file, and checks the list and every
+chunk exactly as from a peer, so it may read a chunk by range where the blob
+store can.
 
 **Limits:** 16 files per version; 2³¹ bytes per file; 64 chunks per
 `want-file`; 24,000 bytes per `file` message.
 
 _Open:_
 
-- **Costs** ([#33](https://github.com/leifriksheim/minca/issues/33)): bytes
-  served per peer (a short `want-file` asks for 16 MiB), and bytes a keeper
-  must fetch and hold per space, since a member can name 16 large files in
-  every version, and under `history: "all"` keep them all; with the hosting
-  limits ([08](08-hosting.md)).
+- **Costs** ([#33](https://github.com/leifriksheim/minca/issues/33)), with
+  the hosting limits ([08](08-hosting.md)):
+  - Bytes served per peer: a short `want-file` asks for 16 MiB.
+  - Bytes a keeper fetches and holds: a member can name 16 large files in
+    every version.
+  - Versions kept whole for good keep their files for good: retained ones,
+    first versions under `onePer` (a first avatar), and everything under
+    `history: "all"`.
+  - Any member can name another's deleted id in a version of its own and
+    keep its ciphertext held, though without the key nobody new reads it.
+  - `size` is the writer's word until the bytes arrive: an id that names no
+    file still counts against a quota that trusts it.
 - Padding encrypted files to size buckets, so `size` says less.
 - When built, the threat model gains what a keeper learns: each version's
-  file count and sizes, and that versions naming one root share a file.
+  file count and sizes, and that versions naming one id share a file, in
+  one space or across the spaces it holds.
+- AES-GCM does not commit to its key: a later version changing only `key`
+  can show other content under the same id. A report or a warrant names the
+  version, not the id.
 
 ---
 

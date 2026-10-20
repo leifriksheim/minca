@@ -315,12 +315,12 @@ _Source: `packages/core/src/storage/mirror.ts`,
 ## Planned: files
 
 > **Planned.** Not normative. What peers must agree on (the `files` member,
-> chunks and the root, the two messages, keeping a file with its body) is
+> chunks and the file id, the messages, keeping a file with its body) is
 > planned in [spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
 > Issue [#37](https://github.com/leifriksheim/minca/issues/37).
 
-- **Where chunks live.** As entries in the space's own store, `f/<root>/<n>`,
-  and the chunk list at `f/<root>/list`: every adapter already keeps bytes
+- **Where chunks live.** As entries in the space's own store, `f/<id>/<n>`,
+  and the chunk list at `f/<id>/list`: every adapter already keeps bytes
   by key, so a file needs no store of its own, and a browser can keep only
   the chunks it has shown.
 - **What a node fetches.** A node holding a whole space (a host, a keeper,
@@ -329,7 +329,7 @@ _Source: `packages/core/src/storage/mirror.ts`,
   writer keeps its own files and pushes them, with their chunk lists, to its
   mirrors.
 - **The API.** `node.files.add(space, bytes, { mime, name })` seals the file
-  under a key of its own, works out its root, keeps it and returns the
+  under a key of its own, works out its id, keeps it and returns the
   `blob` reference, with its `key`; `records.put(…, { files })` names it on the version.
   `node.files.url(space, ref)` gives a URL that fetches, checks and opens
   only the chunks read.
