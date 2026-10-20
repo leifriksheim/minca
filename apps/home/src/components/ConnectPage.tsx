@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { avatarElement } from '@minca/app-shared/avatar';
 import { ConfirmItsYou } from './ConfirmItsYou';
+import { SignIn } from './SignIn';
 import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
   isProposeRequest,
@@ -9,7 +9,7 @@ import {
   type IncomingRequest,
   type ProposeRequest,
 } from '@minca/core/session';
-import { MincaAuth, useAuth, useSession, useMinca } from '@minca/core/react';
+import { useAuth, useSession, useMinca } from '@minca/core/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { Shape, shapeFor } from '@minca/app-shared/shapes';
@@ -68,7 +68,7 @@ export function ConnectPage() {
   const signIn = (
     <Frame>
       <Asking incoming={incoming} />
-      <MincaAuth avatar={avatarElement} />
+      <SignIn />
     </Frame>
   );
 
