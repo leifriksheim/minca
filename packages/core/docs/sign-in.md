@@ -138,20 +138,31 @@ sign-in kept for days. So whatever hands out the whole account, or changes how
 it signs in, asks again. `auth.recoveryCode()` returns the code,
 `auth.offerToPhone()` starts, `setPassword`, `addPasskey` and
 `removeShortcut` work (outside the first setup of an account just made,
-restored or paired, which only landing a session opens), and `auth.grant`
-gives the whole account or the contacts, only within five minutes of
-`auth.confirm(proof)` succeeding for the account signed in now
+restored or paired, which only landing a session opens), only within five
+minutes of `auth.confirm(proof)` succeeding for the account signed in now
 (`isConfirmed()` says whether it has), where `proof` is
 `{ password }`, `{ passkey: true }` (the passkey's own check that someone is
 there: a fingerprint, a face or a PIN) or `{ code }`, the recovery code itself.
 `confirm` resolves false and sets `error` for a wrong answer, and a passkey
 with no credential behind it is no proof. A new sign-in, or signing out, asks
 again. The recovery code shown once when an account is made needs no confirm.
+
+Giving an app or a carrier anything (`auth.grant`, `auth.grantCarry`) takes
+the same proof, or a sign-in with `signInWithPassword`, `signInWithPasskey`
+or `signInWithCode` in the last five minutes: the person just gave it.
+Making the account counts too: whoever made it is there. A passkey sign-in
+counts only when the passkey's own check ran, not for a wrap with no
+credential behind it. `mayGrant()` says whether any of these holds. A
+sign-in kept from an earlier visit is none of them. So the reference home's connect page
+goes as signing in with Google does: choose the account, prove it is you
+(signing in to it, or confirming if it is the one signed in), then allow.
+A suggestion from an app already connected (`auth.propose`) gives nothing
+new, and needs only the sign-in.
 This keeps the seed from someone who only has the open page, not from a
 compromised one: the seed is in the page's memory while it is signed in
 ([threat model §4](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)).
 
-_Source: `packages/core/src/session/auth.ts` (`confirm`, `recoveryCode`, `offerToPhone`), `apps/home/src/components/ConfirmItsYou.tsx`. Tests: `packages/core/tests/auth.test.ts` ("reading the recovery code or offering the account to a phone takes proof it is you", "changing how the account signs in takes proof it is you, once it is set up", "no call steps back into setup to skip the proof", "proof is for one account, and does not carry over to another"), `packages/core/tests/connect.test.ts` ("the whole account, or the contacts, are given only just after proof it is you")._
+_Source: `packages/core/src/session/auth.ts` (`confirm`, `mayGrant`, `recoveryCode`, `offerToPhone`), `apps/home/src/components/ConfirmItsYou.tsx`, `apps/home/src/components/ConnectPage.tsx` (`ChooseAccount`). Tests: `packages/core/tests/auth.test.ts` ("reading the recovery code or offering the account to a phone takes proof it is you", "changing how the account signs in takes proof it is you, once it is set up", "no call steps back into setup to skip the proof", "proof is for one account, and does not carry over to another"), `packages/core/tests/connect.test.ts` ("an app or a carrier is given access only just after proof it is you")._
 
 ## Device keys and passkeys
 
@@ -401,11 +412,13 @@ disconnects them first, and the programs connected through them, with the
 automations they proposed; carriers stay. The node sends nothing once it has
 stopped, so it waits, up to 5 s for them all (`signOutGraceMs` in
 `createMincaAuth`'s config), for a peer to take in each revoke (`spaces.revoke`
-with `waitMs`), its own session key's among them. A node with no network
+with `waitMs`). Its own session key's revokes wait only when a peer is connected in some
+open space as signing out starts, so signing out with nobody else online is
+quick; `state.signingOut` is true meanwhile. A node with no network
 configured doesn't wait. With nobody reachable, they leave the next time the account signs in here. A read-only app has no key to revoke: it loses
 access when its time runs out. The account home asks each time, with
 disconnecting ticked, and is not ready to grant anything from the moment
-signing out starts. "Use another account" on the connect page signs out
+signing out starts. Choosing another account on the connect page signs out
 without disconnecting: switching accounts disconnects nothing.
 
 **Proposals.** `auth.propose({ origin, request, kept? })` adds the

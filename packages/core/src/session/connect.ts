@@ -521,8 +521,10 @@ function askHome<T>(
       finish();
     };
     let made: ConnectRequest | ProposeRequest | null = null;
+    // Until the home says hello, the popup may still be a blank page of this origin: posting there only logs an error.
+    let heard = false;
     const send = () => {
-      if (made && !finished) popup.postMessage({ type: REQUEST, request: made }, homeOrigin);
+      if (made && heard && !finished) popup.postMessage({ type: REQUEST, request: made }, homeOrigin);
     };
     const ready = Promise.resolve(request);
     ready.then(
@@ -542,8 +544,10 @@ function askHome<T>(
       if (event.source !== popup || event.origin !== homeOrigin) return;
       const data: unknown = event.data;
       if (!isObject(data)) return;
-      if (data.type === HELLO) void ready.then(send, () => {});
-      else if (data.type === GRANT && data.grant)
+      if (data.type === HELLO) {
+        heard = true;
+        void ready.then(send, () => {});
+      } else if (data.type === GRANT && data.grant)
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- checkGrant, checkCarryGrant and proposeToHome check it
         done(() => resolve(data.grant as T));
       else if (data.type === DENIED)

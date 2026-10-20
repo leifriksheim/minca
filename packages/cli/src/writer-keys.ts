@@ -11,7 +11,7 @@
  * key, as the registry is, bound to the account and the slot, so a copy of
  * the files can't sign, and a key file moved to another slot doesn't open.
  */
-import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   openEnvelope,
@@ -156,17 +156,30 @@ export function fileWriterKeys(dir: string, localKey: CryptoKey, did: string): W
         const lockFile = path.join(where, 'lock');
         if (!(await lock(lockFile))) continue;
         try {
+          const sealed = path.join(where, 'key.sealed');
+          // A new key starts new lines: whatever a forgotten one left goes.
+          const missing = await stat(sealed).then(
+            () => false,
+            (error: unknown) => {
+              // Only a key that isn't there: another failure must not cost a key its places.
+              if (errorCode(error) === 'ENOENT') return true;
+              throw error;
+            },
+          );
+          if (missing) {
+            await rm(path.join(where, 'heads'), { recursive: true, force: true });
+            await mkdir(path.join(where, 'heads'), { recursive: true, mode: 0o700 });
+          }
           return Object.freeze({
-            keys: await keyPair(path.join(where, 'key.sealed'), { localKey, did, slot }),
+            keys: await keyPair(sealed, { localKey, did, slot }),
             heads: headStore(path.join(where, 'heads')),
             async release() {
               await rm(lockFile, { force: true });
             },
             // A revoked key: the slot's next claim makes a new one, with lines of its own.
+            // Its places stay while it may still sign this run.
             async forget() {
-              await rm(path.join(where, 'key.sealed'), { force: true });
-              await rm(path.join(where, 'heads'), { recursive: true, force: true });
-              await mkdir(path.join(where, 'heads'), { recursive: true, mode: 0o700 });
+              await rm(sealed, { force: true });
             },
           });
         } catch (error) {

@@ -13,6 +13,7 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { createSigner } from '../src/schema/signer.js';
+import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { createVersion, stubOf } from '../src/schema/version.js';
 import { checkVersionShape } from '../src/records/version.js';
 import { checkFork, forkProof } from '../src/records/fork.js';
@@ -26,7 +27,7 @@ import { memoryStores } from './helpers/memory-stores.js';
 import { joined } from './helpers/joined.js';
 import { hold, letGo } from './helpers/hold.js';
 import { until } from './helpers/until.js';
-import { person, open, type Person } from './helpers/person.js';
+import { person, open, makeKey, type Person } from './helpers/person.js';
 
 const provider = createP256Provider();
 
@@ -233,38 +234,56 @@ describe('a writer’s log', () => {
 });
 
 /** Writer keys kept in memory, as a browser keeps them in IndexedDB: slots, each claimed by one node at a time */
-function memoryWriterKeys(): WriterKeySource & { readonly claimed: () => number } {
-  const slots: Array<{ keys: CryptoKeyPair; heads: Map<string, Uint8Array>; held: boolean }> = [];
+function memoryWriterKeys(): WriterKeySource & {
+  readonly claimed: () => number;
+  readonly empty: () => void;
+} {
+  const slots: Array<{ keys: CryptoKeyPair | null; heads: Map<string, Uint8Array>; held: boolean }> = [];
   return {
     claimed: () => slots.filter((slot) => slot.held).length,
+    // As a browser does when site data is cleared under a running page.
+    empty: () => slots.forEach((slot) => slot.heads.clear()),
     async claim(): Promise<ClaimedWriter | null> {
       let slot = slots.find((candidate) => !candidate.held);
       if (!slot) {
-        slot = { keys: await provider.generateKeyPair(), heads: new Map(), held: false };
+        slot = { keys: null, heads: new Map(), held: false };
         slots.push(slot);
       }
       const taken = slot;
+      // A new key starts new lines.
+      const keys = taken.keys ?? (await provider.generateKeyPair());
+      if (!taken.keys) {
+        taken.keys = keys;
+        taken.heads.clear();
+      }
       taken.held = true;
       const heads: HeadStore = {
         get: async (key) => taken.heads.get(key) ?? null,
         put: async (key, value) => void taken.heads.set(key, value),
       };
       return {
-        keys: taken.keys,
+        keys,
         heads,
         release: async () => void (taken.held = false),
-        forget: async () => void taken.heads.clear(),
+        // The key only: its places stay while it may still sign.
+        forget: async () => void (taken.keys = null),
       };
     },
   };
 }
 
 describe('a writer key that outlives the node', () => {
-  async function nodeWith(writerKey: WriterKeySource, who: Person, stores = memoryStores()) {
+  async function nodeWith(
+    writerKey: WriterKeySource,
+    who: Person,
+    stores = memoryStores(),
+    accountKey?: Uint8Array,
+  ) {
     const node = await createNode({
       signer: createLocalRootSigner(who.me, who.manager.getProvider()),
       stores,
       writerKey,
+      ...(accountKey ? { accountKey } : {}),
       watchIntervalMs: 0,
     });
     open.push(node);
@@ -297,6 +316,80 @@ describe('a writer key that outlives the node', () => {
     const two = await nodeWith(keys, who);
     assert.notEqual(one.sessionDid, two.sessionDid);
     assert.equal(keys.claimed(), 2);
+  });
+
+  test('signing out forgets the key before it writes a revoke', async () => {
+    // A tab closed while the revokes wait for a peer must not leave the key to be claimed again.
+    const who = await person();
+    const keys = memoryWriterKeys();
+    let forgotten = false;
+    const watched: WriterKeySource = {
+      async claim() {
+        const claimed = await keys.claim();
+        return claimed && { ...claimed, forget: async () => void (forgotten = true) };
+      },
+    };
+    const node = await nodeWith(watched, who, memoryStores(), await deriveAccountKey(who.seed));
+    const revoking = node.revokeSelf();
+    await Promise.resolve();
+    assert.equal(forgotten, true, 'forgotten before anything is written');
+    await revoking;
+  });
+
+  test('a slot emptied under a running node never signs at a used place again', async () => {
+    const who = await person();
+    const keys = memoryWriterKeys();
+    const node = await nodeWith(keys, who);
+    const { id: space } = await node.spaces.create({ name: 'Mine', visibility: 'public' });
+    const a = await node.records.put(space, 'app.note', { text: 'a' });
+    keys.empty();
+    // Signing again from place 0 would fork the line, and the fork would withdraw `a` everywhere.
+    await assert.rejects(node.records.put(space, 'app.note', { text: 'b' }), /places were lost/);
+    assert.notEqual(await node.records.get(space, a.key), null);
+  });
+
+  test('signing out never signs two versions at one place, even after revokes of its own', async () => {
+    const who = await person();
+    const stores = memoryStores();
+    const node = await nodeWith(memoryWriterKeys(), who, stores, await deriveAccountKey(who.seed));
+    const { id: space } = await node.spaces.create({ name: 'Team', ...team, visibility: 'private' });
+    // An app disconnected earlier: a revoke at the start of the key's line in the space.
+    await node.spaces.revoke(space, (await makeKey()).did);
+    await node.revokeSelf();
+    const store = createStorageProvider(await stores(`spaces/${space}`));
+    const places: number[] = [];
+    for (const id of await store.versionIds()) {
+      const version = await store.getVersion(id);
+      if (version?.author === node.sessionDid && version.collection === 'sys.revoke' && version.log)
+        places.push(version.log.n);
+    }
+    assert.deepEqual(places.sort(), [0, 1]);
+    // And its own revoke stands: what it signs there now is refused.
+    await assert.rejects(node.records.put(space, 'app.note', { text: 'after' }), /revoked/);
+  });
+
+  test('a lasting key the account revoked is never signed with again', async () => {
+    const who = await person();
+    const stores = memoryStores();
+    const accountKey = await deriveAccountKey(who.seed);
+    // A slot whose forget never took: it keeps handing out the revoked key.
+    const keys = memoryWriterKeys();
+    const stuck: WriterKeySource = {
+      async claim() {
+        const claimed = await keys.claim();
+        return claimed && { ...claimed, forget: async () => {} };
+      },
+    };
+    const before = await nodeWith(stuck, who, stores, accountKey);
+    const revoked = before.sessionDid;
+    await before.account.revoke(revoked);
+    await before.close();
+
+    const after = await nodeWith(stuck, who, stores, accountKey);
+    assert.notEqual(after.sessionDid, revoked);
+    // And what it signs counts: the account's own registry takes it.
+    await after.account.setName('Ada');
+    assert.equal((await after.account.profile())?.name, 'Ada');
   });
 
   test('where nothing can lock a key, there is no lasting one: the node makes its own', async () => {

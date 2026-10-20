@@ -1,11 +1,11 @@
-import { MincaAuth, useMinca } from '@minca/core/react';
+import { useMinca } from '@minca/core/react';
 import { AccountHint } from './components/AccountHint';
 import { AccountNotices } from './components/AccountNotices';
 import { AccountSwitcher } from './components/AccountSwitcher';
 import { Settings } from './components/Settings';
+import { SignIn } from './components/SignIn';
 import { HostingDue } from './components/Hosting';
 import { Wordmark } from '@minca/app-shared/Wordmark';
-import { avatarElement } from '@minca/app-shared/avatar';
 import { TABS, useTab } from './tabs';
 import { styles } from './styles';
 
@@ -20,7 +20,7 @@ export function App() {
         <div style={styles.card}>
           <Wordmark />
           <AccountHint />
-          <MincaAuth avatar={avatarElement} />
+          <SignIn />
         </div>
       </div>
     );

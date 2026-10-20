@@ -2547,19 +2547,29 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     async revokeSelf(options: RevokeOptions = {}) {
       const key = sessionDid;
+      // Forgotten first: a tab closed while the revokes wait must not leave a
+      // revoked key behind, to be claimed and refused on every write after.
+      await claimed?.forget().catch(() => {});
       // Every space it may write in: the listed ones, its carry spaces and the contacts space.
       const ids = new Set([
         ...(await spaces.list()).filter((space) => space.writable).map((space) => space.id),
         ...carrySpaces,
         ...(contactsSpaceId ? [contactsSpaceId] : []),
       ]);
+      // With anyone online, every revoke waits for a peer to take it in, closed
+      // spaces too, which open for it. With nobody, waiting would only keep a
+      // person signing out looking at a spinner: they go out with the next sync.
+      let anyone = false;
+      for (const open of runtimes.values()) {
+        const rt = await open.catch(() => null);
+        if (rt && (await rt.status()).peers.length > 0) anyone = true;
+      }
+      const wait = anyone ? options : {};
       // Each its own store: one that can't be done must not keep the rest from happening.
       await Promise.all([
-        ...[...ids].map((spaceId) => spaces.revoke(spaceId, key, options).catch(() => false)),
-        node.account.revoke(key, options).catch(() => false),
+        ...[...ids].map((spaceId) => spaces.revoke(spaceId, key, wait).catch(() => false)),
+        node.account.revoke(key, wait).catch(() => false),
       ]);
-      // Forgotten now, not at close: a crash before closing must not leave a revoked key to be claimed again.
-      await claimed?.forget().catch(() => {});
     },
 
     async close() {
@@ -2577,5 +2587,15 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       events.clear();
     },
   });
+
+  // A lasting key the account revoked on an earlier visit, which was never
+  // forgotten here: every write it signs would be refused. Forgotten now, and
+  // this run starts again on a key of its own; the next claims a new lasting one.
+  if (claimed && accountSpaceId && (await (await runtime(accountSpaceId)).isRevoked(sessionDid))) {
+    await claimed.forget().catch(() => {});
+    await node.close();
+    const { writerKey: _revoked, ...rest } = config;
+    return createNode(rest);
+  }
   return node;
 }

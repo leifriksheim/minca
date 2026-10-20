@@ -555,8 +555,11 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
     live messages, connecting) ends with the note (01 §7.6). Signing out
-    writes a revoke of the session key, delivered when that device next
-    syncs, but a device lost while signed in has to be
+    writes a revoke of the session key, and the device forgets the key
+    before it does. With a peer online it waits briefly for one to take the
+    revokes in; otherwise they go when that device next syncs, and never if
+    its data is deleted first, so a copy of the key taken earlier keeps
+    signing. A device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
     keys. A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/minca/issues/165)).
@@ -823,17 +826,24 @@ raised but has no place above until a test confirms or rules it out.
   can still ask the keychain, as it can read a browser profile.
 - **Stopping someone at a device that is signed in.** The reference home asks
   for the password, a passkey or the recovery code, given in the last five
-  minutes for this account, before it does only these: show the recovery
+  minutes for this account, before it does these: show the recovery
   code, offer the account to a phone, change how the account signs in
-  outside first setup, or give an app the whole account or the contacts,
-  whose keys no revoke takes back (`packages/core/tests/auth.test.ts`,
+  outside first setup, or give an app, or a carrier asking
+  through the connect page, any access at all
+  (`packages/core/tests/auth.test.ts`,
   "reading the recovery code or offering the account to a phone takes proof
   it is you", "changing how the account signs in takes proof it is you, once
   it is set up", "no call steps back into setup to skip the proof";
-  `packages/core/tests/connect.test.ts`, "the whole account, or the
-  contacts, are given only just after proof it is you"). Anything else at an
-  open page, such as giving an app some spaces or disconnecting one, needs
-  only the sign-in. A passkey's proof is whatever the platform takes for it,
+  `packages/core/tests/connect.test.ts`, "an app or a carrier is given access
+  only just after proof it is you"). For giving access, signing in with one
+  of those in the last five minutes is the proof; for the rest it is not.
+  Making the account counts as that proof too, as does a passkey sign-in
+  only when the passkey's own check ran. Anything else at an open page,
+  such as disconnecting an app or keeping what an app already connected
+  suggests, needs only the sign-in, and so do inviting an account into a
+  space, making an invite link and starting to use a host: someone at an
+  open page can still give another account of theirs, or a host they run,
+  what the gate refuses an app or a carrier. A passkey's proof is whatever the platform takes for it,
   which may be the device's own login. And the seed is in the page's memory,
   so developer tools or a script in the home's origin read it whatever was
   asked.

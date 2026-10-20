@@ -374,7 +374,13 @@ export class MincaAuthElement extends Base {
       case 'ready':
         return [];
       case 'starting':
-        return [h('div', { class: 'wa-card' }, h('p', { class: 'wa-hint' }, 'Looking for your accounts…'))];
+        return [
+          h(
+            'div',
+            { class: 'wa-card' },
+            h('p', { class: 'wa-hint' }, state.signingOut ? 'Signing out…' : 'Looking for your accounts…'),
+          ),
+        ];
       case 'pair':
         return [this.#pair(state)];
       case 'create':

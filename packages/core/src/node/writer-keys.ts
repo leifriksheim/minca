@@ -29,7 +29,10 @@ export interface ClaimedWriter {
   readonly heads: HeadStore;
   /** Lets another node claim the slot. The node calls it when it closes. */
   release(): Promise<void>;
-  /** Forgets the key, so the slot's next claim makes a new one: for a key that was revoked */
+  /**
+   * Forgets the key, so the slot's next claim makes a new one: for a key that
+   * was revoked. Its places stay until then, so it may still sign this run.
+   */
   forget(): Promise<void>;
 }
 
@@ -91,21 +94,37 @@ export function browserWriterKeys(
         const unlock = await tryLock(locks, dbName);
         if (!unlock) continue;
         try {
-          const db = await openDb(dbName, STORE);
-          let keys = await idbRun(db, STORE, 'readonly', (store) => store.get(KEYS));
+          let db = await openDb(dbName, STORE);
+          // The browser can close the connection under a running node. Opened
+          // again only while the slot still holds the key: one emptied (site
+          // data cleared) has lost the key's places, and signing on would reuse them.
+          const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>) => {
+            try {
+              return await idbRun(db, STORE, mode, fn);
+            } catch (error) {
+              if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error;
+              db = await openDb(dbName, STORE);
+              if (!isKeyPair(await idbRun(db, STORE, 'readonly', (store) => store.get(KEYS))))
+                throw new Error('This site’s data was cleared while the page was open. Reload the page.');
+              return idbRun(db, STORE, mode, fn);
+            }
+          };
+          let keys = await run('readonly', (store) => store.get(KEYS));
           if (!isKeyPair(keys)) {
             const made = await provider.generateKeyPair();
             keys = { publicKey: made.publicKey, privateKey: made.privateKey };
-            await idbRun(db, STORE, 'readwrite', (store) => store.put(keys, KEYS));
+            // A new key starts new lines: whatever a forgotten one left goes.
+            await run('readwrite', (store) => store.clear());
+            await run('readwrite', (store) => store.put(keys, KEYS));
           }
           if (!isKeyPair(keys)) throw new Error('The writer key could not be kept');
           const heads: HeadStore = {
             async get(key) {
-              const value = await idbRun(db, STORE, 'readonly', (store) => store.get(`head:${key}`));
+              const value = await run('readonly', (store) => store.get(`head:${key}`));
               return value instanceof Uint8Array ? value : null;
             },
             async put(key, value) {
-              await idbRun(db, STORE, 'readwrite', (store) => store.put(value, `head:${key}`));
+              await run('readwrite', (store) => store.put(value, `head:${key}`));
             },
           };
           return Object.freeze({
@@ -116,7 +135,8 @@ export function browserWriterKeys(
               unlock();
             },
             async forget() {
-              await idbRun(db, STORE, 'readwrite', (store) => store.clear());
+              // The key only: its places stay while it may still sign, until the next claim.
+              await run('readwrite', (store) => store.delete(KEYS));
             },
           });
         } catch {
