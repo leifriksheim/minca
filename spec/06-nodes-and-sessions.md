@@ -816,8 +816,9 @@ it does at the reconnect could prevent this.
 Every device holding the account key keeps each live carrier's carry space in
 step with the account (§1.3): one `sys.pass` record per space, and one
 `sys.wake` per automation of the account's own ([03](03-spaces.md) §15).
-It writes each pass from the key it holds for the space, opening the space
-first, which is how it learns of a change of key. It writes no pass in the
+It writes each pass from the key its registry holds for the space, and opens
+the space, which is how it learns of a change of key; the refill that change
+starts writes the pass for the new key. It writes no pass in the
 carry space of a carrier its registry shows deleted, and a removal on that
 device waits for a refill already under way.
 
@@ -864,7 +865,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back")._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 

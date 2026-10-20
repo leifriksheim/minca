@@ -673,4 +673,32 @@ describe('notifications through a carrier', () => {
     await laptop.automations.remove(mentioned.id);
     await until(async () => (await node.wakes()).length === 1, 5000, 'the removal to reach the carrier');
   });
+
+  test('a removal reaches the carrier even when the home closes straight after', async () => {
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const home = await device(me, hub);
+    for (let i = 0; i < 15; i++) await home.spaces.create({ name: `S${i}`, visibility: 'private' });
+    const added = await home.carriers.add({ did: (await carrierKey()).did, name: 'Chrome' });
+    const node = await carrier(me, added.invite, hub);
+    const own = await home.automations.add({
+      name: 'Anything',
+      when: { query: { collection: 'app.chat' }, others: true },
+      then: { kind: 'notify', text: 'Anything' },
+      spaces: 'all',
+    });
+    await until(async () => (await node.wakes()).length === 1, 8000, 'the carrier to hold the wake');
+
+    // As disconnecting an app does, then closing once the carrier is level.
+    await home.automations.remove(own.id);
+    await home.carriers.reached(added.space, 5000);
+    // Level means level with the wakes as they are now, not as they were.
+    assert.deepEqual(
+      (await home.records.list(added.space, { collection: 'sys.wake' })).filter((r) => !r.deleted),
+      [],
+    );
+    await home.close();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal((await node.wakes()).length, 0);
+  });
 });
