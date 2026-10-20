@@ -48,6 +48,10 @@ than most accounts use (33 KB a space measured), so memory stays the limit.
 A community past 10 writers is a few more spaces' memory at most, but it is
 what grows: that is what its fund pays for.
 
+Counting costs nothing to see: with `BENCH_LIMITS=1` the bench runs the host
+with limits on, and carrying 330 spaces it took 255 MB against 288 MB
+without, and 252 MB against 253 MB after a restart, which is noise.
+
 What to watch once limits are on:
 
 - **The log** says each space as it goes over the line, as its grace runs
