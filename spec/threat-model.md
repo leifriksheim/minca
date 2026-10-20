@@ -555,8 +555,11 @@ line. That is relied on, by members (§3.2) and former members (§3.3).
   - Records are judged with no time, so what it signs counts until the owner
     revokes the key, however long ago its note ran out; only live use (knocks,
     live messages, connecting) ends with the note (01 §7.6). Signing out
-    writes a revoke of the session key, delivered when that device next
-    syncs, but a device lost while signed in has to be
+    writes a revoke of the session key, and the device forgets the key
+    before it does. With a peer online it waits briefly for one to take the
+    revokes in; otherwise they go when that device next syncs, and never if
+    its data is deleted first, so a copy of the key taken earlier keeps
+    signing. A device lost while signed in has to be
     revoked from another device, which needs a list of the account's session
     keys. A revocation does not reach spaces created after it
     ([#165](https://github.com/leifriksheim/minca/issues/165)).
@@ -833,8 +836,12 @@ raised but has no place above until a test confirms or rules it out.
   `packages/core/tests/connect.test.ts`, "an app or a carrier is given access
   only just after proof it is you"). For giving access, signing in with one
   of those in the last five minutes is the proof; for the rest it is not.
-  Anything else at an open page, such as disconnecting an app or keeping
-  what an app already connected suggests, needs only the sign-in. A passkey's proof is whatever the platform takes for it,
+  Making the account counts as that proof too, as does a passkey sign-in
+  only when the passkey's own check ran. Anything else at an open page,
+  such as disconnecting an app or keeping what an app already connected
+  suggests, needs only the sign-in, and so does inviting an account into a
+  space or making an invite link: someone at an open page can still give
+  another account of theirs what the gate refuses an app. A passkey's proof is whatever the platform takes for it,
   which may be the device's own login. And the seed is in the page's memory,
   so developer tools or a script in the home's origin read it whatever was
   asked.

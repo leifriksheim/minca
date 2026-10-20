@@ -2556,21 +2556,19 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         ...carrySpaces,
         ...(contactsSpaceId ? [contactsSpaceId] : []),
       ]);
-      // Waiting only where a peer is here now: one still on its way would keep a
-      // person signing out looking at a spinner, for a key already forgotten here.
-      // The revoke goes out with the next sync either way.
-      const waitHere = async (spaceId: string): Promise<RevokeOptions> => {
-        const open = await runtimes.get(spaceId)?.catch(() => null);
-        return open && (await open.status()).peers.length > 0 ? options : {};
-      };
+      // With anyone online, every revoke waits for a peer to take it in, closed
+      // spaces too, which open for it. With nobody, waiting would only keep a
+      // person signing out looking at a spinner: they go out with the next sync.
+      let anyone = false;
+      for (const open of runtimes.values()) {
+        const rt = await open.catch(() => null);
+        if (rt && (await rt.status()).peers.length > 0) anyone = true;
+      }
+      const wait = anyone ? options : {};
       // Each its own store: one that can't be done must not keep the rest from happening.
       await Promise.all([
-        ...[...ids].map(async (spaceId) =>
-          spaces.revoke(spaceId, key, await waitHere(spaceId)).catch(() => false),
-        ),
-        (async () => node.account.revoke(key, accountSpaceId ? await waitHere(accountSpaceId) : {}))().catch(
-          () => false,
-        ),
+        ...[...ids].map((spaceId) => spaces.revoke(spaceId, key, wait).catch(() => false)),
+        node.account.revoke(key, wait).catch(() => false),
       ]);
     },
 

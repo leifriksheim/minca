@@ -210,13 +210,20 @@ node makes a key for this run as it would without a source.
   whether its stores are in IndexedDB or a data folder, so signing out
   (`deleteBrowserData`) deletes the keys too. The key never goes in the data
   folder, which other apps and devices share.
-- `revokeSelf` forgets the claimed key before it writes a single revoke, so a
-  page closed while the revokes wait leaves no revoked key to claim again. A
-  node that claims a key the account registry has revoked anyway (one
-  forgotten by an older version, say) forgets it and starts again on a key
-  for this run alone; the next start claims a new lasting one. A key whose
-  slot's database the browser closed under it (site data cleared while the
-  page was open) opens it again.
+- `forget()` drops the key but keeps its places, which still count while it
+  signs this run; the slot's next claim makes a new key and clears them.
+  `revokeSelf` forgets the claimed key before it writes a single revoke, so a
+  page closed while the revokes wait leaves no revoked key to claim again.
+  With a peer connected in any open space, each revoke waits up to
+  `waitMs` for one to take it in; with none, none wait. A node that claims a
+  key the account registry has revoked anyway (one forgotten by an older
+  version, say) forgets it and starts again on a key for this run alone; the
+  next start claims a new lasting one.
+- A node never signs at a place behind one it took itself this run: if the
+  slot has lost them (site data cleared while the page was open), every
+  write fails until the page reloads, since signing on would fork the line
+  and withdraw what the key wrote. A slot whose connection the browser
+  closed opens again only while it still holds the key.
 - The CLI keeps them in `~/.minca/writers/<account id>/slot-<n>/`: the key as
   JWK in an envelope (spec 01 §9.1) under the account's local key, with label
   `minca/writer-key/v1` and bound `{ did: <account DID>, slot: <n> }`
@@ -225,7 +232,7 @@ node makes a key for this run as it would without a source.
   `heads/`; and a `lock` file naming the process that holds it, taken over
   once that process is gone.
 
-_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/node.ts` (`createNode`, `revokeSelf`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts` ("a key file moved to another slot, or to another account, does not open")._
+_Source: `packages/core/src/node/writer-keys.ts` (`browserWriterKeys`), `packages/core/src/node/writers.ts` (`createWriters`), `packages/core/src/node/node.ts` (`createNode`, `revokeSelf`), `packages/core/src/node/stores.ts` (`writerKeysFor`), `packages/core/src/node/worker.ts` (`withWriterKey`), `packages/cli/src/writer-keys.ts` (`fileWriterKeys`), `packages/cli/src/home.ts` (`unlock`, `nodeFor`). Tests: `packages/core/tests/writer-logs.test.ts` ("a writer key that outlives the node"), `packages/cli/tests/writer-keys.test.ts` ("a key file moved to another slot, or to another account, does not open")._
 
 Sign-in ([sign-in](sign-in.md)) uses `storesFor(account)`: IndexedDB with prefix
 `minca:<dataPath with : for />` in the browser, or `folderStores(pod,

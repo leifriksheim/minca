@@ -595,6 +595,10 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   /** When the open account was last opened with a password, passkey or the recovery code here, and which */
   let signedInAt = 0;
   let signedInFor: string | null = null;
+  const provedSignIn = (did: string) => {
+    signedInAt = Date.now();
+    signedInFor = did;
+  };
   /**
    * Whether a session just landed and is choosing its first way in: only `arrive`
    * opens this, so no call can step back into setup to skip `confirm`.
@@ -967,12 +971,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   }
 
   /** Runs a way in. One that took the recovery code may lead on to setting up an everyday one. */
-  const enter = (open: () => Promise<{ session: MincaSession; byCode: boolean }>) =>
+  const enter = (open: () => Promise<{ session: MincaSession; byCode: boolean; proved?: boolean }>) =>
     run(async () => {
-      const { session, byCode } = await open();
+      const { session, byCode, proved = true } = await open();
       // Opening it took the password, a passkey or the recovery code: proof enough to give an app access, for a few minutes.
-      signedInAt = Date.now();
-      signedInFor = session.did;
+      if (proved) provedSignIn(session.did);
       await arrive(session, byCode ? 'restored' : null);
     }).then(() => undefined);
 
@@ -1299,6 +1302,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
             await unwrapSeedWithDeviceKey(target, key, entry.vault.did),
           ),
           byCode: false,
+          // A wrap with no passkey behind it skipped the check that someone is there.
+          proved: Boolean(target.credentialId),
         };
       });
     },
@@ -1343,6 +1348,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         // shows it. Only at creation and on rename — never on a plain start,
         // where a device that has not synced yet would publish a stale name.
         await session.node.account.setName(summary.name).catch(() => {});
+        // Made just now, by whoever is here: an app asking next needs no more proof.
+        provedSignIn(session.did);
         await arrive(session, 'new');
       });
     },

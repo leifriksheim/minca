@@ -112,8 +112,15 @@ export function createWriters(storeOf: (did: string) => HeadStore | null): Write
     const key = headKey(did, spaceId);
     const store = storeOf(did);
     // A kept key's places are read where they are kept, every time: another node may share the key.
-    if (store) return readPlaces(await store.get(key));
-    return kept.get(key) ?? null;
+    if (!store) return kept.get(key) ?? null;
+    const stored = readPlaces(await store.get(key));
+    // Never behind what this node took itself: a store emptied under it (site
+    // data cleared) would hand out places already used, and the fork withdraws
+    // what the key wrote. Better to sign nothing.
+    for (const [collection, head] of Object.entries(kept.get(key)?.collections ?? {}))
+      if ((stored?.collections[collection]?.n ?? -1) < head.n)
+        throw new Error('This key’s places were lost while it was signing, so it signs nothing more.');
+    return stored;
   }
 
   return Object.freeze({

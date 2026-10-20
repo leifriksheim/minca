@@ -150,8 +150,10 @@ again. The recovery code shown once when an account is made needs no confirm.
 Giving an app or a carrier anything (`auth.grant`, `auth.grantCarry`) takes
 the same proof, or a sign-in with `signInWithPassword`, `signInWithPasskey`
 or `signInWithCode` in the last five minutes: the person just gave it.
-`mayGrant()` says whether either holds. A sign-in kept from an earlier visit,
-or an account just made, is neither. So the reference home's connect page
+Making the account counts too: whoever made it is there. A passkey sign-in
+counts only when the passkey's own check ran, not for a wrap with no
+credential behind it. `mayGrant()` says whether any of these holds. A
+sign-in kept from an earlier visit is none of them. So the reference home's connect page
 goes as signing in with Google does: choose the account, prove it is you
 (signing in to it, or confirming if it is the one signed in), then allow.
 A suggestion from an app already connected (`auth.propose`) gives nothing
@@ -410,9 +412,9 @@ disconnects them first, and the programs connected through them, with the
 automations they proposed; carriers stay. The node sends nothing once it has
 stopped, so it waits, up to 5 s for them all (`signOutGraceMs` in
 `createMincaAuth`'s config), for a peer to take in each revoke (`spaces.revoke`
-with `waitMs`). Its own session key's revokes wait only in spaces where a
-peer is connected when signing out starts, so signing out with nobody else
-online is quick; `state.signingOut` is true meanwhile. A node with no network
+with `waitMs`). Its own session key's revokes wait only when a peer is connected in some
+open space as signing out starts, so signing out with nobody else online is
+quick; `state.signingOut` is true meanwhile. A node with no network
 configured doesn't wait. With nobody reachable, they leave the next time the account signs in here. A read-only app has no key to revoke: it loses
 access when its time runs out. The account home asks each time, with
 disconnecting ticked, and is not ready to grant anything from the moment

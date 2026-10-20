@@ -204,7 +204,7 @@ describe('connecting an app to an account home', () => {
     // A sign-in kept for days on a computer anyone may walk up to is no answer to "is it you?".
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub, { confirmed: false });
-    assert.equal(auth.mayGrant(), false, 'a page left signed in has proved nothing');
+    assert.equal(auth.mayGrant(), true, 'whoever just made the account is here');
     const ask = async (extra: { scope?: 'account'; contacts?: true } = {}) => {
       const key = await appKey();
       return auth.grant({
@@ -220,10 +220,18 @@ describe('connecting an app to an account home', () => {
         request: await asked({ v: 1, audience: key.did, access: 'carry' }, key),
       });
     };
-    await assert.rejects(ask(), /Confirm it is you/);
-    await assert.rejects(ask({ scope: 'account' }), /Confirm it is you/);
-    await assert.rejects(ask({ contacts: true }), /Confirm it is you/);
-    await assert.rejects(carry(), /Confirm it is you/);
+    // Six minutes on, the page is one left signed in.
+    const now = Date.now;
+    Date.now = () => now() + 6 * 60_000;
+    try {
+      assert.equal(auth.mayGrant(), false, 'a page left signed in has proved nothing');
+      await assert.rejects(ask(), /Confirm it is you/);
+      await assert.rejects(ask({ scope: 'account' }), /Confirm it is you/);
+      await assert.rejects(ask({ contacts: true }), /Confirm it is you/);
+      await assert.rejects(carry(), /Confirm it is you/);
+    } finally {
+      Date.now = now;
+    }
 
     // Signing in again with the recovery code, a password or a passkey is proof for granting.
     const kept = codes.get(auth)!;
