@@ -2,12 +2,14 @@ import { useCallback, useRef, useState } from 'react';
 import { useAuth, useSession } from '@minca/core/react';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
+import { useCopy } from '@minca/app-shared/action';
 import { palette, styles } from '../styles';
 
 const { ink, surface, radius } = palette;
 
 /**
- * Who is signed in, and the other accounts this browser keeps: one click to
+ * Who is signed in, to rename or copy the ID of, and the other accounts this
+ * browser keeps: one click to
  * switch to another (it asks for its passkey or password), or to add one.
  * Switching signs this one out of this device first, as one account is open
  * here at a time; its apps keep working.
@@ -16,11 +18,17 @@ export function AccountSwitcher() {
   const { auth, state } = useAuth();
   const session = useSession();
   const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState('');
+  const { copied, copy } = useCopy();
   const root = useRef<HTMLDivElement>(null);
   useDismiss(
     open,
     root,
-    useCallback(() => setOpen(false), []),
+    useCallback(() => {
+      setOpen(false);
+      setRenaming(false);
+    }, []),
   );
   const others = state.accounts.filter((account) => account.id !== session.account.id);
   // Two accounts with one name (a profile can name itself anything) are told apart by their ids.
@@ -55,7 +63,7 @@ export function AccountSwitcher() {
           gap: 8,
         }}
       >
-        <Avatar did={session.did} size={30} />
+        <Avatar did={session.did} size={30} round />
         <span className="switcher-name">{session.account.name}</span>
       </button>
       {open && (
@@ -63,15 +71,58 @@ export function AccountSwitcher() {
           <div
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: 20 }}
           >
-            <Avatar did={session.did} size={56} />
-            <p style={{ fontFamily: palette.display, fontSize: 19, fontWeight: 700, color: ink.strong }}>
-              Hi, {session.account.name}
-            </p>
-            <p style={{ fontSize: 12, color: ink.faint }}>
+            <Avatar did={session.did} size={64} round />
+            {renaming ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void auth.rename(draft).then((ok) => ok && setRenaming(false));
+                }}
+                style={{ display: 'flex', gap: 6, width: '100%', marginTop: 4 }}
+              >
+                <input
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  autoFocus
+                  aria-label="Account name"
+                  style={{ ...styles.input, height: 34 }}
+                />
+                <button
+                  type="submit"
+                  disabled={!draft.trim() || state.busy}
+                  data-variant="primary"
+                  style={{ ...styles.darkSmall, height: 34 }}
+                >
+                  Save
+                </button>
+              </form>
+            ) : (
+              <p style={{ fontFamily: palette.display, fontSize: 21, fontWeight: 700, color: ink.strong }}>
+                {session.account.name}
+              </p>
+            )}
+            <p style={{ fontSize: 12, color: ink.faint, fontFamily: palette.mono }}>
               {named(session.account.name) > 1
-                ? `Signed in here · ${shortId(session.did)}`
-                : 'Signed in here'}
+                ? shortId(session.did)
+                : `${session.did.slice(0, 14)}…${session.did.slice(-4)}`}
             </p>
+            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+              {!renaming && (
+                <button
+                  onClick={() => {
+                    setDraft(session.account.name);
+                    setRenaming(true);
+                  }}
+                  data-variant="quiet"
+                  style={styles.smallButton}
+                >
+                  Rename
+                </button>
+              )}
+              <button onClick={() => copy(session.did)} data-variant="quiet" style={styles.smallButton}>
+                {copied ? 'Copied' : 'Copy ID'}
+              </button>
+            </div>
           </div>
           {others.length > 0 && (
             <div style={{ borderTop: `1px solid ${surface.line}`, padding: 6 }}>
@@ -84,7 +135,7 @@ export function AccountSwitcher() {
                   style={item}
                   className="menu-item"
                 >
-                  <Avatar did={account.did} size={28} />
+                  <Avatar did={account.did} size={28} round />
                   <span style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
                     <span style={{ display: 'block', fontWeight: 500, color: ink.strong }}>
                       {account.name}

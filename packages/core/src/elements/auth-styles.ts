@@ -132,6 +132,7 @@ minca-auth .wa-small .wa-link { padding: 0; margin: 0 8px 0 0; font-size: 13px; 
 minca-auth .wa-footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--minca-line); }
 minca-auth .wa-footer .wa-links { margin-top: 0; }
 minca-auth .wa-avatar { flex-shrink: 0; display: block; border-radius: 8px; }
+minca-auth .wa-avatar-round { border-radius: 50% !important; }
 
 minca-auth .wa-code {
   display: block; margin-top: 16px; padding: 12px; border-radius: var(--minca-radius);

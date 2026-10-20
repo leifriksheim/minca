@@ -17,7 +17,7 @@ export interface MincaAuthProps {
   /** Someone signed in (a session) or out (null) */
   readonly onSession?: (session: MincaSession | null) => void;
   /** Draws an account's avatar, so the element shows accounts as the rest of the page does */
-  readonly avatar?: (did: string, size: number) => Element;
+  readonly avatar?: (did: string, size: number, round: boolean) => Element;
   readonly className?: string;
   readonly style?: CSSProperties;
 }

@@ -4,7 +4,7 @@
  */
 import type { CarriedSpace } from '@minca/core/node';
 import { ensureFolderPermission, recallDataFolder } from '@minca/core/storage';
-import { avatarShape } from '@minca/app-shared/avatar';
+import { avatarElement } from '@minca/app-shared/avatar';
 import { MARK_BANDS, MARK_VIEWBOX } from '@minca/app-shared/mark';
 import type { CarrierStatus, PodState } from './shared';
 
@@ -46,33 +46,12 @@ export function mark(): HTMLElement {
   return h('div', { class: 'mark' }, svg, 'minca');
 }
 
-/**
- * The account's avatar, drawn exactly as the home draws it (`apps/shared/src/avatar.ts`),
- * so the account here and the account there are recognisably the same one — or
- * recognisably not.
- */
-function avatar(did: string, size = 32): SVGSVGElement {
-  const { d, fill, ground } = avatarShape(did);
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('viewBox', '0 0 100 100');
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Account avatar');
-  svg.style.cssText = `border-radius:${size / 4}px;background:${ground};flex-shrink:0;display:block`;
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', d);
-  path.setAttribute('fill', fill);
-  svg.append(path);
-  return svg;
-}
-
 /** Whose spaces these are, and which home connected them — the thing to check when something looks wrong */
 export function accountLine(account: NonNullable<CarrierStatus['account']>, action?: Node): HTMLElement {
   return h(
     'div',
     { class: 'account' },
-    avatar(account.did),
+    avatarElement(account.did, 32),
     h(
       'div',
       { class: 'who' },

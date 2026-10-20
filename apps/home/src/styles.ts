@@ -47,7 +47,6 @@ const authCss = `
     html minca-auth input:focus { border-color: ${accent.base}; box-shadow: 0 0 0 3px ${accent.soft}; }
     html minca-auth input:focus-visible { outline: none; }
     html minca-auth :focus-visible { outline-color: ${accent.base}; }
-    html minca-auth .wa-avatar { border-radius: ${radius.sm}px; }
     /* The account being signed in to is a card on the page: the rule, the surface corner. */
     html minca-auth .wa-account { border-color: ${surface.rule}; }
     html minca-auth .wa-account-open { border-radius: ${radius.lg}px; }
@@ -118,31 +117,6 @@ export function injectBaseStyles(): void {
     .home-page-head h1 { font-size: 40px; line-height: 1.05; }
     .home-page-head p { margin-top: 8px; font-size: 16px; color: ${ink.muted}; }
 
-    /* The home tab's hero: who this is, on grid paper fading at its edges */
-    .home-hero {
-      position: relative;
-      display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
-      margin: 0 -16px 28px; padding: 40px 16px 36px;
-    }
-    .home-hero::before {
-      content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-      background-image:
-        linear-gradient(${surface.line} 1px, transparent 1px),
-        linear-gradient(90deg, ${surface.line} 1px, transparent 1px);
-      background-size: 32px 32px; background-position: center -1px;
-      -webkit-mask-image: radial-gradient(ellipse 60% 75% at 50% 45%, #000 35%, transparent 100%);
-      mask-image: radial-gradient(ellipse 60% 75% at 50% 45%, #000 35%, transparent 100%);
-    }
-    .home-hero > * { position: relative; z-index: 1; }
-    .home-hero-name {
-      display: flex; align-items: center; gap: 10px; margin-top: 6px;
-      font-size: 44px; line-height: 1;
-    }
-    .home-rename {
-      height: 28px; padding: 0 12px; border-radius: ${radius.pill}px; background: ${surface.card};
-      font-family: ${palette.font}; font-size: 12px; font-weight: 500; letter-spacing: 0; color: ${ink.strong};
-    }
-
     /* Colour tiles, as on the site: a shape colour mixed into the paper, its shape off the corner */
     .home-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
     .home-tile {
@@ -180,7 +154,6 @@ export function injectBaseStyles(): void {
       .home-tabs { align-self: stretch; }
       .home-tab { flex: 1; padding: 0 12px; }
       .home-page-head h1 { font-size: 32px; }
-      .home-hero-name { font-size: 34px; }
       .home-tiles { grid-template-columns: minmax(0, 1fr); }
       .home-tile { min-height: 0; padding: 24px; }
       .home-tile-art { width: 120px; height: 120px; right: -40px; bottom: -40px; }

@@ -260,26 +260,27 @@ export class MincaAuthElement extends Base {
   }
 
   /**
-   * Draws an account's avatar from its DID. A page that shows accounts its own
-   * way sets this, so an account looks the same here as everywhere else on it;
-   * otherwise a simple one is drawn.
+   * Draws an account's avatar from its DID, round or not. A page that shows
+   * accounts its own way sets this, so an account looks the same here as
+   * everywhere else on it; otherwise a simple one is drawn.
    */
-  get avatar(): ((did: string, size: number) => Element) | null {
+  get avatar(): ((did: string, size: number, round: boolean) => Element) | null {
     return this.#avatar;
   }
 
-  set avatar(draw: ((did: string, size: number) => Element) | null) {
+  set avatar(draw: ((did: string, size: number, round: boolean) => Element) | null) {
     this.#avatar = draw;
     if (this.isConnected) this.#redraw();
   }
 
-  #avatar: ((did: string, size: number) => Element) | null = null;
+  #avatar: ((did: string, size: number, round: boolean) => Element) | null = null;
 
-  #drawAvatar(did: string, size = 32): Element {
-    const own = this.#avatar?.(did, size);
-    if (!own) return avatar(did, size);
-    own.classList.add('wa-avatar');
-    return own;
+  /** `round` inside something round already (a pill row), where corners would fight it */
+  #drawAvatar(did: string, size = 32, round = false): Element {
+    const drawn = this.#avatar?.(did, size, round) ?? avatar(did, size);
+    drawn.classList.add('wa-avatar');
+    if (round) drawn.classList.add('wa-avatar-round');
+    return drawn;
   }
 
   connectedCallback(): void {
@@ -661,7 +662,7 @@ export class MincaAuthElement extends Base {
           disabled: state.busy,
           onclick: () => void auth.select(account.id),
         },
-        this.#drawAvatar(account.did, 32),
+        this.#drawAvatar(account.did, 32, true),
         h('span', { class: 'wa-account-name', style: 'flex:1;min-width:0' }, account.name),
         h('span', { class: 'wa-chevron', 'aria-hidden': 'true' }, '›'),
       );

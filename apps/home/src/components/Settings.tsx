@@ -11,7 +11,6 @@ import {
   type StaySignedIn,
 } from '@minca/core/session';
 import { useAuth, useSession } from '@minca/core/react';
-import { Avatar } from '@minca/app-shared/Avatar';
 import { Shape, shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
 import type { ShapeColour } from '@minca/app-shared/tokens';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
@@ -145,12 +144,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
     <>
       {tab === 'home' && (
         <>
-          <AccountHeader
-            name={session.account.name}
-            did={session.did}
-            onRename={(name) => auth.rename(name)}
-          />
-
+          <PageHead title={`Hi, ${session.account.name}`} line="Here’s how your account is doing." />
           <Overview
             hasPasskey={hasPasskey}
             hasPassword={hasPassword}
@@ -628,70 +622,6 @@ function SignOut() {
 }
 
 /** Who this is, with the name editable in place */
-/** The home tab's hero: who this is, big, on grid paper, with the name to rename */
-function AccountHeader({
-  name,
-  did,
-  onRename,
-}: {
-  name: string;
-  did: string;
-  onRename: (name: string) => Promise<boolean>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
-  return (
-    <header className="home-hero">
-      <Avatar did={did} size={88} />
-      {editing ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void onRename(draft).then((ok) => ok && setEditing(false));
-          }}
-          style={{ display: 'flex', gap: 6, width: '100%', maxWidth: 320 }}
-        >
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            autoFocus
-            aria-label="Account name"
-            style={{ ...styles.input, height: 40 }}
-          />
-          <button type="submit" disabled={!draft.trim()} data-variant="primary" style={styles.darkSmall}>
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            data-variant="quiet"
-            style={styles.smallButton}
-          >
-            Cancel
-          </button>
-        </form>
-      ) : (
-        <h1 className="home-hero-name">
-          {name}
-          <button
-            onClick={() => {
-              setDraft(name);
-              setEditing(true);
-            }}
-            aria-label="Rename"
-            title="Rename"
-            data-variant="quiet"
-            className="home-rename"
-          >
-            Rename
-          </button>
-        </h1>
-      )}
-      <CopyDid did={did} />
-    </header>
-  );
-}
-
 /** A tab's title and what it is for */
 function PageHead({ title, line }: { title: string; line: string }) {
   return (
@@ -848,25 +778,6 @@ const HEARD_WITHIN_MS = 5000;
 
 const connectionId = (app: Connection) =>
   app.via === 'code' || app.access === 'carry' ? app.audience : app.origin;
-
-/** The account's DID, short, with a way to copy it whole — what a host's `--allow` takes */
-function CopyDid({ did }: { did: string }) {
-  const { copied, copy } = useCopy();
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <code title={did} style={{ fontSize: 12, color: palette.ink.faint }}>
-        {did.slice(0, 16)}…{did.slice(-6)}
-      </code>
-      <button
-        onClick={() => copy(did)}
-        data-variant="quiet"
-        style={{ ...styles.smallButton, height: 24, fontSize: 12 }}
-      >
-        {copied ? 'Copied' : 'Copy'}
-      </button>
-    </span>
-  );
-}
 
 /** "Todo (todo.example) · read and change Groceries · until 3 October" */
 function describeConnection(app: Connection): string {
