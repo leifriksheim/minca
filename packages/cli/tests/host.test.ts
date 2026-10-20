@@ -2134,6 +2134,27 @@ describe('a host with limits', () => {
     assert.equal(status.carrying, true, 'one already made is not new');
   });
 
+  test('asking to pay first makes no subscription past the limit either', async () => {
+    const wallet = createWalletPayments({
+      network: 'base-sepolia',
+      to: '0x1111111111111111111111111111111111111111',
+      monthly: '4',
+      fetch: async () => Response.json({ jsonrpc: '2.0', id: 1, error: { message: 'no' } }),
+    });
+    const served = await running({ newPerAddress: 2, wallet });
+    const url = `http://127.0.0.1:${served.port}`;
+    const info = await describeHost(url);
+    const plan = info.plans?.find((one) => one.id.startsWith('wallet'))?.id;
+    assert.ok(plan);
+    const keys = await Promise.all(Array.from({ length: 3 }, () => subscriptionKey(newSubscriptionSeed())));
+    for (const key of keys.slice(0, 2)) await createHostClient(url, info.did, key).pay(plan);
+    await assert.rejects(
+      createHostClient(url, info.did, keys[2]!).pay(plan),
+      (error: unknown) => error instanceof HostError && error.status === 429,
+    );
+    assert.equal(await served.node.get(keys[2]!.did), null, 'nothing kept for it');
+  });
+
   test('a subscription takes no new space past the spaces it may have', async () => {
     const served = await running({ spacesPerSubscription: 2, measure: async () => 0 });
     const url = `http://127.0.0.1:${served.port}`;
@@ -2212,8 +2233,9 @@ describe('who is asking, for the limit on new subscriptions', () => {
     assert.equal(addressOf(asked('203.0.113.7')), '203.0.113.7');
   });
 
-  test('a proxy’s header counts only when named; its first address is the asker', () => {
-    const behind = asked('10.0.0.1', { 'x-forwarded-for': '198.51.100.4, 10.0.0.1' });
+  test('a proxy’s header counts only when named; the address it added, last, is the asker', () => {
+    // The asker wrote the first; the proxy added the last.
+    const behind = asked('10.0.0.1', { 'x-forwarded-for': '6.6.6.6, 198.51.100.4' });
     assert.equal(addressOf(behind), '10.0.0.1', 'not trusted unless named');
     assert.equal(addressOf(behind, 'X-Forwarded-For'), '198.51.100.4');
   });

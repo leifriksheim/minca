@@ -114,11 +114,20 @@ reference implementation, or any implementation, honestly.
   - A host with limits carries for anyone, and an account is only a key, so
     a stranger can take any number of accounts' free room. The reference
     host makes at most 5 subscriptions a day for one address (an IPv6 /64
-    counting as one), which slows a stranger with many addresses and stops
-    none (08 §1.1). Nor is one account's room bounded in bytes: past its
+    counting as one), whichever call makes them, which slows a stranger with
+    many addresses and stops none (08 §1.1;
+    `packages/cli/tests/host.test.ts`, "asking to pay first makes no
+    subscription past the limit either"). Behind one shared address, as a
+    proxy without its header set or carrier-grade NAT, a stranger can spend
+    the day's 5 for everyone there. The free line counts accounts, which
+    members may share, so a community writing as a few accounts stays under
+    it. Nor is one account's room bounded in bytes: past its
     quota a host takes no new space for it, but what it carries keeps
     growing ([#33](https://github.com/leifriksheim/minca/issues/33)).
     Accepted otherwise: it is the host's cost.
+  - Anyone who knows a space's id learns from the host's open status
+    whether it carries the space, how many wrote and read there, and, asking
+    again and again, when its members are online (08 §1.1).
   - A free subscription none of whose devices calls for `idleDays` is
     dropped, and with it the host's copy of the spaces only it named.
     Someone who lost every device and comes back with the recovery code
@@ -444,11 +453,15 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     the spec says to write what is allowed (01 §7.4, 03 §2.2; `roles.test.ts`,
     "a missing argument reads as null…").
   - A host's free line counts the members who write in a space, so a member
-    who may invite can push it over by inviting more accounts of their own
-    and writing from them. Removing them undoes it, as only members count,
-    though the space comes back under only after a window well below the
-    line (`packages/core/tests/host-limits.test.ts`, "a member removed no
-    longer counts as a writer"). After `graceDays` only the space's fund
+    who may invite, or anyone holding an invite link that is still open, can
+    push it over by joining more accounts and writing from them. Removing
+    them before `until` undoes it, as only members count and a space under
+    the line when its grace runs out is not stopped
+    (`packages/core/tests/host-limits.test.ts`, "a member removed no longer
+    counts as a writer", "pushed over by joiners removed within the hour…");
+    after `until` it is stopped, and is free again only through its fund or
+    once the host forgets it. Any member can also put a space several write
+    in over on bytes, and removing them leaves what they wrote. After `graceDays` only the space's fund
     keeps it at that host. Readers never put a space over, as they cost
     nothing to make up ("readers alone never put a space over the line"),
     and backdating writes does not keep one under: they count by when they

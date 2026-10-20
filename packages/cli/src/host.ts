@@ -281,14 +281,15 @@ const HOOK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/hook$/;
 
 /**
  * Who is asking, as far as the host can tell: the address the proxy in front
- * says, from `header` (trusted only when named; Fly's on Fly), or the
- * socket's. An IPv6 address counts by its /64, which one person usually holds
+ * says, from `header` (trusted only when named; Fly's on Fly), the last one
+ * when it lists several, or the socket's. An IPv6 address counts by its /64, which one person usually holds
  * whole.
  */
 export function addressOf(req: IncomingMessage, header?: string): string {
   const name = header ?? (process.env.FLY_APP_NAME ? 'fly-client-ip' : undefined);
   const given = name ? req.headers[name.toLowerCase()] : undefined;
-  const said = (Array.isArray(given) ? given[0] : given)?.split(',')[0]?.trim();
+  // The last address in the list is the one the proxy itself added; any before it, the asker wrote.
+  const said = (Array.isArray(given) ? given.at(-1) : given)?.split(',').at(-1)?.trim();
   const address = (said || req.socket.remoteAddress || 'unknown').replace(/^::ffff:(?=\d+\.)/i, '');
   if (!address.includes(':')) return address;
   // The first four groups, with :: spelled out far enough to find them.
@@ -704,7 +705,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     const plan = plans.find((known) => known.id === planId);
     if (!plan) throw refusal(400, 'This host has no such plan for this');
     const [kind, period] = [plan.id.slice(0, plan.id.indexOf('-')), plan.id.slice(plan.id.indexOf('-') + 1)];
-    const subscription = await node.subscribe(id);
+    const subscription = await subscribeFrom(req, id);
     if (kind === 'card' && billing) {
       const checkout = await billing.checkout({
         subscription: id,
@@ -775,16 +776,23 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   }
 
   /**
+   * Makes a subscription if there is none, and returns it. At a host with
+   * limits a new one for an account is active at once, so every route that
+   * makes one counts it against the address asking.
+   */
+  async function subscribeFrom(req: IncomingMessage, id: string): Promise<Subscription> {
+    if (limits && !id.startsWith('space:') && !(await node.get(id))) mayMake(req);
+    return node.subscribe(id);
+  }
+
+  /**
    * A subscription someone has paid for; on a free host every one is, made on
    * the way, and so is an account's at a host with limits, a few a day from
    * one address.
    */
   async function mustBePaid(id: string, otherwise: string, req: IncomingMessage): Promise<void> {
     if (options.free) await node.subscribe(id);
-    else if (limits && !id.startsWith('space:') && !(await node.get(id))) {
-      mayMake(req);
-      await node.subscribe(id);
-    }
+    else if (limits && !id.startsWith('space:')) await subscribeFrom(req, id);
     const subscription = await node.get(id);
     if (!subscription || node.state(subscription) === 'lapsed') throw refusal(402, otherwise);
   }

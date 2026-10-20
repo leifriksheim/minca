@@ -440,7 +440,11 @@ export async function createHostNode(config: HostConfig) {
       const { stopped: _paid, ...rest } = line;
       return rest;
     }
-    return line.from + lineGrace <= t && line.stopped === undefined ? { ...line, stopped: t } : line;
+    // Stopped only while it is over: one that went back under before its grace ran out
+    // keeps its notice, and is stopped only should it go over again after.
+    return reasons.length > 0 && line.from + lineGrace <= t && line.stopped === undefined
+      ? { ...line, reasons, stopped: t }
+      : line;
   }
 
   /**

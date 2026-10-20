@@ -291,7 +291,8 @@ person can compare hosts before choosing one.
 }
 ```
 
-Each number is a non-negative integer below 2⁵³. A device MUST ignore a
+Each number is a non-negative integer below 2⁵³, and `space.windowDays` at
+least 1. A device MUST ignore a
 `limits` that is not an object with every field it requires well formed,
 and still read the rest of the description: limits are for showing, and a
 host that describes them badly is still a host. `free: true` means what it
@@ -321,7 +322,8 @@ it carries for members' subscriptions:
   10 minutes). Accounts the host runs, its bots (§3), are not counted.
 - **readers**: distinct session DIDs that a socket for the space
   (`/peer?space=`) proved (04 §5). The reference host keeps at most 10 000
-  a day for a space, so made-up keys cost it no more memory past that.
+  for a space over its window, and a million over every space, so made-up
+  keys cost it no more memory past that.
 - **bytes**: what the space takes at the host.
 
 A space is **over the line** when `writers` exceeds `space.writers`, or when
@@ -333,13 +335,18 @@ as any space does.
 
 When a space goes over, the host notes when (`since`) and keeps carrying it
 for `graceDays` (`until = since + graceDays × 86 400`), saying so in the
-status of every subscription that names it. Past `until`, it MUST NOT carry
-the space for members' subscriptions alone: only its own subscription (§2),
-while `active` or `grace`, carries it then. Before `until` it MUST carry it
-as before. While the space's own subscription is `active`, the line does not
+status of every subscription that names it. Past `until`, if the space is
+over the line then, it MUST NOT carry it for members' subscriptions alone:
+only its own subscription (§2), while `active` or `grace`, carries it then.
+One back under by `until`, as when its members removed those who pushed it
+over, keeps its notice and is carried as before, until it is over again or
+free again. Before `until` it MUST carry it as before. While the space's own subscription is `active`, the line does not
 apply. The grace is given once: paying for a while does not start it again,
 so once the space's own subscription stops being `active`, members'
-subscriptions carry it again only if `until` is still ahead. A space comes
+subscriptions carry it again only if `until` is still ahead or it is under
+the line. Its members hear nothing of the line while the fund pays, so a
+fund that lapses after `until` stops members' carrying it with no new
+notice; the fund's own status says when it runs out. A space comes
 back under the line only after `windowDays` with every count at or below 80%
 of its limit. One the host stopped carrying sees no writes, so it comes back
 only through its own subscription, or once the host forgets it after
@@ -408,9 +415,10 @@ how its members can start its fund (§2) before then.
 **Abuse.** A host with `limits` carries for anyone who asks, so it limits how
 fast subscriptions are made and how much one account may name. The
 reference host makes at most 5 subscriptions a day for one address, an IPv6
-/64 counting as one, and carries at most 200 spaces for one subscription; a
-carry space past that takes no new space, as past its quota. Behind a proxy
-it takes the address from a header only when told which. These are its own
+/64 counting as one, by any call that makes one, and carries at most 200
+spaces for one subscription; a carry space past that takes no new space, as
+past its quota. Behind a proxy it takes the address from a header only when
+told which, and then the last address in it, the one the proxy added. These are its own
 numbers, not the protocol's, and they slow a stranger rather than stop one:
 an account is only a key.
 

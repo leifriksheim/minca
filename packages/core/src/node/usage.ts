@@ -21,8 +21,10 @@ const DAY = 86_400;
 const PREFIX = 'usage:';
 const SALT_KEY = 'usage-salt';
 const FIRST_PREFIX = 'first:';
-/** Readers kept for one space on one day: past it the count stops growing, so made-up keys cost no more memory */
-const MAX_READERS_A_DAY = 10_000;
+/** Readers kept for one space over the whole window: past it the count stops growing, so made-up keys cost no more */
+const MAX_READERS_A_SPACE = 10_000;
+/** Readers kept for every space together, however many spaces someone makes to read */
+const MAX_READERS = 1_000_000;
 
 export interface UsageMeterConfig {
   readonly store: StorageAdapter;
@@ -69,6 +71,10 @@ export async function createUsageMeter(config: UsageMeterConfig) {
   const writers = new Map<string, Map<string, Set<string>>>();
   /** Readers by space, then by day: session DIDs, in memory only */
   const readers = new Map<string, Map<string, Set<string>>>();
+  /** How many reader entries are kept, across every space and day */
+  let kept = 0;
+  const keptIn = (days: Map<string, Set<string>> | undefined) =>
+    [...(days?.values() ?? [])].reduce((sum, set) => sum + set.size, 0);
 
   const setFor = (sets: Map<string, Map<string, Set<string>>>, spaceId: string, day: string) => {
     let days = sets.get(spaceId);
@@ -127,8 +133,11 @@ export async function createUsageMeter(config: UsageMeterConfig) {
 
     /** A session key proved it may read a space */
     read(spaceId: string, session: string): void {
+      if (kept >= MAX_READERS || keptIn(readers.get(spaceId)) >= MAX_READERS_A_SPACE) return;
       const set = setFor(readers, spaceId, dayOf(now()));
-      if (set.size < MAX_READERS_A_DAY) set.add(session);
+      if (set.has(session)) return;
+      set.add(session);
+      kept += 1;
     },
 
     /**
@@ -167,6 +176,7 @@ export async function createUsageMeter(config: UsageMeterConfig) {
         for (const [spaceId, days] of sets) {
           for (const day of [...days.keys()]) {
             if (within.has(day)) continue;
+            if (sets === readers) kept -= days.get(day)?.size ?? 0;
             days.delete(day);
             if (sets === writers) await later(() => store.delete(`${PREFIX}${spaceId}:${day}`));
           }
@@ -179,6 +189,7 @@ export async function createUsageMeter(config: UsageMeterConfig) {
       for (const day of writers.get(spaceId)?.keys() ?? [])
         await later(() => store.delete(`${PREFIX}${spaceId}:${day}`));
       writers.delete(spaceId);
+      kept -= keptIn(readers.get(spaceId));
       readers.delete(spaceId);
       if (first.delete(spaceId)) await later(() => store.delete(`${FIRST_PREFIX}${spaceId}`));
     },

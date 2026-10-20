@@ -95,6 +95,17 @@ describe('the usage meter', () => {
     assert.equal((await meter.usage('club')).readers, 10_000);
   });
 
+  test('readers stop growing for a space across the whole window, not only for a day', async () => {
+    let now = 1_800_000_000;
+    const meter = await createUsageMeter({ store: createMemoryAdapter(), windowDays: 30, now: () => now });
+    for (let day = 0; day < 30; day += 1) {
+      for (let i = 0; i < 1_000; i += 1) meter.read('club', `did:key:zDnae${day}x${i}`);
+      now += DAY;
+    }
+    now -= DAY;
+    assert.equal((await meter.usage('club')).readers, 10_000);
+  });
+
   test('forgetting a space drops its counts', async () => {
     const store = createMemoryAdapter();
     const meter = await createUsageMeter({ store, windowDays: 30 });

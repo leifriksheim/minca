@@ -70,7 +70,12 @@ What to watch once limits are on:
   a new disk keeps its grace clock.
 - **Turning limits on** counts from that moment: no space is over on writers
   until enough people write after it, and each then gets the whole grace
-  period. Paid subscriptions stay on the paid plan until their date.
+  period. Paid subscriptions stay on the paid plan until their date; after
+  it, one none of whose devices called for `MINCA_HOST_IDLE_DAYS` is dropped
+  at the next sweep, as any free one is.
+- **The limit on new subscriptions** counts the asker's address. Behind a
+  proxy other than Fly's, set `MINCA_HOST_CLIENT_IP_HEADER`, or every
+  newcomer shares the proxy's address and its 5 a day.
 
 ## Before launch
 

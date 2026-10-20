@@ -301,9 +301,15 @@ describe('the free line', () => {
     await bothWrite(node, c);
     await node.evaluate();
     await until(async () => (await mirror.list(`${c.space}/`)).length > 0, 8000, 'the bucket to hold it');
-    const held = (await c.aliceNode.records.list(c.space, { collection: 'note' })).length;
-
     clock += 31 * DAY;
+    // Still busy as its grace runs out.
+    await bothWrite(node, c);
+    await until(
+      async () => (await c.aliceNode.records.list(c.space, { collection: 'note' })).length === 4,
+      8000,
+      'every note to reach Alice',
+    );
+    const held = 4;
     await node.evaluate();
     await until(async () => !(await carries(node, c.space)()), 5000, 'the host to stop carrying it');
     const [over] = await node.overFor(c.subscriptions[0]);
@@ -356,6 +362,7 @@ describe('the free line', () => {
     assert.equal(over?.until, first.until, 'the same date as before it paid');
     assert.equal(await carries(node, c.space)(), true, 'carried still, by its own subscription’s grace');
     clock += 31 * DAY;
+    await bothWrite(node, c);
     await node.sweep();
     await node.evaluate();
     await until(async () => !(await carries(node, c.space)()), 5000, 'nobody to carry it');
@@ -370,6 +377,7 @@ describe('the free line', () => {
     await bothWrite(node, c);
     await node.evaluate();
     clock += 31 * DAY;
+    await bothWrite(node, c);
     assert.deepEqual((await node.evaluate()).stopped, [c.space]);
     await until(async () => !(await carries(node, c.space)()), 5000, 'stopped');
 
@@ -383,6 +391,48 @@ describe('the free line', () => {
     clock += 60;
     assert.deepEqual((await node.evaluate()).stopped, [c.space]);
     await until(async () => !(await carries(node, c.space)()), 5000, 'stopped again, without a new grace');
+  });
+
+  test('pushed over by joiners removed within the hour, a space is not stopped when its grace runs out', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    // The defaults' shape: the grace as long as the window.
+    const node = await host(hub, {
+      now: () => clock,
+      limits: { ...LIMITS, space: { ...LIMITS.space, writers: 2 } },
+    });
+    const [alice, one, two] = [await account(), await account(), await account()];
+    const aliceNode = await device(alice, hub);
+    const club = await aliceNode.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    await hold(aliceNode, club.id);
+    const id = await subscriptionId();
+    await node.subscribe(id);
+    await node.attach(id, alice.did, (await aliceNode.carriers.add({ did: node.did, name: 'Host' })).invite);
+    await until(carries(node, club.id), 8000, 'the club to be carried');
+
+    // Someone with the club's invite link joins twice over, and writes.
+    const invite = await aliceNode.spaces.invite(club.id);
+    for (const who of [one, two]) {
+      const joiner = await device(who, hub);
+      await joiner.spaces.join(invite);
+      await joined(joiner, club.id);
+      await joiner.records.put(club.id, 'note', { text: 'hi' });
+    }
+    await until(async () => (await node.usage(club.id))?.writers === 3, 8000, 'three writers');
+    await node.evaluate();
+    assert.equal((await node.overFor(id)).length, 1, 'over');
+
+    clock += 3600;
+    await aliceNode.spaces.removeMember(club.id, one.did);
+    await aliceNode.spaces.removeMember(club.id, two.did);
+    await until(async () => (await node.usage(club.id))?.writers === 1, 8000, 'only Alice counts');
+    clock += 30 * DAY;
+    assert.deepEqual((await node.evaluate()).stopped, [], 'under the line when its grace ran out');
+    assert.equal(await carries(node, club.id)(), true);
+    // A whole window well under, and the notice goes.
+    clock += 30 * DAY;
+    await node.evaluate();
+    assert.deepEqual(await node.overFor(id), []);
   });
 
   test('bytes count only in a space several accounts write in', async () => {
