@@ -65,3 +65,21 @@ export function avatarShape(did: string): AvatarShape {
   drawn.set(did, shape);
   return shape;
 }
+
+/** The avatar as an SVG element, for pages and elements drawn without React (`<minca-auth>`'s `avatar`) */
+export function avatarElement(did: string, size: number): SVGSVGElement {
+  const { d, fill, ground } = avatarShape(did);
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = globalThis.document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Account avatar');
+  svg.style.cssText = `border-radius:${size / 4}px;background:${ground};flex-shrink:0;display:block`;
+  const path = globalThis.document.createElementNS(ns, 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill', fill);
+  svg.appendChild(path);
+  return svg;
+}

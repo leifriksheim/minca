@@ -48,6 +48,10 @@ const authCss = `
     html minca-auth input:focus-visible { outline: none; }
     html minca-auth :focus-visible { outline-color: ${accent.base}; }
     html minca-auth .wa-avatar { border-radius: ${radius.sm}px; }
+    /* The account being signed in to is a card on the page: the rule, the surface corner. */
+    html minca-auth .wa-account { border-color: ${surface.rule}; }
+    html minca-auth .wa-account-open { border-radius: ${radius.lg}px; }
+    html minca-auth .wa-account-row { border-radius: ${radius.pill}px; }
     html minca-auth .wa-popover { border-radius: ${radius.lg}px; border-color: ${surface.rule}; box-shadow: ${shadow.small}; }
 `;
 
@@ -76,40 +80,111 @@ export function injectBaseStyles(): void {
       [data-card] { padding: 28px 20px !important; }
     }
 
-    /* The account page: a bar across the top, the tabs down the side and the
-       tab beside them; on a narrow screen the tabs become a row of pills. */
-    .home { min-height: 100vh; min-height: 100dvh; }
-    .home-bar {
+    /* The account page. A floating pill bar like the site's nav, the tabs as
+       one segmented pill under it, and a column of content in the middle. */
+    .home { min-height: 100vh; min-height: 100dvh; padding-bottom: 96px; }
+    .home-nav {
       position: sticky; top: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      padding: 12px 16px 14px;
+      background: linear-gradient(${surface.page} 78%, transparent);
+    }
+    .home-nav-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: 12px 24px; background: ${surface.page}; border-bottom: 1px solid ${surface.line};
+      width: 100%; max-width: 880px; height: 56px; padding: 0 8px 0 20px;
+      border: 1px solid ${surface.rule}; border-radius: ${radius.pill}px; background: ${surface.page};
     }
-    .home-bar-label { font-size: 15px; color: ${ink.muted}; }
-    .home-layout {
-      display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px;
-      max-width: 1000px; margin: 0 auto; padding: 40px 24px 80px; align-items: start;
+    .home-brand { display: flex; align-items: center; gap: 10px; }
+    .home-brand-label {
+      padding-left: 10px; border-left: 1px solid ${surface.line};
+      font-family: ${display}; font-size: 18px; font-weight: 700; letter-spacing: -0.04em; color: ${ink.muted};
     }
-    .home-tabs { position: sticky; top: 89px; display: flex; flex-direction: column; gap: 2px; }
+    .home-tabs {
+      display: flex; gap: 2px; padding: 4px; max-width: 100%; overflow-x: auto; scrollbar-width: none;
+      border: 1px solid ${surface.rule}; border-radius: ${radius.pill}px; background: ${surface.card};
+    }
+    .home-tabs::-webkit-scrollbar { display: none; }
     .home-tab {
-      display: flex; align-items: center; height: 40px; padding: 0 16px;
-      border: 1px solid transparent; border-radius: ${radius.pill}px; background: transparent;
-      font-size: 14px; font-weight: 500; color: ${ink.body}; text-align: left; white-space: nowrap;
+      flex: none; height: 36px; padding: 0 18px; border: 0; border-radius: ${radius.pill}px;
+      background: transparent; color: ${ink.muted}; font-size: 14px; font-weight: 500; white-space: nowrap;
     }
-    .home-tab:hover { background: ${surface.sunken}; }
-    .home-tab[aria-selected="true"] { background: ${accent.soft}; color: ${accent.base}; }
+    .home-tab:hover { color: ${ink.strong}; }
+    .home-tab[aria-selected="true"] { background: ${ink.strong}; color: ${surface.card}; }
+    .home-main { max-width: 760px; margin: 0 auto; padding: 24px 16px 0; }
     .menu-item:not(:disabled):hover { background: ${surface.sunken} !important; }
-    /* Side by side where there is room; one per row on a phone. */
-    .overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .overview > * { min-height: 200px; }
-    @media (max-width: 760px) {
-      .home-bar { padding: 10px 16px; }
-      .home-bar-label { display: none; }
-      .home-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 16px 16px 64px; }
-      .home-tabs { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
-      .home-tab { border-color: ${surface.line}; }
-      .home-tab[aria-selected="true"] { border-color: ${accent.base}; }
-      .overview { grid-template-columns: minmax(0, 1fr); }
-      .overview > * { min-height: 0; }
+
+    /* A tab's title, in the display face */
+    .home-page-head { margin: 8px 0 24px; }
+    .home-page-head h1 { font-size: 40px; line-height: 1.05; }
+    .home-page-head p { margin-top: 8px; font-size: 16px; color: ${ink.muted}; }
+
+    /* The home tab's hero: who this is, on grid paper fading at its edges */
+    .home-hero {
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
+      margin: 0 -16px 28px; padding: 40px 16px 36px;
+    }
+    .home-hero::before {
+      content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(${surface.line} 1px, transparent 1px),
+        linear-gradient(90deg, ${surface.line} 1px, transparent 1px);
+      background-size: 32px 32px; background-position: center -1px;
+      -webkit-mask-image: radial-gradient(ellipse 60% 75% at 50% 45%, #000 35%, transparent 100%);
+      mask-image: radial-gradient(ellipse 60% 75% at 50% 45%, #000 35%, transparent 100%);
+    }
+    .home-hero > * { position: relative; z-index: 1; }
+    .home-hero-name {
+      display: flex; align-items: center; gap: 10px; margin-top: 6px;
+      font-size: 44px; line-height: 1;
+    }
+    .home-rename {
+      height: 28px; padding: 0 12px; border-radius: ${radius.pill}px; background: ${surface.card};
+      font-family: ${palette.font}; font-size: 12px; font-weight: 500; letter-spacing: 0; color: ${ink.strong};
+    }
+
+    /* Colour tiles, as on the site: a shape colour mixed into the paper, its shape off the corner */
+    .home-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .home-tile {
+      position: relative; overflow: hidden; min-height: 240px;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 28px;
+      border: 1px solid ${surface.rule}; border-radius: ${radius.xl}px;
+      background: color-mix(in srgb, var(--c) var(--minca-tint-tile), ${surface.page});
+    }
+    .home-tile[data-c="cobalt"] { --c: var(--minca-cobalt); }
+    .home-tile[data-c="coral"] { --c: var(--minca-coral); }
+    .home-tile[data-c="sage"] { --c: var(--minca-sage); }
+    .home-tile[data-c="peach"] { --c: var(--minca-peach); }
+    .home-tile[data-c="lilac"] { --c: var(--minca-lilac); }
+    .home-tile > :not(.home-tile-art) { position: relative; z-index: 1; }
+    .home-tile h2 { margin-top: 12px; font-size: 24px; letter-spacing: -0.04em; }
+    .home-tile p { max-width: 230px; font-size: 15px; line-height: 1.45; color: ${ink.body}; }
+    .home-tile button { margin-top: auto; }
+    .home-tile-art {
+      position: absolute; right: -44px; bottom: -44px; width: 170px; height: 170px;
+      transition: transform .6s ease;
+    }
+    .home-tile:hover .home-tile-art { transform: rotate(20deg); }
+    .home-chip {
+      display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
+      border: 1px solid ${surface.rule}; border-radius: ${radius.pill}px; background: ${surface.card};
+      font-size: 12px; font-weight: 500; color: ${ink.strong};
+    }
+    .home-chip-warn { border-color: ${accent.warn}; background: ${accent.warnSoft}; color: ${accent.warn}; }
+
+    @media (prefers-reduced-motion: reduce) { .home-tile-art { transition: none; } .home-tile:hover .home-tile-art { transform: none; } }
+    @media (max-width: 640px) {
+      .home-nav { padding: 8px 12px 12px; }
+      .home-nav-bar { height: 52px; padding: 0 6px 0 16px; }
+      .home-brand-label { display: none; }
+      .home-tabs { align-self: stretch; }
+      .home-tab { flex: 1; padding: 0 12px; }
+      .home-page-head h1 { font-size: 32px; }
+      .home-hero-name { font-size: 34px; }
+      .home-tiles { grid-template-columns: minmax(0, 1fr); }
+      .home-tile { min-height: 0; padding: 24px; }
+      .home-tile-art { width: 120px; height: 120px; right: -40px; bottom: -40px; }
+      .home-tile p { max-width: 200px; }
     }
     @media (max-width: 420px) { .switcher-name { display: none; } }
   `;

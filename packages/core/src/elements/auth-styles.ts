@@ -113,17 +113,24 @@ minca-auth .wa-badge {
   background: var(--minca-sunken); border: 1px solid var(--minca-line); color: var(--minca-muted);
 }
 
-minca-auth .wa-account { padding: 12px 0; border-top: 1px solid var(--minca-line); }
-minca-auth .wa-account:last-of-type { border-bottom: 1px solid var(--minca-line); margin-bottom: 8px; }
+minca-auth .wa-accounts { display: flex; flex-direction: column; gap: 8px; }
+minca-auth .wa-account { border: 1px solid var(--minca-line); border-radius: var(--minca-radius); background: var(--minca-surface); }
+minca-auth .wa-account-open { padding: 20px; border-color: var(--minca-line-strong); }
+minca-auth .wa-account-head { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px; }
+minca-auth .wa-account-head .wa-account-name { font-size: 17px; }
 minca-auth .wa-account-row {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; margin: 0 -8px;
-  width: calc(100% + 16px); text-align: left;
-  background: none; border: 1px solid transparent; border-radius: var(--minca-radius); color: var(--minca-body);
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px;
+  text-align: left; color: var(--minca-body);
 }
 minca-auth .wa-account-row:not(:disabled):hover { background: var(--minca-sunken); }
-minca-auth .wa-account-name { display: block; font-weight: 600; color: var(--minca-ink); }
-minca-auth .wa-account-did { display: block; font-size: 12px; color: var(--minca-faint); font-family: var(--minca-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-minca-auth .wa-account-body { margin-top: 10px; }
+minca-auth .wa-account-name { display: block; font-weight: 600; color: var(--minca-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+minca-auth .wa-chevron { color: var(--minca-faint); font-size: 18px; }
+minca-auth .wa-or { display: flex; align-items: center; gap: 12px; margin: 14px 0; color: var(--minca-faint); font-size: 12px; }
+minca-auth .wa-or::before, minca-auth .wa-or::after { content: ''; flex: 1; height: 1px; background: var(--minca-line); }
+minca-auth .wa-secondary.wa-wide { flex: none; width: 100%; height: 40px; }
+minca-auth .wa-small .wa-link { padding: 0; margin: 0 8px 0 0; font-size: 13px; }
+minca-auth .wa-footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--minca-line); }
+minca-auth .wa-footer .wa-links { margin-top: 0; }
 minca-auth .wa-avatar { flex-shrink: 0; display: block; border-radius: 8px; }
 
 minca-auth .wa-code {

@@ -162,6 +162,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       )}
       {tab === 'security' && (
         <>
+          <PageHead title="Security" line="How you get into your account, and how you get it back." />
           <Section
             title="Signing in"
             description="How you open your account here every day. A passkey works in this browser; a password works wherever your account is kept, including your pod in other apps."
@@ -280,6 +281,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       )}
       {tab === 'apps' && (
         <>
+          <PageHead title="Apps" line="What you let use your account, and what they may tell you." />
           <Section
             title="Connected apps"
             description="Apps that you let use your account. Each got a note, signed by your account, saying what it may use and until when. None of them has your password."
@@ -343,6 +345,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       )}
       {tab === 'data' && (
         <>
+          <PageHead title="Your data" line="Where your spaces are kept, and how they stay safe." />
           <Copies
             place={place}
             folderAvailable={state.folderAvailable}
@@ -365,8 +368,9 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
 }
 
 /**
- * The home tab: how the account is doing at a glance, one cell per tab, in a
- * ruled grid. A cell that needs attention says so in its line.
+ * The home tab: how the account is doing at a glance, one colour tile per
+ * tab, its shape off the corner. A tile that wants something says so in its
+ * chip.
  */
 function Overview({
   hasPasskey,
@@ -382,92 +386,77 @@ function Overview({
   openTab: (tab: TabId) => void;
 }) {
   const ways = [hasPasskey && 'a passkey', hasPassword && 'a password'].filter(Boolean).join(' and ');
-  const cells: ReadonlyArray<{
+  const tiles: ReadonlyArray<{
     kind: ShapeKind;
     colour: ShapeColour;
     title: string;
     line: string;
+    chip: string;
     warn?: boolean;
     action: string;
     tab: TabId;
   }> = [
     {
-      kind: 'key',
+      kind: 'scallop',
       colour: 'cobalt',
       title: 'Signing in',
-      line: ways ? `You sign in with ${ways}.` : 'Only your recovery code opens it here.',
+      line: ways ? `You sign in with ${ways}.` : 'Only your recovery code opens your account here.',
+      chip: ways ? 'All set' : 'Set one up',
       warn: !ways,
       action: 'Security',
       tab: 'security',
     },
     {
-      kind: 'pass',
+      kind: 'daisy',
       colour: 'coral',
       title: 'Apps',
-      line: apps === 0 ? 'No apps yet.' : `${apps} ${apps === 1 ? 'app uses' : 'apps use'} your account.`,
-      action: 'Manage apps',
+      line:
+        apps === 0
+          ? 'Apps you connect show up here.'
+          : `${apps} ${apps === 1 ? 'app uses' : 'apps use'} your account.`,
+      chip: apps === 0 ? 'None yet' : `${apps} connected`,
+      action: 'See apps',
       tab: 'apps',
     },
     {
-      kind: 'stack',
+      kind: 'burst',
       colour: 'sage',
       title: 'Your copies',
       line:
         keepers === 0
-          ? 'Nothing keeps a copy while your pages are closed.'
+          ? 'Nothing keeps your spaces while your pages are closed.'
           : `Kept online by ${keepers} ${keepers === 1 ? 'helper' : 'helpers'}.`,
+      chip: keepers === 0 ? 'Only here' : 'Backed up',
       warn: keepers === 0,
       action: 'Your data',
       tab: 'data',
     },
     {
-      kind: 'mesh',
-      colour: 'lilac',
+      kind: 'flower',
+      colour: 'peach',
       title: 'Your phone',
-      line: 'Show a code, scan it, and your phone is the same account.',
+      line: 'Scan a code, and your phone is the same account.',
+      chip: 'Takes a minute',
       action: 'Add your phone',
       tab: 'data',
     },
   ];
   return (
-    <div className="overview" style={grid}>
-      {cells.map((cell) => (
-        <div key={cell.title} style={cellStyle}>
-          <Shape kind={cell.kind} colour={cell.colour} size={36} />
-          <div style={{ flex: 1 }}>
-            <h2 style={styles.sectionHeading}>{cell.title}</h2>
-            <p style={{ ...styles.sectionText, color: cell.warn ? palette.accent.warn : palette.ink.muted }}>
-              {cell.line}
-            </p>
-          </div>
-          <button
-            onClick={() => openTab(cell.tab)}
-            data-variant="quiet"
-            style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
-          >
-            {cell.action}
+    <div className="home-tiles">
+      {tiles.map((tile) => (
+        <section key={tile.title} className="home-tile" data-c={tile.colour}>
+          <Shape kind={tile.kind} colour={tile.colour} className="home-tile-art" />
+          <span className={tile.warn ? 'home-chip home-chip-warn' : 'home-chip'}>{tile.chip}</span>
+          <h2>{tile.title}</h2>
+          <p>{tile.line}</p>
+          <button onClick={() => openTab(tile.tab)} data-variant="quiet" style={styles.smallButton}>
+            {tile.action}
           </button>
-        </div>
+        </section>
       ))}
     </div>
   );
 }
-
-/** Cells share one navy rule: the frame's colour shows through the gaps */
-const grid = {
-  gap: 1,
-  background: palette.surface.rule,
-  border: `1px solid ${palette.surface.rule}`,
-  borderRadius: palette.radius.xl,
-  overflow: 'hidden',
-} as const;
-const cellStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 14,
-  padding: 24,
-  background: palette.surface.card,
-} as const;
 
 /** How much this site keeps in the browser, and whether the browser may clear it to make room */
 function useBrowserStorage(): { used: number | null; persisted: boolean | null } {
@@ -639,6 +628,7 @@ function SignOut() {
 }
 
 /** Who this is, with the name editable in place */
+/** The home tab's hero: who this is, big, on grid paper, with the name to rename */
 function AccountHeader({
   name,
   did,
@@ -651,50 +641,63 @@ function AccountHeader({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   return (
-    <header style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-      <Avatar did={did} size={48} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {editing ? (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void onRename(draft).then((ok) => ok && setEditing(false));
-            }}
-            style={{ display: 'flex', gap: 6 }}
+    <header className="home-hero">
+      <Avatar did={did} size={88} />
+      {editing ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onRename(draft).then((ok) => ok && setEditing(false));
+          }}
+          style={{ display: 'flex', gap: 6, width: '100%', maxWidth: 320 }}
+        >
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            autoFocus
+            aria-label="Account name"
+            style={{ ...styles.input, height: 40 }}
+          />
+          <button type="submit" disabled={!draft.trim()} data-variant="primary" style={styles.darkSmall}>
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            data-variant="quiet"
+            style={styles.smallButton}
           >
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              autoFocus
-              aria-label="Account name"
-              style={{ ...styles.input, height: 34 }}
-            />
-            <button
-              type="submit"
-              disabled={!draft.trim()}
-              data-variant="primary"
-              style={{ ...styles.darkSmall, height: 34 }}
-            >
-              Save
-            </button>
-          </form>
-        ) : (
-          <h1 style={{ ...styles.appTitle, display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            {name}
-            <button
-              onClick={() => {
-                setDraft(name);
-                setEditing(true);
-              }}
-              data-variant="ghost"
-              style={{ ...styles.linkButton, fontSize: 13 }}
-            >
-              Rename
-            </button>
-          </h1>
-        )}
-        <CopyDid did={did} />
-      </div>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <h1 className="home-hero-name">
+          {name}
+          <button
+            onClick={() => {
+              setDraft(name);
+              setEditing(true);
+            }}
+            aria-label="Rename"
+            title="Rename"
+            data-variant="quiet"
+            className="home-rename"
+          >
+            Rename
+          </button>
+        </h1>
+      )}
+      <CopyDid did={did} />
+    </header>
+  );
+}
+
+/** A tab's title and what it is for */
+function PageHead({ title, line }: { title: string; line: string }) {
+  return (
+    <header className="home-page-head">
+      <h1>{title}</h1>
+      <p>{line}</p>
     </header>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { avatarElement } from '@minca/app-shared/avatar';
 import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
   isProposeRequest,
@@ -57,7 +58,7 @@ export function ConnectPage() {
     return (
       <Frame>
         <Asking incoming={incoming} />
-        <MincaAuth />
+        <MincaAuth avatar={avatarElement} />
       </Frame>
     );
   }

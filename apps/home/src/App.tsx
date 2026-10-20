@@ -5,6 +5,7 @@ import { AccountSwitcher } from './components/AccountSwitcher';
 import { Settings } from './components/Settings';
 import { HostingDue } from './components/Hosting';
 import { Wordmark } from '@minca/app-shared/Wordmark';
+import { avatarElement } from '@minca/app-shared/avatar';
 import { TABS, useTab } from './tabs';
 import { styles } from './styles';
 
@@ -19,7 +20,7 @@ export function App() {
         <div style={styles.card}>
           <Wordmark />
           <AccountHint />
-          <MincaAuth />
+          <MincaAuth avatar={avatarElement} />
         </div>
       </div>
     );
@@ -27,14 +28,14 @@ export function App() {
 
   return (
     <div className="home">
-      <header className="home-bar">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Wordmark compact />
-          <span className="home-bar-label">Account</span>
-        </span>
-        <AccountSwitcher />
-      </header>
-      <div className="home-layout">
+      <header className="home-nav">
+        <div className="home-nav-bar">
+          <span className="home-brand">
+            <Wordmark compact />
+            <span className="home-brand-label">Account</span>
+          </span>
+          <AccountSwitcher />
+        </div>
         <nav className="home-tabs" role="tablist" aria-label="Account">
           {TABS.map((each) => (
             <button
@@ -48,17 +49,13 @@ export function App() {
             </button>
           ))}
         </nav>
-        <main
-          role="tabpanel"
-          aria-label={TABS.find((each) => each.id === tab)?.label}
-          style={{ minWidth: 0 }}
-        >
-          <AccountHint />
-          <AccountNotices />
-          <HostingDue />
-          <Settings tab={tab} openTab={openTab} />
-        </main>
-      </div>
+      </header>
+      <main className="home-main" role="tabpanel" aria-label={TABS.find((each) => each.id === tab)?.label}>
+        <AccountHint />
+        <AccountNotices />
+        <HostingDue />
+        <Settings tab={tab} openTab={openTab} />
+      </main>
     </div>
   );
 }
