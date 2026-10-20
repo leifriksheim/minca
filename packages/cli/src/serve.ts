@@ -122,6 +122,8 @@ export interface Servable {
   readonly spaces: {
     authenticator(spaceId: string): Promise<ServerAuth | null>;
     hold(spaceId: string): Promise<unknown>;
+    /** A peer proved itself in a space, and is let in: a host counts its readers */
+    onPeer?(spaceId: string, peerDid: string): void;
   };
 }
 
@@ -245,6 +247,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
         socket.send(
           JSON.stringify({ type: 'welcome', did: node.sessionDid, sig, ...(note ? { note } : {}) }),
         );
+        node.spaces.onPeer?.(spaceId, hello.did);
         inbound.accept(spaceId, socket, hello.did);
       })().catch(() => socket.close(1011, 'could not open space'));
     });

@@ -34,7 +34,7 @@ import {
 } from '../../core/src/session/hosting.js';
 import { startHost } from '../src/host.js';
 import { createStripeBilling, verifyStripeSignature } from '../src/stripe.js';
-import { allowList, botsFromEnv, checkExposure, walletFromEnv } from '../src/host-setup.js';
+import { allowList, botsFromEnv, checkExposure, limitsFromEnv, walletFromEnv } from '../src/host-setup.js';
 import { createWalletPayments, NETWORKS, toUnits } from '../src/wallet.js';
 import { createMemoryBlobStore } from '../../core/src/storage/blob/memory.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
@@ -2028,5 +2028,173 @@ describe('a space paying for itself', () => {
       body: JSON.stringify({ pass: { v: 1 } }),
     });
     assert.equal(response.status, 403);
+  });
+});
+
+describe('a host with limits', () => {
+  const limits = {
+    accountBytes: 250_000_000,
+    paidAccountBytes: 10_000_000_000,
+    space: { writers: 0, bytes: 500_000_000, windowDays: 30, readers: 50 },
+    graceDays: 30,
+    keepDays: 90,
+    idleDays: 180,
+  };
+
+  async function running(options: Partial<Parameters<typeof startHost>[0]> = {}) {
+    const served = await startHost({
+      key: await provider.generateKeyPair(),
+      stores: memoryStores(),
+      port: 0,
+      limits,
+      measure: async () => 1000,
+      ...options,
+    });
+    open.push(served);
+    return served;
+  }
+
+  async function laptopOf() {
+    const me = await account();
+    const laptop = await createNode({
+      signer: me.signer,
+      stores: memoryStores(),
+      accountKey: me.accountKey,
+      watchIntervalMs: 0,
+      network: {},
+    });
+    open.push(laptop);
+    return { me, laptop };
+  }
+
+  test('it says its limits; an account is carried with nothing paid, on the free plan, and readers and writers are counted', async () => {
+    const served = await running();
+    const url = `http://127.0.0.1:${served.port}`;
+    const info = await describeHost(url);
+    assert.deepEqual(info.limits, limits);
+    assert.equal(info.free, false);
+
+    const { laptop } = await laptopOf();
+    const club = await laptop.spaces.create({ name: 'Club', visibility: 'private' });
+    await laptop.hosting.use(url);
+    await until(carries(served.node, club.id), 8000, 'the host to carry the space, unpaid');
+    const [view] = await laptop.hosting.list();
+    assert.equal(view?.status?.state, 'active');
+    assert.equal(view?.status?.plan, 'free');
+    assert.equal(view?.status?.quota, limits.accountBytes);
+    assert.deepEqual(view?.status?.over, []);
+
+    // The laptop's socket proved it reads the space; its write names its account.
+    await laptop.records.put(club.id, 'note', { text: 'hello' });
+    await until(
+      async () => {
+        const usage = await served.node.usage(club.id);
+        return (usage?.writers ?? 0) >= 1 && (usage?.readers ?? 0) >= 1;
+      },
+      8000,
+      'the writer and the reader to be counted',
+    );
+    await served.node.evaluate();
+    const { status } = await createSpaceHostClient(url, info.did).status(club.id);
+    assert.equal(status.state, 'none', 'nobody pays for the space itself');
+    assert.equal(status.usage?.writers, 1);
+    assert.ok((status.usage?.readers ?? 0) >= 1);
+    assert.equal(status.usage?.windowDays, 30);
+    assert.deepEqual(status.over?.[0]?.reasons, ['writers']);
+    const [again] = await laptop.hosting.list();
+    const named = again?.status?.over?.find((one) => one.space === club.id);
+    assert.ok(named, 'the account’s status names it too');
+    assert.equal(named.until, named.since + 30 * 24 * 3600);
+    // Every device of the account has it, from the receipt, without asking.
+    assert.deepEqual(
+      (await laptop.hosting.over(club.id)).map((one) => one.over),
+      [named],
+    );
+  });
+
+  test('the sixth new subscription from one address in a day is refused; those it has go on', async () => {
+    const served = await running({ newPerAddress: 5 });
+    const url = `http://127.0.0.1:${served.port}`;
+    const info = await describeHost(url);
+    const me = await account();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await device(me, hub);
+    await laptop.spaces.create({ name: 'Notes', visibility: 'private' });
+    const { invite } = await laptop.carriers.add({ did: info.did, name: 'Host' });
+    const keys = await Promise.all(Array.from({ length: 6 }, () => subscriptionKey(newSubscriptionSeed())));
+    for (const key of keys.slice(0, 5)) {
+      const { status } = await createHostClient(url, info.did, key).attach(me.did, invite);
+      assert.equal(status.carrying, true);
+    }
+    await assert.rejects(
+      createHostClient(url, info.did, keys[5]!).attach(me.did, invite),
+      (error: unknown) => error instanceof HostError && error.status === 429,
+    );
+    const { status } = await createHostClient(url, info.did, keys[0]!).attach(me.did, invite);
+    assert.equal(status.carrying, true, 'one already made is not new');
+  });
+
+  test('a subscription takes no new space past the spaces it may have', async () => {
+    const served = await running({ spacesPerSubscription: 2, measure: async () => 0 });
+    const url = `http://127.0.0.1:${served.port}`;
+    const { laptop } = await laptopOf();
+    const first = await laptop.spaces.create({ name: 'One', visibility: 'private' });
+    await laptop.hosting.use(url);
+    await until(carries(served.node, first.id), 8000, 'the first space');
+    await until(
+      async () => ((await laptop.hosting.list())[0]?.status?.spaces ?? 0) >= 2,
+      8000,
+      'the room filled',
+    );
+    const late = await laptop.spaces.create({ name: 'Late', visibility: 'private' });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    assert.equal(await carries(served.node, late.id)(), false, 'no room for another');
+    assert.equal(await carries(served.node, first.id)(), true);
+  });
+
+  test('from the env: MINCA_HOST_FREE_GB turns limits on, with the rest at their defaults; never with MINCA_HOST_FREE', () => {
+    assert.equal(limitsFromEnv({}, false), null);
+    assert.deepEqual(limitsFromEnv({ MINCA_HOST_FREE_GB: '0.25' }, false), {
+      ...limits,
+      space: { ...limits.space, writers: 10 },
+    });
+    assert.equal(
+      limitsFromEnv(
+        { MINCA_HOST_FREE_GB: '1', MINCA_HOST_QUOTA_GB: '20', MINCA_HOST_SPACE_WRITERS: '25' },
+        false,
+      )?.space.writers,
+      25,
+    );
+    assert.throws(() => limitsFromEnv({ MINCA_HOST_FREE_GB: '1' }, true), /choose one/);
+    assert.throws(
+      () => limitsFromEnv({ MINCA_HOST_FREE_GB: '1', MINCA_HOST_SPACE_WRITERS: 'ten' }, false),
+      /whole number/,
+    );
+    assert.throws(
+      () => limitsFromEnv({ MINCA_HOST_FREE_GB: '1', MINCA_HOST_WINDOW_DAYS: '0' }, false),
+      /at least 1/,
+    );
+  });
+
+  test('a description with limits badly described still reads as a host, without them', async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          minca: 'host/1',
+          did: 'did:key:zDnaeXL64',
+          name: 'Odd',
+          free: false,
+          limits: { accountBytes: -1, space: { writers: 'ten' } },
+        }),
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    open.push({ close: () => new Promise<void>((resolve) => server.close(() => resolve())) });
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const info = await describeHost(`http://127.0.0.1:${port}`);
+    assert.equal(info.name, 'Odd');
+    assert.equal(info.limits, undefined);
   });
 });

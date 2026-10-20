@@ -717,6 +717,18 @@ export interface NodeHosting {
   stop(url: string): Promise<void>;
   /** The hosts a space pays (`std.host`), each asked how its subscription stands; hands one the pass once paid */
   space(spaceId: string): Promise<ReadonlyArray<SpaceHostingView>>;
+  /**
+   * The account's hosts that last said a space is over their free line
+   * (spec 08 §1.1), from the statuses they signed: what a member is told
+   * before those hosts stop carrying it for members. Asks no host.
+   */
+  over(spaceId: string): Promise<
+    ReadonlyArray<{
+      readonly url: string;
+      readonly name: string;
+      readonly over: import('../session/hosting.js').OverSpace;
+    }>
+  >;
   /** Starts adding to a space's fund at one of the hosts it names: an amount, once or monthly. Anyone in it may. */
   payForSpace(
     spaceId: string,

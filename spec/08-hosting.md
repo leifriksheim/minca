@@ -219,7 +219,7 @@ reference host mails a link to confirm the address before anything else.
 
 **What a device does.** A device asks each host the account uses for its
 status. When the status says it is not carrying and it is paid (`active`,
-`grace`, or a free host not `lapsed`), the device hands over the carry space
+`grace`, or not `lapsed` at a host that is free or has `limits`), the device hands over the carry space
 with `PUT …/carry`, making the carrier ([06](06-nodes-and-sessions.md) §4.2) for the host's DID first if the
 account has none. It writes the returned receipt into the `sys.hosting` record
 when the state, `paidUntil`, `renews` or name changed. To stop using a host it
@@ -400,8 +400,8 @@ how its members can start its fund (§2) before then.
 **Abuse.** A host with `limits` carries for anyone who asks, so it limits how
 fast subscriptions are made and how much one account may name. The
 reference host makes at most 5 subscriptions a day for one address and
-carries at most 200 spaces for one account; a carry space past that takes
-no new space, as past its quota. These are its own numbers, not the
+carries at most 200 spaces for one subscription; a carry space past that
+takes no new space, as past its quota. These are its own numbers, not the
 protocol's.
 
 **Privacy.** The counts are what the host sees already: every version's

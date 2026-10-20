@@ -137,7 +137,7 @@ export interface HostConfig {
   /** How many bytes a carried space takes: what the free line's `bytes` reads */
   readonly measure?: (spaceId: string) => Promise<number>;
   /** Accounts whose writes are not counted: the host's own bots */
-  readonly ignore?: (account: string) => boolean;
+  readonly ignore?: (account: string) => boolean | Promise<boolean>;
 }
 
 /** A host, as `createHostNode` starts it */
@@ -268,11 +268,12 @@ export async function createHostNode(config: HostConfig) {
   const counted = (spaceId: string, version: Version) => {
     if (!meter || !limits) return;
     const account = version.proof?.payload.iss ?? version.author;
-    if (config.ignore?.(account)) return;
     // Written well before it arrived: history coming in, not someone writing now.
     const written = Date.parse(version.createdAt) / 1000;
     if (Number.isFinite(written) && written < now() - limits.space.windowDays * DAY) return;
-    void meter.wrote(spaceId, account).catch(() => {});
+    void (async () => {
+      if (!(await config.ignore?.(account))) await meter.wrote(spaceId, account);
+    })().catch(() => {});
   };
 
   // A fresh disk: the subscriptions come back from the bucket, and the spaces with them.
@@ -389,9 +390,18 @@ export async function createHostNode(config: HostConfig) {
     return line.from + lineGrace <= t && line.stopped === undefined ? { ...line, stopped: t } : line;
   }
 
-  /** Each space against the free line, and members' subscriptions let go of those past it. Run now and then. */
-  async function evaluate(): Promise<void> {
-    if (!limits || !meter) return;
+  /**
+   * Each space against the free line, and members' subscriptions let go of
+   * those past it. Run now and then. Says which spaces went over, stopped
+   * being carried for members, or came back under.
+   */
+  async function evaluate(): Promise<{ over: string[]; stopped: string[]; under: string[] }> {
+    const changed: { over: string[]; stopped: string[]; under: string[] } = {
+      over: [],
+      stopped: [],
+      under: [],
+    };
+    if (!limits || !meter) return changed;
     await meter.prune();
     const spaces = metered();
     for (const spaceId of new Set([...spaces, ...lines.keys()])) {
@@ -400,6 +410,9 @@ export async function createHostNode(config: HostConfig) {
       const after =
         spaces.has(spaceId) || before?.stopped !== undefined ? await standing(spaceId, before, own) : null;
       if (JSON.stringify(after) !== JSON.stringify(before ?? null)) await writeLine(spaceId, after);
+      if (after && !before) changed.over.push(spaceId);
+      if (after?.stopped !== undefined && before?.stopped === undefined) changed.stopped.push(spaceId);
+      if (before && !after) changed.under.push(spaceId);
       const skip = after?.stopped !== undefined && !own;
       if (skip) skipped.add(spaceId);
       else skipped.delete(spaceId);
@@ -411,6 +424,7 @@ export async function createHostNode(config: HostConfig) {
       }
     }
     await core.refresh();
+    return changed;
   }
 
   /** The spaces over the line among these, as a status says them */
@@ -577,7 +591,6 @@ export async function createHostNode(config: HostConfig) {
         }
         dropped.push(subscription.id);
       }
-      await evaluate();
       return dropped;
     },
 

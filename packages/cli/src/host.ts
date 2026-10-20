@@ -36,6 +36,10 @@
  * (`Billing`, `WalletPayments`), so the host only ever learns "this
  * subscription is paid until …". Without either, and with `free`, every
  * subscription counts as paid — someone hosting only themselves.
+ *
+ * With `limits`, an account needs no payment at all: it is on the free plan
+ * and paying buys room, while a community past the free line pays for itself
+ * through its fund (spec 08 §1.1).
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
@@ -48,11 +52,13 @@ import {
   verifyRequest,
   type BlobStore,
   type HostDescription,
+  type HostLimits,
   type HostPlan,
   type HostNode,
   type HostStatus,
   type PayAnswer,
   type StoreFactory,
+  type Subscription,
 } from '@minca/core';
 import { isRecord, messageOf } from './json.js';
 import { createInboundPeers, serve, type Served } from './serve.js';
@@ -121,6 +127,16 @@ export interface HostOptions {
   readonly quotaBytes?: number;
   /** How many bytes a carried space takes on the host's disk: what `bytes` in a status adds up */
   readonly measure?: (spaceId: string) => Promise<number>;
+  /**
+   * Free hosting within limits: an account needs no payment, its room is
+   * by plan, and a community past the free line pays for itself (spec 08
+   * §1.1). Ignored with `free`; `quotaBytes` gives way to its room.
+   */
+  readonly limits?: HostLimits | null;
+  /** With limits: spaces one subscription may have carried. Default 200. */
+  readonly spacesPerSubscription?: number;
+  /** With limits: new subscriptions one address may make a day. Default 5. */
+  readonly newPerAddress?: number;
   /** How often lapsed subscriptions are dropped. Default hourly. */
   readonly sweepMs?: number;
   /** How often the network is read for wallet payments, while any is open. Default 10 s. */
@@ -261,6 +277,12 @@ const CALLBACK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/callback$/;
 const DISCONNECT_PATH = /^\/host\/bots\/([^/]+)\/disconnect\/([a-z0-9-]{1,40})$/;
 const HOOK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/hook$/;
 
+/** Who is asking, as far as the host can tell: Fly's proxy says, and is trusted only on Fly */
+function addressOf(req: IncomingMessage): string {
+  const forwarded = process.env.FLY_APP_NAME ? req.headers['fly-client-ip'] : undefined;
+  return (typeof forwarded === 'string' && forwarded) || req.socket.remoteAddress || 'unknown';
+}
+
 /** "$4 a month or $36 a year", from the wallet's prices */
 function priceText(wallet: WalletPayments | null): string | undefined {
   const plans = (wallet?.offer.plans ?? []).filter((plan) => plan.id !== 'bot');
@@ -296,8 +318,18 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   };
   /** Carry spaces whose account's spaces take all the room it has: they take no new space */
   const full = new Set<string>();
+  const limits = options.free ? null : (options.limits ?? null);
+  const spacesPerSubscription = options.spacesPerSubscription ?? 200;
   const node = await createHostNode({
     full: (carrySpace) => full.has(carrySpace),
+    ...(limits
+      ? {
+          limits,
+          ...(options.measure ? { measure: (spaceId: string) => sizeOf(options.measure!, spaceId) } : {}),
+          // What the host's own bots write is not a community growing.
+          ignore: async (account: string) => (await bots?.runs(account)) ?? false,
+        }
+      : {}),
     key: options.key,
     stores: options.stores,
     provider,
@@ -319,20 +351,36 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     sizes.set(spaceId, { bytes, at: now() });
     return bytes;
   };
+  /** The room a subscription's spaces have: by its plan at a host with limits, none for a space's own there */
+  const quotaFor = (subscription: Subscription | null, id: string): number | undefined => {
+    if (!limits) return options.quotaBytes;
+    if (!subscription || id.startsWith('space:')) return undefined;
+    return node.plan(subscription) === 'paid'
+      ? (limits.paidAccountBytes ?? limits.accountBytes)
+      : limits.accountBytes;
+  };
   /** What a subscription's spaces take, and its limit: null when this host doesn't measure */
   const usageOf = async (id: string): Promise<{ bytes: number; quota?: number } | null> => {
     const measure = options.measure;
     if (!measure) return null;
+    const subscription = await node.get(id);
+    const account = !id.startsWith('space:');
     let bytes = 0;
-    for (const spaceId of await node.spacesOf(id)) bytes += await sizeOf(measure, spaceId);
-    const carry = (await node.get(id))?.carry?.space;
-    if (carry && options.quotaBytes && bytes >= options.quotaBytes) full.add(carry);
+    for (const spaceId of await node.spacesOf(id)) {
+      // A community paying for itself takes none of its members' room.
+      if (account && limits && (await node.paysItself(spaceId))) continue;
+      bytes += await sizeOf(measure, spaceId);
+    }
+    const quota = quotaFor(subscription, id);
+    const carry = subscription?.carry?.space;
+    const crowded = !!limits && (await node.carriedFor(id)) >= spacesPerSubscription;
+    if (carry && ((quota && bytes >= quota) || crowded)) full.add(carry);
     else if (carry) full.delete(carry);
-    return { bytes, ...(options.quotaBytes ? { quota: options.quotaBytes } : {}) };
+    return { bytes, ...(quota ? { quota } : {}) };
   };
   /** Measures every subscription, and lets a carry space that has room again take the spaces it waited with */
   const measureAll = async (): Promise<void> => {
-    if (!options.measure || !options.quotaBytes) return;
+    if (!options.measure || (!options.quotaBytes && !limits)) return;
     const before = [...full].sort().join(' ');
     for (const subscription of await node.list()) await usageOf(subscription.id);
     if ([...full].sort().join(' ') !== before) await node.recheck();
@@ -342,7 +390,15 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     const subscription = await node.get(id);
     const base = { subscription: id, host: node.did, at: now() };
     if (!subscription)
-      return { ...base, state: 'none', paidUntil: 0, renews: false, carrying: false, spaces: 0 };
+      return {
+        ...base,
+        state: 'none',
+        paidUntil: 0,
+        renews: false,
+        carrying: false,
+        spaces: 0,
+        ...(id.startsWith('space:') ? await lineOf(id) : {}),
+      };
     const state = node.state(subscription);
     const known = {
       ...base,
@@ -356,6 +412,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
         carrying: subscription.carry !== undefined,
         spaces: await node.carriedFor(id),
         ...(await usageOf(id)),
+        ...(limits ? { plan: node.plan(subscription) ?? 'free', over: await node.overFor(id) } : {}),
       };
     const readKey = node.readKeyOf(id);
     const carrying = subscription.pass !== undefined && state !== 'lapsed';
@@ -366,7 +423,13 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       ...(readKey ? { readKey } : {}),
       ...(await usageOf(id)),
       ...(await fundOf(id)),
+      ...(await lineOf(id)),
     };
+  };
+  /** How a space is used and whether it is over the free line, as its own status says: nothing at a host without limits */
+  const lineOf = async (id: string): Promise<Pick<HostStatus, 'usage' | 'over'>> => {
+    const usage = limits ? await node.usage(id.slice('space:'.length)) : null;
+    return usage ? { usage, over: await node.overFor(id) } : {};
   };
   /** A community's fund and bots, as its status says them: nothing of a fund on a free host */
   const fundOf = async (id: string) => {
@@ -455,6 +518,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     ...(options.bots && (options.free || fundOffer) && options.connectors?.length
       ? { connectors: options.connectors.map(({ id, name }) => ({ id, name })) }
       : {}),
+    ...(limits ? { limits } : {}),
   };
 
   // Bots reach the spaces this host carries through its own socket, known once it listens.
@@ -674,9 +738,32 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     return { reminders: await reminders.state(id) };
   }
 
-  /** A subscription someone has paid for; on a free host every one is, made on the way */
-  async function mustBePaid(id: string, otherwise: string): Promise<void> {
+  /** New subscriptions made for each address today, at a host with limits: in memory, as a restart forgives little */
+  const made = new Map<string, number[]>();
+  const DAY_MS = 24 * 3600_000;
+  function mayMake(req: IncomingMessage): void {
+    const address = addressOf(req);
+    const recent = (made.get(address) ?? []).filter((at) => Date.now() - at < DAY_MS);
+    if (recent.length >= (options.newPerAddress ?? 5))
+      throw refusal(429, 'Too many new subscriptions from here today. Try again tomorrow.');
+    made.set(address, [...recent, Date.now()]);
+    // Forget addresses whose day is over, so the map can't grow without end.
+    if (made.size > 10_000)
+      for (const [known, times] of made)
+        if (times.every((at) => Date.now() - at >= DAY_MS)) made.delete(known);
+  }
+
+  /**
+   * A subscription someone has paid for; on a free host every one is, made on
+   * the way, and so is an account's at a host with limits, a few a day from
+   * one address.
+   */
+  async function mustBePaid(id: string, otherwise: string, req: IncomingMessage): Promise<void> {
     if (options.free) await node.subscribe(id);
+    else if (limits && !id.startsWith('space:') && !(await node.get(id))) {
+      mayMake(req);
+      await node.subscribe(id);
+    }
     const subscription = await node.get(id);
     if (!subscription || node.state(subscription) === 'lapsed') throw refusal(402, otherwise);
   }
@@ -841,6 +928,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       provider,
     );
     if (signer !== id) throw refusal(401, 'That call is not signed by the subscription');
+    // Its devices are still about: a free subscription is kept while they are.
+    await node.seen(id);
     const input = jsonFields(body);
 
     if (action === null && method === 'GET') return send(res, 200, await signedStatusOf(id));
@@ -867,7 +956,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       // Asked before anything is kept: a stranger at a free host leaves nothing behind.
       if (options.allow && !options.allow.includes(input.account))
         throw refusal(403, new NotAllowedError().message);
-      await mustBePaid(id, 'This subscription is not paid for');
+      await mustBePaid(id, 'This subscription is not paid for', req);
       try {
         await node.attach(id, input.account, input.invite);
       } catch (error) {
@@ -938,7 +1027,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     if (action === 'pass' && method === 'PUT') {
       const input = jsonFields(await readBody(req));
       if (input.pass === undefined) throw refusal(400, 'A pass is needed');
-      await mustBePaid(id, 'Nobody has paid for this space yet');
+      await mustBePaid(id, 'Nobody has paid for this space yet', req);
       try {
         await node.carrySpace(id, input.pass);
       } catch (error) {
@@ -957,6 +1046,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
         authenticator: (spaceId) => node.authenticator(spaceId),
         // Everything carried is open already; anything else is refused by the authenticator first.
         hold: async () => {},
+        onPeer: (spaceId, peerDid) => node.read(spaceId, peerDid),
       },
     },
     inbound,
@@ -984,14 +1074,26 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   );
   botSweeping.unref();
 
+  /** Each space against the free line, said in the log as it changes: what to watch once limits go on */
+  const evaluate = async () => {
+    const changed = await node.evaluate();
+    for (const spaceId of changed.over) log(`space ${spaceId} is over the free line`);
+    for (const spaceId of changed.stopped)
+      log(`space ${spaceId} is past its grace: only its own fund carries it now`);
+    for (const spaceId of changed.under) log(`space ${spaceId} is under the free line again`);
+  };
   // Who is over their room, known before the first account adds a space.
-  void measureAll().catch((error: unknown) => log(`measuring failed: ${messageOf(error)}`));
+  void measureAll()
+    .then(evaluate)
+    .catch((error: unknown) => log(`measuring failed: ${messageOf(error)}`));
   const sweeping = setInterval(() => {
     void node
       .sweep()
       .then(async (dropped) => {
-        for (const id of dropped) log(`subscription ${id} lapsed past its grace period, and was dropped`);
+        for (const id of dropped)
+          log(`subscription ${id} was dropped: lapsed past its grace, or free and idle`);
         await measureAll();
+        await evaluate();
         if (reminders && options.publicUrl)
           await reminders.send(
             await node.list(),
@@ -1014,7 +1116,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     ? `, only for ${options.allow.length} account${options.allow.length === 1 ? '' : 's'}`
     : '';
   log(
-    `host ${node.did} listening on port ${served.port}${options.free ? ' (free: every subscription counts as paid)' : ''}${who}${options.mirror ? ', kept in its bucket' : ', on this disk alone'}`,
+    `host ${node.did} listening on port ${served.port}${options.free ? ' (free: every subscription counts as paid)' : ''}${limits ? ' (free within limits)' : ''}${who}${options.mirror ? ', kept in its bucket' : ', on this disk alone'}`,
   );
   return {
     node,
