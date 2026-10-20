@@ -83,11 +83,13 @@ import {
 } from './connect.js';
 import { fromProposal, proposalSpaces, sameAutomation } from '../space/own-automations.js';
 import type { Automation, AutomationApp, AutomationSpaces } from '../schemas/automations.js';
+import type { PeerTransport } from '../network/transport.js';
 import {
   clearPairingTicket,
   receiveFromDesktop,
   offerToPhone as offerPairing,
   readPairingTicket,
+  type Handover,
   type PairingOffer,
   type PairingStage,
 } from './pairing.js';
@@ -105,6 +107,8 @@ export interface MincaAuthConfig {
   readonly storageKey?: string;
   /** The page a phone-pairing QR opens. Default: this page. */
   readonly pairingLink?: string;
+  /** How the two sides of a pairing reach each other, given a throwaway DID. Default: the relay. For tests, or a host with its own. */
+  readonly pairingTransport?: (did: string) => PeerTransport;
   /** How long signing out waits, at most, for a peer to take its revokes in. Default 5 s. */
   readonly signOutGraceMs?: number;
   /**
@@ -310,6 +314,11 @@ export interface AuthState {
   /** The phone-pairing link this page was opened with */
   readonly pairing: PairingTicket | null;
   readonly pairingStage: PairingStage | null;
+  /**
+   * The account a pairing brought to a device signed in to another, waiting
+   * for the person: `account` is set when this place already keeps it.
+   */
+  readonly pairingArrival: { readonly did: string; readonly account: AccountSummary | null } | null;
   /** A pod picked while signed in, waiting on what should happen to the data */
   readonly podChoice: { readonly pod: Place; readonly contents: PodContents; readonly from: Place } | null;
   readonly moved: MovedToPod | null;
@@ -348,15 +357,22 @@ export interface MincaAuth {
   codeSaved(): void;
   /** Leaves the optional `pod` step with the data in this browser */
   finishSetup(): void;
+  /**
+   * Meets the computer the pairing link names. Signed in to another account,
+   * it stops once the account arrives and sets `pairingArrival`: answer with
+   * `answerPairing`.
+   */
   acceptPairing(): Promise<void>;
+  /** Takes the account a pairing brought (added, or switched to if already here), or lets it go */
+  answerPairing(take: boolean): Promise<void>;
   dismissPairing(): void;
   clearError(): void;
 
   // Once in
   rename(name: string): Promise<boolean>;
-  /** Adds a passkey for this site. During setup, moves the flow on. */
+  /** Adds a passkey for this site. During setup, moves the flow on; otherwise needs `confirm` first. */
   addPasskey(): Promise<boolean>;
-  /** Sets or replaces the account's password. During setup, moves the flow on. */
+  /** Sets or replaces the account's password. During setup, moves the flow on; otherwise needs `confirm` first. */
   setPassword(password: string): Promise<boolean>;
   removeShortcut(kind: 'passkey' | 'passphrase'): Promise<boolean>;
   confirmPod(how: 'combine' | 'switch'): Promise<void>;
@@ -364,7 +380,19 @@ export interface MincaAuth {
   /** Removes the copy this browser kept after a move into a pod */
   forgetBrowserCopy(): Promise<void>;
   dismissMoved(): void;
-  /** The recovery code of the open account. Null when signed out. */
+  /**
+   * Asks the person to prove it is them, with the account's password, a
+   * passkey on this device or the recovery code, even though they are signed
+   * in: a page left open, or a sign-in kept for days, is no proof anyone is
+   * there. For a few minutes after, the recovery code can be read and the
+   * account offered to a phone. A wrong answer sets `error`.
+   */
+  confirm(
+    proof: { readonly password: string } | { readonly passkey: true } | { readonly code: string },
+  ): Promise<boolean>;
+  /** Whether `confirm` succeeded in the last few minutes */
+  isConfirmed(): boolean;
+  /** The recovery code of the open account, for a few minutes after `confirm`. Null otherwise. */
   recoveryCode(): string | null;
   /** Starts offering this account to a phone */
   offerToPhone(onStage: (stage: PairingStage) => void): Promise<PairingOffer>;
@@ -505,6 +533,8 @@ async function addAutomations(
 const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
 /** How long signing out waits for its revokes to reach the peers here, at most, unless configured: offline, they wait until next time */
 const SIGN_OUT_GRACE_MS = 5000;
+/** How long `confirm` lets the recovery code be read, or the account offered to a phone */
+const CONFIRMED_MS = 5 * 60 * 1000;
 
 /** Creates the sign-in flow for this page. */
 export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
@@ -538,6 +568,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     folderAvailable: isFolderStorageAvailable(),
     pairing: readPairingTicket(),
     pairingStage: null,
+    pairingArrival: null,
     podChoice: null,
     moved: null,
   });
@@ -549,6 +580,15 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
   /** The seed behind the open session. Never leaves this closure except as the recovery code. */
   let seed: Uint8Array | null = null;
+  /** When the person last proved it is them (`confirm`); nothing that hands out the seed works without it */
+  let confirmedAt = 0;
+  /** Which account that proof was for, so it never carries over to another */
+  let confirmedFor: string | null = null;
+  /**
+   * Whether a session just landed and is choosing its first way in: only `arrive`
+   * opens this, so no call can step back into setup to skip `confirm`.
+   */
+  let setupOpen = false;
   let localKey: CryptoKey | null = null;
   let stopFollowingName: (() => void) | null = null;
   let expiryTimer: ReturnType<typeof setInterval> | null = null;
@@ -622,6 +662,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     if (expiryTimer) clearInterval(expiryTimer);
     expiryTimer = null;
     seed = null;
+    confirmedAt = 0;
+    confirmedFor = null;
+    setupOpen = false;
     localKey = null;
     await node?.close();
   }
@@ -875,11 +918,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
    * Lands a new session: in, or on through the setup screens.
    *
    * With no reason to set up, or a passkey or password already here, that is
-   * the app. Otherwise the recovery code is shown first — a new account's for
-   * the first time, a restored one's as a reminder to keep it apart from the
-   * password about to be set, which a password manager may file in its place —
-   * then a way in is chosen. A paired device skips the code: it was never
-   * shown one, and the device it came from keeps it.
+   * the app. Otherwise a new account's recovery code is shown first, then a way
+   * in is chosen. A restored account skips the code, since the person just
+   * typed it, and so does a paired device, which was never shown one.
    */
   async function arrive(session: MincaSession, setup: AuthSetup | null): Promise<void> {
     const place = state.place;
@@ -892,15 +933,18 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     };
     if (setup === null || hasEverydayWay(entry)) {
       update({ ...landed, stage: 'ready', setup: null, freshCode: null });
-    } else if (setup === 'paired') {
-      update({ ...landed, stage: 'unlock', setup });
+    } else if (setup === 'paired' || setup === 'restored') {
+      setupOpen = true;
+      update({ ...landed, stage: 'unlock', setup, freshCode: null });
     } else {
+      setupOpen = true;
       update({ ...landed, stage: 'recovery', setup, freshCode: seed ? seedToRecoveryCode(seed) : null });
     }
   }
 
   /** After a way in is set up: offer a pod to a new account that could use one, or go in. */
   function afterUnlock(): void {
+    setupOpen = false;
     const offerPod =
       config.offerPod !== false &&
       state.setup === 'new' &&
@@ -1002,10 +1046,22 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     return renamed;
   }
 
-  /** Changes to the open account's shortcuts, then re-reads them. During setup, moves the flow on. */
+  /** Whether the person proved it is them (`confirm`) in the last few minutes */
+  const isConfirmed = () =>
+    seed !== null &&
+    confirmedFor !== null &&
+    state.session?.did === confirmedFor &&
+    Date.now() - confirmedAt < CONFIRMED_MS;
+
+  /**
+   * Changes to the open account's shortcuts, then re-reads them. During setup,
+   * moves the flow on. Outside setup they need `confirm` first: a new password
+   * would otherwise both open the gate and lock the owner out.
+   */
   const changeShortcut = (apply: (unlocked: Uint8Array) => Promise<void>) =>
     run(async () => {
       if (!seed) throw new Error('Not signed in.');
+      if (!setupOpen && !isConfirmed()) throw new Error('Confirm it is you first.');
       await apply(seed);
       await refreshEntry();
       if (state.stage === 'unlock' && hasEverydayWay(state.entry)) afterUnlock();
@@ -1026,6 +1082,37 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     const account = state.session?.account.id;
     if (account) set(`${prefix}.connections:${account}`, JSON.stringify(connections));
     update({});
+  }
+
+  /** An account a pairing brought, held while a signed-in device asks whether to take it */
+  let heldHandover: Handover | null = null;
+  /** Counts pairings begun and dismissed: one that ends after a dismiss is dropped */
+  let pairingRun = 0;
+  /** Stops the pairing under way, so a dismissed one leaves the room rather than waiting it out */
+  let stopPairing: AbortController | null = null;
+
+  /** Signs in with what a pairing brought, then joins its spaces */
+  async function takeHandover(handover: Handover): Promise<void> {
+    const onStage = (stage: PairingStage) => update({ pairingStage: stage });
+    // Starting the node takes a moment; the code on screen is done with.
+    onStage({ kind: 'sending' });
+    const opened = await run(async () => {
+      await arrive(await openWithCode(seedToRecoveryCode(handover.seed), null), 'paired');
+    });
+    const session = state.session;
+    if (!opened || !session) return;
+    let joined = 0;
+    for (const [index, invite] of handover.spaces.entries()) {
+      onStage({ kind: 'joining', joined: index, total: handover.spaces.length });
+      if (
+        await session.node.spaces.join(invite).then(
+          () => true,
+          () => false,
+        )
+      )
+        joined++;
+    }
+    onStage({ kind: 'received', spaces: joined });
   }
 
   // ─── The flow ──────────────────────────────────────────────────────
@@ -1057,7 +1144,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
             const kept = await stay.recall(place.kind).catch(() => null);
             const summary = kept && accounts.find((account) => account.id === kept.accountId);
             if (kept && summary) {
-              update({ session: await begin(place, summary, kept.seed), stage: 'ready' });
+              const session = await begin(place, summary, kept.seed);
+              // A pairing link still asks first: it would put another account here (spec 01 §15.3).
+              update({ session, stage: state.pairing ? 'pair' : 'ready' });
               return;
             }
           }
@@ -1231,12 +1320,13 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     },
 
     codeSaved() {
-      if (!state.session) return;
+      if (!state.session || state.stage !== 'recovery') return;
       update({ freshCode: null, stage: 'unlock' });
     },
 
     finishSetup() {
-      if (!state.session) return;
+      if (!state.session || state.stage !== 'pod') return;
+      setupOpen = false;
       update({ stage: 'ready', setup: null, error: null });
     },
 
@@ -1245,39 +1335,75 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (!ticket) return;
       if (!state.place) update({ place: await browserPlace() });
       const onStage = (stage: PairingStage) => update({ pairingStage: stage });
-      let spaces: ReadonlyArray<string> = [];
+      const mine = ++pairingRun;
+      const stop = new AbortController();
+      stopPairing = stop;
+      const got: { handover: Handover | null } = { handover: null };
       // The account arrives over the exchange, after the person has compared
       // the codes; the link only says where to meet.
-      const opened = await run(async () => {
-        const handover = await receiveFromDesktop(ticket, onStage);
-        spaces = handover.spaces;
-        // Starting the node takes a moment; the code on screen is done with.
-        onStage({ kind: 'sending' });
-        await arrive(await openWithCode(seedToRecoveryCode(handover.seed), null), 'paired');
+      await run(async () => {
+        try {
+          got.handover = await receiveFromDesktop(ticket, onStage, {
+            transport: config.pairingTransport,
+            signal: stop.signal,
+          });
+        } catch (error) {
+          // Stopped by "Not now": nothing went wrong to tell the person about.
+          if (!stop.signal.aborted) throw error;
+        }
       });
+      const arrived = got.handover;
+      // "Not now" while the code showed: the computer may still have sent it, but it is not taken.
+      if (mine !== pairingRun) {
+        arrived?.seed.fill(0);
+        return;
+      }
       clearPairingTicket();
       update({ pairing: null });
-      const session = state.session;
-      if (!opened || !session) return;
-      let joined = 0;
-      for (const [index, invite] of spaces.entries()) {
-        onStage({ kind: 'joining', joined: index, total: spaces.length });
-        if (
-          await session.node.spaces.join(invite).then(
-            () => true,
-            () => false,
-          )
-        )
-          joined++;
+      if (!arrived) return;
+
+      // Signed in to another account, the device asks first: add the one that
+      // arrived, or switch to it if it is already here (spec 01 §15.3).
+      const signedIn = state.session;
+      if (signedIn) {
+        const { did } = await createIdentityManager().fromSeed(arrived.seed);
+        // "Not now" while the account was being looked at: let it go.
+        if (mine !== pairingRun) {
+          arrived.seed.fill(0);
+          return;
+        }
+        if (did !== signedIn.did) {
+          heldHandover = arrived;
+          update({
+            pairingArrival: { did, account: state.accounts.find((account) => account.did === did) ?? null },
+          });
+          return;
+        }
       }
-      onStage({ kind: 'received', spaces: joined });
+      await takeHandover(arrived);
+    },
+
+    async answerPairing(take) {
+      const arrived = heldHandover;
+      heldHandover = null;
+      update({ pairingArrival: null });
+      if (!arrived) return;
+      if (take) return takeHandover(arrived);
+      arrived.seed.fill(0);
+      update({ pairingStage: null, stage: state.session ? 'ready' : afterStorage(state.accounts) });
     },
 
     dismissPairing() {
+      pairingRun++;
+      stopPairing?.abort();
+      stopPairing = null;
       clearPairingTicket();
+      heldHandover?.seed.fill(0);
+      heldHandover = null;
       update({
         pairing: null,
         pairingStage: null,
+        pairingArrival: null,
         stage: state.session ? 'ready' : afterStorage(state.accounts),
       });
     },
@@ -1424,13 +1550,56 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       update({ moved: null });
     },
 
+    confirm(proof) {
+      return run(async () => {
+        const { entry, place } = state;
+        const unlocked = seed;
+        if (!unlocked || !entry || !place) throw new Error('Sign in first.');
+        const same = (other: Uint8Array) =>
+          other.length === unlocked.length && other.every((byte, at) => byte === unlocked[at]);
+        const wrong = (message: string) => protocolError('VAULT_UNLOCK_FAILED', message);
+
+        if ('code' in proof) {
+          if (!isValidRecoveryCode(proof.code) || !same(recoveryCodeToSeed(proof.code)))
+            throw wrong('That is not this account’s recovery code.');
+        } else if ('password' in proof) {
+          const wraps = entry.vault.wraps.filter(
+            (candidate): candidate is PassphraseWrap => candidate.kind === 'passphrase',
+          );
+          let opened = false;
+          for (const wrap of wraps) {
+            const tried = await unwrapSeedWithPassphrase(wrap, proof.password, entry.vault.did).catch(
+              () => null,
+            );
+            if (tried && same(tried)) opened = true;
+          }
+          if (!opened) throw wrong('That is not the password.');
+        } else {
+          const target = entry.shortcuts[entry.shortcuts.length - 1];
+          // The passkey's own check that someone is there: a fingerprint, a face or a PIN.
+          // A wrap with no passkey behind it would skip that check, so it is no proof.
+          if (!target?.credentialId) throw wrong('No passkey on this device opens this account.');
+          await authenticatePasskey(target.credentialId, { rpId });
+          const key = await getDeviceKey(target.deviceKeyId);
+          if (!key || !same(await unwrapSeedWithDeviceKey(target, key, entry.vault.did)))
+            throw wrong('That passkey does not open this account here.');
+        }
+        confirmedAt = Date.now();
+        confirmedFor = state.session?.did ?? null;
+      });
+    },
+
+    isConfirmed,
+
     recoveryCode() {
-      return seed ? seedToRecoveryCode(seed) : null;
+      return seed && isConfirmed() ? seedToRecoveryCode(seed) : null;
     },
 
     offerToPhone(onStage) {
       const session = state.session;
       if (!session || !seed) return Promise.reject(new Error('Sign in first.'));
+      // It sends the whole account: the same proof as reading the recovery code.
+      if (!isConfirmed()) return Promise.reject(new Error('Confirm it is you first.'));
       const location = globalThis.location;
       return offerPairing(
         {
@@ -1441,6 +1610,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
             ),
           relays: config.network?.relays ?? [],
           link: config.pairingLink ?? (location ? `${location.origin}${location.pathname}` : ''),
+          transport: config.pairingTransport,
         },
         onStage,
       );
@@ -1464,6 +1634,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (recordsOnly && request.contacts)
         throw new Error('A key given records only is not given your contacts.');
       const whole = request.scope === 'account';
+      // The account key and the contact key are read secrets for good: no revoke takes them back.
+      if ((whole || request.contacts) && !isConfirmed()) throw new Error('Confirm it is you first.');
       const created = [];
       for (const params of request.create ?? []) created.push(await node.spaces.create(params));
       // With the whole account the app derives the contacts space itself; otherwise it is one more space it is given.

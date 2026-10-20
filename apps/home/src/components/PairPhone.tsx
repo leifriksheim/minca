@@ -5,6 +5,7 @@ import { useAuth } from '@minca/core/react';
 import { servedOverLan, relayProblem, relayOnlyLocal } from '@minca/app-shared/relay';
 import { Info } from '@minca/app-shared/Info';
 import { styles, palette } from '../styles';
+import { ConfirmItsYou } from './ConfirmItsYou';
 
 /** What each stage of the handover should say out loud. */
 function describe(stage: PairingStage): string {
@@ -41,6 +42,7 @@ export function PairPhone() {
   const [qr, setQr] = useState<string | null>(null);
   const [stage, setStage] = useState<PairingStage | null>(null);
   const [starting, setStarting] = useState(false);
+  const [asking, setAsking] = useState(false);
   const offerRef = useRef<PairingOffer | null>(null);
 
   // Stop listening when this panel goes away, or the relay connection leaks.
@@ -49,7 +51,15 @@ export function PairPhone() {
   const start = async () => {
     setStarting(true);
     try {
-      const started = await auth.offerToPhone(setStage);
+      const started = await auth.offerToPhone(setStage).catch((error: unknown) => {
+        // Not confirmed in the last few minutes: ask, then start again.
+        if (error instanceof Error && /Confirm it is you/.test(error.message)) {
+          setAsking(true);
+          return null;
+        }
+        throw error;
+      });
+      if (!started) return;
       offerRef.current = started;
       setOffer(started);
       setQr(await QRCode.toDataURL(started.url, { width: 260, margin: 1 }));
@@ -96,14 +106,25 @@ export function PairPhone() {
                 <code>npm run dev -- --host</code> and open the network address it prints.
               </p>
             )}
-            <button
-              onClick={() => void start()}
-              disabled={starting}
-              data-variant="primary"
-              style={styles.addButton}
-            >
-              {starting ? 'Starting…' : 'Show pairing code'}
-            </button>
+            {asking ? (
+              <ConfirmItsYou
+                why="send your account to a phone"
+                onConfirmed={() => {
+                  setAsking(false);
+                  void start();
+                }}
+                onCancel={() => setAsking(false)}
+              />
+            ) : (
+              <button
+                onClick={() => void start()}
+                disabled={starting}
+                data-variant="primary"
+                style={styles.addButton}
+              >
+                {starting ? 'Starting…' : 'Show pairing code'}
+              </button>
+            )}
           </>
         ) : (
           <>

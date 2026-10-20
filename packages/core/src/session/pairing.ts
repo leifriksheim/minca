@@ -237,6 +237,8 @@ export async function receiveFromDesktop(
     /** How long the person has to compare the codes. Default 10 minutes. */
     readonly confirmTimeoutMs?: number;
     readonly transport?: (did: string) => PeerTransport;
+    /** Stops it: the phone leaves the room, and the promise rejects. */
+    readonly signal?: AbortSignal;
   } = {},
 ): Promise<Handover> {
   const secret = base64UrlDecode(ticket.secret);
@@ -298,6 +300,11 @@ export async function receiveFromDesktop(
           }
         } else if (message.type === HANDOVER && channel && message.from === desktop) {
           const handover = readHandover(await room.open(message, channel));
+          // Stopped while it opened: the room is left, and the computer is told nothing.
+          if (settled) {
+            handover?.seed.fill(0);
+            return;
+          }
           if (!handover) {
             fail('That handover could not be read.');
             return;
@@ -309,6 +316,8 @@ export async function receiveFromDesktop(
       })();
     });
 
+    if (options.signal?.aborted) return fail('Pairing stopped.');
+    options.signal?.addEventListener('abort', () => fail('Pairing stopped.'), { once: true });
     onStage({ kind: 'waiting' });
     wait(
       options.findTimeoutMs ?? 60_000,

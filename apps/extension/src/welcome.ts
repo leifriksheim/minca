@@ -155,7 +155,7 @@ function connectedView(): Array<Node | null> {
       status ? h('p', { class: 'hint' }, summary(status)) : null,
       status ? spaceList(status) : null,
     ),
-    grant?.pod ? podSection(grant.pod) : null,
+    grant?.pod ? podSection(grant.pod) : grant ? noPodSection() : null,
     h(
       'section',
       {},
@@ -230,6 +230,33 @@ function podSection(pod: NonNullable<CarryGrant['pod']>): HTMLElement {
     h('h2', {}, 'Your pod'),
     podLine(state === 'none' ? 'not-picked' : state, pod.folder),
     ...body,
+  );
+}
+
+/**
+ * The account lived in the home's browser storage when this connected. The
+ * home may have moved it into a folder since, which it can only tell this
+ * extension by connecting again.
+ */
+function noPodSection(): HTMLElement {
+  return h(
+    'section',
+    {},
+    h('h2', {}, 'A folder'),
+    h(
+      'p',
+      { class: 'hint' },
+      'If your account home keeps your account in a folder, this extension can keep that folder up to date while Chrome is open, so it holds everything even when your account home is closed. Choose “Keep in a folder” in your account home first, then connect again here.',
+    ),
+    h(
+      'div',
+      { class: 'actions' },
+      h(
+        'button',
+        { class: 'quiet small', disabled: busy, onClick: () => void switchAccount() },
+        busy ? 'Waiting…' : 'Connect again',
+      ),
+    ),
   );
 }
 

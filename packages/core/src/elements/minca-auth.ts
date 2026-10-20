@@ -19,6 +19,7 @@
  */
 import {
   createMincaAuth,
+  type AccountEntry,
   type AuthError,
   type AuthState,
   type MincaAuth,
@@ -258,6 +259,30 @@ export class MincaAuthElement extends Base {
     if (this.isConnected) this.#follow();
   }
 
+  /**
+   * Draws an account's avatar from its DID, round or not. A page that shows
+   * accounts its own way sets this, so an account looks the same here as
+   * everywhere else on it; otherwise a simple one is drawn.
+   */
+  get avatar(): ((did: string, size: number, round: boolean) => Element) | null {
+    return this.#avatar;
+  }
+
+  set avatar(draw: ((did: string, size: number, round: boolean) => Element) | null) {
+    this.#avatar = draw;
+    if (this.isConnected) this.#redraw();
+  }
+
+  #avatar: ((did: string, size: number, round: boolean) => Element) | null = null;
+
+  /** `round` inside something round already (a pill row), where corners would fight it */
+  #drawAvatar(did: string, size = 32, round = false): Element {
+    const drawn = this.#avatar?.(did, size, round) ?? avatar(did, size);
+    drawn.classList.add('wa-avatar');
+    if (round) drawn.classList.add('wa-avatar-round');
+    return drawn;
+  }
+
   connectedCallback(): void {
     adoptStyles('minca-auth', AUTH_CSS);
     if (this.#auth) {
@@ -399,9 +424,17 @@ export class MincaAuthElement extends Base {
           () => auth.startCreating(),
           state.busy,
         ),
+        state.folderAvailable
+          ? option(
+              'Open a folder',
+              'Your account is in a folder (a pod): open it, and sign in with your password or passkey.',
+              () => void auth.choosePod(),
+              state.busy,
+            )
+          : null,
         option(
           'I already have one',
-          'Open your pod, use your recovery code, or add this device from another.',
+          'Use your recovery code, or add this device from another.',
           () => auth.showExisting(),
           state.busy,
         ),
@@ -526,7 +559,7 @@ export class MincaAuthElement extends Base {
   }
 
   /** The everyday password, filed under the account's name so a manager fills the right one. */
-  #passwordForm(state: AuthState, account: AccountSummary): HTMLElement {
+  #passwordForm(state: AuthState, account: AccountSummary, secondary = false): HTMLElement {
     const password = this.#input('password', {
       type: 'password',
       name: 'password',
@@ -542,7 +575,13 @@ export class MincaAuthElement extends Base {
       {},
       offscreenUsername(accountCredentialName(account.name), true),
       password,
-      submit(state.busy, 'Sign in', 'Signing in…'),
+      secondary
+        ? h(
+            'button',
+            { type: 'submit', class: 'wa-secondary wa-wide', disabled: state.busy },
+            'Sign in with password',
+          )
+        : submit(state.busy, 'Sign in', 'Signing in…'),
     );
   }
 
@@ -551,19 +590,30 @@ export class MincaAuthElement extends Base {
     const { accounts, entry, place } = state;
     const selected = accounts.find((account) => account.id === state.selectedId) ?? null;
 
-    const rows = accounts.map((account) => {
-      const isSelected = account.id === state.selectedId;
-      const body: Child[] = [];
-
-      if (isSelected && entry) {
-        const hasShortcut = entry.shortcuts.length > 0;
-        // An account with wraps, none of them usable here, has been used on
-        // another site — a passkey works on one web address only.
-        const seenElsewhere = entry.vault.wraps.length > 0;
-
-        if (hasShortcut) {
-          body.push(
-            h(
+    /** The ways into the open account: one main button, the rest set back */
+    const waysIn = (account: AccountSummary, open: AccountEntry): Child[] => {
+      const hasPasskey = open.shortcuts.length > 0;
+      // An account with wraps, none of them usable here, has been used on
+      // another site — a passkey works on one web address only.
+      const seenElsewhere = open.vault.wraps.length > 0;
+      if (!hasPasskey && !open.hasPassword)
+        return [
+          h(
+            'p',
+            { class: 'wa-small', style: 'margin:0 0 10px' },
+            'No passkey or password here yet. Use your recovery code once, then choose one.',
+            info(
+              'Why it is asking for the recovery code',
+              seenElsewhere
+                ? 'This account’s passkeys belong to the sites that made them — a passkey works on one web address only. The recovery code opens it anywhere.'
+                : 'The recovery code opens the account anywhere, with nothing stored. Next you set up a passkey or password so it stops asking.',
+            ),
+          ),
+          ...this.#codeForm(state, selected),
+        ];
+      return [
+        hasPasskey
+          ? h(
               'button',
               {
                 type: 'button',
@@ -573,86 +623,91 @@ export class MincaAuthElement extends Base {
                 onclick: () => void auth.signInWithPasskey(),
               },
               state.busy ? 'Waiting…' : 'Sign in with passkey',
-            ),
-          );
-        }
-        if (entry.hasPassword) body.push(this.#passwordForm(state, account));
-
-        if (hasShortcut || entry.hasPassword) {
-          body.push(links(link('Use my recovery code', () => auth.showRestore(), state.busy)));
-        } else {
-          body.push(
-            h(
-              'p',
-              { class: 'wa-small', style: 'margin:0 0 10px' },
-              'No passkey or password here yet. Use your recovery code once, then choose one.',
-              info(
-                'Why it is asking for the recovery code',
-                seenElsewhere
-                  ? 'This account’s passkeys belong to the sites that made them — a passkey works on one web address only. The recovery code opens it anywhere.'
-                  : 'The recovery code opens the account anywhere, with nothing stored. Next you set up a passkey or password so it stops asking.',
-              ),
-            ),
-            ...this.#codeForm(state, selected),
-          );
-        }
-      }
-
-      return h(
-        'div',
-        { class: 'wa-account' },
+            )
+          : null,
+        hasPasskey && open.hasPassword ? h('div', { class: 'wa-or' }, 'or') : null,
+        open.hasPassword ? this.#passwordForm(state, account, hasPasskey) : null,
         h(
-          'button',
-          {
-            type: 'button',
-            class: 'wa-account-row',
-            'aria-expanded': String(isSelected),
-            disabled: state.busy,
-            // Clicking the open row must not wipe what a manager just filled.
-            onclick: () => (isSelected ? undefined : void auth.select(account.id)),
-          },
-          avatar(account.did),
-          h(
-            'span',
-            { style: 'flex:1;min-width:0' },
-            h('span', { class: 'wa-account-name' }, account.name),
-            h('span', { class: 'wa-account-did' }, `${account.did.slice(0, 18)}…${account.did.slice(-4)}`),
-          ),
+          'p',
+          { class: 'wa-small', style: 'margin-top:12px' },
+          'Forgot it? ',
+          link('Use your recovery code', () => auth.showRestore(), state.busy),
         ),
-        body.length > 0 ? h('div', { class: 'wa-account-body' }, ...body) : null,
+      ];
+    };
+
+    // The one being signed in to first, then the rest to switch to.
+    const ordered = [...accounts].sort(
+      (a, b) => Number(b.id === state.selectedId) - Number(a.id === state.selectedId),
+    );
+    const rows = ordered.map((account) => {
+      const isOpen = account.id === state.selectedId && entry !== null;
+      if (isOpen)
+        return h(
+          'div',
+          { class: 'wa-account wa-account-open' },
+          h(
+            'div',
+            { class: 'wa-account-head' },
+            this.#drawAvatar(account.did, 48),
+            h('span', { class: 'wa-account-name' }, account.name),
+          ),
+          ...waysIn(account, entry),
+        );
+      return h(
+        'button',
+        {
+          type: 'button',
+          class: 'wa-account wa-account-row',
+          disabled: state.busy,
+          onclick: () => void auth.select(account.id),
+        },
+        this.#drawAvatar(account.did, 32, true),
+        h('span', { class: 'wa-account-name', style: 'flex:1;min-width:0' }, account.name),
+        h('span', { class: 'wa-chevron', 'aria-hidden': 'true' }, '›'),
       );
     });
 
+    const one = accounts.length === 1 ? accounts[0] : undefined;
     return card(
       'Welcome back',
-      subtitle(accounts.length > 0 ? 'Choose your account.' : 'There are no accounts here yet.'),
-      ...rows,
-      errorBox(state.error),
-      links(
-        link('Another account', () => auth.showExisting(), state.busy),
-        link('Create a new account', () => auth.startCreating(), state.busy),
+      subtitle(
+        one
+          ? `Sign in as ${one.name}.`
+          : accounts.length > 0
+            ? 'Choose your account.'
+            : 'There are no accounts here yet.',
       ),
-      place
-        ? h(
-            'p',
-            { class: 'wa-small', style: 'margin-top:16px' },
-            place.kind === 'folder'
-              ? `Pod: ${place.directory?.name ?? 'your folder'}`
-              : 'Accounts kept in this browser',
-          )
-        : null,
-      state.folderAvailable
-        ? links(
-            link(
-              place?.kind === 'folder' ? 'Open a different pod' : 'Open a pod',
-              () => void auth.choosePod(),
-              state.busy,
-            ),
-            place?.kind === 'folder'
-              ? link('Use this browser instead', () => void auth.useBrowser(), state.busy)
-              : null,
-          )
-        : null,
+      h('div', { class: 'wa-accounts' }, ...rows),
+      errorBox(state.error),
+      h(
+        'div',
+        { class: 'wa-footer' },
+        links(
+          link('Another account', () => auth.showExisting(), state.busy),
+          link('Create a new account', () => auth.startCreating(), state.busy),
+        ),
+        place
+          ? h(
+              'p',
+              { class: 'wa-small', style: 'margin-top:4px' },
+              place.kind === 'folder'
+                ? `Accounts in the folder “${place.directory?.name ?? 'your pod'}”`
+                : 'Accounts kept in this browser',
+              state.folderAvailable ? ' · ' : null,
+              state.folderAvailable
+                ? link(
+                    place.kind === 'folder' ? 'Open another folder' : 'Open a folder',
+                    () => void auth.choosePod(),
+                    state.busy,
+                  )
+                : null,
+              state.folderAvailable && place.kind === 'folder'
+                ? link('Use this browser', () => void auth.useBrowser(), state.busy)
+                : null,
+            )
+          : null,
+      ),
     );
   }
 
@@ -726,15 +781,12 @@ export class MincaAuthElement extends Base {
     const auth = this.auth;
     const code = state.freshCode ?? '';
     const account = state.session?.account;
-    const restored = state.setup === 'restored';
     return card(
-      restored ? 'Keep your recovery code safe' : 'Your recovery code',
+      'Your recovery code',
       h(
         'p',
         { class: 'wa-hint' },
-        restored
-          ? 'You just used it. From now on a passkey or password signs you in here — keep this code for new devices and emergencies.'
-          : 'This code is your account. With it you can restore your account on any device, even if you lose everything else.',
+        'This code is your account. With it you can restore your account on any device, even if you lose everything else.',
         info(
           'Why it matters',
           'Nobody can reissue it: there is no server that knows your account. Anyone who has it can open your account, so keep it private. ',
@@ -901,6 +953,14 @@ export class MincaAuthElement extends Base {
           : null,
       ),
       choosing ? passwordForm() : null,
+      // The code was typed into a password field: saved as this site's login, the password set now would replace it.
+      state.setup === 'restored'
+        ? h(
+            'p',
+            { class: 'wa-small', style: 'margin-top:16px' },
+            'If your browser offered to save the recovery code as a password, don’t — the password you set now would replace it. Keep the code where you had it.',
+          )
+        : null,
       state.setup === 'paired' && state.pairingStage
         ? h(
             'p',
@@ -956,12 +1016,14 @@ export class MincaAuthElement extends Base {
    */
   #pair(state: AuthState): HTMLElement {
     const auth = this.auth;
+    const arrival = state.pairingArrival;
+    if (arrival && state.session) return this.#pairArrived(state, arrival, state.session.account.name);
     const stage = state.pairingStage;
     const code = stage?.kind === 'confirm' ? stage.code : null;
     // The codes matched and the account is here: nothing left to tap or warn about.
     const arriving = stage?.kind === 'sending';
     return card(
-      'Add this phone',
+      state.session ? 'Add an account' : 'Add this phone',
       subtitle('You scanned a code from your computer.'),
       code
         ? h(
@@ -972,7 +1034,9 @@ export class MincaAuthElement extends Base {
         : h(
             'p',
             { class: 'wa-hint' },
-            'This phone becomes the same account, with its own copy of your spaces.',
+            state.session
+              ? `This phone is signed in as ${state.session.account.name}. Pairing brings the account on the computer showing the code; you choose whether to add it once it arrives.`
+              : 'This phone becomes the same account, with its own copy of your spaces.',
             info(
               'What happens next',
               'Your computer and this phone show the same six digits. When you confirm them on the computer, it sends the account here directly — the relay only introduces the two, and sees nothing it could use.',
@@ -994,7 +1058,7 @@ export class MincaAuthElement extends Base {
               disabled: state.busy,
               onclick: () => void auth.acceptPairing(),
             },
-            state.busy ? 'Looking…' : 'Set up this phone',
+            state.busy ? 'Looking…' : 'Continue',
           )
         : null,
       stage
@@ -1007,6 +1071,43 @@ export class MincaAuthElement extends Base {
       errorBox(state.error),
       h('p', { class: 'wa-small' }, 'Keep the code showing on your computer until this finishes.'),
       links(link(state.pairing ? 'Not now' : 'Back', () => auth.dismissPairing(), state.busy && !code)),
+    );
+  }
+
+  /** The account a pairing brought, to a phone signed in to another: add it, or switch to it if it is already here */
+  #pairArrived(
+    state: AuthState,
+    arrival: NonNullable<AuthState['pairingArrival']>,
+    current: string,
+  ): HTMLElement {
+    const auth = this.auth;
+    const known = arrival.account;
+    return card(
+      known ? `Switch to ${known.name}?` : 'Add this account?',
+      h(
+        'div',
+        { class: 'wa-row', style: 'align-items:center;gap:12px' },
+        this.#drawAvatar(arrival.did, 40),
+        h(
+          'p',
+          { class: 'wa-hint', style: 'margin:0' },
+          known
+            ? `The computer that showed the code sent ${known.name}, which is already on this phone. Switch to it? ${current} stays here, to switch back to.`
+            : `The computer that showed the code sent a different account from ${current}, one this phone doesn't have. Add it only if it is yours: if you meant to add this phone to ${current}, it already is, and this account is someone else's.`,
+        ),
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'wa-button',
+          disabled: state.busy,
+          onclick: () => void auth.answerPairing(true),
+        },
+        known ? `Switch to ${known.name}` : 'Add and switch',
+      ),
+      errorBox(state.error),
+      links(link(`Stay as ${current}`, () => void auth.answerPairing(false), state.busy)),
     );
   }
 }

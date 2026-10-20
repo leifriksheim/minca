@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { useAccount, useConnection } from '@minca/core/react';
+import { accountHomeLink } from '@minca/core/session';
 import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
@@ -26,8 +27,9 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
 
   const openHome = () => {
     setOpen(false);
-    // The account page sits beside the connect page, at whichever home the person uses.
-    globalThis.open(new URL('.', state.home).href, 'minca-account', 'popup,width=720,height=820');
+    // The account page sits beside the connect page, at whichever home the person uses. It may
+    // be signed in to another account there, so the link says which one this app acts for.
+    globalThis.open(accountHomeLink(state.home, account.did), 'minca-account', 'popup,width=720,height=820');
   };
 
   return (
@@ -40,7 +42,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
           aria-label="Account"
           className="you-button"
         >
-          <Avatar did={account.did} size={32} />
+          <Avatar did={account.did} size={32} round />
           <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
             <span style={{ ...ellipsis, fontSize: 13.5, fontWeight: 600, color: palette.ink.strong }}>
               {account.name}
@@ -70,7 +72,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
             fontWeight: 500,
           }}
         >
-          <Avatar did={account.did} size={28} />
+          <Avatar did={account.did} size={28} round />
           <span className="account-name">{account.name}</span>
         </button>
       )}
@@ -78,7 +80,7 @@ export function AccountMenu({ place = 'header' }: { place?: 'header' | 'sidebar'
       {open && (
         <div role="menu" style={{ ...menu, ...(place === 'sidebar' ? above : below) }}>
           <div style={{ padding: '14px 14px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
-            <Avatar did={account.did} size={36} />
+            <Avatar did={account.did} size={36} round />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div
                 style={{

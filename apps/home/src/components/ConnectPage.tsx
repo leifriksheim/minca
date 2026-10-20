@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { avatarElement } from '@minca/app-shared/avatar';
+import { ConfirmItsYou } from './ConfirmItsYou';
 import type { NewSpace, SpaceSummary } from '@minca/core';
 import {
   isProposeRequest,
@@ -57,7 +59,7 @@ export function ConnectPage() {
     return (
       <Frame>
         <Asking incoming={incoming} />
-        <MincaAuth />
+        <MincaAuth avatar={avatarElement} />
       </Frame>
     );
   }
@@ -148,8 +150,12 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   const contacts = request.contacts === true && !recordsOnly && !whole;
   const nothing = !whole && !contacts && chosen.size === 0 && creating.length === 0;
 
-  const allow = () =>
+  // The whole account, or the contacts, hand over keys no revoke takes back: prove it is you first.
+  const [proving, setProving] = useState(false);
+  const needsProof = whole || (request.contacts === true && !recordsOnly);
+  const grant = () =>
     run(async () => incoming.approve(await auth.grant({ origin, request, spaceIds: [...chosen] })));
+  const allow = () => (needsProof && !auth.isConfirmed() ? setProving(true) : grant());
 
   return (
     <Frame>
@@ -268,14 +274,25 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
           ' It can read the private spaces it gets from now on — that cannot be taken back yet.'}
       </p>
 
-      <Answer
-        error={error}
-        busy={busy}
-        blocked={nothing}
-        allowLabel={busy ? 'Giving access…' : 'Allow'}
-        onAllow={() => void allow()}
-        onDeny={() => incoming.deny()}
-      />
+      {proving ? (
+        <ConfirmItsYou
+          why={whole ? 'give it your whole account' : 'give it your contacts'}
+          onConfirmed={() => {
+            setProving(false);
+            void grant();
+          }}
+          onCancel={() => setProving(false)}
+        />
+      ) : (
+        <Answer
+          error={error}
+          busy={busy}
+          blocked={nothing}
+          allowLabel={busy ? 'Giving access…' : 'Allow'}
+          onAllow={() => void allow()}
+          onDeny={() => incoming.deny()}
+        />
+      )}
 
       <p style={{ ...styles.errorHint, marginTop: 20 }}>
         {byCode ? 'The program' : 'The app'} gets a note signed by your account, for its own key. It never

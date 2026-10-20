@@ -791,7 +791,10 @@ describe('a program connected by code, through the account home', () => {
     });
     await auth.start();
     await auth.createAccount('Ada');
+    const code = auth.getState().freshCode!;
     auth.codeSaved();
+    // Whole-account grants need the person to have just proved it is them.
+    await auth.confirm({ code });
     open.push({ close: () => auth.signOut() });
     return auth;
   }

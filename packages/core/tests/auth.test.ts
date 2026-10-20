@@ -88,7 +88,7 @@ describe('createMincaAuth', () => {
     assert.equal(made.setup, 'new');
     assert.ok(made.freshCode, 'the recovery code is shown');
     assert.equal(made.session?.account.name, 'Ada');
-    assert.equal(auth.recoveryCode(), made.freshCode);
+    assert.equal(auth.recoveryCode(), null, 'shown once here; reading it later takes proof it is you');
 
     auth.codeSaved();
     assert.equal(auth.getState().stage, 'unlock', 'a passkey or password is not optional');
@@ -167,6 +167,7 @@ describe('createMincaAuth', () => {
     const auth = started();
     await auth.start();
     await createAccount(auth, 'Ada');
+    assert.equal(await auth.confirm({ password: PASSWORD }), true);
     assert.equal(await auth.setPassword('a different one entirely'), true);
     assert.equal(auth.getState().entry?.vault.wraps.filter((wrap) => wrap.kind === 'passphrase').length, 1);
     await auth.signOut();
@@ -188,7 +189,7 @@ describe('createMincaAuth', () => {
     assert.equal(auth.getState().stage, 'ready');
   });
 
-  test('restoring on a new device goes on to set up a way in there', async () => {
+  test('restoring on a new device goes straight on to set up a way in there', async () => {
     const auth = started();
     await auth.start();
     const code = await createAccount(auth, 'Ada');
@@ -203,14 +204,9 @@ describe('createMincaAuth', () => {
 
     const restored = elsewhere.getState();
     assert.equal(restored.session?.did, did);
-    assert.equal(
-      restored.stage,
-      'recovery',
-      'a reminder to keep the code apart from the password about to be set',
-    );
+    assert.equal(restored.stage, 'unlock', 'the person just typed the code: it is not shown back to them');
     assert.equal(restored.setup, 'restored');
-    elsewhere.codeSaved();
-    assert.equal(elsewhere.getState().stage, 'unlock');
+    assert.equal(restored.freshCode, null);
     await elsewhere.setPassword(PASSWORD);
     assert.equal(elsewhere.getState().stage, 'ready');
   });
@@ -226,7 +222,7 @@ describe('createMincaAuth', () => {
 
     await auth.signInWithPassword(code);
     assert.equal(auth.getState().session?.did, did);
-    assert.equal(auth.getState().stage, 'recovery');
+    assert.equal(auth.getState().stage, 'unlock');
   });
 
   test('a recovery code for another account is refused with a reason', async () => {
@@ -295,6 +291,68 @@ describe('createMincaAuth', () => {
     }
   });
 
+  test('reading the recovery code or offering the account to a phone takes proof it is you', async () => {
+    const auth = started();
+    await auth.start();
+    const code = await createAccount(auth, 'Ada');
+    assert.equal(auth.recoveryCode(), null, 'a page left open hands out nothing');
+    await assert.rejects(
+      auth.offerToPhone(() => {}),
+      /Confirm it is you/,
+    );
+
+    assert.equal(await auth.confirm({ password: 'not the password' }), false);
+    assert.equal(auth.recoveryCode(), null);
+    assert.ok(auth.getState().error, 'a wrong answer says so');
+    assert.equal(await auth.confirm({ code: '0000-0000-0000-0000-0000-0000-00' }), false, 'nor another code');
+
+    assert.equal(await auth.confirm({ password: PASSWORD }), true);
+    assert.equal(auth.recoveryCode(), code);
+
+    await auth.signOut();
+    await auth.signInWithPassword(PASSWORD);
+    assert.equal(auth.recoveryCode(), null, 'a new sign-in asks again');
+    assert.equal(await auth.confirm({ code }), true, 'the recovery code is proof too');
+    assert.equal(auth.recoveryCode(), code);
+  });
+
+  test('changing how the account signs in takes proof it is you, once it is set up', async () => {
+    // Otherwise a new password would open the gate to the recovery code, and lock the owner out.
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    assert.equal(await auth.setPassword('chosen by whoever sat down'), false);
+    assert.equal(await auth.removeShortcut('passphrase'), false);
+    assert.equal(await auth.confirm({ password: 'chosen by whoever sat down' }), false);
+    assert.equal(auth.recoveryCode(), null);
+
+    await auth.signOut();
+    await auth.signInWithPassword(PASSWORD);
+    assert.equal(auth.getState().stage, 'ready', 'the owner’s password still opens it');
+  });
+
+  test('no call steps back into setup to skip the proof', async () => {
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    auth.codeSaved();
+    auth.finishSetup();
+    assert.equal(auth.getState().stage, 'ready', 'neither reopens setup once it is done');
+    assert.equal(await auth.setPassword('chosen by whoever sat down'), false);
+    assert.equal(await auth.confirm({ password: 'chosen by whoever sat down' }), false);
+  });
+
+  test('proof is for one account, and does not carry over to another', async () => {
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    assert.equal(await auth.confirm({ password: PASSWORD }), true);
+    await auth.signOut();
+    await createAccount(auth, 'Bob');
+    assert.equal(auth.isConfirmed(), false);
+    assert.equal(auth.recoveryCode(), null);
+  });
+
   test('subscribers hear every change', async () => {
     const auth = started();
     const stages: string[] = [];
@@ -322,6 +380,7 @@ describe('passwords beside the CLI', () => {
     );
     await place!.store.write(session!.account, { ...vault, wraps: [...vault.wraps, cli] });
 
+    assert.equal(await auth.confirm({ code }), true);
     assert.equal(await auth.setPassword('a brand new password'), true);
     const labels = auth
       .getState()

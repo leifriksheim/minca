@@ -7,12 +7,21 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMincaAuth, type MincaAuthConfig, type MincaSession } from '../src/session/auth.js';
+import {
+  createMincaAuth,
+  type MincaAuth,
+  type MincaAuthConfig,
+  type MincaSession,
+} from '../src/session/auth.js';
 import type { KeyValueStore } from '../src/session/stay-signed-in.js';
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { until } from './helpers/until.js';
+import { createFakeHub } from './helpers/fake-transport.js';
+import type { PairingStage } from '../src/session/pairing.js';
+import { encodePairingTicket } from '../src/identity/pairing.js';
+import { base64UrlEncode } from '../src/utils/encoding.js';
 
 // ── A page: device keys need IndexedDB, and tabs hear each other through `storage` events ──
 
@@ -124,10 +133,10 @@ function sessionsOf(auth: ReturnType<typeof createMincaAuth>): Set<MincaSession>
   return seen;
 }
 
-async function signedInTab(config: MincaAuthConfig) {
+async function signedInTab(config: MincaAuthConfig, name = 'Ada') {
   const tab = createMincaAuth(config);
   await tab.start();
-  await tab.createAccount('Ada');
+  await tab.createAccount(name);
   tab.codeSaved();
   assert.equal(await tab.setPassword('correct horse battery'), true);
   return tab;
@@ -158,6 +167,7 @@ describe('a sign-in kept in another tab', () => {
     const waiting = createMincaAuth(config);
     await waiting.start();
     const paired = await signedInTab(config);
+    await paired.confirm({ password: 'correct horse battery' });
     const code = paired.recoveryCode()!;
     const seen = sessionsOf(waiting);
 
@@ -249,5 +259,125 @@ describe('a sign-in kept in another tab', () => {
     assert.equal(waiting.getState().session, null, 'still waiting for Ada');
     assert.equal(waiting.getState().selectedId, adaId);
     await other.signOut();
+  });
+});
+
+describe('a pairing link opened where a sign-in is kept', () => {
+  /** A tab opened from a phone-pairing QR code */
+  function openedFromPairingLink(config: MincaAuthConfig, link?: string) {
+    const ticket = { v: 2, secret: base64UrlEncode(new Uint8Array(16)), relay: '' } as const;
+    const was = { location: scope.location, history: scope.history };
+    const hash = link ? link.slice(link.indexOf('#')) : `#pair=${encodePairingTicket(ticket)}`;
+    scope.location = { hash, pathname: '/', search: '' };
+    scope.history = { replaceState() {} };
+    try {
+      return createMincaAuth(config);
+    } finally {
+      Object.assign(scope, was);
+    }
+  }
+
+  test('still asks before pairing, signed in, and going back keeps that account', async () => {
+    const { config } = browser();
+    const first = await signedInTab(config);
+    const did = first.getState().session?.did;
+
+    const phone = openedFromPairingLink(config);
+    await phone.start();
+    assert.equal(phone.getState().stage, 'pair', 'the kept sign-in does not skip the warning');
+    assert.ok(phone.getState().pairing);
+    assert.equal(phone.getState().session?.did, did, 'it says who this device is signed in as');
+
+    phone.dismissPairing();
+    assert.equal(phone.getState().stage, 'ready');
+    assert.equal(phone.getState().session?.did, did);
+    await phone.signOut();
+    await first.signOut();
+  });
+
+  /** A computer signed in as Ada showing a pairing code, and a phone signed in as Bob that opened it */
+  async function pairing(
+    options: { adaOnPhone?: boolean; signedIn?: boolean; beforeConfirm?: (phone: MincaAuth) => void } = {},
+  ) {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const pairingTransport = (did: string) => hub.transport(did, 'pair');
+    const computer = await signedInTab({ ...browser().config, pairingTransport });
+    const ada = computer.getState().session!.did;
+    assert.equal(await computer.confirm({ password: 'correct horse battery' }), true);
+    const phoneConfig = { ...browser().config, pairingTransport };
+    if (options.adaOnPhone) {
+      const before = createMincaAuth(phoneConfig);
+      await before.start();
+      await before.signInWithCode(computer.recoveryCode()!);
+      await before.setPassword('correct horse battery');
+      await before.signOut();
+    }
+    const bobTab = options.signedIn === false ? null : await signedInTab(phoneConfig, 'Bob');
+    const bob = bobTab?.getState().session?.did ?? null;
+    const stages: PairingStage[] = [];
+    const offer = await computer.offerToPhone((stage) => stages.push(stage));
+    const phone = openedFromPairingLink(phoneConfig, offer.url);
+    await phone.start();
+    assert.equal(phone.getState().session?.did ?? null, bob);
+
+    const accepting = phone.acceptPairing();
+    await until(() => stages.some((stage) => stage.kind === 'compare'), 5000, 'the codes to show');
+    const compare = stages.find((stage) => stage.kind === 'compare');
+    assert.ok(compare?.kind === 'compare');
+    options.beforeConfirm?.(phone);
+    compare.same();
+    await accepting;
+    const done = async () => {
+      offer.stop();
+      await Promise.all([phone.signOut(), bobTab?.signOut(), computer.signOut()]);
+    };
+    return { phone, ada, bob, stages, done };
+  }
+
+  test('signed in as another, it asks to add the account that arrived, and keeps the other', async () => {
+    const { phone, ada, bob, done } = await pairing();
+    const asked = phone.getState();
+    assert.equal(asked.session?.did, bob, 'nothing switches before the person answers');
+    assert.deepEqual(asked.pairingArrival, { did: ada, account: null });
+
+    await phone.answerPairing(true);
+    assert.equal(phone.getState().session?.did, ada);
+    const kept = phone.getState().accounts.map((account) => account.did);
+    assert.ok(bob && kept.includes(bob) && kept.includes(ada), 'both accounts are on the phone');
+    await done();
+  });
+
+  test('an account already on the phone is offered as a switch', async () => {
+    const { phone, ada, done } = await pairing({ adaOnPhone: true });
+    const arrival = phone.getState().pairingArrival;
+    assert.equal(arrival?.did, ada);
+    assert.equal(arrival?.account?.did, ada, 'it names the account this phone keeps');
+    await phone.answerPairing(true);
+    assert.equal(phone.getState().session?.did, ada);
+    assert.equal(phone.getState().stage, 'ready', 'it has a way in here already');
+    await done();
+  });
+
+  test('saying no keeps the phone as it was', async () => {
+    const { phone, ada, bob, done } = await pairing();
+    await phone.answerPairing(false);
+    assert.equal(phone.getState().session?.did, bob);
+    assert.equal(phone.getState().stage, 'ready');
+    assert.ok(!phone.getState().accounts.some((account) => account.did === ada), 'the account was not filed');
+    await done();
+  });
+  test('"Not now" while the code shows stops the pairing, even if the computer confirms after', async () => {
+    const { phone, ada, stages, done } = await pairing({
+      signedIn: false,
+      beforeConfirm: (tab) => tab.dismissPairing(),
+    });
+    await new Promise((settle) => setTimeout(settle, 200));
+    assert.equal(phone.getState().busy, false, 'the screen it went back to is not held up');
+    assert.equal(phone.getState().error, null, 'stopping is not an error');
+    assert.ok(!stages.some((stage) => stage.kind === 'sent'), 'the computer is not told it arrived');
+    assert.equal(phone.getState().session, null, 'nothing was signed in');
+    assert.equal(phone.getState().pairingArrival, null);
+    assert.ok(!phone.getState().accounts.some((account) => account.did === ada), 'the account was not filed');
+    await done();
   });
 });

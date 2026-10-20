@@ -65,3 +65,30 @@ export function avatarShape(did: string): AvatarShape {
   drawn.set(did, shape);
   return shape;
 }
+
+/** The corner an avatar of this size takes: a rounded square, or a circle inside something round */
+export const avatarRadius = (size: number, round = false): string => (round ? '50%' : `${size / 4}px`);
+
+/** In a circle the shape's tips would be cut off, so it shrinks to sit inside it */
+export const avatarFit = (round = false): string | undefined =>
+  round ? 'translate(50 50) scale(0.74) translate(-50 -50)' : undefined;
+
+/** The avatar as an SVG element, for pages and elements drawn without React (`<minca-auth>`'s `avatar`) */
+export function avatarElement(did: string, size: number, round = false): SVGSVGElement {
+  const { d, fill, ground } = avatarShape(did);
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = globalThis.document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Account avatar');
+  svg.style.cssText = `border-radius:${avatarRadius(size, round)};background:${ground};flex-shrink:0;display:block`;
+  const path = globalThis.document.createElementNS(ns, 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('fill', fill);
+  const fit = avatarFit(round);
+  if (fit) path.setAttribute('transform', fit);
+  svg.appendChild(path);
+  return svg;
+}

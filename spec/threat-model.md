@@ -95,8 +95,24 @@ reference implementation, or any implementation, honestly.
     request, in the window the person opened from the app. The home shows
     that page's origin and grants nothing under the app's; the person
     reading the origin is the only defence (06 §2.3). By design.
+  - A pairing link it makes puts the device that opens it in its account:
+    it is the offering side, so it confirms the codes itself, and the code
+    check proves only that the two screens are one exchange, not that the
+    computer is the person's. Any page can deliver the link, by opening the
+    account home with it. A tab with no session takes it in one tap: after a
+    warning where the device keeps an account (01 §15.3), with none where it
+    keeps no account. A tab that opens with a kept sign-in asks once the
+    account has arrived: add it, or switch to it if the device keeps it
+    already; the account signed in stays filed either way
+    (`packages/core/tests/take-up.test.ts`, "a pairing link opened where a
+    sign-in is kept"). "Not now", even once the code shows, leaves the
+    exchange before the account arrives (same file, "… while the code shows
+    stops the pairing, even if the computer confirms after"). Those warnings and that question are the only defence. By
+    design, as with any "scan to log in" link. Once added, its account can
+    look like the person's own: its name follows its profile, and an avatar
+    is for recognition only, since a look-alike takes seconds to find.
 
-_Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
+_Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 
 ### 3.2 Member
 
@@ -805,6 +821,22 @@ raised but has no place above until a test confirms or rules it out.
   system's keychain: a copy of the folder yields no key, grant or private
   body, and shows what a carrier sees (§3.8). A program running as the person
   can still ask the keychain, as it can read a browser profile.
+- **Stopping someone at a device that is signed in.** The reference home asks
+  for the password, a passkey or the recovery code, given in the last five
+  minutes for this account, before it does only these: show the recovery
+  code, offer the account to a phone, change how the account signs in
+  outside first setup, or give an app the whole account or the contacts,
+  whose keys no revoke takes back (`packages/core/tests/auth.test.ts`,
+  "reading the recovery code or offering the account to a phone takes proof
+  it is you", "changing how the account signs in takes proof it is you, once
+  it is set up", "no call steps back into setup to skip the proof";
+  `packages/core/tests/connect.test.ts`, "the whole account, or the
+  contacts, are given only just after proof it is you"). Anything else at an
+  open page, such as giving an app some spaces or disconnecting one, needs
+  only the sign-in. A passkey's proof is whatever the platform takes for it,
+  which may be the device's own login. And the seed is in the page's memory,
+  so developer tools or a script in the home's origin read it whatever was
+  asked.
 
 ## 5. Reviewing a change against this page
 

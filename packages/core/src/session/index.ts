@@ -77,6 +77,7 @@ export type { Place, PodContents } from './places.js';
 export { createStaySignedIn, STAY_SIGNED_IN_CHOICES, DEFAULT_STAY_SIGNED_IN } from './stay-signed-in.js';
 export type { StaySignedIn, StaySignedInStore, KeyValueStore } from './stay-signed-in.js';
 export { offerToPhone, receiveFromDesktop, readPairingTicket, clearPairingTicket } from './pairing.js';
+export { accountHomeLink, readAccountHint, clearAccountHint } from './account-hint.js';
 export type { PairingStage, PairingOffer, Handover } from './pairing.js';
 export { offerConnectCode, connectWithCode, newConnectCode, readConnectCode } from './connect-code.js';
 export type { ConnectCodeStage, ConnectCodeOffer, CodeAsking, ConnectCode } from './connect-code.js';

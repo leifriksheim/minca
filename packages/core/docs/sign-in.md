@@ -60,26 +60,27 @@ _Source: `packages/core/src/identity/account-store.ts`. Tests: `packages/core/te
 
 Transitions:
 
-| From                            | Action                                                                                                                | To                                                                                                                   |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `starting`                      | `start()`, a kept sign-in for an account in the place ([the session a sign-in starts](#the-session-a-sign-in-starts)) | `ready`                                                                                                              |
-| `starting`                      | `start()`, a pairing ticket in the URL                                                                                | `pair`                                                                                                               |
-| `starting`                      | `start()`, otherwise                                                                                                  | `signIn` if the place has accounts, else `welcome`                                                                   |
-| `starting`                      | `start()` fails                                                                                                       | `welcome` (with `error`)                                                                                             |
-| any                             | `showWelcome()` / `showExisting()` / `showRestore()` / `showSignIn()`                                                 | `welcome` / `existing` / `restore` / `signIn`                                                                        |
-| `existing`, `signIn`            | `choosePod()` / `useBrowser()` while signed out                                                                       | `signIn` or `welcome`                                                                                                |
-| `ready`                         | `choosePod()` while signed in                                                                                         | `ready`, with `podChoice` set; `confirmPod('combine' \| 'switch')` restarts the session in the pod                   |
-| `pod`                           | `choosePod()`                                                                                                         | `ready`: the new account moves into the pod without asking, and its browser copy is removed                          |
-| `pod`                           | `finishSetup()`                                                                                                       | `ready`                                                                                                              |
-| `welcome`, `existing`, `signIn` | `startCreating()`                                                                                                     | `create`                                                                                                             |
-| `signIn`                        | `signInWithPassword` / `signInWithPasskey` succeeds                                                                   | `ready`                                                                                                              |
-| `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `recovery` with `setup: 'restored'`             |
-| `create`                        | `createAccount(name)`                                                                                                 | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                       |
-| `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                             |
-| `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, unless `offerPod` is false; else `ready`                 |
-| `pair`                          | `acceptPairing()`                                                                                                     | once the computer confirms the code, `unlock` with `setup: 'paired'` if the account has no way in here, else `ready` |
-| `pair`                          | `dismissPairing()`                                                                                                    | `ready` if signed in, else `signIn` / `welcome`                                                                      |
-| `ready`                         | `signOut()`                                                                                                           | `starting`, then `signIn` / `welcome`                                                                                |
+| From                            | Action                                                                                                                | To                                                                                                                                                                       |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `starting`                      | `start()`, a kept sign-in for an account in the place ([the session a sign-in starts](#the-session-a-sign-in-starts)) | `ready`, or `pair` (signed in) with a pairing ticket in the URL                                                                                                          |
+| `starting`                      | `start()`, no kept sign-in and a pairing ticket in the URL                                                            | `pair`                                                                                                                                                                   |
+| `starting`                      | `start()`, otherwise                                                                                                  | `signIn` if the place has accounts, else `welcome`                                                                                                                       |
+| `starting`                      | `start()` fails                                                                                                       | `welcome` (with `error`)                                                                                                                                                 |
+| any                             | `showWelcome()` / `showExisting()` / `showRestore()` / `showSignIn()`                                                 | `welcome` / `existing` / `restore` / `signIn`                                                                                                                            |
+| `welcome`, `existing`, `signIn` | `choosePod()` / `useBrowser()` while signed out                                                                       | `signIn` or `welcome`                                                                                                                                                    |
+| `ready`                         | `choosePod()` while signed in                                                                                         | `ready`, with `podChoice` set; `confirmPod('combine' \| 'switch')` restarts the session in the pod                                                                       |
+| `pod`                           | `choosePod()`                                                                                                         | `ready`: the new account moves into the pod without asking, and its browser copy is removed                                                                              |
+| `pod`                           | `finishSetup()`                                                                                                       | `ready`                                                                                                                                                                  |
+| `welcome`, `existing`, `signIn` | `startCreating()`                                                                                                     | `create`                                                                                                                                                                 |
+| `signIn`                        | `signInWithPassword` / `signInWithPasskey` succeeds                                                                   | `ready`                                                                                                                                                                  |
+| `signIn`, `restore`             | `signInWithCode` (or a recovery code given to `signInWithPassword`) succeeds                                          | `ready` if the account has a usable passkey or a password here; else `unlock` with `setup: 'restored'`                                                                   |
+| `create`                        | `createAccount(name)`                                                                                                 | `recovery`, with `session`, `freshCode` and `setup: 'new'` set                                                                                                           |
+| `recovery`                      | `codeSaved()`                                                                                                         | `unlock`                                                                                                                                                                 |
+| `unlock`                        | `addPasskey()` / `setPassword(p)` succeeds                                                                            | `pod` for a new account in a browser that can open folders, unless `offerPod` is false; else `ready`                                                                     |
+| `pair`                          | `acceptPairing()`                                                                                                     | once the computer confirms the code, `unlock` with `setup: 'paired'` if the account has no way in here, else `ready`; signed in to another, `pair` with `pairingArrival` |
+| `pair`                          | `answerPairing(true)` / `answerPairing(false)`                                                                        | as `acceptPairing()` signed out / `ready`, the account signed in kept                                                                                                    |
+| `pair`                          | `dismissPairing()`                                                                                                    | `ready` if signed in, else `signIn` / `welcome`                                                                                                                          |
+| `ready`                         | `signOut()`                                                                                                           | `starting`, then `signIn` / `welcome`                                                                                                                                    |
 
 A failed action sets `error` (`{ message, hint?, code? }`) and leaves the stage
 as it was. A dismissed passkey or folder prompt sets no error.
@@ -129,6 +130,28 @@ waits for `ready` does not see the session during `recovery`, `unlock` or
 `pod`.
 
 _Source: `packages/core/src/session/auth.ts`, `packages/core/src/session/credentials.ts`, `packages/core/src/identity/account-vault.ts` (`CLI_PASSPHRASE_LABEL`). Tests: `packages/core/tests/auth.test.ts`, `packages/core/tests/account-vault.test.ts`._
+
+## Proving it is you
+
+Being signed in is no proof anyone is there: a page may be left open, and a
+sign-in kept for days. So whatever hands out the whole account, or changes how
+it signs in, asks again. `auth.recoveryCode()` returns the code,
+`auth.offerToPhone()` starts, `setPassword`, `addPasskey` and
+`removeShortcut` work (outside the first setup of an account just made,
+restored or paired, which only landing a session opens), and `auth.grant`
+gives the whole account or the contacts, only within five minutes of
+`auth.confirm(proof)` succeeding for the account signed in now
+(`isConfirmed()` says whether it has), where `proof` is
+`{ password }`, `{ passkey: true }` (the passkey's own check that someone is
+there: a fingerprint, a face or a PIN) or `{ code }`, the recovery code itself.
+`confirm` resolves false and sets `error` for a wrong answer, and a passkey
+with no credential behind it is no proof. A new sign-in, or signing out, asks
+again. The recovery code shown once when an account is made needs no confirm.
+This keeps the seed from someone who only has the open page, not from a
+compromised one: the seed is in the page's memory while it is signed in
+([threat model §4](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)).
+
+_Source: `packages/core/src/session/auth.ts` (`confirm`, `recoveryCode`, `offerToPhone`), `apps/home/src/components/ConfirmItsYou.tsx`. Tests: `packages/core/tests/auth.test.ts` ("reading the recovery code or offering the account to a phone takes proof it is you", "changing how the account signs in takes proof it is you, once it is set up", "no call steps back into setup to skip the proof", "proof is for one account, and does not carry over to another"), `packages/core/tests/connect.test.ts` ("the whole account, or the contacts, are given only just after proof it is you")._
 
 ## Device keys and passkeys
 
@@ -227,6 +250,11 @@ into the pod, copies every space into it (`copyAccountData`, [stores](node.md#st
 restarts the session there. `forgetBrowserCopy()` then deletes the browser's
 copy. Other accounts in the pod are never touched.
 
+The page writes to the pod only while it is open. A carrier given the same
+folder, such as the Chrome extension, keeps it up to date while the page is
+closed: it learns of the pod from its grant (`CarryGrant.pod`), so one that
+connected before the move learns of it only by connecting again.
+
 _Source: `packages/core/src/session/auth.ts` (`confirmPod`), `packages/core/src/session/places.ts`. Tests: `packages/core/tests/account.test.ts`._
 
 ## Pairing a phone
@@ -256,6 +284,32 @@ the person to confirm. Where accounts are already kept here, `<minca-auth>`
 warns before going on: a link someone else sent would put the phone in their
 account.
 
+A phone that stays signed in still gets the `pair` stage, with the kept
+account's session open, and `<minca-auth>` names it; `dismissPairing()` goes
+back to it. Signed in, `acceptPairing()` stops once the account arrives,
+before taking it, and sets `pairingArrival` to `{ did, account }`: `account`
+is the summary when this place already keeps that account, else null. The
+same account as the one signed in is taken without asking, and only its
+spaces are joined. `answerPairing(true)` adds the account (or, already here,
+switches to it) and the one signed in stays filed, to switch back to;
+`answerPairing(false)` lets it go and goes back to the account signed in.
+`<minca-auth>` asks "Add this account?" or "Switch to <name>?", with the
+account's avatar. Only the tab's session when the account arrives counts: a
+tab that opens with no kept sign-in, or a caller that accepts before
+`start()` has finished, pairs as a signed-out one does. Switching this way
+starts the arriving account's session without signing the other out: its
+session key is left unrevoked, as when a tab closes. `dismissPairing()` stops
+a pairing at any point before the account is taken: the phone leaves the
+exchange, and tells the computer nothing.
+
+`pairingTransport` in `createMincaAuth`'s config sets how the two sides of a
+pairing reach each other (default: the relay in the ticket), for tests or a
+host with its own.
+
+An account home ignores a pairing link on its connect page, so a popup an app
+opened never shows a pairing screen. It is no defence: any page can open the
+account page with the link instead.
+
 The camera opens the link in a new tab, so an app that sent the person to
 sign in is still waiting in another. A flow that is signed out picks up a
 sign-in another tab keeps (`storage` events on the remembered session), as a
@@ -269,7 +323,30 @@ tab. It keeps the remembered key as it is, and gives up if the kept sign-in
 changed meanwhile. When the kept sign-in goes, because the person signed out
 in another tab, a tab that took it up signs out too, revoking its own key.
 
-_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`, `packages/core/tests/take-up.test.ts`._
+_Source: `packages/core/src/session/pairing.ts` (`offerToPhone`, `receiveFromDesktop`), `packages/core/src/session/auth.ts` (`start`, `offerToPhone`, `acceptPairing`), `packages/core/src/elements/minca-auth.ts`. Tests: `packages/core/tests/pairing.test.ts`, `packages/core/tests/take-up.test.ts` ("a pairing link opened where a sign-in is kept")._
+
+## Linking to the account home
+
+An app that links to the person's account home (for its settings, say) says
+which account it acts for: `accountHomeLink(home, did, section?)` gives the
+account page beside the home's connect page, with `#account=<did>` in the
+fragment, after the section if there is one (`#notifications&account=…`). The
+fragment never reaches the server that serves the home.
+
+The home may be signed in to another account in that browser, or signed out.
+`readAccountHint()` on the home gives the DID, or null when there is none or it
+is not a P-256 `did:key`; `clearAccountHint()` takes it out of the address and
+leaves the section. Any page can open the home with any DID, so a home must
+treat it as a hint: say which account the app uses, pick it on the sign-in
+screen, offer to switch, and never sign out or switch on the hint alone. For
+an account the home doesn't keep, it must not suggest bringing it in: a
+stranger could name their own account, then send a pairing link "to add this
+browser" ([threat model §3.1](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)). An
+account the home keeps is named by the name it filed, never one from the
+link; its avatar helps recognise it, but is no proof, since a look-alike
+takes seconds to find.
+
+_Source: `packages/core/src/session/account-hint.ts`, `apps/home/src/components/AccountHint.tsx`, `apps/example/src/components/AccountMenu.tsx`, `apps/example/src/notifications.ts`. Tests: `packages/core/tests/account-hint.test.ts`._
 
 ## The account home's side
 
