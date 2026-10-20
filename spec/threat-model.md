@@ -821,6 +821,16 @@ raised but has no place above until a test confirms or rules it out.
   system's keychain: a copy of the folder yields no key, grant or private
   body, and shows what a carrier sees (§3.8). A program running as the person
   can still ask the keychain, as it can read a browser profile.
+- **Stopping someone at a device that is signed in.** The reference home asks
+  for the password, a passkey or the recovery code before it shows the
+  recovery code, offers the account to a phone, or changes how the account
+  signs in (`packages/core/tests/auth.test.ts`, "reading the recovery code or
+  offering the account to a phone takes proof it is you", "changing how the
+  account signs in takes proof it is you, once it is set up"). That keeps the
+  seed from someone who only has the open page. The seed is still in the
+  page's memory, so developer tools or a script in the home's origin read it;
+  and anything that hands out notes rather than the seed (approving an app,
+  disconnecting one) asks nothing more than being signed in.
 
 ## 5. Reviewing a change against this page
 

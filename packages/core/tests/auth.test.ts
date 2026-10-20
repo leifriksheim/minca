@@ -167,6 +167,7 @@ describe('createMincaAuth', () => {
     const auth = started();
     await auth.start();
     await createAccount(auth, 'Ada');
+    assert.equal(await auth.confirm({ password: PASSWORD }), true);
     assert.equal(await auth.setPassword('a different one entirely'), true);
     assert.equal(auth.getState().entry?.vault.wraps.filter((wrap) => wrap.kind === 'passphrase').length, 1);
     await auth.signOut();
@@ -315,6 +316,21 @@ describe('createMincaAuth', () => {
     assert.equal(auth.recoveryCode(), code);
   });
 
+  test('changing how the account signs in takes proof it is you, once it is set up', async () => {
+    // Otherwise a new password would open the gate to the recovery code, and lock the owner out.
+    const auth = started();
+    await auth.start();
+    await createAccount(auth, 'Ada');
+    assert.equal(await auth.setPassword('chosen by whoever sat down'), false);
+    assert.equal(await auth.removeShortcut('passphrase'), false);
+    assert.equal(await auth.confirm({ password: 'chosen by whoever sat down' }), false);
+    assert.equal(auth.recoveryCode(), null);
+
+    await auth.signOut();
+    await auth.signInWithPassword(PASSWORD);
+    assert.equal(auth.getState().stage, 'ready', 'the owner’s password still opens it');
+  });
+
   test('subscribers hear every change', async () => {
     const auth = started();
     const stages: string[] = [];
@@ -342,6 +358,7 @@ describe('passwords beside the CLI', () => {
     );
     await place!.store.write(session!.account, { ...vault, wraps: [...vault.wraps, cli] });
 
+    assert.equal(await auth.confirm({ code }), true);
     assert.equal(await auth.setPassword('a brand new password'), true);
     const labels = auth
       .getState()

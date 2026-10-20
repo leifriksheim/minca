@@ -37,6 +37,10 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
   // Without either, every visit here asks for the recovery code.
   const onlyWayIn = Number(hasPasskey) + Number(hasPassword) === 1;
   const [changingPassword, setChangingPassword] = useState(false);
+  // A change to how the account signs in waits here until the person proves it is them.
+  const [waiting, setWaiting] = useState<{ why: string; then: () => void } | null>(null);
+  const guarded = (why: string, then: () => void) =>
+    auth.isConfirmed() ? then() : setWaiting({ why, then });
   const place = state.place;
   const [leaving, setLeaving] = useState<string | null>(null);
   const { run, busy, error: disconnectError } = useAction();
@@ -165,7 +169,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             {hasPasskey ? (
               <Row label="A passkey signs you in on this device.">
                 <button
-                  onClick={() => void auth.removeShortcut('passkey')}
+                  onClick={() => guarded('remove the passkey', () => void auth.removeShortcut('passkey'))}
                   disabled={state.busy || onlyWayIn}
                   title={
                     onlyWayIn
@@ -181,7 +185,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             ) : (
               <Row label="No passkey on this device.">
                 <button
-                  onClick={() => void auth.addPasskey()}
+                  onClick={() => guarded('add a passkey', () => void auth.addPasskey())}
                   disabled={state.busy}
                   data-variant="primary"
                   style={styles.darkSmall}
@@ -209,7 +213,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
               <Row label={hasPassword ? 'A password is set.' : 'No password.'}>
                 <span style={{ display: 'flex', gap: 6 }}>
                   <button
-                    onClick={() => setChangingPassword(true)}
+                    onClick={() => guarded('change the password', () => setChangingPassword(true))}
                     disabled={state.busy}
                     data-variant="quiet"
                     style={styles.smallButton}
@@ -218,7 +222,9 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                   </button>
                   {hasPassword && (
                     <button
-                      onClick={() => void auth.removeShortcut('passphrase')}
+                      onClick={() =>
+                        guarded('remove the password', () => void auth.removeShortcut('passphrase'))
+                      }
                       disabled={state.busy || onlyWayIn}
                       title={
                         onlyWayIn
@@ -235,6 +241,16 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
               </Row>
             )}
             {changingPassword && state.error && <p style={styles.error}>{state.error.message}</p>}
+            {waiting && (
+              <ConfirmItsYou
+                why={waiting.why}
+                onConfirmed={() => {
+                  setWaiting(null);
+                  waiting.then();
+                }}
+                onCancel={() => setWaiting(null)}
+              />
+            )}
           </Section>
 
           <RecoveryCode reveal={() => auth.recoveryCode()} name={session.account.name} did={session.did} />

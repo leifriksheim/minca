@@ -370,9 +370,9 @@ export interface MincaAuth {
 
   // Once in
   rename(name: string): Promise<boolean>;
-  /** Adds a passkey for this site. During setup, moves the flow on. */
+  /** Adds a passkey for this site. During setup, moves the flow on; otherwise needs `confirm` first. */
   addPasskey(): Promise<boolean>;
-  /** Sets or replaces the account's password. During setup, moves the flow on. */
+  /** Sets or replaces the account's password. During setup, moves the flow on; otherwise needs `confirm` first. */
   setPassword(password: string): Promise<boolean>;
   removeShortcut(kind: 'passkey' | 'passphrase'): Promise<boolean>;
   confirmPod(how: 'combine' | 'switch'): Promise<void>;
@@ -390,6 +390,8 @@ export interface MincaAuth {
   confirm(
     proof: { readonly password: string } | { readonly passkey: true } | { readonly code: string },
   ): Promise<boolean>;
+  /** Whether `confirm` succeeded in the last few minutes */
+  isConfirmed(): boolean;
   /** The recovery code of the open account, for a few minutes after `confirm`. Null otherwise. */
   recoveryCode(): string | null;
   /** Starts offering this account to a phone */
@@ -1032,10 +1034,18 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     return renamed;
   }
 
-  /** Changes to the open account's shortcuts, then re-reads them. During setup, moves the flow on. */
+  /** Whether the person proved it is them (`confirm`) in the last few minutes */
+  const isConfirmed = () => seed !== null && Date.now() - confirmedAt < CONFIRMED_MS;
+
+  /**
+   * Changes to the open account's shortcuts, then re-reads them. During setup,
+   * moves the flow on. Outside setup they need `confirm` first: a new password
+   * would otherwise both open the gate and lock the owner out.
+   */
   const changeShortcut = (apply: (unlocked: Uint8Array) => Promise<void>) =>
     run(async () => {
       if (!seed) throw new Error('Not signed in.');
+      if (state.stage !== 'unlock' && !isConfirmed()) throw new Error('Confirm it is you first.');
       await apply(seed);
       await refreshEntry();
       if (state.stage === 'unlock' && hasEverydayWay(state.entry)) afterUnlock();
@@ -1549,9 +1559,10 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
           if (!opened) throw wrong('That is not the password.');
         } else {
           const target = entry.shortcuts[entry.shortcuts.length - 1];
-          if (!target) throw wrong('No passkey on this device opens this account.');
           // The passkey's own check that someone is there: a fingerprint, a face or a PIN.
-          if (target.credentialId) await authenticatePasskey(target.credentialId, { rpId });
+          // A wrap with no passkey behind it would skip that check, so it is no proof.
+          if (!target?.credentialId) throw wrong('No passkey on this device opens this account.');
+          await authenticatePasskey(target.credentialId, { rpId });
           const key = await getDeviceKey(target.deviceKeyId);
           if (!key || !same(await unwrapSeedWithDeviceKey(target, key, entry.vault.did)))
             throw wrong('That passkey does not open this account here.');
@@ -1560,16 +1571,17 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       });
     },
 
+    isConfirmed,
+
     recoveryCode() {
-      return seed && Date.now() - confirmedAt < CONFIRMED_MS ? seedToRecoveryCode(seed) : null;
+      return seed && isConfirmed() ? seedToRecoveryCode(seed) : null;
     },
 
     offerToPhone(onStage) {
       const session = state.session;
       if (!session || !seed) return Promise.reject(new Error('Sign in first.'));
       // It sends the whole account: the same proof as reading the recovery code.
-      if (Date.now() - confirmedAt >= CONFIRMED_MS)
-        return Promise.reject(new Error('Confirm it is you first.'));
+      if (!isConfirmed()) return Promise.reject(new Error('Confirm it is you first.'));
       const location = globalThis.location;
       return offerPairing(
         {

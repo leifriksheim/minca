@@ -134,16 +134,22 @@ _Source: `packages/core/src/session/auth.ts`, `packages/core/src/session/credent
 ## Proving it is you
 
 Being signed in is no proof anyone is there: a page may be left open, and a
-sign-in kept for days. So whatever hands out the whole account asks again.
-`auth.recoveryCode()` returns the code, and `auth.offerToPhone()` starts, only
-within five minutes of `auth.confirm(proof)` succeeding, where `proof` is
+sign-in kept for days. So whatever hands out the whole account, or changes how
+it signs in, asks again. `auth.recoveryCode()` returns the code,
+`auth.offerToPhone()` starts, and `setPassword`, `addPasskey` and
+`removeShortcut` work (outside the `unlock` step of setting an account up)
+only within five minutes of `auth.confirm(proof)` succeeding (`isConfirmed()`
+says whether it has), where `proof` is
 `{ password }`, `{ passkey: true }` (the passkey's own check that someone is
 there: a fingerprint, a face or a PIN) or `{ code }`, the recovery code itself.
-`confirm` resolves false and sets `error` for a wrong answer. A new sign-in, or
-signing out, asks again. The recovery code shown once when an account is made
-needs no confirm.
+`confirm` resolves false and sets `error` for a wrong answer, and a passkey
+with no credential behind it is no proof. A new sign-in, or signing out, asks
+again. The recovery code shown once when an account is made needs no confirm.
+This keeps the seed from someone who only has the open page, not from a
+compromised one: the seed is in the page's memory while it is signed in
+([threat model §4](https://github.com/leifriksheim/minca/blob/main/spec/threat-model.md)).
 
-_Source: `packages/core/src/session/auth.ts` (`confirm`, `recoveryCode`, `offerToPhone`), `apps/home/src/components/ConfirmItsYou.tsx`. Tests: `packages/core/tests/auth.test.ts` ("reading the recovery code or offering the account to a phone takes proof it is you")._
+_Source: `packages/core/src/session/auth.ts` (`confirm`, `recoveryCode`, `offerToPhone`), `apps/home/src/components/ConfirmItsYou.tsx`. Tests: `packages/core/tests/auth.test.ts` ("reading the recovery code or offering the account to a phone takes proof it is you", "changing how the account signs in takes proof it is you, once it is set up")._
 
 ## Device keys and passkeys
 
