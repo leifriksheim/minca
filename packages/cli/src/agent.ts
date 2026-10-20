@@ -31,7 +31,7 @@ import { checkGrant, connectWithCode, GRANT_VERSION, grantSigner, type Grant } f
 import { base64UrlDecode } from '@minca/core';
 import { writeWhole } from './fs-directory.js';
 import { fileStores } from './file-stores.js';
-import { nodeFor, type Unlocked } from './home.js';
+import { localPath, movedOut, nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
 import { holdLock, lockHolder } from './writer-keys.js';
 
@@ -63,6 +63,13 @@ export async function enableWebRTC(): Promise<void> {
 }
 
 const agentDir = (home: string) => path.join(home, 'agent');
+/**
+ * The agent's stores, with its key's places in each line: outside the home,
+ * like an account's (`localPath`), and moved there once from `agent/data`.
+ * No account id has a hyphen, so the name is the agent's alone.
+ */
+const agentData = (home: string) =>
+  movedOut(path.join(agentDir(home), 'data'), localPath(home, 'agent-data'));
 
 interface Stored {
   readonly keys: CryptoKeyPair;
@@ -158,7 +165,7 @@ export async function connectAgent(params: {
   // Another account's spaces don't belong next to this one's.
   const before = await loadAgentGrant(params.home);
   if (before && before.did !== grant.did)
-    await rm(path.join(agentDir(params.home), 'data'), { recursive: true, force: true });
+    await rm(await agentData(params.home), { recursive: true, force: true });
   const kept = { ...grant, relays: [...new Set([...(grant.relays ?? []), ...params.relays])] };
   await mkdir(agentDir(params.home), { recursive: true, mode: 0o700 });
   // The key, then the grant made out to it: a running agent reloads when the grant changes.
@@ -393,7 +400,7 @@ async function startWithKey(
   options: StartOptions,
 ): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   if (!options.network) await enableWebRTC();
-  const data = path.join(agentDir(home), 'data');
+  const data = await agentData(home);
   const relays = [...new Set([...(grant.relays ?? []), ...configuredRelays()])];
   const base = await createNode({
     signer: grantSigner(grant),

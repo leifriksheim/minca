@@ -16,10 +16,13 @@ import {
   type DirectoryHandleLike,
 } from '../folder-adapter.js';
 
-/** A key's parts as names in the directory; none may be empty */
+/** Whether a key's part can stand as one name in a directory */
+const isKeyPart = (part: string) => part !== '' && part !== '.' && part !== '..' && !/[/\\\0]/.test(part);
+
+/** A key's parts as names in the directory; each must be one */
 function partsOf(key: string): string[] {
   const parts = key.split('/');
-  if (parts.some((part) => part === '')) throw new Error(`Not a blob key: ${JSON.stringify(key)}`);
+  if (!parts.every(isKeyPart)) throw new Error(`Not a blob key: ${JSON.stringify(key)}`);
   return parts.map(encodeKey);
 }
 
@@ -98,7 +101,10 @@ export function createDirectoryBlobStore(root: DirectoryHandleLike, path = ''): 
         for await (const entry of dir.values()) {
           // Another writer's file mid-write is not an entry yet.
           if (entry.name.endsWith('.tmp')) continue;
-          const key = at + decodeKey(entry.name);
+          const part = decodeKey(entry.name);
+          // A name no key could have made (planted, or another program's) is not one of ours.
+          if (!isKeyPart(part)) continue;
+          const key = at + part;
           if (entry.kind === 'file') {
             if (key.startsWith(prefix)) keys.push(key);
           } else if (`${key}/`.startsWith(prefix)) {

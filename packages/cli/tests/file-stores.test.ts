@@ -4,13 +4,15 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFile, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { fileStores, openFileStore } from '../src/file-stores.js';
 import { openFsDirectory } from '../src/fs-directory.js';
 import { tempDir } from './helpers/nodes.js';
-import { createAccount, localPath, openHome, unlock } from '../src/home.js';
+import { isRecord } from '../src/json.js';
+import { createAccount, localPath, nodeFor, openHome, unlock } from '../src/home.js';
+import { team } from '../../core/src/space/presets.js';
 import { createFolderAdapter } from '../../core/src/storage/folder-adapter.js';
 import { createIdentityManager } from '../../core/src/identity/identity-manager.js';
 import { createSigner } from '../../core/src/schema/signer.js';
@@ -151,5 +153,42 @@ describe('an account in a home', () => {
     assert.ok(path.relative(home.path, local).startsWith('..'), 'not inside the home');
     assert.ok(!(await files(home.path)).some((file) => file.endsWith('.log')), 'no store file in the home');
     assert.deepEqual(await files(local), ['spaces/abc.log', 'writers.log']);
+  });
+});
+
+describe('a writer key of an account in a home', () => {
+  test('keeps its places outside the home, so whoever writes the folder can’t make it sign at one twice', async () => {
+    const home = await openHome(await tempDir());
+    const { account, code } = await createAccount(home, { name: 'Ada' });
+    let node = await nodeFor(await unlock(home, account, { code: code! }), { watchIntervalMs: 0 });
+    const space = await node.spaces.create({ name: 'Notes', ...team, visibility: 'public' });
+    await node.records.put(space.id, 'app.test.note', { text: 'first' });
+    await node.close();
+
+    assert.ok(!(await files(home.path)).some((file) => file.includes('heads')), 'no key place in the home');
+    // Whoever writes the folder clears what it can reach.
+    await rm(path.join(home.path, 'writers'), { recursive: true, force: true });
+    node = await nodeFor(await unlock(home, account, { code: code! }), { watchIntervalMs: 0 });
+    await node.records.put(space.id, 'app.test.note', { text: 'second' });
+    await node.close();
+
+    const places = new Map<string, number>();
+    const spaces = path.join(localPath(home.path, account.id), 'spaces');
+    for (const log of await readdir(spaces))
+      for (const line of (await readFile(path.join(spaces, log), 'utf8')).split('\n')) {
+        const ops: unknown = line ? JSON.parse(line) : [];
+        for (const op of Array.isArray(ops) ? ops : []) {
+          const parts: readonly unknown[] = Array.isArray(op) ? op : [];
+          const version = parts[1];
+          if (parts[0] !== 'ver' || !isRecord(version) || version.collection !== 'app.test.note') continue;
+          const at = `${String(version.author)}:${String(isRecord(version.log) ? version.log.n : '')}`;
+          places.set(at, (places.get(at) ?? 0) + 1);
+        }
+      }
+    assert.equal(places.size, 2, 'two notes at two places');
+    assert.ok(
+      [...places.values()].every((count) => count === 1),
+      'no place taken twice',
+    );
   });
 });

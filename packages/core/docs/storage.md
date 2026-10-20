@@ -174,6 +174,9 @@ change and on close.
   `<first 16 hex of SHA-256 of the home's path>/<account id>/`, one log file
   per store ([stores on disk](#stores-on-disk)), so a command and the daemon
   share it (`localPath` in `packages/cli/src/home.ts`).
+  Its writer keys' places (`<local>/writers`) and `minca agent`'s stores
+  (`<local base>/<hash>/agent-data`) are there too, moved once from
+  `<home>/writers/<account id>` and `<home>/agent/data`.
 - **Elsewhere** it must be given: `folderStores` refuses to start without
   one, since a lasting key's places kept in memory would be handed out again
   after a restart.
@@ -196,6 +199,11 @@ Getting the folder:
   instead. The File System Access API replaces a file atomically on `close()`.
 - **The CLI** (Node and Bun) writes `<name>.<uuid>.tmp` with mode `0600` and
   renames it into place. Directories are created with mode `0700`.
+
+Two folders holding the same account (a copy, a restored backup) share this
+device's local stores, which are named by the account's id: a version known
+to be in one is not pushed to the other. Open one copy at a time, or let the
+other fill in from peers.
 
 A folder is the account: copy it to a USB stick and it is all of it, or put
 it in iCloud, Dropbox or Syncthing and several devices converge with no relay,

@@ -3870,6 +3870,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // Once at open, then after every change.
   keepUp();
   const pulling = pullMirrors();
+  // What this device holds and the folder lacks (copied in, or written before the folder was) goes out soon.
+  folderMirror?.changed();
 
   return Object.freeze({
     async list<T>(options: ListOptions = {}): Promise<ReadonlyArray<NodeRecord<T>>> {

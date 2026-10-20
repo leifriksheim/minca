@@ -8,7 +8,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { createFolderAdapter } from '../src/storage/folder-adapter.js';
+import { createFolderAdapter, resolvePath, writeFolderFile } from '../src/storage/folder-adapter.js';
 import { createDirectoryBlobStore } from '../src/storage/blob/directory.js';
 import { createMirror, type Taken } from '../src/storage/mirror.js';
 import { folderStores, type StoreFactory } from '../src/node/stores.js';
@@ -310,6 +310,21 @@ describe('a data folder', () => {
     await b.mirror.flush();
     await a.mirror.pull();
     assert.equal((await ids(a.storage)).length, 2);
+  });
+
+  test('a name no key could make, planted in the folder, stops no pull', async () => {
+    const folder = createMemoryDirectory();
+    const a = await origin(folder.open());
+    const b = await origin(folder.open());
+    // A directory that sorts first, holding a file whose name decodes to a key with an empty part.
+    const planted = await resolvePath(folder.open(), [...BASE.split('/'), 'spaces', SPACE, '0']);
+    await writeFolderFile(planted, '%2Fx.seg', new Uint8Array([1]));
+
+    const honest = await makeVersion('written after');
+    await a.storage.addVersion(honest);
+    await a.mirror.flush();
+    await b.mirror.pull();
+    assert.deepEqual(await ids(b.storage), [honest.id]);
   });
 
   test('outside a browser, a data folder needs a place for this device’s own stores', () => {

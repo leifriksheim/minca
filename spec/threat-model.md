@@ -621,16 +621,21 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - Where it can write the account's data folder, it can't change which
     version another app or device holds as current, nor have one take a
     version a peer would refuse, nor make one drop a version it has read: no
-    client takes another's entries from the folder, every version in a
+    client takes another's space entries from the folder, nor any store of
+    its own (a store writer id, a key's places), every version in a
     segment is judged like a peer's, and a segment deleted takes nothing from
     a client that read it (05 §14.4, §14.5;
     `packages/core/tests/folder-adapter.test.ts`, "two nodes of one account
     on one folder", "deleting segments from the folder takes nothing from an
     app that read them", "no store but a space is ever read from the
-    folder"). Clients keep their own stores outside the folder; the CLI's are
-    outside its home (`packages/cli/tests/file-stores.test.ts`, "keeps what
-    this computer holds outside the home"). It can hide versions from a
-    client that hasn't read them yet, which only a peer can then bring.
+    folder", "a name no key could make, planted in the folder, stops no
+    pull"). Clients keep their own stores outside the folder: the CLI keeps
+    an account's stores and its writer keys' places, and `minca agent` its
+    stores, outside its home, so rolling those back can't fork a key
+    (`packages/cli/tests/file-stores.test.ts`, "keeps what this computer
+    holds outside the home", "keeps its places outside the home"). It can
+    hide versions from a client that hasn't read them yet, which only a peer
+    can then bring.
   - A program connected by code gets what the app it connects through asks
     for and the person allows, never more than its key signed for: the app
     can't use its proof for the app's own connection, nor ask for more than
@@ -828,13 +833,16 @@ raised but has no place above until a test confirms or rules it out.
 - **Per-message forward secrecy.** A space key opens everything sealed under
   it. Changing keys bounds what a later key opens; ratcheting group keys (MLS,
   say) are not a goal before v1.
-- **Rollback of a data folder's registry** by whoever can write it (a pod in
-  a synced drive, say). Sealing at rest binds an entry's name, not its
-  version, so an older sealed registry entry, such as a space key from before
-  a key change, still opens, and an entry can be deleted (05 §15,
-  [#215](https://github.com/leifriksheim/minca/issues/215)). A space's
-  records can't be rolled back this way: what a client read from the folder
-  stays with it (05 §14.5).
+- **Rollback of a data folder** by whoever can write it (a pod in a synced
+  drive, say). Sealing at rest binds an entry's name, not its version, so an
+  older sealed registry entry, such as a space key from before a key change,
+  still opens, and an entry can be deleted (05 §15,
+  [#215](https://github.com/leifriksheim/minca/issues/215)); so can the
+  vault's wraps. A space's records can't be rolled back this way on a client
+  whose own stores are outside the folder: what it read stays with it (05
+  §14.5). Nor can a client's own stores, by the same token, wherever they are
+  kept; rollback there is the device's own (a backup restored), which this
+  page doesn't cover.
 - **Protecting a device that is already compromised** while it runs. Keeping
   keys from being exported is up to each implementation (see
   `packages/core/docs/node.md`). The desktop app keeps its app's key and grant

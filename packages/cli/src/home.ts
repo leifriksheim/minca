@@ -8,6 +8,7 @@
  * variable, or a prompt — every time a process starts.
  */
 import { createHash } from 'node:crypto';
+import { cp, mkdir, rename, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -72,6 +73,32 @@ export function localPath(home: string, accountId: string): string {
         : path.join(process.env.XDG_STATE_HOME ?? path.join(os.homedir(), '.local', 'state'), 'minca'));
   const which = createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16);
   return path.join(base, which, accountId);
+}
+
+/**
+ * Where this computer keeps an account's writer keys and their places: under
+ * {@link localPath}, never in the home, where whoever writes the folder could
+ * roll a key's places back and have it sign at one again. Keys kept in the
+ * home before are moved there once.
+ */
+async function writersPath(home: Home, accountId: string): Promise<string> {
+  return movedOut(
+    path.join(home.path, 'writers', accountId),
+    path.join(localPath(home.path, accountId), 'writers'),
+  );
+}
+
+/** `now`, after moving what was at `before` there, once, if anything was */
+export async function movedOut(before: string, now: string): Promise<string> {
+  if ((await stat(before).catch(() => null)) && !(await stat(now).catch(() => null))) {
+    await mkdir(path.dirname(now), { recursive: true, mode: 0o700 });
+    // Another disk: copy, then remove.
+    await rename(before, now).catch(async () => {
+      await cp(before, now, { recursive: true });
+      await rm(before, { recursive: true, force: true });
+    });
+  }
+  return now;
 }
 
 export async function openHome(flag?: string): Promise<Home> {
@@ -201,7 +228,7 @@ export async function unlock(
     }),
     accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),
-    writerKey: fileWriterKeys(path.join(home.path, 'writers', account.id), localKey, account.did),
+    writerKey: fileWriterKeys(await writersPath(home, account.id), localKey, account.did),
   };
 }
 

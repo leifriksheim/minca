@@ -188,7 +188,8 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
     }
     let added = 0;
     for (const key of fresh.sort()) {
-      const bytes = await store.get(key);
+      // One segment that can't be fetched must not keep every one after it out: it is tried again next time.
+      const bytes = await store.get(key).catch(() => null);
       // Deleted between listing and fetching — compacted by its writer. Its versions are in a newer segment.
       if (!bytes) continue;
       let pending = unpackSegment(bytes);

@@ -36,7 +36,7 @@ type Op =
   | readonly ['ver', Version]
   | readonly ['unver', string];
 
-/** A lock older than this was left by a process that hung or died */
+/** A lock naming no process (one cut off while written) is left over once this old */
 const STALE_LOCK_MS = 30_000;
 /** Ops per line of a snapshot */
 const SNAPSHOT_LINE = 500;
@@ -82,9 +82,9 @@ async function locked<T>(file: string, work: () => Promise<T>): Promise<T> {
         fs.stat(lock).catch(() => null),
       ]);
       const pid = Number(holder);
-      const gone =
-        (Number.isSafeInteger(pid) && pid > 0 && !alive(pid)) ||
-        (info && Date.now() - info.mtimeMs > STALE_LOCK_MS);
+      // A live holder keeps it however long it takes; age only decides for a lock naming nobody.
+      const named = Number.isSafeInteger(pid) && pid > 0;
+      const gone = named ? !alive(pid) : !!info && Date.now() - info.mtimeMs > STALE_LOCK_MS;
       if (gone) await fs.rm(lock, { force: true });
       else await wait(2 + Math.random() * 8);
     }
