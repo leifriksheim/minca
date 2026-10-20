@@ -9,6 +9,8 @@
  * the socket its description names. Reports, for the host process: how long
  * until it carries every space, its memory and disk while carrying them, and
  * how long a restart takes to open them all again, with its memory after.
+ * With BENCH_LIMITS=1 the host runs free within limits instead, counting each
+ * space's writers and readers, to see what metering costs.
  */
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -43,11 +45,26 @@ async function waitFor(what: string, ok: () => Promise<boolean>, ms = 600_000): 
   return (Date.now() - started) / 1000;
 }
 
+const metered = process.env.BENCH_LIMITS === '1';
+
 function startHostProcess(data: string): ChildProcess {
+  // Limits roomy enough that every account fits and none of the spaces goes over.
+  const limits = metered
+    ? { MINCA_HOST_FREE_GB: '100', MINCA_HOST_SPACE_WRITERS: '1000', MINCA_HOST_NEW_PER_DAY: '100000' }
+    : {};
   const child = spawn(
     process.execPath,
-    ['--conditions=@minca/source', '--import', 'tsx', cli, 'host', '--free', '--port', String(PORT)],
-    { env: { ...process.env, MINCA_HOST_DATA: data }, stdio: ['ignore', 'ignore', 'inherit'] },
+    [
+      '--conditions=@minca/source',
+      '--import',
+      'tsx',
+      cli,
+      'host',
+      ...(metered ? [] : ['--free']),
+      '--port',
+      String(PORT),
+    ],
+    { env: { ...process.env, ...limits, MINCA_HOST_DATA: data }, stdio: ['ignore', 'ignore', 'inherit'] },
   );
   return child;
 }

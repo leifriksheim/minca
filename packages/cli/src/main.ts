@@ -58,6 +58,7 @@ import {
   fundFromEnv,
   quotaFromEnv,
   limitsFromEnv,
+  abuseFromEnv,
   spaceSize,
   walletFromEnv,
 } from './host-setup.js';
@@ -827,6 +828,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       measure: spaceSize(data),
       ...(quotaBytes ? { quotaBytes } : {}),
       limits,
+      ...(limits ? abuseFromEnv(process.env) : {}),
       port: Number(values.port),
       ...(values.host ? { host: values.host } : {}),
       ...(values.free ? { free: true } : {}),

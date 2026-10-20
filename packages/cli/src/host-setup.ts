@@ -132,6 +132,21 @@ export function limitsFromEnv(env: NodeJS.ProcessEnv, free: boolean): HostLimits
   };
 }
 
+/**
+ * How much one asker may take at a host with limits: MINCA_HOST_NEW_PER_DAY
+ * new subscriptions a day from one address (default 5), and
+ * MINCA_HOST_SPACES_PER_SUBSCRIPTION spaces carried for one (default 200).
+ */
+export function abuseFromEnv(env: NodeJS.ProcessEnv): {
+  newPerAddress: number;
+  spacesPerSubscription: number;
+} {
+  return {
+    newPerAddress: wholeFromEnv(env, 'MINCA_HOST_NEW_PER_DAY', 5),
+    spacesPerSubscription: wholeFromEnv(env, 'MINCA_HOST_SPACES_PER_SUBSCRIPTION', 200),
+  };
+}
+
 /** Stripe, when STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are set; otherwise none */
 export function billingFromEnv(env: NodeJS.ProcessEnv): Billing | null {
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) return null;

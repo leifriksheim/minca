@@ -31,6 +31,43 @@ deploy at a quiet hour.
 TURN is not needed for a host: devices reach it over its WebSocket, never
 WebRTC. It matters only for devices meeting each other.
 
+## Limits
+
+With `MINCA_HOST_FREE_GB` set (README, "Free within limits"), every account
+is kept online for free within its room, and paying buys more. A community
+pays for itself once it outgrows a free line (spec 08 §1.1). The host cannot
+read a space, so the line counts what it sees: accounts that wrote there in
+the window, and its size once at least two accounts write. Readers are shown
+and never enforced, as anyone can make up a reader. Each limit is the host's
+own, said in its description, so a home shows it next to the price and people
+can compare hosts.
+
+What the defaults cost, from the numbers above: a free account is six to ten
+spaces, 2 to 4 cents a month of the smallest machine. 250 MB is far more disk
+than most accounts use (33 KB a space measured), so memory stays the limit.
+A community past 10 writers is a few more spaces' memory at most, but it is
+what grows: that is what its fund pays for.
+
+What to watch once limits are on:
+
+- **The log** says each space as it goes over the line, as its grace runs
+  out, and as it comes back under. In the first weeks, check how many go
+  over against the defaults before the first grace period ends.
+- **Going over is a notice, never a cut.** For `MINCA_HOST_GRACE_DAYS` every
+  member's status names the space and the date, and the apps ask its members
+  to start a fund. Past it, members' subscriptions stop carrying it. Members
+  keep their copies and still sync with each other; the host keeps what it
+  had, unserved, for `MINCA_HOST_KEEP_DAYS`, so a fund brings it straight back.
+- **Free again** only after a whole window with every count under 80% of its
+  limit, so a busy week doesn't flip it.
+- **Counts reset when the disk does.** Which accounts wrote is kept on disk
+  as salted hashes and not in the bucket, so a new disk counts from nothing,
+  which errs toward free. Each space's date on the line is in the bucket, so
+  a new disk keeps its grace clock.
+- **Turning limits on** counts from that moment: no space is over on writers
+  until enough people write after it, and each then gets the whole grace
+  period. Paid subscriptions stay on the paid plan until their date.
+
 ## Before launch
 
 1. **Deploy** with `fly.toml` (commands at its top). Set `MINCA_HOST_URL` to
