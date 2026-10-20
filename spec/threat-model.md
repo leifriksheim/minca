@@ -115,7 +115,8 @@ reference implementation, or any implementation, honestly.
     a stranger can take any number of accounts' free room. The reference
     host makes at most 5 subscriptions a day for one address (an IPv6 /64
     counting as one), whichever call makes them, which slows a stranger with
-    many addresses and stops none (08 §1.1;
+    many addresses and stops none; one with a /48 of IPv6 holds 65 536 of
+    them (08 §1.1;
     `packages/cli/tests/host.test.ts`, "asking to pay first makes no
     subscription past the limit either"). Behind one shared address, as a
     proxy without its header set or carrier-grade NAT, a stranger can spend
@@ -127,6 +128,12 @@ reference implementation, or any implementation, honestly.
     what it carries keeps growing, and a space its own fund pays for has no
     bound at all ([#289](https://github.com/leifriksheim/minca/issues/289)).
     Accepted otherwise: it is the host's cost.
+  - Anyone holding an invite link that is still open can push a community
+    over a host's free line by joining more accounts and writing from them,
+    and join again with new keys as fast as they are removed, so a community
+    with an open link may have to close it, or pay (08 §1.1). Letting go of
+    a space for an hour does not reset its line ("a space nobody names for a
+    while keeps its line").
   - Anyone who knows a space's id learns from the host's open status
     whether it carries the space, how many wrote and read there, and, asking
     again and again, when its members are online (08 §1.1).
@@ -455,8 +462,9 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     the spec says to write what is allowed (01 §7.4, 03 §2.2; `roles.test.ts`,
     "a missing argument reads as null…").
   - A host's free line counts the members who write in a space, so a member
-    who may invite, or anyone holding an invite link that is still open, can
-    push it over by joining more accounts and writing from them. Removing
+    who may invite can push it over by inviting more accounts of their own
+    and writing from them (a stranger holding an open invite link can too:
+    §3.1). Removing
     them before `until` undoes it, as only members count and a space under
     the line when its grace runs out is not stopped
     (`packages/core/tests/host-limits.test.ts`, "a member removed no longer
@@ -814,7 +822,9 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
     (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)). A host with limits also keeps, for its window, which
-    accounts wrote in each space on each day, as salted hashes, and tells
+    accounts wrote in each space on each day, as hashes salted with a salt
+    on the same disk, which hides nothing from the host or whoever holds its
+    disk, since every writer is in the space's envelopes anyway, and tells
     anyone with the space id how many wrote and read; asked again and again,
     that says when the members are online (08 §1.1).
   - It can hold back what it likes from a node that syncs with nobody else.

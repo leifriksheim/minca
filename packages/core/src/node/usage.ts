@@ -25,6 +25,8 @@ const FIRST_PREFIX = 'first:';
 const MAX_READERS_A_SPACE = 10_000;
 /** Readers kept for every space together, however many spaces someone makes to read */
 const MAX_READERS = 1_000_000;
+/** Writers kept for one space on one day: far past any free line, so counting on past it changes nothing */
+const MAX_WRITERS_A_DAY = 1_000;
 
 export interface UsageMeterConfig {
   readonly store: StorageAdapter;
@@ -130,15 +132,35 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     return next;
   };
 
+  // A day's set is written whole, but once for however many writers joined it while the last write was
+  // under way, so many new writers in a day cost a few writes, not one each.
+  const dirty = new Set<string>();
+  let flushing: Promise<void> | null = null;
+  const persist = (spaceId: string, day: string): Promise<void> => {
+    dirty.add(`${spaceId}:${day}`);
+    flushing ??= later(async () => {
+      // Writers that join while a write is under way go out with the next, not one each.
+      while (dirty.size > 0) {
+        const key = dirty.values().next().value!;
+        dirty.delete(key);
+        const at = key.lastIndexOf(':');
+        const set = writers.get(key.slice(0, at))?.get(key.slice(at + 1));
+        if (set) await store.put(`${PREFIX}${key}`, utf8Encode(JSON.stringify([...set])));
+      }
+      flushing = null;
+    });
+    return flushing;
+  };
+
   return Object.freeze({
     /** An account wrote in a space: counted once a day, whatever it wrote */
     async wrote(spaceId: string, account: string): Promise<void> {
       const day = dayOf(now());
       const hash = await hashOf(spaceId, account);
       const set = setFor(writers, spaceId, day);
-      if (set.has(hash)) return;
+      if (set.has(hash) || set.size >= MAX_WRITERS_A_DAY) return;
       set.add(hash);
-      await later(() => store.put(`${PREFIX}${spaceId}:${day}`, utf8Encode(JSON.stringify([...set]))));
+      await persist(spaceId, day);
     },
 
     /** A session key proved it may read a space */

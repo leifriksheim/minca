@@ -323,7 +323,9 @@ it carries for members' subscriptions, carry spaces among them:
 - **readers**: distinct session DIDs that a socket for the space
   (`/peer?space=`) proved (04 §5). The reference host keeps at most 10 000
   for a space over its window, and a million over every space, so made-up
-  keys cost it no more memory past that.
+  keys cost it no more memory past that; one account with many spaces can
+  fill the million, after which readers stop growing anywhere. It keeps at
+  most 1 000 writers for a space a day, far past any line.
 - **bytes**: what the space takes at the host.
 
 A space is **over the line** when `writers` exceeds `space.writers` (and at
@@ -341,8 +343,8 @@ over the line then, it MUST NOT carry it for members' subscriptions alone:
 only its own subscription (§2), while `active` or `grace`, carries it then.
 One back under by `until`, as when its members removed those who pushed it
 over, keeps its notice and is carried as before, until it is over again or
-free again. Before `until` it MUST carry it as before. While the space's own subscription is `active`, the line does not
-apply. The grace is given once: paying for a while does not start it again,
+free again. Before `until` it MUST carry it as before. While the space's own subscription is `active`, the host still
+counts and dates the line, but carrying does not depend on it. The grace is given once: paying for a while does not start it again,
 so once the space's own subscription stops being `active`, members'
 subscriptions carry it again only if `until` is still ahead or it is under
 the line. Its members hear nothing of the line while the fund pays, so a
@@ -355,7 +357,9 @@ only through its own subscription, or once the host forgets it after
 spent, because it was stopped or because the grace ran out while it was
 under, gets only a short notice should it go over again (the reference
 host: 7 days), never a whole grace; one free again after a whole window
-under has its grace back. A carry space over the line past `until` stops
+under has its grace back, and so does one stopped and forgotten, a window
+after `keepDays`. Nobody naming a space for a while changes none of this:
+its line stays until it ends by these rules. A carry space over the line past `until` stops
 being that subscription's carry space, and the host refuses it as one until
 its own subscription pays.
 

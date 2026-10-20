@@ -528,6 +528,41 @@ describe('the free line', () => {
     assert.equal(notice?.until, clock + 7 * DAY);
   });
 
+  test('a space nobody names for a while keeps its line: letting go for an hour buys no new grace', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const node = await host(hub, { now: () => clock });
+    const c = await community(hub, node);
+    await bothWrite(node, c);
+    await node.evaluate();
+    const [first] = await node.overFor(c.subscriptions[0]);
+    assert.ok(first);
+
+    // Just before until, both members let the host go for one look, then hand it back.
+    clock += 29 * DAY;
+    await node.detach(c.subscriptions[0]);
+    await node.detach(c.subscriptions[1]);
+    await until(async () => !(await carries(node, c.space)()), 5000, 'let go');
+    assert.deepEqual((await node.evaluate()).under, []);
+    await node.attach(
+      c.subscriptions[0],
+      c.alice.did,
+      (await c.aliceNode.carriers.add({ did: node.did, name: 'Host' })).invite,
+    );
+    await node.attach(
+      c.subscriptions[1],
+      c.bob.did,
+      (await c.bobNode.carriers.add({ did: node.did, name: 'Host' })).invite,
+    );
+    await until(carries(node, c.space), 8000, 'carried again');
+    await node.evaluate();
+    assert.equal((await node.overFor(c.subscriptions[0]))[0]?.until, first.until, 'the same date');
+
+    clock += 2 * DAY;
+    await bothWrite(node, c);
+    assert.deepEqual((await node.evaluate()).stopped, [c.space], 'stopped on the first date');
+  });
+
   test('bytes count only in a space several accounts write in', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const node = await host(hub, {

@@ -106,6 +106,24 @@ describe('the usage meter', () => {
     assert.equal((await meter.usage('club')).readers, 10_000);
   });
 
+  test('many new writers in a day cost a few writes of the day, not one each, and stop counting past a cap', async () => {
+    const store = createMemoryAdapter();
+    let puts = 0;
+    const counting = {
+      ...store,
+      put: async (key: string, value: Uint8Array) => ((puts += 1), store.put(key, value)),
+    };
+    const meter = await createUsageMeter({ store: counting, windowDays: 30 });
+    puts = 0;
+    await Promise.all(
+      Array.from({ length: 1_500 }, (_, i) => meter.wrote('club', `did:key:zDnaeWriter${i}`)),
+    );
+    await meter.flushed();
+    // One write a writer at most, however many come at once; never one per writer per writer.
+    assert.ok(puts <= 1_000, `${puts} writes`);
+    assert.equal((await meter.usage('club')).writers, 1_000);
+  });
+
   test('forgetting a space drops its counts', async () => {
     const store = createMemoryAdapter();
     const meter = await createUsageMeter({ store, windowDays: 30 });

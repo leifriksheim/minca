@@ -497,8 +497,15 @@ export async function createHostNode(config: HostConfig) {
     {
       const before = lines.get(spaceId);
       const own = await paysItself(spaceId);
-      const after =
-        spaces.has(spaceId) || before?.stopped !== undefined ? await standing(spaceId, before, own) : null;
+      // A space nobody names for a while keeps its line: the line goes only by a whole window
+      // under, or after a stop, by `keepDays`; never because it was let go for an hour.
+      const after = spaces.has(spaceId) || before ? await standing(spaceId, before, own) : null;
+      // A stop long forgotten, and a window more under: its grace is its own again.
+      const struckAt = struck.get(spaceId);
+      if (!before && !after && struckAt !== undefined && limits) {
+        const forgotten = ((limits.keepDays ?? 0) + limits.space.windowDays) * DAY;
+        if (struckAt + forgotten <= now()) await unstrike(spaceId);
+      }
       if (JSON.stringify(after) !== JSON.stringify(before ?? null)) await writeLine(spaceId, after);
       if (after && !before) changed.over.push(spaceId);
       if (after?.stopped !== undefined && before?.stopped === undefined) {
