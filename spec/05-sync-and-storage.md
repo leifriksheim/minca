@@ -1196,7 +1196,7 @@ envelope's disagree, the envelope is what peers fetch and keep.
 
 **Chunks and the id.** A file is cut into `n = ceil(size / CHUNK)` chunks
 of `CHUNK` = 262,144 bytes (256 KiB), the last one `size − (n−1)·CHUNK`
-bytes. Each chunk's leaf is `SHA-256(0x00 ‖ chunk)`. The root of one chunk is
+bytes. Each chunk's leaf is `SHA-256(0x00 ‖ chunk)`. The tree root of one chunk is
 its leaf. Otherwise leaves are paired in order into
 `SHA-256(0x01 ‖ left ‖ right)`, a last one without a pair carried up
 unchanged, level by level, until one remains: the tree root. A file's
@@ -1230,7 +1230,7 @@ only: an edited file gets a new key, and so a new id.
 > encrypt attachments: changing the space key never touches a file, and a
 > removed member keeps what it could already read, as with records.
 > Encrypting public files too costs only deduplication: a stub keeps its
-> signed `files` but not its body, so a deleted file's root is useless to
+> signed `files` but not its body, so a deleted file's id is useless to
 > anyone who never had the body, and a guess of what it was can't be tested
 > against it ([02](02-records.md) §4.9). Sealing piece by piece (the STREAM
 > construction, as in age) lets any chunk be opened on its own; the flag on
@@ -1256,7 +1256,7 @@ only: an edited file gets a new key, and so a new id.
 - A peer MUST serve only chunks it holds for that space, of files named by
   a version it keeps whole in that space, over a session the space admitted
   (§6), and MUST end every reply with `file-done`. It never answers from
-  another space's holdings, so a root can't be used to learn who holds what
+  another space's holdings, so an id can't be used to learn who holds what
   elsewhere.
 - A sender SHOULD interleave `file` messages with sync's own, a frame at a
   time: a receiver handles a peer's messages in order (§6.1), so only the
