@@ -97,7 +97,9 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       const seen = new Set<string>();
       for (const carrier of current) {
         const status = await session.node.spaces.status(carrier.space).catch(() => null);
-        if (status?.peers.includes(carrier.did)) seen.add(carrier.space);
+        // By key: a carrier set up on two devices at once has two carry spaces, and is online in one.
+        if (status?.peers.includes(carrier.did))
+          for (const same of current) if (same.did === carrier.did) seen.add(same.space);
       }
       setOnline(seen);
     };
@@ -105,7 +107,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
       void session.node.carriers.list().then(
         (found) => {
           current = found;
-          setCarriers(found);
+          setCarriers(onePerKey(found));
           void look();
         },
         () => {},
@@ -136,7 +138,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
   const removeCarrier = (space: string) =>
     leave(space, 'it', async () => {
       await session.node.carriers.remove(space);
-      setCarriers(await session.node.carriers.list());
+      setCarriers(onePerKey(await session.node.carriers.list()));
     });
 
   const choose = async (choice: StaySignedIn) => {
@@ -926,5 +928,12 @@ function Strength({ password }: { password: string }) {
         {check.hint || 'Any password works. Let your password manager make a strong one.'}
       </p>
     </div>
+  );
+}
+
+/** Each carrier once, by key: one set up on two devices at once has two carry spaces (spec 06 §4.2) */
+function onePerKey(carriers: ReadonlyArray<CarrierSummary>): ReadonlyArray<CarrierSummary> {
+  return carriers.filter(
+    (carrier, index) => carriers.findIndex((other) => other.did === carrier.did) === index,
   );
 }

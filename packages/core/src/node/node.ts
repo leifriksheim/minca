@@ -1122,42 +1122,57 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     },
   });
 
+  /** Carriers being added now, by key */
+  const adding = new Map<string, Promise<{ readonly space: string; readonly invite: string }>>();
+
+  async function addCarrier(carrier: { readonly did: string; readonly name: string }): Promise<{
+    readonly space: string;
+    readonly invite: string;
+  }> {
+    const registryRt = await requireAccount('Using a carrier');
+    // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
+    const known = (await liveCarriers()).find((c) => c.did === carrier.did);
+    if (known) {
+      void passAll().catch(() => {});
+      return { space: known.space, invite: known.invite };
+    }
+    const name = carrier.name.trim().slice(0, 80) || 'Carrier';
+    // Private, so the passes in it are sealed; the account alone may write there.
+    const record = await registry.create({
+      name: `Carried by ${name}`,
+      visibility: 'private',
+      creator: config.signer.did,
+    });
+    carrySpaces.add(record.space.id);
+    let body: Carrier;
+    try {
+      const invite = await registry.createInvite(record.space.id, config.signer.did);
+      body = { space: record.space.id, invite, did: carrier.did, name, since: new Date().toISOString() };
+      await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, await carrierKey(record.space.id), body);
+    } catch (error) {
+      // Without its record nothing says it is a carry space: held, a restart would list it as one the account uses.
+      // Left in `carrySpaces`: a reconcile already under way must not record it either.
+      await closeRuntime(record.space.id);
+      await registry.remove(record.space.id);
+      throw error;
+    }
+    // Its passes before its invite, as one batch: a carrier joining an empty carry space takes spaces as they trickle in.
+    // Not in turn behind a refill: nothing removes a carrier that is only now being added.
+    await syncPasses(body);
+    return { space: record.space.id, invite: body.invite };
+  }
+
   const carriers = Object.freeze<NodeCarriers>({
     list: async () =>
       (await liveCarriers()).map(({ space, did, name, since }) => ({ space, did, name, since })),
 
-    async add(carrier) {
-      const registryRt = await requireAccount('Using a carrier');
-      // The same carrier again keeps its carry space: what it holds stays good, and nothing is closed under it.
-      const known = (await liveCarriers()).find((c) => c.did === carrier.did);
-      if (known) {
-        void passAll().catch(() => {});
-        return { space: known.space, invite: known.invite };
-      }
-      const name = carrier.name.trim().slice(0, 80) || 'Carrier';
-      // Private, so the passes in it are sealed; the account alone may write there.
-      const record = await registry.create({
-        name: `Carried by ${name}`,
-        visibility: 'private',
-        creator: config.signer.did,
-      });
-      carrySpaces.add(record.space.id);
-      let body: Carrier;
-      try {
-        const invite = await registry.createInvite(record.space.id, config.signer.did);
-        body = { space: record.space.id, invite, did: carrier.did, name, since: new Date().toISOString() };
-        await registryRt.upsertSystem<Carrier>(CARRIER_COLLECTION, await carrierKey(record.space.id), body);
-      } catch (error) {
-        // Without its record nothing says it is a carry space: held, a restart would list it as one the account uses.
-        // Left in `carrySpaces`: a reconcile already under way must not record it either.
-        await closeRuntime(record.space.id);
-        await registry.remove(record.space.id);
-        throw error;
-      }
-      // Its passes before its invite, as one batch: a carrier joining an empty carry space takes spaces as they trickle in.
-      // Not in turn behind a refill: nothing removes a carrier that is only now being added.
-      await syncPasses(body);
-      return { space: record.space.id, invite: body.invite };
+    add(carrier) {
+      // Asked again while the first is under way (a click and a reconcile, say): the same answer, not a second carry space.
+      const pending = adding.get(carrier.did);
+      if (pending) return pending;
+      const made = addCarrier(carrier).finally(() => adding.delete(carrier.did));
+      adding.set(carrier.did, made);
+      return made;
     },
 
     settled: (waitMs) => within(passAll.done(), waitMs),
@@ -1178,18 +1193,21 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const registryRt = await requireAccount('Removing a carrier');
       // In turn with any refill, which would otherwise put the passes back.
       await inCarryTurn(async () => {
-        const found = (await carrierRecords()).find(
-          ({ record, space }) => !record.deleted && space === spaceId,
-        )?.record;
-        if (!found) return;
-        const carry = await runtime(spaceId);
-        // Passes gone first, then the word to forget everything, then the carrier's record.
-        for (const pass of await ownRecords(carry, { collection: PASS_COLLECTION }, (r) =>
-          r.key.startsWith('pass:'),
-        ))
-          await carry.removeSystem(pass.key);
-        await carry.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
-        await registryRt.removeSystem(found.key);
+        const live = (await carrierRecords()).filter(({ record }) => !record.deleted && record.body);
+        const did = live.find(({ space }) => space === spaceId)?.record.body?.did;
+        if (!did) return;
+        // Every carry space it has: added on two devices at once, it may hold the other one (spec 06 §4.2).
+        for (const { record, space } of live) {
+          if (record.body?.did !== did) continue;
+          const carry = await runtime(space);
+          // Passes gone first, then the word to forget everything, then the carrier's record.
+          for (const pass of await ownRecords(carry, { collection: PASS_COLLECTION }, (r) =>
+            r.key.startsWith('pass:'),
+          ))
+            await carry.removeSystem(pass.key);
+          await carry.upsertSystem(PASS_COLLECTION, CARRY_CLOSED_KEY, { v: 1, closed: true });
+          await registryRt.removeSystem(record.key);
+        }
       });
     },
   });

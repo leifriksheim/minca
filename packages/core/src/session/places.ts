@@ -76,6 +76,17 @@ export async function recallPod(request: boolean): Promise<Place | null> {
   return folderPlace(directory);
 }
 
+/**
+ * The name of the pod this site used last, when it needs a click to open
+ * again (the browser keeps no permission between visits unless asked to).
+ */
+export async function podToReopen(): Promise<string | null> {
+  const directory = await recallDataFolder();
+  if (!directory) return null;
+  if (await ensureFolderPermission(directory, { request: false })) return null;
+  return directory.name;
+}
+
 /** Stops using the pod. Nothing in it is touched. */
 export async function forgetPod(): Promise<void> {
   await forgetDataFolder();

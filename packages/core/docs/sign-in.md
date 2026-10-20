@@ -68,6 +68,7 @@ Transitions:
 | `starting`                      | `start()` fails                                                                                                       | `welcome` (with `error`)                                                                                                                                                 |
 | any                             | `showWelcome()` / `showExisting()` / `showRestore()` / `showSignIn()`                                                 | `welcome` / `existing` / `restore` / `signIn`                                                                                                                            |
 | `welcome`, `existing`, `signIn` | `choosePod()` / `useBrowser()` while signed out                                                                       | `signIn` or `welcome`                                                                                                                                                    |
+| `welcome`                       | `reopenPod()`, from a click, with `podToReopen` set                                                                   | `ready` with a kept sign-in for an account there, else `signIn` or `welcome`                                                                                             |
 | `ready`                         | `choosePod()` while signed in                                                                                         | `ready`, with `podChoice` set; `confirmPod('combine' \| 'switch')` restarts the session in the pod                                                                       |
 | `pod`                           | `choosePod()`                                                                                                         | `ready`: the new account moves into the pod without asking, and its browser copy is removed                                                                              |
 | `pod`                           | `finishSetup()`                                                                                                       | `ready`                                                                                                                                                                  |
@@ -82,6 +83,14 @@ Transitions:
 | `pair`                          | `dismissPairing()`                                                                                                    | `ready` if signed in, else `signIn` / `welcome`                                                                                                                          |
 | `ready`                         | `signOut()`                                                                                                           | `starting`, then `signIn` / `welcome`                                                                                                                                    |
 
+A pod this site used last opens at `start()` only while the browser still
+grants it. Chrome keeps the folder's handle between visits, but not the
+permission, unless the person chose "Allow on every visit". Then `start()`
+sets `podToReopen` to the folder's name and goes on as if there were no pod;
+`<minca-auth>` offers it first on the welcome screen, and `reopenPod()`, from
+that click, asks for the permission and goes on as `start()` would have,
+signed in if the sign-in was kept.
+
 A failed action sets `error` (`{ message, hint?, code? }`) and leaves the stage
 as it was. A dismissed passkey or folder prompt sets no error.
 
@@ -90,7 +99,7 @@ while it runs, or a carrier given the folder. A page that closes once signed
 in, such as an account home's connect page, passes `offerPod: false`, and
 offers the pod where the person comes back instead.
 
-_Source: `packages/core/src/session/auth.ts`. Tests: `packages/core/tests/auth.test.ts`._
+_Source: `packages/core/src/session/auth.ts` (`start`, `reopenPod`), `packages/core/src/session/places.ts` (`podToReopen`). Tests: `packages/core/tests/auth.test.ts`, `packages/core/tests/take-up.test.ts` ("a pod the browser wants a click to open again")._
 
 ## Ways in
 

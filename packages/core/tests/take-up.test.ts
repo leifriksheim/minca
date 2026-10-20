@@ -383,3 +383,44 @@ describe('a pairing link opened where a sign-in is kept', () => {
     await done();
   });
 });
+
+describe('a pod the browser wants a click to open again', () => {
+  test('is offered by name, and one click opens it, still signed in', async () => {
+    const { config } = browser();
+    // Chrome keeps the folder's handle, but not the permission, between visits.
+    let permission: PermissionState = 'granted';
+    const handle = Object.assign(createMemoryDirectory('Minca').handle, {
+      queryPermission: async () => permission,
+      requestPermission: async () => (permission = 'granted'),
+    });
+    Object.defineProperty(globalThis, 'showDirectoryPicker', {
+      value: async () => handle,
+      configurable: true,
+    });
+    try {
+      const first = createMincaAuth(config);
+      await first.start();
+      await first.choosePod();
+      await first.createAccount('Ada');
+      first.codeSaved();
+      assert.equal(await first.setPassword('correct horse battery'), true);
+      assert.equal(first.getState().place?.kind, 'folder');
+      // The tab closes without signing out.
+      await first.getState().session!.node.close();
+
+      permission = 'prompt';
+      const later = createMincaAuth(config);
+      await later.start();
+      assert.equal(later.getState().stage, 'welcome', 'nothing opens without the click');
+      assert.equal(later.getState().podToReopen, 'Minca');
+
+      await later.reopenPod();
+      assert.equal(later.getState().stage, 'ready', 'still signed in');
+      assert.equal(later.getState().session?.account.name, 'Ada');
+      assert.equal(later.getState().podToReopen, null);
+      await later.signOut();
+    } finally {
+      Reflect.deleteProperty(globalThis, 'showDirectoryPicker');
+    }
+  });
+});
