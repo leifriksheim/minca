@@ -6,6 +6,7 @@ import {
   accountCredentialName,
   offerToSave,
   recoveryKit,
+  type AuthState,
   type Connection,
   type StaySignedIn,
 } from '@minca/core/session';
@@ -312,31 +313,15 @@ export function Settings() {
         </p>
       </Section>
 
-      {state.folderAvailable && (
-        <Section
-          title="Where your data lives"
-          description="A pod is a folder on your computer that keeps your account and spaces. Copy it, back it up, or put it in iCloud or Dropbox."
-        >
-          <Row
-            label={place?.kind === 'folder' ? `Pod: ${place.directory?.name ?? 'folder'}` : 'In this browser'}
-          >
-            <button
-              onClick={() => void auth.choosePod()}
-              disabled={state.busy}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
-              {place?.kind === 'folder' ? 'Change pod' : 'Move to a pod'}
-            </button>
-          </Row>
-          {/* Which carriers were given the folder is the extension's to know, not the home's: say what is true either way. */}
-          <p style={styles.errorHint}>
-            {place?.kind === 'folder'
-              ? 'Your pod is brought up to date while this page is open, and by the Minca browser extension if you gave it this folder. Apps keep their own copy, so without it, what you do in them reaches the pod the next time you come back here.'
-              : 'A pod is brought up to date while this page is open, or all the time with the Minca browser extension.'}
-          </p>
-        </Section>
-      )}
+      <Copies
+        place={place}
+        folderAvailable={state.folderAvailable}
+        busy={state.busy}
+        onChooseFolder={() => void auth.choosePod()}
+        carriers={(carriers ?? []).filter((carrier) => !hostKeys.has(carrier.did))}
+        hosts={(carriers ?? []).filter((carrier) => hostKeys.has(carrier.did))}
+        presence={presence}
+      />
 
       <div style={{ marginBottom: 16 }}>
         <PairPhone />
@@ -349,6 +334,99 @@ export function Settings() {
         <SignOut />
       </Section>
     </>
+  );
+}
+
+/** How much this site keeps in the browser, and whether the browser may clear it to make room */
+function useBrowserStorage(): { used: number | null; persisted: boolean | null } {
+  const [found, setFound] = useState<{ used: number | null; persisted: boolean | null }>({
+    used: null,
+    persisted: null,
+  });
+  useEffect(() => {
+    const storage = globalThis.navigator?.storage;
+    if (!storage) return;
+    void Promise.all([
+      storage.estimate?.().then(
+        (estimate) => estimate.usage ?? null,
+        () => null,
+      ) ?? null,
+      storage.persisted?.().catch(() => null) ?? null,
+    ]).then(([used, persisted]) => setFound({ used, persisted }));
+  }, []);
+  return found;
+}
+
+const megabytes = (bytes: number) => `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
+
+/**
+ * Where copies of the account's spaces are, as far as this home can tell:
+ * here, and every carrier and host. Every device and app keeps its own copy
+ * too, but nothing lists them, so the section says so rather than counting.
+ */
+function Copies({
+  place,
+  folderAvailable,
+  busy,
+  onChooseFolder,
+  carriers,
+  hosts,
+  presence,
+}: {
+  place: AuthState['place'];
+  folderAvailable: boolean;
+  busy: boolean;
+  onChooseFolder: () => void;
+  carriers: ReadonlyArray<CarrierSummary>;
+  hosts: ReadonlyArray<CarrierSummary>;
+  presence: (space: string) => string;
+}) {
+  const browser = useBrowserStorage();
+  const inFolder = place?.kind === 'folder';
+  const here = inFolder
+    ? `Folder “${place.directory?.name ?? 'pod'}”`
+    : [
+        'This browser',
+        browser.used !== null ? megabytes(browser.used) : null,
+        browser.persisted === false ? 'may be cleared to make room' : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+  const alone = carriers.length === 0 && hosts.length === 0;
+  return (
+    <Section
+      title="Your copies"
+      description="Every device and app you use keeps its own copy of your spaces, and they sync with each other. More than one copy is what keeps them safe."
+    >
+      <Row label={here}>
+        {folderAvailable && (
+          <button onClick={onChooseFolder} disabled={busy} data-variant="quiet" style={styles.smallButton}>
+            {inFolder ? 'Change folder' : 'Keep in a folder'}
+          </button>
+        )}
+      </Row>
+      {carriers.map((carrier) => (
+        <Row key={carrier.space} label={`${carrier.name} · ${presence(carrier.space)}`}>
+          <span />
+        </Row>
+      ))}
+      {hosts.map((host) => (
+        <Row key={host.space} label={`${host.name} · host`}>
+          <span />
+        </Row>
+      ))}
+      <p style={styles.errorHint}>
+        {inFolder
+          ? 'This page writes to the folder only while it is open. Give the Minca extension the same folder and it keeps it up to date while Chrome is open; then the folder is a whole copy of your account, which you can open with your password on any computer.'
+          : 'A folder keeps your account and its data on your computer, where clearing the browser can’t reach it. Put it in iCloud or Dropbox to back it up.'}
+      </p>
+      {alone && (
+        <p style={styles.errorHint}>
+          Nothing keeps a copy while your pages are closed. Your recovery code brings back your account, but
+          your private spaces come back only from another copy: add your phone below, or the Minca extension.
+        </p>
+      )}
+    </Section>
   );
 }
 

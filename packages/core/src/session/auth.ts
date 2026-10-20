@@ -83,11 +83,13 @@ import {
 } from './connect.js';
 import { fromProposal, proposalSpaces, sameAutomation } from '../space/own-automations.js';
 import type { Automation, AutomationApp, AutomationSpaces } from '../schemas/automations.js';
+import type { PeerTransport } from '../network/transport.js';
 import {
   clearPairingTicket,
   receiveFromDesktop,
   offerToPhone as offerPairing,
   readPairingTicket,
+  type Handover,
   type PairingOffer,
   type PairingStage,
 } from './pairing.js';
@@ -105,6 +107,8 @@ export interface MincaAuthConfig {
   readonly storageKey?: string;
   /** The page a phone-pairing QR opens. Default: this page. */
   readonly pairingLink?: string;
+  /** How the two sides of a pairing reach each other, given a throwaway DID. Default: the relay. For tests, or a host with its own. */
+  readonly pairingTransport?: (did: string) => PeerTransport;
   /** How long signing out waits, at most, for a peer to take its revokes in. Default 5 s. */
   readonly signOutGraceMs?: number;
   /**
@@ -310,6 +314,11 @@ export interface AuthState {
   /** The phone-pairing link this page was opened with */
   readonly pairing: PairingTicket | null;
   readonly pairingStage: PairingStage | null;
+  /**
+   * The account a pairing brought to a device signed in to another, waiting
+   * for the person: `account` is set when this place already keeps it.
+   */
+  readonly pairingArrival: { readonly did: string; readonly account: AccountSummary | null } | null;
   /** A pod picked while signed in, waiting on what should happen to the data */
   readonly podChoice: { readonly pod: Place; readonly contents: PodContents; readonly from: Place } | null;
   readonly moved: MovedToPod | null;
@@ -348,8 +357,14 @@ export interface MincaAuth {
   codeSaved(): void;
   /** Leaves the optional `pod` step with the data in this browser */
   finishSetup(): void;
-  /** Meets the computer the pairing link names. Signed in, it refuses: sign out first. */
+  /**
+   * Meets the computer the pairing link names. Signed in to another account,
+   * it stops once the account arrives and sets `pairingArrival`: answer with
+   * `answerPairing`.
+   */
   acceptPairing(): Promise<void>;
+  /** Takes the account a pairing brought (added, or switched to if already here), or lets it go */
+  answerPairing(take: boolean): Promise<void>;
   dismissPairing(): void;
   clearError(): void;
 
@@ -539,6 +554,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     folderAvailable: isFolderStorageAvailable(),
     pairing: readPairingTicket(),
     pairingStage: null,
+    pairingArrival: null,
     podChoice: null,
     moved: null,
   });
@@ -1027,6 +1043,33 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     update({});
   }
 
+  /** An account a pairing brought, held while a signed-in device asks whether to take it */
+  let heldHandover: Handover | null = null;
+
+  /** Signs in with what a pairing brought, then joins its spaces */
+  async function takeHandover(handover: Handover): Promise<void> {
+    const onStage = (stage: PairingStage) => update({ pairingStage: stage });
+    // Starting the node takes a moment; the code on screen is done with.
+    onStage({ kind: 'sending' });
+    const opened = await run(async () => {
+      await arrive(await openWithCode(seedToRecoveryCode(handover.seed), null), 'paired');
+    });
+    const session = state.session;
+    if (!opened || !session) return;
+    let joined = 0;
+    for (const [index, invite] of handover.spaces.entries()) {
+      onStage({ kind: 'joining', joined: index, total: handover.spaces.length });
+      if (
+        await session.node.spaces.join(invite).then(
+          () => true,
+          () => false,
+        )
+      )
+        joined++;
+    }
+    onStage({ kind: 'received', spaces: joined });
+  }
+
   // ─── The flow ──────────────────────────────────────────────────────
 
   const auth: MincaAuth = {
@@ -1244,53 +1287,53 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     async acceptPairing() {
       const ticket = state.pairing;
       if (!ticket) return;
-      // Signed in, a link from anyone would switch this device to their account
-      // in a tap: signing out first makes switching a choice of its own.
-      const signedIn = state.session;
-      if (signedIn) {
-        update({
-          error: {
-            message: `Sign out of ${signedIn.account.name} first.`,
-            hint: 'This device is signed in to another account. Pairing would switch it.',
-          },
-        });
-        return;
-      }
       if (!state.place) update({ place: await browserPlace() });
       const onStage = (stage: PairingStage) => update({ pairingStage: stage });
-      let spaces: ReadonlyArray<string> = [];
+      const got: { handover: Handover | null } = { handover: null };
       // The account arrives over the exchange, after the person has compared
       // the codes; the link only says where to meet.
-      const opened = await run(async () => {
-        const handover = await receiveFromDesktop(ticket, onStage);
-        spaces = handover.spaces;
-        // Starting the node takes a moment; the code on screen is done with.
-        onStage({ kind: 'sending' });
-        await arrive(await openWithCode(seedToRecoveryCode(handover.seed), null), 'paired');
+      await run(async () => {
+        got.handover = await receiveFromDesktop(ticket, onStage, { transport: config.pairingTransport });
       });
       clearPairingTicket();
       update({ pairing: null });
-      const session = state.session;
-      if (!opened || !session) return;
-      let joined = 0;
-      for (const [index, invite] of spaces.entries()) {
-        onStage({ kind: 'joining', joined: index, total: spaces.length });
-        if (
-          await session.node.spaces.join(invite).then(
-            () => true,
-            () => false,
-          )
-        )
-          joined++;
+      const arrived = got.handover;
+      if (!arrived) return;
+
+      // Signed in to another account, the device asks first: add the one that
+      // arrived, or switch to it if it is already here (spec 01 §15.3).
+      const signedIn = state.session;
+      if (signedIn) {
+        const { did } = await createIdentityManager().fromSeed(arrived.seed);
+        if (did !== signedIn.did) {
+          heldHandover = arrived;
+          update({
+            pairingArrival: { did, account: state.accounts.find((account) => account.did === did) ?? null },
+          });
+          return;
+        }
       }
-      onStage({ kind: 'received', spaces: joined });
+      await takeHandover(arrived);
+    },
+
+    async answerPairing(take) {
+      const arrived = heldHandover;
+      heldHandover = null;
+      update({ pairingArrival: null });
+      if (!arrived) return;
+      if (take) return takeHandover(arrived);
+      arrived.seed.fill(0);
+      update({ pairingStage: null, stage: state.session ? 'ready' : afterStorage(state.accounts) });
     },
 
     dismissPairing() {
       clearPairingTicket();
+      heldHandover?.seed.fill(0);
+      heldHandover = null;
       update({
         pairing: null,
         pairingStage: null,
+        pairingArrival: null,
         stage: state.session ? 'ready' : afterStorage(state.accounts),
       });
     },
@@ -1454,6 +1497,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
             ),
           relays: config.network?.relays ?? [],
           link: config.pairingLink ?? (location ? `${location.origin}${location.pathname}` : ''),
+          transport: config.pairingTransport,
         },
         onStage,
       );
@@ -1704,9 +1748,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       });
       await stopNode(leaving).catch(() => {});
       const place = state.place;
-      const accounts = place ? await refresh(place) : [];
-      // Signed out to pair: back to the pairing link that asked for it.
-      update({ stage: state.pairing ? 'pair' : place ? afterStorage(accounts) : 'welcome' });
+      update({ stage: place ? afterStorage(await refresh(place)) : 'welcome' });
     },
   };
 

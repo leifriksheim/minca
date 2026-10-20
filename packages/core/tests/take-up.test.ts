@@ -13,6 +13,8 @@ import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { until } from './helpers/until.js';
+import { createFakeHub } from './helpers/fake-transport.js';
+import type { PairingStage } from '../src/session/pairing.js';
 import { encodePairingTicket } from '../src/identity/pairing.js';
 import { base64UrlEncode } from '../src/utils/encoding.js';
 
@@ -126,10 +128,10 @@ function sessionsOf(auth: ReturnType<typeof createMincaAuth>): Set<MincaSession>
   return seen;
 }
 
-async function signedInTab(config: MincaAuthConfig) {
+async function signedInTab(config: MincaAuthConfig, name = 'Ada') {
   const tab = createMincaAuth(config);
   await tab.start();
-  await tab.createAccount('Ada');
+  await tab.createAccount(name);
   tab.codeSaved();
   assert.equal(await tab.setPassword('correct horse battery'), true);
   return tab;
@@ -256,10 +258,11 @@ describe('a sign-in kept in another tab', () => {
 
 describe('a pairing link opened where a sign-in is kept', () => {
   /** A tab opened from a phone-pairing QR code */
-  function openedFromPairingLink(config: MincaAuthConfig) {
+  function openedFromPairingLink(config: MincaAuthConfig, link?: string) {
     const ticket = { v: 2, secret: base64UrlEncode(new Uint8Array(16)), relay: '' } as const;
     const was = { location: scope.location, history: scope.history };
-    scope.location = { hash: `#pair=${encodePairingTicket(ticket)}`, pathname: '/', search: '' };
+    const hash = link ? link.slice(link.indexOf('#')) : `#pair=${encodePairingTicket(ticket)}`;
+    scope.location = { hash, pathname: '/', search: '' };
     scope.history = { replaceState() {} };
     try {
       return createMincaAuth(config);
@@ -286,22 +289,71 @@ describe('a pairing link opened where a sign-in is kept', () => {
     await first.signOut();
   });
 
-  test('will not switch a signed-in device until it signs out, then asks again', async () => {
-    const { config } = browser();
-    const first = await signedInTab(config);
-    const did = first.getState().session?.did;
-
-    const phone = openedFromPairingLink(config);
+  /** A computer signed in as Ada showing a pairing code, and a phone signed in as Bob that opened it */
+  async function pairing(options: { adaOnPhone?: boolean } = {}) {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const pairingTransport = (did: string) => hub.transport(did, 'pair');
+    const computer = await signedInTab({ ...browser().config, pairingTransport });
+    const ada = computer.getState().session!.did;
+    const phoneConfig = { ...browser().config, pairingTransport };
+    if (options.adaOnPhone) {
+      const before = createMincaAuth(phoneConfig);
+      await before.start();
+      await before.signInWithCode(computer.recoveryCode()!);
+      await before.setPassword('correct horse battery');
+      await before.signOut();
+    }
+    const bobTab = await signedInTab(phoneConfig, 'Bob');
+    const bob = bobTab.getState().session!.did;
+    const stages: PairingStage[] = [];
+    const offer = await computer.offerToPhone((stage) => stages.push(stage));
+    const phone = openedFromPairingLink(phoneConfig, offer.url);
     await phone.start();
-    await phone.acceptPairing();
-    assert.match(phone.getState().error?.message ?? '', /Sign out/, 'a tap on a link alone switches nothing');
-    assert.equal(phone.getState().session?.did, did);
-    assert.equal(phone.getState().pairingStage, null, 'it never went looking for the computer');
+    assert.equal(phone.getState().session?.did, bob);
 
-    await phone.signOut();
-    assert.equal(phone.getState().stage, 'pair', 'signed out, the link asks again');
-    assert.equal(phone.getState().session, null);
-    assert.ok(phone.getState().pairing);
-    await first.signOut();
+    const accepting = phone.acceptPairing();
+    await until(() => stages.some((stage) => stage.kind === 'compare'), 5000, 'the codes to show');
+    const compare = stages.find((stage) => stage.kind === 'compare');
+    assert.ok(compare?.kind === 'compare');
+    compare.same();
+    await accepting;
+    const done = async () => {
+      offer.stop();
+      await Promise.all([phone.signOut(), bobTab.signOut(), computer.signOut()]);
+    };
+    return { phone, ada, bob, done };
+  }
+
+  test('signed in as another, it asks to add the account that arrived, and keeps the other', async () => {
+    const { phone, ada, bob, done } = await pairing();
+    const asked = phone.getState();
+    assert.equal(asked.session?.did, bob, 'nothing switches before the person answers');
+    assert.deepEqual(asked.pairingArrival, { did: ada, account: null });
+
+    await phone.answerPairing(true);
+    assert.equal(phone.getState().session?.did, ada);
+    const kept = phone.getState().accounts.map((account) => account.did);
+    assert.ok(kept.includes(bob) && kept.includes(ada), 'both accounts are on the phone');
+    await done();
+  });
+
+  test('an account already on the phone is offered as a switch', async () => {
+    const { phone, ada, done } = await pairing({ adaOnPhone: true });
+    const arrival = phone.getState().pairingArrival;
+    assert.equal(arrival?.did, ada);
+    assert.equal(arrival?.account?.did, ada, 'it names the account this phone keeps');
+    await phone.answerPairing(true);
+    assert.equal(phone.getState().session?.did, ada);
+    assert.equal(phone.getState().stage, 'ready', 'it has a way in here already');
+    await done();
+  });
+
+  test('saying no keeps the phone as it was', async () => {
+    const { phone, ada, bob, done } = await pairing();
+    await phone.answerPairing(false);
+    assert.equal(phone.getState().session?.did, bob);
+    assert.equal(phone.getState().stage, 'ready');
+    assert.ok(!phone.getState().accounts.some((account) => account.did === ada), 'the account was not filed');
+    await done();
   });
 });

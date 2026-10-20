@@ -399,9 +399,17 @@ export class MincaAuthElement extends Base {
           () => auth.startCreating(),
           state.busy,
         ),
+        state.folderAvailable
+          ? option(
+              'Open a folder',
+              'Your account is in a folder (a pod): open it, and sign in with your password or passkey.',
+              () => void auth.choosePod(),
+              state.busy,
+            )
+          : null,
         option(
           'I already have one',
-          'Open your pod, use your recovery code, or add this device from another.',
+          'Use your recovery code, or add this device from another.',
           () => auth.showExisting(),
           state.busy,
         ),
@@ -961,12 +969,14 @@ export class MincaAuthElement extends Base {
    */
   #pair(state: AuthState): HTMLElement {
     const auth = this.auth;
+    const arrival = state.pairingArrival;
+    if (arrival && state.session) return this.#pairArrived(state, arrival, state.session.account.name);
     const stage = state.pairingStage;
     const code = stage?.kind === 'confirm' ? stage.code : null;
     // The codes matched and the account is here: nothing left to tap or warn about.
     const arriving = stage?.kind === 'sending';
     return card(
-      'Add this phone',
+      state.session ? 'Add an account' : 'Add this phone',
       subtitle('You scanned a code from your computer.'),
       code
         ? h(
@@ -977,19 +987,14 @@ export class MincaAuthElement extends Base {
         : h(
             'p',
             { class: 'wa-hint' },
-            'This phone becomes the same account, with its own copy of your spaces.',
+            state.session
+              ? `This phone is signed in as ${state.session.account.name}. Pairing brings the account from your computer here too; you choose whether to add it once it arrives.`
+              : 'This phone becomes the same account, with its own copy of your spaces.',
             info(
               'What happens next',
               'Your computer and this phone show the same six digits. When you confirm them on the computer, it sends the account here directly — the relay only introduces the two, and sees nothing it could use.',
             ),
           ),
-      state.session && !code && !arriving
-        ? h(
-            'p',
-            { class: 'wa-hint' },
-            `This phone is signed in as ${state.session.account.name}. If the code is on your own computer, sign out to add that account; ${state.session.account.name} stays on this phone, to sign back in to.`,
-          )
-        : null,
       state.accounts.length > 0 && !code && !arriving
         ? h(
             'p',
@@ -997,20 +1002,7 @@ export class MincaAuthElement extends Base {
             'Only continue if the code is on your own screen, in front of you. A link someone sent you would put this phone in their account instead of yours.',
           )
         : null,
-      // Signed in, staying put is the safe choice, so it is the main button.
-      state.pairing && state.session && !code && !arriving
-        ? h(
-            'button',
-            {
-              type: 'button',
-              class: 'wa-button',
-              disabled: state.busy,
-              onclick: () => auth.dismissPairing(),
-            },
-            `Stay as ${state.session.account.name}`,
-          )
-        : null,
-      state.pairing && !state.session && !code && !arriving
+      state.pairing && !code && !arriving
         ? h(
             'button',
             {
@@ -1019,7 +1011,7 @@ export class MincaAuthElement extends Base {
               disabled: state.busy,
               onclick: () => void auth.acceptPairing(),
             },
-            state.busy ? 'Looking…' : 'Set up this phone',
+            state.busy ? 'Looking…' : 'Continue',
           )
         : null,
       stage
@@ -1031,9 +1023,44 @@ export class MincaAuthElement extends Base {
         : null,
       errorBox(state.error),
       h('p', { class: 'wa-small' }, 'Keep the code showing on your computer until this finishes.'),
-      state.pairing && state.session && !code && !arriving
-        ? links(link(`Sign out of ${state.session.account.name}`, () => void auth.signOut(), state.busy))
-        : links(link(state.pairing ? 'Not now' : 'Back', () => auth.dismissPairing(), state.busy && !code)),
+      links(link(state.pairing ? 'Not now' : 'Back', () => auth.dismissPairing(), state.busy && !code)),
+    );
+  }
+
+  /** The account a pairing brought, to a phone signed in to another: add it, or switch to it if it is already here */
+  #pairArrived(
+    state: AuthState,
+    arrival: NonNullable<AuthState['pairingArrival']>,
+    current: string,
+  ): HTMLElement {
+    const auth = this.auth;
+    const known = arrival.account;
+    return card(
+      known ? `Switch to ${known.name}?` : 'Add this account?',
+      h(
+        'div',
+        { class: 'wa-row', style: 'align-items:center;gap:12px' },
+        avatar(arrival.did, 40),
+        h(
+          'p',
+          { class: 'wa-hint', style: 'margin:0' },
+          known
+            ? `Your computer sent ${known.name}, which is already on this phone. Switch to it? ${current} stays here, to switch back to.`
+            : `Your computer sent an account this phone doesn't have yet. Add it and switch to it? ${current} stays here, to switch back to.`,
+        ),
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'wa-button',
+          disabled: state.busy,
+          onclick: () => void auth.answerPairing(true),
+        },
+        known ? `Switch to ${known.name}` : 'Add and switch',
+      ),
+      errorBox(state.error),
+      links(link(`Stay as ${current}`, () => void auth.answerPairing(false), state.busy)),
     );
   }
 }
