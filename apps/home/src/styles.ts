@@ -75,6 +75,43 @@ export function injectBaseStyles(): void {
     @media (max-width: 520px) {
       [data-card] { padding: 28px 20px !important; }
     }
+
+    /* The account page: a bar across the top, the tabs down the side and the
+       tab beside them; on a narrow screen the tabs become a row of pills. */
+    .home { min-height: 100vh; min-height: 100dvh; }
+    .home-bar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 24px; background: ${surface.page}; border-bottom: 1px solid ${surface.line};
+    }
+    .home-bar-label { font-size: 15px; color: ${ink.muted}; }
+    .home-layout {
+      display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px;
+      max-width: 1000px; margin: 0 auto; padding: 40px 24px 80px; align-items: start;
+    }
+    .home-tabs { position: sticky; top: 89px; display: flex; flex-direction: column; gap: 2px; }
+    .home-tab {
+      display: flex; align-items: center; height: 40px; padding: 0 16px;
+      border: 1px solid transparent; border-radius: ${radius.pill}px; background: transparent;
+      font-size: 14px; font-weight: 500; color: ${ink.body}; text-align: left; white-space: nowrap;
+    }
+    .home-tab:hover { background: ${surface.sunken}; }
+    .home-tab[aria-selected="true"] { background: ${accent.soft}; color: ${accent.base}; }
+    .menu-item:not(:disabled):hover { background: ${surface.sunken} !important; }
+    /* Side by side where there is room; one per row on a phone. */
+    .overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overview > * { min-height: 200px; }
+    @media (max-width: 760px) {
+      .home-bar { padding: 10px 16px; }
+      .home-bar-label { display: none; }
+      .home-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 16px 16px 64px; }
+      .home-tabs { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+      .home-tab { border-color: ${surface.line}; }
+      .home-tab[aria-selected="true"] { border-color: ${accent.base}; }
+      .overview { grid-template-columns: minmax(0, 1fr); }
+      .overview > * { min-height: 0; }
+    }
+    @media (max-width: 420px) { .switcher-name { display: none; } }
   `;
   globalThis.document.head.appendChild(style);
 }

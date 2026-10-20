@@ -12,12 +12,14 @@ import {
 } from '@minca/core/session';
 import { useAuth, useSession } from '@minca/core/react';
 import { Avatar } from '@minca/app-shared/Avatar';
-import { Shape, shapeFor } from '@minca/app-shared/shapes';
+import { Shape, shapeFor, type ShapeKind } from '@minca/app-shared/shapes';
+import type { ShapeColour } from '@minca/app-shared/tokens';
 import { message, useAction, useCopy } from '@minca/app-shared/action';
 import { PairPhone } from './PairPhone';
 import { Hosting } from './Hosting';
 import { Notifications } from './Notifications';
 import { styles, palette } from '../styles';
+import type { TabId } from '../tabs';
 
 /**
  * The account, as its home shows it: who you are, which apps may use it, how
@@ -25,7 +27,7 @@ import { styles, palette } from '../styles';
  * here for "account settings" — they never hold the seed, so they have none of
  * their own.
  */
-export function Settings() {
+export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) => void }) {
   const { auth, state } = useAuth();
   const session = useSession();
   const [stay, setStay] = useState<StaySignedIn>(() => auth.staySignedIn.choice());
@@ -141,135 +143,37 @@ export function Settings() {
 
   return (
     <>
-      <AccountHeader name={session.account.name} did={session.did} onRename={(name) => auth.rename(name)} />
-
-      <Section
-        title="Connected apps"
-        description="Apps that you let use your account. Each got a note, signed by your account, saying what it may use and until when. None of them has your password."
-      >
-        {connections.length === 0 && elsewhere.length === 0 && <Row label="No apps yet.">{null}</Row>}
-        {connections.map((app) => (
-          <Row
-            key={connectionId(app)}
-            shape={connectionId(app)}
-            label={
-              app.access === 'carry'
-                ? `${describeConnection(app)} · ${presence(app.carrySpace)}`
-                : describeConnection(app)
-            }
-          >
-            <button
-              onClick={() => disconnect(app)}
-              disabled={disconnecting !== null}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
-              {disconnecting === connectionId(app) ? 'Disconnecting…' : 'Disconnect'}
-            </button>
-          </Row>
-        ))}
-        {elsewhere.map((carrier) => (
-          <Row
-            key={carrier.space}
-            shape={carrier.space}
-            label={`${carrier.name} · keeps your spaces online · connected on another device · ${presence(carrier.space)}`}
-          >
-            <button
-              onClick={() => removeCarrier(carrier.space)}
-              disabled={disconnecting !== null}
-              data-variant="quiet"
-              style={styles.smallButton}
-            >
-              {disconnecting === carrier.space ? 'Disconnecting…' : 'Disconnect'}
-            </button>
-          </Row>
-        ))}
-        {disconnectError && <p style={styles.error}>{disconnectError}</p>}
-        {notYet && <p style={styles.errorHint}>{notYet}</p>}
-        {anyAway && (
-          <p style={styles.errorHint}>
-            An extension that is not online either has Chrome closed, or is keeping a different account online
-            now — open it to see which.
-          </p>
-        )}
-        {connections.length > 0 && (
-          <p style={styles.errorHint}>
-            Disconnecting stops the app for good the next time it comes online: it signs itself out, and
-            nothing it changes after that counts. What it already wrote stays, and it keeps what it could
-            already read.
-          </p>
-        )}
-      </Section>
-
-      <Hosting node={session.node} />
-
-      <Notifications node={session.node} />
-
-      <Section
-        title="Signing in"
-        description="How you open your account here every day. A passkey works in this browser; a password works wherever your account is kept, including your pod in other apps."
-      >
-        {hasPasskey ? (
-          <Row label="A passkey signs you in on this device.">
-            <button
-              onClick={() => void auth.removeShortcut('passkey')}
-              disabled={state.busy || onlyWayIn}
-              title={
-                onlyWayIn
-                  ? 'Set a password first — otherwise you would need your recovery code to get back in.'
-                  : undefined
-              }
-              data-variant="quiet"
-              style={{ ...styles.smallButton, color: palette.accent.danger }}
-            >
-              Remove
-            </button>
-          </Row>
-        ) : (
-          <Row label="No passkey on this device.">
-            <button
-              onClick={() => void auth.addPasskey()}
-              disabled={state.busy}
-              data-variant="primary"
-              style={styles.darkSmall}
-            >
-              {state.busy ? 'Waiting…' : 'Set up a passkey'}
-            </button>
-          </Row>
-        )}
-        {changingPassword ? (
-          <PasswordForm
-            account={session.account.name}
-            busy={state.busy}
-            onSave={async (password) => {
-              const ok = await auth.setPassword(password);
-              if (ok) {
-                const filedAs = accountCredentialName(session.account.name);
-                await offerToSave(filedAs, password, filedAs);
-                setChangingPassword(false);
-              }
-              return ok;
-            }}
-            onCancel={() => setChangingPassword(false)}
+      {tab === 'home' && (
+        <>
+          <AccountHeader
+            name={session.account.name}
+            did={session.did}
+            onRename={(name) => auth.rename(name)}
           />
-        ) : (
-          <Row label={hasPassword ? 'A password is set.' : 'No password.'}>
-            <span style={{ display: 'flex', gap: 6 }}>
-              <button
-                onClick={() => setChangingPassword(true)}
-                disabled={state.busy}
-                data-variant="quiet"
-                style={styles.smallButton}
-              >
-                {hasPassword ? 'Change' : 'Set a password'}
-              </button>
-              {hasPassword && (
+
+          <Overview
+            hasPasskey={hasPasskey}
+            hasPassword={hasPassword}
+            apps={connections.filter((app) => app.access !== 'carry').length}
+            keepers={carriers?.length ?? 0}
+            openTab={openTab}
+          />
+        </>
+      )}
+      {tab === 'security' && (
+        <>
+          <Section
+            title="Signing in"
+            description="How you open your account here every day. A passkey works in this browser; a password works wherever your account is kept, including your pod in other apps."
+          >
+            {hasPasskey ? (
+              <Row label="A passkey signs you in on this device.">
                 <button
-                  onClick={() => void auth.removeShortcut('passphrase')}
+                  onClick={() => void auth.removeShortcut('passkey')}
                   disabled={state.busy || onlyWayIn}
                   title={
                     onlyWayIn
-                      ? 'Set up a passkey first — otherwise you would need your recovery code to get back in.'
+                      ? 'Set a password first — otherwise you would need your recovery code to get back in.'
                       : undefined
                   }
                   data-variant="quiet"
@@ -277,65 +181,293 @@ export function Settings() {
                 >
                   Remove
                 </button>
-              )}
-            </span>
-          </Row>
-        )}
-        {changingPassword && state.error && <p style={styles.error}>{state.error.message}</p>}
-      </Section>
+              </Row>
+            ) : (
+              <Row label="No passkey on this device.">
+                <button
+                  onClick={() => void auth.addPasskey()}
+                  disabled={state.busy}
+                  data-variant="primary"
+                  style={styles.darkSmall}
+                >
+                  {state.busy ? 'Waiting…' : 'Set up a passkey'}
+                </button>
+              </Row>
+            )}
+            {changingPassword ? (
+              <PasswordForm
+                account={session.account.name}
+                busy={state.busy}
+                onSave={async (password) => {
+                  const ok = await auth.setPassword(password);
+                  if (ok) {
+                    const filedAs = accountCredentialName(session.account.name);
+                    await offerToSave(filedAs, password, filedAs);
+                    setChangingPassword(false);
+                  }
+                  return ok;
+                }}
+                onCancel={() => setChangingPassword(false)}
+              />
+            ) : (
+              <Row label={hasPassword ? 'A password is set.' : 'No password.'}>
+                <span style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    onClick={() => setChangingPassword(true)}
+                    disabled={state.busy}
+                    data-variant="quiet"
+                    style={styles.smallButton}
+                  >
+                    {hasPassword ? 'Change' : 'Set a password'}
+                  </button>
+                  {hasPassword && (
+                    <button
+                      onClick={() => void auth.removeShortcut('passphrase')}
+                      disabled={state.busy || onlyWayIn}
+                      title={
+                        onlyWayIn
+                          ? 'Set up a passkey first — otherwise you would need your recovery code to get back in.'
+                          : undefined
+                      }
+                      data-variant="quiet"
+                      style={{ ...styles.smallButton, color: palette.accent.danger }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </span>
+              </Row>
+            )}
+            {changingPassword && state.error && <p style={styles.error}>{state.error.message}</p>}
+          </Section>
 
-      <RecoveryCode reveal={() => auth.recoveryCode()} name={session.account.name} did={session.did} />
+          <RecoveryCode reveal={() => auth.recoveryCode()} name={session.account.name} did={session.did} />
 
-      <Section
-        title="Stay signed in"
-        description="Skip unlocking when you come back. After this long without using it, you'll be asked again."
-      >
-        <div role="radiogroup" aria-label="Stay signed in" style={segmented}>
-          {STAY_SIGNED_IN_CHOICES.map((choice) => (
-            <button
-              key={choice.value}
-              role="radio"
-              aria-checked={stay === choice.value}
-              onClick={() => void choose(choice.value)}
-              style={stay === choice.value ? segmentOn : segment}
-            >
-              {choice.label}
-            </button>
-          ))}
-        </div>
-        <p style={styles.errorHint}>
-          {stay === 'never'
-            ? 'This device asks to unlock every time.'
-            : until
-              ? `Signed in on this device until ${until.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}, or longer if you keep using it.`
-              : 'Applies from your next unlock.'}{' '}
-          Anyone who can use this browser can open your account while you're signed in.
-        </p>
-      </Section>
+          <Section
+            title="Stay signed in"
+            description="Skip unlocking when you come back. After this long without using it, you'll be asked again."
+          >
+            <div role="radiogroup" aria-label="Stay signed in" style={segmented}>
+              {STAY_SIGNED_IN_CHOICES.map((choice) => (
+                <button
+                  key={choice.value}
+                  role="radio"
+                  aria-checked={stay === choice.value}
+                  onClick={() => void choose(choice.value)}
+                  style={stay === choice.value ? segmentOn : segment}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+            <p style={styles.errorHint}>
+              {stay === 'never'
+                ? 'This device asks to unlock every time.'
+                : until
+                  ? `Signed in on this device until ${until.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}, or longer if you keep using it.`
+                  : 'Applies from your next unlock.'}{' '}
+              Anyone who can use this browser can open your account while you're signed in.
+            </p>
+          </Section>
 
-      <Copies
-        place={place}
-        folderAvailable={state.folderAvailable}
-        busy={state.busy}
-        onChooseFolder={() => void auth.choosePod()}
-        carriers={(carriers ?? []).filter((carrier) => !hostKeys.has(carrier.did))}
-        hosts={(carriers ?? []).filter((carrier) => hostKeys.has(carrier.did))}
-        presence={presence}
-      />
+          <Section
+            title="Sign out of this device"
+            description="Signs this account home out on this device. Your account and your data stay where they are."
+          >
+            <SignOut />
+          </Section>
+        </>
+      )}
+      {tab === 'apps' && (
+        <>
+          <Section
+            title="Connected apps"
+            description="Apps that you let use your account. Each got a note, signed by your account, saying what it may use and until when. None of them has your password."
+          >
+            {connections.length === 0 && elsewhere.length === 0 && <Row label="No apps yet.">{null}</Row>}
+            {connections.map((app) => (
+              <Row
+                key={connectionId(app)}
+                shape={connectionId(app)}
+                label={
+                  app.access === 'carry'
+                    ? `${describeConnection(app)} · ${presence(app.carrySpace)}`
+                    : describeConnection(app)
+                }
+              >
+                <button
+                  onClick={() => disconnect(app)}
+                  disabled={disconnecting !== null}
+                  data-variant="quiet"
+                  style={styles.smallButton}
+                >
+                  {disconnecting === connectionId(app) ? 'Disconnecting…' : 'Disconnect'}
+                </button>
+              </Row>
+            ))}
+            {elsewhere.map((carrier) => (
+              <Row
+                key={carrier.space}
+                shape={carrier.space}
+                label={`${carrier.name} · keeps your spaces online · connected on another device · ${presence(carrier.space)}`}
+              >
+                <button
+                  onClick={() => removeCarrier(carrier.space)}
+                  disabled={disconnecting !== null}
+                  data-variant="quiet"
+                  style={styles.smallButton}
+                >
+                  {disconnecting === carrier.space ? 'Disconnecting…' : 'Disconnect'}
+                </button>
+              </Row>
+            ))}
+            {disconnectError && <p style={styles.error}>{disconnectError}</p>}
+            {notYet && <p style={styles.errorHint}>{notYet}</p>}
+            {anyAway && (
+              <p style={styles.errorHint}>
+                An extension that is not online either has Chrome closed, or is keeping a different account
+                online now — open it to see which.
+              </p>
+            )}
+            {connections.length > 0 && (
+              <p style={styles.errorHint}>
+                Disconnecting stops the app for good the next time it comes online: it signs itself out, and
+                nothing it changes after that counts. What it already wrote stays, and it keeps what it could
+                already read.
+              </p>
+            )}
+          </Section>
 
-      <div style={{ marginBottom: 16 }}>
-        <PairPhone />
-      </div>
+          <Notifications node={session.node} />
+        </>
+      )}
+      {tab === 'data' && (
+        <>
+          <Copies
+            place={place}
+            folderAvailable={state.folderAvailable}
+            busy={state.busy}
+            onChooseFolder={() => void auth.choosePod()}
+            carriers={(carriers ?? []).filter((carrier) => !hostKeys.has(carrier.did))}
+            hosts={(carriers ?? []).filter((carrier) => hostKeys.has(carrier.did))}
+            presence={presence}
+          />
 
-      <Section
-        title="Sign out of this device"
-        description="Signs this account home out on this device. Your account and your data stay where they are."
-      >
-        <SignOut />
-      </Section>
+          <div style={{ marginBottom: 16 }}>
+            <PairPhone />
+          </div>
+
+          <Hosting node={session.node} />
+        </>
+      )}
     </>
   );
 }
+
+/**
+ * The home tab: how the account is doing at a glance, one cell per tab, in a
+ * ruled grid. A cell that needs attention says so in its line.
+ */
+function Overview({
+  hasPasskey,
+  hasPassword,
+  apps,
+  keepers,
+  openTab,
+}: {
+  hasPasskey: boolean;
+  hasPassword: boolean;
+  apps: number;
+  keepers: number;
+  openTab: (tab: TabId) => void;
+}) {
+  const ways = [hasPasskey && 'a passkey', hasPassword && 'a password'].filter(Boolean).join(' and ');
+  const cells: ReadonlyArray<{
+    kind: ShapeKind;
+    colour: ShapeColour;
+    title: string;
+    line: string;
+    warn?: boolean;
+    action: string;
+    tab: TabId;
+  }> = [
+    {
+      kind: 'key',
+      colour: 'cobalt',
+      title: 'Signing in',
+      line: ways ? `You sign in with ${ways}.` : 'Only your recovery code opens it here.',
+      warn: !ways,
+      action: 'Security',
+      tab: 'security',
+    },
+    {
+      kind: 'pass',
+      colour: 'coral',
+      title: 'Apps',
+      line: apps === 0 ? 'No apps yet.' : `${apps} ${apps === 1 ? 'app uses' : 'apps use'} your account.`,
+      action: 'Manage apps',
+      tab: 'apps',
+    },
+    {
+      kind: 'stack',
+      colour: 'sage',
+      title: 'Your copies',
+      line:
+        keepers === 0
+          ? 'Nothing keeps a copy while your pages are closed.'
+          : `Kept online by ${keepers} ${keepers === 1 ? 'helper' : 'helpers'}.`,
+      warn: keepers === 0,
+      action: 'Your data',
+      tab: 'data',
+    },
+    {
+      kind: 'mesh',
+      colour: 'lilac',
+      title: 'Your phone',
+      line: 'Show a code, scan it, and your phone is the same account.',
+      action: 'Add your phone',
+      tab: 'data',
+    },
+  ];
+  return (
+    <div className="overview" style={grid}>
+      {cells.map((cell) => (
+        <div key={cell.title} style={cellStyle}>
+          <Shape kind={cell.kind} colour={cell.colour} size={36} />
+          <div style={{ flex: 1 }}>
+            <h2 style={styles.sectionHeading}>{cell.title}</h2>
+            <p style={{ ...styles.sectionText, color: cell.warn ? palette.accent.warn : palette.ink.muted }}>
+              {cell.line}
+            </p>
+          </div>
+          <button
+            onClick={() => openTab(cell.tab)}
+            data-variant="quiet"
+            style={{ ...styles.smallButton, alignSelf: 'flex-start' }}
+          >
+            {cell.action}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Cells share one navy rule: the frame's colour shows through the gaps */
+const grid = {
+  gap: 1,
+  background: palette.surface.rule,
+  border: `1px solid ${palette.surface.rule}`,
+  borderRadius: palette.radius.xl,
+  overflow: 'hidden',
+} as const;
+const cellStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 14,
+  padding: 24,
+  background: palette.surface.card,
+} as const;
 
 /** How much this site keeps in the browser, and whether the browser may clear it to make room */
 function useBrowserStorage(): { used: number | null; persisted: boolean | null } {
