@@ -106,7 +106,7 @@ describe('the usage meter', () => {
     assert.equal((await meter.usage('club')).readers, 10_000);
   });
 
-  test('many new writers in a day cost a few writes of the day, not one each, and stop counting past a cap', async () => {
+  test('many new writers in a day cost a few writes of the day, not one each', async () => {
     const store = createMemoryAdapter();
     let puts = 0;
     const counting = {
@@ -120,15 +120,16 @@ describe('the usage meter', () => {
     );
     await meter.flushed();
     // One write a writer at most, however many come at once; never one per writer per writer.
-    assert.ok(puts <= 1_000, `${puts} writes`);
-    assert.equal((await meter.usage('club')).writers, 1_000);
+    assert.ok(puts <= 1_500, `${puts} writes`);
+    assert.equal((await meter.usage('club')).writers, 1_500);
   });
 
-  test('a day that reached the cap counts as full, however many of its writers were removed since', async () => {
+  test('a thousand throwaway joiners, removed, count no more: the real writers still count', async () => {
     const meter = await createUsageMeter({ store: createMemoryAdapter(), windowDays: 30 });
     for (let i = 0; i < 1_000; i += 1) await meter.wrote('club', `did:key:zDnaeThrowaway${i}`);
     await meter.wrote('club', alice);
-    assert.equal((await meter.usage('club', [alice])).writers, 1_000);
+    await meter.wrote('club', bob);
+    assert.equal((await meter.usage('club', [alice, bob])).writers, 2);
   });
 
   test('forgetting a space drops its counts', async () => {

@@ -27,11 +27,11 @@ const MAX_READERS_A_SPACE = 10_000;
 /** Readers kept for every space together, however many spaces someone makes to read */
 const MAX_READERS = 1_000_000;
 /**
- * Writers kept for one space on one day. A day that reaches it counts as that
- * many writers whoever is a member later, so joining and removing throwaway
- * accounts to fill it hides no one.
+ * Writers kept for one space on one day: so far past any free line that only
+ * as many accounts joining in one day could fill it, which costs whoever does
+ * it as much as the host, and the day's set is written in batches.
  */
-const MAX_WRITERS_A_DAY = 1_000;
+const MAX_WRITERS_A_DAY = 50_000;
 
 export interface UsageMeterConfig {
   readonly store: StorageAdapter;
@@ -197,10 +197,8 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     async usage(spaceId: string, members?: ReadonlyArray<string>): Promise<Counted> {
       const within = window();
       const only = members ? await hashesOf(spaceId, members) : undefined;
-      const days = writers.get(spaceId);
-      const full = [...(days ?? [])].some(([day, set]) => within.has(day) && set.size >= MAX_WRITERS_A_DAY);
       return {
-        writers: full ? MAX_WRITERS_A_DAY : distinct(days, within, only),
+        writers: distinct(writers.get(spaceId), within, only),
         readers: distinct(readers.get(spaceId), within),
         windowDays: config.windowDays,
       };

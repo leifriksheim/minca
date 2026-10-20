@@ -446,8 +446,17 @@ describe('the free line', () => {
 
   test('a shared space handed over as someone’s carry space is refused, so every member is told of the line', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
-    const node = await host(hub);
+    const mirror = createMemoryBlobStore();
+    const node = await host(hub, { mirror });
     const c = await community(hub, node);
+    await until(async () => (await mirror.list(`${c.space}/`)).length > 0, 8000, 'the bucket to hold it');
+    // Someone who only holds the club's invite link, with a free subscription of their own.
+    const stranger = await account();
+    const theirs = await subscriptionId();
+    await node.subscribe(theirs);
+    await assert.rejects(node.attach(theirs, stranger.did, c.invite), /not a carry space/);
+    assert.ok((await mirror.list(`${c.space}/`)).length > 0, 'the host keeps its copy');
+    assert.equal(await carries(node, c.space)(), true);
     // The trick: the club itself, handed over in place of Alice's carry space.
     const id = await subscriptionId();
     await node.subscribe(id);
@@ -456,6 +465,7 @@ describe('the free line', () => {
       /not a carry space/,
     );
     assert.equal((await node.get(id))?.carry, undefined);
+    // Nor did trying take the host's copy of it.
     // So the club is still Bob's to name, and he is told when it goes over.
     await bothWrite(node, c);
     await node.evaluate();

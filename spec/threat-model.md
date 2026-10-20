@@ -478,9 +478,12 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     once the host forgets it. A space whose grace is spent gets only 7 days'
     notice when pushed over again, which is the time its members have to
     remove whoever did it. Handing a shared space over as a carry space
-    neither escapes the line nor hides its notice from the other members: a
-    host with limits refuses it ("a shared space handed over as someone's
-    carry space is refused"). Any member can also put a space several write
+    neither escapes the line nor hides its notice from the other members who
+    use the host, nor drops the host's copy: a host with limits refuses one
+    it carries or others name ("a shared space handed over as someone's
+    carry space is refused"). One no other member uses the host for is
+    refused only once its members are known, at the next look, and a member
+    without a role is not seen as sharing it. Any member can also put a space several write
     in over on bytes, and removing them leaves what they wrote. After `graceDays` only the space's fund
     keeps it at that host. Readers never put a space over, as they cost
     nothing to make up ("readers alone never put a space over the line"),

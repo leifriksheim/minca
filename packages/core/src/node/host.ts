@@ -443,7 +443,10 @@ export async function createHostNode(config: HostConfig) {
     const keep = (limits.keepDays ?? 0) * DAY;
     // Members stopped carrying it, so nothing it does reaches here: it stays as it was, and is forgotten after a while.
     if (before?.stopped !== undefined && !own) return before.stopped + keep <= t ? null : before;
-    const counts = await meter.usage(spaceId, await membersOf(spaceId));
+    // Not carried now, so who is a member can't be read: judged again once it is, as it was till then.
+    const members = await membersOf(spaceId);
+    if (!members) return before ?? null;
+    const counts = await meter.usage(spaceId, members);
     const bytes = (await config.measure?.(spaceId).catch(() => 0)) ?? 0;
     const shared = counts.writers >= 2;
     // One writer is never a community, whatever the limit says.
@@ -667,6 +670,13 @@ export async function createHostNode(config: HostConfig) {
       const asked = parseSpaceInvite(invite).space.id;
       if (lines.get(asked)?.stopped !== undefined && !(await paysItself(asked)))
         throw new Error('That space is over this host’s free line: only its own fund carries it');
+      // One carried, or named, for others already is theirs to carry: taking it as a carry space
+      // would take it from them, and letting it go again would drop the host's copy.
+      if (limits && !core.carries.has(asked)) {
+        const others =
+          core.carried.has(asked) || [...core.carries.values()].some((entry) => entry.named.has(asked));
+        if (others) throw new Error('That is a space others are members of, not a carry space');
+      }
       const space = await core.addCarry(account, invite);
       // A carry space is the account's alone: anyone else holding a role there makes it a shared
       // space, which members' own passes carry, each told of the line.

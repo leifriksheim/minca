@@ -325,8 +325,7 @@ it carries for members' subscriptions, carry spaces among them:
   for a space over its window, and a million over every space, so made-up
   keys cost it no more memory past that; one account with many spaces can
   fill the million, after which readers stop growing anywhere. It keeps at
-  most 1 000 writers for a space a day, and a day that reaches that counts
-  as 1 000 writers whoever is a member later.
+  most 50 000 writers for a space a day.
 - **bytes**: what the space takes at the host.
 
 A space is **over the line** when `writers` exceeds `space.writers` (and at
@@ -371,8 +370,9 @@ that once the space's own subscription is paid it carries it again from
 where it was.
 
 A carry space is the account's alone (06 §4.2): at a host with `limits`, one
-in which another account is a founder or holds a role is refused as a
-carry space, and let go should one come to, so that every member's own
+the host already carries, or another subscription's passes name, is refused
+as a carry space, as is one in which another account is a founder or holds a
+role; and one that comes to be shared is let go, so that every member's own
 pass carries it and every member is told of the line.
 
 A host with `limits` takes payments for communities (§2 `fund`): a line
@@ -437,7 +437,8 @@ reference host makes at most 5 subscriptions a day for one address, an IPv6
 /64 counting as one, by any call that makes one, and carries at most 200
 spaces for one subscription, counted as it reads the carry space's passes;
 one past that takes no new space, as past its quota. Behind a proxy it takes the address from a header only when
-told which, and then the last address in it, the one the proxy added. These are its own
+told which (on Fly, Fly's own), and then the last address in it, the one
+the proxy added. These are its own
 numbers, not the protocol's, and they slow a stranger rather than stop one:
 an account is only a key.
 
