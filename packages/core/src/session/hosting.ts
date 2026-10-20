@@ -147,8 +147,126 @@ export interface HostStatus {
   readonly daily?: number;
   /** For a space's own subscription: the bots the host runs there, and whether each is running */
   readonly bots?: ReadonlyArray<HostedBot>;
+  /** At a host with limits, for an account's subscription: whether it is on the free plan or pays for more room */
+  readonly plan?: 'free' | 'paid';
+  /** At a host with limits: the spaces it names that are over the free line, and when carrying them for members stops */
+  readonly over?: ReadonlyArray<OverSpace>;
+  /** At a host with limits, for a space's own subscription: how much the space is used */
+  readonly usage?: SpaceUsage;
   /** When the host said it, unix seconds */
   readonly at: number;
+}
+
+/** A space over a host's free line (spec 08 §1.1) */
+export interface OverSpace {
+  readonly space: string;
+  /** When it went over, unix seconds */
+  readonly since: number;
+  /** When carrying it for members' subscriptions stops, or stopped: only its own fund keeps it after */
+  readonly until: number;
+  /** Which limits it is over */
+  readonly reasons: ReadonlyArray<'writers' | 'bytes'>;
+}
+
+/** How much a space is used at a host, over its window: counts, never who */
+export interface SpaceUsage {
+  /** Accounts that wrote */
+  readonly writers: number;
+  /** Session keys that read */
+  readonly readers: number;
+  /** What it takes at the host, as last measured */
+  readonly bytes: number;
+  readonly windowDays: number;
+}
+
+/** What a host keeps for free and what paying adds, as its description says (spec 08 §1.1) */
+export interface HostLimits {
+  /** Bytes an account's spaces may take on the free plan */
+  readonly accountBytes: number;
+  /** Bytes they may take while it pays; absent: the same */
+  readonly paidAccountBytes?: number;
+  /** The free line for a space several accounts write in; readers are only a hint */
+  readonly space: {
+    readonly writers: number;
+    readonly bytes: number;
+    readonly windowDays: number;
+    readonly readers?: number;
+  };
+  /** Days a space over the line is still carried for its members */
+  readonly graceDays: number;
+  /** Days a space no longer carried is kept, so a fund brings it back at once */
+  readonly keepDays?: number;
+  /** Days a free subscription is kept with no call from any of its devices */
+  readonly idleDays?: number;
+}
+
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+/** The limits a host description gives, when well formed; null otherwise, and the description still stands */
+export function hostLimits(described: unknown): HostLimits | null {
+  if (typeof described !== 'object' || described === null) return null;
+  const given: Record<string, unknown> = { ...described };
+  const space: unknown = given.space;
+  if (typeof space !== 'object' || space === null) return null;
+  const line: Record<string, unknown> = { ...space };
+  if (
+    !isCount(given.accountBytes) ||
+    !isCount(given.graceDays) ||
+    !isCount(line.writers) ||
+    !isCount(line.bytes) ||
+    !isCount(line.windowDays) ||
+    line.windowDays === 0
+  )
+    return null;
+  const optional = (value: unknown) => (isCount(value) ? value : undefined);
+  const paid = optional(given.paidAccountBytes);
+  const readers = optional(line.readers);
+  const keep = optional(given.keepDays);
+  const idle = optional(given.idleDays);
+  return {
+    accountBytes: given.accountBytes,
+    ...(paid !== undefined ? { paidAccountBytes: paid } : {}),
+    space: {
+      writers: line.writers,
+      bytes: line.bytes,
+      windowDays: line.windowDays,
+      ...(readers !== undefined ? { readers } : {}),
+    },
+    graceDays: given.graceDays,
+    ...(keep !== undefined ? { keepDays: keep } : {}),
+    ...(idle !== undefined ? { idleDays: idle } : {}),
+  };
+}
+
+/** The spaces a status says are over the line, each well formed; the rest left out */
+export function overSpaces(described: unknown): ReadonlyArray<OverSpace> {
+  if (!Array.isArray(described)) return [];
+  return described.flatMap((one: unknown): OverSpace[] => {
+    if (typeof one !== 'object' || one === null) return [];
+    const given: Record<string, unknown> = { ...one };
+    const reasons = Array.isArray(given.reasons)
+      ? given.reasons.filter(
+          (reason): reason is 'writers' | 'bytes' => reason === 'writers' || reason === 'bytes',
+        )
+      : [];
+    return typeof given.space === 'string' &&
+      SPACE_ID.test(given.space) &&
+      isCount(given.since) &&
+      isCount(given.until) &&
+      reasons.length > 0
+      ? [{ space: given.space, since: given.since, until: given.until, reasons }]
+      : [];
+  });
+}
+
+/** A status's usage, when well formed */
+export function spaceUsage(described: unknown): SpaceUsage | null {
+  if (typeof described !== 'object' || described === null) return null;
+  const given: Record<string, unknown> = { ...described };
+  return isCount(given.writers) && isCount(given.readers) && isCount(given.bytes) && isCount(given.windowDays)
+    ? { writers: given.writers, readers: given.readers, bytes: given.bytes, windowDays: given.windowDays }
+    : null;
 }
 
 /** A status as the host sent it: the exact bytes, and its signature over them */
@@ -186,6 +304,8 @@ export interface HostDescription {
   readonly fund?: FundOffer;
   /** The services its bots can be connected to, at `/host/bots/<bot>/connect/<id>` (spec 08 §3.1) */
   readonly connectors?: ReadonlyArray<HostConnectorOffer>;
+  /** What it keeps for free, what paying adds, and where a community has to pay for itself (spec 08 §1.1) */
+  readonly limits?: HostLimits;
 }
 
 /** A service a host connects its bots to: `id` in its addresses and records, `name` for people */
@@ -386,8 +506,17 @@ export async function readStatus(
     if (!(await provider.verify(publicKey, base64UrlDecode(signed.sig), statusText(signed.payload))))
       return null;
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the host signed it, and it names the host
-    const status = JSON.parse(signed.payload) as HostStatus;
-    return status.host === host ? status : null;
+    const { over, usage, plan, ...status } = JSON.parse(signed.payload) as HostStatus;
+    if (status.host !== host) return null;
+    // What only shows something to a person is kept when well formed, and left out otherwise.
+    const listed = overSpaces(over);
+    const used = spaceUsage(usage);
+    return {
+      ...status,
+      ...(plan === 'free' || plan === 'paid' ? { plan } : {}),
+      ...(over !== undefined ? { over: listed } : {}),
+      ...(used ? { usage: used } : {}),
+    };
   } catch {
     return null;
   }
@@ -454,7 +583,10 @@ export async function describeHost(url: string, timeoutMs = HOST_TIMEOUT_MS): Pr
   ) {
     throw new Error(NOT_A_HOST);
   }
-  return description;
+  // Limits are for showing: badly described, they are left out, and the host still stands.
+  const { limits: given, ...rest } = description;
+  const limits = description.free ? null : hostLimits(given);
+  return limits ? { ...rest, limits } : rest;
 }
 
 /** A space id as it may appear in a host's path */

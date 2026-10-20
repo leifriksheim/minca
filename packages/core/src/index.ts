@@ -554,6 +554,8 @@ export {
   readStatus,
   createSpaceHostClient,
   readPayAnswer,
+  hostLimits,
+  overSpaces,
   HOST_DESCRIPTION_PATH,
   HostError,
 } from './session/hosting.js';
@@ -571,6 +573,9 @@ export type {
   PayAnswer,
   HostClient,
   SpaceHostClient,
+  HostLimits,
+  OverSpace,
+  SpaceUsage,
 } from './session/hosting.js';
 
 // Mirrors: a space kept in a dumb file store — a bucket, an app folder — synced like a peer
