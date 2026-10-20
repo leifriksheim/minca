@@ -96,7 +96,7 @@ export function ConnectPage() {
   if (!auth.mayGrant())
     return (
       <Frame>
-        <Asking incoming={incoming} />
+        <Asking incoming={incoming} step="Confirm it’s you" />
         <WhichAccount label="Continuing as" busy={false} onSwitch={() => setChosen(null)} />
         <ConfirmItsYou
           why={`continue to ${asker(incoming.origin)}`}
@@ -211,7 +211,7 @@ function asker(origin: string): string {
 }
 
 /** A small line above sign-in, so it is clear why this window opened */
-function Asking({ incoming }: { incoming: IncomingRequest }) {
+function Asking({ incoming, step = 'Sign in' }: { incoming: IncomingRequest; step?: string }) {
   return (
     <p
       style={{
@@ -227,7 +227,7 @@ function Asking({ incoming }: { incoming: IncomingRequest }) {
       {isProposeRequest(incoming.request)
         ? 'suggests what to notify you about.'
         : 'wants to use your Minca account.'}{' '}
-      Sign in to decide
+      {step} to decide
       {isProposeRequest(incoming.request) ? '.' : ' what it gets.'}
     </p>
   );
