@@ -16,7 +16,7 @@
 # https://my-host.fly.dev/host/billing/webhook, and set MINCA_HOST_URL below
 # to the host's own address.
 
-app = "weave-host"
+app = "minca-host"
 primary_region = "ams"
 # Give it time to finish writing before a deploy replaces it.
 kill_timeout = 30
@@ -26,7 +26,12 @@ kill_timeout = 30
 
 [env]
   MINCA_HOST_NAME = "Minca host"
-  MINCA_HOST_URL = "https://weave-host.fly.dev"
+  MINCA_HOST_URL = "https://minca-host.fly.dev"
+  # Free for the accounts named in the MINCA_HOST_ALLOW secret, and no one
+  # else: a free host anyone could reach would carry spaces for anyone.
+  # Add one with `fly secrets set MINCA_HOST_ALLOW=did:key:…,did:key:…`.
+  MINCA_HOST_FREE = "1"
+  MINCA_HOST_QUOTA_GB = "0.5"
   MINCA_WALLET_NETWORK = "base"
   MINCA_WALLET_MONTHLY = "4"
   MINCA_WALLET_YEARLY = "36"
