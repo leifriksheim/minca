@@ -106,9 +106,8 @@ reference implementation, or any implementation, honestly.
     already; the account signed in stays filed either way
     (`packages/core/tests/take-up.test.ts`, "a pairing link opened where a
     sign-in is kept"). "Not now", even once the code shows, leaves the
-    exchange, and an account that arrives anyway is dropped (same file, "…
-    while the code shows stops the pairing, even if the computer confirms
-    after"). Those warnings and that question are the only defence. By
+    exchange before the account arrives (same file, "… while the code shows
+    stops the pairing, even if the computer confirms after"). Those warnings and that question are the only defence. By
     design, as with any "scan to log in" link. Once added, its account can
     look like the person's own: its name follows its profile, and an avatar
     is for recognition only, since a look-alike takes seconds to find.

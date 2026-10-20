@@ -278,8 +278,7 @@ tab that opens with no kept sign-in, or a caller that accepts before
 starts the arriving account's session without signing the other out: its
 session key is left unrevoked, as when a tab closes. `dismissPairing()` stops
 a pairing at any point before the account is taken: the phone leaves the
-exchange, and an account that arrives anyway, because the computer confirmed
-first, is dropped.
+exchange, and tells the computer nothing.
 
 `pairingTransport` in `createMincaAuth`'s config sets how the two sides of a
 pairing reach each other (default: the relay in the ticket), for tests or a

@@ -300,6 +300,11 @@ export async function receiveFromDesktop(
           }
         } else if (message.type === HANDOVER && channel && message.from === desktop) {
           const handover = readHandover(await room.open(message, channel));
+          // Stopped while it opened: the room is left, and the computer is told nothing.
+          if (settled) {
+            handover?.seed.fill(0);
+            return;
+          }
           if (!handover) {
             fail('That handover could not be read.');
             return;

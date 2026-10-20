@@ -1325,6 +1325,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const signedIn = state.session;
       if (signedIn) {
         const { did } = await createIdentityManager().fromSeed(arrived.seed);
+        // "Not now" while the account was being looked at: let it go.
+        if (mine !== pairingRun) {
+          arrived.seed.fill(0);
+          return;
+        }
         if (did !== signedIn.did) {
           heldHandover = arrived;
           update({
