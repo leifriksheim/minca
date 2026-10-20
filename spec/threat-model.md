@@ -111,6 +111,11 @@ reference implementation, or any implementation, honestly.
     design, as with any "scan to log in" link. Once added, its account can
     look like the person's own: its name follows its profile, and an avatar
     is for recognition only, since a look-alike takes seconds to find.
+  - A host with limits carries for anyone, and an account is only a key, so
+    a stranger can take any number of accounts' free room. The reference
+    host makes at most 5 subscriptions a day for one address and drops a
+    free one after `idleDays` with no call (08 §1.1). Accepted: it is the
+    host's cost, not a member's loss.
 
 _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `packages/core/tests/constitution.test.ts` ("what a constitution may say"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/space.test.ts` ("a personal space refuses a stranger"), `packages/core/tests/ucan.test.ts`, `packages/core/tests/validation.test.ts`._
 
@@ -430,6 +435,14 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     since `/member/remove` has no `role`. A space gets what its policies say;
     the spec says to write what is allowed (01 §7.4, 03 §2.2; `roles.test.ts`,
     "a missing argument reads as null…").
+  - A host's free line counts the accounts that write in a space, so anyone
+    who may write there can push it over by writing from more accounts: a
+    member in any space, and a stranger in one whose constitution lets
+    anyone write. After `graceDays` only the space's fund keeps it at that
+    host. Readers never put a space over, as they cost nothing to make up
+    (08 §1.1; `packages/core/tests/host-limits.test.ts`, "readers alone never
+    put a space over the line"). Accepted: the line is the host's policy, and
+    a community can pay, or move host.
 
 _Source: 03 §2, §4, §5, §8.3, §9; 02 §4.1, §6.3, §7.3; 01 §9; `packages/core/docs/warrants.md`. Tests: `packages/core/tests/constitution.test.ts`, `packages/core/tests/record-keys.test.ts` ("a first version at someone else’s key, ground to a lower id"; "rival first definitions by two accounts name no one…"; "a backdated rival with a ground-low id does not put its rules in force"), `packages/core/tests/attacks.test.ts` ("a sealed body copied into another record, or another collection, reads as unreadable"), `packages/core/tests/space.test.ts` ("a sealed body moved to another record, collection or space does not open"), `packages/core/tests/envelope.test.ts` ("a box opened with the wrong bound, label or key opens nothing"), `packages/core/tests/rules.test.ts`, `packages/core/tests/roles.test.ts`, `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/space-access.test.ts`, `packages/core/tests/access-convergence.test.ts`, `packages/core/tests/warrants.test.ts`._
 
@@ -730,6 +743,11 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     never the values it matches"). Any `where` condition on a field declared
     a topic becomes tags. In a public space a tag can be worked out from the
     space id, so a guessed value can be checked against it (02 §8.2).
+  - A host with limits that stops carrying a space over its free line takes
+    nothing from its members: their copies, and their syncing with each
+    other, are as before, and an account's subscription still names the
+    space (08 §1.1; `packages/core/tests/host-limits.test.ts`, "past until,
+    members' subscriptions no longer carry it; members keep what they hold").
 - **Does not hold yet.**
   - Live messages, such as typing, presence and call signalling, reach it in
     plaintext ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
@@ -762,7 +780,9 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
-    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)).
+    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)). A host with limits also keeps, for its window, which
+    accounts wrote in each space on each day, as salted hashes, and tells
+    anyone with the space id how many wrote and read (08 §1.1).
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#166](https://github.com/leifriksheim/minca/issues/166)) _(traced)_.

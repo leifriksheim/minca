@@ -47,6 +47,7 @@ account's key: the host learns a subscription, not who pays.
 | `bots`       | Optional: `true` when it runs bots for the spaces it carries (§3).                                                                                                   |
 | `fund`       | Optional: how communities pay here, through a fund (§2). Absent: they can't.                                                                                         |
 | `connectors` | Optional, with `bots`: the services its bots can be connected to (§3.1), each `{ id, name }`.                                                                        |
+| `limits`     | Optional: what it keeps for free and what paying adds (§1.1). Absent: every subscription is paid for, or free with `free`.                                           |
 
 A device MUST refuse a description whose `minca` is not `host/1` or whose `did`
 is not a `did:key`, and MUST treat a host whose `did` changed since it was first
@@ -156,6 +157,9 @@ text of a `HostStatus` and `sig` is the host key's signature (base64url) over
 | `at`           | When the host said it, unix seconds.                                                                                           |
 | `bytes`        | Optional: what the subscription's spaces take at the host, as it last measured.                                                |
 | `quota`        | Optional: what they may take. Past it the host takes no new space for the subscription; those it carries stay.                 |
+| `plan`         | Optional, at a host with `limits`, for an account's subscription: `"free"` or `"paid"`, which room applies (§1.1).             |
+| `over`         | Optional, at a host with `limits`: the spaces this subscription names that are over the free line (§1.1), each an `OverSpace`. |
+| `usage`        | Optional, at a host with `limits`, for a space's own subscription: how much the space is used (§1.1), a `SpaceUsage`.          |
 
 A device MUST accept a status only if it verifies under the host's recorded DID,
 its `host` equals that DID, and its `subscription` is the device's own. Example:
@@ -224,7 +228,8 @@ record. How often the reference asks is in
 [the node](../packages/core/docs/node.md#carriers-hosting-and-notifications).
 
 **What a host does.** Subscriptions are `active` while `paidUntil ≥ now` (or
-always, when free), `grace` for a grace period after (the host's policy), then
+always, when free; or, for an account's, always at a host with `limits`,
+§1.1), `grace` for a grace period after (the host's policy), then
 `lapsed`; a lapsed subscription is dropped, and its carry space with it unless
 another subscription carries it. Paying again
 in time carries again what the grace period kept. A host MAY carry only a
@@ -252,6 +257,161 @@ registry's id and the device's session key, and serves it only if it carries
 it. The reference reaches those hosts for the registry alone.
 
 _Source: `packages/core/src/session/hosting.ts` (`hostPeerAddress`), `packages/core/src/node/host.ts`, `packages/core/src/node/node.ts` (`hosting`, `reachHosts`), `packages/core/src/node/space-runtime.ts` (`useNodes`), `packages/cli/src/host.ts` (`startPayment`, `watch`), `packages/cli/src/wallet.ts` (`request`, `scan`), `packages/cli/src/reminders.ts`. Tests: `packages/cli/tests/host.test.ts` ("the host API": all; "pay answers": all; "reaching a host at the address it names": all; "a host’s room": all; "wallet payments": all), `packages/cli/tests/reminders.test.ts`._
+
+### 1.1 Limits: free hosting, paid room, and the free line
+
+A host may keep every account's spaces online without payment, within
+limits, and ask a community to pay for itself once it grows past them. It is
+blind, so it draws the line only on what it can see of a space: how many
+accounts write there, how many devices read, and how many bytes it holds.
+The numbers are each host's own; it says them in its description, so a
+person can compare hosts before choosing one.
+
+**Description.** `limits`:
+
+| Field              | Meaning                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `accountBytes`     | Bytes an account's spaces may take on the free plan: its `quota` while it does not pay.                                                   |
+| `paidAccountBytes` | Optional: its `quota` while it pays (`paidUntil` ahead). Absent: the same as `accountBytes`.                                              |
+| `space`            | The free line for a space several accounts write in: `{ writers, bytes, windowDays, readers? }`, below.                                   |
+| `graceDays`        | Days a space over the line is still carried for its members' subscriptions before only its own subscription (§2) carries it.              |
+| `keepDays`         | Optional: days the host keeps a space it stopped carrying for being over the line, so a fund started in that time brings it back at once. |
+| `idleDays`         | Optional: days a free subscription is kept with no signed call from any of its devices. Absent: kept while the host runs.                 |
+
+```json
+{
+  "limits": {
+    "accountBytes": 250000000,
+    "paidAccountBytes": 10000000000,
+    "space": { "writers": 10, "bytes": 500000000, "windowDays": 30, "readers": 50 },
+    "graceDays": 30,
+    "keepDays": 90,
+    "idleDays": 180
+  }
+}
+```
+
+Each number is a non-negative integer below 2⁵³. A device MUST ignore a
+`limits` that is not an object with every field it requires well formed,
+and still read the rest of the description: limits are for showing, and a
+host that describes them badly is still a host. `free: true` means what it
+always did, every subscription paid and no limits, and a host that says it
+MUST NOT also give `limits`.
+
+**Plans.** At a host with `limits`, an account's subscription is `active`
+without payment: `plan` is `"paid"` while `paidUntil` is ahead and `"free"`
+otherwise, and its `quota` is `paidAccountBytes` or `accountBytes`
+accordingly. It is never `grace` or `lapsed` for want of payment, and is
+dropped only after `idleDays` with no signed call (§1) from any of its
+devices. What a space's own subscription carries (§2) counts against no
+account's quota.
+
+**The free line.** Over the last `windowDays`, a host counts for each space
+it carries for members' subscriptions:
+
+- **writers**: distinct accounts with a version of the space that reached the
+  host and passed its gates (02 §3), the account being the issuer of the
+  version's note (`proof`), or its `author` when it has none. A version whose
+  `createdAt` is more than `windowDays` before it arrived is history, and is
+  not counted. Accounts the host runs, its bots (§3), are not counted.
+- **readers**: distinct session DIDs that a socket for the space
+  (`/peer?space=`) proved (04 §5).
+- **bytes**: what the space takes at the host.
+
+A space is **over the line** when `writers` exceeds `space.writers`, or when
+it has at least two writers and `bytes` exceeds `space.bytes`. Readers are
+only reported: they are cheap to make up, so they MUST NOT put a space over
+the line. A space only one account writes in is never over the line,
+however large: it counts against the quota of every account that names it,
+as any space does.
+
+When a space goes over, the host notes when (`since`) and keeps carrying it
+for `graceDays` (`until = since + graceDays × 86 400`), saying so in the
+status of every subscription that names it. Past `until`, it MUST NOT carry
+the space for members' subscriptions alone: only its own subscription (§2),
+while `active` or `grace`, carries it then. Before `until` it MUST carry it
+as before. While the space's own subscription is `active`, the line does not
+apply and `until` does not run: the grace starts again from when it stops
+being active. A space comes back under the line only after `windowDays` with
+every count at or below 80% of its limit; one the host stopped carrying sees
+no writes, so it comes back only through its own subscription, or once the
+host forgets it after `keepDays`, and is then counted again from nothing.
+
+Stopping changes nothing a peer checks: members' devices keep their copies
+and sync with each other directly, and a subscription that names the space
+still names it. The host keeps what it held for `keepDays`, unserved, so
+that once the space's own subscription is paid it carries it again from
+where it was.
+
+**Status.** For an account's subscription, `over` lists the spaces its
+carry space names that are over the line, and those it no longer carries
+for that reason:
+
+| `OverSpace` field | Meaning                                                                      |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `space`           | The space id.                                                                |
+| `since`           | When it went over, unix seconds.                                             |
+| `until`           | When carrying it for members' subscriptions stops, or stopped, unix seconds. |
+| `reasons`         | Which limits it is over: a non-empty subset of `"writers"`, `"bytes"`.       |
+
+For a space's own subscription, and so at `GET /host/spaces/<space id>`,
+`usage` says how the space is used, and `over` holds its one `OverSpace`
+while it is over the line, whether or not anyone pays for it:
+
+| `SpaceUsage` field | Meaning                                                |
+| ------------------ | ------------------------------------------------------ |
+| `writers`          | Distinct accounts that wrote, over the window.         |
+| `readers`          | Distinct session DIDs that read, over the window.      |
+| `bytes`            | What the space takes at the host, as it last measured. |
+| `windowDays`       | The window counted over.                               |
+
+Example payload, for an account on the free plan in a community over the
+line:
+
+```json
+{
+  "subscription": "did:key:zDnaet57…",
+  "host": "did:key:zDnaeXL64…",
+  "state": "active",
+  "paidUntil": 0,
+  "renews": false,
+  "carrying": true,
+  "spaces": 6,
+  "bytes": 41200000,
+  "quota": 250000000,
+  "plan": "free",
+  "over": [
+    {
+      "space": "b3kq7zp2f4mhx6ydwa5rtc9n1e",
+      "since": 1791027701,
+      "until": 1793619701,
+      "reasons": ["writers"]
+    }
+  ],
+  "at": 1791114101
+}
+```
+
+A device MUST ignore an `over` entry or a `usage` that is not shaped as
+above, and SHOULD show a person each space in `over` with its `until`, and
+how its members can start its fund (§2) before then.
+
+**Abuse.** A host with `limits` carries for anyone who asks, so it limits how
+fast subscriptions are made and how much one account may name. The
+reference host makes at most 5 subscriptions a day for one address and
+carries at most 200 spaces for one account; a carry space past that takes
+no new space, as past its quota. These are its own numbers, not the
+protocol's.
+
+**Privacy.** The counts are what the host sees already: every version's
+note names its account in the clear (02 §3.1), and every socket's hello its
+session DID. To count, the reference host keeps, for `windowDays`, the
+accounts that wrote in each space on each day as salted hashes; the readers
+it keeps in memory only. `usage` gives only counts, never who. It is open
+to anyone who knows the space id, as its status is, so it tells them
+roughly how busy the space is.
+
+_Source: `packages/core/src/session/hosting.ts` (`HostLimits`, `hostLimits`, `OverSpace`, `SpaceUsage`, `describeHost`), `packages/core/src/node/usage.ts` (`createUsageMeter`), `packages/core/src/node/host.ts` (`plan`, `evaluate`, `sweep`), `packages/core/src/node/carrier.ts` (`skip`, `onArrived`), `packages/cli/src/host.ts` (`usageOf`, `quotaFor`, `statusOf`), `packages/cli/src/serve.ts` (`onPeer`), `packages/cli/src/host-setup.ts` (`limitsFromEnv`). Tests: `packages/core/tests/usage.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts` ("a host with limits": all)._
 
 ## 2. A space paying for itself: its fund
 
@@ -308,7 +468,9 @@ A host MUST check a pass as a carrier checks one from a carry space ([06](06-nod
 its space must verify and hash to the id in the path, and a private space's
 read key must be one the space's history names. It carries the space while
 the subscription is `active` or `grace`, and drops it when it lapses unless an
-account's carry space also names it.
+account's carry space also names it. At a host with `limits`, an account's carry space naming it
+keeps it only while it is under the free line, or before that line's `until`
+(§1.1).
 
 For a space's own subscription, `HostStatus` also has:
 
