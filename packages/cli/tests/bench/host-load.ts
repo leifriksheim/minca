@@ -81,7 +81,8 @@ async function carried(data: string): Promise<{ count: number; bytes: number }> 
   const dir = path.join(data, 'store', 'spaces');
   const ids = await import('node:fs/promises').then((fs) => fs.readdir(dir).catch(() => []));
   let bytes = 0;
-  for (const id of ids) bytes += await size(id);
+  // A file renamed away mid-walk is counted next time round.
+  for (const id of ids) bytes += await size(id).catch(() => 0);
   return { count: ids.length, bytes };
 }
 
@@ -157,5 +158,5 @@ try {
 } finally {
   await Promise.all(nodes.map((node) => node.close().catch(() => {})));
   host.kill('SIGTERM');
-  await rm(data, { recursive: true, force: true });
+  await rm(data, { recursive: true, force: true, maxRetries: 5 });
 }

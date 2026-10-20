@@ -474,7 +474,12 @@ export async function createHostNode(config: HostConfig) {
       const own = spaceIdOf(id);
       if (own) return overOf([own]);
       const space = (await read(id))?.carry?.space;
-      return overOf(space ? (core.carries.get(space)?.named ?? []) : []);
+      const named = space ? [...(core.carries.get(space)?.named ?? [])] : [];
+      // One its own fund pays for is nothing its members need to hear about.
+      const unpaid: string[] = [];
+      for (const spaceId of named)
+        if (lines.has(spaceId) && !(await paysItself(spaceId))) unpaid.push(spaceId);
+      return overOf(unpaid);
     },
 
     /** How a space is used, as a status says it; null at a host without limits */

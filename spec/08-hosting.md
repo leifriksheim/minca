@@ -346,7 +346,7 @@ where it was.
 
 **Status.** For an account's subscription, `over` lists the spaces its
 carry space names that are over the line, and those it no longer carries
-for that reason:
+for that reason, but none whose own subscription is `active`:
 
 | `OverSpace` field | Meaning                                                                      |
 | ----------------- | ---------------------------------------------------------------------------- |

@@ -315,6 +315,12 @@ describe('the free line', () => {
     clock += 45 * DAY;
     await node.evaluate();
     assert.equal(await carries(node, c.space)(), true, 'paid for: the line does not apply');
+    assert.deepEqual(
+      await node.overFor(c.subscriptions[0]),
+      [],
+      'its members hear nothing of it while it pays',
+    );
+    assert.equal((await node.overFor(spaceSubscription(c.space))).length, 1, 'its own status still says it');
 
     clock += 20 * DAY;
     await node.evaluate();
