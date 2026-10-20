@@ -511,6 +511,43 @@ describe('everything else that holds a space follows its new key', () => {
     const readKey = (await deriveReadKey(key, provider)).did;
     await until(async () => (await passReadKey()) === readKey, 6000, 'the pass to carry the new read key');
   });
+
+  test('another device of the account never puts the old key’s pass back', async () => {
+    // The phone holds the space but never opens it: refilling the carry space must not undo the laptop's new pass.
+    const hub = createFakeHub({ latencyMs: 1 });
+    const laptop = await somebody(hub, { accountKey: true });
+    const phone = await somebody(hub, { seed: laptop.seed, accountKey: true });
+    const { id: space } = await laptop.node.spaces.create({ name: 'Notes', visibility: 'private' });
+    const added = await laptop.node.carriers.add({ did: 'did:key:zCarrier', name: 'Chrome' });
+    await until(
+      async () =>
+        (await phone.node.spaces.list()).some((each) => each.id === space) &&
+        (await phone.node.carriers.list()).length === 1,
+      8000,
+      'the phone to hold the space and know the carrier',
+    );
+    const passReadKey = async () => {
+      const passes = await laptop.node.records.list<{ space: { id: string }; readKey?: string }>(
+        added.space,
+        {
+          collection: 'sys.pass',
+        },
+      );
+      return passes.find((pass) => pass.body?.space.id === space)?.body?.readKey ?? null;
+    };
+
+    await laptop.node.spaces.changeKey(space);
+    const key = await spaceKeyFromRaw(
+      base64UrlDecode(parseSpaceInvite(await laptop.node.spaces.invite(space, { write: false })).key!),
+    );
+    const readKey = (await deriveReadKey(key, provider)).did;
+    await until(async () => (await passReadKey()) === readKey, 6000, 'the pass to carry the new read key');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Any change to the registry has the phone refill the carry space.
+    await laptop.node.spaces.create({ name: 'More', visibility: 'private' });
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    assert.equal(await passReadKey(), readKey);
+  });
 });
 
 describe('a key change that leaves out the first key', () => {

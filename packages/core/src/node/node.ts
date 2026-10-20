@@ -671,9 +671,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       if (membership.deleted || !membership.body || hidden(membership.body.space)) continue;
       const record = await registry.get(membership.body.space);
       if (!record) continue;
-      // Only wakes need what a space declares: with none, no space is opened for it, which from a data folder is slow.
+      // Opened even with no wakes to make: opening is also how this device learns the space's key changed.
       const declared = new Map(
-        owned.length ? (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c]) : [],
+        (await (await runtime(record.space.id)).collections()).map((c) => [c.name, c]),
       );
       spaces.push({
         id: record.space.id,
@@ -688,6 +688,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         // Held without its key — nothing to pass on until it arrives.
       }
     }
+    // Removed meanwhile, on this device or another: its passes stay deleted.
+    if (!(await liveCarriers()).some((live) => live.space === carrier.space)) return;
     const carry = await runtime(carrier.space);
     await writeExactly(carry, PASS_COLLECTION, passes, (key) => key.startsWith('pass:'));
     const wakes = new Map<string, unknown>();
@@ -823,8 +825,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // Held here but never recorded — joined before the registry existed, or on
     // a node without the account key. Recorded now, so other devices follow.
+    // Held still: a carrier that failed while this ran has taken its carry space back out.
+    const stillHeld = new Set((await registry.list()).map((record) => record.space.id));
     for (const spaceId of held) {
-      if (!known.has(spaceId)) await remember(spaceId);
+      if (!known.has(spaceId) && stillHeld.has(spaceId) && !carrySpaces.has(spaceId)) await remember(spaceId);
     }
 
     // Not awaited: it opens every space the account holds, which from a data
@@ -839,6 +843,22 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     if (changed) emit({ type: 'spaces' });
   }
+
+  /** Whether `work` settled within `waitMs` */
+  const within = (work: Promise<unknown>, waitMs: number): Promise<boolean> =>
+    new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), waitMs);
+      void work.then(
+        () => {
+          clearTimeout(timer);
+          resolve(true);
+        },
+        () => {
+          clearTimeout(timer);
+          resolve(false);
+        },
+      );
+    });
 
   /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
   const passAll = serial(async () => {
@@ -1128,16 +1148,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return { space: record.space.id, invite: body.invite };
     },
 
-    settled: () => passAll.done(),
+    settled: (waitMs) => within(passAll.done(), waitMs),
 
     async reached(spaceId, waitMs) {
       const carrier = (await liveCarriers()).find((c) => c.space === spaceId);
       if (!carrier || !accountSpaceId) return false;
       const deadline = Date.now() + waitMs;
-      // What it is to be level with: its passes written first.
-      await passAll.done();
+      // What it is to be level with: its passes written first, within the same time.
+      if (!(await within(passAll.done(), waitMs))) return false;
       // Its passes first: only through them does it come to the registry, and hold its own record there.
-      if (!(await (await runtime(spaceId)).syncedWith(carrier.did, waitMs))) return false;
+      if (!(await (await runtime(spaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()))))
+        return false;
       return (await runtime(accountSpaceId)).syncedWith(carrier.did, Math.max(0, deadline - Date.now()));
     },
 

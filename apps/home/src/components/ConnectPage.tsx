@@ -542,12 +542,12 @@ function ApproveProposal({ incoming, request }: { incoming: IncomingRequest; req
     return names.join(', ');
   };
 
-  // The app hears at once; this window stays until the browser extension has the new wakes.
+  // The app hears at once; this window stays until the new wakes are written for the browser extension, or a while.
   const allow = () =>
     run(async () =>
       incoming.approve(
         await auth.propose({ origin, request, kept: [...kept] }),
-        session.node.carriers.settled().catch(() => {}),
+        session.node.carriers.settled(HAND_OVER_MS),
       ),
     );
 
