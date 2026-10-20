@@ -16,7 +16,14 @@ import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
-import { newSubscriptionSeed, subscriptionKey } from '../src/session/hosting.js';
+import {
+  newSubscriptionSeed,
+  readStatus,
+  signStatus,
+  subscriptionKey,
+  type HostStatus,
+} from '../src/session/hosting.js';
+import { didOf } from '../src/identity/did.js';
 import { parseSpaceInvite } from '../src/space/space-manager.js';
 import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -353,13 +360,15 @@ describe('the free line', () => {
       [],
       'its members hear nothing of it while it pays',
     );
-    assert.equal((await node.overFor(spaceSubscription(c.space))).length, 1, 'its own status still says it');
 
     // The fund stopped at day 60: the grace it had ran out long ago.
     clock += 20 * DAY;
     await node.evaluate();
-    const [over] = await node.overFor(c.subscriptions[0]);
-    assert.equal(over?.until, first.until, 'the same date as before it paid');
+    assert.deepEqual(
+      await node.overFor(c.subscriptions[0]),
+      [],
+      'quiet by now: under the line, nothing to tell',
+    );
     assert.equal(await carries(node, c.space)(), true, 'carried still, by its own subscription’s grace');
     // Quiet since its writes left the window, then busy again: its grace is spent, so a short notice.
     clock += 31 * DAY;
@@ -559,6 +568,55 @@ describe('the free line', () => {
     assert.deepEqual((await node.evaluate()).stopped, [c.space], 'stopped on the first date');
   });
 
+  test('removing a member for an hour as the date passes buys nothing: over in its last days, it is stopped', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const node = await host(hub, { now: () => clock });
+    const c = await community(hub, node);
+    await bothWrite(node, c);
+    await node.evaluate();
+    clock += 25 * DAY;
+    await bothWrite(node, c);
+    await node.evaluate();
+    // An hour before its date, Bob is removed; the look after the date finds it under.
+    clock += 5 * DAY - 3600;
+    await c.aliceNode.spaces.removeMember(c.space, c.bob.did);
+    await until(async () => (await node.usage(c.space))?.writers === 1, 8000, 'only Alice');
+    clock += 2 * 3600;
+    assert.deepEqual((await node.evaluate()).stopped, [c.space], 'over five days ago: stopped all the same');
+  });
+
+  test('a device ignores an over entry or a usage not shaped as the spec says', async () => {
+    const key = await provider.generateKeyPair();
+    const did = await didOf(key.publicKey, provider);
+    const status = {
+      subscription: 'did:key:zDnaeMine',
+      host: did,
+      state: 'active',
+      paidUntil: 0,
+      renews: false,
+      carrying: true,
+      spaces: 1,
+      at: 1,
+      plan: 'gold',
+      over: [
+        { space: 'club', since: 1, until: 2, reasons: ['writers'] },
+        { space: 'club', since: 1, until: 2, reasons: ['writers', 'vibes'] },
+        { space: 'club', since: -1, until: 2, reasons: ['bytes'] },
+        'nonsense',
+      ],
+      usage: { writers: 'many', readers: 1, bytes: 1, windowDays: 30 },
+    };
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a host saying what it shouldn't
+    const signed = await signStatus(status as unknown as HostStatus, key.privateKey, provider);
+    const read = await readStatus(signed, did, provider);
+    assert.ok(read);
+    assert.deepEqual(read.over, [{ space: 'club', since: 1, until: 2, reasons: ['writers'] }]);
+    assert.equal(read.usage, undefined);
+    assert.equal(read.plan, undefined);
+    assert.equal(read.carrying, true, 'the rest of it stands');
+  });
+
   test('bytes count only in a space several accounts write in', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const node = await host(hub, {
@@ -602,20 +660,15 @@ describe('the free line', () => {
     clock += 31 * DAY;
     await node.evaluate();
     clock += 20 * DAY;
-    await node.evaluate();
-    assert.equal((await node.overFor(c.subscriptions[0])).length, 1, 'not a whole window yet');
+    assert.deepEqual((await node.evaluate()).under, [], 'not a whole window yet');
+    assert.deepEqual(await node.overFor(c.subscriptions[0]), [], 'back under: not said to be over');
 
+    // A restart keeps when it went under, so the window ends when it would have.
     await node.close();
     open.splice(open.indexOf(node), 1);
     const again = await host(hub, { now: () => clock, stores, key, limits });
-    assert.deepEqual(
-      await again.overFor(spaceSubscription(c.space)),
-      [first],
-      'the same dates after a restart',
-    );
-
     clock += 11 * DAY;
-    await again.evaluate();
-    assert.deepEqual(await again.overFor(spaceSubscription(c.space)), []);
+    await until(carries(again, c.space), 8000, 'carried again after the restart');
+    assert.deepEqual((await again.evaluate()).under, [c.space]);
   });
 });

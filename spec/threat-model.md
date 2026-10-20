@@ -137,7 +137,8 @@ reference implementation, or any implementation, honestly.
     while it pays, so their carrying can stop when it lapses with no notice
     after. Accepted: it costs the stranger money, and the fund's status says
     when it runs out. Letting go of
-    a space for an hour does not reset its line ("a space nobody names for a
+    a space for an hour does not reset its line
+    (`packages/core/tests/host-limits.test.ts`, "a space nobody names for a
     while keeps its line").
   - Anyone who knows a space's id learns from the host's open status
     whether it carries the space, how many wrote and read there, and, asking
@@ -470,8 +471,10 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     who may invite can push it over by inviting more accounts of their own
     and writing from them (a stranger holding an open invite link can too:
     §3.1). Removing
-    them before `until` undoes it, as only members count and a space under
-    the line when its grace runs out is not stopped
+    them more than 7 days before `until` undoes it, as only members count and
+    a space under the line through its last days is not stopped; removing
+    someone for an hour as the date passes does not ("removing a member for
+    an hour as the date passes buys nothing…")
     (`packages/core/tests/host-limits.test.ts`, "a member removed no longer
     counts as a writer", "pushed over by joiners removed within the hour…");
     after `until` it is stopped, and is free again only through its fund or

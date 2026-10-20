@@ -339,10 +339,11 @@ as any space does.
 When a space goes over, the host notes when (`since`) and keeps carrying it
 for `graceDays` (`until = since + graceDays × 86 400`), saying so in the
 status of every subscription that names it. Past `until`, if the space is
-over the line then, it MUST NOT carry it for members' subscriptions alone:
+over the line then, or was at any look in the 7 days before `until`, it
+MUST NOT carry it for members' subscriptions alone:
 only its own subscription (§2), while `active` or `grace`, carries it then.
-One back under by `until`, as when its members removed those who pushed it
-over, keeps its notice and is carried as before, until it is over again or
+One back under more than 7 days before `until`, as when its members removed
+those who pushed it over once told, keeps its line and is carried as before, until it is over again or
 free again. Before `until` it MUST carry it as before. While the space's own subscription is `active`, the host still
 counts and dates the line, but carrying does not depend on it. The grace is given once: paying for a while does not start it again,
 so once the space's own subscription stops being `active`, members'
@@ -380,7 +381,8 @@ that stops carrying a community needs a way for it to pay for itself.
 
 **Status.** For an account's subscription, `over` lists the spaces its
 carry space names that are over the line, and those it no longer carries
-for that reason, but none whose own subscription is `active`:
+for that reason, but none whose own subscription is `active`, and none back
+under the line and still carried:
 
 | `OverSpace` field | Meaning                                                                      |
 | ----------------- | ---------------------------------------------------------------------------- |

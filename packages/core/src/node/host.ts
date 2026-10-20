@@ -96,6 +96,8 @@ interface Line {
   readonly from: number;
   readonly reasons: ReadonlyArray<Reason>;
   readonly calm?: true;
+  /** When it was last found over the line */
+  readonly lastOver?: number;
   readonly under?: number;
   readonly stopped?: number;
 }
@@ -462,7 +464,7 @@ export async function createHostNode(config: HostConfig) {
     const spent = before ? before.calm === true && before.from + lineGrace <= t : struck.has(spaceId);
     if (reasons.length > 0) {
       const from = spent ? Math.max(before?.from ?? notice, notice) : (before?.from ?? t);
-      line = { since: before?.since ?? t, from, reasons };
+      line = { since: before?.since ?? t, from, reasons, lastOver: t };
     } else if (line && wellUnder) {
       const under = line.under ?? t;
       // Free again only after a whole window well under, so a busy week does not flip it.
@@ -479,10 +481,13 @@ export async function createHostNode(config: HostConfig) {
       const { stopped: _paid, ...rest } = line;
       return rest;
     }
-    // Stopped only while it is over: one that went back under before its grace ran out
-    // keeps its notice, and is stopped only should it go over again after.
-    return reasons.length > 0 && line.from + lineGrace <= t && line.stopped === undefined
-      ? { ...line, reasons, stopped: t }
+    // Stopped once its grace runs out if it is over then, or was at any look in the last days
+    // before: one that went back under in time keeps its notice and is carried, but going
+    // under for an hour as the date passes buys nothing.
+    const until = line.from + lineGrace;
+    const lately = (line.lastOver ?? 0) >= until - NOTICE_DAYS * DAY;
+    return (reasons.length > 0 || lately) && until <= t && line.stopped === undefined
+      ? { ...line, stopped: t }
       : line;
   }
 
@@ -559,7 +564,8 @@ export async function createHostNode(config: HostConfig) {
   const overOf = (spaceIds: Iterable<string>): ReadonlyArray<OverSpace> =>
     [...spaceIds].flatMap((spaceId) => {
       const line = lines.get(spaceId);
-      return line
+      // One back under and carried is not over: it keeps its line, quietly, until free again.
+      return line && (!line.calm || line.stopped !== undefined)
         ? [{ space: spaceId, since: line.since, until: line.from + lineGrace, reasons: line.reasons }]
         : [];
     });
