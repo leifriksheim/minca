@@ -234,7 +234,13 @@ function HostRow({
           </div>
           <p style={{ fontSize: 12, color: palette.ink.faint }}>
             {size(status.bytes)} of {size(status.quota)} used
-            {room >= 1 ? ' · a new space waits until there is room' : ''}
+            {status.full
+              ? stillFree(status.full)
+                ? ` · over your room: make some, or get more, by ${shortDate(status.full.until)}`
+                : ` · over your room: ${host.name} keeps your spaces online again once they fit`
+              : room >= 1
+                ? ' · a new space waits until there is room'
+                : ''}
           </p>
         </div>
       )}

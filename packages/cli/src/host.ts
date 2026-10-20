@@ -377,24 +377,65 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   /** The room a subscription's spaces have: by its plan at a host with limits, none for a space's own there */
   const quotaFor = (subscription: Subscription | null, id: string): number | undefined => {
     if (!limits) return options.quotaBytes;
+    // A community's fund pays for its size instead (`roomsOf`).
     if (!subscription || id.startsWith('space:')) return undefined;
     return node.plan(subscription) === 'paid'
       ? (limits.paidAccountBytes ?? limits.accountBytes)
       : limits.accountBytes;
   };
+  /** How many paying accounts' rooms each community takes: its fund pays the monthly rate for each */
+  const rooms = new Map<string, number>();
   /** What a subscription's spaces take, and its limit: null when this host doesn't measure */
   const usageOf = async (id: string): Promise<{ bytes: number; quota?: number } | null> => {
     const measure = options.measure;
     if (!measure) return null;
     const subscription = await node.get(id);
     const account = !id.startsWith('space:');
-    let bytes = 0;
-    for (const spaceId of await node.spacesOf(id)) {
-      // A community paying for itself takes none of its members' room.
-      if (account && limits && (await node.paysItself(spaceId))) continue;
-      bytes += await sizeOf(measure, spaceId);
+    const carrySpace = subscription?.carry?.space;
+    // With limits, a room counts every space it names, carried or not (one held back for want of room
+    // still takes it), but those paying for themselves and those the free line stopped.
+    const counted: Array<{ spaceId: string; bytes: number }> = [];
+    if (!limits)
+      for (const spaceId of await node.spacesOf(id))
+        counted.push({ spaceId, bytes: await sizeOf(measure, spaceId) });
+    else if (!account) {
+      if (subscription?.pass !== undefined) {
+        const spaceId = id.slice('space:'.length);
+        counted.push({ spaceId, bytes: await sizeOf(measure, spaceId) });
+      }
+    } else if (subscription?.carry) {
+      counted.push({
+        spaceId: subscription.carry.space,
+        bytes: await sizeOf(measure, subscription.carry.space),
+      });
+      for (const spaceId of await node.namedFor(id))
+        if (!(await node.paysItself(spaceId)) && !node.heldBack(spaceId))
+          counted.push({ spaceId, bytes: await sizeOf(measure, spaceId) });
     }
+    const bytes = counted.reduce((sum, one) => sum + one.bytes, 0);
     const quota = quotaFor(subscription, id);
+    if (limits && subscription && quota !== undefined) {
+      await node.setFull(id, bytes > quota);
+      // Past its notice, its largest spaces wait until the rest fit; its carry space never does.
+      const held: string[] = [];
+      if (account && bytes > quota && node.outOfRoom((await node.get(id)) ?? subscription)) {
+        let left = bytes;
+        for (const one of counted.filter((c) => c.spaceId !== carrySpace).sort((a, b) => b.bytes - a.bytes)) {
+          if (left <= quota) break;
+          held.push(one.spaceId);
+          left -= one.bytes;
+        }
+      }
+      if (account) await node.holdForRoom(id, held);
+      // Over by its carry space alone, which can't be held back: turned away until the owner says.
+      const carried = counted.find((c) => c.spaceId === carrySpace)?.bytes ?? 0;
+      if (account && carried > quota && node.outOfRoom((await node.get(id)) ?? subscription)) {
+        await node.refuse(id);
+        log(`subscription ${id}: its carry space alone is over its room; no longer carried`);
+      }
+    }
+    if (limits && !account)
+      rooms.set(id, Math.max(1, Math.ceil(bytes / ((limits.paidAccountBytes ?? limits.accountBytes) || 1))));
     const carry = subscription?.carry?.space;
     const crowded = !!limits && (await node.carriedFor(id)) >= spacesPerSubscription;
     // At a host with limits, no room is room: 0 is a quota too.
@@ -438,6 +479,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
         spaces: await node.carriedFor(id),
         ...(await usageOf(id)),
         ...(limits ? { plan: node.plan(subscription) ?? 'free', over: await node.overFor(id) } : {}),
+        ...fullOf(subscription),
       };
     const readKey = node.readKeyOf(id);
     const carrying = subscription.pass !== undefined && state !== 'lapsed';
@@ -449,7 +491,13 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       ...(await usageOf(id)),
       ...(await fundOf(id)),
       ...(await lineOf(id)),
+      ...fullOf(subscription),
     };
+  };
+  /** Whether a subscription is over its room, and until when it is carried all the same */
+  const fullOf = (subscription: Subscription): Pick<HostStatus, 'full'> => {
+    const full = limits ? node.fullUntil(subscription) : null;
+    return full ? { full } : {};
   };
   /** How a space is used and whether it is over the free line, as its own status says: nothing at a host without limits */
   const lineOf = async (id: string): Promise<Pick<HostStatus, 'usage' | 'over'>> => {
@@ -608,7 +656,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     if (options.free) return Promise.resolve();
     // One at a time: a timer's refresh read before a payment must not write its date after it.
     const next = refreshing.then(async () => {
-      const state = await funds.settle(id);
+      const state = await funds.settle(id, rooms.get(id));
       const until = funds.until(state);
       // An empty fund never moves its date later: its grace runs from when it ran out, or never starts.
       const was = (await node.get(id))?.paidUntil ?? 0;

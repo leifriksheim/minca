@@ -71,6 +71,18 @@ export interface Subscription {
   readonly seen?: number;
 }
 
+/**
+ * An account over its room at a host with limits, kept by the account rather
+ * than a subscription key, so a new key starts nothing anew: since when, since
+ * when it fits again (the notice goes after a whole window of it), and whether
+ * its carry space alone was over, so it is carried for no more.
+ */
+interface Room {
+  readonly full: number;
+  readonly fits?: number;
+  readonly refused?: true;
+}
+
 /** A payment a host asked a wallet for: an exact amount, so the transfer that arrives says whose it is */
 export interface Invoice {
   readonly plan: string;
@@ -272,6 +284,54 @@ export async function createHostNode(config: HostConfig) {
     }
   }
   const lineGrace = (limits?.graceDays ?? 0) * DAY;
+  /** Each account over its room, there and in the bucket */
+  const ROOM_PREFIX = 'room:';
+  const ROOM_BUCKET_PREFIX = 'host/rooms/';
+  const rooms = new Map<string, Room>();
+  if (limits) {
+    if (config.mirror && (await store.list(ROOM_PREFIX)).length === 0)
+      for (const key of await config.mirror.list(ROOM_BUCKET_PREFIX)) {
+        const bytes = await config.mirror.get(key);
+        // Named in the bucket by the account DID, encoded: the store by the DID itself.
+        if (bytes)
+          await store.put(`${ROOM_PREFIX}${decodeURIComponent(key.slice(ROOM_BUCKET_PREFIX.length))}`, bytes);
+      }
+    for (const key of await store.list(ROOM_PREFIX)) {
+      const bytes = await store.get(key);
+      const room: unknown = bytes ? JSON.parse(utf8Decode(bytes)) : null;
+      if (isRecord(room) && typeof room.full === 'number')
+        rooms.set(key.slice(ROOM_PREFIX.length), {
+          full: room.full,
+          ...(typeof room.fits === 'number' ? { fits: room.fits } : {}),
+          ...(room.refused === true ? { refused: true } : {}),
+        });
+    }
+  }
+  const writeRoom = async (account: string, room: Room | null) => {
+    if (JSON.stringify(room) === JSON.stringify(rooms.get(account) ?? null)) return;
+    const key = encodeURIComponent(account);
+    if (room) {
+      rooms.set(account, room);
+      const bytes = utf8Encode(JSON.stringify(room));
+      await store.put(`${ROOM_PREFIX}${account}`, bytes);
+      await config.mirror?.put(`${ROOM_BUCKET_PREFIX}${key}`, bytes);
+    } else {
+      rooms.delete(account);
+      await store.delete(`${ROOM_PREFIX}${account}`);
+      await config.mirror?.delete(`${ROOM_BUCKET_PREFIX}${key}`);
+    }
+  };
+  /** The account a subscription carries for */
+  const accountOf = (subscription: Subscription) => subscription.carry?.account;
+  /** Whether a subscription's account is past its notice of being over its room */
+  const outOfRoom = (subscription: Subscription) => {
+    const room = rooms.get(accountOf(subscription) ?? '');
+    return room !== undefined && room.full + lineGrace <= now();
+  };
+  /** Each carry space's spaces held back for want of its room, and all of them together */
+  const holds = new Map<string, ReadonlySet<string>>();
+  const roomHeld = new Set<string>();
+
   /** Spaces members' subscriptions no longer carry, being over the line with nobody paying */
   const skipped = new Set(
     [...lines].flatMap(([spaceId, line]) => (line.stopped !== undefined ? [spaceId] : [])),
@@ -376,14 +436,21 @@ export async function createHostNode(config: HostConfig) {
       events.emit(event);
     },
     ...(config.full ? { full: config.full } : {}),
-    ...(limits ? { skip: (spaceId: string) => skipped.has(spaceId), onArrived: counted } : {}),
+    ...(limits
+      ? {
+          skip: (spaceId: string) => skipped.has(spaceId),
+          held: (carrySpace: string) => holds.get(carrySpace),
+          onArrived: counted,
+        }
+      : {}),
     ...(config.spacesPerCarry !== undefined ? { most: config.spacesPerCarry } : {}),
     ...(config.mirror
       ? {
           mirror: config.mirror,
           // One stopped for being over the line is kept a while, so a fund brings it back as it was.
           onRelease: async (spaceId: string) => {
-            if (!skipped.has(spaceId)) await deleteMirrored(config.mirror!, spaceId);
+            if (!skipped.has(spaceId) && !roomHeld.has(spaceId))
+              await deleteMirrored(config.mirror!, spaceId);
           },
         }
       : {}),
@@ -422,7 +489,7 @@ export async function createHostNode(config: HostConfig) {
   const carriedByOther = async (carrySpace: string, except: string) =>
     (await list()).some((other) => other.id !== except && other.carry?.space === carrySpace);
 
-  /** Whether a space's own subscription pays for it now: the free line does not apply then */
+  /** Whether a space's own subscription pays for it now, within the room its fund buys: the free line does not apply then */
   const paysItself = async (spaceId: string) => {
     const own = await read(`${SPACE_SUBSCRIPTION_PREFIX}${spaceId}`);
     return !!own && state(own) === 'active';
@@ -589,7 +656,65 @@ export async function createHostNode(config: HostConfig) {
     /** The limits it keeps to, or null when it has none */
     limits,
 
-    /** A device of the subscription made a signed call: kept to the day, so an idle free one can be dropped */
+    /**
+     * Whether a subscription's spaces take more than its room, as its host
+     * measured. The notice runs from when they first did, and goes only after
+     * a whole window of fitting, so a dip under for an hour starts nothing anew.
+     */
+    async setFull(id: string, over: boolean): Promise<void> {
+      const subscription = await read(id);
+      const account = subscription && accountOf(subscription);
+      if (!account || !limits) return;
+      const room = rooms.get(account);
+      const t = now();
+      if (over)
+        await writeRoom(account, { full: room?.full ?? t, ...(room?.refused ? { refused: true } : {}) });
+      else if (room) {
+        const fits = room.fits ?? t;
+        // Fitting a whole window: the notice goes, though a refusal stays until the host's owner says.
+        if (t - fits >= limits.space.windowDays * DAY && !room.refused) await writeRoom(account, null);
+        else await writeRoom(account, { ...room, fits });
+      }
+    },
+
+    /** Whether a subscription is past its notice of being over its room */
+    outOfRoom,
+
+    /**
+     * Holds back these solo spaces of a subscription's for want of room, and
+     * no others of its: the host keeps them, unserved, until they fit.
+     */
+    async holdForRoom(id: string, spaceIds: ReadonlyArray<string>): Promise<void> {
+      const carrySpace = (await read(id))?.carry?.space;
+      if (!carrySpace) return;
+      const before = [...holds]
+        .map(([space, held]) => `${space}:${[...held].sort().join(',')}`)
+        .sort()
+        .join(' ');
+      if (spaceIds.length) holds.set(carrySpace, new Set(spaceIds));
+      else holds.delete(carrySpace);
+      roomHeld.clear();
+      for (const held of holds.values()) for (const spaceId of held) roomHeld.add(spaceId);
+      const after = [...holds]
+        .map(([space, held]) => `${space}:${[...held].sort().join(',')}`)
+        .sort()
+        .join(' ');
+      if (after !== before) await core.refresh();
+    },
+
+    /**
+     * Stops carrying a subscription's carry space, which is over its room by
+     * itself past its notice, and turns it away until the host's owner says.
+     */
+    async refuse(id: string): Promise<void> {
+      const subscription = await read(id);
+      if (!subscription?.carry) return;
+      const { carry, ...rest } = subscription;
+      await writeRoom(carry.account, { ...(rooms.get(carry.account) ?? { full: now() }), refused: true });
+      await write(rest);
+      if (!(await carriedByOther(carry.space, id))) await core.removeCarry(carry.space);
+    },
+
     async seen(id: string): Promise<void> {
       const subscription = await read(id);
       if (!subscription || (subscription.seen !== undefined && now() - subscription.seen < DAY)) return;
@@ -623,6 +748,15 @@ export async function createHostNode(config: HostConfig) {
       const bytes = core.carried.has(spaceId) ? ((await config.measure?.(spaceId).catch(() => 0)) ?? 0) : 0;
       return { writers: counts.writers, readers: counts.readers, bytes, windowDays: counts.windowDays };
     },
+
+    /** When a subscription's notice of being over its room runs out, or null when it is not over */
+    fullUntil: (subscription: Subscription): { since: number; until: number } | null => {
+      const room = rooms.get(accountOf(subscription) ?? '');
+      return room ? { since: room.full, until: room.full + lineGrace } : null;
+    },
+
+    /** Whether members' subscriptions hold a space back, being past the free line: no member's room counts it */
+    heldBack: (spaceId: string): boolean => skipped.has(spaceId),
 
     /** Whether a space pays for itself now, so no account's room counts it */
     paysItself,
@@ -672,6 +806,9 @@ export async function createHostNode(config: HostConfig) {
         throw new Error('That subscription is not paid for');
       if (!account.startsWith('did:key:')) throw new Error('An account is named by its DID');
       if (!allowed(account)) throw new NotAllowedError();
+      // Kept by the account, so a new subscription key brings nothing back.
+      if (rooms.get(account)?.refused)
+        throw new Error('This host stopped carrying for this account: its carry space was over its room');
       // A shared space stopped for being over the line comes back only through its own fund.
       const asked = parseSpaceInvite(invite).space.id;
       if (lines.get(asked)?.stopped !== undefined && !(await paysItself(asked)))

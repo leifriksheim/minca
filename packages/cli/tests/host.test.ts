@@ -2106,6 +2106,59 @@ describe('a host with limits', () => {
     assert.deepEqual(await laptop.hosting.over(club.id), []);
   });
 
+  test('over its room, a status gives the date the host stops carrying for it; a fund buys a paying account’s room', async () => {
+    // Small as it is handed over, then past the free room.
+    let size = 0;
+    const served = await running({ measure: async () => size });
+    const url = `http://127.0.0.1:${served.port}`;
+    const { laptop } = await laptopOf();
+    const big = await laptop.spaces.create({ name: 'Big', visibility: 'private' });
+    await laptop.hosting.use(url);
+    await until(carries(served.node, big.id), 8000, 'the space to be carried');
+    size = 300_000_000;
+    await until(
+      async () => (await laptop.hosting.list())[0]?.status?.full !== undefined,
+      15000,
+      'the notice',
+    );
+    const [view] = await laptop.hosting.list();
+    const full = view?.status?.full;
+    assert.ok(full);
+    assert.equal(full.until, full.since + 30 * 24 * 3600);
+
+    const info = await describeHost(url);
+    const { status } = await createSpaceHostClient(url, info.did).status(big.id);
+    assert.equal(status.quota, undefined, 'nobody pays for it: no room of its own');
+  });
+
+  test('past its notice, the host holds back an account’s largest space until the rest fit', async () => {
+    // No grace, so the notice runs out at once.
+    const sizes = new Map<string, number>();
+    const served = await running({
+      limits: { ...limits, graceDays: 0 },
+      measure: async (spaceId) => sizes.get(spaceId) ?? 0,
+    });
+    const url = `http://127.0.0.1:${served.port}`;
+    const { laptop } = await laptopOf();
+    const big = await laptop.spaces.create({ name: 'Big', visibility: 'private' });
+    const small = await laptop.spaces.create({ name: 'Small', visibility: 'private' });
+    await laptop.hosting.use(url);
+    await until(carries(served.node, big.id), 8000, 'both carried');
+    await until(carries(served.node, small.id), 8000, 'both carried');
+    sizes.set(big.id, 200_000_000);
+    sizes.set(small.id, 100_000_000);
+    // Sizes are measured at most every ten minutes: a fresh look at each.
+    await until(
+      async () => {
+        await laptop.hosting.list();
+        return !(await carries(served.node, big.id)());
+      },
+      15_000,
+      'the largest held back',
+    );
+    assert.equal(await carries(served.node, small.id)(), true, 'what fits stays');
+  });
+
   test('the sixth new subscription from one address in a day is refused; those it has go on', async () => {
     const served = await running({ newPerAddress: 5 });
     const url = `http://127.0.0.1:${served.port}`;

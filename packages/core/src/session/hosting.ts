@@ -153,6 +153,11 @@ export interface HostStatus {
   readonly over?: ReadonlyArray<OverSpace>;
   /** At a host with limits, for a space's own subscription: how much the space is used */
   readonly usage?: SpaceUsage;
+  /**
+   * At a host with limits: since when its spaces have taken more than `quota`,
+   * and when the host stops carrying them for it, unless they fit by then
+   */
+  readonly full?: { readonly since: number; readonly until: number };
   /** When the host said it, unix seconds */
   readonly at: number;
 }
@@ -507,7 +512,7 @@ export async function readStatus(
     if (!(await provider.verify(publicKey, base64UrlDecode(signed.sig), statusText(signed.payload))))
       return null;
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the host signed it, and it names the host
-    const { over, usage, plan, ...status } = JSON.parse(signed.payload) as HostStatus;
+    const { over, usage, plan, full, ...status } = JSON.parse(signed.payload) as HostStatus;
     if (status.host !== host) return null;
     // What only shows something to a person is kept when well formed, and left out otherwise.
     const listed = overSpaces(over);
@@ -517,6 +522,9 @@ export async function readStatus(
       ...(plan === 'free' || plan === 'paid' ? { plan } : {}),
       ...(over !== undefined ? { over: listed } : {}),
       ...(used ? { usage: used } : {}),
+      ...(isCount(full?.since) && isCount(full?.until)
+        ? { full: { since: full.since, until: full.until } }
+        : {}),
     };
   } catch {
     return null;

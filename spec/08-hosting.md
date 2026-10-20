@@ -145,21 +145,22 @@ subscription), 402, 403, 404, 405. The reference host sends
 text of a `HostStatus` and `sig` is the host key's signature (base64url) over
 `utf8("minca-host-status/v1\n" + payload)`. `HostStatus`:
 
-| Field          | Meaning                                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `subscription` | The subscription DID.                                                                                                          |
-| `host`         | The host's DID.                                                                                                                |
-| `state`        | `active` (paid, or a free host), `grace` (past `paidUntil`, within the grace period), `lapsed`, `none` (no such subscription). |
-| `paidUntil`    | Unix seconds; 0 before any payment.                                                                                            |
-| `renews`       | Paid through something that renews by itself (a card).                                                                         |
-| `carrying`     | Whether it carries the account's spaces now.                                                                                   |
-| `spaces`       | How many spaces the carry space's passes name.                                                                                 |
-| `at`           | When the host said it, unix seconds.                                                                                           |
-| `bytes`        | Optional: what the subscription's spaces take at the host, as it last measured.                                                |
-| `quota`        | Optional: what they may take. Past it the host takes no new space for the subscription; those it carries stay.                 |
-| `plan`         | Optional, at a host with `limits`, for an account's subscription: `"free"` or `"paid"`, which room applies (§1.1).             |
-| `over`         | Optional, at a host with `limits`: the spaces this subscription names that are over the free line (§1.1), each an `OverSpace`. |
-| `usage`        | Optional, at a host with `limits`, for a space's own subscription: how much the space is used (§1.1), a `SpaceUsage`.          |
+| Field          | Meaning                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `subscription` | The subscription DID.                                                                                                                                                    |
+| `host`         | The host's DID.                                                                                                                                                          |
+| `state`        | `active` (paid, or a free host), `grace` (past `paidUntil`, within the grace period), `lapsed`, `none` (no such subscription).                                           |
+| `paidUntil`    | Unix seconds; 0 before any payment.                                                                                                                                      |
+| `renews`       | Paid through something that renews by itself (a card).                                                                                                                   |
+| `carrying`     | Whether it carries the account's spaces now.                                                                                                                             |
+| `spaces`       | How many spaces the carry space's passes name.                                                                                                                           |
+| `at`           | When the host said it, unix seconds.                                                                                                                                     |
+| `bytes`        | Optional: what the subscription's spaces take at the host, as it last measured.                                                                                          |
+| `quota`        | Optional: what they may take. Past it the host takes no new space for the subscription; at a host with `limits`, see Room (§1.1).                                        |
+| `plan`         | Optional, at a host with `limits`, for an account's subscription: `"free"` or `"paid"`, which room applies (§1.1).                                                       |
+| `over`         | Optional, at a host with `limits`: the spaces this subscription names that are over the free line (§1.1), each an `OverSpace`.                                           |
+| `usage`        | Optional, at a host with `limits`, for a space's own subscription: how much the space is used (§1.1), a `SpaceUsage`.                                                    |
+| `full`         | Optional, at a host with `limits`: `{ since, until }`, unix seconds, from when its spaces took more than `quota` until a whole window after they fit again (§1.1, Room). |
 
 A device MUST accept a status only if it verifies under the host's recorded DID,
 its `host` equals that DID, and its `subscription` is the device's own. Example:
@@ -269,14 +270,14 @@ person can compare hosts before choosing one.
 
 **Description.** `limits`:
 
-| Field              | Meaning                                                                                                                                   |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `accountBytes`     | Bytes an account's spaces may take on the free plan: its `quota` while it does not pay.                                                   |
-| `paidAccountBytes` | Optional: its `quota` while it pays (`paidUntil` ahead). Absent: the same as `accountBytes`.                                              |
-| `space`            | The free line for a space several accounts write in: `{ writers, bytes, windowDays, readers? }`, below.                                   |
-| `graceDays`        | Days a space over the line is still carried for its members' subscriptions before only its own subscription (§2) carries it.              |
-| `keepDays`         | Optional: days the host keeps a space it stopped carrying for being over the line, so a fund started in that time brings it back at once. |
-| `idleDays`         | Optional: days a free subscription is kept with no signed call from any of its devices. Absent: kept while the host runs.                 |
+| Field              | Meaning                                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `accountBytes`     | Bytes an account's spaces may take on the free plan: its `quota` while it does not pay.                                                                      |
+| `paidAccountBytes` | Optional: its `quota` while it pays (`paidUntil` ahead). Absent: the same as `accountBytes`.                                                                 |
+| `space`            | The free line for a space several accounts write in: `{ writers, bytes, windowDays, readers? }`, below.                                                      |
+| `graceDays`        | Days a space over the line is still carried for its members' subscriptions before only its own subscription (§2) carries it; and the notice for room (Room). |
+| `keepDays`         | Optional: days the host keeps a space it stopped carrying for being over the line, so a fund started in that time brings it back at once.                    |
+| `idleDays`         | Optional: days a free subscription is kept with no signed call from any of its devices. Absent: kept while the host runs.                                    |
 
 ```json
 {
@@ -305,7 +306,22 @@ otherwise, and its `quota` is `paidAccountBytes` or `accountBytes`
 accordingly. It is never `grace` or `lapsed` for want of payment, and is
 dropped only after `idleDays` with no signed call (§1) from any of its
 devices. What a space's own subscription carries (§2), while `active`,
-counts against no account's quota. A quota of 0 is a quota: no room.
+counts against no account's quota; its fund pays for its size instead (§2).
+A quota of 0 is a quota: no room.
+
+**Room.** At a host with `limits` a quota is kept, not only a bar to new
+spaces. A subscription's room counts its carry space and every space it
+names, carried or not, but those paying for themselves and those past the
+free line. When they pass its `quota`, the host says so in its status
+(`full`) and keeps carrying for `graceDays`; the notice is the account's, not
+the subscription key's, and goes only after a whole `windowDays` of fitting,
+so neither a new key nor a dip under starts it again. Past `until`, while
+still over, it MUST NOT carry the largest of those spaces for that
+subscription until the rest fit; another subscription with room that names
+one still has it carried. It keeps what it held of them, unserved, while any
+is held. An account over by its carry space alone is carried for no more,
+under any key, until the host's owner says. Members' devices keep
+everything. A space's own fund pays for its size instead (§2).
 
 **The free line.** Over the last `windowDays`, a host counts for each space
 it carries for members' subscriptions, carry spaces among them:
@@ -453,7 +469,7 @@ to anyone who knows the space id, as its status is, so it tells them
 roughly how busy the space is, and, asked again and again, when its members
 are online.
 
-_Source: `packages/core/src/session/hosting.ts` (`HostLimits`, `hostLimits`, `OverSpace`, `SpaceUsage`, `describeHost`), `packages/core/src/node/usage.ts` (`createUsageMeter`), `packages/core/src/node/host.ts` (`plan`, `evaluate`, `sweep`), `packages/core/src/node/carrier.ts` (`skip`, `onArrived`), `packages/cli/src/host.ts` (`usageOf`, `quotaFor`, `statusOf`), `packages/cli/src/serve.ts` (`onPeer`), `packages/cli/src/host-setup.ts` (`limitsFromEnv`). Tests: `packages/core/tests/usage.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts` ("a host with limits": all)._
+_Source: `packages/core/src/session/hosting.ts` (`HostLimits`, `hostLimits`, `OverSpace`, `SpaceUsage`, `describeHost`), `packages/core/src/node/usage.ts` (`createUsageMeter`), `packages/core/src/node/host.ts` (`plan`, `evaluate`, `sweep`, `setFull`, `holdForRoom`, `refuse`, `fullUntil`), `packages/cli/src/fund.ts` (`settle`, `daily`), `packages/core/src/node/carrier.ts` (`skip`, `onArrived`), `packages/cli/src/host.ts` (`usageOf`, `quotaFor`, `statusOf`), `packages/cli/src/serve.ts` (`onPeer`), `packages/cli/src/host-setup.ts` (`limitsFromEnv`). Tests: `packages/core/tests/usage.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts` ("a host with limits": all)._
 
 ## 2. A space paying for itself: its fund
 
@@ -470,7 +486,9 @@ id that does not match `^[A-Za-z0-9_-]{1,120}$`.
 **The fund.** One balance, in millionths of a US dollar. Every payment into
 it adds what was paid, whoever pays and however (once, or every month). The
 host takes from it only what it says it will: keeping the space online at its
-`fund.monthly` rate, for the time it does, and what the bots it runs in that
+`fund.monthly` rate for each paying account's room (`limits.paidAccountBytes`)
+its space takes or part of one (once, at a host without `limits`), for the
+time it does, and what the bots it runs in that
 space spend (§3). The subscription is `active` while the balance is above
 zero, then `grace`, then `lapsed`, as in §1. `paidUntil` is not a date that
 was bought: it is the host's estimate of when the balance reaches zero at
@@ -482,7 +500,7 @@ A host that takes payments for communities says how in its description
 
 | Field         | Meaning                                                                                                  |
 | ------------- | -------------------------------------------------------------------------------------------------------- |
-| `monthly`     | Dollars a month that keeping the space online takes from the fund: `"4"`.                                |
+| `monthly`     | Dollars a month that keeping the space online takes from the fund, for each room it takes: `"4"`.        |
 | `min`         | Dollars: the least one payment may add.                                                                  |
 | `methods`     | How money is added: `checkout` (a page at a payment provider) and/or `request` (a payment for a wallet). |
 | `recurring`   | Whether a `checkout` payment may be every month.                                                         |
@@ -749,9 +767,10 @@ _Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finis
 >
 > **Metering beyond storage.** A host that meters requests and bandwidth per
 > subscription says so in `HostStatus` as it says `bytes`. Open: the fields,
-> and whether a host may stop syncing a space that keeps growing past `quota`
-> rather than only taking no new one, and what bounds a space its own fund
-> pays for. Tracked in [#289](https://github.com/leifriksheim/minca/issues/289).
+> and what bounds a fund through its grace, and an account with several
+> subscriptions or refused for good ([#289](https://github.com/leifriksheim/minca/issues/289)),
+> and whether a fund's rate should follow a space's size rather than buy a
+> fixed room.
 >
 > **A reminder before time runs out.** Time paid up front does not renew
 > itself (`renews: false`), so the host reminds the person 14 and 3 days before
