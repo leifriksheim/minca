@@ -971,9 +971,10 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   }
 
   /** Runs a way in. One that took the recovery code may lead on to setting up an everyday one. */
-  const enter = (open: () => Promise<{ session: MincaSession; byCode: boolean; proved?: boolean }>) =>
+  // Every way in says whether it proved someone is there, so a new one can't count by omission.
+  const enter = (open: () => Promise<{ session: MincaSession; byCode: boolean; proved: boolean }>) =>
     run(async () => {
-      const { session, byCode, proved = true } = await open();
+      const { session, byCode, proved } = await open();
       // Opening it took the password, a passkey or the recovery code: proof enough to give an app access, for a few minutes.
       if (proved) provedSignIn(session.did);
       await arrive(session, byCode ? 'restored' : null);
@@ -1239,7 +1240,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     },
 
     signInWithCode(code) {
-      return enter(async () => ({ session: await openWithCode(code, selectedAccount()), byCode: true }));
+      return enter(async () => ({
+        session: await openWithCode(code, selectedAccount()),
+        byCode: true,
+        proved: true,
+      }));
     },
 
     signInWithPassword(password) {
@@ -1260,11 +1265,16 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
           } catch (error) {
             failed = error instanceof Error ? error : new Error(String(error));
           }
-          if (unlocked) return { session: await begin(place!, entry!.summary, unlocked), byCode: false };
+          if (unlocked)
+            return { session: await begin(place!, entry!.summary, unlocked), byCode: false, proved: true };
         }
         if (failed && !code) throw failed;
         if (code)
-          return { session: await openWithCode(code, entry?.summary ?? selectedAccount()), byCode: true };
+          return {
+            session: await openWithCode(code, entry?.summary ?? selectedAccount()),
+            byCode: true,
+            proved: true,
+          };
         throw protocolError(
           'VAULT_UNLOCK_FAILED',
           'No password is set for this account here.',

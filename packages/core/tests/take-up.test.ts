@@ -355,6 +355,8 @@ describe('a pairing link opened where a sign-in is kept', () => {
     await phone.answerPairing(true);
     assert.equal(phone.getState().session?.did, ada);
     assert.equal(phone.getState().stage, 'ready', 'it has a way in here already');
+    // The computer was asked, not this phone: giving an app access here asks again.
+    assert.equal(phone.mayGrant(), false);
     await done();
   });
 

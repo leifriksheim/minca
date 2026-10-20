@@ -828,7 +828,8 @@ raised but has no place above until a test confirms or rules it out.
   for the password, a passkey or the recovery code, given in the last five
   minutes for this account, before it does these: show the recovery
   code, offer the account to a phone, change how the account signs in
-  outside first setup, or give an app or a carrier any access at all
+  outside first setup, or give an app, or a carrier asking
+  through the connect page, any access at all
   (`packages/core/tests/auth.test.ts`,
   "reading the recovery code or offering the account to a phone takes proof
   it is you", "changing how the account signs in takes proof it is you, once
@@ -839,9 +840,10 @@ raised but has no place above until a test confirms or rules it out.
   Making the account counts as that proof too, as does a passkey sign-in
   only when the passkey's own check ran. Anything else at an open page,
   such as disconnecting an app or keeping what an app already connected
-  suggests, needs only the sign-in, and so does inviting an account into a
-  space or making an invite link: someone at an open page can still give
-  another account of theirs what the gate refuses an app. A passkey's proof is whatever the platform takes for it,
+  suggests, needs only the sign-in, and so do inviting an account into a
+  space, making an invite link and starting to use a host: someone at an
+  open page can still give another account of theirs, or a host they run,
+  what the gate refuses an app or a carrier. A passkey's proof is whatever the platform takes for it,
   which may be the device's own login. And the seed is in the page's memory,
   so developer tools or a script in the home's origin read it whatever was
   asked.
