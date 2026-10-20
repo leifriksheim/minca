@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSession } from '@minca/core/react';
-import { describeHost, type HostDescription } from '@minca/core';
+import { describeHost, type HostDescription, type OverSpace } from '@minca/core';
 import type { HostingView, P2PNode } from '@minca/core/node';
 import { DEFAULT_HOST } from '@minca/app-shared/relay';
 import { Modal } from '@minca/app-shared/Modal';
@@ -10,6 +10,9 @@ import {
   HostOfferPicker,
   HostStatusRow,
   StopFooter,
+  hostTerms,
+  size,
+  stillFree,
   useAskAgain,
   useOffer,
 } from '@minca/app-shared/HostOffer';
@@ -76,6 +79,7 @@ export function Hosting({ node }: { node: P2PNode }) {
           {hosts.map((host) => (
             <HostRow
               key={host.url}
+              node={node}
               host={host}
               busy={busy}
               onAddTime={() => setDialog({ url: host.url })}
@@ -127,9 +131,7 @@ function Offer({ offer, onTurnOn }: { offer: HostDescription | null; onTurnOn: (
         <div style={{ flex: 1 }}>
           <h2 style={styles.sectionHeading}>Keep your spaces online</h2>
           <p style={{ fontSize: 13, color: palette.ink.muted, marginTop: 2 }}>
-            {offer
-              ? `${offer.name} · ${offer.free ? 'free' : (offer.price ?? '')}`
-              : 'With a host you choose'}
+            {offer ? `${offer.name} · ${hostTerms(offer)}` : 'With a host you choose'}
           </p>
         </div>
       </div>
@@ -147,6 +149,7 @@ function Offer({ offer, onTurnOn }: { offer: HostDescription | null; onTurnOn: (
 
 /** On: the host, how it stands, and what can be done */
 function HostRow({
+  node,
   host,
   busy,
   onAddTime,
@@ -155,6 +158,7 @@ function HostRow({
   onStop,
   remind,
 }: {
+  node: P2PNode;
   host: HostingView;
   busy: string | null;
   onAddTime: () => void;
@@ -201,7 +205,7 @@ function HostRow({
                 data-variant={needsPaying(host) ? 'primary' : 'quiet'}
                 style={needsPaying(host) ? styles.darkSmall : styles.smallButton}
               >
-                {status?.paidUntil ? 'Add time' : 'Pay'}
+                {status?.plan === 'free' ? 'More room' : status?.paidUntil ? 'Add time' : 'Pay'}
               </button>
             )
           )}
@@ -234,8 +238,53 @@ function HostRow({
           </p>
         </div>
       )}
+      {status?.over && status.over.length > 0 && (
+        <OverSpaces node={node} host={host.name} over={status.over} />
+      )}
       {host.reminds && status && !status.renews && status.paidUntil > 0 && <RemindMe remind={remind} />}
     </div>
+  );
+}
+
+/**
+ * The communities the host keeps for free only a while longer: more people
+ * write in each than it keeps for free, so each needs a fund of its own,
+ * which its members start in the space. Nothing leaves anyone's devices.
+ */
+function OverSpaces({ node, host, over }: { node: P2PNode; host: string; over: ReadonlyArray<OverSpace> }) {
+  const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
+  useEffect(() => {
+    void node.spaces.list().then(
+      (spaces) => setNames(new Map(spaces.map((space) => [space.id, space.name]))),
+      () => {},
+    );
+  }, [node]);
+  return (
+    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {over.map((one) => (
+        <li
+          key={one.space}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 12px',
+            borderRadius: palette.radius.md,
+            border: `1px solid ${palette.surface.line}`,
+          }}
+        >
+          <StatusPill tone={stillFree(one) ? 'warn' : 'bad'}>
+            {stillFree(one) ? `Free until ${shortDate(one.until)}` : 'Needs a fund'}
+          </StatusPill>
+          <span style={{ flex: 1, fontSize: 13, color: palette.ink.muted }}>
+            {names.get(one.space) ?? 'A community you’re in'} has outgrown free hosting.{' '}
+            {stillFree(one)
+              ? `Start a fund in it to keep it at ${host} after that.`
+              : `Its own fund keeps it at ${host} now; it stays on members' devices either way.`}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -299,7 +348,7 @@ function HostingDialog({
         ) : (
           <HostOfferPicker
             offer={offer}
-            price={offer?.free ? 'Free' : (offer?.price ?? '')}
+            price={offer ? hostTerms(offer) : ''}
             busy={busy}
             onContinue={() => void run(() => start(DEFAULT_HOST ?? '', wanted))}
             onAddress={start}
@@ -377,7 +426,8 @@ export function HostingDue() {
         setDue(
           hosts.filter((host) => {
             const status = host.status;
-            if (!status || status.renews || status.paidUntil === 0) return false;
+            // On a free plan nothing runs out: paid time ending only means less room.
+            if (!status || status.renews || status.paidUntil === 0 || status.plan === 'free') return false;
             return status.state === 'grace' || status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
           }),
         ),
@@ -428,8 +478,8 @@ function standing(host: HostingView): { tone: Tone; pill: string; line: string }
   if (!status) return { tone: 'bad', pill: "Can't reach host", line: host.error ?? 'Try again in a while' };
   const room =
     status.bytes !== undefined && status.quota !== undefined && status.bytes >= status.quota ? ' · full' : '';
-  if (status.state === 'active' && status.paidUntil === 0)
-    return { tone: 'good', pill: 'Online', line: `Free${offline}` };
+  if (status.state === 'active' && (status.paidUntil === 0 || status.plan === 'free'))
+    return { tone: 'good', pill: 'Online', line: `${status.plan ? 'Free plan' : 'Free'}${room}${offline}` };
   if (status.state === 'active') {
     const soon = !status.renews && status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
     return {
@@ -468,18 +518,7 @@ function paidAhead(host: HostingView): boolean {
 function needsPaying(host: HostingView): boolean {
   const status = host.status;
   if (!status || status.state !== 'active') return true;
+  if (status.plan === 'free') return false;
   if (status.renews || status.paidUntil === 0) return false;
   return status.paidUntil - Date.now() / 1000 < TOP_UP_DAYS * DAY;
-}
-
-/** Bytes as people read them: 12 KB, 3.4 MB, 10 GB */
-function size(bytes: number): string {
-  const units = ['bytes', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
-  }
-  return `${unit === 0 || value >= 10 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }

@@ -57,6 +57,8 @@ import {
   githubFromEnv,
   fundFromEnv,
   quotaFromEnv,
+  limitsFromEnv,
+  abuseFromEnv,
   spaceSize,
   walletFromEnv,
 } from './host-setup.js';
@@ -795,12 +797,18 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     checkExposure({ ...(values.host ? { host: values.host } : {}), free: !!values.free, allow });
     const billing = billingFromEnv(process.env);
     const wallet = walletFromEnv(process.env);
-    if (!billing && !wallet && !values.free) {
+    const limits = limitsFromEnv(process.env, !!values.free);
+    if (limits && !billing && !wallet)
       throw new Error(
-        'minca host needs a way to take payments — Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET), a wallet (MINCA_WALLET_ADDRESS), or both — or --free to host without them.',
+        'MINCA_HOST_FREE_GB stops carrying communities past the free line for free, so they need a way to pay for themselves: Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET) or a wallet (MINCA_WALLET_ADDRESS).',
+      );
+    if (!billing && !wallet && !values.free && !limits) {
+      throw new Error(
+        'minca host needs a way to take payments — Stripe (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET), a wallet (MINCA_WALLET_ADDRESS), or both — or --free to host without them, or MINCA_HOST_FREE_GB to host for free within limits.',
       );
     }
-    const quotaBytes = quotaFromEnv(process.env, !!values.free);
+    // With limits, the quota is the room a paying account has: `limits` says it.
+    const quotaBytes = limits ? undefined : quotaFromEnv(process.env, !!values.free);
     const stores = await hostStores(data);
     const presentation = presentationFromEnv(process.env);
     const mirror = mirrorFromEnv(process.env);
@@ -823,6 +831,8 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       reminders,
       measure: spaceSize(data),
       ...(quotaBytes ? { quotaBytes } : {}),
+      limits,
+      ...(limits ? abuseFromEnv(process.env) : {}),
       port: Number(values.port),
       ...(values.host ? { host: values.host } : {}),
       ...(values.free ? { free: true } : {}),

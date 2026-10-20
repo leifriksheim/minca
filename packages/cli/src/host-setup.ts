@@ -10,6 +10,7 @@ import {
   createS3BlobStore,
   folderStores,
   type BlobStore,
+  type HostLimits,
   type StoreFactory,
 } from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
@@ -80,6 +81,76 @@ export function quotaFromEnv(env: NodeJS.ProcessEnv, free: boolean): number | un
   if (!Number.isFinite(gb) || gb < 0)
     throw new Error(`MINCA_HOST_QUOTA_GB must be a number of gigabytes, not "${text}"`);
   return gb > 0 ? Math.round(gb * 1e9) : undefined;
+}
+
+/** A whole number from the environment, or what it is when unset */
+function wholeFromEnv(env: NodeJS.ProcessEnv, name: string, otherwise: number): number {
+  const text = env[name]?.trim();
+  if (!text) return otherwise;
+  const value = Number(text);
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new Error(`${name} must be a whole number, not "${text}"`);
+  return value;
+}
+
+/** Gigabytes from the environment, as bytes */
+function gigabytesFromEnv(env: NodeJS.ProcessEnv, name: string, otherwise: number): number {
+  const text = env[name]?.trim();
+  const gb = text ? Number(text) : otherwise;
+  if (!Number.isFinite(gb) || gb < 0) throw new Error(`${name} must be a number of gigabytes, not "${text}"`);
+  return Math.round(gb * 1e9);
+}
+
+/**
+ * Free hosting within limits (spec 08 §1.1), when MINCA_HOST_FREE_GB is set:
+ * the room an account has for free. MINCA_HOST_QUOTA_GB is then the room it
+ * has while it pays (default 10). A space several accounts write in is free
+ * up to MINCA_HOST_SPACE_WRITERS accounts writing (10) and MINCA_HOST_SPACE_MB
+ * (500) over MINCA_HOST_WINDOW_DAYS (30); MINCA_HOST_SPACE_READERS (50) is
+ * only shown. Past the line it is carried for MINCA_HOST_GRACE_DAYS (30), and
+ * kept MINCA_HOST_KEEP_DAYS (90) after; a free subscription with no call for
+ * MINCA_HOST_IDLE_DAYS (180) is dropped. None otherwise, and never with
+ * MINCA_HOST_FREE=1, which has no limits at all.
+ */
+export function limitsFromEnv(env: NodeJS.ProcessEnv, free: boolean): HostLimits | null {
+  if (!env.MINCA_HOST_FREE_GB?.trim()) return null;
+  if (free) throw new Error('MINCA_HOST_FREE_GB sets limits, and MINCA_HOST_FREE=1 has none: choose one');
+  const windowDays = wholeFromEnv(env, 'MINCA_HOST_WINDOW_DAYS', 30);
+  if (windowDays === 0) throw new Error('MINCA_HOST_WINDOW_DAYS must be at least 1');
+  return {
+    accountBytes: gigabytesFromEnv(env, 'MINCA_HOST_FREE_GB', 0),
+    paidAccountBytes: gigabytesFromEnv(env, 'MINCA_HOST_QUOTA_GB', 10),
+    space: {
+      writers: wholeFromEnv(env, 'MINCA_HOST_SPACE_WRITERS', 10),
+      bytes: wholeFromEnv(env, 'MINCA_HOST_SPACE_MB', 500) * 1_000_000,
+      windowDays,
+      readers: wholeFromEnv(env, 'MINCA_HOST_SPACE_READERS', 50),
+    },
+    graceDays: wholeFromEnv(env, 'MINCA_HOST_GRACE_DAYS', 30),
+    keepDays: wholeFromEnv(env, 'MINCA_HOST_KEEP_DAYS', 90),
+    idleDays: wholeFromEnv(env, 'MINCA_HOST_IDLE_DAYS', 180),
+  };
+}
+
+/**
+ * How much one asker may take at a host with limits: MINCA_HOST_NEW_PER_DAY
+ * new subscriptions a day from one address (default 5), and
+ * MINCA_HOST_SPACES_PER_SUBSCRIPTION spaces carried for one (default 200).
+ * Behind a proxy, MINCA_HOST_CLIENT_IP_HEADER names the header it gives the
+ * asker's address in (`x-forwarded-for`, `cf-connecting-ip`); on Fly it is
+ * Fly's own. Without one, every asker shares the proxy's address.
+ */
+export function abuseFromEnv(env: NodeJS.ProcessEnv): {
+  newPerAddress: number;
+  spacesPerSubscription: number;
+  clientAddressHeader?: string;
+} {
+  const header = env.MINCA_HOST_CLIENT_IP_HEADER?.trim();
+  return {
+    newPerAddress: wholeFromEnv(env, 'MINCA_HOST_NEW_PER_DAY', 5),
+    spacesPerSubscription: wholeFromEnv(env, 'MINCA_HOST_SPACES_PER_SUBSCRIPTION', 200),
+    ...(header ? { clientAddressHeader: header } : {}),
+  };
 }
 
 /** Stripe, when STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are set; otherwise none */

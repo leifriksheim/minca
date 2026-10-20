@@ -11,8 +11,8 @@
 #     STRIPE_PRICE_MONTHLY=price_… STRIPE_PRICE_YEARLY=price_…
 #   fly deploy . --config packages/cli/fly.toml
 #
-# It needs at least one way to be paid: Stripe (both STRIPE_ keys) or a wallet
-# (MINCA_WALLET_ADDRESS). Point Stripe's webhook at
+# It takes payments for more room and for community funds: Stripe (both
+# STRIPE_ keys), a wallet (MINCA_WALLET_ADDRESS), or both. Point Stripe's webhook at
 # https://my-host.fly.dev/host/billing/webhook, and set MINCA_HOST_URL below
 # to the host's own address.
 
@@ -27,11 +27,13 @@ kill_timeout = 30
 [env]
   MINCA_HOST_NAME = "Minca host"
   MINCA_HOST_URL = "https://minca-host.fly.dev"
-  # Free for the accounts named in the MINCA_HOST_ALLOW secret, and no one
-  # else: a free host anyone could reach would carry spaces for anyone.
-  # Add one with `fly secrets set MINCA_HOST_ALLOW=did:key:…,did:key:…`.
-  MINCA_HOST_FREE = "1"
-  MINCA_HOST_QUOTA_GB = "0.5"
+  # Free for every account within limits, and paid for more room; a
+  # community past the free line pays for itself through its fund
+  # (packages/cli/HOSTING.md, Limits). Every limit not set here takes its
+  # default. Unset any MINCA_HOST_ALLOW secret left from before, or only the
+  # accounts it names are carried: `fly secrets unset MINCA_HOST_ALLOW`.
+  MINCA_HOST_FREE_GB = "0.25"
+  MINCA_HOST_QUOTA_GB = "10"
   MINCA_WALLET_NETWORK = "base"
   MINCA_WALLET_MONTHLY = "4"
   MINCA_WALLET_YEARLY = "36"
