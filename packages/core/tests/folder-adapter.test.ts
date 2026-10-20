@@ -32,7 +32,7 @@ import { createSigner } from '../src/schema/signer.js';
 import { createVersion } from '../src/schema/version.js';
 import { utf8Encode, utf8Decode } from '../src/utils/encoding.js';
 import type { Version } from '../src/types.js';
-import { packSegment } from '../src/storage/segment.js';
+import { packSegment, segmentName } from '../src/storage/segment.js';
 
 const provider = createP256Provider();
 const signer = createSigner(provider);
@@ -430,6 +430,24 @@ describe('a data folder', () => {
     assert.equal((await ids(a.storage)).length, 2);
   });
 
+  test('a segment read before it is all there is read again once it is', async () => {
+    const folder = createMemoryDirectory();
+    const a = await origin(folder.open());
+    const b = await origin(folder.open());
+    const version = await makeVersion('arriving');
+    await a.storage.addVersion(version);
+    await a.mirror.flush();
+    const spaces = createDirectoryBlobStore(folder.open(), `${BASE}/spaces`);
+    const [key] = await spaces.list(`${SPACE}/`);
+    const whole = (await spaces.get(key!))!;
+    // As a browser leaves it mid-write, or a sync service half-delivers it.
+    await spaces.put(key!, whole.subarray(0, 0));
+    await b.mirror.pull();
+    await spaces.put(key!, whole);
+    await b.mirror.pull();
+    assert.deepEqual(await ids(b.storage), [version.id]);
+  });
+
   test('a name no key could make, planted in the folder, stops no pull', async () => {
     const folder = createMemoryDirectory();
     const a = await origin(folder.open());
@@ -496,7 +514,8 @@ describe('two nodes of one account on one folder', () => {
       // A stranger's version, left in the folder as a segment of its own.
       const stranger = await makeVersion('let me in', space.id);
       const spaces = createDirectoryBlobStore(folder.open(), 'accounts/a/stores/spaces');
-      await spaces.put(`${space.id}/${'f'.repeat(32)}/000001-0000000000000000.seg`, packSegment([stranger]));
+      const planted = packSegment([stranger]);
+      await spaces.put(`${space.id}/${'f'.repeat(32)}/${await segmentName(1, planted)}`, planted);
       await second.records.put(space.id, COLLECTION, { text: 'from the phone' });
       await until(
         async () => (await first.records.list(space.id)).length === 2,

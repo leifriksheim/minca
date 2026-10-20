@@ -983,11 +983,13 @@ the gatekeeper. Peers bring such a space back.
 
 > **Known defect:** nothing in the folder says which layout it uses, so a
 > client of an older layout sharing a folder with this one sees none of its
-> writes. Before v1 every client of a folder is upgraded together.
+> writes, and a space the folder alone held in the older layout is not
+> brought over. Before v1 every client of a folder is upgraded together.
 
 _Source: `packages/core/src/node/stores.ts` (`folderStores`),
 `packages/core/src/storage/blob/directory.ts`,
-`packages/core/src/storage/folder-adapter.ts` (the registry),
+`packages/core/src/storage/folder-adapter.ts` (the registry, and a device's own directory stores),
+`packages/core/src/storage/folder-reconcile.ts` (a command beside a daemon),
 `packages/core/src/node/space-runtime.ts` ("Mirrors", "Writers outside this process"),
 `packages/core/src/identity/account-store.ts`,
 `packages/cli/src/fs-directory.ts` (path safety). Tests:
@@ -1108,10 +1110,14 @@ When and how big is the store writer's own.
 
 **Pull.** List `<space id>/`; for every segment not under the store writer's own
 prefix and not yet read, in name order: fetch it (skip it if it is gone —
-its store writer compacted it), and run every version through the gatekeeper (§8),
+its store writer compacted it). A reader MUST NOT take a segment whose bytes do
+not hash to the hash in its name: it may still be being written, or be half
+delivered by a sync service; it is read again next time. Run every version
+in one through the gatekeeper (§8),
 passing over the remainder repeatedly while any go in (versions depend on
-each other). Mark each version stored known; a refused copy is not, so a
-valid version with the same id still goes out. Mark the segment read only if
+each other). Mark each version stored known; a refused copy is not, nor a
+stub of one the store holds whole, so the whole valid version still goes
+out. Mark the segment read only if
 none are still waiting; otherwise it is read again next time.
 
 The blob store is untrusted: it can hide versions (the mesh fills the gap)

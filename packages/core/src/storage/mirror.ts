@@ -30,7 +30,15 @@
 import type { Version, StorageAdapter } from '../types.js';
 import type { BlobStore } from './blob-store.js';
 import type { StorageProvider } from './storage-provider.js';
-import { packSegment, segmentBatches, segmentName, SEGMENT_SUFFIX, unpackSegment } from './segment.js';
+import {
+  isWholeSegment,
+  packSegment,
+  segmentBatches,
+  segmentName,
+  SEGMENT_SUFFIX,
+  unpackSegment,
+} from './segment.js';
+import { isStub } from '../schema/version.js';
 import { utf8Decode, utf8Encode } from '../utils/encoding.js';
 import { unref } from '../utils/guards.js';
 
@@ -201,7 +209,8 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
       // One segment that can't be fetched must not keep every one after it out: it is tried again next time.
       const bytes = await store.get(key).catch(() => null);
       // Deleted between listing and fetching — compacted by its writer. Its versions are in a newer segment.
-      if (!bytes) continue;
+      // Or not all there yet (still being written, half synced): read again next time.
+      if (!bytes || !(await isWholeSegment(key, bytes))) continue;
       let pending = unpackSegment(bytes);
       // Versions can depend on each other — a record on its first version, on the access changes it saw.
       // Pass over the rest until nothing more goes in.
@@ -217,7 +226,9 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
           // A refused copy is not known to be there: the valid one with the same id may still need pushing.
           if (taken === 'stored') {
             added += 1;
-            await markKnown(version.id);
+            // Nor is a stub of one held whole: the whole one still goes out.
+            const held = isStub(version) ? await storage.getVersion(version.id) : null;
+            if (!held || isStub(held)) await markKnown(version.id);
           }
           progress = true;
         }

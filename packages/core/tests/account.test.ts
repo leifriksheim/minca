@@ -14,6 +14,8 @@ import { generateSeed } from '../src/identity/recovery-code.js';
 import { deriveAccountKey } from '../src/identity/account-vault.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
 import { memoryStores } from './helpers/memory-stores.js';
+import { createMemoryDirectory } from './helpers/memory-directory.js';
+import { folderStores, type StoreFactory } from '../src/node/stores.js';
 import { team } from '../src/space/presets.js';
 import { hold } from './helpers/hold.js';
 import { until } from './helpers/until.js';
@@ -34,7 +36,11 @@ async function account(seed = generateSeed()) {
   };
 }
 
-async function device(me: Awaited<ReturnType<typeof account>>, stores = memoryStores(), hub?: FakeHub) {
+async function device(
+  me: Awaited<ReturnType<typeof account>>,
+  stores: StoreFactory = memoryStores(),
+  hub?: FakeHub,
+) {
   const node = await createNode({
     signer: me.signer,
     stores,
@@ -185,6 +191,33 @@ describe('moving and merging an account', () => {
       accountKey: me.accountKey,
     });
     assert.deepEqual([again.spacesAdded, again.recordsAdded], [0, 0]);
+  });
+});
+
+describe('moving an account into a data folder', () => {
+  test('puts its records in the folder, where another device with nothing of its own finds them', async () => {
+    const me = await account();
+    const browser = memoryStores();
+    const inBrowser = await device(me, browser);
+    const notes = await inBrowser.spaces.create({ name: 'Notes', visibility: 'public' });
+    await inBrowser.records.put(notes.id, 'app.note', { text: 'moved' });
+    await inBrowser.close();
+
+    const pod = createMemoryDirectory();
+    const at = { basePath: 'accounts/a/stores' };
+    await copyAccountData({
+      from: browser,
+      to: folderStores(pod.open(), { ...at, local: memoryStores() }),
+      did: me.did,
+      accountKey: me.accountKey,
+    });
+    // Another device: the folder alone, no network.
+    const other = await device(me, folderStores(pod.open(), { ...at, local: memoryStores() }));
+    await until(
+      async () => (await other.records.list(notes.id).catch(() => [])).length === 1,
+      5000,
+      'the moved record to be read from the folder',
+    );
   });
 });
 
