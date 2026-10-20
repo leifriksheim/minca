@@ -311,3 +311,34 @@ _Source: `packages/core/src/storage/mirror.ts`,
 - **Budget.** A store like Drive allows about 1,000 requests per 100 seconds.
   The segment, never the single version, is the unit fetched, and syncing
   1,000 records must fit that budget.
+
+## Planned: files
+
+> **Planned.** Not normative. What peers must agree on (the `files` member,
+> chunks and the root, the two messages, keeping a file with its body) is
+> planned in [spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md).
+> Issue [#37](https://github.com/leifriksheim/minca/issues/37).
+
+- **Where chunks live.** As entries in the space's own store, `f/<root>/<n>`,
+  and the chunk list at `f/<root>/list`: every adapter already keeps bytes
+  by key, so a file needs no store of its own, and a browser can keep only
+  the chunks it has shown.
+- **What a node fetches.** A node holding a whole space (a host, a keeper,
+  the CLI) fetches every file of every version it keeps whole. A browser
+  fetches a file when it is shown, and keeps it while it is kept whole. A
+  writer keeps its own files and pushes them to its mirrors.
+- **The API.** `node.files.add(space, bytes, { mime, name })` seals the file
+  if the space is private, works out its root, keeps it and returns the
+  `blob` reference; `records.put(…, { files })` names it on the version.
+  `node.files.url(space, ref)` gives a URL that fetches, checks and opens
+  only the chunks read.
+- **Video.** That URL is served by a service worker answering the browser's
+  range requests, so `<video>` plays and seeks with no player of its own:
+  MP4 with its index first (H.264/AAC), or WebM. Chunks are asked of several
+  peers at once, and of a slow one again elsewhere. No transcoding; a
+  poster is a second, small image file.
+- **Mirrors as sources.** `BlobStore` gains an optional `getRange(key, from,
+to)`: a `Range` header on S3, `File.slice` in a data folder. A host's bucket
+  or a Dropbox folder then serves chunks with no peer online.
+- **Profile pictures.** `std.profile`'s `avatar`, resized in the browser
+  before it is added; the generated shape stays the fallback.

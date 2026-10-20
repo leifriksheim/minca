@@ -72,8 +72,8 @@ identical everywhere:
 
 Until the dialect has `format` ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), `when` and `day` are checked only for
 length. How a `blob`'s bytes are stored and fetched is planned
-([Planned: what the library still waits on](#planned-what-the-library-still-waits-on));
-the reference to them is not.
+([spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)):
+`hash` becomes the file's root, and a file in a private space gains `key`.
 
 ## The definitions
 
