@@ -43,19 +43,12 @@ async function find(
   return current;
 }
 
-/** Whether a directory holds nothing */
-async function isEmpty(dir: DirectoryHandleLike): Promise<boolean> {
-  for await (const _ of dir.keys()) return false;
-  return true;
-}
-
 /**
  * @param path Where under `root` the store keeps its keys, `/` separating
  *   directories, e.g. `accounts/<id>/stores/spaces`
  */
 export function createDirectoryBlobStore(root: DirectoryHandleLike, path = ''): BlobStore {
   const baseNames = path.split('/').filter(Boolean).map(encodeKey);
-  const base = () => find(root, baseNames);
 
   return Object.freeze({
     async get(key: string) {
@@ -75,22 +68,8 @@ export function createDirectoryBlobStore(root: DirectoryHandleLike, path = ''): 
 
     async delete(key: string) {
       const parts = partsOf(key);
-      const chain: DirectoryHandleLike[] = [];
-      let dir = await base();
-      for (const name of parts.slice(0, -1)) {
-        if (!dir) return;
-        chain.push(dir);
-        dir = await find(dir, [name]);
-      }
-      if (!dir) return;
-      await removeFile(dir, parts.at(-1)!);
-      // A writer's directory goes with its last segment, and a space's with its last writer.
-      for (let i = chain.length - 1; i >= 0; i--) {
-        const child = await find(chain[i]!, [parts[i]!]);
-        if (!child || !(await isEmpty(child))) break;
-        // Not recursive: a segment another process just wrote there keeps its directory.
-        await removeFile(chain[i]!, parts[i]!).catch(() => {});
-      }
+      const dir = await find(root, [...baseNames, ...parts.slice(0, -1)]);
+      if (dir) await removeFile(dir, parts.at(-1)!);
     },
 
     async list(prefix: string) {

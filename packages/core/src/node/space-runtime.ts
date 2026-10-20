@@ -73,8 +73,10 @@ import {
 } from '../records/contracts.js';
 import { changedFixedField, onePerKey, onePerSecret } from '../records/rules.js';
 import type { Link } from '../types.js';
+import { reconcileFolder } from '../storage/folder-reconcile.js';
 import type { BlobStore } from '../storage/blob-store.js';
 import { createMirror, type Mirror, type Taken } from '../storage/mirror.js';
+import type { FolderAdapter } from '../storage/folder-adapter.js';
 import { createVersionCheck } from '../validation/check-version.js';
 import type { Writers } from './writers.js';
 import { breaksLine, checkFork, forkProof } from '../records/fork.js';
@@ -483,6 +485,10 @@ const looksEncrypted = isSealedBody;
 /** The key a sealed body names, as the keyring is looked up by */
 function sealedKeyId(body: unknown): string {
   return String(isRecord(body) ? body.keyId : undefined);
+}
+
+function isFolderAdapter(adapter: StorageAdapter): adapter is FolderAdapter {
+  return 'reload' in adapter && typeof adapter.reload === 'function';
 }
 
 const isLinks = (links: unknown): links is ReadonlyArray<Link> => checkLinks(links) === null;
@@ -2793,19 +2799,20 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   // ─── Writers outside this process ──────────────────────────────────
   //
   // A data folder is written by other apps, and by other devices behind
-  // whatever syncs it; a store on disk by another process (a command beside a
-  // daemon). Nothing announces either, so both are looked for.
+  // whatever syncs it; a directory store by another process (a command beside
+  // a daemon). Nothing announces either, so both are looked for.
 
   /** Whether another writer changed anything this node holds */
   const look = async (): Promise<boolean> => {
-    // Another process wrote this store underneath: what sync compares is read again.
-    const rewritten = (await adapter.refresh?.()) ?? false;
-    if (rewritten) storage.invalidate();
+    // The same verdict as for a version from a peer.
+    const reconciled = isFolderAdapter(adapter)
+      ? (await reconcileFolder(storage, adapter, async (version) => storable(await admit(version)))).changed
+      : false;
     const pulled = folderMirror ? (await folderMirror.pull()).added > 0 : false;
-    return rewritten || pulled;
+    return reconciled || pulled;
   };
   let watchTimer: ReturnType<typeof setInterval> | null = null;
-  if (deps.watchIntervalMs > 0 && (folderMirror || adapter.refresh)) {
+  if (deps.watchIntervalMs > 0 && (folderMirror || isFolderAdapter(adapter))) {
     let running = false;
     watchTimer = setInterval(() => {
       if (running) return;

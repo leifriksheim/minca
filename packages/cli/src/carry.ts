@@ -14,9 +14,9 @@
  */
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { createCarrierNode } from '@minca/core';
+import { createCarrierNode, directoryStores } from '@minca/core';
 import type { CarryGrant } from '@minca/core/session';
-import { fileStores } from './file-stores.js';
+import { openFsDirectory } from './fs-directory.js';
 import { configuredRelays, enableWebRTC } from './agent.js';
 import { hostKey } from './host-setup.js';
 
@@ -87,7 +87,7 @@ export async function runCarrier(options: {
     key,
     account: grant.did,
     carry: grant.carry.invite,
-    stores: fileStores(path.join(data, 'store')),
+    stores: directoryStores(await openFsDirectory(path.join(data, 'store'))),
     network: { relays },
   });
   log(`carrying for ${grant.name} (${grant.did}) as ${node.did}`);

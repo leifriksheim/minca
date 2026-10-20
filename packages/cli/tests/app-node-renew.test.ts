@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { base64UrlDecode, base64UrlEncode, createNode, type P2PNode } from '@minca/core';
+import { base64UrlDecode, base64UrlEncode, createNode, directoryStores, type P2PNode } from '@minca/core';
 import { createMincaAuth } from '../../core/src/session/auth.js';
 import { createFolderAccountStore } from '../../core/src/identity/account-store.js';
 import { team } from '../../core/src/space/presets.js';
@@ -18,7 +18,7 @@ import { memoryStores } from '../../core/tests/helpers/memory-stores.js';
 import { createFakeHub } from '../../core/tests/helpers/fake-transport.js';
 import type { ConnectRequest } from '@minca/core/session';
 import { runAppNode, type AppNodeOut, type StartParams } from '../src/app-node.js';
-import { fileStores } from '../src/file-stores.js';
+import { openFsDirectory } from '../src/fs-directory.js';
 import { isRecord } from '../src/json.js';
 
 const ORIGIN = 'http://127.0.0.1:47830';
@@ -83,7 +83,7 @@ test('renewing from the menu bar keeps what the app wrote while the home could n
     const node = await createNode({
       signer: params.signer,
       sessionKey: params.key.keys,
-      stores: fileStores(params.stores, { localKey: params.seal }),
+      stores: directoryStores(await openFsDirectory(params.stores), { localKey: params.seal }),
       network: { transports: (self: string, peer: string) => [which.transport(peer, self)] },
     });
     for (const space of params.grant.spaces)

@@ -973,30 +973,19 @@ Not protocol: how a client gets hold of the folder is its own. The library's
 use of `showDirectoryPicker` is in
 [Sync and storage in the library](../packages/core/docs/storage.md#data-folders).
 
-### 14.8 The former layout
+### 14.8 Older layouts
 
-Before segments, a space was kept as one file per entry and per version:
-`spaces/<space id>/kv/<encoded key>` and
-`spaces/<space id>/versions/<id>.json`, and other stores (`writers`) beside
-it the same way. A client MAY read such a store when it opens a space: it
-writes the versions found under `versions/` into segments under a **new**
-store writer id of its own making, never its own, so that every client,
-itself included, judges them on the next pull (§16.4); then it deletes
-`kv/` and `versions/`. It MUST NOT take the former entries as its own, nor
-read any other store from the folder (`writers`, a mirror's state): they
-were written by whoever could write the folder, and a store writer id or a
-key's place in its line taken from there would partition clients or fork the
-key.
+A client reads nothing in the folder but the files of §14.1. A space kept in
+an older layout (a file per entry under `spaces/<space id>/kv`, a file per
+version under `versions/`) is not read: whoever can write the folder could
+have planted it, and its entries would decide what this client holds without
+the gatekeeper. Peers bring such a space back.
 
-> **Known defect:** nothing in the folder says which layout it uses. A client
-> of the former layout sharing a folder with this one finds its space files
-> gone and holds nothing until peers fill it in, and what it writes in the
-> former layout becomes another one-off store writer each time it is
-> converted. Before v1 every client of a folder is upgraded together. How the library brings over
-> another store is in
-> [Sync and storage in the library](../packages/core/docs/storage.md#data-folders).
+> **Known defect:** nothing in the folder says which layout it uses, so a
+> client of an older layout sharing a folder with this one sees none of its
+> writes. Before v1 every client of a folder is upgraded together.
 
-_Source: `packages/core/src/node/stores.ts` (`folderStores`, `adoptFormerStore`),
+_Source: `packages/core/src/node/stores.ts` (`folderStores`),
 `packages/core/src/storage/blob/directory.ts`,
 `packages/core/src/storage/folder-adapter.ts` (the registry),
 `packages/core/src/node/space-runtime.ts` ("Mirrors", "Writers outside this process"),
@@ -1112,9 +1101,9 @@ store (§12); the library's keys are in
 
 **Push.** After local changes, and on close: collect every version the store
 keeps (§10) that is not known to be in the blob store; pack them into
-segments; upload each; mark its versions known, and uploaded. "Known" is
-everything this store writer uploaded **or stored from a segment**, so nobody
-re-uploads everyone else's versions.
+segments; upload each; mark its versions known. "Known" is everything this
+store writer uploaded **or stored from a segment**, so nobody re-uploads
+everyone else's versions.
 When and how big is the store writer's own.
 
 **Pull.** List `<space id>/`; for every segment not under the store writer's own
@@ -1128,18 +1117,11 @@ none are still waiting; otherwise it is read again next time.
 The blob store is untrusted: it can hide versions (the mesh fills the gap)
 but not forge them.
 
-**Compaction.** A store writer may rewrite its own segments: read them all,
-write into new segments its store's copy of every version in them that the
-store holds (a stub where it holds a stub, so a superseded body is not
-carried forward), and the segment's copy of one it does not hold but marked
-uploaded, **then** delete the old ones. A reader in between sees
-duplicates, which are harmless. Anything else in its segments was put there
-by someone else, and is not carried.
-
-> Rationale: several processes can share one store writer's state (two tabs
-> over one IndexedDB, a command beside a daemon), and one may compact a
-> segment another uploaded before it has read what is in it; what was
-> uploaded is in the shared state, what was planted is not.
+**Compaction.** A store writer may rewrite its own segments: read them all, keep
+only versions its store still keeps, write its store's copy of each into new
+segments (a stub where the store holds one, so a superseded body is not
+carried forward), **then** delete the old ones. A reader in between sees
+duplicates, which are harmless.
 
 **Deleting a space** from a blob store deletes every key under
 `<space id>/`.
@@ -1159,9 +1141,7 @@ _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirr
   seed, so it mirrors like any other. Recovery code, then connect storage, and
   every space comes back. Segments are **not** sealed with the space key: a
   blind host that must read the store to restart would then need the key.
-- **Absorbing a quiet store writer.** A lost phone leaves its folder forever,
-  and so does the one-off store writer a data folder's former layout is
-  turned into (§14.8).
+- **Absorbing a quiet store writer.** A lost phone leaves its folder forever.
   Any store writer MAY absorb one whose newest segment is older than
   `absorbAfterDays` (default 30): copy the versions its own store still keeps
   from one of that store writer's segments into a new segment of its own, then

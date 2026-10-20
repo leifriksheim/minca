@@ -170,10 +170,8 @@ What a path means is the factory's choice:
   under `basePath`, sealed under `localKey` (`deriveLocalKey(seed)`) when one
   is given; every other path in `local`; and each space mirrored to the
   folder's segments, which the factory names as `folder`.
-- `directoryStores(directory, { localKey? })` — a directory only this process
-  writes, one file per entry and per version.
-- `fileStores(root, { localKey? })` in `packages/cli` — one log file per path,
-  which several processes on one computer may share.
+- `directoryStores(directory, { localKey? })` — a directory on this device,
+  one file per entry and per version; the `registry` sealed as above.
 
 Every version a node signs in a space takes the next place in its key's line
 for that collection there ([spec 02 §4.10](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)).
@@ -888,7 +886,7 @@ others, and an app can say so and offer to ask again or to stop using it.
 The reference host (`minca host`, `packages/cli/src/host.ts`) keeps a lapsed
 subscription for `graceDays` (default 30) after `paidUntil`, and drops lapsed
 ones in a sweep every hour (`sweepMs`). It measures each carried space's
-store file at most every ten minutes, and each status gives the sum as `bytes`,
+folder at most every ten minutes, and each status gives the sum as `bytes`,
 with `quotaBytes` as `quota` (`MINCA_HOST_QUOTA_GB`: 10 on a paying host, none
 on a free one). At its quota, an account's carry space takes no new space
 (`full`, in `createCarryCore`): what it carries stays and keeps syncing, and a

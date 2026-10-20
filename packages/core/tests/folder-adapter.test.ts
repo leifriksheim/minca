@@ -8,7 +8,13 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMemoryDirectory } from './helpers/memory-directory.js';
-import { createFolderAdapter, resolvePath, writeFolderFile } from '../src/storage/folder-adapter.js';
+import {
+  createFolderAdapter,
+  resolvePath,
+  writeFolderFile,
+  type FolderAdapter,
+} from '../src/storage/folder-adapter.js';
+import { reconcileFolder } from '../src/storage/folder-reconcile.js';
 import { createDirectoryBlobStore } from '../src/storage/blob/directory.js';
 import { createMirror, type Taken } from '../src/storage/mirror.js';
 import { folderStores, type StoreFactory } from '../src/node/stores.js';
@@ -109,17 +115,161 @@ describe('folder adapter — key/value storage', () => {
 });
 
 describe('folder adapter — versions', () => {
-  test('stores each version as its own file, and reads it back after reopening', async () => {
+  test('stores each version as its own file', async () => {
+    const folder = createMemoryDirectory();
+    const adapter = await createFolderAdapter(folder.handle, 'notes');
+
+    const first = await makeVersion('one');
+    const second = await makeVersion('two');
+    await adapter.putVersion(first);
+    await adapter.putVersion(second);
+
+    assert.deepEqual([...(await adapter.listVersionIds())].sort(), [first.id, second.id].sort());
+    assert.deepEqual(await adapter.getVersion(first.id), first);
+    assert.equal(await adapter.getVersion('nope'), null);
+
+    // One file per record, named after its own hash — that is what lets two
+    // copies of the folder merge by union.
+    const files = folder.paths().filter((path) => path.includes('/versions/'));
+    assert.equal(files.length, 2);
+    assert.ok(files.some((path) => path.endsWith(`${first.id}.json`)));
+  });
+
+  test('reopening a folder finds what was written before', async () => {
     const folder = createMemoryDirectory();
     const first = await createFolderAdapter(folder.handle, 'notes');
     const version = await makeVersion('durable');
     await first.putVersion(version);
     await first.close();
 
-    assert.ok(folder.paths().includes(`notes/versions/${version.id}.json`));
     const reopened = await createFolderAdapter(folder.handle, 'notes');
     assert.deepEqual(await reopened.getVersion(version.id), version);
-    assert.equal(await reopened.getVersion('nope'), null);
+  });
+});
+
+describe('two origins, one folder', () => {
+  /** Opens an independent view of a folder — a second deployment of the app. */
+  async function openOrigin(
+    handle: ReturnType<typeof createMemoryDirectory>['handle'],
+  ): Promise<{ adapter: FolderAdapter; storage: StorageProvider }> {
+    const adapter = await createFolderAdapter(handle, 'spaces/demo');
+    return { adapter, storage: createStorageProvider(adapter) };
+  }
+
+  test('a key another writer creates after a miss is found by listing', async () => {
+    const folder = createMemoryDirectory();
+    const a = await openOrigin(folder.open());
+    const b = await openOrigin(folder.open());
+
+    // B asks first and finds nothing — and remembers that.
+    assert.equal(await b.adapter.get('space:new'), null);
+    await a.adapter.put('space:new', new Uint8Array([1, 2, 3]));
+
+    // Listing is how a writer's additions are discovered; the stale miss must not hide them.
+    assert.deepEqual(await b.adapter.list('space:'), ['space:new']);
+    assert.deepEqual(await b.adapter.get('space:new'), new Uint8Array([1, 2, 3]));
+  });
+
+  test('what one origin writes, the other sees — and reconciling reports it', async () => {
+    const folder = createMemoryDirectory();
+    const a = await openOrigin(folder.open());
+    const b = await openOrigin(folder.open());
+
+    const version = await makeVersion('written on A');
+    await a.storage.addVersion(version);
+
+    // Reconciling notices the file A added. (Both read the same root pointer
+    // from disk, so B's lists already include it; reconciling is what repairs
+    // a tree whose pointer write was lost.)
+    const result = await reconcileFolder(b.storage, b.adapter);
+    assert.deepEqual(result.added, [version.id]);
+    assert.equal(result.changed, true);
+
+    const seen = await b.storage.queryVersions(COLLECTION);
+    assert.deepEqual(
+      seen.map((item) => item.id),
+      [version.id],
+    );
+  });
+
+  test('a delete on one origin propagates to the other', async () => {
+    const folder = createMemoryDirectory();
+    const a = await openOrigin(folder.open());
+    const b = await openOrigin(folder.open());
+
+    const version = await makeVersion('short-lived');
+    await a.storage.addVersion(version);
+    await reconcileFolder(b.storage, b.adapter);
+    assert.equal((await b.storage.queryVersions(COLLECTION)).length, 1);
+
+    await a.storage.removeVersion(version.id);
+    await reconcileFolder(b.storage, b.adapter);
+
+    assert.equal((await b.storage.queryVersions(COLLECTION)).length, 0);
+    assert.equal(await b.storage.fingerprint(), await a.storage.fingerprint());
+  });
+
+  test('a tree that still indexes a vanished file is repaired from the files', async () => {
+    const folder = createMemoryDirectory();
+    const a = await openOrigin(folder.open());
+
+    const version = await makeVersion('deleted behind our back');
+    await a.storage.addVersion(version);
+
+    // Delete the file without going through the provider — another device did
+    // it while this one was closed, so the root pointer still indexes it. This
+    // is the case the shared root pointer cannot cover, and the reason
+    // reconciling reads the directory rather than trusting the pointer.
+    const store = await (await folder.open().getDirectoryHandle('spaces')).getDirectoryHandle('demo');
+    const versions = await store.getDirectoryHandle('versions');
+    await versions.removeEntry(`${version.id}.json`);
+
+    const result = await reconcileFolder(a.storage, a.adapter);
+
+    assert.deepEqual(result.removed, [version.id]);
+    assert.deepEqual(result.repaired, [version.id], 'the entries should have been fixed');
+    assert.equal((await a.storage.queryVersions(COLLECTION)).length, 0);
+  });
+
+  test('concurrent writes converge on the union, with the same fingerprint', async () => {
+    const folder = createMemoryDirectory();
+    const a = await openOrigin(folder.open());
+    const b = await openOrigin(folder.open());
+
+    // Neither knows about the other: interleaved writes, no coordination, and
+    // both write the same folder's entries on the way.
+    const fromA = await makeVersion('from A');
+    const fromB = await makeVersion('from B');
+    await a.storage.addVersion(fromA);
+    await b.storage.addVersion(fromB);
+
+    await reconcileFolder(a.storage, a.adapter);
+    await reconcileFolder(b.storage, b.adapter);
+    // A second pass on A: B's reconcile may have written entries after A had
+    // already finished looking.
+    await reconcileFolder(a.storage, a.adapter);
+
+    const idsFrom = async (origin: { storage: StorageProvider }) =>
+      (await origin.storage.queryVersions(COLLECTION)).map((item) => item.id).sort();
+
+    assert.deepEqual(await idsFrom(a), [fromA.id, fromB.id].sort());
+    assert.deepEqual(await idsFrom(b), [fromA.id, fromB.id].sort());
+
+    // Same files means the same versions kept, which is the whole point of
+    // deriving the entries from the files rather than trying to merge them.
+    assert.equal(await a.storage.fingerprint(), await b.storage.fingerprint());
+  });
+
+  test('reconciling with nothing new reports no change', async () => {
+    const folder = createMemoryDirectory();
+    const a = await openOrigin(folder.open());
+    await a.storage.addVersion(await makeVersion('settled'));
+
+    const result = await reconcileFolder(a.storage, a.adapter);
+    assert.equal(result.changed, false);
+    assert.deepEqual(result.added, []);
+    assert.deepEqual(result.removed, []);
+    assert.deepEqual(result.repaired, []);
   });
 });
 
@@ -148,17 +298,6 @@ describe('directory blob store', () => {
     // Encoded as a data folder names files: every key stays inside `base`.
     assert.ok(folder.paths().every((path) => path.startsWith('base/')));
     assert.ok(folder.paths().includes('base/s1/%571/a.seg'));
-  });
-
-  test('a writer’s directory goes with its last segment', async () => {
-    const folder = createMemoryDirectory();
-    const store = createDirectoryBlobStore(folder.handle, 'base');
-    await store.put('s/w/a.seg', utf8Encode('a'));
-    await store.delete('s/w/a.seg');
-    assert.deepEqual(await store.list(''), []);
-    const left: string[] = [];
-    for await (const name of (await folder.handle.getDirectoryHandle('base')).keys()) left.push(name);
-    assert.deepEqual(left, [], 'the empty space and writer directories are gone');
   });
 });
 
@@ -259,27 +398,6 @@ describe('a data folder', () => {
     const b = await origin(folder.open(), (version) => version.id === planted.id);
     await b.mirror.pull();
     assert.deepEqual(await ids(b.storage), []);
-  });
-
-  test('a space in the former layout becomes a segment, judged like any other, and its files go', async () => {
-    const folder = createMemoryDirectory();
-    const kept = await makeVersion('from before');
-    const planted = await makeVersion('planted before');
-    // The former layout: a file per version, and entries another app wrote and nobody checked.
-    const former = await createFolderAdapter(folder.open(), `${BASE}/spaces/${SPACE}`);
-    const formerStorage = createStorageProvider(former);
-    await formerStorage.addVersion(kept);
-    await formerStorage.addVersion(planted);
-
-    const b = await origin(folder.open(), (version) => version.id === planted.id);
-    const paths = folder.paths().filter((path) => path.startsWith(`${BASE}/spaces/${SPACE}/`));
-    assert.ok(paths.every((path) => !path.includes('/kv/') && !path.includes('/versions/')));
-    assert.equal(paths.filter((path) => path.endsWith('.seg')).length, 1);
-    // Nothing is taken on the former entries' word.
-    assert.deepEqual(await ids(b.storage), []);
-
-    await b.mirror.pull();
-    assert.deepEqual(await ids(b.storage), [kept.id]);
   });
 
   test('no store but a space is ever read from the folder: a planted writer id or line place is not taken', async () => {

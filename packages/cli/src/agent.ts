@@ -21,6 +21,7 @@ import { promisify } from 'node:util';
 import {
   CLOSE_DID_TAKEN,
   createNode,
+  directoryStores,
   didOf,
   COLLECTION_DEFINE,
   type NodeConfig,
@@ -29,8 +30,7 @@ import {
 import { profile } from '@minca/core/schemas';
 import { checkGrant, connectWithCode, GRANT_VERSION, grantSigner, type Grant } from '@minca/core/session';
 import { base64UrlDecode } from '@minca/core';
-import { writeWhole } from './fs-directory.js';
-import { fileStores } from './file-stores.js';
+import { openFsDirectory, writeWhole } from './fs-directory.js';
 import { nodeFor, type Unlocked } from './home.js';
 import { commaList, errorCode, isRecord, messageOf } from './json.js';
 import { holdLock, lockHolder } from './writer-keys.js';
@@ -393,12 +393,12 @@ async function startWithKey(
   options: StartOptions,
 ): Promise<{ node: P2PNode; stop(): Promise<void> }> {
   if (!options.network) await enableWebRTC();
-  const data = path.join(agentDir(home), 'data');
+  const data = await openFsDirectory(path.join(agentDir(home), 'data'));
   const relays = [...new Set([...(grant.relays ?? []), ...configuredRelays()])];
   const base = await createNode({
     signer: grantSigner(grant),
     sessionKey: key.keys,
-    stores: fileStores(data),
+    stores: directoryStores(data),
     ...(grant.accountKey ? { accountKey: base64UrlDecode(grant.accountKey) } : {}),
     network: options.network ?? {
       relays,

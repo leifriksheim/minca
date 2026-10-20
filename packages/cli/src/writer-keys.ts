@@ -143,7 +143,7 @@ function headStore(dir: string): HeadStore {
 
 /**
  * Lasting writer keys in a directory of slots.
- * @param dir One account's slots, e.g. `<localPath>/writers`
+ * @param dir One account's slots, e.g. `~/.minca/writers/<account id>`
  * @param localKey The account's local key (`deriveLocalKey`), which seals each key at rest
  * @param did The account's DID, which each sealed key is bound to
  */

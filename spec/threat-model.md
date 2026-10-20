@@ -632,9 +632,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     pull"). Clients keep their own stores outside the folder: the CLI keeps
     an account's stores and its writer keys with their places outside its
     home, and reads no slot from it, so rolling one back, or putting an old
-    one back, can't fork a key (`packages/cli/tests/file-stores.test.ts`,
-    "keeps what this computer holds outside the home", "keeps its places
-    outside the home"). It can hide versions from a client that hasn't read
+    one back, can't fork a key (`packages/cli/tests/cli.test.ts`, "keep
+    what this computer holds, and its writer keys, outside the home"). It
+    can hide versions from a client that hasn't read
     them yet, which only a peer can then bring.
   - A program connected by code gets what the app it connects through asks
     for and the person allows, never more than its key signed for: the app

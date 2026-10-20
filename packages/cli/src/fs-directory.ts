@@ -96,10 +96,8 @@ function directory(dir: string): DirectoryHandleLike {
     async getFileHandle(name, options) {
       checkName(name);
       const file = path.join(dir, name);
-      if (!(await exists(file))) {
-        if (!options?.create) throw notFound(name);
-        await fs.writeFile(file, new Uint8Array(0), { mode: 0o600 });
-      }
+      // Created when first written, whole: an empty file in between would be read as an empty value.
+      if (!options?.create && !(await exists(file))) throw notFound(name);
       return fileHandle(file);
     },
 

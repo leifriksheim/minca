@@ -23,12 +23,9 @@
  * goes through the same gates as one from a peer — the store is untrusted.
  * It can hide things (the mesh fills the gap) but not forge them.
  *
- * **Compaction**: a writer may rewrite its own segments into fewer, then
- * delete the old ones. New first, delete after: a reader in between sees
- * duplicates, which are harmless. Every version in them is carried over, as
- * its store holds it where it does: another process of the same store (a
- * second tab, a command beside a daemon) may have written one this one has
- * not read yet.
+ * **Compaction**: a writer may rewrite its own segments into fewer, keeping
+ * only what its store still keeps, then delete the old ones. New first,
+ * delete after: a reader in between sees duplicates, which are harmless.
  */
 import type { Version, StorageAdapter } from '../types.js';
 import type { BlobStore } from './blob-store.js';
@@ -77,11 +74,10 @@ const WRITER_KEY = 'mirror:writer';
 const COUNTER_KEY = 'mirror:counter';
 const readKey = (name: string) => `mirror:read:${name}`;
 const knownKey = (id: string) => `mirror:known:${id}`;
-const uploadedKey = (id: string) => `mirror:uploaded:${id}`;
 const MARK = utf8Encode('1');
 
 /** A new store writer id: 128 random bits as hex, never a DID, so a listing does not say whose device wrote it */
-export const newWriterId = () =>
+const newWriterId = () =>
   Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (b) =>
     b.toString(16).padStart(2, '0'),
   ).join('');
@@ -158,10 +154,7 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
       if (version) waiting.push(version);
     }
     await writeSegments(waiting, async (batch) => {
-      for (const version of batch) {
-        await markKnown(version.id);
-        await state.put(uploadedKey(version.id), MARK);
-      }
+      for (const version of batch) await markKnown(version.id);
     });
     // Past what the last compaction left times two: a space bigger than `compactAt` segments
     // would otherwise be rewritten whole on every flush, and read again by every other reader.
@@ -175,23 +168,16 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   async function compactNow(): Promise<void> {
     const old = (await store.list(mine)).filter((key) => key.endsWith(SEGMENT_SUFFIX));
     if (old.length < 2) return;
-    // Read again: another process writing as this store writer marks what it uploads here too.
-    const uploaded = new Set(
-      (await state.list(uploadedKey(''))).map((key) => key.slice(uploadedKey('').length)),
-    );
     const keep = new Map<string, Version>();
     for (const key of old) {
       const bytes = await store.get(key).catch(() => null);
-      // The store's copy where it holds one: a version superseded since it was
-      // written is a stub now, and its body is not carried forward. One it does
-      // not hold is carried only if this store writer uploaded it (another
-      // process may have, before this one read it); anything else in its
-      // segments was put there by someone else, and goes.
+      // The store's copy: a version superseded since it was written is a stub
+      // now, and its body is not carried forward. One the store does not hold
+      // (asked of it afresh, so another process's write to it is found) was put
+      // there by someone else, and goes.
       for (const version of bytes ? unpackSegment(bytes) : []) {
-        if (keep.has(version.id)) continue;
-        const held = await storage.getVersion(version.id);
+        const held = keep.has(version.id) ? null : await storage.getVersion(version.id);
         if (held) keep.set(version.id, held);
-        else if (uploaded.has(version.id)) keep.set(version.id, version);
       }
     }
     // New first, then delete: a reader in between sees each version twice, which is harmless.

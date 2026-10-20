@@ -89,7 +89,6 @@ methods async):
 | `entries(prefix)`                | _Optional._ Every entry under `prefix` with its bytes, in one read. Without it, `list` then `get` each                                                      |
 | `getVersions(ids)`               | _Optional._ Version bodies by id, null where absent, in the order asked, in one read. Without it, `getVersion` each                                         |
 | `commit({ store, ops, remove })` | _Optional._ Stores these bodies, applies these entry ops and deletes these bodies, atomically. Without it, `putVersion` each, `batch`, `deleteVersion` each |
-| `refresh()`                      | _Optional._ Reads again what another process wrote to the same store; whether anything changed. The space runtime asks every `watchIntervalMs`              |
 
 The optional methods only save round trips: a store gives the same answers
 with or without them. With `commit`, one placement of a version is one atomic
@@ -97,8 +96,8 @@ write; without, versions go first, then the entries in one batch, then the
 deletes, so no entry ever names a version that is not there.
 
 Entry keys are strings; values are bytes. The adapters are IndexedDB (below),
-a directory (the data folder's registry), a log file on disk
-([below](#stores-on-disk)), the sealing wrapper, and memory.
+a directory (`directoryStores`: the data folder's registry, and a node's
+stores on disk), the sealing wrapper, and an in-memory one for tests.
 
 _Source: `packages/core/src/types.ts` (`StorageAdapter`, `BatchOp`). Tests:
 `packages/core/tests/folder-adapter.test.ts`,
@@ -168,27 +167,20 @@ change and on close.
 
 - **In the browser**, IndexedDB under `minca-pod:<dataPath>` (the default).
 - **The CLI** keeps it outside the home, which may be the folder a browser
-  uses or one a sync service copies: `$MINCA_LOCAL`, else
-  `~/Library/Application Support/minca` (macOS), `%LOCALAPPDATA%\minca`
-  (Windows) or `$XDG_STATE_HOME/minca` (`~/.local/state/minca`), then
-  `<first 16 hex of SHA-256 of the home's path>/<account id>/`, one log file
-  per store ([stores on disk](#stores-on-disk)), so a command and the daemon
-  share it (`localPath` in `packages/cli/src/home.ts`).
-  Its writer keys and their places are there too (`<local>/writers`); a slot
-  left in the home from before is not read, and the CLI claims a key of its
-  own. `minca agent` still keeps its key and stores together in
-  `<home>/agent`.
+  uses or one a sync service copies: `$MINCA_LOCAL` or `~/.local/state/minca`,
+  then `<first 16 hex of SHA-256 of the home's path>/<account id>/stores`, a
+  directory store (`localPath` in `packages/cli/src/home.ts`). A command and
+  the daemon share it, and the daemon finds the command's writes as it finds
+  any directory store's (`reconcileFolder`). Writer keys are beside it in
+  `writers/`; a slot left in the home from before is not read. `minca agent`
+  still keeps its key and stores together in `<home>/agent`.
 - **Elsewhere** it must be given: `folderStores` refuses to start without
   one, since a lasting key's places kept in memory would be handed out again
   after a restart.
 
-**The former layout.** A space store kept the old way (`spaces/<id>/kv`,
-`versions`) is turned into a segment of a new store writer the first time
-the space opens, and its `kv/` and `versions/` deleted
-([spec 05 §14.8](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
-No other store kept the old way (`writers`, a mirror's state) is read: anyone
-who can write the folder could have planted it. A lasting key whose places
-were only there starts its lines afresh.
+A space kept in an older layout is not read
+([spec 05 §14.8](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md));
+peers bring it back.
 
 Getting the folder:
 
@@ -220,35 +212,6 @@ _Source: `packages/core/src/node/stores.ts` (`folderStores`),
 `packages/core/src/node/space-runtime.ts` ("Mirrors", "Writers outside this
 process"). Tests: `packages/core/tests/folder-adapter.test.ts`,
 `packages/cli/tests/path-safety.test.ts`._
-
-## Stores on disk
-
-Nodes the CLI runs (a host, a carrier, an agent, the desktop app's node, and
-an account's own stores beside a data folder) keep each store in one file,
-`fileStores(root)`: `<root>/<path>.log`, every part of the path named as a
-data folder names its files.
-
-- **A log.** Each write is one line of JSON, an array of operations:
-  `["put", key, <base64url value>]`, `["del", key]`, `["ver", <version>]`,
-  `["unver", id]`. A line is applied whole or not at all: one cut off by a
-  crash is skipped, and the next write truncates it first.
-- **In memory.** The file is read whole when opened. Once more lines have
-  been written since the last snapshot than the store holds entries and
-  versions (and at least 1,000), it is rewritten as a snapshot: a temporary
-  file renamed into place.
-- **Shared.** Every write holds `<file>.lock`, naming the process, taken over
-  from a process that is gone or after 30 s, and first reads what other
-  processes appended. Every read does too. `refresh()` says whether another
-  process wrote since it last asked, so the daemon's watch finds what a
-  command did.
-- **The registry** is sealed under `localKey` when one is given, as in a
-  data folder.
-- **The former layout.** A store kept as a directory at the same path, one
-  file per entry and per version, is read into the log the first time it is
-  opened, then deleted.
-
-_Source: `packages/cli/src/file-stores.ts`. Tests:
-`packages/cli/tests/file-stores.test.ts`._
 
 ## Blob stores
 
@@ -294,13 +257,12 @@ Today data folders, carriers and hosts mirror.
 A store writer keeps its state in the store `mirrors/<space id>/<n>`, where `n` is
 the mirror's index:
 
-| Key                            | Value                                          |
-| ------------------------------ | ---------------------------------------------- |
-| `mirror:writer`                | the writer id                                  |
-| `mirror:counter`               | the segment counter, decimal                   |
-| `mirror:read:<segment key>`    | `1`, for each segment read or written          |
-| `mirror:known:<version id>`    | `1`, for each version known to be in the store |
-| `mirror:uploaded:<version id>` | `1`, for each version this writer uploaded     |
+| Key                         | Value                                          |
+| --------------------------- | ---------------------------------------------- |
+| `mirror:writer`             | the writer id                                  |
+| `mirror:counter`            | the segment counter, decimal                   |
+| `mirror:read:<segment key>` | `1`, for each segment read or written          |
+| `mirror:known:<version id>` | `1`, for each version known to be in the store |
 
 "Known" is everything this store writer uploaded **or read**, so nobody re-uploads
 everyone else's versions.
@@ -309,9 +271,8 @@ A store writer pushes 5 s after the first change (1 s for a data folder) and
 on close, packing what is not yet known into segments of about 256 KiB (a
 segment is closed once it reaches that size). It reads the `mirror:known:`
 entries once, when it starts. Once it has 32 or more segments of its own,
-and twice as many as its last compaction left, it compacts them: the store's
-copy of what it holds, and what it marked uploaded, read again then; nothing
-else in them.
+and twice as many as its last compaction left, it compacts them, keeping
+only what its store holds.
 
 _Source: `packages/core/src/storage/mirror.ts`,
 `packages/core/src/node/space-runtime.ts` ("Mirrors"),

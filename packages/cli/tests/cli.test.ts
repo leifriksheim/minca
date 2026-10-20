@@ -12,7 +12,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import { openFsDirectory } from '../src/fs-directory.js';
-import { openHome, createAccount, unlock, chooseAccount } from '../src/home.js';
+import { openHome, createAccount, unlock, chooseAccount, localPath, nodeFor } from '../src/home.js';
 import { startDaemon, type Daemon } from '../src/daemon.js';
 import { enableWebRTC, holdEverySpace } from '../src/agent.js';
 import { handleMcpMessage, TAKE_OVER, waitingMcp } from '../src/mcp.js';
@@ -61,6 +61,29 @@ describe('a folder on disk', () => {
 });
 
 describe('accounts in a home', () => {
+  test('keep what this computer holds, and its writer keys, outside the home a browser or a sync service may share', async () => {
+    const home = await openHome(await tempDir());
+    const { account, code } = await createAccount(home, { name: 'Ada' });
+    const node = await nodeFor(await unlock(home, account, { code: code! }), { watchIntervalMs: 0 });
+    const space = await node.spaces.create({ name: 'Notes', ...team, visibility: 'public' });
+    await node.records.put(space.id, 'app.note', { text: 'kept here' });
+    await node.close();
+
+    const inHome = (await readdir(home.path, { recursive: true })).map(String);
+    assert.ok(
+      !inHome.some((file) => file.includes('/kv/r%2F') || file.includes('heads')),
+      'no index or key place in the home',
+    );
+    assert.ok(
+      inHome.some((file) => file.endsWith('.seg')),
+      'the space is in the home as segments',
+    );
+    const local = (await readdir(localPath(home.path, account.id), { recursive: true })).map(String);
+    assert.ok(
+      local.some((file) => file.startsWith('writers')) && local.some((file) => file.startsWith('stores')),
+    );
+  });
+
   test('create, then unlock with the code or the passphrase — never anything else', async () => {
     const home = await openHome(await tempDir());
     const { account, code } = await createAccount(home, { name: 'Leif', passphrase: 'correct horse' });

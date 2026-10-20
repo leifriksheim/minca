@@ -19,6 +19,7 @@ import {
   deriveLocalKey,
   deriveAccountKey,
   deriveContactKeyBytes,
+  directoryStores,
   folderStores,
   generateSeed,
   newAccountId,
@@ -40,7 +41,6 @@ import {
   type WriterKeySource,
 } from '@minca/core';
 import { openFsDirectory } from './fs-directory.js';
-import { fileStores } from './file-stores.js';
 import { fileWriterKeys } from './writer-keys.js';
 
 export interface Home {
@@ -55,33 +55,17 @@ export function homePath(flag?: string): string {
 }
 
 /**
- * Where this computer keeps an account's own stores: what it holds of each
- * space, and its place in each key's line. Never in the home, which may be a
- * folder a browser shares, or one a sync service copies to other machines:
- * whoever writes it would write these, and two machines would share them.
- * `$MINCA_LOCAL`, else the system's place for an app's state, under a name
- * worked out from the home's path.
+ * Where this computer keeps an account's own stores and writer keys: never in
+ * the home, which may be a folder a browser shares or a sync service copies,
+ * so whoever writes it could roll them back, and two machines would share
+ * them. `$MINCA_LOCAL`, else `~/.local/state/minca`, under a name worked out
+ * from the home's path. Writer keys left in the home before are not read.
  */
 export function localPath(home: string, accountId: string): string {
-  const base =
-    process.env.MINCA_LOCAL ??
-    (process.platform === 'darwin'
-      ? path.join(os.homedir(), 'Library', 'Application Support', 'minca')
-      : process.platform === 'win32'
-        ? path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'minca')
-        : path.join(process.env.XDG_STATE_HOME ?? path.join(os.homedir(), '.local', 'state'), 'minca'));
+  const base = process.env.MINCA_LOCAL ?? path.join(os.homedir(), '.local', 'state', 'minca');
   const which = createHash('sha256').update(path.resolve(home)).digest('hex').slice(0, 16);
   return path.join(base, which, accountId);
 }
-
-/**
- * Where this computer keeps an account's writer keys and their places: under
- * {@link localPath}, never in the home, where whoever writes the folder could
- * roll a key's places back, or put an old slot back, and have it sign at a
- * place twice. Slots kept in the home before are not read: this computer
- * claims a key of its own, which only starts a new line.
- */
-const writersPath = (home: Home, accountId: string) => path.join(localPath(home.path, accountId), 'writers');
 
 export async function openHome(flag?: string): Promise<Home> {
   const where = homePath(flag);
@@ -206,11 +190,11 @@ export async function unlock(
     stores: folderStores(home.directory, {
       basePath: account.dataPath,
       localKey,
-      local: fileStores(localPath(home.path, account.id)),
+      local: directoryStores(await openFsDirectory(path.join(localPath(home.path, account.id), 'stores'))),
     }),
     accountKey: await deriveAccountKey(seed),
     contactKey: await deriveContactKeyBytes(seed),
-    writerKey: fileWriterKeys(writersPath(home, account.id), localKey, account.did),
+    writerKey: fileWriterKeys(path.join(localPath(home.path, account.id), 'writers'), localKey, account.did),
   };
 }
 
