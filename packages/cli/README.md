@@ -220,8 +220,11 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   fund carries it; the host keeps what it had for `MINCA_HOST_KEEP_DAYS` (90)
   so a fund brings it straight back. A free subscription none of whose
   devices called for `MINCA_HOST_IDLE_DAYS` (180) is dropped. One address may
-  make `MINCA_HOST_NEW_PER_DAY` subscriptions a day (5), and one subscription
-  carry `MINCA_HOST_SPACES_PER_SUBSCRIPTION` spaces (200). Not with
+  make `MINCA_HOST_NEW_PER_DAY` subscriptions a day (5), an IPv6 /64 counting
+  as one address, and one subscription carry
+  `MINCA_HOST_SPACES_PER_SUBSCRIPTION` spaces (200). Behind a proxy other
+  than Fly's, set `MINCA_HOST_CLIENT_IP_HEADER` to the header it puts the
+  asker's address in, or everyone shares the proxy's address and its 5. Not with
   `MINCA_HOST_FREE=1`, which has no limits at all. How to choose the numbers:
   [HOSTING.md](HOSTING.md#limits).
 - **Bots.** With `MINCA_HOST_BOTS=1` and a model's key, the host runs

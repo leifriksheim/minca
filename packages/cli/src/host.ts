@@ -137,6 +137,8 @@ export interface HostOptions {
   readonly spacesPerSubscription?: number;
   /** With limits: new subscriptions one address may make a day. Default 5. */
   readonly newPerAddress?: number;
+  /** The header the proxy in front of the host puts the asker's address in, when there is one */
+  readonly clientAddressHeader?: string;
   /** How often lapsed subscriptions are dropped. Default hourly. */
   readonly sweepMs?: number;
   /** How often the network is read for wallet payments, while any is open. Default 10 s. */
@@ -277,10 +279,29 @@ const CALLBACK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/callback$/;
 const DISCONNECT_PATH = /^\/host\/bots\/([^/]+)\/disconnect\/([a-z0-9-]{1,40})$/;
 const HOOK_PATH = /^\/host\/connect\/([a-z0-9-]{1,40})\/hook$/;
 
-/** Who is asking, as far as the host can tell: Fly's proxy says, and is trusted only on Fly */
-function addressOf(req: IncomingMessage): string {
-  const forwarded = process.env.FLY_APP_NAME ? req.headers['fly-client-ip'] : undefined;
-  return (typeof forwarded === 'string' && forwarded) || req.socket.remoteAddress || 'unknown';
+/**
+ * Who is asking, as far as the host can tell: the address the proxy in front
+ * says, from `header` (trusted only when named; Fly's on Fly), or the
+ * socket's. An IPv6 address counts by its /64, which one person usually holds
+ * whole.
+ */
+export function addressOf(req: IncomingMessage, header?: string): string {
+  const name = header ?? (process.env.FLY_APP_NAME ? 'fly-client-ip' : undefined);
+  const given = name ? req.headers[name.toLowerCase()] : undefined;
+  const said = (Array.isArray(given) ? given[0] : given)?.split(',')[0]?.trim();
+  const address = (said || req.socket.remoteAddress || 'unknown').replace(/^::ffff:(?=\d+\.)/i, '');
+  if (!address.includes(':')) return address;
+  // The first four groups, with :: spelled out far enough to find them.
+  const [head = '', tail = ''] = address.split('::');
+  const front = head ? head.split(':') : [];
+  const back = tail ? tail.split(':') : [];
+  const groups = address.includes('::')
+    ? [...front, ...Array<string>(Math.max(0, 8 - front.length - back.length)).fill('0'), ...back]
+    : front;
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.toLowerCase().replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
 }
 
 /** "$4 a month or $36 a year", from the wallet's prices */
@@ -742,7 +763,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   const made = new Map<string, number[]>();
   const DAY_MS = 24 * 3600_000;
   function mayMake(req: IncomingMessage): void {
-    const address = addressOf(req);
+    const address = addressOf(req, options.clientAddressHeader);
     const recent = (made.get(address) ?? []).filter((at) => Date.now() - at < DAY_MS);
     if (recent.length >= (options.newPerAddress ?? 5))
       throw refusal(429, 'Too many new subscriptions from here today. Try again tomorrow.');

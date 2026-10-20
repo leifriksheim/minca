@@ -22,8 +22,8 @@ describe('the usage meter', () => {
     meter.read('club', 'did:key:zDnaePhone');
     meter.read('club', 'did:key:zDnaePhone');
     meter.read('club', 'did:key:zDnaeLaptop');
-    assert.deepEqual(meter.usage('club'), { writers: 2, readers: 2, windowDays: 30 });
-    assert.deepEqual(meter.usage('notes'), { writers: 1, readers: 0, windowDays: 30 });
+    assert.deepEqual(await meter.usage('club'), { writers: 2, readers: 2, windowDays: 30 });
+    assert.deepEqual(await meter.usage('notes'), { writers: 1, readers: 0, windowDays: 30 });
   });
 
   test('counts someone once over the window though they wrote on many days, and drops days past it', async () => {
@@ -34,12 +34,12 @@ describe('the usage meter', () => {
     now += 10 * DAY;
     await meter.wrote('club', alice);
     await meter.wrote('club', bob);
-    assert.equal(meter.usage('club').writers, 2);
+    assert.equal((await meter.usage('club')).writers, 2);
     // Alice's first day falls out of the window; her second still counts.
     now += 25 * DAY;
-    assert.equal(meter.usage('club').writers, 2);
+    assert.equal((await meter.usage('club')).writers, 2);
     now += 10 * DAY;
-    assert.equal(meter.usage('club').writers, 0);
+    assert.equal((await meter.usage('club')).writers, 0);
     await meter.prune();
     await meter.flushed();
     assert.deepEqual(
@@ -57,7 +57,7 @@ describe('the usage meter', () => {
     await before.flushed();
     const after = await createUsageMeter({ store, windowDays: 30 });
     await after.wrote('club', alice);
-    assert.deepEqual(after.usage('club'), { writers: 1, readers: 0, windowDays: 30 });
+    assert.deepEqual(await after.usage('club'), { writers: 1, readers: 0, windowDays: 30 });
   });
 
   test('the store holds no DID, only salted hashes', async () => {
@@ -86,13 +86,22 @@ describe('the usage meter', () => {
     assert.ok(!ours.includes(theirs[0]));
   });
 
+  test('with the members given, only their writes count; readers stop growing at a cap', async () => {
+    const meter = await createUsageMeter({ store: createMemoryAdapter(), windowDays: 30 });
+    await meter.wrote('club', alice);
+    await meter.wrote('club', bob);
+    assert.equal((await meter.usage('club', [alice])).writers, 1, 'Bob was removed');
+    for (let i = 0; i < 20_000; i += 1) meter.read('club', `did:key:zDnaeMadeUp${i}`);
+    assert.equal((await meter.usage('club')).readers, 10_000);
+  });
+
   test('forgetting a space drops its counts', async () => {
     const store = createMemoryAdapter();
     const meter = await createUsageMeter({ store, windowDays: 30 });
     await meter.wrote('club', alice);
     await meter.forget('club');
     await meter.flushed();
-    assert.equal(meter.usage('club').writers, 0);
+    assert.equal((await meter.usage('club')).writers, 0);
     assert.deepEqual(await store.list('usage:club'), []);
   });
 });

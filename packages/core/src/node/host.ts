@@ -165,6 +165,11 @@ const LINE_BUCKET_PREFIX = 'host/lines/';
 const DAY = 24 * 3600;
 /** How far under every limit a space must stay, for its window, to be free again */
 const UNDER = 0.8;
+/** How long after the host first sees a space what arrives may be its history, rather than people writing now */
+const CATCH_UP_SECONDS = 600;
+/** Where the host keeps which spaces it once stopped carrying for members, there and in the bucket */
+const STRUCK_PREFIX = 'struck:';
+const STRUCK_BUCKET_PREFIX = 'host/struck/';
 
 /** Starts a host */
 export async function createHostNode(config: HostConfig) {
@@ -264,16 +269,51 @@ export async function createHostNode(config: HostConfig) {
     [...lines].flatMap(([spaceId, line]) => (line.stopped !== undefined ? [spaceId] : [])),
   );
 
-  /** A version reached a carried space: its account wrote there, unless it is history or the host's own */
+  /**
+   * Spaces members' subscriptions once stopped carrying, and when: one that
+   * comes back over the line after the host forgot it gets no new grace.
+   */
+  const struck = new Map<string, number>();
+  const strike = async (spaceId: string, at: number) => {
+    struck.set(spaceId, at);
+    const bytes = utf8Encode(String(at));
+    await store.put(`${STRUCK_PREFIX}${spaceId}`, bytes);
+    await config.mirror?.put(`${STRUCK_BUCKET_PREFIX}${spaceId}`, bytes);
+  };
+  if (limits) {
+    if (config.mirror && (await store.list(STRUCK_PREFIX)).length === 0)
+      for (const key of await config.mirror.list(STRUCK_BUCKET_PREFIX)) {
+        const bytes = await config.mirror.get(key);
+        if (bytes) await store.put(`${STRUCK_PREFIX}${key.slice(STRUCK_BUCKET_PREFIX.length)}`, bytes);
+      }
+    for (const key of await store.list(STRUCK_PREFIX)) {
+      const bytes = await store.get(key);
+      const at = bytes ? Number(utf8Decode(bytes)) : NaN;
+      if (Number.isFinite(at)) struck.set(key.slice(STRUCK_PREFIX.length), at);
+    }
+  }
+
+  /**
+   * A version reached a carried space: its account wrote there, unless it is
+   * the host's own. Counted by when it arrived, whatever its writer says of
+   * when it was written, except while the host first catches up on a space:
+   * then what says it is older than the window is its history.
+   */
   const counted = (spaceId: string, version: Version) => {
     if (!meter || !limits) return;
     const account = version.proof?.payload.iss ?? version.author;
-    // Written well before it arrived: history coming in, not someone writing now.
     const written = Date.parse(version.createdAt) / 1000;
-    if (Number.isFinite(written) && written < now() - limits.space.windowDays * DAY) return;
+    const old = Number.isFinite(written) && written < now() - limits.space.windowDays * DAY;
     void (async () => {
+      if (old && now() - (await meter.firstSeen(spaceId)) < CATCH_UP_SECONDS) return;
       if (!(await config.ignore?.(account))) await meter.wrote(spaceId, account);
     })().catch(() => {});
+  };
+  /** The accounts that are members of a carried space now: only their writes count */
+  const membersOf = async (spaceId: string): Promise<ReadonlyArray<string> | undefined> => {
+    const entry = core.carried.get(spaceId);
+    if (!entry) return undefined;
+    return (await entry.runtime.access()).members.map((member) => member.did);
   };
 
   // A fresh disk: the subscriptions come back from the bucket, and the spaces with them.
@@ -289,13 +329,21 @@ export async function createHostNode(config: HostConfig) {
 
   /** The subscription an account's carry space belongs to, when it wrote `carry:closed` */
   let closing: Promise<void> = Promise.resolve();
+  /** Whether the carry core below is made, so its events may look at it */
+  let opened = false;
   const core = await createCarryCore({
     key: config.key,
     stores: config.stores,
     ...(config.network ? { network: config.network } : {}),
     provider,
     ...(config.watchIntervalMs !== undefined ? { watchIntervalMs: config.watchIntervalMs } : {}),
-    emit: events.emit,
+    emit: (event) => {
+      // A space newly carried: what arrives over the next minutes is it catching up.
+      if (event.type === 'spaces' && meter && opened)
+        for (const spaceId of core.carried.keys())
+          if (!core.carries.has(spaceId)) void meter.firstSeen(spaceId).catch(() => {});
+      events.emit(event);
+    },
     ...(config.full ? { full: config.full } : {}),
     ...(limits ? { skip: (spaceId: string) => skipped.has(spaceId), onArrived: counted } : {}),
     ...(config.mirror
@@ -319,6 +367,8 @@ export async function createHostNode(config: HostConfig) {
       });
     },
   });
+
+  opened = true;
 
   // Carry again what was carried before a restart — the store is only a cache of the spaces, but the list is ours.
   for (const subscription of await list()) {
@@ -362,7 +412,7 @@ export async function createHostNode(config: HostConfig) {
     const keep = (limits.keepDays ?? 0) * DAY;
     // Members stopped carrying it, so nothing it does reaches here: it stays as it was, and is forgotten after a while.
     if (before?.stopped !== undefined && !own) return before.stopped + keep <= t ? null : before;
-    const counts = meter.usage(spaceId);
+    const counts = await meter.usage(spaceId, await membersOf(spaceId));
     const bytes = (await config.measure?.(spaceId).catch(() => 0)) ?? 0;
     const shared = counts.writers >= 2;
     const reasons: Reason[] = [];
@@ -371,7 +421,9 @@ export async function createHostNode(config: HostConfig) {
     const wellUnder =
       counts.writers <= limits.space.writers * UNDER && (!shared || bytes <= limits.space.bytes * UNDER);
     let line: Line | null = before ?? null;
-    if (reasons.length > 0) line = { since: before?.since ?? t, from: before?.from ?? t, reasons };
+    // Stopped once before and forgotten since: over again, it is past its grace at once.
+    const again = struck.has(spaceId) && !before ? t - lineGrace : t;
+    if (reasons.length > 0) line = { since: before?.since ?? t, from: before?.from ?? again, reasons };
     else if (line && wellUnder) {
       const under = line.under ?? t;
       // Free again only after a whole window well under, so a busy week does not flip it.
@@ -382,10 +434,11 @@ export async function createHostNode(config: HostConfig) {
       line = rest;
     }
     if (!line) return null;
-    // While it pays for itself the grace does not run: it starts again from when it stops.
+    // While it pays for itself the line does not apply. Its grace is given once: paying for
+    // a while does not buy it again, so once the fund stops, what is left of it is all it has.
     if (own) {
       const { stopped: _paid, ...rest } = line;
-      return { ...rest, from: t };
+      return rest;
     }
     return line.from + lineGrace <= t && line.stopped === undefined ? { ...line, stopped: t } : line;
   }
@@ -411,7 +464,10 @@ export async function createHostNode(config: HostConfig) {
         spaces.has(spaceId) || before?.stopped !== undefined ? await standing(spaceId, before, own) : null;
       if (JSON.stringify(after) !== JSON.stringify(before ?? null)) await writeLine(spaceId, after);
       if (after && !before) changed.over.push(spaceId);
-      if (after?.stopped !== undefined && before?.stopped === undefined) changed.stopped.push(spaceId);
+      if (after?.stopped !== undefined && before?.stopped === undefined) {
+        changed.stopped.push(spaceId);
+        await strike(spaceId, after.stopped);
+      }
       if (before && !after) changed.under.push(spaceId);
       const skip = after?.stopped !== undefined && !own;
       if (skip) skipped.add(spaceId);
@@ -485,7 +541,7 @@ export async function createHostNode(config: HostConfig) {
     /** How a space is used, as a status says it; null at a host without limits */
     async usage(spaceId: string): Promise<SpaceUsage | null> {
       if (!meter) return null;
-      const counts = meter.usage(spaceId);
+      const counts = await meter.usage(spaceId, await membersOf(spaceId));
       const bytes = core.carried.has(spaceId) ? ((await config.measure?.(spaceId).catch(() => 0)) ?? 0) : 0;
       return { writers: counts.writers, readers: counts.readers, bytes, windowDays: counts.windowDays };
     },

@@ -311,12 +311,17 @@ it carries for members' subscriptions:
 
 - **writers**: distinct accounts with a version of the space that reached the
   host and passed its gates (02 §3), the account being the issuer of the
-  version's note (`proof`), or its `author` when it has none. Joining writes
-  a version, so a member counts from when they join. A version whose
-  `createdAt` is more than `windowDays` before it arrived is history, and is
-  not counted. Accounts the host runs, its bots (§3), are not counted.
+  version's note (`proof`), or its `author` when it has none, and that are
+  members of the space (03 §4) when the host counts. Joining writes a
+  version, so a member counts from when they join, and one removed counts no
+  more. A version counts by when it arrived, never by its `createdAt`, which
+  is its writer's to say: only while the host first catches up on a space it
+  has just started carrying is a version that says it is older than the
+  window taken as history, and not counted (the reference host: the first
+  10 minutes). Accounts the host runs, its bots (§3), are not counted.
 - **readers**: distinct session DIDs that a socket for the space
-  (`/peer?space=`) proved (04 §5).
+  (`/peer?space=`) proved (04 §5). The reference host keeps at most 10 000
+  a day for a space, so made-up keys cost it no more memory past that.
 - **bytes**: what the space takes at the host.
 
 A space is **over the line** when `writers` exceeds `space.writers`, or when
@@ -332,11 +337,14 @@ status of every subscription that names it. Past `until`, it MUST NOT carry
 the space for members' subscriptions alone: only its own subscription (§2),
 while `active` or `grace`, carries it then. Before `until` it MUST carry it
 as before. While the space's own subscription is `active`, the line does not
-apply and `until` does not run: the grace starts again from when it stops
-being active. A space comes back under the line only after `windowDays` with
-every count at or below 80% of its limit; one the host stopped carrying sees
-no writes, so it comes back only through its own subscription, or once the
-host forgets it after `keepDays`, and is then counted again from nothing.
+apply. The grace is given once: paying for a while does not start it again,
+so once the space's own subscription stops being `active`, members'
+subscriptions carry it again only if `until` is still ahead. A space comes
+back under the line only after `windowDays` with every count at or below 80%
+of its limit. One the host stopped carrying sees no writes, so it comes back
+only through its own subscription, or once the host forgets it after
+`keepDays`, when it is counted again from nothing; but the host remembers it
+stopped it, and should it go over again it is past its grace at once.
 
 Stopping changes nothing a peer checks: members' devices keep their copies
 and sync with each other directly, and a subscription that names the space
@@ -399,10 +407,12 @@ how its members can start its fund (§2) before then.
 
 **Abuse.** A host with `limits` carries for anyone who asks, so it limits how
 fast subscriptions are made and how much one account may name. The
-reference host makes at most 5 subscriptions a day for one address and
-carries at most 200 spaces for one subscription; a carry space past that
-takes no new space, as past its quota. These are its own numbers, not the
-protocol's.
+reference host makes at most 5 subscriptions a day for one address, an IPv6
+/64 counting as one, and carries at most 200 spaces for one subscription; a
+carry space past that takes no new space, as past its quota. Behind a proxy
+it takes the address from a header only when told which. These are its own
+numbers, not the protocol's, and they slow a stranger rather than stop one:
+an account is only a key.
 
 **Privacy.** The counts are what the host sees already: every version's
 note names its account in the clear (02 §3.1), and every socket's hello its
@@ -410,7 +420,8 @@ session DID. To count, the reference host keeps, for `windowDays`, the
 accounts that wrote in each space on each day as salted hashes; the readers
 it keeps in memory only. `usage` gives only counts, never who. It is open
 to anyone who knows the space id, as its status is, so it tells them
-roughly how busy the space is.
+roughly how busy the space is, and, asked again and again, when its members
+are online.
 
 _Source: `packages/core/src/session/hosting.ts` (`HostLimits`, `hostLimits`, `OverSpace`, `SpaceUsage`, `describeHost`), `packages/core/src/node/usage.ts` (`createUsageMeter`), `packages/core/src/node/host.ts` (`plan`, `evaluate`, `sweep`), `packages/core/src/node/carrier.ts` (`skip`, `onArrived`), `packages/cli/src/host.ts` (`usageOf`, `quotaFor`, `statusOf`), `packages/cli/src/serve.ts` (`onPeer`), `packages/cli/src/host-setup.ts` (`limitsFromEnv`). Tests: `packages/core/tests/usage.test.ts`, `packages/core/tests/host-limits.test.ts`, `packages/cli/tests/host.test.ts` ("a host with limits": all)._
 

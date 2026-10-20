@@ -9,7 +9,7 @@ import { test, describe, afterEach } from 'node:test';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { createServer, type RequestListener } from 'node:http';
+import { createServer, type IncomingMessage, type RequestListener } from 'node:http';
 
 import { createNode } from '../../core/src/node/node.js';
 import { createHostNode, type HostNode } from '../../core/src/node/host.js';
@@ -32,7 +32,7 @@ import {
   subscriptionKey,
   verifyRequest,
 } from '../../core/src/session/hosting.js';
-import { startHost } from '../src/host.js';
+import { addressOf, startHost } from '../src/host.js';
 import { createStripeBilling, verifyStripeSignature } from '../src/stripe.js';
 import { allowList, botsFromEnv, checkExposure, limitsFromEnv, walletFromEnv } from '../src/host-setup.js';
 import { createWalletPayments, NETWORKS, toUnits } from '../src/wallet.js';
@@ -2196,5 +2196,25 @@ describe('a host with limits', () => {
     const info = await describeHost(`http://127.0.0.1:${port}`);
     assert.equal(info.name, 'Odd');
     assert.equal(info.limits, undefined);
+  });
+});
+
+describe('who is asking, for the limit on new subscriptions', () => {
+  const asked = (remoteAddress: string, headers: Record<string, string> = {}) =>
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- only the fields addressOf reads
+    ({ socket: { remoteAddress }, headers }) as unknown as IncomingMessage;
+
+  test('an IPv6 address counts by its /64; an IPv4 one as itself, mapped or not', () => {
+    assert.equal(addressOf(asked('2001:db8:1:2:aaaa::1')), '2001:db8:1:2::/64');
+    assert.equal(addressOf(asked('2001:db8:1:2:bbbb:cccc:dddd:eeee')), '2001:db8:1:2::/64');
+    assert.equal(addressOf(asked('2001:db8::1')), '2001:db8:0:0::/64');
+    assert.equal(addressOf(asked('::ffff:203.0.113.7')), '203.0.113.7');
+    assert.equal(addressOf(asked('203.0.113.7')), '203.0.113.7');
+  });
+
+  test('a proxy’s header counts only when named; its first address is the asker', () => {
+    const behind = asked('10.0.0.1', { 'x-forwarded-for': '198.51.100.4, 10.0.0.1' });
+    assert.equal(addressOf(behind), '10.0.0.1', 'not trusted unless named');
+    assert.equal(addressOf(behind, 'X-Forwarded-For'), '198.51.100.4');
   });
 });

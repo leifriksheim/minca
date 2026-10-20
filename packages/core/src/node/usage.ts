@@ -20,6 +20,9 @@ import { sha256 } from '../utils/hash.js';
 const DAY = 86_400;
 const PREFIX = 'usage:';
 const SALT_KEY = 'usage-salt';
+const FIRST_PREFIX = 'first:';
+/** Readers kept for one space on one day: past it the count stops growing, so made-up keys cost no more memory */
+const MAX_READERS_A_DAY = 10_000;
 
 export interface UsageMeterConfig {
   readonly store: StorageAdapter;
@@ -52,6 +55,16 @@ export async function createUsageMeter(config: UsageMeterConfig) {
   }
   const salted = salt;
 
+  const hashOf = async (spaceId: string, account: string) =>
+    hex((await sha256(new Uint8Array([...salted, ...utf8Encode(`${spaceId}\n${account}`)]))).slice(0, 16));
+  /** When the meter first saw each space, unix seconds */
+  const first = new Map<string, number>();
+  for (const key of await store.list(FIRST_PREFIX)) {
+    const bytes = await store.get(key);
+    const at = bytes ? Number(utf8Decode(bytes)) : NaN;
+    if (Number.isFinite(at)) first.set(key.slice(FIRST_PREFIX.length), at);
+  }
+
   /** Writers by space, then by day: hashes */
   const writers = new Map<string, Map<string, Set<string>>>();
   /** Readers by space, then by day: session DIDs, in memory only */
@@ -82,9 +95,14 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     return new Set(Array.from({ length: config.windowDays }, (_, back) => dayOf(today - back * DAY)));
   };
 
-  const distinct = (days: Map<string, Set<string>> | undefined, within: ReadonlySet<string>) => {
+  const distinct = (
+    days: Map<string, Set<string>> | undefined,
+    within: ReadonlySet<string>,
+    only?: ReadonlySet<string>,
+  ) => {
     const all = new Set<string>();
-    for (const [day, set] of days ?? []) if (within.has(day)) for (const one of set) all.add(one);
+    for (const [day, set] of days ?? [])
+      if (within.has(day)) for (const one of set) if (!only || only.has(one)) all.add(one);
     return all.size;
   };
 
@@ -100,9 +118,7 @@ export async function createUsageMeter(config: UsageMeterConfig) {
     /** An account wrote in a space: counted once a day, whatever it wrote */
     async wrote(spaceId: string, account: string): Promise<void> {
       const day = dayOf(now());
-      const hash = hex(
-        (await sha256(new Uint8Array([...salted, ...utf8Encode(`${spaceId}\n${account}`)]))).slice(0, 16),
-      );
+      const hash = await hashOf(spaceId, account);
       const set = setFor(writers, spaceId, day);
       if (set.has(hash)) return;
       set.add(hash);
@@ -111,14 +127,34 @@ export async function createUsageMeter(config: UsageMeterConfig) {
 
     /** A session key proved it may read a space */
     read(spaceId: string, session: string): void {
-      setFor(readers, spaceId, dayOf(now())).add(session);
+      const set = setFor(readers, spaceId, dayOf(now()));
+      if (set.size < MAX_READERS_A_DAY) set.add(session);
     },
 
-    /** How a space was used over the window */
-    usage(spaceId: string): Counted {
+    /**
+     * When the meter first saw a space, kept from now if it never did: what
+     * arrives soon after is the host catching up on its history.
+     */
+    async firstSeen(spaceId: string): Promise<number> {
+      const known = first.get(spaceId);
+      if (known !== undefined) return known;
+      const at = now();
+      first.set(spaceId, at);
+      await later(() => store.put(`${FIRST_PREFIX}${spaceId}`, utf8Encode(String(at))));
+      return at;
+    },
+
+    /**
+     * How a space was used over the window. With `members`, only the writers
+     * among them count: one removed since counts no more.
+     */
+    async usage(spaceId: string, members?: ReadonlyArray<string>): Promise<Counted> {
       const within = window();
+      const only = members
+        ? new Set(await Promise.all(members.map((member) => hashOf(spaceId, member))))
+        : undefined;
       return {
-        writers: distinct(writers.get(spaceId), within),
+        writers: distinct(writers.get(spaceId), within, only),
         readers: distinct(readers.get(spaceId), within),
         windowDays: config.windowDays,
       };
@@ -144,6 +180,7 @@ export async function createUsageMeter(config: UsageMeterConfig) {
         await later(() => store.delete(`${PREFIX}${spaceId}:${day}`));
       writers.delete(spaceId);
       readers.delete(spaceId);
+      if (first.delete(spaceId)) await later(() => store.delete(`${FIRST_PREFIX}${spaceId}`));
     },
 
     /** Waits for what is being written */

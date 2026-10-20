@@ -211,12 +211,10 @@ describe('counting a space’s writers', () => {
     assert.equal((await node.usage(c.space))?.writers, 2, 'two devices, one account');
   });
 
-  test('the host’s own bots are not counted, and neither is history written long before it arrived', async () => {
+  test('the host’s own bots are not counted', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const [alice, bot] = [await account(), await account()];
-    // The host's clock is moved on later: everything arriving then was written long before.
-    let clock = Math.floor(Date.now() / 1000);
-    const node = await host(hub, { ignore: (account) => account === bot.did, now: () => clock });
+    const node = await host(hub, { ignore: (account) => account === bot.did });
     const c = await community(hub, node, 'private', [alice, bot]);
     await c.bobNode.records.put(c.space, 'note', { text: 'the bot' });
     await until(
@@ -226,12 +224,39 @@ describe('counting a space’s writers', () => {
     );
     await settle(300);
     assert.equal((await node.usage(c.space))?.writers, 1, 'Alice, and not the bot');
+  });
 
-    clock += 40 * DAY;
-    assert.equal((await node.usage(c.space))?.writers, 0, 'the window moved on');
-    await c.aliceNode.records.put(c.space, 'note', { text: 'written today, by the device’s clock' });
+  test('history is not counted while the host first catches up; after that, a backdated write counts as any', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    // The host's clock is 40 days ahead of the devices': all they write says it is 40 days old.
+    let clock = Math.floor(Date.now() / 1000) + 40 * DAY;
+    const node = await host(hub, { now: () => clock });
+    const c = await community(hub, node);
     await settle(500);
-    assert.equal((await node.usage(c.space))?.writers, 0, 'it reads as written 40 days before it arrived');
+    assert.equal((await node.usage(c.space))?.writers, 0, 'founding and joining arrived as history');
+
+    clock += 11 * 60;
+    await c.aliceNode.records.put(c.space, 'note', { text: 'a' });
+    await c.bobNode.records.put(c.space, 'note', { text: 'b' });
+    await until(
+      async () => (await node.usage(c.space))?.writers === 2,
+      8000,
+      'both counted, backdated or not',
+    );
+    await node.evaluate();
+    assert.equal((await node.overFor(c.subscriptions[0])).length, 1, 'so the space is over the line');
+  });
+
+  test('a member removed no longer counts as a writer', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const node = await host(hub);
+    const c = await community(hub, node);
+    await bothWrite(node, c);
+    await c.aliceNode.spaces.removeMember(c.space, c.bob.did);
+    await until(async () => (await node.usage(c.space))?.writers === 1, 8000, 'Bob to stop counting');
+    await c.bobNode.records.put(c.space, 'note', { text: 'still trying' }).catch(() => {});
+    await settle(500);
+    assert.equal((await node.usage(c.space))?.writers, 1);
   });
 
   test('readers alone never put a space over the line', async () => {
@@ -301,13 +326,15 @@ describe('the free line', () => {
     assert.deepEqual(await mirror.list(`${c.space}/`), []);
   });
 
-  test('its own subscription keeps it carried past until; the grace starts again when that stops', async () => {
+  test('its own subscription keeps it carried past until; paying a while does not buy the grace again', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     let clock = Math.floor(Date.now() / 1000);
     const node = await host(hub, { now: () => clock });
     const c = await community(hub, node, 'public');
     await bothWrite(node, c);
     await node.evaluate();
+    const [first] = await node.overFor(c.subscriptions[0]);
+    assert.ok(first);
     const own = spaceSubscription(c.space);
     await node.extend(own, clock + 60 * DAY);
     await node.carrySpace(own, { v: 1, space: parseSpaceInvite(c.invite).space });
@@ -322,12 +349,40 @@ describe('the free line', () => {
     );
     assert.equal((await node.overFor(spaceSubscription(c.space))).length, 1, 'its own status still says it');
 
+    // The fund stopped at day 60: the grace it had ran out long ago.
     clock += 20 * DAY;
     await node.evaluate();
     const [over] = await node.overFor(c.subscriptions[0]);
-    // Last seen paying at day 45 (the sweep runs hourly at a real host): its grace runs from there.
-    assert.equal(over?.until, clock - 20 * DAY + 30 * DAY, 'its grace runs from when the fund stopped');
-    assert.equal(await carries(node, c.space)(), true);
+    assert.equal(over?.until, first.until, 'the same date as before it paid');
+    assert.equal(await carries(node, c.space)(), true, 'carried still, by its own subscription’s grace');
+    clock += 31 * DAY;
+    await node.sweep();
+    await node.evaluate();
+    await until(async () => !(await carries(node, c.space)()), 5000, 'nobody to carry it');
+  });
+
+  test('stopped once and forgotten, a space over the line again gets no new grace', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const { keepDays: _none, ...limits } = LIMITS;
+    const node = await host(hub, { now: () => clock, limits });
+    const c = await community(hub, node);
+    await bothWrite(node, c);
+    await node.evaluate();
+    clock += 31 * DAY;
+    assert.deepEqual((await node.evaluate()).stopped, [c.space]);
+    await until(async () => !(await carries(node, c.space)()), 5000, 'stopped');
+
+    // Forgotten at once without keepDays, so its members carry it again, counted from nothing…
+    clock += 60;
+    await node.evaluate();
+    await until(carries(node, c.space), 8000, 'carried again for members');
+    // …and once it is over again, past catching up, it is past its grace at once.
+    clock += 11 * 60;
+    await bothWrite(node, c);
+    clock += 60;
+    assert.deepEqual((await node.evaluate()).stopped, [c.space]);
+    await until(async () => !(await carries(node, c.space)()), 5000, 'stopped again, without a new grace');
   });
 
   test('bytes count only in a space several accounts write in', async () => {
