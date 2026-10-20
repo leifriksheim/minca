@@ -795,6 +795,12 @@ Using a carrier needs the account key:
    carrier joins with the invite. Keeping the other carriers' carry spaces
    in step (below) needs no waiting for.
 
+> **Known defect:** two devices that add the same carrier at once, each before
+> hearing of the other's record, make two carry spaces for it. Both stay live
+> and are kept in step; the carrier holds whichever invite reached it.
+> Removing one could close the one the carrier holds, so neither is removed
+> ([#283](https://github.com/leifriksheim/minca/issues/283)).
+
 > **Known defect:** a node that stops between steps 1 and 2 (a tab closed
 > mid-connect) leaves the carry space held with no record, and a later
 > reconcile records it as a space the account uses, where every app lists it.
@@ -802,11 +808,8 @@ Using a carrier needs the account key:
 > ([#283](https://github.com/leifriksheim/minca/issues/283)).
 
 A carrier the account already uses, by `did`, is not added again: the node
-returns its carry space and invite as they are. Two devices that add the same
-carrier at once, each before hearing of the other's, make two carry spaces.
-Every device that sees two live `sys.carrier` records with one `did` keeps the
-one with the earliest `since` (then the lower carry space id) and removes the
-others as below, so they all keep the same one. So a carrier that connects
+returns its carry space and invite as they are. A node asked to add a carrier
+it is already adding answers both with the one carry space. So a carrier that connects
 again keeps what it holds, and is never sent `carry:closed` (below) for a
 space it is still using.
 
@@ -869,7 +872,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, every device keeps the earliest and removes the rest", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 

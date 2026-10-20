@@ -781,19 +781,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     // Carry spaces first: they are the account's, but not spaces it uses.
     const carriers = await carrierRecords();
-    // One carrier, by key, added on two devices at once: every device keeps the
-    // earliest (by `since`, then carry space id) and removes the rest.
-    const byKey = new Map<string, Carrier[]>();
-    for (const { record } of carriers)
-      if (!record.deleted && record.body)
-        byKey.set(record.body.did, [...(byKey.get(record.body.did) ?? []), record.body]);
-    for (const same of byKey.values()) {
-      if (same.length < 2) continue;
-      const [, ...extra] = [...same].sort(
-        (a, b) => a.since.localeCompare(b.since) || a.space.localeCompare(b.space),
-      );
-      for (const carrier of extra) void carriersApi.remove(carrier.space).catch(() => {});
-    }
     carrySpaces = new Set([...carrySpaces, ...carriers.map(({ space }) => space)]);
     for (const { record, space: spaceId } of carriers) {
       if (record.deleted) {
@@ -1221,9 +1208,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       });
     },
   });
-
-  /** For reconcile, whose own `carriers` is the records */
-  const carriersApi = carriers;
 
   // ─── Hosting ───────────────────────────────────────────────────────
   //

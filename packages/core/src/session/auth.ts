@@ -1229,10 +1229,11 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         const summary = kept && accounts.find((account) => account.id === kept.accountId);
         if (kept && summary) {
           const session = await begin(pod, summary, kept.seed);
-          update({ session, stage: 'ready' });
+          // A pairing link still asks first, as at start (spec 01 §15.3).
+          update({ session, stage: state.pairing ? 'pair' : 'ready' });
           return;
         }
-        update({ stage: afterStorage(accounts) });
+        update({ stage: state.pairing ? 'pair' : afterStorage(accounts) });
       });
     },
 

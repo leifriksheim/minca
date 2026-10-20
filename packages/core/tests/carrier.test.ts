@@ -171,29 +171,6 @@ describe('a carrier', () => {
     assert.equal((await home.carriers.list()).length, 1);
   });
 
-  test('added on two devices at once, every device keeps the earliest and removes the rest', async () => {
-    const me = await account();
-    const hub = createFakeHub({ latencyMs: 1 });
-    const laptop = await device(me, hub);
-    const phone = await device(me, hub);
-    const did = (await carrierKey()).did;
-    // Neither has heard of the other's when it adds its own.
-    const [a, b] = await Promise.all([
-      laptop.carriers.add({ did, name: 'host.example' }),
-      phone.carriers.add({ did, name: 'host.example' }),
-    ]);
-    assert.notEqual(a.space, b.space);
-    const one = async (node: P2PNode) => (await node.carriers.list()).map((c) => c.space);
-    await until(
-      async () => {
-        const [l, p] = [await one(laptop), await one(phone)];
-        return l.length === 1 && p.length === 1 && l[0] === p[0];
-      },
-      8000,
-      'both devices to keep the same one',
-    );
-  });
-
   test('adding one that fails leaves no carry space behind, to come back as a space the account uses', async () => {
     const me = await account();
     const stores = memoryStores();
