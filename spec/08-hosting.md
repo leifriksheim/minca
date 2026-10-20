@@ -311,7 +311,8 @@ it carries for members' subscriptions:
 
 - **writers**: distinct accounts with a version of the space that reached the
   host and passed its gates (02 §3), the account being the issuer of the
-  version's note (`proof`), or its `author` when it has none. A version whose
+  version's note (`proof`), or its `author` when it has none. Joining writes
+  a version, so a member counts from when they join. A version whose
   `createdAt` is more than `windowDays` before it arrived is history, and is
   not counted. Accounts the host runs, its bots (§3), are not counted.
 - **readers**: distinct session DIDs that a socket for the space
