@@ -424,6 +424,14 @@ export class MincaAuthElement extends Base {
       h(
         'div',
         { class: 'wa-options' },
+        state.podToReopen && state.folderAvailable
+          ? option(
+              `Open “${state.podToReopen}” again`,
+              'Your account is in this folder. The browser asks once more before opening it.',
+              () => void auth.reopenPod(),
+              state.busy,
+            )
+          : null,
         option(
           'Create an account',
           "Takes a minute. You'll get a recovery code to keep safe, then sign in with a passkey or a password.",

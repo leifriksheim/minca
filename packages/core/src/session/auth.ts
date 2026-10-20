@@ -53,6 +53,7 @@ import {
   inspectPod,
   listAccounts,
   pickPod,
+  podToReopen,
   recallPod,
   rememberPod,
   describeStores,
@@ -324,6 +325,11 @@ export interface AuthState {
   readonly moved: MovedToPod | null;
   /** Signing out now: `starting` is this, not a look for accounts */
   readonly signingOut: boolean;
+  /**
+   * The pod this site used last, by name, when the browser wants a click
+   * before opening it again: `reopenPod` from that click.
+   */
+  readonly podToReopen: string | null;
 }
 
 export interface MincaAuth {
@@ -334,6 +340,8 @@ export interface MincaAuth {
   start(): Promise<void>;
 
   // Where the data lives
+  /** Opens again the pod named in `podToReopen`, signed in if it was kept so. Needs a click. */
+  reopenPod(): Promise<void>;
   /** Opens a pod. Needs a click. Signed in, it asks what should happen to the data first (`podChoice`). */
   choosePod(): Promise<void>;
   /** Keeps accounts in this browser, and stops using a pod if one was open */
@@ -579,6 +587,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     podChoice: null,
     moved: null,
     signingOut: false,
+    podToReopen: null,
   });
   const listeners = new Set<(state: AuthState) => void>();
   const update = (patch: Partial<AuthState>) => {
@@ -1175,6 +1184,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
           const pod = await recallPod(false).catch(() => null);
           const place = pod ?? (await browserPlace());
           const accounts = await refresh(place);
+          // Remembered, but the browser wants a click first: say so, rather than start as if new.
+          if (!pod) update({ podToReopen: await podToReopen().catch(() => null) });
 
           if (accounts.length > 0) {
             const kept = await stay.recall(place.kind).catch(() => null);
@@ -1202,6 +1213,27 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
         }
       })();
       return started;
+    },
+
+    async reopenPod() {
+      await run(async () => {
+        const pod = await recallPod(true);
+        if (!pod)
+          throw new Error(
+            'The browser did not open the folder. Try again, or choose it with “Open a folder”.',
+          );
+        update({ podToReopen: null });
+        const accounts = await refresh(pod);
+        // Kept signed in there: straight in, as a page load with the permission would have been.
+        const kept = await stay.recall(pod.kind).catch(() => null);
+        const summary = kept && accounts.find((account) => account.id === kept.accountId);
+        if (kept && summary) {
+          const session = await begin(pod, summary, kept.seed);
+          update({ session, stage: 'ready' });
+          return;
+        }
+        update({ stage: afterStorage(accounts) });
+      });
     },
 
     async choosePod() {
