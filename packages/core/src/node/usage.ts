@@ -59,6 +59,16 @@ export async function createUsageMeter(config: UsageMeterConfig) {
 
   const hashOf = async (spaceId: string, account: string) =>
     hex((await sha256(new Uint8Array([...salted, ...utf8Encode(`${spaceId}\n${account}`)]))).slice(0, 16));
+  /** Each space's members, hashed, as last asked: hashed again only when they change */
+  const memberHashes = new Map<string, { readonly members: string; readonly hashes: ReadonlySet<string> }>();
+  const hashesOf = async (spaceId: string, members: ReadonlyArray<string>) => {
+    const joined = members.join('\n');
+    const known = memberHashes.get(spaceId);
+    if (known?.members === joined) return known.hashes;
+    const hashes = new Set(await Promise.all(members.map((member) => hashOf(spaceId, member))));
+    memberHashes.set(spaceId, { members: joined, hashes });
+    return hashes;
+  };
   /** When the meter first saw each space, unix seconds */
   const first = new Map<string, number>();
   for (const key of await store.list(FIRST_PREFIX)) {
@@ -159,9 +169,7 @@ export async function createUsageMeter(config: UsageMeterConfig) {
      */
     async usage(spaceId: string, members?: ReadonlyArray<string>): Promise<Counted> {
       const within = window();
-      const only = members
-        ? new Set(await Promise.all(members.map((member) => hashOf(spaceId, member))))
-        : undefined;
+      const only = members ? await hashesOf(spaceId, members) : undefined;
       return {
         writers: distinct(writers.get(spaceId), within, only),
         readers: distinct(readers.get(spaceId), within),
@@ -191,6 +199,7 @@ export async function createUsageMeter(config: UsageMeterConfig) {
       writers.delete(spaceId);
       kept -= keptIn(readers.get(spaceId));
       readers.delete(spaceId);
+      memberHashes.delete(spaceId);
       if (first.delete(spaceId)) await later(() => store.delete(`${FIRST_PREFIX}${spaceId}`));
     },
 

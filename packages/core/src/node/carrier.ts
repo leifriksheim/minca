@@ -27,7 +27,13 @@ import { didOf } from '../identity/did.js';
 import { createSigner } from '../schema/signer.js';
 import { createSchemaEngine } from '../schema/schema-engine.js';
 import { createSpaceManager, parseSpaceInvite, type SpaceRecord } from '../space/space-manager.js';
-import { carriedRecord, CARRY_CLOSED_KEY, openPass, PASS_COLLECTION } from '../space/pass.js';
+import {
+  carriedRecord,
+  CARRY_CLOSED_KEY,
+  openPass,
+  PASS_COLLECTION,
+  type OpenedPass,
+} from '../space/pass.js';
 import { readWake, wakes, WAKE_COLLECTION, type Wake } from '../space/own-automations.js';
 import type { Version } from '../types.js';
 import { createLocalHub, type LocalHub } from '../network/local-transport.js';
@@ -152,8 +158,10 @@ export interface CarryCoreConfig {
    * has to pay for itself
    */
   readonly skip?: (spaceId: string) => boolean;
-  /** Versions that reached a carried space from a peer and passed its gates; not a carry space's own */
+  /** Versions that reached a carried space from a peer and passed its gates, a carry space's too */
   readonly onArrived?: (spaceId: string, version: Version) => void;
+  /** Spaces one carry space may have carried at most: those its passes name past that wait */
+  readonly most?: number;
 }
 
 /**
@@ -247,7 +255,7 @@ export async function createCarryCore(config: CarryCoreConfig) {
         if (event.type === 'records' && carries.has(spaceId)) void refresh();
       },
       (version) => {
-        if (!carries.has(spaceId)) config.onArrived?.(spaceId, version);
+        config.onArrived?.(spaceId, version);
         arrived(record, version);
       },
     );
@@ -330,15 +338,22 @@ export async function createCarryCore(config: CarryCoreConfig) {
       entry.wakes = found;
       const wants = new Set<string>();
       const named = new Set<string>();
+      const passes: OpenedPass[] = [];
       for (const record of records) {
         if (!record.key.startsWith('pass:')) continue;
         const pass = await openPass(record.body, provider);
         if (!pass || carries.has(pass.space.id)) continue;
         named.add(pass.space.id);
-        if (config.skip?.(pass.space.id)) continue;
+        if (!config.skip?.(pass.space.id)) passes.push(pass);
+      }
+      // What it carries already comes first, so a cap keeps those and turns away only new ones.
+      passes.sort((a, b) => Number(entry.wants.has(b.space.id)) - Number(entry.wants.has(a.space.id)));
+      for (const pass of passes) {
         // Over its limit: no new space, though one held already for someone else costs nothing more.
         const more = !entry.wants.has(pass.space.id) && !carried.has(pass.space.id);
         if (more && config.full?.(carrySpace)) continue;
+        // Counted as it goes, so one handed over with thousands of passes takes no more than it may.
+        if (config.most !== undefined && wants.size >= config.most) continue;
         wants.add(pass.space.id);
         // Two accounts naming one space: a pass for a later key beats one for the space's first,
         // since an account whose pass is behind just hasn't caught up yet.

@@ -361,10 +361,15 @@ describe('the free line', () => {
     const [over] = await node.overFor(c.subscriptions[0]);
     assert.equal(over?.until, first.until, 'the same date as before it paid');
     assert.equal(await carries(node, c.space)(), true, 'carried still, by its own subscription’s grace');
+    // Quiet since its writes left the window, then busy again: its grace is spent, so a short notice.
     clock += 31 * DAY;
     await bothWrite(node, c);
     await node.sweep();
     await node.evaluate();
+    assert.equal((await node.overFor(c.subscriptions[0]))[0]?.until, clock + 7 * DAY);
+    clock += 8 * DAY;
+    await bothWrite(node, c);
+    assert.deepEqual((await node.evaluate()).stopped, [c.space]);
     await until(async () => !(await carries(node, c.space)()), 5000, 'nobody to carry it');
   });
 
@@ -385,10 +390,14 @@ describe('the free line', () => {
     clock += 60;
     await node.evaluate();
     await until(carries(node, c.space), 8000, 'carried again for members');
-    // …and once it is over again, past catching up, it is past its grace at once.
+    // …and once it is over again, past catching up, it gets a week's notice, not a new grace.
     clock += 11 * 60;
     await bothWrite(node, c);
     clock += 60;
+    assert.deepEqual((await node.evaluate()).stopped, []);
+    assert.equal((await node.overFor(c.subscriptions[0]))[0]?.until, clock + 7 * DAY);
+    clock += 8 * DAY;
+    await bothWrite(node, c);
     assert.deepEqual((await node.evaluate()).stopped, [c.space]);
     await until(async () => !(await carries(node, c.space)()), 5000, 'stopped again, without a new grace');
   });
@@ -435,6 +444,90 @@ describe('the free line', () => {
     assert.deepEqual(await node.overFor(id), []);
   });
 
+  test('a shared space handed over as someone’s carry space is held to the line too', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const node = await host(hub, { now: () => clock });
+    const [alice, bob] = [await account(), await account()];
+    const [aliceNode, bobNode] = [await device(alice, hub), await device(bob, hub)];
+    const club = await aliceNode.spaces.create({ name: 'Club', ...team, visibility: 'private' });
+    await bobNode.spaces.join(await aliceNode.spaces.invite(club.id));
+    await hold(aliceNode, club.id);
+    await joined(bobNode, club.id);
+    // The trick: the club itself, handed over in place of Alice's carry space.
+    const id = await subscriptionId();
+    await node.subscribe(id);
+    await node.attach(id, alice.did, await aliceNode.spaces.invite(club.id));
+    await until(carries(node, club.id), 8000, 'the club to be carried');
+
+    const write = async () => {
+      await aliceNode.records.put(club.id, 'note', { text: String(clock) });
+      await bobNode.records.put(club.id, 'note', { text: String(clock) });
+      await until(async () => (await node.usage(club.id))?.writers === 2, 8000, 'both counted');
+    };
+    await write();
+    await node.evaluate();
+    assert.equal((await node.overFor(id))[0]?.space, club.id, 'its member is told');
+    clock += 31 * DAY;
+    await write();
+    assert.deepEqual((await node.evaluate()).stopped, [club.id]);
+    await until(async () => !(await carries(node, club.id)()), 5000, 'no longer carried');
+    assert.equal((await node.get(id))?.carry, undefined, 'it is nobody’s carry space now');
+    await assert.rejects(
+      node.attach(id, alice.did, await aliceNode.spaces.invite(club.id)),
+      /free line/,
+      'nor can it be handed over again',
+    );
+  });
+
+  test('free again after a whole window under, a space’s grace is its own again; over again after it was spent, a short notice', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const node = await host(hub, { now: () => clock });
+    const c = await community(hub, node, 'public');
+    await bothWrite(node, c);
+    await node.evaluate();
+    clock += 31 * DAY;
+    await bothWrite(node, c);
+    assert.deepEqual((await node.evaluate()).stopped, [c.space]);
+
+    // Its fund pays, and it goes quiet for two windows: its line goes, and the stop with it.
+    const own = spaceSubscription(c.space);
+    await node.extend(own, clock + 100 * DAY);
+    await node.carrySpace(own, { v: 1, space: parseSpaceInvite(c.invite).space });
+    clock += 31 * DAY;
+    await node.evaluate();
+    clock += 31 * DAY;
+    assert.deepEqual((await node.evaluate()).under, [c.space]);
+    clock += 60 * DAY;
+    await node.sweep();
+    await node.evaluate();
+    await until(carries(node, c.space), 8000, 'carried for its members again');
+    await bothWrite(node, c);
+    await node.evaluate();
+    const [fresh] = await node.overFor(c.subscriptions[0]);
+    assert.equal(fresh?.until, clock + 30 * DAY, 'a whole grace, as for any space');
+
+    // Under before its grace runs out, then over again after: seven days' notice, not a stop.
+    clock += 1 * DAY;
+    await c.aliceNode.spaces.removeMember(c.space, c.bob.did);
+    await until(async () => (await node.usage(c.space))?.writers === 1, 8000, 'only Alice');
+    await node.evaluate();
+    clock += 30 * DAY;
+    await node.evaluate();
+    const third = await account();
+    const joiner = await device(third, hub);
+    await joiner.spaces.join(c.invite);
+    await joined(joiner, c.space);
+    await c.aliceNode.records.put(c.space, 'note', { text: 'again' });
+    await joiner.records.put(c.space, 'note', { text: 'hi' });
+    await until(async () => (await node.usage(c.space))?.writers === 2, 8000, 'over again');
+    const changed = await node.evaluate();
+    assert.deepEqual(changed.stopped, [], 'not stopped at once');
+    const [notice] = await node.overFor(c.subscriptions[0]);
+    assert.equal(notice?.until, clock + 7 * DAY);
+  });
+
   test('bytes count only in a space several accounts write in', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const node = await host(hub, {
@@ -468,6 +561,8 @@ describe('the free line', () => {
     const node = await host(hub, { now: () => clock, stores, key, limits });
     const c = await community(hub, node);
     await bothWrite(node, c);
+    // Everything in flight arrives before the clock moves, or it counts on a later day.
+    await settle(1000);
     await node.evaluate();
     const [first] = await node.overFor(c.subscriptions[0]);
     assert.ok(first);

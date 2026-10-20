@@ -304,11 +304,11 @@ without payment: `plan` is `"paid"` while `paidUntil` is ahead and `"free"`
 otherwise, and its `quota` is `paidAccountBytes` or `accountBytes`
 accordingly. It is never `grace` or `lapsed` for want of payment, and is
 dropped only after `idleDays` with no signed call (§1) from any of its
-devices. What a space's own subscription carries (§2) counts against no
-account's quota.
+devices. What a space's own subscription carries (§2), while `active`,
+counts against no account's quota. A quota of 0 is a quota: no room.
 
 **The free line.** Over the last `windowDays`, a host counts for each space
-it carries for members' subscriptions:
+it carries for members' subscriptions, carry spaces among them:
 
 - **writers**: distinct accounts with a version of the space that reached the
   host and passed its gates (02 §3), the account being the issuer of the
@@ -326,8 +326,9 @@ it carries for members' subscriptions:
   keys cost it no more memory past that.
 - **bytes**: what the space takes at the host.
 
-A space is **over the line** when `writers` exceeds `space.writers`, or when
-it has at least two writers and `bytes` exceeds `space.bytes`. Readers are
+A space is **over the line** when `writers` exceeds `space.writers` (and at
+least 1), or when it has at least two writers and `bytes` exceeds
+`space.bytes`. Readers are
 only reported: they are cheap to make up, so they MUST NOT put a space over
 the line. A space only one account writes in is never over the line,
 however large: it counts against the quota of every account that names it,
@@ -350,8 +351,13 @@ notice; the fund's own status says when it runs out. A space comes
 back under the line only after `windowDays` with every count at or below 80%
 of its limit. One the host stopped carrying sees no writes, so it comes back
 only through its own subscription, or once the host forgets it after
-`keepDays`, when it is counted again from nothing; but the host remembers it
-stopped it, and should it go over again it is past its grace at once.
+`keepDays`, when it is counted again from nothing. A space whose grace is
+spent, because it was stopped or because the grace ran out while it was
+under, gets only a short notice should it go over again (the reference
+host: 7 days), never a whole grace; one free again after a whole window
+under has its grace back. A carry space over the line past `until` stops
+being that subscription's carry space, and the host refuses it as one until
+its own subscription pays.
 
 Stopping changes nothing a peer checks: members' devices keep their copies
 and sync with each other directly, and a subscription that names the space
@@ -416,8 +422,8 @@ how its members can start its fund (§2) before then.
 fast subscriptions are made and how much one account may name. The
 reference host makes at most 5 subscriptions a day for one address, an IPv6
 /64 counting as one, by any call that makes one, and carries at most 200
-spaces for one subscription; a carry space past that takes no new space, as
-past its quota. Behind a proxy it takes the address from a header only when
+spaces for one subscription, counted as it reads the carry space's passes;
+one past that takes no new space, as past its quota. Behind a proxy it takes the address from a header only when
 told which, and then the last address in it, the one the proxy added. These are its own
 numbers, not the protocol's, and they slow a stranger rather than stop one:
 an account is only a key.
@@ -728,7 +734,8 @@ _Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finis
 > **Metering beyond storage.** A host that meters requests and bandwidth per
 > subscription says so in `HostStatus` as it says `bytes`. Open: the fields,
 > and whether a host may stop syncing a space that keeps growing past `quota`
-> rather than only taking no new one.
+> rather than only taking no new one, and what bounds a space its own fund
+> pays for. Tracked in [#289](https://github.com/leifriksheim/minca/issues/289).
 >
 > **A reminder before time runs out.** Time paid up front does not renew
 > itself (`renews: false`), so the host reminds the person 14 and 3 days before

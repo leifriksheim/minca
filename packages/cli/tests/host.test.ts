@@ -2035,7 +2035,7 @@ describe('a host with limits', () => {
   const limits = {
     accountBytes: 250_000_000,
     paidAccountBytes: 10_000_000_000,
-    space: { writers: 0, bytes: 500_000_000, windowDays: 30, readers: 50 },
+    space: { writers: 10, bytes: 500_000_000, windowDays: 30, readers: 50 },
     graceDays: 30,
     keepDays: 90,
     idleDays: 180,
@@ -2100,16 +2100,10 @@ describe('a host with limits', () => {
     assert.equal(status.usage?.writers, 1);
     assert.ok((status.usage?.readers ?? 0) >= 1);
     assert.equal(status.usage?.windowDays, 30);
-    assert.deepEqual(status.over?.[0]?.reasons, ['writers']);
+    assert.deepEqual(status.over, [], 'one writer is never over the line');
     const [again] = await laptop.hosting.list();
-    const named = again?.status?.over?.find((one) => one.space === club.id);
-    assert.ok(named, 'the account’s status names it too');
-    assert.equal(named.until, named.since + 30 * 24 * 3600);
-    // Every device of the account has it, from the receipt, without asking.
-    assert.deepEqual(
-      (await laptop.hosting.over(club.id)).map((one) => one.over),
-      [named],
-    );
+    assert.deepEqual(again?.status?.over, []);
+    assert.deepEqual(await laptop.hosting.over(club.id), []);
   });
 
   test('the sixth new subscription from one address in a day is refused; those it has go on', async () => {
@@ -2156,14 +2150,15 @@ describe('a host with limits', () => {
   });
 
   test('a subscription takes no new space past the spaces it may have', async () => {
-    const served = await running({ spacesPerSubscription: 2, measure: async () => 0 });
+    // Its registry, its contacts and One: three.
+    const served = await running({ spacesPerSubscription: 3, measure: async () => 0 });
     const url = `http://127.0.0.1:${served.port}`;
     const { laptop } = await laptopOf();
     const first = await laptop.spaces.create({ name: 'One', visibility: 'private' });
     await laptop.hosting.use(url);
     await until(carries(served.node, first.id), 8000, 'the first space');
     await until(
-      async () => ((await laptop.hosting.list())[0]?.status?.spaces ?? 0) >= 2,
+      async () => ((await laptop.hosting.list())[0]?.status?.spaces ?? 0) >= 3,
       8000,
       'the room filled',
     );
@@ -2175,10 +2170,7 @@ describe('a host with limits', () => {
 
   test('from the env: MINCA_HOST_FREE_GB turns limits on, with the rest at their defaults; never with MINCA_HOST_FREE', () => {
     assert.equal(limitsFromEnv({}, false), null);
-    assert.deepEqual(limitsFromEnv({ MINCA_HOST_FREE_GB: '0.25' }, false), {
-      ...limits,
-      space: { ...limits.space, writers: 10 },
-    });
+    assert.deepEqual(limitsFromEnv({ MINCA_HOST_FREE_GB: '0.25' }, false), limits);
     assert.equal(
       limitsFromEnv(
         { MINCA_HOST_FREE_GB: '1', MINCA_HOST_QUOTA_GB: '20', MINCA_HOST_SPACE_WRITERS: '25' },

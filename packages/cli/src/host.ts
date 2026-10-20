@@ -347,6 +347,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     ...(limits
       ? {
           limits,
+          spacesPerCarry: spacesPerSubscription,
           ...(options.measure ? { measure: (spaceId: string) => sizeOf(options.measure!, spaceId) } : {}),
           // What the host's own bots write is not a community growing.
           ignore: async (account: string) => (await bots?.runs(account)) ?? false,
@@ -396,9 +397,11 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     const quota = quotaFor(subscription, id);
     const carry = subscription?.carry?.space;
     const crowded = !!limits && (await node.carriedFor(id)) >= spacesPerSubscription;
-    if (carry && ((quota && bytes >= quota) || crowded)) full.add(carry);
+    // At a host with limits, no room is room: 0 is a quota too.
+    const room = limits ? quota : quota || undefined;
+    if (carry && ((room !== undefined && bytes >= room) || crowded)) full.add(carry);
     else if (carry) full.delete(carry);
-    return { bytes, ...(quota ? { quota } : {}) };
+    return { bytes, ...(room !== undefined ? { quota: room } : {}) };
   };
   /** Measures every subscription, and lets a carry space that has room again take the spaces it waited with */
   const measureAll = async (): Promise<void> => {

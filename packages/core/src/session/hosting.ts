@@ -245,11 +245,12 @@ export function overSpaces(described: unknown): ReadonlyArray<OverSpace> {
   return described.flatMap((one: unknown): OverSpace[] => {
     if (typeof one !== 'object' || one === null) return [];
     const given: Record<string, unknown> = { ...one };
-    const reasons = Array.isArray(given.reasons)
-      ? given.reasons.filter(
-          (reason): reason is 'writers' | 'bytes' => reason === 'writers' || reason === 'bytes',
-        )
-      : [];
+    const listed: unknown[] = Array.isArray(given.reasons) ? given.reasons : [];
+    const reasons = listed.filter(
+      (reason): reason is 'writers' | 'bytes' => reason === 'writers' || reason === 'bytes',
+    );
+    // One reason it doesn't know, and the entry isn't shaped as it should be.
+    if (reasons.length !== listed.length) return [];
     return typeof given.space === 'string' &&
       SPACE_ID.test(given.space) &&
       isCount(given.since) &&

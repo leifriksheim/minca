@@ -121,9 +121,11 @@ reference implementation, or any implementation, honestly.
     proxy without its header set or carrier-grade NAT, a stranger can spend
     the day's 5 for everyone there. The free line counts accounts, which
     members may share, so a community writing as a few accounts stays under
-    it. Nor is one account's room bounded in bytes: past its
-    quota a host takes no new space for it, but what it carries keeps
-    growing ([#33](https://github.com/leifriksheim/minca/issues/33)).
+    it. A community can also move to a successor space (03), which the line
+    counts from nothing, with a whole grace. Nor is one account's room
+    bounded in bytes: past its quota a host takes no new space for it, but
+    what it carries keeps growing, and a space its own fund pays for has no
+    bound at all ([#289](https://github.com/leifriksheim/minca/issues/289)).
     Accepted otherwise: it is the host's cost.
   - Anyone who knows a space's id learns from the host's open status
     whether it carries the space, how many wrote and read there, and, asking
@@ -460,7 +462,11 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     (`packages/core/tests/host-limits.test.ts`, "a member removed no longer
     counts as a writer", "pushed over by joiners removed within the hour…");
     after `until` it is stopped, and is free again only through its fund or
-    once the host forgets it. Any member can also put a space several write
+    once the host forgets it. A space whose grace is spent gets only 7 days'
+    notice when pushed over again, which is the time its members have to
+    remove whoever did it. Handing a shared space over as a carry space
+    does not escape the line ("a shared space handed over as someone's carry
+    space is held to the line too"). Any member can also put a space several write
     in over on bytes, and removing them leaves what they wrote. After `graceDays` only the space's fund
     keeps it at that host. Readers never put a space over, as they cost
     nothing to make up ("readers alone never put a space over the line"),
