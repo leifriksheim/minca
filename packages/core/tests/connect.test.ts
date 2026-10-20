@@ -46,7 +46,10 @@ afterEach(async () => {
  * The account home: a signed-in flow on the hub. Signing out waits only
  * briefly for a peer to take its revokes in, unless a test is about that wait.
  */
-async function home(hub: FakeHub, { signOutGraceMs = 300 } = {}): Promise<MincaAuth> {
+/** Each home's recovery code, as the person kept it */
+const codes = new WeakMap<MincaAuth, string>();
+
+async function home(hub: FakeHub, { signOutGraceMs = 300, confirmed = true } = {}): Promise<MincaAuth> {
   const accounts = createFolderAccountStore(createMemoryDirectory().handle);
   const stores = memoryStores();
   const values = new Map<string, string>([['minca.stay-signed-in', '"never"']]);
@@ -64,9 +67,10 @@ async function home(hub: FakeHub, { signOutGraceMs = 300 } = {}): Promise<MincaA
   await auth.start();
   await auth.createAccount('Ada');
   const code = auth.getState().freshCode!;
+  codes.set(auth, code);
   auth.codeSaved();
-  // Whole-account and contacts grants need the person to have just proved it is them.
-  await auth.confirm({ code });
+  // Giving an app anything needs the person to have just proved it is them.
+  if (confirmed) await auth.confirm({ code });
   cleanup.push(() => auth.signOut());
   return auth;
 }
@@ -196,15 +200,12 @@ describe('connecting an app to an account home', () => {
     await assert.rejects(() => viewer.records.put(shared.id, 'app.note', { text: 'hi' }));
   });
 
-  test('the whole account, or the contacts, are given only just after proof it is you', async () => {
-    // Their keys read every private space and contact request for good: one click at an open page is not enough.
+  test('an app or a carrier is given access only just after proof it is you', async () => {
+    // A sign-in kept for days on a computer anyone may walk up to is no answer to "is it you?".
     const hub = createFakeHub({ latencyMs: 1 });
-    const auth = await home(hub);
-    const code = auth.recoveryCode()!;
-    await auth.signOut();
-    await auth.signInWithCode(code);
-    assert.equal(auth.isConfirmed(), false, 'a new sign-in has proved nothing yet');
-    const ask = async (extra: { scope?: 'account'; contacts?: true }) => {
+    const auth = await home(hub, { confirmed: false });
+    assert.equal(auth.mayGrant(), false, 'a page left signed in has proved nothing');
+    const ask = async (extra: { scope?: 'account'; contacts?: true } = {}) => {
       const key = await appKey();
       return auth.grant({
         origin: 'https://browser.test',
@@ -212,10 +213,26 @@ describe('connecting an app to an account home', () => {
         spaceIds: [],
       });
     };
+    const carry = async () => {
+      const key = await appKey();
+      return auth.grantCarry({
+        origin: 'chrome-extension://abcdef',
+        request: await asked({ v: 1, audience: key.did, access: 'carry' }, key),
+      });
+    };
+    await assert.rejects(ask(), /Confirm it is you/);
     await assert.rejects(ask({ scope: 'account' }), /Confirm it is you/);
     await assert.rejects(ask({ contacts: true }), /Confirm it is you/);
-    assert.equal(await auth.confirm({ code }), true);
+    await assert.rejects(carry(), /Confirm it is you/);
+
+    // Signing in again with the recovery code, a password or a passkey is proof for granting.
+    const kept = codes.get(auth)!;
+    await auth.signOut();
+    await auth.signInWithCode(kept);
+    assert.equal(auth.isConfirmed(), false, 'not enough to read the recovery code');
+    assert.equal(auth.mayGrant(), true);
     assert.ok((await ask({ scope: 'account' })).accountKey);
+    assert.ok((await carry()).carry.space);
   });
 
   test('whole-account access: the app sees every space, and a space it makes lands in the account', async () => {

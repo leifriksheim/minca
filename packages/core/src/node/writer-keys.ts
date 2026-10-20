@@ -91,21 +91,32 @@ export function browserWriterKeys(
         const unlock = await tryLock(locks, dbName);
         if (!unlock) continue;
         try {
-          const db = await openDb(dbName, STORE);
-          let keys = await idbRun(db, STORE, 'readonly', (store) => store.get(KEYS));
+          let db = await openDb(dbName, STORE);
+          // The browser closes the connection under a running node when site data is
+          // cleared: open it again, rather than fail every write from then on.
+          const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>) => {
+            try {
+              return await idbRun(db, STORE, mode, fn);
+            } catch (error) {
+              if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error;
+              db = await openDb(dbName, STORE);
+              return idbRun(db, STORE, mode, fn);
+            }
+          };
+          let keys = await run('readonly', (store) => store.get(KEYS));
           if (!isKeyPair(keys)) {
             const made = await provider.generateKeyPair();
             keys = { publicKey: made.publicKey, privateKey: made.privateKey };
-            await idbRun(db, STORE, 'readwrite', (store) => store.put(keys, KEYS));
+            await run('readwrite', (store) => store.put(keys, KEYS));
           }
           if (!isKeyPair(keys)) throw new Error('The writer key could not be kept');
           const heads: HeadStore = {
             async get(key) {
-              const value = await idbRun(db, STORE, 'readonly', (store) => store.get(`head:${key}`));
+              const value = await run('readonly', (store) => store.get(`head:${key}`));
               return value instanceof Uint8Array ? value : null;
             },
             async put(key, value) {
-              await idbRun(db, STORE, 'readwrite', (store) => store.put(value, `head:${key}`));
+              await run('readwrite', (store) => store.put(value, `head:${key}`));
             },
           };
           return Object.freeze({
@@ -116,7 +127,7 @@ export function browserWriterKeys(
               unlock();
             },
             async forget() {
-              await idbRun(db, STORE, 'readwrite', (store) => store.clear());
+              await run('readwrite', (store) => store.clear());
             },
           });
         } catch {

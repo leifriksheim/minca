@@ -67,7 +67,11 @@ test('renewing from the menu bar keeps what the app wrote while the home could n
   });
   await auth.start();
   await auth.createAccount('Ada');
+  const code = auth.getState().freshCode;
+  assert.ok(code);
   auth.codeSaved();
+  // Giving an app access takes proof it is you, as the person at the home's connect page gives.
+  assert.ok(await auth.confirm({ code }));
   const homeNode = auth.getState().session?.node;
   assert.ok(homeNode);
   const shared = await homeNode.spaces.create({ name: 'Team', ...team, visibility: 'private' });

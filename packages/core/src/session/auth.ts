@@ -322,6 +322,8 @@ export interface AuthState {
   /** A pod picked while signed in, waiting on what should happen to the data */
   readonly podChoice: { readonly pod: Place; readonly contents: PodContents; readonly from: Place } | null;
   readonly moved: MovedToPod | null;
+  /** Signing out now: `starting` is this, not a look for accounts */
+  readonly signingOut: boolean;
 }
 
 export interface MincaAuth {
@@ -392,6 +394,11 @@ export interface MincaAuth {
   ): Promise<boolean>;
   /** Whether `confirm` succeeded in the last few minutes */
   isConfirmed(): boolean;
+  /**
+   * Whether `grant` and `grantCarry` may run now: `isConfirmed`, or a sign-in
+   * with a password, passkey or the recovery code in the last few minutes.
+   */
+  mayGrant(): boolean;
   /** The recovery code of the open account, for a few minutes after `confirm`. Null otherwise. */
   recoveryCode(): string | null;
   /** Starts offering this account to a phone */
@@ -571,6 +578,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     pairingArrival: null,
     podChoice: null,
     moved: null,
+    signingOut: false,
   });
   const listeners = new Set<(state: AuthState) => void>();
   const update = (patch: Partial<AuthState>) => {
@@ -584,6 +592,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   let confirmedAt = 0;
   /** Which account that proof was for, so it never carries over to another */
   let confirmedFor: string | null = null;
+  /** When the open account was last opened with a password, passkey or the recovery code here, and which */
+  let signedInAt = 0;
+  let signedInFor: string | null = null;
   /**
    * Whether a session just landed and is choosing its first way in: only `arrive`
    * opens this, so no call can step back into setup to skip `confirm`.
@@ -664,6 +675,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     seed = null;
     confirmedAt = 0;
     confirmedFor = null;
+    signedInAt = 0;
+    signedInFor = null;
     setupOpen = false;
     localKey = null;
     await node?.close();
@@ -957,6 +970,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   const enter = (open: () => Promise<{ session: MincaSession; byCode: boolean }>) =>
     run(async () => {
       const { session, byCode } = await open();
+      // Opening it took the password, a passkey or the recovery code: proof enough to give an app access, for a few minutes.
+      signedInAt = Date.now();
+      signedInFor = session.did;
       await arrive(session, byCode ? 'restored' : null);
     }).then(() => undefined);
 
@@ -1052,6 +1068,18 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     confirmedFor !== null &&
     state.session?.did === confirmedFor &&
     Date.now() - confirmedAt < CONFIRMED_MS;
+
+  /**
+   * Whether an app may be given access now: the person proved it is them, or
+   * opened the account with a password, passkey or the recovery code, in the
+   * last few minutes. A sign-in kept from before is neither.
+   */
+  const mayGrant = () =>
+    isConfirmed() ||
+    (seed !== null &&
+      signedInFor !== null &&
+      state.session?.did === signedInFor &&
+      Date.now() - signedInAt < CONFIRMED_MS);
 
   /**
    * Changes to the open account's shortcuts, then re-reads them. During setup,
@@ -1591,6 +1619,8 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     isConfirmed,
 
+    mayGrant,
+
     recoveryCode() {
       return seed && isConfirmed() ? seedToRecoveryCode(seed) : null;
     },
@@ -1634,8 +1664,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (recordsOnly && request.contacts)
         throw new Error('A key given records only is not given your contacts.');
       const whole = request.scope === 'account';
-      // The account key and the contact key are read secrets for good: no revoke takes them back.
-      if ((whole || request.contacts) && !isConfirmed()) throw new Error('Confirm it is you first.');
+      // Like any sign-in elsewhere: the person proves it is them before an app gets anything,
+      // not only a home that stayed signed in on a computer anyone may walk up to.
+      if (!mayGrant()) throw new Error('Confirm it is you first.');
       const created = [];
       for (const params of request.create ?? []) created.push(await node.spaces.create(params));
       // With the whole account the app derives the contacts space itself; otherwise it is one more space it is given.
@@ -1757,6 +1788,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const { node } = session;
       const problem = await audienceProblem(request, origin);
       if (problem) throw new Error(problem);
+      if (!mayGrant()) throw new Error('Confirm it is you first.');
       // One carrier per origin: a new key there replaces the old one. The same key again keeps its
       // carry space (`carriers.add`). An app at the same origin is not it, and stays (§2.10).
       const carrierHere = (known: Connection) => known.origin === origin && known.access === 'carry';
@@ -1836,7 +1868,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
 
     async signOut(options = {}) {
       // Not ready from now on: nothing may be granted from this account while it goes.
-      update({ stage: 'starting' });
+      update({ stage: 'starting', signingOut: true });
       await stay.forget();
       const leaving = state.session?.node;
       // Every app and the programs connected through it; carriers stay, holding nothing that writes.
@@ -1863,7 +1895,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       });
       await stopNode(leaving).catch(() => {});
       const place = state.place;
-      update({ stage: place ? afterStorage(await refresh(place)) : 'welcome' });
+      update({ stage: place ? afterStorage(await refresh(place)) : 'welcome', signingOut: false });
     },
   };
 

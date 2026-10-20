@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { avatarElement } from '@minca/app-shared/avatar';
 import { ConfirmItsYou } from './ConfirmItsYou';
 import type { NewSpace, SpaceSummary } from '@minca/core';
@@ -17,15 +17,24 @@ import { useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 import { Loader } from '@minca/app-shared/Loader';
 
+/** Back to choosing an account, from the page that says what an app gets */
+const ChooseAgain = createContext<() => void>(() => {});
+
 /**
- * An app opened this in a popup to ask for access to the account: sign in,
- * then say what the app gets. The account signs a note for the app's own key;
- * the seed never leaves this page. The app's address is what is trusted, as
- * the browser reports it, not what it calls itself.
+ * An app opened this in a popup to ask for access to the account: choose the
+ * account, prove it is you, then say what the app gets — as signing in with
+ * Google goes. The account signs a note for the app's own key; the seed never
+ * leaves this page. The app's address is what is trusted, as the browser
+ * reports it, not what it calls itself.
  */
 export function ConnectPage() {
   const [incoming, setIncoming] = useState<IncomingRequest | null | undefined>(undefined);
   const { state } = useMinca();
+  const { auth } = useAuth();
+  // The account the person chose in this window, or `other` for one this browser doesn't list.
+  const [chosen, setChosen] = useState<string | null>(null);
+  // Proof is read off the flow, not its state: a confirm moves this page on by itself.
+  const [, setProved] = useState(0);
 
   useEffect(() => {
     void receiveConnectRequest().then(setIncoming);
@@ -55,23 +64,130 @@ export function ConnectPage() {
     );
   }
 
-  if (state?.stage !== 'ready') {
+  const { request } = incoming;
+  const signIn = (
+    <Frame>
+      <Asking incoming={incoming} />
+      <MincaAuth avatar={avatarElement} />
+    </Frame>
+  );
+
+  // A suggestion from an app already connected gives nothing new: being signed in is enough.
+  if (isProposeRequest(request))
+    return state?.stage === 'ready' ? <ApproveProposal incoming={incoming} request={request} /> : signIn;
+
+  const choose = async (accountId: string | null) => {
+    setChosen(accountId ?? 'other');
+    const open = auth.getState().session;
+    if (open && open.account.id === accountId) return;
+    if (open) await auth.signOut();
+    if (accountId) {
+      await auth.select(accountId);
+      auth.showSignIn();
+    } else auth.showWelcome();
+  };
+
+  if (!state || state.stage === 'starting') return signIn;
+  // No account here yet: making or restoring one is proof enough.
+  if (chosen === null && state.accounts.length > 0)
+    return <ChooseAccount incoming={incoming} onChoose={(id) => void choose(id)} />;
+  if (state.stage !== 'ready') return signIn;
+
+  if (!auth.mayGrant())
     return (
       <Frame>
         <Asking incoming={incoming} />
-        <MincaAuth avatar={avatarElement} />
+        <WhichAccount label="Continuing as" busy={false} onSwitch={() => setChosen(null)} />
+        <ConfirmItsYou
+          why={`continue to ${asker(incoming.origin)}`}
+          onConfirmed={() => setProved((n) => n + 1)}
+          onCancel={() => setChosen(null)}
+        />
       </Frame>
     );
-  }
 
-  const { request } = incoming;
-  if (isProposeRequest(request)) return <ApproveProposal incoming={incoming} request={request} />;
-  return request.access === 'carry' ? (
-    <ApproveCarrier incoming={incoming} request={request} />
-  ) : (
-    <Approve incoming={incoming} request={request} />
+  return (
+    <ChooseAgain.Provider value={() => setChosen(null)}>
+      {request.access === 'carry' ? (
+        <ApproveCarrier incoming={incoming} request={request} />
+      ) : (
+        <Approve incoming={incoming} request={request} />
+      )}
+    </ChooseAgain.Provider>
   );
 }
+
+/**
+ * The first step: which account the app gets. Every account this browser
+ * keeps, the one signed in here among them; each asks for its password,
+ * passkey or recovery code next.
+ */
+function ChooseAccount({
+  incoming,
+  onChoose,
+}: {
+  incoming: IncomingRequest;
+  onChoose: (accountId: string | null) => void;
+}) {
+  const { state } = useAuth();
+  const current = state.session?.account.id ?? null;
+  const named = (name: string) => state.accounts.filter((account) => account.name === name).length;
+  return (
+    <Frame>
+      <h1 style={styles.title}>Choose an account</h1>
+      <p style={styles.subtitle}>
+        to continue to <strong style={{ color: palette.ink.strong }}>{asker(incoming.origin)}</strong>
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+        {state.accounts.map((account) => (
+          <button
+            key={account.id}
+            onClick={() => onChoose(account.id)}
+            disabled={state.busy}
+            data-choice
+            style={{ ...styles.choice, textAlign: 'left' }}
+          >
+            <Avatar did={account.did} size={32} round />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontWeight: 500 }}>{account.name}</span>
+              <span style={{ display: 'block', fontSize: 12, color: palette.ink.faint }}>
+                {account.id === current
+                  ? 'Signed in'
+                  : named(account.name) > 1
+                    ? `…${account.did.slice(-6)}`
+                    : 'Signed out'}
+              </span>
+            </span>
+          </button>
+        ))}
+        <button
+          onClick={() => onChoose(null)}
+          disabled={state.busy}
+          data-choice
+          style={{ ...styles.choice, textAlign: 'left' }}
+        >
+          <span style={plus} aria-hidden="true">
+            +
+          </span>
+          <span style={{ flex: 1 }}>Use another account</span>
+        </button>
+      </div>
+      <p style={styles.errorHint}>Next you confirm it’s you, then decide what it gets.</p>
+    </Frame>
+  );
+}
+
+const plus = {
+  width: 32,
+  height: 32,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: palette.radius.pill,
+  border: `1px solid ${palette.surface.rule}`,
+  color: palette.ink.strong,
+  fontSize: 16,
+} as const;
 
 /** After a few seconds: a phone may pause the app's tab while this one is in front */
 function SlowApp() {
@@ -150,12 +266,11 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
   const contacts = request.contacts === true && !recordsOnly && !whole;
   const nothing = !whole && !contacts && chosen.size === 0 && creating.length === 0;
 
-  // The whole account, or the contacts, hand over keys no revoke takes back: prove it is you first.
+  // Proof given on the way here lasts a few minutes: after that, it asks again.
   const [proving, setProving] = useState(false);
-  const needsProof = whole || (request.contacts === true && !recordsOnly);
   const grant = () =>
     run(async () => incoming.approve(await auth.grant({ origin, request, spaceIds: [...chosen] })));
-  const allow = () => (needsProof && !auth.isConfirmed() ? setProving(true) : grant());
+  const allow = () => (auth.mayGrant() ? grant() : setProving(true));
 
   return (
     <Frame>
@@ -276,7 +391,7 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
 
       {proving ? (
         <ConfirmItsYou
-          why={whole ? 'give it your whole account' : 'give it your contacts'}
+          why={`continue to ${host}`}
           onConfirmed={() => {
             setProving(false);
             void grant();
@@ -321,8 +436,9 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
   const elsewhere = auth.connectedElsewhere(origin);
 
   const [handing, setHanding] = useState(false);
+  const [proving, setProving] = useState(false);
 
-  const allow = () =>
+  const grant = () =>
     run(async () => {
       const grant = await auth.grantCarry({ origin, request });
       // Until the extension has its passes, this window's node may be the only one holding them.
@@ -331,6 +447,7 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
       setHanding(true);
       await reached;
     });
+  const allow = () => (auth.mayGrant() ? grant() : setProving(true));
 
   return (
     <Frame>
@@ -377,13 +494,24 @@ function ApproveCarrier({ incoming, request }: { incoming: IncomingRequest; requ
         time in your account.
       </p>
 
-      <Answer
-        error={error}
-        busy={busy}
-        allowLabel={handing ? 'Handing your spaces over…' : busy ? 'Connecting…' : 'Allow'}
-        onAllow={() => void allow()}
-        onDeny={() => incoming.deny()}
-      />
+      {proving ? (
+        <ConfirmItsYou
+          why="keep your spaces online with it"
+          onConfirmed={() => {
+            setProving(false);
+            void grant();
+          }}
+          onCancel={() => setProving(false)}
+        />
+      ) : (
+        <Answer
+          error={error}
+          busy={busy}
+          allowLabel={handing ? 'Handing your spaces over…' : busy ? 'Connecting…' : 'Allow'}
+          onAllow={() => void allow()}
+          onDeny={() => incoming.deny()}
+        />
+      )}
     </Frame>
   );
 }
@@ -522,8 +650,8 @@ function useSpaces(hold: boolean): ReadonlyArray<SpaceSummary> {
  * Who is signed in here, and a way to answer as someone else: the request
  * waits while the person signs in to another account, and is answered from it.
  */
-function WhichAccount({ label, busy }: { label: string; busy: boolean }) {
-  const { auth } = useAuth();
+function WhichAccount({ label, busy, onSwitch }: { label: string; busy: boolean; onSwitch?: () => void }) {
+  const chooseAgain = useContext(ChooseAgain);
   const session = useSession();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -533,7 +661,7 @@ function WhichAccount({ label, busy }: { label: string; busy: boolean }) {
         <p style={{ ...styles.errorHint, margin: 0 }}>{label}</p>
       </div>
       <button
-        onClick={() => void auth.signOut()}
+        onClick={onSwitch ?? chooseAgain}
         disabled={busy}
         data-variant="ghost"
         style={{ ...styles.linkButton, fontSize: 13 }}
