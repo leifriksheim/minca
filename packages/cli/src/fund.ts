@@ -177,7 +177,14 @@ export function createFunds(options: {
 
   return Object.freeze({
     get: read,
-    ids: async () => (await options.store.list(PREFIX)).map((key) => key.slice(PREFIX.length)),
+    // Those in the bucket too: on a new disk a fund is read from there until it is next written here.
+    ids: async () => {
+      const here = (await options.store.list(PREFIX)).map((key) => key.slice(PREFIX.length));
+      const kept = ((await options.mirror?.list(BUCKET_PREFIX)) ?? []).flatMap((key) =>
+        key.endsWith('.json') ? [decodeURIComponent(key.slice(BUCKET_PREFIX.length, -'.json'.length))] : [],
+      );
+      return [...new Set([...here, ...kept])];
+    },
     add: (id: string, micros: number) =>
       // What its grace took is paid first; above zero again, it has not run out.
       change(id, (state) => {

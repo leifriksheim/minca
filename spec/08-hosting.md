@@ -495,9 +495,10 @@ that was bought: it is the host's estimate of when the balance reaches zero
 at what the fund spends now, and it MUST move as that changes (sooner as
 bots spend more, later with each payment). Once it ran out, it is the date
 the host's grace period counts from so that it ends where the fund stops
-drawing, in time or in money: a payment that leaves it owing moves it later
-by what that payment pays for, never past the grace period from when it ran
-out, and a fund is never drawn on past it.
+drawing, in time or in money: while its grace still runs, a payment that
+leaves it owing moves it later by what that payment pays for, never past the
+grace period from when it ran out; once the grace is spent, in time or in
+money, such a payment moves nothing. A fund is never drawn on past it.
 
 A host that takes payments says how in its description (§1), as `fund`, for
 accounts' balances and communities' funds alike:

@@ -157,7 +157,16 @@ reference implementation, or any implementation, honestly.
     (`packages/cli/tests/fund.test.ts`, "its grace is lent…", "a grace lends
     what the payment before it was…", "paid while small, grown…", "no
     payment shortens a grace…", "a payment that leaves it owing…", "once its
-    grace is over…"); a fund is drawn on only while it is carried. An
+    grace is over…"), even on a host that came back from its bucket on a
+    new disk (`packages/cli/tests/fund.test.ts`, "a fund comes back from
+    the bucket…"). A fund is drawn on from its first payment, at one GB,
+    and never past its grace. A balance is charged by the size last
+    measured, every hour or so, so growth between measures goes uncharged:
+    the host's cost. Whoever clears a lapsed fund's debt starts its next
+    grace, which then runs whether members use the space or not; the payer
+    paid the debt, so nothing is carried free. A card payment disputed
+    later still counts as the largest payment a grace lends: the host's
+    cost, as the chargeback is. An
     account at a host with limits is lent nothing: its room's notice is its
     grace. One payment keeps an account whose spaces fit its free room
     `"paid"` for good, so never dropped for being idle: accepted, as that is

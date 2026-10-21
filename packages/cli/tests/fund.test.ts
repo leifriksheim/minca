@@ -238,5 +238,6 @@ describe('a community fund', () => {
       now: t.now,
     });
     assert.equal((await again.get('space:club')).balance, 7e6);
+    assert.deepEqual(await again.ids(), ['space:club'], 'and is listed, so the host goes on drawing on it');
   });
 });
