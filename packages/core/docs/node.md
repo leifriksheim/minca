@@ -55,12 +55,16 @@ A node acts for one account (`node.did`) and signs with one session key
 (`node.sessionDid`) for its whole lifetime. To act for another account, start
 another node.
 
-`revokeSelf()` revokes the node's session key in every space it writes in,
-its carry spaces, the contacts space and the account registry, each with a
-cutoff at what it wrote, and forgets a lasting key at once; the account
-home's sign-out calls it ([spec 01 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
-A record is judged with no time, so this, not the note running out, is what
-ends what a key can write. An agent's view refuses it.
+`revokeKey(key, { spaces?, waitMs? })` revokes a key of the account, each
+revoke with a cutoff at what the key wrote: in `spaces`, or by default
+wherever the account writes (every space it lists, its carry spaces, the
+contacts space and the account registry). It says whether a peer took each in
+within `waitMs`. The account home's disconnect calls it for an app's key.
+`revokeSelf()` does the same for the node's own session key, and forgets a
+lasting key at once; the account home's sign-out calls it
+([spec 01 §7.4](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md)).
+A record is judged with no time, so a revoke, not the note running out, is
+what ends what a key can write. An agent's view refuses both.
 
 `close()` stops renewal, closes every open space (flushing what each keeps,
 stopping sync and disconnecting its transports), closes the registry store,

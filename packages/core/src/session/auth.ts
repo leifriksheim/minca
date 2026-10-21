@@ -767,29 +767,15 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
    * With `waitMs`, until a peer has each revoke or that time has passed (they wait together).
    */
   async function revokeConnection(node: P2PNode, connection: Connection, waitMs = 0): Promise<boolean> {
-    if (connection.access !== 'write') return true;
-    if (connection.audience === node.sessionDid) return true;
-    const contactsSpace = await node.contacts.space();
-    const writable = (await node.spaces.list()).filter((space) => space.writable).map((space) => space.id);
-    // A space the account has left, or no longer writes in, has nothing to revoke, and nobody to tell.
-    const covered =
-      connection.scope === 'account'
-        ? [...writable, ...(contactsSpace ? [contactsSpace] : [])]
-        : connection.spaces
-            .map((space) => space.id)
-            .filter((id) => writable.includes(id) || id === contactsSpace);
-    // Every space at once: each is its own store. A space that is gone, or
-    // that this account no longer writes in, has nothing to revoke.
-    const key = connection.audience;
-    const options = { waitMs };
-    // One that can't be written (a space gone, or no longer the account's to write in) has
-    // nothing to send: it isn't one that went unheard.
-    const taken = await Promise.all([
-      ...covered.map((spaceId) => node.spaces.revoke(spaceId, key, options).catch(() => true)),
-      // A whole-account app could also add spaces to the account's list, and rename it.
-      ...(connection.scope === 'account' ? [node.account.revoke(key, options).catch(() => true)] : []),
-    ]);
-    return taken.every(Boolean);
+    if (connection.access !== 'write' || connection.audience === node.sessionDid) return true;
+    // A whole-account app acts as the account, so wrote wherever it does: its own spaces too.
+    if (connection.scope === 'account') return node.revokeKey(connection.audience, { waitMs });
+    // Any other wrote only in the spaces it was given. One the account has left has nobody to tell.
+    const writable = new Set(
+      (await node.spaces.list()).filter((space) => space.writable).map((space) => space.id),
+    );
+    const spaces = connection.spaces.map((space) => space.id).filter((id) => writable.has(id));
+    return node.revokeKey(connection.audience, { waitMs, spaces });
   }
 
   /** Disconnects every app connected here whose chosen time has passed */

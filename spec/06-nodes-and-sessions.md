@@ -401,14 +401,14 @@ _Source: `packages/core/src/session/connect.ts` (`startConnectedNode`, `grantSig
 
 ### 2.8 Scope
 
-|                       | `scope: spaces`                                                    | `scope: account`                        |
-| --------------------- | ------------------------------------------------------------------ | --------------------------------------- |
-| Note                  | about the one space, or the account with a policy naming them      | about the account, no policy            |
-| Account key           | no                                                                 | yes                                     |
-| Sees                  | the granted spaces                                                 | every space; the account registry       |
-| Makes or joins spaces | the home makes them at grant time                                  | itself; they land in the account's list |
-| Contacts              | only with `contacts: true` (list and requests; not `ask`/`accept`) | yes, including `ask`/`accept`           |
-| Member keys           | one per granted private space                                      | derived from the account key            |
+|                       | `scope: spaces`                                                                         | `scope: account`                        |
+| --------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
+| Note                  | about the one space, or the account with a policy naming them                           | about the account, no policy            |
+| Account key           | no                                                                                      | yes                                     |
+| Sees                  | the granted spaces                                                                      | every space; the account registry       |
+| Makes or joins spaces | the home makes them at grant time                                                       | itself; they land in the account's list |
+| Contacts              | only with `contacts: true`: reads the list and requests, changes neither, opens no door | yes, including `ask`/`accept` and doors |
+| Member keys           | one per granted private space                                                           | derived from the account key            |
 
 With `recordsOnly` the note grants `/record` (or `/record/read`) under either
 scope, so every peer refuses from it what a records-only note can't do
@@ -473,9 +473,12 @@ both.
 that has `access: write` (never the home's own session key), and connecting
 the same app again with a new key revokes the old one the same way:
 
-- `scope: spaces`: in every space it was granted;
-- `scope: account`: in every space the account can write in, the contacts
-  space, and the account registry.
+- `scope: spaces`: in every space it was granted that the account still
+  writes in;
+- `scope: account`: wherever the account writes: every space it lists, its
+  carry spaces, the contacts space and the account registry. Such an app
+  acts as the account ([01](01-identity.md) §8), so it could write in all of
+  them.
 
 Disconnecting an app (not only the programs connected through it, which go
 with it) also removes every automation of the account's own whose
@@ -488,7 +491,7 @@ already seen of it. What the app could already read, it keeps. How the reference
 home stores connections and what the reference client does when it sees its
 key revoked are in [the account home's side](../packages/core/docs/sign-in.md#the-account-homes-side).
 
-_Source: `packages/core/src/session/auth.ts` (`disconnect`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "a carrier and an app at one origin are two connections…")._
+_Source: `packages/core/src/session/auth.ts` (`disconnect`, `revokeConnection`, `connections`, `grant`, `grantCarry`), `packages/core/src/node/node.ts` (`revokeKey`, `checkRevoked`). Tests: `packages/core/tests/connect.test.ts` ("disconnecting …", "disconnecting a whole-account app revokes it in the carry spaces too…", "a carrier and an app at one origin are two connections…")._
 
 ### 2.11 Proposing automations
 

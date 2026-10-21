@@ -985,10 +985,19 @@ export interface P2PNode {
   asAgent(agent: { readonly keys: CryptoKeyPair; readonly note: Delegation }): Promise<P2PNode>;
   subscribe(listener: (event: NodeEvent) => void): () => void;
   /**
-   * Revokes this node's own session key in every space it writes in, its
-   * carry spaces, the contacts space and the account registry included, each
-   * with a cutoff at what it wrote; a lasting key is forgotten at once, so the
-   * next session signs with a new one. For signing out.
+   * Revokes a key of this account, each revoke with a cutoff at what the key
+   * wrote: in `spaces`, or by default everywhere the account writes — every
+   * space it lists, its carry spaces, its contacts space and its registry.
+   * True once a peer has taken each in, or at once without `waitMs`.
+   */
+  revokeKey(
+    key: string,
+    options?: RevokeOptions & { readonly spaces?: ReadonlyArray<string> },
+  ): Promise<boolean>;
+  /**
+   * Revokes this node's own session key everywhere (`revokeKey`); a lasting
+   * key is forgotten at once, so the next session signs with a new one. For
+   * signing out.
    */
   revokeSelf(options?: RevokeOptions): Promise<void>;
   close(): Promise<void>;

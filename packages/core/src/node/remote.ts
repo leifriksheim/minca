@@ -55,7 +55,7 @@ const isStatements = (value: unknown): value is ReadonlyArray<ReadonlyArray<unkn
 const TAG = 'minca-node';
 
 /** The node's own methods that cross; every namespace's do (`node/api.ts`) */
-const OWN_METHODS = Object.freeze({ iceServers: true, revokeSelf: true });
+const OWN_METHODS = Object.freeze({ iceServers: true, revokeKey: true, revokeSelf: true });
 
 /** How often the served side checks for a renewed delegation between calls */
 const DELEGATION_CHECK_MS = 60_000;
@@ -411,6 +411,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
       ),
       delegation: () => state().delegation,
       iceServers: () => ask<ReadonlyArray<RTCIceServer>>(handle, 'iceServers', []),
+      revokeKey: (key, options) => ask(handle, 'revokeKey', options ? [key, options] : [key]),
       revokeSelf: (options) => ask(handle, 'revokeSelf', options ? [options] : []),
       async asAgent(agent) {
         const started = await ask<{ handle: number; state: NodeState }>(handle, 'asAgent', [agent]);

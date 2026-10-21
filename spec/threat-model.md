@@ -667,6 +667,19 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     app only the spaces chosen for it (01 §8, 06 §2). It can be given a note
     only for a key it shows it holds, never the home's own or another
     connection's, so disconnecting it revokes nobody else (06 §2.5).
+  - Given some spaces, or records only, it never changes the account's own
+    place in any space:
+    every peer ignores its account leaving, taking or giving up a role,
+    stepping down, or publishing a member key or profile, and its revoke of
+    any key but its own. Nor does it write the account's own spaces or open
+    its doors: those need a note about the whole account (01 §8;
+    `packages/core/tests/records-only.test.ts`, "an app given a space never
+    changes the account's own place there…"; `connect.test.ts`, "it lists
+    them and opens requests sent to the account…").
+  - Given the whole account and disconnected, its key is revoked wherever the
+    account writes, carry spaces included, so it no longer changes what a
+    carrier keeps (06 §2.10; `connect.test.ts`, "disconnecting a
+    whole-account app revokes it in the carry spaces too…").
   - Given the whole account, it can't keep the person from pausing or
     removing their own automations: they are `sys.automation`, which nothing
     defines, so no definition it writes applies to them (03 §13.2;
@@ -736,9 +749,6 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     the same key. Its stores' entries are its own, unjudged, though what it
     reads is still judged when shown (`packages/cli/src/agent.ts`, `startWithKey`;
     [#287](https://github.com/leifriksheim/minca/issues/287)).
-  - A records-only grant can write the account's `sys.profile`, and so have
-    contact requests sealed to itself; and `sys.memberkey`, to have new space
-    keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/minca/issues/165)).
   - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
     its grant expires ([#165](https://github.com/leifriksheim/minca/issues/165)).

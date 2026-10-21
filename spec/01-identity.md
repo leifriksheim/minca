@@ -632,17 +632,32 @@ it does requires: a command, where (a space `S`, or the account as a whole),
 and the **arguments** the note's policy reads. The protocol never asks
 what kind of thing holds a key: a person's session, an app, any other
 program and a borrowed device are told apart only by what their notes grant.
+A note for `/` about the whole account acts as the account itself: that key
+is one of its devices. Any narrower note is an app's, whatever holds it.
 
-| A version in space `S`…                                                                                                     | requires (in `S`)    | with arguments                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------ |
-| any record                                                                                                                  | `/record/write`      | `{ "space": S, "collection": <its collection> }`                                           |
-| and in `sys.collection`                                                                                                     | `/collection/define` | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:` |
-| and in any other collection of the access history ([03 — Spaces](03-spaces.md))                                             | `/access/change`     | `{ "space": S, "collection": <its collection> }`                                           |
-| and in one of the account's own spaces (its registry, its contacts space, its carry spaces; [06](06-nodes-and-sessions.md)) | `/account/write`     | `{ "space": S, "collection": <its collection> }`                                           |
+| A version in space `S`…                                                         | requires (in `S`)                            | with arguments                                                                             |
+| ------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| any record                                                                      | `/record/write`                              | `{ "space": S, "collection": <its collection> }`                                           |
+| and in `sys.collection`                                                         | `/collection/define`                         | `{ "space": S, "collection": C }`, `C` the collection defined: its key after `collection:` |
+| and in any other collection of the access history ([03 — Spaces](03-spaces.md)) | `/access/change`                             | `{ "space": S, "collection": <its collection> }`                                           |
+| and about the account itself (below)                                            | `/account/write`, for the account as a whole | `{}`                                                                                       |
 
-A knock ([07 — Doors](07-doors.md)) requires `/account/write` for the
-account as a whole, with arguments `{}`: only a note about the account
-grants it, and a policy that limits it to some spaces does not hold there.
+A version is **about the account itself** when it is in one of the
+account's own spaces (its registry, its contacts space, its carry spaces;
+[06](06-nodes-and-sessions.md)), or, in any space, when it is:
+
+- a `sys.assign` or `sys.remove` naming the account that signs it: taking or
+  giving up a role, joining by invite, leaving;
+- a `sys.stepdown`;
+- a `sys.memberkey` or `sys.profile`: what others seal to the account, and
+  what they see of it;
+- a `sys.revoke` of a key other than its own author: another of the
+  account's keys.
+
+So is a knock ([07 — Doors](07-doors.md)). Each requires `/account/write`
+for the account as a whole, with arguments `{}`: only a note about the
+account grants it, and a policy that limits it to some spaces does not hold
+there.
 
 `space` is the space's id, without `space:`. `S` is the space the version is
 judged in, never one it claims. The arguments are exactly these: a policy
@@ -652,9 +667,9 @@ that reads anything else finds `null` (a missing member) or nothing.
   do anything (§6).
 - A peer MUST ignore a change to the access history whose proof does not
   grant what it requires: it is not an event in the history, whatever the
-  writer's roles ([03 — Spaces](03-spaces.md)). A version in one of the
-  account's own spaces whose proof lacks `/account/write` MUST NOT count
-  there.
+  writer's roles ([03 — Spaces](03-spaces.md)). Any other version about the
+  account itself whose proof lacks `/account/write` for the account as a
+  whole MUST NOT count.
 
 A person's own sessions, and apps granted write, get `/` about the account.
 A key the account trusts less gets `/record` (a request for records only,
@@ -672,13 +687,19 @@ excludes spaces (`["not", ["==", ".space", "<id>"]]`) holds for it. To keep
 a note to some spaces, name them, as above.
 
 A key whose note grants `/access/change` in a space with no policy on
-`.collection` changes anything there its account may: it can make the
-account leave, and, for a founder, step down (`sys.stepdown`), and it can
-name a successor (`sys.succeed`, [03](03-spaces.md) §2.5, §2.7). Revoking
-the key undoes all of it but stepping down, which nothing undoes (03 §4.3):
-a key revoked and still held can end its account's founder status, and
-nothing else. A home that gives an app the access command, and wants less,
-names the collections it may change.
+`.collection` changes there what its account may do to others: roles,
+members, invites, the space's key, relays and keepers, and a successor
+(`sys.succeed`, [03](03-spaces.md) §2.5, §2.7). Its account's own place it
+leaves alone unless the note is about the whole account: an app given a
+space never makes the account leave or step down, never gives up its roles,
+never puts a key of its own where others seal to the account, and never
+revokes the account's other keys. A home that gives an app the access
+command, and wants less, names the collections it may change.
+
+> Rationale: one rule, not a command per act. Whether a key may act as the
+> account is what a note about the whole account already says, so the same
+> check guards the account's own spaces, its doors and its place in every
+> space, and a home tells a device from an app by the note it gives.
 
 A note carries no fact a peer reads. A peer MUST NOT judge a version, a live
 message or a knock differently for anything in `meta`: what the key may do is
@@ -696,8 +717,8 @@ what the proof grants.
 > several. So one token per version, and one requirement checked against it,
 > keep everything notes granted before.
 
-_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `accountSpaceRequirement`, `ACCOUNT_REQUIREMENT`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`buildEvent`, `judgeStanding`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
-_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").
+_Source:_ `packages/core/src/identity/abilities.ts` (`writeRequirement`, `accessRequirement`, `ACCOUNT_REQUIREMENT`, `actsForAccount`, `noteGrants`, `noteTerms`), `packages/core/src/node/space-runtime.ts` (`aboutItself`, `buildEvent`, `judgeStanding`, `write`), `packages/core/src/doors/doors.ts` (`openKnock`), `packages/core/src/session/connect.ts` (`grantTerms`).
+_Tests:_ `packages/core/tests/records-only.test.ts` ("what counts is what the note grants", "a note's policy is checked by every peer", "a definition signed by hand under a records-only note is ignored by every peer", "taking someone out of the space, under a records-only note, is ignored too", "an app given a space never changes the account's own place there: every peer ignores it", "the same change under a note about the whole account counts: that key is one of the account’s devices", "in the account's own spaces, a version under a records-only note does not stand"), `packages/core/tests/connect.test.ts` ("it lists them and opens requests sent to the account, and sees no other space"), `packages/core/tests/doors.test.ts` ("needs a note that grants /account/write: …").
 
 ---
 

@@ -31,7 +31,7 @@ import { verifyNote, type Delegation } from '../identity/ucan.js';
 import {
   ACCESS_COMMAND,
   accessRequirement,
-  accountSpaceRequirement,
+  actsForAccount,
   DEFINE_COMMAND,
   noteGrants,
   writeRequirement,
@@ -335,6 +335,21 @@ export const CANNOT_DEFINE =
 const CANNOT_CHANGE_ACCESS =
   "This key's note doesn't let it change who may do what in a space. Ask the person.";
 const NOT_ACCOUNT = "This key's note doesn't let it change the account itself. Ask the person.";
+
+/**
+ * Whether a version is about the account that signs it: its own place in the
+ * space (taking or giving up a role, leaving, stepping down), what others
+ * seal to it or see of it, or another of its keys. Only a key acting as the
+ * account itself writes one (spec 01 §8), so an app given a space never
+ * changes the account's standing there.
+ */
+function aboutItself(collection: string, body: unknown, root: string, author: string): boolean {
+  if (collection === STEPDOWN_COLLECTION || collection === MEMBER_KEY_COLLECTION) return true;
+  if (collection === PROFILE_COLLECTION) return true;
+  if (!isRecord(body)) return false;
+  if (collection === ASSIGN_COLLECTION || collection === REMOVE_COLLECTION) return body.did === root;
+  return collection === REVOKE_COLLECTION && body.key !== author;
+}
 
 /** The key that signs, and the delegation that lets it */
 export interface ActiveSession {
@@ -826,6 +841,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!noteGrants(version.proof, accessRequirement(space.id, version.collection, version.key))) return null;
     const verdict = await judge(version);
     if (!verdict.verified || !verdict.root) return null;
+    if (
+      !actsForAccount(version.proof) &&
+      aboutItself(version.collection, version.body, verdict.root, version.author)
+    )
+      return null;
     const seen = version.seen ?? [];
     const base = {
       id: version.id,
@@ -1272,8 +1292,10 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     const verdict = await judge(version);
     if (!verdict.verified || !verdict.root)
       return { ok: false, reason: verdict.reason ?? 'Its signature does not check out' };
-    if (deps.accountOnly && !noteGrants(version.proof, accountSpaceRequirement(space.id, version.collection)))
-      return { ok: false, reason: "Its note doesn't let it write in the account's own spaces" };
+    const asAccount =
+      deps.accountOnly || aboutItself(version.collection, version.body, verdict.root, version.author);
+    if (asAccount && !actsForAccount(version.proof))
+      return { ok: false, reason: "Its note doesn't let it act as the account itself" };
     const { history } = await access();
 
     if (ACCESS_COLLECTIONS.has(version.collection)) {
@@ -2372,7 +2394,12 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       return;
     }
     const mine = await memberKeyMap();
-    if (memberPair && mine.get(deps.rootDid) !== memberPair.publicKey && !(await cannotWrite())) {
+    if (
+      memberPair &&
+      mine.get(deps.rootDid) !== memberPair.publicKey &&
+      actsForAccount(session.proof()) &&
+      !(await cannotWrite())
+    ) {
       await upsert(MEMBER_KEY_COLLECTION, await memberKeyRecordKey(deps.rootDid), {
         key: memberPair.publicKey,
       });
@@ -3088,8 +3115,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     options: { joining?: boolean; as?: ActiveSession } = {},
   ): Promise<Version> {
     const writer = options.as ?? session;
-    if (deps.accountOnly && !noteGrants(writer.proof(), accountSpaceRequirement(space.id, collection)))
-      throw new Error(NOT_ACCOUNT);
+    const asAccount = deps.accountOnly || aboutItself(collection, body, deps.rootDid, writer.did);
+    if (asAccount && !actsForAccount(writer.proof())) throw new Error(NOT_ACCOUNT);
     // Every peer would ignore it (see buildEvent); say why here instead.
     if (
       ACCESS_COLLECTIONS.has(collection) &&
@@ -3960,8 +3987,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     /** For the node itself: says who this account is here, when that changed and the space takes its writes */
     async publishProfile(profile: { name: string; contactKey?: string }) {
-      // Someone following a space without a role in it cannot write there, and says nothing.
-      if (await cannotWrite()) return;
+      // Someone following a space without a role in it cannot write there, and says nothing; nor does an app.
+      if (!actsForAccount(session.proof()) || (await cannotWrite())) return;
       const name = profile.name.trim().slice(0, 64);
       const mine = (await profileMap()).get(deps.rootDid);
       // An app without the contact key must not take away the one another device published.

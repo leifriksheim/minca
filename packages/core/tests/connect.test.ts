@@ -588,6 +588,42 @@ describe('connecting an app to an account home', () => {
       'the revoke to reach the app',
     );
   });
+
+  test('disconnecting a whole-account app revokes it in the carry spaces too: it can no longer change what a carrier keeps', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const carrier = await appKey();
+    const { carry } = await auth.grantCarry({
+      origin: 'chrome-extension://abcdef',
+      request: await asked(
+        { v: 1, audience: carrier.did, name: 'Minca for Chrome', access: 'carry' },
+        carrier,
+      ),
+    });
+    const key = await appKey();
+    const grant = await auth.grant({
+      origin: 'https://browser.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
+      spaceIds: [],
+    });
+    const browser = await app(hub, grant, key);
+    const told: string[] = [];
+    browser.subscribe((event) => event.type === 'revoked' && told.push(event.space));
+    // A whole-account app follows the account's carriers, as its devices do.
+    await until(
+      async () => (await browser.carriers.list()).some((known) => known.did === carrier.did),
+      3000,
+      'the carrier to reach the app',
+    );
+    await hold(browser, carry.space);
+
+    await auth.disconnect('https://browser.test');
+    await until(
+      async () => told.includes(carry.space),
+      3000,
+      'the revoke in the carry space to reach the app',
+    );
+  });
 });
 
 describe('giving an app the contacts', () => {
@@ -653,6 +689,9 @@ describe('giving an app the contacts', () => {
       people.contacts.accept(club.id, (await people.contacts.requests(club.id))[0]!.key),
       /whole account/,
     );
+    // The list and the doors are the account's own: it reads them, and changes neither.
+    await assert.rejects(people.contacts.put({ did: bob.did, name: 'Someone else' }), /the account itself/);
+    await assert.rejects(people.doors.open(), /doesn't let it use doors/);
   });
 
   test('an app not given them has no contact key, and cannot open requests', async () => {
@@ -728,7 +767,7 @@ describe('connecting a carrier to an account home', () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
     const { node, did } = auth.getState().session!;
-    await node.spaces.create({ name: 'Notes', visibility: 'private' });
+    const notes = await node.spaces.create({ name: 'Notes', visibility: 'private' });
     const key = await appKey();
 
     const request: ConnectRequest = await asked(
@@ -751,6 +790,12 @@ describe('connecting a carrier to an account home', () => {
       [key.did],
     );
     assert.equal(auth.connections()[0]?.access, 'carry');
+    // The account says who it is in the spaces it uses, never in one a carrier reads.
+    await until(async () => (await node.spaces.profiles(notes.id)).length === 1, 3000, 'the name in Notes');
+    await hold(node, grant.carry.space);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.deepEqual(await node.spaces.profiles(grant.carry.space), []);
+    await letGo(node, grant.carry.space);
     await assert.rejects(
       () => auth.grant({ origin: 'chrome-extension://abcdef', request, spaceIds: [] }),
       /grantCarry/,

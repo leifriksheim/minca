@@ -21,14 +21,7 @@ import { createP256Provider } from '../identity/crypto-p256.js';
 import type { Link, SpaceRole } from '../types.js';
 import { didOf } from '../identity/did.js';
 import { verifyNote, type Delegation } from '../identity/ucan.js';
-import {
-  ACCOUNT_COMMAND,
-  ACCOUNT_REQUIREMENT,
-  ALL_COMMAND,
-  grantsRecordsOnly,
-  noteGrants,
-  noteSpaces,
-} from '../identity/abilities.js';
+import { actsForAccount, ALL_COMMAND, grantsRecordsOnly, noteSpaces } from '../identity/abilities.js';
 import { createSigner } from '../schema/signer.js';
 import { createSchemaEngine } from '../schema/schema-engine.js';
 import {
@@ -273,12 +266,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   );
   const mesh = meshFor(config.network, sessionDid);
   /**
-   * A node whose note doesn't grant `account/write` — an agent on someone's
-   * computer running a node of its own, say. It follows the account, but never
-   * writes for it: no list of spaces, no passes, no name. Every peer would
-   * ignore those.
+   * A node whose note doesn't let it act as the account itself — an app, or
+   * an agent on someone's computer running a node of its own. It may follow
+   * the account, but never writes for it: no list of spaces, no passes, no
+   * name, no doors. Every peer would ignore those (spec 01 §8).
    */
-  const narrowNote = !noteGrants(current, ACCOUNT_REQUIREMENT);
+  const narrowNote = !actsForAccount(current);
 
   // ─── Events ────────────────────────────────────────────────────────
 
@@ -422,7 +415,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * all; a space not open now hears on its next open.
    */
   async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
-    if (spaceId === accountSpaceId || spaceId === contactsSpaceId || narrowNote) return;
+    if (ownSpace(spaceId) || narrowNote) return;
     const name = await ownName();
     if (name)
       await open.publishProfile({ name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) });
@@ -1695,7 +1688,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   /** Making and joining spaces for two needs a note good for every space — whole-account access. */
   function requireEverywhere(what: string): void {
     // As a knock needs: `/account/write` for the whole account (spec 01 §8, 07).
-    if (!noteGrants(current, ACCOUNT_REQUIREMENT)) {
+    if (narrowNote) {
       throw new Error(
         `${what} makes or joins a space, which needs access to your whole account. Connect to your account home again, and ask for it.`,
       );
@@ -1785,7 +1778,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (record.body?.to !== config.signer.did || typeof record.body.sealed !== 'string') return null;
     // Asking makes a space for two for the account, as a knock does: only a note that may write for all of it.
     const note = await (await runtime(spaceId)).noteOf(record.key);
-    if (!noteGrants(note, ACCOUNT_REQUIREMENT)) return null;
+    if (!actsForAccount(note)) return null;
     const from = record.root;
     if (!from || record.createdBy !== from || from === config.signer.did) return null;
     const value = await openValueFrom(
@@ -1977,10 +1970,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
   >();
   const DAY_MS = 24 * 3600 * 1000;
 
-  /** Doors live in the contacts space: a note must grant `/account/write` there, as every peer checks */
-  const doorsAllowed = () =>
-    contactsSpaceId !== null &&
-    noteGrants(current, { space: contactsSpaceId, cmd: ACCOUNT_COMMAND, args: { space: contactsSpaceId } });
+  /** Doors are the account's own, in its contacts space: only a key acting as the account opens one, as every peer checks */
+  const doorsAllowed = () => contactsSpaceId !== null && !narrowNote;
 
   function requireContactKey(what: string): Uint8Array {
     // Doors are the account's: a key whose note doesn't grant `/account/write` never opens one or knocks.
@@ -2591,6 +2582,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       delegation: () => note,
       iceServers: () => node.iceServers(),
       asAgent: person('start another agent'),
+      revokeKey: person('revoke a key'),
       revokeSelf: person('sign the account out'),
       subscribe: (listener: (event: NodeEvent) => void) =>
         node.subscribe((event) => {
@@ -2627,17 +2619,29 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
 
     subscribe: events.subscribe,
 
+    async revokeKey(key: string, options: RevokeOptions & { readonly spaces?: ReadonlyArray<string> } = {}) {
+      // Everywhere the account writes, unless told where: the listed spaces, its carry spaces and contacts space.
+      const ids = options.spaces ?? [
+        ...new Set([
+          ...(await spaces.list()).filter((space) => space.writable).map((space) => space.id),
+          ...carrySpaces,
+          ...(contactsSpaceId ? [contactsSpaceId] : []),
+        ]),
+      ];
+      const wait = options.waitMs === undefined ? {} : { waitMs: options.waitMs };
+      // Each its own store: one that can't be written (a space gone, or no longer the account's
+      // to write in) has nothing to send, and must not keep the rest from happening.
+      const taken = await Promise.all([
+        ...ids.map((spaceId) => spaces.revoke(spaceId, key, wait).catch(() => true)),
+        ...(options.spaces ? [] : [node.account.revoke(key, wait).catch(() => true)]),
+      ]);
+      return taken.every(Boolean);
+    },
+
     async revokeSelf(options: RevokeOptions = {}) {
-      const key = sessionDid;
       // Forgotten first: a tab closed while the revokes wait must not leave a
       // revoked key behind, to be claimed and refused on every write after.
       await claimed?.forget().catch(() => {});
-      // Every space it may write in: the listed ones, its carry spaces and the contacts space.
-      const ids = new Set([
-        ...(await spaces.list()).filter((space) => space.writable).map((space) => space.id),
-        ...carrySpaces,
-        ...(contactsSpaceId ? [contactsSpaceId] : []),
-      ]);
       // With anyone online, every revoke waits for a peer to take it in, closed
       // spaces too, which open for it. With nobody, waiting would only keep a
       // person signing out looking at a spinner: they go out with the next sync.
@@ -2646,12 +2650,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         const rt = await open.catch(() => null);
         if (rt && (await rt.status()).peers.length > 0) anyone = true;
       }
-      const wait = anyone ? options : {};
-      // Each its own store: one that can't be done must not keep the rest from happening.
-      await Promise.all([
-        ...[...ids].map((spaceId) => spaces.revoke(spaceId, key, wait).catch(() => false)),
-        node.account.revoke(key, wait).catch(() => false),
-      ]);
+      await node.revokeKey(sessionDid, anyone ? options : {});
     },
 
     async close() {

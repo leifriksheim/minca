@@ -990,8 +990,9 @@ A version outside the access collections **stands** when, in this order:
 
 1. its `space` equals the space id;
 2. its signature and note verify ([02](02-records.md)) — giving `root`;
-3. in the account's own spaces (registry, contacts, carry spaces) its proof
-   grants `/account/write` there ([01](01-identity.md) §8);
+3. when it is about its account itself (in the account's own spaces, or its
+   `sys.memberkey` or `sys.profile`), its proof grants `/account/write` for
+   the account as a whole ([01](01-identity.md) §8);
 4. its first version is present, is `seq` 0, has the same key and collection;
 5. `at(seen)` and `seenAs(seen)` are available (else: not yet);
 6. its **invocation** is `/record/delete` with `{ collection, byCreator }` for
