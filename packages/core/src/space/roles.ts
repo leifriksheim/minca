@@ -1122,6 +1122,8 @@ interface Replay {
   /** Valid: allowed, and not struck */
   readonly valid: ReadonlySet<string>;
   readonly struck: ReadonlyMap<string, string>;
+  /** The allowed reductions, in order */
+  readonly taking: ReadonlyMap<string, Reduction>;
   /** Valid removals, unassignments and stepping down by the account they reach, and revokes by the key */
   readonly taken: ReadonlyMap<string, ReadonlyArray<Reduction>>;
   /** The lowest applied fork of each key's line for each collection, by {@link lineOf} */
@@ -1513,42 +1515,33 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const defViews = new Map<string, AccessState>();
   /** The allowed reductions, in order */
   const taking = new Map<string, Reduction>();
-  // Revokes and fork proofs are never struck: every allowed one applies.
-  const reachedBy = (reduction: Reduction, event: AccessEvent) =>
-    reduction.id !== event.id &&
-    event.kind !== 'revoke' &&
-    event.kind !== 'fork' &&
-    (reachesBack(reduction) ||
-      (!saw.get(event.id)!.has(reduction.id) && !saw.get(reduction.id)!.has(event.id))) &&
-    reaches(reduction, subjectOf(event));
-  // A stepping down is never struck (`invalidWithin`): founder status can't be given again. One a
-  // revoke or a fork proof reaches ends founder status and does nothing more (below).
-  const strikesOn = (reduction: Reduction, event: AccessEvent) =>
-    !(reachesBack(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event);
   const strike = (by: string, id: string) => (strikes.get(by) ?? strikes.set(by, []).get(by)!).push(id);
   const allowedView = viewsAlong(byIdMap, saw, genesis, (id) => allowedIds.has(id), afterOf, defViews);
 
   for (const id of order) {
     const event = byIdMap.get(id)!;
-    const view = allowedView(event);
-    const reason = refusal(event, view);
-    if (reason) {
-      refused.set(id, reason);
+    const result = step(event, allowedView(event), {
+      genesis,
+      saw,
+      byId: byIdMap,
+      counted: allowedIds,
+      taking,
+    });
+    if (result.refused !== null) {
+      refused.set(id, result.refused);
       continue;
     }
     allowedIds.add(id);
-    const after = stepped(view, event, genesis, saw, byIdMap, allowedIds);
-    const reduction = reductionOf(event, view);
-    const lost = affected(event).filter((did) => isMember(view, did) && !isMember(after, did));
-    if (lost.length > 0) tookReading.add(id);
-    afterOf.set(id, after);
+    afterOf.set(id, result.after);
+    if (result.tookReading) tookReading.add(id);
     // Strikes it is part of, with the allowed changes before it.
-    for (const earlier of taking.values()) if (strikesOn(earlier, event)) strike(earlier.id, id);
+    for (const by of result.reachedBy) if (strikesOn(by, event, saw)) strike(by.id, id);
+    const reduction = result.reduction;
     if (!reduction) continue;
     taking.set(id, reduction);
     for (const other of order) {
       if (other === id) break;
-      if (allowedIds.has(other) && strikesOn(reduction, byIdMap.get(other)!)) strike(id, other);
+      if (allowedIds.has(other) && strikesOn(reduction, byIdMap.get(other)!, saw)) strike(id, other);
     }
   }
 
@@ -1558,7 +1551,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   for (const id of order) {
     const event = byIdMap.get(id)!;
     if (event.kind !== 'stepdown' || !allowedIds.has(id)) continue;
-    if (back.some((reduction) => reachedBy(reduction, event))) {
+    if (back.some((reduction) => reachedBy(reduction, event, saw))) {
       strikes.delete(id);
       taking.delete(id);
     }
@@ -1626,6 +1619,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     refused,
     valid,
     struck,
+    taking,
     taken,
     forks,
     state,
@@ -1637,6 +1631,57 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
     validDefViews: within.defViews,
     strikes,
   });
+}
+
+// Revokes and fork proofs are never struck: every allowed one applies.
+const reachedBy = (reduction: Reduction, event: AccessEvent, saw: ReadonlyMap<string, Seen>) =>
+  reduction.id !== event.id &&
+  event.kind !== 'revoke' &&
+  event.kind !== 'fork' &&
+  (reachesBack(reduction) ||
+    (!saw.get(event.id)!.has(reduction.id) && !saw.get(reduction.id)!.has(event.id))) &&
+  reaches(reduction, subjectOf(event));
+
+// A stepping down is never struck (`invalidWithin`): founder status can't be given again. One a
+// revoke or a fork proof reaches ends founder status and does nothing more.
+const strikesOn = (reduction: Reduction, event: AccessEvent, saw: ReadonlyMap<string, Seen>) =>
+  !(reachesBack(reduction) && event.kind === 'stepdown') && reachedBy(reduction, event, saw);
+
+/**
+ * One change judged in its own view, as replaying in order and extending by
+ * one both do: why it is refused, or the state it leaves, what it takes,
+ * whether it took reading from someone, and the reductions before it that reach it.
+ */
+function step(
+  event: AccessEvent,
+  view: AccessState,
+  c: {
+    readonly genesis: AccessGenesis;
+    readonly saw: ReadonlyMap<string, Seen>;
+    readonly byId: ReadonlyMap<string, AccessEvent>;
+    /** The allowed changes, which say who defined a collection */
+    readonly counted: ReadonlySet<string>;
+    readonly taking: ReadonlyMap<string, Reduction>;
+  },
+):
+  | { readonly refused: string }
+  | {
+      readonly refused: null;
+      readonly after: MutableState;
+      readonly reduction: Reduction | null;
+      readonly tookReading: boolean;
+      readonly reachedBy: ReadonlyArray<Reduction>;
+    } {
+  const reason = refusal(event, view);
+  if (reason) return { refused: reason };
+  const after = stepped(view, event, c.genesis, c.saw, c.byId, c.counted);
+  return {
+    refused: null,
+    after,
+    reduction: reductionOf(event, view),
+    tookReading: affected(event).some((did) => isMember(view, did) && !isMember(after, did)),
+    reachedBy: [...c.taking.values()].filter((reduction) => reachedBy(reduction, event, c.saw)),
+  };
 }
 
 /** A state with one change on top, and who defined it when it defines a collection */
@@ -1816,49 +1861,41 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
     defViews,
   };
 
-  const reason = refusal(event, view);
-  if (reason) return { ...r, ...base, refused: new Map(r.refused).set(event.id, reason) };
-  const after = applied(view, event, genesis.id);
-  const reduction = reductionOf(event, view);
-  const lost = affected(event).filter((did) => isMember(view, did) && !isMember(after, did));
-  // Valid, besides allowed: no revoke or fork of its key reaches it, whatever it saw.
-  const subject = subjectOf(event);
-  const fork = r.forks.get(lineOf(event.author, KIND_COLLECTION[event.kind]));
-  const strikers = [...(r.taken.get(event.author) ?? []), ...(fork ? [fork] : [])]
-    .filter((other) => reachesBack(other) && reaches(other, subject))
-    .map((other) => other.id);
+  const result = step(event, view, {
+    genesis,
+    saw: ancestry,
+    byId: byIdMap,
+    counted: r.allowedIds,
+    taking: r.taking,
+  });
+  if (result.refused !== null)
+    return { ...r, ...base, refused: new Map(r.refused).set(event.id, result.refused) };
+  // Valid, besides allowed, when no revoke or fork of its key reaches it, whatever it saw: no other
+  // reduction can, since it saw them all.
+  const strikers = result.reachedBy.map((reduction) => reduction.id);
   // A stepping down its key's revoke reaches ends founder status and does nothing else: only a whole replay says.
   if (strikers.length > 0 && event.kind === 'stepdown') return null;
+  const taking = result.reduction ? new Map(r.taking).set(event.id, result.reduction) : r.taking;
+  const allowedIds = new Set(r.allowedIds).add(event.id);
   if (strikers.length > 0) {
     const strikes = new Map(r.strikes);
     for (const by of strikers) strikes.set(by, [...(strikes.get(by) ?? []), event.id]);
-    return {
-      ...r,
-      ...base,
-      strikes,
-      struck: new Map(r.struck).set(event.id, STRUCK),
-      allowedIds: new Set(r.allowedIds).add(event.id),
-    };
+    return { ...r, ...base, strikes, struck: new Map(r.struck).set(event.id, STRUCK), allowedIds, taking };
   }
-  const state = applied(r.state, event, genesis.id);
-  if (event.kind === 'definition' && !event.deleted) {
-    // Who defined it, by the same rule a merge uses: among the valid changes, which here are the allowed ones.
-    const group = [...r.byId.values()]
-      .filter((other) => other.key === event.key && r.valid.has(other.id))
-      .concat(event);
-    state.definitions.set(event.name, { event: event.id, definedBy: definerOf(event, group, ancestry) });
-  }
+  // Its view is every allowed change, and those are the valid ones: it is the state with it on top.
+  const state = result.after;
   // Due once it takes reading from someone: the key saw everything else, and no one else lost it.
-  state.keyDue = lost.length > 0 && state.keys.length > 0 && event.kind !== 'key';
+  state.keyDue = result.tookReading && state.keys.length > 0 && event.kind !== 'key';
   const taken = new Map(r.taken);
   const forks = new Map(r.forks);
-  if (reduction) indexReduction(taken, forks, reduction);
+  if (result.reduction) indexReduction(taken, forks, result.reduction);
   return {
     ...r,
     ...base,
     validDefViews,
     valid: new Set(r.valid).add(event.id),
-    allowedIds: new Set(r.allowedIds).add(event.id),
+    allowedIds,
+    taking,
     state,
     taken,
     forks,
