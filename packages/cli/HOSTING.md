@@ -125,6 +125,38 @@ the memory of the spaces it holds. Unlike the spaces a host carries, a bot's
 keys are on the host's disk, in `bots/`: keep that volume as private as the
 host's own key.
 
+## Stats
+
+Anyone can see what a host carries and takes in, so whoever is thinking of
+running one sees real numbers, and whoever uses one sees it is open:
+
+```
+minca host stats https://minca-host.fly.dev
+Minca host, counted 2026-10-21 14:00 UTC
+  Communities    about 15
+  Accounts       about 40
+  Spaces         about 60
+  Data kept      3.2 GB
+  Bots running   about 5
+  In funds       $412
+  Spent a month  $9 hosting, $38 AI
+  Up for         12 days
+```
+
+`--json` gives the answer of `GET /host/stats` as it is. It is totals only,
+never a space id or an account. Counts are to the nearest 5 (a host with one
+community shows "fewer than 3"), data to 0.1 GB and money to the dollar, and
+they are counted once an hour: asked more often, a host answers the same.
+While a host carries only a few communities, a live total would say when one
+of them writes or leaves; rounded and hourly, it says how big the host is.
+Money is what every balance and fund holds now, and what they spend a month
+at the rate they spend today, on keeping spaces online and on bots' AI use.
+
+`MINCA_HOST_STATS=off` keeps them to itself: `/host/stats` answers 404. This
+is the reference host's own, not protocol: no device asks for it.
+
+_Source: `packages/cli/src/host-stats.ts` (`createHostStats`, `statsLines`, `isHostStats`), `packages/cli/src/host.ts` (`stats`), `packages/cli/src/host-setup.ts` (`statsFromEnv`), `packages/cli/src/fund.ts` (`botsDaily`). Tests: `packages/cli/tests/host-stats.test.ts`, `packages/cli/tests/host.test.ts` ("anyone sees a host’s rounded totals…")._
+
 ## If something goes wrong
 
 What a host holds decides what a breach can expose. It holds no account's

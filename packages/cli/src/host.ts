@@ -64,6 +64,7 @@ import { createInboundPeers, serve, type Served } from './serve.js';
 import type { WalletPayments } from './wallet.js';
 import { isEmail, type Reminders } from './reminders.js';
 import { botFundWords, createHostedBots, type BotModel } from './hosted-bots.js';
+import { createHostStats } from './host-stats.js';
 import { createFunds } from './fund.js';
 import { createBotConnect } from './host-connect.js';
 import { dailyBudget, isConnectorId, type HostConnector } from './connectors/connector.js';
@@ -152,6 +153,8 @@ export interface HostOptions {
   readonly manageFunds?: string;
   /** How often each fund pays for the time since, and its bots start or stop. Default a minute. */
   readonly fundMs?: number;
+  /** Whether anyone may see its rounded totals, once an hour, at `/host/stats`. Default true. */
+  readonly stats?: boolean;
   readonly log?: (line: string) => void;
 }
 
@@ -642,6 +645,48 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   /** Whether a community's fund has money in it: on a free host, always */
   const funded = async (spaceId: string) => options.free || (await funds.get(`space:${spaceId}`)).balance > 0;
   const syncBots = () => bots?.sync(funded).catch((error: unknown) => log(`bots: ${messageOf(error)}`));
+  /** Totals for anyone, once an hour (`/host/stats`): nothing about any one space or account */
+  const stats =
+    options.stats === false
+      ? null
+      : createHostStats({
+          name,
+          collect: async () => {
+            const carried = (await node.list()).filter((one) => node.state(one) !== 'lapsed');
+            const communities = carried.filter(
+              (one) => one.id.startsWith('space:') && one.pass !== undefined,
+            );
+            const spaces = await node.spaces();
+            const measure = options.measure;
+            let bytes = 0;
+            if (measure) for (const space of spaces) bytes += await sizeOf(measure, space.id);
+            let running = 0;
+            if (bots)
+              for (const one of communities)
+                running += (await bots.list(one.id.slice('space:'.length))).filter((bot) =>
+                  bots.running(bot.did),
+                ).length;
+            let counted: { balance: number; hostingDaily: number; aiDaily: number } | undefined;
+            if (fundOffer) {
+              counted = { balance: 0, hostingDaily: 0, aiDaily: 0 };
+              for (const id of await funds.ids()) {
+                const state = await funds.get(id);
+                const ai = funds.botsDaily(state);
+                counted.balance += Math.max(0, state.balance);
+                counted.aiDaily += ai;
+                counted.hostingDaily += funds.daily(state) - ai;
+              }
+            }
+            return {
+              communities: communities.length,
+              accounts: carried.filter((one) => !one.id.startsWith('space:') && one.carry).length,
+              spaces: spaces.length,
+              bytes,
+              ...(bots ? { bots: running } : {}),
+              ...(counted ? { funds: counted } : {}),
+            };
+          },
+        });
   /**
    * Takes the hosting fee from a fund for the time since, and moves its
    * paid-until date to what it lasts at the rate it is spent: later after a
@@ -859,6 +904,10 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   async function answer(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
     const method = req.method ?? 'GET';
     if (url.pathname === HOST_DESCRIPTION_PATH && method === 'GET') return send(res, 200, description);
+    if (url.pathname === '/host/stats' && method === 'GET') {
+      if (!stats) throw refusal(404, 'This host keeps its stats to itself');
+      return send(res, 200, await stats.get());
+    }
 
     const page = { 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
     if (url.pathname === '/host/paid' && method === 'GET') {

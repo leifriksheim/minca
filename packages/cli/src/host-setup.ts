@@ -369,3 +369,11 @@ export function fundFromEnv(env: NodeJS.ProcessEnv): {
     ...(portal ? { manageFunds: portal } : {}),
   };
 }
+
+/** Whether anyone may see the host's rounded totals at `/host/stats` (MINCA_HOST_STATS, public or off; default public) */
+export function statsFromEnv(env: NodeJS.ProcessEnv): boolean {
+  const given = env.MINCA_HOST_STATS?.trim() || 'public';
+  if (given !== 'public' && given !== 'off')
+    throw new Error(`MINCA_HOST_STATS is public or off, not "${given}"`);
+  return given === 'public';
+}

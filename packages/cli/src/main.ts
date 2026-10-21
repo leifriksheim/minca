@@ -56,12 +56,14 @@ import {
   botsFromEnv,
   githubFromEnv,
   fundFromEnv,
+  statsFromEnv,
   quotaFromEnv,
   limitsFromEnv,
   abuseFromEnv,
   spaceSize,
   walletFromEnv,
 } from './host-setup.js';
+import { isHostStats, statsLines } from './host-stats.js';
 import { runMcpStdio, runWaitingMcpStdio, TAKE_OVER } from './mcp.js';
 import {
   AgentBusy,
@@ -108,6 +110,7 @@ Usage:
   minca records list | get | put | update | delete               [--flags]
   minca run [--port 8787] [--host 127.0.0.1] [--node wss://…/peer] [--no-relays] [--create]
   minca host [--port 8787] [--host 127.0.0.1] [--data DIR] [--free] [--allow did:key:…]
+  minca host stats <address> [--json]       what a host carries and takes in, as it shows anyone
   minca carry --data DIR                     one account's spaces, from a folder the desktop app connected
   minca app-node --data DIR                  the desktop app's node; the desktop shell runs it
   minca connect <code> [--name NAME] [--relay wss://…] [--no-configure]
@@ -781,6 +784,29 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
     return 0;
   }
 
+  if (command === 'host' && args[0] === 'stats') {
+    const { values, positionals } = parseArgs({
+      args: args.slice(1),
+      allowPositionals: true,
+      options: { json: { type: 'boolean' } },
+    });
+    const [address] = positionals;
+    if (!address)
+      throw new Error(
+        'minca host stats needs the host’s address: minca host stats https://minca-host.fly.dev',
+      );
+    const base = (address.includes('://') ? address : `https://${address}`).replace(/\/+$/, '');
+    const response = await fetch(`${base}/host/stats`, { signal: AbortSignal.timeout(10_000) });
+    if (response.status === 404) throw new Error(`${base} keeps its stats to itself`);
+    if (!response.ok) throw new Error(`${base} answered ${response.status}`);
+    const stats: unknown = await response.json();
+    if (!isHostStats(stats)) throw new Error(`${base} answered with something other than stats`);
+    process.stdout.write(
+      values.json ? `${JSON.stringify(stats, null, 2)}\n` : `${statsLines(stats).join('\n')}\n`,
+    );
+    return 0;
+  }
+
   if (command === 'host') {
     const { values } = parseArgs({
       args,
@@ -828,6 +854,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
       bots: await botsFromEnv(process.env, data),
       connectors: [await githubFromEnv(process.env)].flatMap((one) => (one ? [one] : [])),
       ...fundFromEnv(process.env),
+      stats: statsFromEnv(process.env),
       reminders,
       measure: spaceSize(data),
       ...(quotaBytes ? { quotaBytes } : {}),
