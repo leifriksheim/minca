@@ -13,10 +13,10 @@
  * reaches (`paidUntil`).
  *
  * Grace is lent, not given, and in money: once it runs out the hosting goes
- * on drawing, below zero, until it owes as much as the payment before it
- * (and for the host's grace at most), and what is added next pays for it
- * first. So a grace is what the last payment would buy again at the size
- * the space is then, the least payment into a large space buys hours, and
+ * on drawing, below zero, until it owes as much as the largest payment since
+ * it was last above zero (and for the host's grace at most), and what is
+ * added next pays for it first. So a grace is what that payment would buy
+ * again at the size the space is then, no payment ever shortens it, the least payment into a large space buys hours, and
  * nothing is drawn once the grace is over, whatever the space grows to. An
  * account at a host with limits is lent nothing: its room's notice is its
  * grace.
@@ -38,8 +38,8 @@ export interface FundState {
   readonly byBot?: Readonly<Record<string, Readonly<Record<string, number>>>>;
   /** What it pays for, as last measured: the fee is the monthly rate for each GB. Unmeasured, one. */
   readonly bytes?: number;
-  /** What was last added, in millionths of a dollar: what a grace lends at most */
-  readonly last?: number;
+  /** The most one payment added since it was last at or below zero, in millionths of a dollar: what a grace lends */
+  readonly most?: number;
   /** When it last ran out, and what its grace lends from then, in millionths of a dollar; absent while above zero */
   readonly ran?: { readonly at: number; readonly lent: number; readonly spent?: number };
 }
@@ -108,7 +108,7 @@ export function createFunds(options: {
       spent: days(kept.spent),
       byBot,
       ...size,
-      ...(typeof kept.last === 'number' ? { last: kept.last } : {}),
+      ...(typeof kept.most === 'number' ? { most: kept.most } : {}),
       ...(isRecord(kept.ran) && typeof kept.ran.at === 'number' && typeof kept.ran.lent === 'number'
         ? {
             ran: {
@@ -126,10 +126,10 @@ export function createFunds(options: {
     await options.mirror?.put(`${BUCKET_PREFIX}${encodeURIComponent(id)}.json`, bytes);
     return state;
   };
-  /** Running out now: lent what was last added, for the host's grace at most */
+  /** Running out now: lent the most one payment added, for the host's grace at most */
   const runOut = (id: string, state: FundState, at: number): FundState['ran'] => ({
     at,
-    lent: (options.lends?.(id) ?? true) ? (state.last ?? 0) : 0,
+    lent: (options.lends?.(id) ?? true) ? (state.most ?? 0) : 0,
   });
   /** The fee for the time since it was last taken, taken: down to zero, then through its lent grace only */
   const settled = (id: string, state: FundState): FundState => {
@@ -182,9 +182,16 @@ export function createFunds(options: {
       // What its grace took is paid first; above zero again, it has not run out.
       change(id, (state) => {
         const { ran, ...rest } = state;
-        const last = Math.round(micros);
-        const balance = state.balance + last;
-        return { ...rest, balance, last, ...(balance <= 0 && ran ? { ran } : {}) };
+        const paid = Math.round(micros);
+        const balance = state.balance + paid;
+        // Above zero again, a run starts with this payment; within one, the largest stands.
+        const most = state.balance > 0 ? Math.max(state.most ?? 0, paid) : paid;
+        return {
+          ...rest,
+          balance,
+          ...(balance > 0 ? { most } : state.most !== undefined ? { most: state.most } : {}),
+          ...(balance <= 0 && ran ? { ran } : {}),
+        };
       }),
     charge: (id: string, micros: number, bot?: string) =>
       change(id, (state) => {

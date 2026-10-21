@@ -287,7 +287,9 @@ without payment: `plan` is `"paid"` while its balance is above zero and
 `"free"` otherwise. Paying, it has no `quota`: its balance pays for what is
 past `accountBytes`. On the free plan its `quota` is `accountBytes`. So when
 a balance runs out, its room is the free one again, and the notice (Room)
-is its grace: nothing below zero is taken from it. It is never `grace` or `lapsed` for want of payment, and is
+is its grace: nothing below zero is taken from it. A balance whose spaces fit
+in the free room draws nothing, so it stays `"paid"` and is not dropped for
+`idleDays`. It is never `grace` or `lapsed` for want of payment, and is
 dropped only after `idleDays` with no signed call (§1) from any of its
 devices. What a space's own subscription carries (§2), while `active`,
 counts against no account's quota; its fund pays for its size instead (§2).
@@ -479,11 +481,13 @@ it takes less, for the time it does, and what the bots it runs in that space
 spend (§3). The subscription is `active` while the balance is above zero,
 then `grace`, then `lapsed`, as in §1. A grace is lent, never given, and
 in money: after the balance reaches zero the host goes on taking its rate,
-below zero, until it owes as much as the last payment added, or for its
-grace period at most, whichever comes first, and then takes nothing more,
-whatever the space grows to. So a grace is what the last payment would buy
-again at the size the space is then. A fund nothing was ever added to owes
-nothing. A payment pays what is owed
+below zero, until it owes as much as the largest single payment since the
+balance was last at or below zero, or for its grace period at most,
+whichever comes first, and then takes nothing more, whatever the space
+grows to. So a grace is what that payment would buy again at the size the
+space is then, and no payment, whoever makes it, ever shortens one. A fund
+nothing was ever added to owes nothing. The rate follows the size as the
+host last measured it. A payment pays what is owed
 first, so one that leaves the balance at or below zero turns nothing back
 on, and each grace is paid for by the payment after it. So the least
 payment into a large space buys a short grace. `paidUntil` is not a date

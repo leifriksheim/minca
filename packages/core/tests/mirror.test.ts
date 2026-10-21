@@ -344,6 +344,32 @@ describe('a mirror', () => {
     assert.equal((await inner.list(`${SPACE}/`)).length, before + 1, 'and uploads nothing twice');
   });
 
+  test('a host that only read its space back from the store puts it back whole once it was taken out', async () => {
+    const store = createMemoryBlobStore();
+    const before = await device(store);
+    const me = await author();
+    for (const text of ['one', 'two']) await before.storage.addVersion(await note(me, text));
+    await before.mirror.flush();
+    await before.mirror.close();
+    // A new disk: it reads everything back, and writes nothing of its own.
+    const storage = createStorageProvider(createMemoryAdapter());
+    const accept = async (version: Version): Promise<Taken> => {
+      await storage.addVersion(version);
+      return 'stored';
+    };
+    const options = { store, space: SPACE, storage, accept, state: createMemoryAdapter(), flushMs: 5 };
+    const restored = await createMirror(options);
+    await restored.pull();
+    await restored.close();
+    await deleteMirrored(store, SPACE);
+    const again = await createMirror(options);
+    await again.flush();
+    await again.close();
+    const fresh = await device(store);
+    await fresh.mirror.pull();
+    assert.deepEqual(await texts(fresh.storage), ['one', 'two']);
+  });
+
   test('a segment that is not one, or of the format before envelopes, opens as nothing', async () => {
     assert.deepEqual(unpackSegment(new TextEncoder().encode('not json')), []);
     assert.deepEqual(unpackSegment(new TextEncoder().encode('{"v":3,"versions":[]}')), []);

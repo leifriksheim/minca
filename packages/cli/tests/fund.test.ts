@@ -146,6 +146,25 @@ describe('a community fund', () => {
     assert.ok(Math.abs(state.balance + 5e6) < 100);
   });
 
+  test('no payment shortens a grace: a small one after a large one still lends what the large one was', async () => {
+    const t = await setUp();
+    // 10 GB at $4 a GB: $40 a month.
+    await t.funds.settle('space:club', 10e9);
+    await t.funds.add('space:club', 40e6);
+    t.pass(20);
+    await t.funds.add('space:club', 1e6);
+    t.pass(11);
+    let state = await t.funds.settle('space:club');
+    assert.ok(state.balance <= 0, 'run out');
+    const ends = t.funds.until(state) + 30 * DAY;
+    assert.ok(ends - t.now() > 28 * DAY, `still about a month of grace, not ${(ends - t.now()) / DAY} days`);
+    // Once above zero again, a run starts afresh with the payment that began it.
+    t.pass(40);
+    await t.funds.settle('space:club');
+    state = await t.funds.add('space:club', 50e6);
+    assert.equal(state.most, 50e6);
+  });
+
   test('a balance its host lends nothing to stops at zero', async () => {
     let clock = START;
     const funds = createFunds({

@@ -175,8 +175,8 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   `MINCA_FUND_PER_GB` dollars a month for each GB (default 0.10), by the
   second: an account pays for what is past its free room, a community for
   its space, at least one GB. Once a community's balance runs out the host
-  carries on through a grace until it owes what the last payment added (30
-  days at most), and the next payment pays for it first. An account at a
+  carries on through a grace until it owes the largest payment since it was
+  last above zero (30 days at most), and the next payment pays for it first. An account at a
   host with limits gets its room's notice instead.
 - **No pages of its own.** The host gives its price in its description, and
   the account home (or the app, for a space) shows it and pays: a card
