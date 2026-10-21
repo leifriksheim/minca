@@ -1920,39 +1920,29 @@ function historyOf(r: Replay): AccessHistory {
   };
   const inOrder = (ids: Iterable<string>) => [...ids].sort((a, b) => r.index.get(a)! - r.index.get(b)!);
   const idsKey = (ids: ReadonlyArray<string>) => [...new Set(ids)].sort().join(',');
-  /** The merge of what `ids` name and saw, counting those of them in `among` */
-  const stateOf = (
-    ids: ReadonlyArray<string>,
-    among: { readonly valid: ReadonlySet<string>; readonly defViews: ReadonlyMap<string, AccessState> },
-  ) =>
-    merge(
+  /**
+   * The merge of what `ids` name and saw, counting the changes valid in the
+   * whole history, or valid among what `within` names and saw
+   */
+  const at = (ids: ReadonlyArray<string>, within?: ReadonlyArray<string>): AccessState => {
+    const key = `${idsKey(ids)}|${within ? idsKey(within) : '*'}`;
+    const known = r.views.get(key);
+    if (known) return known;
+    const among = within
+      ? validWithin(inOrder(cutOf([...ids, ...within])), r)
+      : { valid: r.valid, defViews: r.validDefViews };
+    const counted = inOrder(cutOf(ids)).filter((id) => among.valid.has(id));
+    const view = merge(
       genesis,
-      inOrder(cutOf(ids))
-        .filter((id) => among.valid.has(id))
-        .map((id) => r.byId.get(id)!),
+      counted.map((id) => r.byId.get(id)!),
       r.saw,
       among.defViews,
     );
-  const cached = (key: string, make: () => AccessState): AccessState => {
-    const known = r.views.get(key);
-    if (known) return known;
-    const view = make();
     r.views.set(key, view);
     return view;
   };
-  /** Valid in the whole history, or among what `within` names and saw */
-  const at = (ids: ReadonlyArray<string>, within?: ReadonlyArray<string>): AccessState =>
-    cached(`at:${idsKey(ids)}|${within ? idsKey(within) : '*'}`, () =>
-      stateOf(
-        ids,
-        within
-          ? validWithin(inOrder(cutOf([...ids, ...within])), r)
-          : { valid: r.valid, defViews: r.validDefViews },
-      ),
-    );
   /** Valid among what `ids` name and saw alone */
-  const seenAs = (ids: ReadonlyArray<string>): AccessState =>
-    cached(`seen:${idsKey(ids)}`, () => stateOf(ids, validWithin(inOrder(cutOf(ids)), r)));
+  const seenAs = (ids: ReadonlyArray<string>): AccessState => at(ids, ids);
   const index = new Map(r.order.map((id, i) => [id, i]));
   const changesState = (id: string) => !['revoke', 'fork'].includes(r.byId.get(id)!.kind);
   let heads: ReadonlyArray<string> | null = null;
