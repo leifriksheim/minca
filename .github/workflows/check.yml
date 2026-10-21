@@ -14,6 +14,7 @@ jobs:
   # The tests and the static checks run side by side, each on its own runner.
   # Core's tests take as long as the rest together, so they get a runner of
   # their own. More runners than this costs minutes: each job bills a whole one.
+  # A row with `paths` runs only when a changed file matches them.
   check:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -22,8 +23,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Nothing outside core changes what its tests see.
           - name: test core
             run: npm test -w packages/core
+            paths: '^(packages/core/|package(-lock)?\.json$|tsconfig\.base\.json$|\.github/workflows/check\.yml$)'
           # Every other workspace, by folder: a new app is picked up, a new package must be added.
           - name: test
             run: npm test --if-present -w packages/cli -w packages/relay -w apps -w scenarios
@@ -32,20 +35,36 @@ jobs:
             run: npm run check
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # The history to diff against, only for a row that has paths.
+          fetch-depth: ${{ matrix.paths && '0' || '1' }}
+      - id: changed
+        shell: bash
+        env:
+          PATHS: ${{ matrix.paths }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        # When the base can't be read (a new branch), run anyway.
+        run: |
+          if [[ -z "$PATHS" ]] || ! files=$(git diff --name-only "$BASE"...HEAD 2>/dev/null) || grep -qE "$PATHS" <<<"$files"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changed.outputs.run == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       # node_modules itself, so an unchanged lockfile skips the install.
-      - id: modules
+      - if: steps.changed.outputs.run == 'true'
+        id: modules
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             node_modules
             */*/node_modules
           key: modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
-      - if: steps.modules.outputs.cache-hit != 'true'
+      - if: steps.changed.outputs.run == 'true' && steps.modules.outputs.cache-hit != 'true'
         run: npm ci
-      - run: ${{ matrix.run }}
+      - if: steps.changed.outputs.run == 'true'
+        run: ${{ matrix.run }}
 
   # The downloads (build.yml) build on every PR, so a broken one shows before a
   # release does. The desktop app takes a macOS runner and minutes, so only when

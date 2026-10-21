@@ -6,6 +6,10 @@
 [build]
   command = "npm ci && npm run build -w apps/site"
   publish = "apps/site/dist"
+  # The site's base is the whole repository, so Netlify would build it for
+  # every change. This builds only when the site, what it is built from, or
+  # this file changes. Exit 1 builds.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- apps/site apps/shared packages/core package.json package-lock.json tsconfig.base.json netlify.toml"
 
 [build.environment]
   NODE_VERSION = "22"
