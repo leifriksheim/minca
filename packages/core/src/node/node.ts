@@ -483,9 +483,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           onKeys: async (keys, current) => {
             if (kind === 'registry') return;
             await registry.addKeys(spaceId, keys, current);
-            // The account's other devices, and its carriers, follow the new key.
-            await remember(spaceId, { refresh: true });
-            void reconcile();
+            // The account's other devices follow the new key, and its carriers: passes and wakes, not a whole reconcile.
+            if (!kind) await remember(spaceId, { refresh: true });
+            void passAll().catch(() => {});
           },
         });
       });
