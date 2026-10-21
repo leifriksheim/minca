@@ -301,6 +301,49 @@ describe('a mirror', () => {
     assert.deepEqual(await texts(fresh.storage), ['one', 'three', 'two']);
   });
 
+  test('a mirror that only ever read uploads nothing when it starts again; one whose store is down still opens', async () => {
+    const inner = createMemoryBlobStore();
+    let down = false;
+    const store: BlobStore = {
+      get: (key) => inner.get(key),
+      put: (key, bytes) => inner.put(key, bytes),
+      delete: (key) => inner.delete(key),
+      list: async (prefix) => {
+        if (down) throw new Error('bucket unreachable');
+        return inner.list(prefix);
+      },
+    };
+    const writer = await device(store);
+    const me = await author();
+    for (const text of ['one', 'two']) await writer.storage.addVersion(await note(me, text));
+    await writer.mirror.flush();
+    const before = (await inner.list(`${SPACE}/`)).length;
+    const storage = createStorageProvider(createMemoryAdapter());
+    const state = createMemoryAdapter();
+    const accept = async (version: Version): Promise<Taken> => {
+      await storage.addVersion(version);
+      return 'stored';
+    };
+    const options = { store, space: SPACE, storage, accept, state, flushMs: 5 };
+    const reader = await createMirror(options);
+    await reader.pull();
+    await reader.close();
+    const again = await createMirror(options);
+    await again.flush();
+    assert.equal((await inner.list(`${SPACE}/`)).length, before, 'what it only read is not its to upload');
+    // Now it writes too; with the store down it still opens, and knows what it knew.
+    await storage.addVersion(await note(me, 'three'));
+    await again.flush();
+    await again.close();
+    await writer.mirror.close();
+    down = true;
+    const offline = await createMirror(options);
+    down = false;
+    await offline.flush();
+    await offline.close();
+    assert.equal((await inner.list(`${SPACE}/`)).length, before + 1, 'and uploads nothing twice');
+  });
+
   test('a segment that is not one, or of the format before envelopes, opens as nothing', async () => {
     assert.deepEqual(unpackSegment(new TextEncoder().encode('not json')), []);
     assert.deepEqual(unpackSegment(new TextEncoder().encode('{"v":3,"versions":[]}')), []);

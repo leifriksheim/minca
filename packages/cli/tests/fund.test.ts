@@ -112,7 +112,7 @@ describe('a community fund', () => {
     assert.ok(Math.abs(state.balance - 2e6) < 10, '$6 in, $4 owed: $2 left');
   });
 
-  test('a grace is no longer than the payment before it lasted: the least payment into a large space buys hours', async () => {
+  test('a grace lends what the payment before it was: the least payment into a large space buys hours', async () => {
     const t = await setUp();
     // 100 GB at $4 a GB: $400 a month, so $4 lasts 0.3 days.
     await t.funds.settle('space:big', 100e9);
@@ -127,6 +127,38 @@ describe('a community fund', () => {
     // The host's grace runs from the date it says: so it ends 0.6 days after paying.
     const ends = t.funds.until(state) + 30 * DAY;
     assert.ok(Math.abs(ends - (paidAt + 0.6 * DAY)) < 60, `ends 0.6 days on, not ${(ends - paidAt) / DAY}`);
+  });
+
+  test('paid while small, grown just before it runs out: the grace is still what the payment was, at the new size', async () => {
+    const t = await setUp();
+    await t.funds.settle('space:club', 1e9);
+    await t.funds.add('space:club', 5e6);
+    t.pass(30);
+    // 10 TB at $4 a GB a month: the $1 left lasts minutes, and the grace lends $5 at that rate.
+    await t.funds.settle('space:club', 10_000e9);
+    t.pass(1);
+    let state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 5e6) < 100, 'owes what was paid, no more');
+    const ends = t.funds.until(state) + 30 * DAY;
+    assert.ok(ends - t.now() < 0, 'its grace already over: a day of 10 TB is far past $5');
+    t.pass(31);
+    state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 5e6) < 100);
+  });
+
+  test('a balance its host lends nothing to stops at zero', async () => {
+    let clock = START;
+    const funds = createFunds({
+      store: await memoryStores()('funds'),
+      perGb: 4e6,
+      lends: (id) => id.startsWith('space:'),
+      now: () => clock,
+    });
+    await funds.add('did:key:zMe', 4e6);
+    clock += 40 * DAY;
+    const state = await funds.settle('did:key:zMe');
+    assert.ok(Math.abs(state.balance) < 10, 'nothing owed');
+    assert.ok(funds.until(state) + 30 * DAY <= clock, 'and no grace left');
   });
 
   test('once its grace is over, a fund owes nothing more, whatever its space grows to', async () => {

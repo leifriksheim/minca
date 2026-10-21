@@ -153,7 +153,8 @@ GB (10⁹ bytes) the subscription's spaces take past `limits.accountBytes`
 (every GB, at a host without `limits`), by the byte and for the time they
 do. Its state, its grace and `paidUntil` go as a fund's do (§2): `active`
 while the balance is above zero, a grace lent as a fund's is, and
-`paidUntil` the host's estimate. Its status says `balance` and `daily`. The
+`paidUntil` the host's estimate. At a host with `limits` an account's
+balance is lent no grace: its room's notice is its grace (§1.1). Its status says `balance` and `daily`. The
 host learns how much was paid into which subscription, never by whom.
 
 **Paying.** A device never handles a payment: it shows the host's price
@@ -286,7 +287,7 @@ without payment: `plan` is `"paid"` while its balance is above zero and
 `"free"` otherwise. Paying, it has no `quota`: its balance pays for what is
 past `accountBytes`. On the free plan its `quota` is `accountBytes`. So when
 a balance runs out, its room is the free one again, and the notice (Room)
-runs as its grace does. It is never `grace` or `lapsed` for want of payment, and is
+is its grace: nothing below zero is taken from it. It is never `grace` or `lapsed` for want of payment, and is
 dropped only after `idleDays` with no signed call (§1) from any of its
 devices. What a space's own subscription carries (§2), while `active`,
 counts against no account's quota; its fund pays for its size instead (§2).
@@ -477,10 +478,12 @@ host takes from it only what it says it will: keeping the space online at its
 it takes less, for the time it does, and what the bots it runs in that space
 spend (§3). The subscription is `active` while the balance is above zero,
 then `grace`, then `lapsed`, as in §1. A grace is lent, never given, and
-no longer than what was last added lasted, nor the host's grace period: for
-that long after the balance reaches zero the host goes on taking its rate,
-below zero, and then takes nothing more, whatever the space grows to. A
-fund nothing was ever added to owes nothing. A payment pays what is owed
+in money: after the balance reaches zero the host goes on taking its rate,
+below zero, until it owes as much as the last payment added, or for its
+grace period at most, whichever comes first, and then takes nothing more,
+whatever the space grows to. So a grace is what the last payment would buy
+again at the size the space is then. A fund nothing was ever added to owes
+nothing. A payment pays what is owed
 first, so one that leaves the balance at or below zero turns nothing back
 on, and each grace is paid for by the payment after it. So the least
 payment into a large space buys a short grace. `paidUntil` is not a date
@@ -488,7 +491,7 @@ that was bought: it is the host's estimate of when the balance reaches zero
 at what the fund spends now, and it MUST move as that changes (sooner as
 bots spend more, later with each payment). Once it ran out, it is the date
 the host's grace period counts from so that it ends where the lent grace
-does, and it never moves later.
+does, in time or in money, and it never moves later.
 
 A host that takes payments says how in its description (§1), as `fund`, for
 accounts' balances and communities' funds alike:

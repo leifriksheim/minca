@@ -471,7 +471,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       ...base,
       state,
       paidUntil: subscription.paidUntil,
-      renews: subscription.customer !== undefined,
+      // A balance never renews by itself: a card that adds every month is the payer's own.
+      renews: false,
     };
     if (!id.startsWith('space:'))
       return {
@@ -556,6 +557,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     store: await options.stores('host-funds'),
     perGb: Number(perGb) * 1e6,
     ...(options.graceDays !== undefined ? { graceDays: options.graceDays } : {}),
+    // An account at a host with limits has its room's notice as its grace: nothing is lent to it.
+    lends: (id) => !limits || id.startsWith('space:'),
     mirror: options.mirror ?? null,
   });
   const ids = (options.connectors ?? []).map((one) => one.id);

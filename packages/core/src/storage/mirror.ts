@@ -116,9 +116,11 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
 
   // Read once: a flush asks about every version the store keeps, and a folder flushes every second.
   const known = new Set((await state.list(knownKey(''))).map((key) => key.slice(knownKey('').length)));
-  // Known, but none of this writer's segments are there: the space was taken out of the store
-  // (`deleteMirrored`). What it knew is gone, so everything goes out again.
-  if (known.size > 0 && (await store.list(mine)).length === 0) {
+  // It wrote before, yet none of its segments are there: the space was taken out of the store
+  // (`deleteMirrored`). What it knew is gone, so everything goes out again. A writer that only ever
+  // read has none to look for, and a store it can't reach now leaves what it knows as it was.
+  const gone = counter > 0 && known.size > 0 && (await store.list(mine).catch(() => null))?.length === 0;
+  if (gone) {
     for (const id of known) await state.delete(knownKey(id));
     known.clear();
   }
