@@ -325,11 +325,7 @@ export type RecordVerdict =
       readonly ok: false;
       readonly reason: string;
       readonly later?: boolean;
-      /**
-       * Allowed when written, and refused only because a later change took
-       * its author's access away or revoked its key. It is kept, so a
-       * version that cites it, and had not seen that change, can count it.
-       */
+      /** Allowed when written, and taken away by a later change: kept, so a version citing it can count it */
       readonly withdrawn?: true;
     };
 
@@ -341,52 +337,29 @@ export interface AccessHistory {
   readonly current: AccessState;
   /** What became of one change */
   status(id: string): EventStatus | null;
-  /**
-   * The latest applied changes to who holds what — what a new record's `seen`
-   * names. A dropped change is never a head, nor a revoke or a fork proof:
-   * none changes the state, and a writer need not name them.
-   */
+  /** The latest applied changes to who holds what, which a new record's `seen` names: no revokes or fork proofs */
   heads(): ReadonlyArray<string>;
-  /**
-   * At most `max` heads, chosen so that what they saw holds the latest applied
-   * change to each of `keys` (the records a writer's standing rests on), then
-   * the most recently applied: what a writer names when there are more.
-   */
+  /** At most `max` heads: first ones that saw the latest change to each of `keys`, then the most recent */
   headsFor(keys: ReadonlyArray<string>, max: number): ReadonlyArray<string>;
   /**
-   * The state a record is judged by, as of what `seen` names: the changes it
-   * names and everything they saw, counting only those valid in the whole
-   * history, so a change struck since gives nothing even to a record that
-   * cites it. With `within`, valid among what `within` and `seen` name
-   * instead (a version another cites). Null when some of it is not here.
+   * The state as of what `seen` names and saw, counting the changes valid in the whole history, or
+   * with `within` valid among what both name (a version another cites). Null until all of it is here.
    */
   at(seen: ReadonlyArray<string>, within?: ReadonlyArray<string>): AccessState | null;
-  /**
-   * The state as its writer saw it: the changes `seen` names and everything
-   * they saw, judged among themselves alone. A record its author couldn't
-   * have written here is refused; one that fails only in {@link at} is
-   * withdrawn. Null when some of it is not here.
-   */
+  /** The state as its writer saw it: what `seen` names and saw, judged among themselves alone */
   seenAs(seen: ReadonlyArray<string>): AccessState | null;
   /**
-   * Whether a record stands as of what it saw: its key not revoked or forked
-   * past where the change that did so covers it, its author allowed by
-   * `needs` as of what it saw, still allowed counting only the changes that
-   * stand ({@link at}), and no removal or unassignment of its account it had
-   * not seen and that doesn't cover it.
-   * @param record The record's id, its account, what it saw, and the key that signed it
-   * @param needs What the record asks of its author
-   * @param within For a version another cites: what the citing version saw.
-   *   Only changes among those, and what they saw, can take it away.
+   * Whether a record stands: its key not revoked or forked past what covers it, `needs` met as of
+   * what it saw and as of the changes that stand, and no unseen removal of its account taking it.
+   * With `within`, for a version another cites, only changes the citer saw can take it away.
    */
   judge(
     record: {
       readonly id: string;
       readonly root: string;
       readonly seen: ReadonlyArray<string>;
-      /** The key that signed it */
+      /** The key that signed it, its collection, and its place in that key's line there */
       readonly writer?: string;
-      /** Its collection, and its place in its key's line for that collection */
       readonly collection?: string;
       readonly line?: number;
     },
@@ -399,22 +372,11 @@ export interface AccessHistory {
   forked(writer: string, collection: string): { readonly event: string; readonly from: number } | null;
   /** Every key whose line for a collection forked, and from where */
   forks(): ReadonlyArray<ForkedLine>;
-  /**
-   * Whether an account appears anywhere in the history — a founder, assigned
-   * a role by the constitution, or named by any assignment, whatever became of it. Only grows as changes
-   * arrive, so it can decide what to store without two peers ever disagreeing
-   * for good.
-   */
+  /** Whether any founder, constitution or assignment names an account: it only grows, so it can decide what to store */
   named(did: string): boolean;
   /** Whether any change held opens an invite with this key */
   knownInvite(inviteKey: string): boolean;
-  /**
-   * The history with one more change, made without replaying the rest:
-   * exactly what `replayAccess` with every change held and this one gives.
-   * Null when only a whole replay can say where it goes — it did not see
-   * every change here, or it could change an order already chosen. This
-   * history stays as it was.
-   */
+  /** The history with one more change, exactly as replaying all gives; null when only a whole replay can say */
   extend(event: AccessEvent): AccessHistory | null;
 }
 
@@ -544,46 +506,21 @@ export function may(
   return answer;
 }
 
-/** What a role's current definitions all hold, and the authors whose power bounds it */
-interface EffectiveRole {
-  /** The grants every current definition holds, by command and policy */
-  readonly grants: ReadonlyArray<Grant>;
-  /** The roles every current definition nests */
-  readonly nests: ReadonlyArray<string>;
-  /** Each written definition's author, and its view: it holds only what they could do there */
-  readonly authors: ReadonlyArray<{ readonly view: AccessState; readonly by: string }>;
-}
-
-const effective = new WeakMap<AccessState, Map<string, EffectiveRole | null>>();
-
-/** A role as its rival definitions leave it: only what they share. Once per state: a state never changes. */
-function effectiveRole(state: AccessState, role: string): EffectiveRole | null {
-  let cache = effective.get(state);
-  if (!cache) effective.set(state, (cache = new Map<string, EffectiveRole | null>()));
-  const known = cache.get(role);
-  if (known !== undefined) return known;
+/** A role as its rival definitions leave it: what they all hold, and the authors whose power bounds it */
+function effectiveRole(state: AccessState, role: string) {
   const heads = state.roles.get(role);
-  let found: EffectiveRole | null = null;
-  if (heads && heads.length > 0) {
-    const [first, ...rivals] = heads;
-    found = {
-      grants: first!.grants.filter((grant) =>
-        rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
-      ),
-      nests: first!.nests.filter((nested) => rivals.every((rival) => rival.nests.includes(nested))),
-      authors: heads.flatMap((head) =>
-        head.view === null || head.by === null ? [] : [{ view: head.view, by: head.by }],
-      ),
-    };
-  }
-  cache.set(role, found);
-  return found;
+  if (!heads?.length) return null;
+  const [first, ...rivals] = heads;
+  return {
+    grants: first!.grants.filter((grant) =>
+      rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
+    ),
+    nests: first!.nests.filter((nested) => rivals.every((rival) => rival.nests.includes(nested))),
+    authors: heads.flatMap(({ view, by }) => (view === null || by === null ? [] : [{ view, by }])),
+  };
 }
 
-/**
- * Whether a role, or a role it nests, holds a grant that `fits`, and every
- * author of its definitions could do as much as of it (`authorHolds`).
- */
+/** Whether a role, or one it nests, holds a grant that `fits`, as far as each definition's author did */
 function roleHolds(
   state: AccessState,
   role: string,
@@ -603,14 +540,9 @@ function roleHolds(
 }
 
 /**
- * Whether an account holds every grant a role gives, each as wide or wider:
- * what it may hand on to a bot or an agent of its own without handing on more
- * than it holds. A grant is as wide when its command covers the other's and
- * every statement of its policy is among the other's, held through the
- * account's roles as {@link may} holds it (rivals sharing it, attenuated by
- * each definition's author). A founder holds every grant. Only the policies'
- * words are compared, so it may say no where the policies would in fact
- * allow; never yes where they wouldn't.
+ * Whether an account holds every grant a role gives, each as wide or wider (its command covering,
+ * its policy's statements among the other's): what it may hand a bot of its own. Only the policies'
+ * words are compared, so it may say no where they would allow; never yes where they wouldn't.
  */
 export function holdsRole(state: AccessState, did: string, role: string): boolean {
   return grantsOfRole(state, role, new Set()).every((grant) => holdsGrant(state, did, grant));
