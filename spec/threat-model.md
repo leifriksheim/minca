@@ -729,7 +729,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
   - Its writes count only where its note covers them, and a home grants an
     app only the spaces chosen for it (01 §8, 06 §2). It can be given a note
     only for a key it shows it holds, never the home's own or another
-    connection's, so disconnecting it revokes nobody else (06 §2.5).
+    connection's, nor one a connection replaced, so disconnecting it revokes
+    nobody else (06 §2.5, §2.10; `packages/core/tests/connect.test.ts`, "a key
+    a connection replaced is not granted again for anything else").
   - Given some spaces, or records only, it never changes the account's own
     place in any space: every peer ignores its account joining, leaving,
     being assigned or unassigned a role, stepping down, or publishing a
@@ -746,9 +748,11 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     removing their own automations: they are `sys.automation`, which nothing
     defines, so no definition it writes applies to them (03 §13.2;
     `packages/core/tests/own-automations.test.ts`). Disconnecting it removes
-    every automation it proposed and every one its own key wrote, whichever
-    app that one names (06 §2.10; `packages/core/tests/connect.test.ts`,
-    "disconnecting a whole-account app removes what its own key wrote…").
+    every automation it proposed and every one its own key, or a key it
+    replaced, wrote, whichever app that one names (06 §2.10;
+    `packages/core/tests/connect.test.ts`, "disconnecting a whole-account app
+    removes what its own key wrote…", "disconnecting removes the automations
+    a replaced key wrote…").
   - Given the whole account, it holds the account key, not the local key, so
     it can't open the registry store's sealed entries, and of those it gets
     nothing else it lacks but invite secrets waiting to be used and the CLI's
@@ -822,9 +826,19 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     node to a client that pinned the account, and a pin checks no revoke. A
     narrower note can't (04 §5.2)
     ([#165](https://github.com/leifriksheim/minca/issues/165)) _(traced)_.
-  - Its records count until its key is revoked, not until `expiresAt`: only
-    the home that granted it revokes it, while signed in there (06 §2.9,
-    [#165](https://github.com/leifriksheim/minca/issues/165)).
+  - Its records count until the person disconnects it, not until
+    `expiresAt`, and so do those of a key it replaced by connecting again: no
+    home revokes an app's key on its own, since a revoke from a home's view
+    withdraws whatever of the app's honest writes the home hadn't seen. A
+    copied app key keeps writing until the person notices and disconnects
+    the app, as a stolen session token does in any app (§3.4); for a
+    whole-account app that includes changing access and revoking the
+    account's other keys. The date chosen at the grant bounds only live use,
+    and the home says so where the person grants and lists apps. Only the
+    home that granted it can disconnect it, and only while it keeps its
+    record of the connection: site data cleared there leaves the app's keys,
+    and those it replaced, never to be revoked (06 §2.9, §2.10,
+    [#165](https://github.com/leifriksheim/minca/issues/165)). By design.
   - Everything a key thief can do in §3.4, with its own key ([#165](https://github.com/leifriksheim/minca/issues/165)).
   - A version it writes in one of the account's own spaces (the registry,
     contacts, carry spaces) without `/account/write` is refused by the

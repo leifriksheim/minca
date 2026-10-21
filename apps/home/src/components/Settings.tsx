@@ -67,7 +67,8 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
         ...(connectionKey(app) === app.audience ? { audience: app.audience } : {}),
         waitMs: HEARD_WITHIN_MS,
       });
-      if (app.access === 'read')
+      // A reader may still have replaced a key that wrote: that one is revoked, and may go unheard.
+      if (app.access === 'read' && !app.retired?.length)
         setNotYet(
           `${what} only reads, so there is no key to take back: it keeps reading until its access runs out.`,
         );
@@ -75,6 +76,15 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
         setNotYet(
           `${what} is disconnected here, but none of your other devices or apps is reachable to hear of it yet. It keeps working until one is: keep this open a moment, or it happens the next time you open your account home while one is online.`,
         );
+    });
+  };
+
+  // Every app at once, for when one has gone wrong and you can't tell which: carriers stay.
+  const disconnectAll = () => {
+    setNotYet(null);
+    leave('all', 'every app', async () => {
+      const origins = new Set(connections.filter((app) => app.access !== 'carry').map((app) => app.origin));
+      for (const origin of origins) await auth.disconnect(origin, { waitMs: HEARD_WITHIN_MS });
     });
   };
 
@@ -354,9 +364,19 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             {connections.length > 0 && (
               <p style={styles.errorHint}>
                 Disconnecting stops the app for good the next time it comes online: it signs itself out, and
-                nothing it changes after that counts. What it already wrote stays, and it keeps what it could
-                already read.
+                nothing it changes after that counts, nor anything it wrote that hasn't reached this page yet.
+                It keeps what it could already read. Nothing is disconnected unless you do it here.
               </p>
+            )}
+            {connections.filter((app) => app.access !== 'carry').length > 1 && (
+              <button
+                onClick={disconnectAll}
+                disabled={disconnecting !== null}
+                data-variant="quiet"
+                style={{ ...styles.smallButton, marginTop: 8 }}
+              >
+                {disconnecting === 'all' ? 'Disconnecting…' : 'Something wrong? Disconnect every app'}
+              </button>
             )}
           </Section>
 
@@ -573,14 +593,14 @@ function Copies({
 
 /**
  * Signing out, and what becomes of the apps connected from here: an app's
- * note doesn't need the home signed in, so they would keep working. Asked
- * each time, ticked to disconnect them; carriers stay, as they hold nothing
- * that writes.
+ * note doesn't need the home signed in, so they keep working. Asked each
+ * time, unticked: disconnecting revokes, which is for when something is wrong.
+ * Carriers stay, as they hold nothing that writes.
  */
 function SignOut() {
   const { auth } = useAuth();
   const [asking, setAsking] = useState(false);
-  const [disconnect, setDisconnect] = useState(true);
+  const [disconnect, setDisconnect] = useState(false);
   const { run, busy, error } = useAction();
   const apps = auth.connections().filter((app) => app.access !== 'carry');
   // A read-only note has no key to revoke: it runs until its time does.
@@ -620,7 +640,7 @@ function SignOut() {
                     ? `; ${readOnly.length === 1 ? 'one only reads, and keeps reading' : `${readOnly.length} only read, and keep reading`} until ${readOnly.length === 1 ? 'its' : 'their'} access runs out`
                     : ''
                 }. If none of your devices or apps is reachable now, they hear of it when you next sign in here.`
-              : 'They keep working until their access runs out, signed out here or not.'}
+              : 'They keep working until you disconnect them, signed out here or not.'}
           </span>
         </span>
       </label>
@@ -844,7 +864,7 @@ function describeConnection(app: Connection): string {
     month: 'long',
   });
   const expired = app.expiresAt * 1000 < Date.now();
-  return `${who} · ${app.access === 'write' ? 'read and change' : 'read'} ${what} · ${expired ? 'ran out' : `until ${until}`}`;
+  return `${who} · ${app.access === 'write' ? 'read and change' : 'read'} ${what} · ${expired ? (app.access === 'write' ? 'stopped syncing, can still change things until disconnected' : 'ran out') : `in sync until ${until}`}`;
 }
 
 function Section({

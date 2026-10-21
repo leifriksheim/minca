@@ -337,7 +337,7 @@ describe('connecting an app to an account home', () => {
     );
   });
 
-  test('connecting again with a new key revokes the old one: no time ends a note, so revoking does', async () => {
+  test('connecting again with a new key revokes nothing, so what the old key wrote stands; disconnecting revokes both', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
     const auth = await home(hub);
     const { node: homeNode } = auth.getState().session!;
@@ -349,13 +349,38 @@ describe('connecting an app to an account home', () => {
       spaceIds: [shared.id],
     });
     const todo = await app(hub, grant, first);
-    await todo.records.put(shared.id, 'app.todo.item', { text: 'with the first key' });
+    await hold(todo, shared.id);
+    await hold(homeNode, shared.id);
+    const seen = await todo.records.put(shared.id, 'app.todo.item', { text: 'seen' });
+    await until(
+      async () => (await homeNode.records.get(shared.id, seen.key)) !== null,
+      5000,
+      'the two to meet',
+    );
+    // The home is closed now: what the app writes next, it hasn't seen.
+    await letGo(homeNode, shared.id);
+    const unseen = await todo.records.put(shared.id, 'app.todo.item', { text: 'with the first key' });
     const second = await testAppKey('second');
     await auth.grant({
       origin: 'https://todo.test',
       request: await asked({ v: 1, audience: second.did, access: 'write' }, second),
       spaceIds: [shared.id],
     });
+    assert.deepEqual(
+      auth.connections().map((known) => [known.audience, known.retired?.map((key) => key.audience)]),
+      [[second.did, [first.did]]],
+      'the old key is kept, to revoke when the person disconnects',
+    );
+    const after = await todo.records.put(shared.id, 'app.todo.item', { text: 'still counts' });
+    await hold(homeNode, shared.id);
+    for (const written of [unseen, after])
+      await until(
+        async () => (await homeNode.records.get(shared.id, written.key)) !== null,
+        3000,
+        'what the old key wrote, before and after, to reach the home and stand',
+      );
+
+    await auth.disconnect('https://todo.test');
     await until(
       async () =>
         todo.records.put(shared.id, 'app.todo.item', { text: 'after' }).then(
@@ -363,7 +388,103 @@ describe('connecting an app to an account home', () => {
           (error: Error) => /revoked/.test(error.message),
         ),
       3000,
-      'the old key to be revoked',
+      'the old key to be revoked once the person disconnects',
+    );
+    assert.notEqual(await homeNode.records.get(shared.id, unseen.key), null, 'what the home had seen stays');
+  });
+
+  test('disconnecting removes the automations a replaced key wrote, whichever app they name', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node } = auth.getState().session!;
+    const first = await testAppKey('first');
+    const grant = await auth.grant({
+      origin: 'https://evil.test',
+      request: await asked({ v: 1, audience: first.did, access: 'write', scope: 'account' }, first),
+      spaceIds: [],
+    });
+    const evil = await app(hub, grant, first);
+    await evil.automations.add({
+      ...notifyOn('Your bank: sign in again', 'app.chat.message'),
+      then: { kind: 'notify', text: 'Sign in again' },
+      spaces: 'all',
+      app: { origin: 'https://bank.test' },
+      open: 'https://evil.test/phish',
+    });
+    await until(
+      async () => (await node.automations.list()).length === 1,
+      5000,
+      'the automation to reach the home',
+    );
+    const second = await testAppKey('second');
+    await auth.grant({
+      origin: 'https://evil.test',
+      request: await asked({ v: 1, audience: second.did, access: 'write', scope: 'account' }, second),
+      spaceIds: [],
+    });
+    await auth.disconnect('https://evil.test');
+    assert.deepEqual(await node.automations.list(), []);
+  });
+
+  test('the same key asking again for less is still revoked everywhere it could write, once disconnected', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const { node: homeNode } = auth.getState().session!;
+    const one = await homeNode.spaces.create({ name: 'One', ...team, visibility: 'public' });
+    const key = await appKey();
+    const whole = await auth.grant({
+      origin: 'https://evil.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write', scope: 'account' }, key),
+      spaceIds: [],
+    });
+    // Same key, asking for one space only: the person happily gives less.
+    await auth.grant({
+      origin: 'https://evil.test',
+      request: await asked({ v: 1, audience: key.did, access: 'write' }, key),
+      spaceIds: [one.id],
+    });
+    // The app keeps running on its first, whole-account note.
+    const evil = await app(hub, whole, key);
+    await until(
+      async () => (await evil.account.profile())?.name === 'Ada',
+      3000,
+      'the account to reach the app',
+    );
+    await auth.disconnect('https://evil.test', { waitMs: 2000 });
+    await until(
+      async () =>
+        evil.account.setName('Pwned').then(
+          () => false,
+          (error: Error) => /revoked/.test(error.message),
+        ),
+      4000,
+      'the key to be revoked in the account registry too',
+    );
+    assert.equal((await homeNode.account.profile())?.name, 'Ada');
+  });
+
+  test('a key a connection replaced is not granted again for anything else', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const auth = await home(hub);
+    const first = await testAppKey('first');
+    await auth.grant({
+      origin: 'https://a.test',
+      request: await asked({ v: 1, audience: first.did, access: 'write' }, first),
+      spaceIds: [],
+    });
+    const second = await testAppKey('second');
+    await auth.grant({
+      origin: 'https://a.test',
+      request: await asked({ v: 1, audience: second.did, access: 'write' }, second),
+      spaceIds: [],
+    });
+    await assert.rejects(
+      auth.grant({
+        origin: 'https://b.test',
+        request: await asked({ v: 1, audience: first.did, access: 'write' }, first),
+        spaceIds: [],
+      }),
+      /already connected/,
     );
   });
 

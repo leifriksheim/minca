@@ -324,8 +324,8 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       {whole && !recordsOnly && (
         <Note title="Your whole account">
           Every space, including private ones, the list of them, your contacts, and contact requests sent to
-          you. It can make and join spaces for you. It cannot sign in anywhere as you, change your password or
-          passkeys, or keep access past the date below unless you allow it again.
+          you. It can make and join spaces for you. It cannot sign in anywhere as you, or change your password
+          or passkeys. Until you disconnect it, what it changes counts, even after the date below.
         </Note>
       )}
 
@@ -384,7 +384,8 @@ function Approve({ incoming, request }: { incoming: IncomingRequest; request: Co
       )}
 
       <p style={{ ...styles.errorHint, marginBottom: 20 }}>
-        Access lasts {lasts(request.days ?? 7)}; after that it asks again.
+        It stays in sync for {lasts(request.days ?? 7)}, then asks again. Disconnecting it, in your account,
+        is what cuts it off for good.
         {(whole || privateChosen) &&
           ' It can read the private spaces it gets from now on — that cannot be taken back yet.'}
       </p>

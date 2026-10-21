@@ -6,7 +6,7 @@
  * hands it to a new device. The seed stays inside this object, and signs only
  * the note that lets a session key write.
  */
-import { isObject, unref } from '../utils/guards.js';
+import { isObject } from '../utils/guards.js';
 import { createIdentityManager, rootFromSeed } from '../identity/identity-manager.js';
 import { accountDataPath, newAccountId, createBrowserAccountStore } from '../identity/account-store.js';
 import type { AccountStore, AccountSummary } from '../identity/account-store.js';
@@ -237,6 +237,12 @@ export interface Connection {
   readonly via?: 'code';
   /** Present, and true, when its note grants records only */
   readonly recordsOnly?: true;
+  /**
+   * Keys that wrote, which this connection replaced, left unrevoked: revoking
+   * from what this home has seen would withdraw what they wrote that it
+   * hasn't. Disconnecting revokes each where it was granted.
+   */
+  readonly retired?: ReadonlyArray<RetiredKey>;
 }
 
 /**
@@ -245,6 +251,38 @@ export interface Connection {
  */
 export const connectionKey = (known: Connection): string =>
   known.via === 'code' || known.access === 'carry' ? known.audience : known.origin;
+/** A key a connection replaced, and where it could write */
+export interface RetiredKey {
+  readonly audience: string;
+  readonly scope: 'spaces' | 'account';
+  readonly spaces: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+}
+
+const isSpaces = (spaces: unknown): boolean =>
+  Array.isArray(spaces) &&
+  spaces.every((space) => isObject(space) && typeof space.id === 'string' && typeof space.name === 'string');
+
+/** Where either of two grants to one key let it write */
+function widest(a: RetiredKey | undefined, b: RetiredKey): RetiredKey {
+  if (!a) return b;
+  if (a.scope === 'account' || b.scope === 'account')
+    return { audience: b.audience, scope: 'account', spaces: [] };
+  const spaces = new Map([...a.spaces, ...b.spaces].map((space) => [space.id, space]));
+  return { audience: b.audience, scope: 'spaces', spaces: [...spaces.values()] };
+}
+
+/** Whether a connection already reaches everywhere a key it replaced could write */
+const covers = (connection: Connection, key: RetiredKey): boolean =>
+  connection.scope === 'account' ||
+  (key.scope === 'spaces' &&
+    key.spaces.every((space) => connection.spaces.some((has) => has.id === space.id)));
+
+const isRetired = (value: unknown): value is RetiredKey =>
+  isObject(value) &&
+  Object.keys(value).every((field) => field === 'audience' || field === 'scope' || field === 'spaces') &&
+  typeof value.audience === 'string' &&
+  (value.scope === 'spaces' || value.scope === 'account') &&
+  isSpaces(value.spaces);
 
 /** Every field a kept connection may have */
 const CONNECTION_FIELDS = new Set([
@@ -254,6 +292,7 @@ const CONNECTION_FIELDS = new Set([
   'access',
   'scope',
   'carrySpace',
+  'retired',
   'spaces',
   'grantedAt',
   'expiresAt',
@@ -279,7 +318,8 @@ function isConnection(value: unknown): value is Connection {
     typeof grantedAt === 'string' &&
     typeof expiresAt === 'number' &&
     (via === undefined || via === 'code') &&
-    (value.recordsOnly === undefined || value.recordsOnly === true)
+    (value.recordsOnly === undefined || value.recordsOnly === true) &&
+    (value.retired === undefined || (Array.isArray(value.retired) && value.retired.every(isRetired)))
   );
 }
 
@@ -551,8 +591,6 @@ async function addAutomations(
   return added;
 }
 
-/** How often a signed-in device looks for app connections whose chosen time has passed */
-const EXPIRY_SWEEP_MS = 15 * 60 * 1000;
 /** How long signing out waits for its revokes to reach the peers here, at most, unless configured: offline, they wait until next time */
 const SIGN_OUT_GRACE_MS = 5000;
 /** How long `confirm` lets the recovery code be read, or the account offered to a phone */
@@ -622,7 +660,6 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   let setupOpen = false;
   let localKey: CryptoKey | null = null;
   let stopFollowingName: (() => void) | null = null;
-  let expiryTimer: ReturnType<typeof setInterval> | null = null;
   let started: Promise<void> | null = null;
 
   const browserPlace = async (): Promise<Place> => ({
@@ -697,8 +734,6 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
   async function stopNode(node = state.session?.node): Promise<void> {
     stopFollowingName?.();
     stopFollowingName = null;
-    if (expiryTimer) clearInterval(expiryTimer);
-    expiryTimer = null;
     seed = null;
     confirmedAt = 0;
     confirmedFor = null;
@@ -718,16 +753,20 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
     if (!(await checkKeyProof(request.audience, request.proof, requestTerms(request, origin))))
       return 'The app did not show it holds the key it named, for what it asked.';
     if (request.audience === state.session?.node.sessionDid) return 'That key is this home’s own.';
+    // Which kept connection the request would replace (`connectionKey`).
+    const asking = request.via === 'code' || request.access === 'carry' ? request.audience : origin;
     // One key is one connection: an app's and a carrier's are never the same key, even from one origin.
-    const elsewhere = auth
-      .connections()
-      .some(
-        (known) =>
-          known.audience === request.audience &&
+    const elsewhere = auth.connections().some(
+      (known) =>
+        (known.audience === request.audience &&
           (known.origin !== origin ||
             known.via !== request.via ||
-            (known.access === 'carry') !== (request.access === 'carry')),
-      );
+            (known.access === 'carry') !== (request.access === 'carry'))) ||
+        // A key a connection replaced is revoked when it goes, so it is no other connection's
+        // either; the connection it replaced may ask with it again.
+        (connectionKey(known) !== asking &&
+          (known.retired ?? []).some((key) => key.audience === request.audience)),
+    );
     return elsewhere ? 'That key is already connected for something else.' : null;
   }
 
@@ -753,7 +792,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (!connection.via && node) {
         for (const own of await node.automations.list()) {
           const wrote = (await node.automations.versions([own.id])).some(
-            (version) => version.author === connection.audience,
+            (version) =>
+              version.author === connection.audience ||
+              (connection.retired ?? []).some((key) => key.audience === version.author),
           );
           // A carrier proposes none: the app's at its origin are the app's, and stay.
           const proposed = own.app?.origin === connection.origin && connection.access !== 'carry';
@@ -774,23 +815,34 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
    * With `waitMs`, until a peer has each revoke or that time has passed (they wait together).
    */
   async function revokeConnection(node: P2PNode, connection: Connection, waitMs = 0): Promise<boolean> {
-    if (connection.access !== 'write' || connection.audience === node.sessionDid) return true;
+    // Every key it replaced, each where it was granted, with its own.
+    const replaced = (connection.retired ?? []).map((key) =>
+      revokeWhere(node, key.audience, key.scope, key.spaces, waitMs),
+    );
+    const own =
+      connection.access === 'write'
+        ? revokeWhere(node, connection.audience, connection.scope, connection.spaces, waitMs)
+        : Promise.resolve(true);
+    return (await Promise.all([own, ...replaced])).every(Boolean);
+  }
+
+  /** Revokes one key where a connection let it write; never this node's own */
+  async function revokeWhere(
+    node: P2PNode,
+    key: string,
+    scope: Connection['scope'],
+    granted: Connection['spaces'],
+    waitMs: number,
+  ): Promise<boolean> {
+    if (key === node.sessionDid) return true;
     // A whole-account app acts as the account, so wrote wherever it does: its own spaces too.
-    if (connection.scope === 'account') return node.revokeKey(connection.audience, { waitMs });
+    if (scope === 'account') return node.revokeKey(key, { waitMs });
     // Any other wrote only in the spaces it was given. One the account has left has nobody to tell.
     const writable = new Set(
       (await node.spaces.list()).filter((space) => space.writable).map((space) => space.id),
     );
-    const spaces = connection.spaces.map((space) => space.id).filter((id) => writable.has(id));
-    return node.revokeKey(connection.audience, { waitMs, spaces });
-  }
-
-  /** Disconnects every app connected here whose chosen time has passed */
-  async function letExpiredGo(): Promise<void> {
-    const now = Math.floor(Date.now() / 1000);
-    for (const known of auth.connections())
-      if (known.expiresAt > 0 && known.expiresAt <= now)
-        await auth.disconnect(known.origin, { audience: known.audience }).catch(() => {});
+    const spaces = granted.map((space) => space.id).filter((id) => writable.has(id));
+    return node.revokeKey(key, { waitMs, spaces });
   }
 
   /** Starts the node for an unlocked account. */
@@ -838,13 +890,6 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (event.type === 'account') void adopt();
     });
     void adopt();
-
-    // An app connected for a while: once its time has passed, this device
-    // disconnects it, revoking its key, so what it writes after stops counting
-    // too, not only its note.
-    void letExpiredGo();
-    expiryTimer = setInterval(() => void letExpiredGo(), EXPIRY_SWEEP_MS);
-    unref(expiryTimer);
 
     return session;
   }
@@ -1777,10 +1822,25 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       // Connecting again replaces the old note. A program connected by code is its own key: connecting one replaces only that one.
       // A carrier at the same origin is not the app, and stays (§2.10).
       const replaced = (known: Connection) => connectionKey(known) === connectionKey(connection);
-      // A note it replaces stops too: no time ends it, so revoking does (unless it is the same key, still in use).
-      for (const known of auth.connections().filter(replaced))
-        if (known.audience !== connection.audience) await revokeConnection(node, known);
-      writeConnections([connection, ...auth.connections().filter((known) => !replaced(known))]);
+      // A key it replaces is not revoked: this home has seen little of what it wrote, and a
+      // revoke would withdraw the rest. The app forgets it; disconnecting revokes it too.
+      // Only a key that could write needs revoking; one is kept once, however often it was
+      // replaced, with everywhere it was ever granted. The same key asking again for less keeps
+      // its earlier reach here, so disconnecting still revokes it there.
+      const retired = new Map<string, RetiredKey>();
+      const keep = (key: RetiredKey) => retired.set(key.audience, widest(retired.get(key.audience), key));
+      for (const known of auth.connections().filter(replaced)) {
+        for (const key of known.retired ?? []) keep(key);
+        if (known.access === 'write')
+          keep({ audience: known.audience, scope: known.scope, spaces: known.spaces });
+      }
+      const mine = retired.get(connection.audience);
+      if (mine && connection.access === 'write' && covers(connection, mine))
+        retired.delete(connection.audience);
+      writeConnections([
+        ...(retired.size > 0 ? [{ ...connection, retired: [...retired.values()] }] : [connection]),
+        ...auth.connections().filter((known) => !replaced(known)),
+      ]);
 
       return {
         v: GRANT_VERSION,
@@ -1931,10 +1991,9 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       const disconnected = options.disconnect
         ? await disconnectWhere((known) => known.access !== 'carry', signOutGraceMs).catch(() => null)
         : null;
-      // Before going: let apps whose time has passed go, and revoke this device's
-      // session key, so a key left behind here can't write for the account again.
+      // Before going: revoke this device's session key, so a key left behind here can't
+      // write for the account again. It knows what it wrote, so the cutoff loses nothing.
       // Its revokes and the apps' wait together, up to the one grace.
-      await letExpiredGo().catch(() => {});
       await Promise.all([
         disconnected?.delivered,
         leaving?.revokeSelf({ waitMs: signOutGraceMs }).catch(() => {}),
