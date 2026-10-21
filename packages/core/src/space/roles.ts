@@ -1657,10 +1657,7 @@ function historyOf(r: Replay): AccessHistory {
   };
   const inOrder = (ids: Iterable<string>) => [...ids].sort((a, b) => r.index.get(a)! - r.index.get(b)!);
   const idsKey = (ids: ReadonlyArray<string>) => [...new Set(ids)].sort().join(',');
-  /**
-   * The merge of what `ids` name and saw, counting the changes valid in the
-   * whole history, or valid among what `within` names and saw
-   */
+  /** The merge of what `ids` name and saw, counting the changes valid in all, or among what `within` names and saw */
   const at = (ids: ReadonlyArray<string>, within?: ReadonlyArray<string>): AccessState => {
     const key = `${idsKey(ids)}|${within ? idsKey(within) : '*'}`;
     const known = r.views.get(key);
@@ -1668,18 +1665,11 @@ function historyOf(r: Replay): AccessHistory {
     const among = within
       ? validWithin(inOrder(cutOf([...ids, ...within])), r)
       : { valid: r.valid, defViews: r.validDefViews };
-    const counted = inOrder(cutOf(ids)).filter((id) => among.valid.has(id));
-    const view = merge(
-      genesis,
-      counted.map((id) => r.byId.get(id)!),
-      r.saw,
-      among.defViews,
-    );
+    const counted = inOrder(cutOf(ids)).flatMap((id) => (among.valid.has(id) ? [r.byId.get(id)!] : []));
+    const view = merge(genesis, counted, r.saw, among.defViews);
     r.views.set(key, view);
     return view;
   };
-  /** Valid among what `ids` name and saw alone */
-  const seenAs = (ids: ReadonlyArray<string>): AccessState => at(ids, ids);
   const changesState = (id: string) => !['revoke', 'fork'].includes(r.byId.get(id)!.kind);
   let heads: ReadonlyArray<string> | null = null;
 
@@ -1719,7 +1709,7 @@ function historyOf(r: Replay): AccessHistory {
       return seen(ids) && (!within || seen(within)) ? at(ids, within) : null;
     },
     seenAs(ids: ReadonlyArray<string>) {
-      return seen(ids) ? seenAs(ids) : null;
+      return seen(ids) ? at(ids, ids) : null;
     },
     judge(record, needs, within) {
       if (!seen(record.seen) || (within && !seen(within)))
@@ -1737,7 +1727,7 @@ function historyOf(r: Replay): AccessHistory {
           : r.forks.get(lineOf(record.writer, record.collection));
       if (fork && takes(fork))
         return { ok: false, reason: 'Its writer’s log forked at or before it', withdrawn: true };
-      if (!needs(seenAs(record.seen)))
+      if (!needs(at(record.seen, record.seen)))
         return { ok: false, reason: 'Its author was not allowed to, as of what it had seen' };
       // What it had not seen of its author's standing: a removal or an unassignment takes everything.
       const cut = cutOf(record.seen);
