@@ -89,7 +89,6 @@ describe('a node in a worker', () => {
     const fake = fakeWorker();
     const refusing: RootSigner = {
       did: 'did:key:zNobody',
-      custody: 'remote',
       delegate: () => Promise.reject(new Error('Access has run out')),
     };
     await assert.rejects(

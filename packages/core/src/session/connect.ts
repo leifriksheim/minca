@@ -598,7 +598,6 @@ export function grantSigner(grant: Grant | (() => Grant | null)): RootSigner {
     get did() {
       return current()?.did ?? '';
     },
-    custody: 'remote',
     async delegate() {
       const now = current();
       if (!now || grantExpired(now))

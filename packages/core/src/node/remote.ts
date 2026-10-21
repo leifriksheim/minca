@@ -22,6 +22,7 @@ import { toJsonSchema } from '../schema/collection-def.js';
 import { storedComputed, storedContract } from '../records/contract-builder.js';
 import { previewInvite } from '../space/space-manager.js';
 import { isRecord } from '../utils/guards.js';
+import { SESSION_COMMAND } from './node.js';
 import type { MessagePortLike } from '../utils/port.js';
 import type { DefineCollection, NodeCollection, NodeEvent, P2PNode } from './types.js';
 import { API, buildNamespaces, callMethod, givenFor, type Namespace } from './api.js';
@@ -46,10 +47,6 @@ interface NodeState {
   readonly delegation: Delegation;
   readonly status: MeshStatus;
 }
-
-/** Whether a value is a list of lists: a policy's shape, before its statements are read */
-const isStatements = (value: unknown): value is ReadonlyArray<ReadonlyArray<unknown>> =>
-  Array.isArray(value) && value.every((statement: unknown) => Array.isArray(statement));
 
 /** Tags every message, so a port shared with other traffic can tell ours apart */
 const TAG = 'minca-node';
@@ -446,9 +443,12 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
 const SIGNER_TAG = 'minca-signer';
 
 /**
- * Signs session delegations for a `remoteSigner` on the other side of `port`.
- * The root key stays here: a passkey needs a document, and a key in a tab
- * should stay in the tab that holds it. Returns a function that stops.
+ * Signs session notes for a `remoteSigner` on the other side of `port`: the
+ * one note a node asks for, everything about the account (`SESSION_COMMAND`)
+ * to its session key until a time. Nothing else: whatever runs at the other
+ * end can't have it sign a note of another shape. The root key stays here: a
+ * passkey needs a document, and a key in a tab should stay in the tab that
+ * holds it. Returns a function that stops.
  */
 export function serveSigner(signer: RootSigner, port: MessagePortLike): () => void {
   const post = (message: Record<string, unknown>) => {
@@ -459,24 +459,21 @@ export function serveSigner(signer: RootSigner, port: MessagePortLike): () => vo
     if (!isRecord(message) || message[SIGNER_TAG] !== true || typeof message.id !== 'number') return;
     const { id } = message;
     const run = async (): Promise<unknown> => {
-      if (message.kind === 'hello') return { did: signer.did, custody: signer.custody };
+      if (message.kind === 'hello') return { did: signer.did };
       const params = message.params;
       if (
         message.kind !== 'delegate' ||
         !isRecord(params) ||
         typeof params.audience !== 'string' ||
-        typeof params.command !== 'string' ||
         typeof params.expiration !== 'number' ||
-        (params.subject !== undefined && typeof params.subject !== 'string') ||
-        (params.policy !== undefined && !isStatements(params.policy))
+        params.command !== SESSION_COMMAND ||
+        params.subject !== undefined ||
+        params.policy !== undefined
       )
-        throw new Error('A signer only signs delegations');
-      // What each statement says is checked as the token is made (`issueDelegation`).
+        throw new Error('A signer across a port signs only session notes');
       return signer.delegate({
         audience: params.audience,
-        command: params.command,
-        ...(typeof params.subject === 'string' ? { subject: params.subject } : {}),
-        ...(isStatements(params.policy) ? { policy: params.policy } : {}),
+        command: SESSION_COMMAND,
         expiration: params.expiration,
       });
     };
@@ -513,10 +510,9 @@ export async function remoteSigner(port: MessagePortLike): Promise<RootSigner> {
       });
       port.postMessage({ [SIGNER_TAG]: true, kind: message.kind, params: message.params, id });
     });
-  const { did, custody } = await ask<Pick<RootSigner, 'did' | 'custody'>>({ kind: 'hello' });
+  const { did } = await ask<Pick<RootSigner, 'did'>>({ kind: 'hello' });
   return Object.freeze({
     did,
-    custody,
     delegate: async (params) => {
       const token = parseDelegation(await ask<unknown>({ kind: 'delegate', params }));
       if (!token) throw new Error('The signer answered with something that is not a delegation');

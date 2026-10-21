@@ -247,7 +247,6 @@ describe("the page's signer, from a worker", () => {
 
     const signer = await remoteSigner(pair.port2);
     assert.equal(signer.did, me.did);
-    assert.equal(signer.custody, 'local');
     const node = await createNode({ signer, stores: memoryStores(), watchIntervalMs: 0 });
     cleanup.push(() => node.close());
     assert.equal(node.delegation().payload.iss, me.did);
@@ -256,13 +255,40 @@ describe("the page's signer, from a worker", () => {
     assert.equal((await node.records.put(space, 'app.note', { text: 'hi' })).root, me.did);
   });
 
+  test('it signs only the session note: no other command, subject or policy', async () => {
+    const manager = createIdentityManager();
+    const me = await manager.fromSeed(generateSeed());
+    const local = createLocalRootSigner(me, manager.getProvider());
+    let asked = 0;
+    const pair = channel();
+    cleanup.push(
+      serveSigner({ did: me.did, delegate: (params) => (asked++, local.delegate(params)) }, pair.port1),
+    );
+    const signer = await remoteSigner(pair.port2);
+    const expiration = Math.floor(Date.now() / 1000) + 60;
+    const audience = 'did:key:zSession';
+    for (const other of [
+      { command: '/record' },
+      { command: '/', subject: 'space:elsewhere' },
+      { command: '/', subject: me.did },
+      { command: '/', policy: [] },
+    ])
+      await assert.rejects(
+        () => signer.delegate({ audience, expiration, ...other }),
+        /signs only session notes/,
+      );
+    assert.equal(asked, 0, 'the root key was never asked');
+    const note = await signer.delegate({ audience, command: '/', expiration });
+    assert.equal(note.payload.aud, audience);
+    assert.equal(asked, 1);
+  });
+
   test("the signer's refusal reaches the worker as an error", async () => {
     const pair = channel();
     cleanup.push(
       serveSigner(
         {
           did: 'did:key:zRefuses',
-          custody: 'remote',
           delegate: () => Promise.reject(new Error('The person said no')),
         },
         pair.port1,

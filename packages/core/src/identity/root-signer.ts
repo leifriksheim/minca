@@ -27,11 +27,6 @@ export interface NoteRequest {
 export interface RootSigner {
   /** The identity being acted for */
   readonly did: string;
-  /**
-   * Where the key lives. Worth showing: "your key is in your account home" and
-   * "your key is in this tab" are different promises to make to someone.
-   */
-  readonly custody: 'local' | 'remote';
   /** Signs a note from the identity to a key: the session's, an app's, a program's */
   delegate(params: NoteRequest): Promise<Delegation>;
 }
@@ -48,7 +43,6 @@ export function createLocalRootSigner(
 ): RootSigner {
   return Object.freeze({
     did: identity.did,
-    custody: 'local' as const,
 
     async delegate(params: NoteRequest): Promise<Delegation> {
       return issueDelegation(

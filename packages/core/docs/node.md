@@ -80,11 +80,10 @@ which hides where the key lives and is asked only for notes. This is an
 in-process interface, not a wire format; what a note must be is
 [spec 01 §7](https://github.com/leifriksheim/minca/blob/main/spec/01-identity.md).
 
-| Member                                                         | Type                    | Meaning                                                                                          |
-| -------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `did`                                                          | string                  | The account DID                                                                                  |
-| `custody`                                                      | `'local'` \| `'remote'` | `local`: the seed is unlocked in this page. `remote`: another context (an account home) holds it |
-| `delegate({audience, command, subject?, policy?, expiration})` | → `Delegation`          | Issue a note from the account to `audience`                                                      |
+| Member                                                         | Type           | Meaning                                     |
+| -------------------------------------------------------------- | -------------- | ------------------------------------------- |
+| `did`                                                          | string         | The account DID                             |
+| `delegate({audience, command, subject?, policy?, expiration})` | → `Delegation` | Issue a note from the account to `audience` |
 
 - The **local** signer (`createLocalRootSigner`) calls `issueDelegation` with
   the root key. `subject` defaults to the account's own DID (the whole
@@ -93,6 +92,10 @@ in-process interface, not a wire format; what a note must be is
   already issued to the app's key, unchanged, and refuses once the grant's
   `expiresAt` has passed. It cannot mint new notes
   ([spec 06 §2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+- A signer **across a port** (`serveSigner` on the side that holds the key,
+  `remoteSigner` on the node's, as a page signs for its worker's node) signs
+  only the session note below: `command` `/`, no `subject`, no `policy`. It
+  refuses anything else without asking the signer behind it.
 
 The **session note** a node asks for when it starts:
 
@@ -128,7 +131,7 @@ policy statement it can't read that way, so it never offers more than the
 note grants; peers judge each use against the note itself
 ([spec 06 §2.5](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
 
-_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyNote`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
+_Source: `packages/core/src/identity/root-signer.ts`, `packages/core/src/node/remote.ts` (`serveSigner`, `remoteSigner`), `packages/core/src/identity/ucan.ts` (`issueDelegation`, `verifyNote`), `packages/core/src/identity/abilities.ts` (`noteTerms`, `noteSpaces`), `packages/core/src/node/node.ts` (`SESSION_COMMAND`, `delegate`), `packages/core/src/session/connect.ts` (`grantSigner`, `grantTerms`). Tests: `packages/core/tests/ucan.test.ts`, `packages/core/tests/remote.test.ts` ("the page's signer, from a worker"), `packages/core/tests/node.test.ts`, `packages/core/tests/connect.test.ts`._
 
 ## Renewing the session note
 
@@ -783,7 +786,7 @@ closed it, and gives up after 10 minutes by default.
 starts a node with:
 
 - `signer = grantSigner(grant)` ([renewing the session note](#renewing-the-session-note)):
-  `did` = `grant.did`, `custody: "remote"`;
+  `did` = `grant.did`;
 - `sessionKey` = the app's key;
 - stores `indexedDBStores('minca-app:<grant.did>')` unless given;
 - `cache: {}` unless `cache: false` ([holding part of a space](#holding-part-of-a-space));
