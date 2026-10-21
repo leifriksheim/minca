@@ -128,6 +128,7 @@ import {
 import { accessGenesisOf, isSpaceId } from '../space/constitution.js';
 import {
   ACCESS_COLLECTIONS,
+  ACCESS_KINDS,
   ASSIGN_COLLECTION,
   DEFINITION_COLLECTION,
   INVITE_COLLECTION,
@@ -222,36 +223,12 @@ const MANAGED = new Set([
  * read the records has no use for their rules.
  */
 const IN_THE_CLEAR = new Set([
-  ROLE_COLLECTION,
-  ASSIGN_COLLECTION,
-  REMOVE_COLLECTION,
-  INVITE_COLLECTION,
-  REVOKE_COLLECTION,
-  KEY_COLLECTION,
+  ...Object.values(ACCESS_KINDS)
+    .filter(({ clear }) => clear)
+    .map(({ collection }) => collection),
   BOX_COLLECTION,
   MEMBER_KEY_COLLECTION,
-  RELAYS_COLLECTION,
-  KEEPERS_COLLECTION,
-  FORK_COLLECTION,
-  STEPDOWN_COLLECTION,
-  SUCCEED_COLLECTION,
 ]);
-
-/** Which collection each access record key belongs to */
-const ACCESS_KEYS: ReadonlyArray<readonly [string, string]> = [
-  ['role:', ROLE_COLLECTION],
-  ['assign:', ASSIGN_COLLECTION],
-  ['remove:', REMOVE_COLLECTION],
-  ['invite:', INVITE_COLLECTION],
-  ['revoke:', REVOKE_COLLECTION],
-  ['collection:', DEFINITION_COLLECTION],
-  ['key:', KEY_COLLECTION],
-  ['relays:', RELAYS_COLLECTION],
-  ['keepers:', KEEPERS_COLLECTION],
-  ['fork:', FORK_COLLECTION],
-  ['stepdown:', STEPDOWN_COLLECTION],
-  ['succeed:', SUCCEED_COLLECTION],
-];
 
 /** How many keys a cutoff may name */
 const MAX_CUTOFF = 1024;
@@ -1009,7 +986,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     let unsettled = false;
     // By key, not by the current version's collection: whatever sits on top
     // may be anyone's, and every version of the history counts.
-    for (const [prefix, collection] of ACCESS_KEYS) {
+    for (const { prefix, collection } of Object.values(ACCESS_KINDS)) {
       for (const versions of (await storage.histories(prefix)).values()) {
         for (const held of versions) {
           if (held.collection !== collection) continue;
@@ -1042,8 +1019,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     let pending: AccessEvent[] = [];
     for (const version of placed) {
       if (
-        !ACCESS_KEYS.some(
-          ([prefix, collection]) => version.key.startsWith(prefix) && version.collection === collection,
+        !Object.values(ACCESS_KINDS).some(
+          ({ prefix, collection }) => version.key.startsWith(prefix) && version.collection === collection,
         )
       )
         continue;

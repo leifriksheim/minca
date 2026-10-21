@@ -99,21 +99,39 @@ export const STRONG_REMOVE = 'strong-remove/1';
 /** Every resolver this peer knows. A space naming another is not judged here. */
 export const RESOLVERS: ReadonlySet<string> = new Set([STRONG_REMOVE]);
 
+/** Where one kind of change lives */
+export interface AccessKind {
+  /** Its collection, where its place in its key's line is counted too */
+  readonly collection: string;
+  /** What its records' keys start with */
+  readonly prefix: string;
+  /** Kept in the clear in a private space, so a peer without the key can still judge who may do what */
+  readonly clear: boolean;
+}
+
+const accessKind = (collection: string, prefix: string, clear = true): AccessKind =>
+  Object.freeze({ collection, prefix, clear });
+
+/** Each kind of change in the access history. Collection definitions stay sealed: only readers need their rules. */
+export const ACCESS_KINDS: Readonly<Record<AccessEvent['kind'], AccessKind>> = Object.freeze({
+  role: accessKind(ROLE_COLLECTION, 'role:'),
+  assign: accessKind(ASSIGN_COLLECTION, 'assign:'),
+  remove: accessKind(REMOVE_COLLECTION, 'remove:'),
+  invite: accessKind(INVITE_COLLECTION, 'invite:'),
+  revoke: accessKind(REVOKE_COLLECTION, 'revoke:'),
+  definition: accessKind(DEFINITION_COLLECTION, 'collection:', false),
+  key: accessKind(KEY_COLLECTION, 'key:'),
+  relays: accessKind(RELAYS_COLLECTION, 'relays:'),
+  keepers: accessKind(KEEPERS_COLLECTION, 'keepers:'),
+  fork: accessKind(FORK_COLLECTION, 'fork:'),
+  stepdown: accessKind(STEPDOWN_COLLECTION, 'stepdown:'),
+  succeed: accessKind(SUCCEED_COLLECTION, 'succeed:'),
+});
+
 /** Every collection whose records are part of the access history */
-export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set([
-  ROLE_COLLECTION,
-  ASSIGN_COLLECTION,
-  REMOVE_COLLECTION,
-  INVITE_COLLECTION,
-  REVOKE_COLLECTION,
-  DEFINITION_COLLECTION,
-  KEY_COLLECTION,
-  RELAYS_COLLECTION,
-  KEEPERS_COLLECTION,
-  FORK_COLLECTION,
-  STEPDOWN_COLLECTION,
-  SUCCEED_COLLECTION,
-]);
+export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set(
+  Object.values(ACCESS_KINDS).map(({ collection }) => collection),
+);
 
 // ─── Events ───────────────────────────────────────────────────────────
 
@@ -934,7 +952,7 @@ function reaches(reduction: Reduction, subject: Subject): boolean {
 const subjectOf = (event: AccessEvent): Subject => ({
   root: event.root,
   author: event.author,
-  collection: KIND_COLLECTION[event.kind],
+  collection: ACCESS_KINDS[event.kind].collection,
   line: event.line,
   viaInvite: event.kind === 'assign' ? event.viaInvite : undefined,
 });
@@ -1054,22 +1072,6 @@ function change(event: AccessEvent, state: MutableState, view: AccessState): voi
 
 /** A key's line for one collection, as a map key */
 const lineOf = (writer: string, collection: string) => `${writer}\n${collection}`;
-
-/** The kind's collection: where a change's place in its key's line is counted */
-const KIND_COLLECTION: Record<AccessEvent['kind'], string> = {
-  role: ROLE_COLLECTION,
-  assign: ASSIGN_COLLECTION,
-  remove: REMOVE_COLLECTION,
-  invite: INVITE_COLLECTION,
-  revoke: REVOKE_COLLECTION,
-  definition: DEFINITION_COLLECTION,
-  key: KEY_COLLECTION,
-  relays: RELAYS_COLLECTION,
-  keepers: KEEPERS_COLLECTION,
-  fork: FORK_COLLECTION,
-  stepdown: STEPDOWN_COLLECTION,
-  succeed: SUCCEED_COLLECTION,
-};
 
 /**
  * The changes one change saw, directly or not: every change placed before
