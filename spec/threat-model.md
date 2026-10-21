@@ -162,9 +162,11 @@ reference implementation, or any implementation, honestly.
     the bucket…"). A fund is drawn on from its first payment, at one GB,
     and never past its grace. A balance is charged by the size last
     measured, every hour or so, so growth between measures goes uncharged:
-    the host's cost. Whoever clears a lapsed fund's debt starts its next
-    grace, which then runs whether members use the space or not; the payer
-    paid the debt, so nothing is carried free. A card payment disputed
+    the host's cost. Whoever brings a lapsed fund back starts a grace that
+    lends only what their payment left above zero, so a stranger paying off
+    the rest of a debt can't put it back on the members (`packages/cli/tests/fund.test.ts`,
+    "whoever brings a fund back…"). Time the host was down is charged to
+    nobody ("a gap longer than an hour…"). A card payment disputed
     later still counts as the largest payment a grace lends: the host's
     cost, as the chargeback is. An
     account at a host with limits is lent nothing: its room's notice is its

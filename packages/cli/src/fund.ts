@@ -40,6 +40,12 @@ export interface FundState {
   readonly bytes?: number;
   /** The most one payment ever added, in millionths of a dollar: what a grace lends, and no payment lowers */
   readonly most?: number;
+  /**
+   * Brought back above zero after its grace was spent: what that payment left above zero, or the most
+   * one payment added since. The next grace lends no more, so whoever revives a fund pays for the
+   * grace they start.
+   */
+  readonly revived?: number;
   /** When it last ran out, and what its grace lends from then, in millionths of a dollar; absent while above zero */
   readonly ran?: { readonly at: number; readonly lent: number; readonly spent?: number };
 }
@@ -52,6 +58,8 @@ export interface Funds {
   charge(id: string, micros: number, bot?: string): Promise<FundState>;
   /** Every subscription with a balance kept here */
   ids(): Promise<string[]>;
+  /** Takes nothing for a gap longer than an hour since it was last settled: the host was down, and carried nothing */
+  resume(id: string): Promise<FundState>;
   /** Takes the hosting fee for the time since it was last taken; from then on, for this many bytes */
   settle(id: string, bytes?: number): Promise<FundState>;
   /** What the fund spends in a day, as things go: the hosting fee, and what its bots spent a day this last week */
@@ -67,6 +75,7 @@ const BUCKET_PREFIX = 'host/funds/';
 const DAY = 86_400;
 const MONTH = 30 * DAY;
 const GB = 1e9;
+const HOUR = 3600;
 
 export function createFunds(options: {
   readonly store: StorageAdapter;
@@ -109,6 +118,7 @@ export function createFunds(options: {
       byBot,
       ...size,
       ...(typeof kept.most === 'number' ? { most: kept.most } : {}),
+      ...(typeof kept.revived === 'number' ? { revived: kept.revived } : {}),
       ...(isRecord(kept.ran) && typeof kept.ran.at === 'number' && typeof kept.ran.lent === 'number'
         ? {
             ran: {
@@ -129,7 +139,7 @@ export function createFunds(options: {
   /** Running out now: lent the most one payment added, for the host's grace at most */
   const runOut = (id: string, state: FundState, at: number): FundState['ran'] => ({
     at,
-    lent: (options.lends?.(id) ?? true) ? (state.most ?? 0) : 0,
+    lent: (options.lends?.(id) ?? true) ? Math.min(state.most ?? 0, state.revived ?? Infinity) : 0,
   });
   /** The fee for the time since it was last taken, taken: down to zero, then through its lent grace only */
   const settled = (id: string, state: FundState): FundState => {
@@ -180,23 +190,43 @@ export function createFunds(options: {
     // Those in the bucket too: on a new disk a fund is read from there until it is next written here.
     ids: async () => {
       const here = (await options.store.list(PREFIX)).map((key) => key.slice(PREFIX.length));
-      const kept = ((await options.mirror?.list(BUCKET_PREFIX)) ?? []).flatMap((key) =>
+      // A bucket that can't be listed now leaves those here: the next tick asks again.
+      const kept = ((await options.mirror?.list(BUCKET_PREFIX).catch(() => [])) ?? []).flatMap((key) =>
         key.endsWith('.json') ? [decodeURIComponent(key.slice(BUCKET_PREFIX.length, -'.json'.length))] : [],
       );
       return [...new Set([...here, ...kept])];
     },
+    resume: (id: string) => {
+      const next = queue.then(async () => {
+        const state = await read(id);
+        return now() - state.at <= HOUR ? state : write(id, { ...state, at: now() });
+      });
+      queue = next.catch(() => {});
+      return next;
+    },
     add: (id: string, micros: number) =>
       // What its grace took is paid first; above zero again, it has not run out.
       change(id, (state) => {
-        const { ran, ...rest } = state;
+        const { ran, revived: before, ...rest } = state;
         const paid = Math.round(micros);
         const balance = state.balance + paid;
         // The largest ever stands: no payment, whoever makes it and whenever, lends less after it.
         const most = Math.max(state.most ?? 0, paid);
+        // Brought back after its grace was spent: the grace after lends what it left above zero, and later payments.
+        const spent = ran !== undefined && (ran.spent !== undefined || now() >= ran.at + grace);
+        const revived =
+          balance <= 0
+            ? before
+            : spent
+              ? balance
+              : before !== undefined && state.balance > 0
+                ? Math.max(before, paid)
+                : undefined;
         return {
           ...rest,
           balance,
           most,
+          ...(revived !== undefined ? { revived } : {}),
           ...(balance <= 0 && ran ? { ran } : {}),
         };
       }),

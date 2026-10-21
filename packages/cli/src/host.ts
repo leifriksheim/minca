@@ -1109,7 +1109,11 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     if (!options.free) for (const id of await funds.ids()) if (await node.get(id)) await refreshFund(id);
     await syncBots();
   };
-  void fundTick().catch(() => {});
+  // Down a while: that time was carried by nobody, so it is charged to nobody.
+  void (async () => {
+    if (!options.free) for (const id of await funds.ids()) await funds.resume(id);
+    await fundTick();
+  })().catch(() => {});
   const botSweeping = setInterval(
     () => void fundTick().catch((error: unknown) => log(`funds: ${messageOf(error)}`)),
     options.fundMs ?? 60_000,

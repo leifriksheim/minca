@@ -485,9 +485,13 @@ below zero, until it owes as much as the largest single payment ever made
 into it, or for its grace period at most,
 whichever comes first, and then takes nothing more, whatever the space
 grows to. So a grace is what that payment would buy again at the size the
-space is then, and no payment, whoever makes it, ever shortens one. A fund
+space is then, and no payment, whoever makes it, ever shortens one. A
+payment that brings a fund back above zero after its grace was spent lends
+the grace after it no more than it left above zero, and what is added
+after, so whoever revives a fund pays for the grace they start. A fund
 nothing was ever added to owes nothing. The rate follows the size as the
-host last measured it. A payment pays what is owed
+host last measured it, and time the host was down for more than an hour is
+charged to nobody. A payment pays what is owed
 first, so one that leaves the balance at or below zero turns nothing back
 on, and each grace is paid for by the payment after it. So the least
 payment into a large space buys a short grace. `paidUntil` is not a date
