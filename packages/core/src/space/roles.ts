@@ -592,46 +592,75 @@ export function may(
   if (!cache) answers.set(state, (cache = new Map<string, boolean>()));
   const known = cache.get(key);
   if (known !== undefined) return known;
-  const answer = roles.some((role) => roleMay(state, role, cmd, args, !!options.opaque, new Set()));
+  const opaque = !!options.opaque;
+  const answer = roles.some((role) =>
+    roleHolds(
+      state,
+      role,
+      (grant) => grantFits(grant, cmd, args, opaque),
+      (view, by) => may(view, by, cmd, args, { opaque }),
+    ),
+  );
   cache.set(key, answer);
   return answer;
 }
 
-/** Whether a role's grants let its members invoke a command with these arguments */
-function roleMay(
+/** What a role's current definitions all hold, and the authors whose power bounds it */
+interface EffectiveRole {
+  /** The grants every current definition holds, by command and policy */
+  readonly grants: ReadonlyArray<Grant>;
+  /** The roles every current definition nests */
+  readonly nests: ReadonlyArray<string>;
+  /** Each written definition's author, and its view: it holds only what they could do there */
+  readonly authors: ReadonlyArray<{ readonly view: AccessState; readonly by: string }>;
+}
+
+const effective = new WeakMap<AccessState, Map<string, EffectiveRole | null>>();
+
+/** A role as its rival definitions leave it: only what they share. Once per state: a state never changes. */
+function effectiveRole(state: AccessState, role: string): EffectiveRole | null {
+  let cache = effective.get(state);
+  if (!cache) effective.set(state, (cache = new Map<string, EffectiveRole | null>()));
+  const known = cache.get(role);
+  if (known !== undefined) return known;
+  const heads = state.roles.get(role);
+  let found: EffectiveRole | null = null;
+  if (heads && heads.length > 0) {
+    const [first, ...rivals] = heads;
+    found = {
+      grants: first!.grants.filter((grant) =>
+        rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
+      ),
+      nests: first!.nests.filter((nested) => rivals.every((rival) => rival.nests.includes(nested))),
+      authors: heads.flatMap((head) =>
+        head.view === null || head.by === null ? [] : [{ view: head.view, by: head.by }],
+      ),
+    };
+  }
+  cache.set(role, found);
+  return found;
+}
+
+/**
+ * Whether a role, or a role it nests, holds a grant that `fits`, and every
+ * author of its definitions could do as much as of it (`authorHolds`).
+ */
+function roleHolds(
   state: AccessState,
   role: string,
-  cmd: string,
-  args: unknown,
-  opaque: boolean,
-  visiting: ReadonlySet<string>,
+  fits: (grant: Grant) => boolean,
+  authorHolds: (view: AccessState, by: string) => boolean,
+  visiting: ReadonlySet<string> = new Set(),
 ): boolean {
   if (visiting.has(role)) return false;
-  const heads = state.roles.get(role);
-  if (!heads || heads.length === 0) return false;
-  const [first, ...rivals] = heads;
-  // What every current definition holds: a grant by its command and policy, a nesting by its role.
-  const delegated = first!.grants.some(
-    (grant) =>
-      grantFits(grant, cmd, args, opaque) &&
-      rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
-  );
+  const found = effectiveRole(state, role);
+  if (!found) return false;
   const inner = new Set(visiting).add(role);
   const held =
-    delegated ||
-    first!.nests.some(
-      (nested) =>
-        nested !== role &&
-        rivals.every((rival) => rival.nests.includes(nested)) &&
-        roleMay(state, nested, cmd, args, opaque, inner),
-    );
+    found.grants.some(fits) ||
+    found.nests.some((nested) => nested !== role && roleHolds(state, nested, fits, authorHolds, inner));
   // Each definition holds only what its author could do itself, as of it.
-  return (
-    held &&
-    heads.every(
-      (head) => head.view === null || head.by === null || may(head.view, head.by, cmd, args, { opaque }),
-    )
-  );
+  return held && found.authors.every(({ view, by }) => authorHolds(view, by));
 }
 
 /**
@@ -650,56 +679,21 @@ export function holdsRole(state: AccessState, did: string, role: string): boolea
 
 /** What a role gives its members, as grants: its current definitions' shared ones, and its nested roles' */
 function grantsOfRole(state: AccessState, role: string, visiting: ReadonlySet<string>): ReadonlyArray<Grant> {
-  const heads = state.roles.get(role);
-  if (!heads?.length || visiting.has(role)) return [];
-  const [first, ...rivals] = heads;
+  const found = effectiveRole(state, role);
+  if (!found || visiting.has(role)) return [];
   const inner = new Set(visiting).add(role);
-  return [
-    ...first!.grants.filter((grant) =>
-      rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
-    ),
-    ...first!.nests
-      .filter((nested) => rivals.every((rival) => rival.nests.includes(nested)))
-      .flatMap((nested) => grantsOfRole(state, nested, inner)),
-  ];
+  return [...found.grants, ...found.nests.flatMap((nested) => grantsOfRole(state, nested, inner))];
 }
 
 /** Whether an account holds a grant as wide as `wanted` or wider, in a state */
 function holdsGrant(state: AccessState, did: string, wanted: Grant): boolean {
   if (state.founders.has(did)) return true;
-  return rolesOf(state, did).some((role) => roleHoldsGrant(state, role, wanted, new Set()));
-}
-
-function roleHoldsGrant(
-  state: AccessState,
-  role: string,
-  wanted: Grant,
-  visiting: ReadonlySet<string>,
-): boolean {
-  if (visiting.has(role)) return false;
-  const heads = state.roles.get(role);
-  if (!heads || heads.length === 0) return false;
-  const [first, ...rivals] = heads;
   const statements = new Set(wanted.pol.map((statement) => canonicalize(statement)));
   const widens = (grant: Grant) =>
     commandCovers(grant.cmd, wanted.cmd) &&
     grant.pol.every((statement) => statements.has(canonicalize(statement)));
-  const inner = new Set(visiting).add(role);
-  const held =
-    first!.grants.some(
-      (grant) =>
-        widens(grant) &&
-        rivals.every((rival) => rival.grants.some((other) => grantShape(other) === grantShape(grant))),
-    ) ||
-    first!.nests.some(
-      (nested) =>
-        nested !== role &&
-        rivals.every((rival) => rival.nests.includes(nested)) &&
-        roleHoldsGrant(state, nested, wanted, inner),
-    );
-  return (
-    held &&
-    heads.every((head) => head.view === null || head.by === null || holdsGrant(head.view, head.by, wanted))
+  return rolesOf(state, did).some((role) =>
+    roleHolds(state, role, widens, (view, by) => holdsGrant(view, by, wanted)),
   );
 }
 
