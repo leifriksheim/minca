@@ -473,7 +473,7 @@ successor's constitution; a reader that holds it does.
 > view from before anyone held it, and the result is the same: a name in a
 > list, and a choice for each member.
 
-_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `roleMay`, `refusal`, `rolesOf`, `isMember`, `startState`), `packages/core/src/space/space-access.ts` (`stepDownKey`, `succeedKey`), `packages/core/src/node/space-runtime.ts` (`stepDown`, `succeed`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed", "the constitution on nodes")._
+_Source: `packages/core/src/space/grants.ts` (`checkFoundingRole`, `readDefinition`, `grantFits`, `grantShape`, the command constants), `packages/core/src/space/roles.ts` (`may`, `effectiveRole`, `roleHolds`, `refusal`, `rolesOf`, `isMember`, `startState`), `packages/core/src/space/space-access.ts` (`stepDownKey`, `succeedKey`), `packages/core/src/node/space-runtime.ts` (`stepDown`, `succeed`), `packages/core/src/identity/policy.ts` (`policyOutcome`, `policyReads`). Tests: `packages/core/tests/roles.test.ts` (all of "founders and roles", "definitions", "unassigning and removing", "invites"), `packages/core/tests/access-attacks.test.ts` ("attacks on grants"), `packages/core/tests/constitution.test.ts` ("top: founders", "stepping down", "top: none", "/space/succeed", "the constitution on nodes")._
 
 ---
 
