@@ -87,6 +87,8 @@ export interface SyncEngineConfig {
   readonly validate?: (version: Version) => Promise<IncomingValidation>;
   /** What this node holds, asked afresh for every hello. Default: everything. */
   readonly holds?: () => Holds;
+  /** Where a files message from a peer goes (spec 05 §16.6); without it, they are dropped */
+  readonly files?: (peerId: string, message: unknown) => Promise<void>;
 }
 
 /**
@@ -669,6 +671,11 @@ export function createSyncEngine(config: SyncEngineConfig): SyncEngine {
           break;
         case 'push-update':
           if (msg.version && typeof msg.version === 'object') await admitAll(peerId, [msg.version]);
+          break;
+        case 'want-file':
+        case 'file':
+        case 'file-done':
+          await config.files?.(peerId, msg);
           break;
         case 'stored':
           if (Array.isArray(msg.ids))

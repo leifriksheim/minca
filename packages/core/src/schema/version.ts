@@ -34,6 +34,8 @@ export interface CreateVersionParams<T> {
   readonly links?: ReadonlyArray<Link>;
   /** Topic tags, worked out from the body (`records/topics.ts`) */
   readonly tags?: ReadonlyArray<string>;
+  /** The files the version names, outside the body (spec 05 §16.6) */
+  readonly files?: ReadonlyArray<{ readonly hash: string; readonly size: number }>;
   /** Its place in the writer's log for the space (`node/writers.ts`) */
   readonly log?: WriterLog;
 }
@@ -85,6 +87,7 @@ export function createVersion<T>(params: CreateVersionParams<T>): UnsignedVersio
     ...(params.deleted ? { deleted: true as const } : {}),
     ...(params.links?.length ? { links: params.links } : {}),
     ...(params.tags?.length ? { tags: params.tags } : {}),
+    ...(params.files?.length ? { files: params.files } : {}),
     ...(params.log ? { log: logOf(params.log) } : {}),
   });
 }

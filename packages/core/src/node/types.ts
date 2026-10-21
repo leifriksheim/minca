@@ -76,6 +76,12 @@ export interface NodeConfig {
   readonly writerKey?: WriterKeySource;
   /** How often to look for writes another process made to a folder store. 0 disables. Default 2000. */
   readonly watchIntervalMs?: number;
+  /**
+   * Fetch every file the records it keeps name, as soon as they are named:
+   * what a node keeping a space for others does. Without it, a file is
+   * fetched when it is read (spec 05 §16.6).
+   */
+  readonly fetchFiles?: 'all';
   /** Hold only the collections this node uses, once a space names a keeper to hold the rest */
   readonly cache?: CacheConfig;
 }
@@ -446,6 +452,8 @@ export interface SpaceProfile {
   readonly updatedAt: string;
   /** The public half of their contact key, which a contact request to them is sealed with (`contacts.ask`) */
   readonly contactKey?: string;
+  /** Their picture, a file in this space: read it with `records.readFile` */
+  readonly avatar?: FileRef;
 }
 
 export interface NodeSpaces {
@@ -519,6 +527,19 @@ export interface NodeSpaces {
   profiles(spaceId: string): Promise<ReadonlyArray<SpaceProfile>>;
 }
 
+/**
+ * A file a body refers to, as `records.addFile` gives it: what names it on a
+ * version (`hash`, `size`), what opens it (`key`, `salt`), and what it is.
+ */
+export interface FileRef {
+  readonly hash: string;
+  readonly size: number;
+  readonly key: string;
+  readonly salt: string;
+  readonly mime: string;
+  readonly name?: string;
+}
+
 export interface NodeRecords {
   /** Current versions, oldest record first; deleted records only with `includeDeleted` */
   list<T = unknown>(spaceId: string, options?: ListOptions): Promise<ReadonlyArray<NodeRecord<T>>>;
@@ -585,6 +606,14 @@ export interface NodeRecords {
   /** Whether this account may `create` in a collection (`target` its name), or `edit` / `delete` a record (`target` its key) */
   can(spaceId: string, action: 'create' | 'edit' | 'delete', target: string): Promise<boolean>;
   /**
+   * Seals a file under a key of its own, keeps it, and gives back the
+   * reference to put in a body: a version whose body holds it names the file
+   * on its outside, so peers fetch and keep it (spec 05 §16.6).
+   */
+  addFile(spaceId: string, bytes: Uint8Array, about: { mime: string; name?: string }): Promise<FileRef>;
+  /** The bytes of a file a body refers to: held here, or fetched from peers or mirrors */
+  readFile(spaceId: string, ref: FileRef): Promise<Uint8Array>;
+  /**
    * Records matching a query, typed when it names a collection by its definition.
    * @throws When the query is malformed, saying what to fix
    */
@@ -603,6 +632,8 @@ export interface NodeRecords {
 
 export interface AccountProfileView {
   readonly name: string;
+  /** The account's picture, a file in its registry; each space holds its own copy (`SpaceProfile.avatar`) */
+  readonly avatar?: FileRef;
   /** When it was set, on whichever device set it */
   readonly updatedAt: string;
 }
@@ -692,8 +723,8 @@ export interface HostingView {
   readonly live: boolean;
   /** Why it could not be reached */
   readonly error?: string;
-  /** Its plans an account may pay with, from its description; none when it takes no payments or can't be reached */
-  readonly plans: ReadonlyArray<import('../session/hosting.js').HostPlan>;
+  /** How the account's balance there is added to, from its description; null when it takes no payments or can't be reached */
+  readonly fund: import('../session/hosting.js').FundOffer | null;
   /** Whether it sends reminders by email (`remind`) */
   readonly reminds: boolean;
 }
@@ -707,10 +738,11 @@ export interface NodeHosting {
   list(): Promise<ReadonlyArray<HostingView>>;
   /** Starts using a host: a subscription key every device signs as, and the spaces once it is paid */
   use(url: string): Promise<HostingView>;
-  /** Starts paying a host with one of its plans: a `checkout` page to open (`noopener`), or a `request` for a wallet */
-  pay(url: string, plan: string): Promise<import('../session/hosting.js').PayAnswer>;
-  /** The payment provider's page for changing a card or cancelling it, as a `checkout` answer */
-  manage(url: string): Promise<import('../session/hosting.js').PayAnswer>;
+  /** Adds to the account's balance at a host: a `checkout` page to open (`noopener`), or a `request` for a wallet */
+  pay(
+    url: string,
+    payment: import('../session/hosting.js').FundPayment,
+  ): Promise<import('../session/hosting.js').PayAnswer>;
   /** Asks a host for reminders by email before paid time runs out; it mails a link to confirm first */
   remind(url: string, email: string): Promise<void>;
   /** Stops using a host: it forgets the spaces, and the subscription is let go. Cancel a card that renews first (`manage`). */
@@ -789,6 +821,19 @@ export interface NodeAccount {
   profile(): Promise<AccountProfileView | null>;
   /** Renames the account on every device and app that opens it. Needs an account key. */
   setName(name: string): Promise<AccountProfileView>;
+  /**
+   * Sets the account's picture on every device, and in every space it opens:
+   * an image, already as small as it should be (the app resizes it). `null`
+   * takes it away. `name` is the account's name as the app knows it, kept
+   * with the picture when the registry has none yet (an app just connected,
+   * before the registry has synced). Needs an account key.
+   */
+  setAvatar(
+    image: { bytes: Uint8Array; mime: string } | null,
+    options?: { name?: string },
+  ): Promise<AccountProfileView>;
+  /** The account's picture, read from its registry; null without one, or without an account key */
+  picture(): Promise<{ bytes: Uint8Array; mime: string } | null>;
   /** Revokes one of this account's keys, by DID, in the account registry. Needs an account key. `waitMs` as for a space's */
   revoke(key: string, options?: RevokeOptions): Promise<boolean>;
 }

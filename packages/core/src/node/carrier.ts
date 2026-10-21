@@ -162,6 +162,8 @@ export interface CarryCoreConfig {
   readonly onArrived?: (spaceId: string, version: Version) => void;
   /** Spaces one carry space may have carried at most: those its passes name past that wait */
   readonly most?: number;
+  /** Spaces a carry space's passes name that it carries no more for want of its room: others may still */
+  readonly held?: (carrySpace: string) => ReadonlySet<string> | undefined;
 }
 
 /**
@@ -220,6 +222,8 @@ export async function createCarryCore(config: CarryCoreConfig) {
       rootDid: as.did,
       network,
       watchIntervalMs: config.watchIntervalMs ?? 2000,
+      // It keeps spaces for others: their files too, so they are there while the writer is away.
+      fetchFiles: 'all',
       emit: onEvent,
     });
 
@@ -348,7 +352,9 @@ export async function createCarryCore(config: CarryCoreConfig) {
       }
       // What it carries already comes first, so a cap keeps those and turns away only new ones.
       passes.sort((a, b) => Number(entry.wants.has(b.space.id)) - Number(entry.wants.has(a.space.id)));
+      const held = config.held?.(carrySpace);
       for (const pass of passes) {
+        if (held?.has(pass.space.id)) continue;
         // Over its limit: no new space, though one held already for someone else costs nothing more.
         const more = !entry.wants.has(pass.space.id) && !carried.has(pass.space.id);
         if (more && config.full?.(carrySpace)) continue;

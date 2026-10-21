@@ -16,20 +16,21 @@ import {
   useAskAgain,
   useOffer,
 } from '@minca/app-shared/HostOffer';
-import { PayFlow, RemindMe } from '@minca/app-shared/Payment';
+import { ChipIn, RemindMe, dollars } from '@minca/app-shared/Payment';
 import { Benefit, FeatureIcon, StatusPill, shortDate, timeLeft, type Tone } from '@minca/app-shared/Feature';
 import { message, useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
 
 const DAY = 86_400;
-/** Time paid up front can be topped up this long before it runs out */
+/** A balance is worth topping up this long before it runs out */
 const TOP_UP_DAYS = 30;
-/** Days before time paid up front runs out that the home says so at the top */
+/** Days before a balance runs out that the home says so at the top */
 const DUE_DAYS = 14;
 
 /**
- * "Keep my spaces online": one host, paid for once, carrying every space of
- * the account without being able to read them. Choosing and paying happen
+ * "Keep my spaces online": one host carrying every space of the account
+ * without being able to read them, free up to its room and paid by the GB
+ * past it, from a balance the account adds to. Choosing and paying happen
  * here, not on the host's site (spec/06-nodes-and-sessions.md, Hosts).
  */
 export function Hosting({ node }: { node: P2PNode }) {
@@ -51,22 +52,6 @@ export function Hosting({ node }: { node: P2PNode }) {
     setDoing(what);
     return run(work);
   };
-  /** The payment provider's page for a card that renews: opened inside the click, the link following */
-  const manage = (host: HostingView) => {
-    const tab = window.open('about:blank', '_blank');
-    void act('manage', async () => {
-      try {
-        const answer = await node.hosting.manage(host.url);
-        if (!('checkout' in answer)) throw new Error("The host's answer isn't a page to open");
-        if (!tab) return void window.open(answer.checkout, '_blank', 'noopener');
-        tab.opener = null;
-        tab.location.href = answer.checkout;
-      } catch (reason) {
-        tab?.close();
-        throw reason;
-      }
-    });
-  };
   const again = () => act('again', load);
 
   return (
@@ -83,7 +68,6 @@ export function Hosting({ node }: { node: P2PNode }) {
               host={host}
               busy={busy}
               onAddTime={() => setDialog({ url: host.url })}
-              onManage={() => manage(host)}
               onAgain={() => void again()}
               onStop={() => setStopping(host)}
               remind={(email) => node.hosting.remind(host.url, email)}
@@ -111,7 +95,6 @@ export function Hosting({ node }: { node: P2PNode }) {
         <StopDialog
           node={node}
           host={stopping}
-          onManage={() => manage(stopping)}
           onClose={() => {
             setStopping(null);
             void load();
@@ -153,7 +136,6 @@ function HostRow({
   host,
   busy,
   onAddTime,
-  onManage,
   onAgain,
   onStop,
   remind,
@@ -162,7 +144,6 @@ function HostRow({
   host: HostingView;
   busy: string | null;
   onAddTime: () => void;
-  onManage: () => void;
   /** Asks a host that didn't answer once more */
   onAgain: () => void;
   onStop: () => void;
@@ -174,7 +155,6 @@ function HostRow({
     status?.bytes !== undefined && status.quota !== undefined
       ? Math.min(1, status.bytes / status.quota)
       : null;
-  const plans = plansFor(host);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -189,25 +169,14 @@ function HostRow({
               {busy === 'again' ? 'Asking…' : 'Try again'}
             </button>
           )}
-          {status?.renews ? (
+          {host.fund && (
             <button
-              onClick={onManage}
-              disabled={busy !== null}
-              data-variant="quiet"
-              style={styles.smallButton}
+              onClick={onAddTime}
+              data-variant={needsPaying(host) ? 'primary' : 'quiet'}
+              style={needsPaying(host) ? styles.darkSmall : styles.smallButton}
             >
-              {busy === 'manage' ? 'Opening…' : 'Change card'}
+              {status?.plan === 'free' ? 'More room' : 'Add money'}
             </button>
-          ) : (
-            plans.length > 0 && (
-              <button
-                onClick={onAddTime}
-                data-variant={needsPaying(host) ? 'primary' : 'quiet'}
-                style={needsPaying(host) ? styles.darkSmall : styles.smallButton}
-              >
-                {status?.plan === 'free' ? 'More room' : status?.paidUntil ? 'Add time' : 'Pay'}
-              </button>
-            )
           )}
           <button onClick={onStop} disabled={busy !== null} data-variant="danger" style={styles.smallButton}>
             Stop
@@ -234,14 +203,27 @@ function HostRow({
           </div>
           <p style={{ fontSize: 12, color: palette.ink.faint }}>
             {size(status.bytes)} of {size(status.quota)} used
-            {room >= 1 ? ' · a new space waits until there is room' : ''}
+            {status.full
+              ? stillFree(status.full)
+                ? ` · over your room: make some, or get more, by ${shortDate(status.full.until)}`
+                : ` · over your room: ${host.name} keeps your spaces online again once they fit`
+              : room >= 1
+                ? ' · a new space waits until there is room'
+                : ''}
           </p>
         </div>
+      )}
+      {room === null && status?.bytes !== undefined && status.daily !== undefined && status.daily > 0 && (
+        <p style={{ fontSize: 12, color: palette.ink.faint }}>
+          {size(status.bytes)} kept · about {dollars(status.daily * 30)} a month as they are now
+        </p>
       )}
       {status?.over && status.over.length > 0 && (
         <OverSpaces node={node} host={host.name} over={status.over} />
       )}
-      {host.reminds && status && !status.renews && status.paidUntil > 0 && <RemindMe remind={remind} />}
+      {host.reminds && status && status.plan !== 'free' && status.paidUntil > 0 && (
+        <RemindMe remind={remind} />
+      )}
     </div>
   );
 }
@@ -288,7 +270,7 @@ function OverSpaces({ node, host, over }: { node: P2PNode; host: string; over: R
   );
 }
 
-/** Turning it on, or adding time: choosing a host, then its plans */
+/** Turning it on, or adding money: choosing a host, then how much */
 function HostingDialog({
   node,
   url,
@@ -315,10 +297,10 @@ function HostingDialog({
     if (!stillWanted()) return;
     const view = await node.hosting.use(where);
     if (!stillWanted()) return;
-    if (!plansFor(view).length || !needsPaying(view)) return onClose();
+    if (!view.fund || !needsPaying(view)) return onClose();
     setHost(view);
   };
-  const paidUntil = host?.status?.paidUntil ?? 0;
+  const balance = host?.status?.balance ?? 0;
 
   return (
     <Modal title="Keep your spaces online" onClose={onClose} width={460}>
@@ -328,20 +310,23 @@ function HostingDialog({
           <div>
             <p style={styles.sectionHeading}>{host ? host.name : 'Always online'}</p>
             <p style={{ fontSize: 13, color: palette.ink.muted }}>
-              {host ? 'Choose how to pay' : 'Your spaces, reachable around the clock'}
+              {host
+                ? `$${host.fund?.perGb ?? ''} a GB a month, from what you add`
+                : 'Your spaces, reachable around the clock'}
             </p>
           </div>
         </div>
 
-        {host ? (
-          <PayFlow
-            plans={plansFor(host)}
-            start={(plan) => node.hosting.pay(host.url, plan)}
+        {host?.fund ? (
+          <ChipIn
+            fund={host.fund}
+            start={(payment) => node.hosting.pay(host.url, payment)}
             paid={async () =>
-              ((await node.hosting.list()).find((known) => known.url === host.url)?.status?.paidUntil ?? 0) >
-              paidUntil
+              ((await node.hosting.list()).find((known) => known.url === host.url)?.status?.balance ?? 0) >
+              balance
             }
             onDone={onClose}
+            {...(host.status ? { rate: host.status } : {})}
           />
         ) : url ? (
           <Loader label="One moment" showLabel />
@@ -368,18 +353,8 @@ function HostingDialog({
   );
 }
 
-/** Stopping a host, said before it happens; a card that renews is cancelled at the provider first */
-function StopDialog({
-  node,
-  host,
-  onManage,
-  onClose,
-}: {
-  node: P2PNode;
-  host: HostingView;
-  onManage: () => void;
-  onClose: () => void;
-}) {
+/** Stopping a host, said before it happens; a card that adds every month is stopped at the provider */
+function StopDialog({ node, host, onClose }: { node: P2PNode; host: HostingView; onClose: () => void }) {
   const { run, busy, error } = useAction();
   const status = host.status;
   const stop = () => void run(() => node.hosting.stop(host.url).then(onClose));
@@ -391,19 +366,21 @@ function StopDialog({
           {host.name} forgets your spaces. They stay on your devices, and are reachable only while one of them
           is online.
         </p>
-        {status?.renews && (
+        {host.fund?.recurring && host.fund.manage && (
           <p style={said}>
-            Your card keeps renewing until you cancel it at the payment provider.{' '}
-            <button
-              onClick={onManage}
-              style={{ ...styles.linkButton, padding: 0, color: palette.ink.strong }}
+            A card that adds every month keeps adding until it is stopped.{' '}
+            <a
+              href={host.fund.manage}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: palette.ink.strong }}
             >
-              Cancel the card first
-            </button>
+              Stop it at the payment provider
+            </a>
           </p>
         )}
-        {status && paidAhead(host) && (
-          <p style={said}>The time paid for, until {shortDate(status.paidUntil)}, isn't paid back.</p>
+        {status && (status.balance ?? 0) > 0 && (
+          <p style={said}>The {dollars(status.balance ?? 0)} left isn't paid back.</p>
         )}
         {!host.live && (
           <p style={said}>
@@ -416,7 +393,7 @@ function StopDialog({
   );
 }
 
-/** Above everything else, when time paid up front runs out soon or has: from the host's signed `paidUntil` */
+/** Above everything else, when a balance runs out soon or has: from the host's signed `paidUntil` */
 export function HostingDue() {
   const session = useSession();
   const [due, setDue] = useState<ReadonlyArray<HostingView>>([]);
@@ -426,8 +403,8 @@ export function HostingDue() {
         setDue(
           hosts.filter((host) => {
             const status = host.status;
-            // On a free plan nothing runs out: paid time ending only means less room.
-            if (!status || status.renews || status.paidUntil === 0 || status.plan === 'free') return false;
+            // On a free plan nothing runs out: a balance ending only means less room.
+            if (!status || status.paidUntil === 0 || status.plan === 'free') return false;
             return status.state === 'grace' || status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
           }),
         ),
@@ -464,7 +441,7 @@ export function HostingDue() {
             textDecoration: 'none',
           }}
         >
-          Add time
+          Add money
         </a>
       </div>
     );
@@ -481,44 +458,30 @@ function standing(host: HostingView): { tone: Tone; pill: string; line: string }
   if (status.state === 'active' && (status.paidUntil === 0 || status.plan === 'free'))
     return { tone: 'good', pill: 'Online', line: `${status.plan ? 'Free plan' : 'Free'}${room}${offline}` };
   if (status.state === 'active') {
-    const soon = !status.renews && status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
+    const soon = status.paidUntil - Date.now() / 1000 < DUE_DAYS * DAY;
     return {
       tone: soon ? 'warn' : 'good',
       pill: soon ? `Runs out ${timeLeft(status.paidUntil)}` : 'Online',
-      line: `${status.renews ? 'Renews' : 'Paid until'} ${shortDate(status.paidUntil)}${room}${offline}`,
+      line: `${dollars(status.balance ?? 0)} left · lasts until about ${shortDate(status.paidUntil)}${room}${offline}`,
     };
   }
   if (status.state === 'grace')
     return {
       tone: 'bad',
-      pill: 'Needs payment',
-      line: `Ran out ${shortDate(status.paidUntil)}. Your spaces stay online a little longer${offline}`,
+      pill: 'Needs money',
+      line: `Ran out ${shortDate(status.paidUntil)}. Your spaces stay online a little longer, paid for from what you add next${offline}`,
     };
   return {
     tone: 'neutral',
-    pill: host.plans.length ? 'Not paid yet' : 'Off',
-    line: host.plans.length
-      ? `Choose a plan to turn it on${offline}`
-      : `This host isn't taking new accounts${offline}`,
+    pill: host.fund ? 'Not paid yet' : 'Off',
+    line: host.fund ? `Add money to turn it on${offline}` : `This host isn't taking new accounts${offline}`,
   };
 }
 
-/** The plans a person may choose now: not a card that renews while one already does */
-function plansFor(host: HostingView) {
-  return host.plans.filter((plan) => !(plan.renews && host.status?.renews));
-}
-
-/** Whether time paid up front is still running: what stopping gives up */
-function paidAhead(host: HostingView): boolean {
-  const status = host.status;
-  return status !== null && !status.renews && status.paidUntil > Date.now() / 1000;
-}
-
-/** Not paid, running out, or time paid up front that ends within a month */
+/** Not paid, running out, or a balance that ends within a month */
 function needsPaying(host: HostingView): boolean {
   const status = host.status;
   if (!status || status.state !== 'active') return true;
-  if (status.plan === 'free') return false;
-  if (status.renews || status.paidUntil === 0) return false;
+  if (status.plan === 'free' || status.paidUntil === 0) return false;
   return status.paidUntil - Date.now() / 1000 < TOP_UP_DAYS * DAY;
 }

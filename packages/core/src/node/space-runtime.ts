@@ -171,6 +171,9 @@ import {
 } from '../space/grants.js';
 import { FOUNDER } from '../space/space-manager.js';
 import { createSyncEngine, type Holds } from '../sync/sync-engine.js';
+import { SYNC_PROTOCOL_VERSION } from '../sync/sync-messages.js';
+import { createSpaceFiles, type SealedFile, type SpaceFiles } from '../files/space-files.js';
+import { fileRefsIn, MAX_FILES } from '../files/file-id.js';
 import type { NetworkMessage, PeerInfo } from '../types.js';
 import type { StoreFactory } from './stores.js';
 import {
@@ -182,7 +185,13 @@ import {
   type SchemaIssue,
   type StoredCollection,
 } from '../schema/collection-def.js';
-import { CARRIER_COLLECTION, MEMBERSHIP_COLLECTION, PROFILE_COLLECTION } from '../space/account-registry.js';
+import {
+  CARRIER_COLLECTION,
+  MEMBERSHIP_COLLECTION,
+  PROFILE_COLLECTION,
+  isAvatarRef,
+  type AvatarRef,
+} from '../space/account-registry.js';
 import { PASS_COLLECTION } from '../space/pass.js';
 import { base32Encode, cidOfDigest, hashedKey, sha256 } from '../utils/hash.js';
 import { sameTags, tagsFor, topicKey, topicTag } from '../records/topics.js';
@@ -382,6 +391,8 @@ export interface SpaceRuntimeDeps {
   readonly cache?: CacheConfig;
   /** Told of every version a peer sent that was taken in — what a carrier matches subscriptions against */
   readonly onArrived?: (version: Version) => void;
+  /** Fetch every file the space's records name, as a keeper does, rather than only those read (spec 05 §16.6) */
+  readonly fetchFiles?: 'all';
 }
 
 /** One open space, as `openSpaceRuntime` gives it */
@@ -2067,6 +2078,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           if (typeof name !== 'string' || !name.trim()) break;
           found = { did: verdict.root, name: name.trim().slice(0, 64), updatedAt: version.createdAt };
         }
+        // The picture, from the newest version: one without it shows none (the older stay kept, as retained).
+        if (!found.avatar && found.updatedAt === version.createdAt && isAvatarRef(body?.avatar))
+          found = { ...found, avatar: body.avatar };
         // The contact key from the newest version that has one: it never changes, and an app
         // without it that wrote a newer version first must not hide it.
         if (isContactPublicKey(body?.contactKey)) {
@@ -2117,7 +2131,44 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * verdict still holds. Given nothing — another tab, a folder, new keys —
    * everything is.
    */
+  let spaceFiles: SpaceFiles | null = null;
+  const missingFiles = (): never => {
+    throw new Error('The space is still opening');
+  };
+  let filesTimer: ReturnType<typeof setTimeout> | null = null;
+  /** One pass at a time; a change during one runs another after it */
+  let filesPass: Promise<void> | null = null;
+  let filesAgain = false;
+  /** After a change: which files are named is worked out again, and soon kept, dropped and fetched to match */
+  function filesChanged(): void {
+    spaceFiles?.changed();
+    if (filesPass) {
+      filesAgain = true;
+      return;
+    }
+    if (filesTimer || closed) return;
+    filesTimer = setTimeout(() => {
+      filesTimer = null;
+      filesPass = (async () => {
+        await spaceFiles?.tidy();
+        if (deps.fetchFiles === 'all') await spaceFiles?.fetchAll();
+      })()
+        .catch(() => {
+          // A peer or mirror out of reach; the next change tries again.
+        })
+        .finally(() => {
+          filesPass = null;
+          if (filesAgain && !closed) {
+            filesAgain = false;
+            filesChanged();
+          }
+        });
+    }, 2000);
+    unref(filesTimer);
+  }
+
   const recordsChanged = (placed?: ReadonlyArray<Version>) => {
+    filesChanged();
     if (placed) noteArrived(placed);
     linkIndexCache = null;
     emit({ type: 'records', space: space.id });
@@ -2560,10 +2611,35 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
   /** Which network a peer was met on, so replies go back the same way */
   const routes = new Map<string, NetworkManager>();
 
+  // ─── Files ─────────────────────────────────────────────────────────
+  //
+  // Named on the outside of the versions that refer to them, fetched chunk by
+  // chunk and checked as they come, kept while a body that names them is
+  // (spec 05 §16.6).
+
+  spaceFiles = createSpaceFiles({
+    space: space.id,
+    adapter,
+    storage,
+    send: (peer, message) =>
+      routes.get(peer)?.send(peer, {
+        type: 'sync',
+        from: session.did,
+        payload: { ...message, v: SYNC_PROTOCOL_VERSION },
+      }),
+    peers: () => connectedPeers(),
+    mirrors: () => mirrors.map((mirror) => ({ store: mirror.store, writer: mirror.writer })),
+    stands: async (version) => {
+      const standing = await standingOf(version);
+      return standing.ok || !!standing.withdrawn;
+    },
+  });
+
   const sync = createSyncEngine({
     storageProvider: storage,
     self: session.did,
     holds,
+    files: (peer, message) => spaceFiles?.onMessage(peer, message) ?? Promise.resolve(),
     sendToPeer: (peerId, message) => {
       routes.get(peerId)?.send(peerId, { type: 'sync', from: session.did, payload: message });
     },
@@ -3115,6 +3191,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
 
     let payload: unknown = null;
     let tags: string[] = [];
+    // The files the body refers to, named on the outside so keepers fetch and keep them.
+    const named = deleted ? [] : fileRefsIn(body);
+    if (named.length > MAX_FILES) throw new Error(`A record names at most ${MAX_FILES} files`);
     if (!deleted) {
       // Refused here, where the writer can fix it. On arrival a misfit is kept
       // and flagged instead — see `conforms`.
@@ -3196,6 +3275,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           // In the clear only where the body is: a private space sealed them above.
           ...(space.visibility === 'public' && !deleted && links.length ? { links } : {}),
           ...(tags.length ? { tags } : {}),
+          ...(named.length ? { files: named } : {}),
           log,
         }),
         writer.key,
@@ -3935,6 +4015,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       return mayNow(current.collection, action, await genesisOf(current));
     },
 
+    /** Seals a file, keeps it, and gives back the reference a body names it by (spec 05 §16.6) */
+    addFile: (bytes: Uint8Array): Promise<SealedFile> => (spaceFiles ?? missingFiles()).add(bytes),
+    /** The bytes of a file a body refers to: held here, or fetched from peers or mirrors */
+    readFile: (ref: SealedFile): Promise<Uint8Array> => (spaceFiles ?? missingFiles()).open(ref),
+
     /** For the node itself: writes the next version of a record in a collection `put` refuses, like the profile */
     upsertSystem: <T>(collection: string, recordKey: string, body: T) =>
       upsert<T>(collection, recordKey, body),
@@ -3946,17 +4031,22 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     },
 
     /** For the node itself: says who this account is here, when that changed and the space takes its writes */
-    async publishProfile(profile: { name: string; contactKey?: string }) {
+    async publishProfile(profile: { name: string; contactKey?: string; avatar?: AvatarRef }) {
       // Someone following a space without a role in it cannot write there, and says nothing; nor does an app.
       if (!actsForAccount(session.proof()) || (await cannotWrite())) return;
       const name = profile.name.trim().slice(0, 64);
       const mine = (await profileMap()).get(deps.rootDid);
       // An app without the contact key must not take away the one another device published.
       const contactKey = profile.contactKey ?? mine?.contactKey;
-      if (!name || (mine?.name === name && mine.contactKey === contactKey)) return;
+      if (
+        !name ||
+        (mine?.name === name && mine.contactKey === contactKey && mine.avatar?.hash === profile.avatar?.hash)
+      )
+        return;
       await upsert(PROFILE_COLLECTION, await profileKey(deps.rootDid), {
         name,
         ...(contactKey ? { contactKey } : {}),
+        ...(profile.avatar ? { avatar: profile.avatar } : {}),
       });
     },
 
@@ -4493,6 +4583,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       await keepingUp.done();
       await pulling;
       await Promise.all(mirrors.map((mirror) => mirror.close()));
+      if (filesTimer) clearTimeout(filesTimer);
+      spaceFiles?.close();
+      await filesPass;
       if (watchTimer) clearInterval(watchTimer);
       if (announceTimer) clearTimeout(announceTimer);
       channel?.close();

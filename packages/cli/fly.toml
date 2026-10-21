@@ -7,11 +7,10 @@
 #     MINCA_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com \
 #     MINCA_S3_BUCKET=… MINCA_S3_ACCESS_KEY_ID=… MINCA_S3_SECRET_ACCESS_KEY=… \
 #     MINCA_WALLET_ADDRESS=0x… \
-#     STRIPE_SECRET_KEY=sk_live_… STRIPE_WEBHOOK_SECRET=whsec_… \
-#     STRIPE_PRICE_MONTHLY=price_… STRIPE_PRICE_YEARLY=price_…
+#     STRIPE_SECRET_KEY=sk_live_… STRIPE_WEBHOOK_SECRET=whsec_…
 #   fly deploy . --config packages/cli/fly.toml
 #
-# It takes payments for more room and for community funds: Stripe (both
+# It takes payments into balances, an account's and a community's fund: Stripe (both
 # STRIPE_ keys), a wallet (MINCA_WALLET_ADDRESS), or both. Point Stripe's webhook at
 # https://my-host.fly.dev/host/billing/webhook, and set MINCA_HOST_URL below
 # to the host's own address.
@@ -27,16 +26,14 @@ kill_timeout = 30
 [env]
   MINCA_HOST_NAME = "Minca host"
   MINCA_HOST_URL = "https://minca-host.fly.dev"
-  # Free for every account within limits, and paid for more room; a
-  # community past the free line pays for itself through its fund
+  # Free for every account within limits, and paid by the GB past them
+  # (MINCA_FUND_PER_GB, default 0.10); a community past the free line pays
+  # for itself through its fund
   # (packages/cli/HOSTING.md, Limits). Every limit not set here takes its
   # default. Unset any MINCA_HOST_ALLOW secret left from before, or only the
   # accounts it names are carried: `fly secrets unset MINCA_HOST_ALLOW`.
   MINCA_HOST_FREE_GB = "0.25"
-  MINCA_HOST_QUOTA_GB = "10"
   MINCA_WALLET_NETWORK = "base"
-  MINCA_WALLET_MONTHLY = "4"
-  MINCA_WALLET_YEARLY = "36"
 
 # The host's key and subscriptions live here, and must outlive every deploy:
 # lose the key and every home that trusts this host stops trusting it. The

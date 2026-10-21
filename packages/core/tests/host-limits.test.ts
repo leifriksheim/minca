@@ -70,7 +70,6 @@ async function device(me: Account, hub: FakeHub): Promise<P2PNode> {
 
 const LIMITS: HostLimits = {
   accountBytes: 1_000,
-  paidAccountBytes: 10_000,
   space: { writers: 1, bytes: 500, windowDays: 30, readers: 2 },
   graceDays: 30,
   keepDays: 90,
@@ -191,6 +190,162 @@ describe('plans', () => {
     assert.equal(node.limits, null);
     const free = await host(hub, { free: true });
     assert.equal(free.limits, null, 'free means no limits');
+  });
+});
+
+describe('room', () => {
+  test('a space held back for one subscription’s room stays carried for another that names it', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const node = await host(hub, { limits: { ...LIMITS, space: { ...LIMITS.space, writers: 10 } } });
+    const c = await community(hub, node);
+    const mine = await c.aliceNode.spaces.create({ name: 'Mine', visibility: 'private' });
+    await until(carries(node, mine.id), 8000, 'Alice’s own space carried');
+    // Alice is out of room: the club and her own space wait, for her.
+    await node.holdForRoom(c.subscriptions[0], [c.space, mine.id]);
+    await until(async () => !(await carries(node, mine.id)()), 5000, 'her own space let go');
+    assert.equal(await carries(node, c.space)(), true, 'the club, which Bob names with room, stays');
+  });
+
+  test('over its room: a notice that a dip under does not reset, then the spaces held back wait until they fit', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const mirror = createMemoryBlobStore();
+    const node = await host(hub, { now: () => clock, mirror });
+    const me = await account();
+    const laptop = await device(me, hub);
+    const photos = await laptop.spaces.create({ name: 'Photos', visibility: 'private' });
+    const id = await subscriptionId();
+    await node.subscribe(id);
+    await node.attach(id, me.did, (await laptop.carriers.add({ did: node.did, name: 'Host' })).invite);
+    await until(carries(node, photos.id), 5000, 'the space to be carried');
+    await until(async () => (await mirror.list(`${photos.id}/`)).length > 0, 8000, 'the bucket to hold it');
+
+    await node.setFull(id, true);
+    const since = node.fullUntil((await node.get(id))!)?.since;
+    assert.equal(since, clock);
+    assert.equal(node.outOfRoom((await node.get(id))!), false, 'within its notice');
+    // Under for an hour, over again: the same notice, not a new one.
+    clock += 3600;
+    await node.setFull(id, false);
+    clock += 3600;
+    await node.setFull(id, true);
+    assert.equal(node.fullUntil((await node.get(id))!)?.since, since);
+
+    clock += 30 * DAY;
+    assert.equal(node.outOfRoom((await node.get(id))!), true);
+    await node.holdForRoom(id, [photos.id]);
+    await until(async () => !(await carries(node, photos.id)()), 5000, 'held back');
+    assert.ok((await node.namedFor(id)).includes(photos.id), 'still named');
+    assert.ok((await mirror.list(`${photos.id}/`)).length > 0, 'the host keeps its copy');
+
+    await node.holdForRoom(id, []);
+    await until(carries(node, photos.id), 5000, 'taken back once it fits');
+    // A whole window fitting, and the notice goes.
+    await node.setFull(id, false);
+    clock += 31 * DAY;
+    await node.setFull(id, false);
+    assert.equal(node.fullUntil((await node.get(id))!), null);
+  });
+
+  test('a space held back for keepDays has the host’s copy deleted, counted from when it was first held, through a restart', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const mirror = createMemoryBlobStore();
+    const stores = memoryStores();
+    const key = await provider.generateKeyPair();
+    const node = await host(hub, { now: () => clock, mirror, stores, key });
+    const me = await account();
+    const laptop = await device(me, hub);
+    const photos = await laptop.spaces.create({ name: 'Photos', visibility: 'private' });
+    const id = await subscriptionId();
+    await node.subscribe(id);
+    await node.attach(id, me.did, (await laptop.carriers.add({ did: node.did, name: 'Host' })).invite);
+    await until(carries(node, photos.id), 5000, 'the space to be carried');
+    await until(async () => (await mirror.list(`${photos.id}/`)).length > 0, 8000, 'the bucket to hold it');
+    await node.setFull(id, true);
+    clock += 30 * DAY;
+    await node.holdForRoom(id, [photos.id]);
+    await until(async () => !(await carries(node, photos.id)()), 5000, 'held back');
+
+    clock += 89 * DAY;
+    await node.close();
+    open.splice(open.indexOf(node), 1);
+    const again = await host(hub, { now: () => clock, mirror, stores, key });
+    await again.setFull(id, true);
+    await again.holdForRoom(id, [photos.id]);
+    assert.ok((await mirror.list(`${photos.id}/`)).length > 0, 'kept for keepDays, a restart counting on');
+    clock += 2 * DAY;
+    await again.holdForRoom(id, [photos.id]);
+    assert.deepEqual(await mirror.list(`${photos.id}/`), [], 'then the host’s copy goes');
+    assert.ok((await again.namedFor(id)).includes(photos.id), 'still named, to come back once it fits');
+  });
+
+  test('a carry space over its room by itself is let go, and turned away when handed over again, under any key', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const node = await host(hub);
+    const me = await account();
+    const laptop = await device(me, hub);
+    const id = await subscriptionId();
+    await node.subscribe(id);
+    const { invite } = await laptop.carriers.add({ did: node.did, name: 'Host' });
+    await node.attach(id, me.did, invite);
+    await node.refuse(id);
+    assert.equal((await node.get(id))?.carry, undefined);
+    await assert.rejects(node.attach(id, me.did, invite), /over its room/);
+    const fresh = await subscriptionId();
+    await node.subscribe(fresh);
+    await assert.rejects(
+      node.attach(fresh, me.did, invite),
+      /over its room/,
+      'a new key brings nothing back',
+    );
+    // Paying does: a balance has no room to be over.
+    await node.extend(fresh, Math.floor(Date.now() / 1000) + 86_400);
+    await node.attach(fresh, me.did, invite);
+    assert.ok((await node.get(fresh))?.carry, 'carried again once it pays');
+  });
+
+  test('a refusal comes back with the bucket on a new disk', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const mirror = createMemoryBlobStore();
+    const key = await provider.generateKeyPair();
+    const node = await host(hub, { mirror, key });
+    const me = await account();
+    const laptop = await device(me, hub);
+    const id = await subscriptionId();
+    await node.subscribe(id);
+    const { invite } = await laptop.carriers.add({ did: node.did, name: 'Host' });
+    await node.attach(id, me.did, invite);
+    await node.refuse(id);
+    await node.close();
+    open.splice(open.indexOf(node), 1);
+    const again = await host(hub, { mirror, key, stores: memoryStores() });
+    const fresh = await subscriptionId();
+    await again.subscribe(fresh);
+    await assert.rejects(again.attach(fresh, me.did, invite), /over its room/);
+  });
+
+  test('the notice is the account’s: a new subscription key starts nothing anew', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    let clock = Math.floor(Date.now() / 1000);
+    const node = await host(hub, { now: () => clock });
+    const me = await account();
+    const laptop = await device(me, hub);
+    const { invite } = await laptop.carriers.add({ did: node.did, name: 'Host' });
+    const first = await subscriptionId();
+    await node.subscribe(first);
+    await node.attach(first, me.did, invite);
+    await node.setFull(first, true);
+    const since = node.fullUntil((await node.get(first))!)?.since;
+    clock += 29 * DAY;
+    await node.detach(first);
+    const second = await subscriptionId();
+    await node.subscribe(second);
+    await node.attach(second, me.did, invite);
+    await node.setFull(second, true);
+    assert.equal(node.fullUntil((await node.get(second))!)?.since, since);
+    clock += 2 * DAY;
+    assert.equal(node.outOfRoom((await node.get(second))!), true);
   });
 });
 

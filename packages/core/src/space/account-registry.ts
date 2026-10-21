@@ -42,6 +42,33 @@ export const PROFILE_KEY = 'profile';
 
 export interface AccountProfile {
   readonly name: string;
+  /** The account's picture, a file in the registry (`records.addFile`) */
+  readonly avatar?: AvatarRef;
+}
+
+/** A picture, as a profile names it: the file, what it is, and, in a space, which registry file it is a copy of */
+export interface AvatarRef {
+  readonly hash: string;
+  readonly size: number;
+  readonly key: string;
+  readonly salt: string;
+  readonly mime: string;
+  readonly source?: string;
+}
+
+/** Whether something is a picture a profile can name */
+export function isAvatarRef(value: unknown): value is AvatarRef {
+  if (typeof value !== 'object' || value === null) return false;
+  const ref: Record<string, unknown> = { ...value };
+  return (
+    typeof ref.hash === 'string' &&
+    /^[0-9a-f]{64}$/.test(ref.hash) &&
+    typeof ref.size === 'number' &&
+    typeof ref.key === 'string' &&
+    typeof ref.salt === 'string' &&
+    typeof ref.mime === 'string' &&
+    ref.mime.startsWith('image/')
+  );
 }
 
 /** A membership record's body. The invite carries a private space's key — the registry is encrypted. */

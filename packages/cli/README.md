@@ -157,7 +157,6 @@ minca host --free --host 0.0.0.0 --allow did:key:zDnae… --allow did:key:zDnae�
 
 # As a service: Stripe for payments, R2 (or any S3) for storage
 STRIPE_SECRET_KEY=sk_live_… STRIPE_WEBHOOK_SECRET=whsec_… \
-STRIPE_PRICE_MONTHLY=price_… STRIPE_PRICE_YEARLY=price_… \
 MINCA_S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com MINCA_S3_BUCKET=minca-host \
 MINCA_S3_ACCESS_KEY_ID=… MINCA_S3_SECRET_ACCESS_KEY=… \
 minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
@@ -169,26 +168,36 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   Settings, with a Copy button. `--allow` works on a paying host too.
 - The host's key is made once, in `--data` (`host-key`, readable by you alone).
   A new key is a new host: every account would hand its spaces over again.
-- **No pages of its own.** The host lists its plans in its description, and
-  the account home (or the app, for a space) shows them and pays: a card
+- **Pay as it grows.** Every subscription has a balance: an account's, and
+  a community's fund. Paying adds any amount to it, at least
+  `MINCA_FUND_MIN` dollars (default 5, so a card's fixed fee stays small),
+  once or (by card) every month. Keeping spaces online takes
+  `MINCA_FUND_PER_GB` dollars a month for each GB (default 0.10), by the
+  second: an account pays for what is past its free room, a community for
+  its space, at least one GB. Once a community's balance runs out the host
+  carries on through a grace until it owes the largest payment ever made
+  into it (30 days at most), and the next payment pays for it first. An account at a
+  host with limits gets its room's notice instead.
+- **No pages of its own.** The host gives its price in its description, and
+  the account home (or the app, for a space) shows it and pays: a card
   opens Stripe's own checkout page, a wallet gets a payment request as a QR
   code and a link. Stripe sends people back to `/host/paid`, which says done.
 - Point Stripe's webhook at `https://<host>/host/billing/webhook`, sending
-  `checkout.session.completed` and `invoice.paid`. Plan labels come from the
-  prices in Stripe ("$4 a month, by card").
+  `checkout.session.completed` and `invoice.paid`. Card payments need no
+  prices in Stripe: the amount goes in the Checkout session.
 - Crypto wallets pay with no company in between: USDC on Base, sent straight
   to your address. Next to Stripe, or instead of it:
 
   ```bash
-  MINCA_WALLET_ADDRESS=0x… MINCA_WALLET_MONTHLY=4 MINCA_WALLET_YEARLY=36 \
+  MINCA_WALLET_ADDRESS=0x… \
   minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   ```
 
-  The home shows a payment request for the plan's price plus a fraction of a
+  The home shows a payment request for the amount plus a fraction of a
   cent that marks it as theirs: a QR code for a phone wallet, a link, and one
   click for a wallet in the browser (MetaMask, Coinbase Wallet, Rabby…). The
   host reads the network every 10 s while a payment is open, sees it arrive,
-  then adds a month or a year. Time is paid up front. `MINCA_WALLET_NETWORK=base-sepolia` tries it
+  then adds it to the balance. `MINCA_WALLET_NETWORK=base-sepolia` tries it
   with test USDC; `MINCA_WALLET_RPC` points at a network node of your own or a
   provider's (default: the network's public one). Keep the address's private
   key off the host — it only needs to receive.
@@ -196,28 +205,26 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
 - **Communities pay through a fund.** A community names the host in its
   space (`std.host`), and anyone in it adds to its fund from the app, any
   amount, by card or wallet, once or (by card) every month, with no sign-in at
-  the host. Keeping the space online takes `MINCA_FUND_MONTHLY` dollars a
-  month from it (default the wallet's monthly price, or 4), by the second, and
-  its bots take what they spend. Every status says what is in it, what it
-  spends a day, and when it will run out at that rate. Card payments need no
-  prices in Stripe: the amount goes in the Checkout session. For those who add
+  the host. Its bots take what they spend too. Every status says what is in
+  it, what it spends a day, and when it will run out at that rate. For those
+  who add
   every month, set `STRIPE_PORTAL_LINK` to Stripe's no-code customer portal
   link, which the app offers as "Stop adding every month". Members' devices
   hand the host the space's pass once there is money in the fund, and it
   carries the space blind, like an account's. A host with `--allow` carries no
   space for itself.
-- Each account's spaces may take `MINCA_HOST_QUOTA_GB` (default 10 on a
-  paying host, no limit on a free one; 0 is none). Every status says what
-  they take, and the home shows it. At the limit the host takes no new space
-  for that account; what it carries stays and keeps syncing.
+- Without limits, each account's spaces may take `MINCA_HOST_QUOTA_GB` if
+  set (none by default; a balance pays for what they take). Every status
+  says what they take, and the home shows it. At the limit the host takes no
+  new space for that account; what it carries stays and keeps syncing.
 - **Free within limits.** With `MINCA_HOST_FREE_GB` set, an account needs no
-  payment: it gets that much room for free, and `MINCA_HOST_QUOTA_GB` while
-  it pays. A space several accounts write in stays free up to
+  payment: it gets that much room for free, and its balance pays for what is
+  past it. A space several accounts write in stays free up to
   `MINCA_HOST_SPACE_WRITERS` accounts writing (default 10) and
   `MINCA_HOST_SPACE_MB` (500) over `MINCA_HOST_WINDOW_DAYS` (30);
   `MINCA_HOST_SPACE_READERS` (50) is only shown, never enforced. Past the
   line it is carried for `MINCA_HOST_GRACE_DAYS` (30) more, then only its own
-  fund carries it; the host keeps what it had for `MINCA_HOST_KEEP_DAYS` (90)
+  fund carries it; the host keeps what it had for `MINCA_HOST_KEEP_DAYS` (30)
   so a fund brings it straight back. A free subscription none of whose
   devices called for `MINCA_HOST_IDLE_DAYS` (180) is dropped. One address may
   make `MINCA_HOST_NEW_PER_DAY` subscriptions a day (5), an IPv6 /64 counting

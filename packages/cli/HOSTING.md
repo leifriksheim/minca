@@ -64,6 +64,16 @@ What to watch once limits are on:
   had, unserved, for `MINCA_HOST_KEEP_DAYS`, so a fund brings it straight back.
 - **Free again** only after a whole window with every count under 80% of its
   limit, so a busy week doesn't flip it.
+- **Room is kept too.** Every space an account names counts against its
+  room, but communities paying for themselves. Past it, the same notice
+  (`MINCA_HOST_GRACE_DAYS`, kept through dips under and new keys), then the
+  host holds back its largest spaces for that account until the rest fit;
+  another member with room keeps a shared one carried. A space held for
+  `MINCA_HOST_KEEP_DAYS` has the host's copy deleted (devices keep theirs). An account over by
+  its carry space alone is refused, and the log says so: delete its
+  `room:<account DID>` entry in the host's store (and `host/rooms/` in the
+  bucket) to let it back. A community's fund pays `MINCA_FUND_PER_GB` a
+  month for each GB its space takes, at least one.
 - **Counts reset when the disk does.** Which accounts wrote is kept on disk
   as salted hashes and not in the bucket, so a new disk counts from nothing,
   which errs toward free. Each space's date on the line is in the bucket, so
@@ -81,15 +91,13 @@ What to watch once limits are on:
 
 1. **Deploy** with `fly.toml` (commands at its top). Set `MINCA_HOST_URL` to
    the public address, and the R2 bucket, so the disk is only a cache.
-2. **A Stripe test-mode run, end to end.** With `sk_test_…` keys and test
-   prices:
-   - In a home built with `VITE_MINCA_HOST`, **Keep online**, pay with
-     `4242 4242 4242 4242`. The home should say "renews" with the date within
-     a minute, and the host's log "paid until".
-   - **Change card or cancel** in the home opens Stripe's portal. Cancel,
-     and the webhook for the end of the period should leave the date as is.
-   - A space: **Chip in** twice with the one-off price; its date moves twice.
-   - Replay a webhook from Stripe's dashboard: the date must not move again.
+2. **A Stripe test-mode run, end to end.** With `sk_test_…` keys:
+   - In a home built with `VITE_MINCA_HOST`, **More room**, add $5 with
+     `4242 4242 4242 4242`. Within a minute the home should show the balance,
+     and the host's log "got $5.00 by card".
+   - Add every month, then stop it from the link `STRIPE_PORTAL_LINK` gives.
+   - A space: **Chip in** twice; its balance moves twice.
+   - Replay a webhook from Stripe's dashboard: the balance must not move again.
 3. **A wallet payment on Base Sepolia** (`MINCA_WALLET_NETWORK=base-sepolia`),
    with test USDC from faucet.circle.com.
 4. **Tax.** Selling a digital service to consumers makes you liable for VAT

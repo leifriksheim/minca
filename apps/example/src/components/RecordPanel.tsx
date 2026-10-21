@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNode, useLive, useProfiles, useCan } from '@minca/core/react';
 import type { NodeCollection, NodeRecord, SpaceSummary } from '@minca/core';
-import { reaction, comment, tag } from '@minca/core/schemas';
+import { attachment, reaction, comment, tag } from '@minca/core/schemas';
 import {
   belonging,
   bodyOf,
@@ -28,6 +28,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { Reactions } from './std/Reactions';
 import { Tags } from './std/Tags';
 import { Comments } from './std/Comments';
+import { Attachments } from './std/Attachments';
 import { LinkPicker } from './LinkPicker';
 import { styles, palette, ui } from '../styles';
 import { useAction } from '@minca/app-shared/action';
@@ -37,7 +38,7 @@ import { Loader } from '@minca/app-shared/Loader';
 import { ask } from '@minca/app-shared/Ask';
 
 /** Standard collections with a place of their own on every record, so not offered as "+ Add …" */
-const ANNOTATIONS = new Set<string>([reaction.name, comment.name, tag.name]);
+const ANNOTATIONS = new Set<string>([reaction.name, comment.name, tag.name, attachment.name]);
 
 /** One record in a side panel: fields edited in place, its links both ways, reactions, tags and comments. */
 export function RecordPanel({
@@ -467,6 +468,17 @@ export function RecordPanel({
                   </div>
                 )
               ))}
+
+            {uses(attachment.name) && (
+              <>
+                <div style={{ height: 1, background: palette.surface.line }} />
+                <Attachments
+                  space={space}
+                  target={record.key}
+                  attachments={linked.filter((r) => r.collection === attachment.name)}
+                />
+              </>
+            )}
 
             {uses(comment.name) && (
               <>

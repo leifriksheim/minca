@@ -10,10 +10,38 @@ import { avatarFit, avatarRadius, avatarShape } from './avatar';
  *
  * A rounded square on its own, in a card or a list; round inside something
  * round already (a pill button, an account picker), where corners would
- * fight the shape around it.
+ * fight the shape around it. A picture the person chose, when there is one,
+ * takes its place.
  */
-export function Avatar({ did, size = 32, round = false }: { did: string; size?: number; round?: boolean }) {
+export function Avatar({
+  did,
+  size = 32,
+  round = false,
+  src,
+}: {
+  did: string;
+  size?: number;
+  round?: boolean;
+  /** A picture the person chose, shown instead of the shape once it has loaded */
+  src?: string | null;
+}) {
   const { d, fill, ground } = avatarShape(did);
+  if (src)
+    return (
+      <img
+        src={src}
+        width={size}
+        height={size}
+        alt="Account avatar"
+        style={{
+          borderRadius: avatarRadius(size, round),
+          objectFit: 'cover',
+          flexShrink: 0,
+          display: 'block',
+          background: ground,
+        }}
+      />
+    );
 
   return (
     <svg

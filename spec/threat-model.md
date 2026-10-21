@@ -124,10 +124,61 @@ reference implementation, or any implementation, honestly.
     members may share, so a community writing as a few accounts stays under
     it. A host whose disk is new counts a large space's history again if it
     takes longer than the first minutes to come back. A community can also move to a successor space (03), which the line
-    counts from nothing, with a whole grace. Nor is one account's room
-    bounded in bytes: past its quota a host takes no new space for it, but
-    what it carries keeps growing, and a space its own fund pays for has no
-    bound at all ([#289](https://github.com/leifriksheim/minca/issues/289)).
+    counts from nothing, with a whole grace. One account's room is
+    bounded in bytes after a notice that neither a new key nor a dip under
+    resets: past it the host stops carrying its largest spaces for it until
+    the rest fit, and an account over by its carry space alone is carried for
+    no more until it pays; past its free room an account's balance, and a
+    community's fund, pay for its size while they have money (08 §1,
+    §1.1, Room, §2;
+    `packages/core/tests/host-limits.test.ts`, "over its room…", "the notice
+    is the account's…", "a carry space over its room by itself…";
+    `packages/cli/tests/host.test.ts`, "past its notice, the host holds back
+    an account's largest space…"). Every space a member names counts against
+    their room, so one member's writing in a shared space fills every
+    member's; the host then holds back each such member's largest spaces,
+    which may be their own rather than the shared one, and keeps carrying a
+    held space for any member with room. A held space's bucket copy goes
+    after `keepDays`, and goes back whole once it is carried again
+    (`packages/core/tests/host-limits.test.ts`, "a space held back for
+    keepDays…"; `packages/core/tests/mirror.test.ts`, "taken out of the
+    store and mirrored again…", "a mirror that only ever read…", "a host
+    that only read its space back…"). A writer also drains a community's fund,
+    or a member's balance, as fast as they make a space grow. Paying makes
+    an account's room unbounded, bounded only by how fast its balance
+    drains, and every paying member who names a shared space pays for its
+    whole size. A grace is lent, in money: the balance goes below zero
+    through it until it owes as much as the largest payment ever made into
+    it, and the next payment pays that first, so a little money now and then keeps
+    nothing carried, the least payment into a large space (or one grown
+    after paying) buys what that payment buys at its size, no payment
+    shortens a grace (anyone may pay into a fund, so one could otherwise
+    cut it), and nothing more is owed once the grace is over
+    (`packages/cli/tests/fund.test.ts`, "its grace is lent…", "a grace lends
+    what the payment before it was…", "paid while small, grown…", "no
+    payment shortens a grace…", "a payment that leaves it owing…", "once its
+    grace is over…"), even on a host that came back from its bucket on a
+    new disk (`packages/cli/tests/fund.test.ts`, "a fund comes back from
+    the bucket…"). A fund is drawn on from its first payment, at one GB,
+    and never past its grace. A balance is charged by the size last
+    measured, every hour or so, so growth between measures goes uncharged:
+    the host's cost. Whoever brings a lapsed fund back starts a grace that
+    lends only what their payment left above zero, so a stranger paying off
+    the rest of a debt can't put it back on the members (`packages/cli/tests/fund.test.ts`,
+    "whoever brings a fund back…"). Time the host was down is charged to
+    nobody ("a gap longer than an hour…"). A card payment disputed
+    later still counts as the largest payment a grace lends: the host's
+    cost, as the chargeback is. An
+    account at a host with limits is lent nothing: its room's notice is its
+    grace. One payment keeps an account whose spaces fit its free room
+    `"paid"` for good, so never dropped for being idle: accepted, as that is
+    at most `accountBytes` for each such account. Whoever
+    pays into a fund nobody else has can so leave its community owing at
+    most what they paid, should it fund itself later; accepted. Still open
+    ([#289](https://github.com/leifriksheim/minca/issues/289)): an account
+    with two subscriptions on one carry space is held and refused by the
+    smaller room, and at a host without limits one that changes keys leaves
+    its grace's debt behind.
     Accepted otherwise: it is the host's cost.
   - Anyone holding an invite link that is still open can push a community
     over a host's free line by joining more accounts and writing from them,
@@ -285,6 +336,18 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
   - Each warrant costs every member's node a replay of the offending
     version's own view, once; nothing bounds how many warrants a member
     writes, true or false ([#33](https://github.com/leifriksheim/minca/issues/33)).
+  - A member can name up to 16 files of up to 2³¹ bytes in every version,
+    and a keeper fetches and holds each while that version is kept whole:
+    for good where it is retained, a first version under `onePer`, or under
+    `history: "all"`. It can also name another member's deleted file in a
+    version of its own, keeping its ciphertext held, though nobody without
+    the old body can open it. `size` is the writer's word until the bytes
+    arrive. And any peer it serves can ask for up to four chunks (1 MiB) per
+    `want-file`, as often as it likes, and a member naming ids nobody holds
+    has every keeper ask its peers and list its mirrors for each, one id at
+    a time, again every ten minutes, which delays its fetching the files
+    that exist: nothing bounds bytes served per peer
+    (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
     sorts on them, and that grow with every record a member links to it.
@@ -821,6 +884,15 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
+  - It can't read a file it keeps or serves without a body that names it:
+    each is sealed under a key only bodies hold, so in a private space it
+    reads none, and a deleted file is ciphertext to anyone who never had its
+    body; nor pass off
+    other bytes as one,
+    since every chunk is checked against the id a signed version names
+    (05 §16.6; `packages/core/tests/files.test.ts`, "a chunk that is not the
+    one its list names is dropped…", "a list of inner hashes, or of the wrong
+    length, is refused").
   - From the account's wakes it learns a collection, spaces, topic tags,
     whether only others' records wake, since when, whether paused, and which
     app's address a click leads to; for a `where` on a computed field, also
@@ -873,7 +945,10 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - A removed carrier keeps proving read until the key changes ([#170](https://github.com/leifriksheim/minca/issues/170)) _(traced)_.
   - It sees envelopes: authors, collections, record keys, timing, and the
     member list. `profile:` keys and collection names say whose and what
-    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)). A host with limits also keeps, for its window, which
+    (03 §8.6, [#223](https://github.com/leifriksheim/minca/issues/223)).
+    Unlike `links`, a version's `files` stays outside a private body: how
+    many files each names, how big, and that versions naming one id share a
+    file, in one space or across the spaces it holds (05 §16.6). A host with limits also keeps, for its window, which
     accounts wrote in each space on each day, as hashes salted with a salt
     on the same disk, which hides nothing from the host or whoever holds its
     disk, since every writer is in the space's envelopes anyway, and tells

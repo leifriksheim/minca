@@ -101,6 +101,8 @@ import {
   PROFILE_COLLECTION,
   PROFILE_KEY,
   type AccountProfile,
+  type AvatarRef,
+  isAvatarRef,
   type Carrier,
   type Membership,
 } from '../space/account-registry.js';
@@ -156,6 +158,8 @@ import type {
   NodeDirect,
   DirectMessage,
   NodeRecords,
+  FileRef,
+  AccountProfileView,
   NodeSpaces,
   P2PNode,
   RevokeOptions,
@@ -407,12 +411,17 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    * or before one is set. One record: its current version is the name, by the
    * ordering rule, the same on every device whatever their clocks say.
    */
-  async function ownProfile(): Promise<{ name: string; updatedAt: string } | null> {
+  async function ownProfile(): Promise<AccountProfileView | null> {
     if (!accountSpaceId) return null;
     const profile = await (await runtime(accountSpaceId)).get<AccountProfile>(PROFILE_KEY);
-    return profile?.verified && profile.root === config.signer.did && typeof profile.body?.name === 'string'
-      ? { name: profile.body.name, updatedAt: profile.updatedAt }
-      : null;
+    if (!profile?.verified || profile.root !== config.signer.did || typeof profile.body?.name !== 'string')
+      return null;
+    const avatar = profile.body.avatar;
+    return {
+      name: profile.body.name,
+      updatedAt: profile.updatedAt,
+      ...(isAvatarRef(avatar) ? { avatar } : {}),
+    };
   }
   const ownName = async () => (await ownProfile())?.name ?? null;
 
@@ -423,10 +432,46 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
    */
   async function publishProfile(spaceId: string, open: SpaceRuntime): Promise<void> {
     if (narrowNote || (await kindOf(spaceId))) return;
-    const name = await ownName();
-    if (name)
-      await open.publishProfile({ name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) });
+    const own = await ownProfile();
+    if (!own) return;
+    const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
+    const held = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
+    const current = isAvatarRef(held) && held.source === own.avatar?.hash ? held : undefined;
+    // The name and contact key go out now, with the picture the space already has; a new picture
+    // follows once it is copied, which may wait on its bytes reaching this device.
+    const shown = own.avatar ? (current ?? (isAvatarRef(held) ? held : undefined)) : undefined;
+    await open.publishProfile({ ...base, ...(shown ? { avatar: shown } : {}) });
+    if (own.avatar && !current)
+      void avatarIn(spaceId, open, own.avatar)
+        .then((avatar) => open.publishProfile({ ...base, avatar }))
+        .catch(() => {
+          // Its bytes are on a device that is away: copied next time the profile is published.
+        });
   }
+
+  /**
+   * The account's picture as a file of this space: a space's members can't
+   * read the registry, so each space holds its own copy, made once and named
+   * by the registry file it copies.
+   */
+  function avatarIn(spaceId: string, open: SpaceRuntime, avatar: AvatarRef): Promise<AvatarRef> {
+    // One copy per space and picture, however many publishes ask at once (a space opening, a change).
+    const at = `${spaceId}:${avatar.hash}`;
+    let copying = avatarCopies.get(at);
+    if (!copying) {
+      copying = (async () => {
+        const held = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
+        if (isAvatarRef(held) && held.source === avatar.hash) return held;
+        const registryRt = await runtime(accountSpaceId!);
+        const copy = await open.addFile(await registryRt.readFile(avatar));
+        return { ...copy, mime: avatar.mime, source: avatar.hash };
+      })();
+      copying.catch(() => avatarCopies.delete(at));
+      avatarCopies.set(at, copying);
+    }
+    return copying;
+  }
+  const avatarCopies = new Map<string, Promise<AvatarRef>>();
 
   async function publishProfileToOpenSpaces(): Promise<void> {
     for (const [spaceId, open] of runtimes) {
@@ -455,6 +500,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
           // The account's own spaces are always held whole: every device needs all of them.
           ...(config.cache && !kind ? { cache: config.cache } : {}),
           watchIntervalMs: config.watchIntervalMs ?? 2000,
+          ...(config.fetchFiles ? { fetchFiles: config.fetchFiles } : {}),
           emit: fromRuntime,
           onRole: (role) => {
             // Holding a role now — perhaps just joined — means the space may hear who this is.
@@ -1292,10 +1338,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         name: description.name,
         status,
         live: true,
-        // The plans for an account's subscription, not a space's own.
-        plans: (description.plans ?? []).filter(
-          (plan) => Array.isArray(plan.for) && plan.for.includes('account'),
-        ),
+        fund: description.free ? null : (description.fund ?? null),
         reminds: description.remind === true,
       };
     } catch (error) {
@@ -1304,7 +1347,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         name: hosting.name ?? new URL(hosting.url).host,
         status: kept,
         live: false,
-        plans: [],
+        fund: null,
         reminds: false,
         error: error instanceof Error ? error.message : String(error),
       };
@@ -1560,12 +1603,8 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       return viewHosting(record, true);
     },
 
-    async pay(url, plan) {
-      return (await hostClient(await requireHosting(url))).client.pay(plan);
-    },
-
-    async manage(url) {
-      return (await hostClient(await requireHosting(url))).client.manage();
+    async pay(url, payment) {
+      return (await hostClient(await requireHosting(url))).client.pay(payment);
     },
 
     async remind(url, email) {
@@ -2374,12 +2413,33 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       const registryRt = await requireAccount('Renaming across devices');
       const trimmed = name.trim();
       if (!trimmed) throw new Error('A name cannot be empty');
+      const avatar = (await ownProfile())?.avatar;
       const written = await registryRt.upsertSystem<AccountProfile>(PROFILE_COLLECTION, PROFILE_KEY, {
         name: trimmed,
+        ...(avatar ? { avatar } : {}),
       });
       emit({ type: 'account' });
       await publishProfileToOpenSpaces();
-      return { name: trimmed, updatedAt: written.updatedAt };
+      return { name: trimmed, updatedAt: written.updatedAt, ...(avatar ? { avatar } : {}) };
+    },
+    async setAvatar(image, options = {}) {
+      const registryRt = await requireAccount('Changing the picture across devices');
+      const name = (await ownName()) ?? options.name?.trim();
+      if (!name) throw new Error('Give the account a name first');
+      if (image && !image.mime.startsWith('image/')) throw new Error('A picture is an image');
+      const avatar = image ? { ...(await registryRt.addFile(image.bytes)), mime: image.mime } : null;
+      const written = await registryRt.upsertSystem<AccountProfile>(PROFILE_COLLECTION, PROFILE_KEY, {
+        name,
+        ...(avatar ? { avatar } : {}),
+      });
+      emit({ type: 'account' });
+      await publishProfileToOpenSpaces();
+      return { name, updatedAt: written.updatedAt, ...(avatar ? { avatar } : {}) };
+    },
+    async picture() {
+      const avatar = (await ownProfile())?.avatar;
+      if (!avatar || !accountSpaceId) return null;
+      return { bytes: await (await runtime(accountSpaceId)).readFile(avatar), mime: avatar.mime };
     },
     revoke: async (key, options) =>
       (await requireAccount('Revoking in the account registry')).revoke(key, options),
@@ -2413,6 +2473,12 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       delete: async (spaceId: string, key: string) =>
         (await runtime(spaceId)).remove(key, as ? { as } : undefined),
       history: async <T>(spaceId: string, key: string) => (await runtime(spaceId)).history<T>(key),
+      addFile: async (spaceId: string, bytes: Uint8Array, about: { mime: string; name?: string }) => ({
+        ...(await (await runtime(spaceId)).addFile(bytes)),
+        mime: about.mime,
+        ...(about.name !== undefined ? { name: about.name } : {}),
+      }),
+      readFile: async (spaceId: string, ref: FileRef) => (await runtime(spaceId)).readFile(ref),
       can: perSpace((rt, action: 'create' | 'edit' | 'delete', target: string) => rt.can(action, target)),
       async query<const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
         spaceId: string,

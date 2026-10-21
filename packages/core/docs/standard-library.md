@@ -57,23 +57,24 @@ _Source: `packages/core/src/schemas/blueprints.ts` (`standardCollections`), `pac
 out in each definition, built by the library's `fragments` so they are
 identical everywhere:
 
-| Fragment   | Shape                                                                                                                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `when`     | string 10–64: RFC 3339 date-time (`2026-03-01T18:30:00+01:00`), or `YYYY-MM-DD` for a whole day                                                                                                           |
-| `day`      | string of 10: `YYYY-MM-DD`                                                                                                                                                                                |
-| `timeZone` | string 1–64: an IANA zone, `Europe/Oslo`                                                                                                                                                                  |
-| DID        | string 1–256: an account DID (built by `person`)                                                                                                                                                          |
-| `money`    | `{ amount, currency }`, both required: `amount` a decimal string 1–32 (`"12.50"`), never a number; `currency` ISO 4217, 3 characters                                                                      |
-| `address`  | `{ street, locality, region, postcode, country }`, each optional; `country` ISO 3166-1 alpha-2                                                                                                            |
-| `place`    | `{ name, address, lat, lon, cells }` (built by `placeRef`), each optional; `lat` −90–90, `lon` −180–180, WGS 84; `cells` string 1–12[] (≤ 8), the geohash cells of `lat` and `lon` (see Places and areas) |
-| `blob`     | `{ hash, size, mime, name? }`: `hash` the lower-case hex SHA-256 of the bytes as stored (64 characters), `size` bytes, `mime` required                                                                    |
-| `image`    | `{ blob, alt? }`: `alt` ≤ 2000, what it shows                                                                                                                                                             |
-| `position` | string 1–200 that sorts where a record goes (Positions, below)                                                                                                                                            |
+| Fragment   | Shape                                                                                                                                                                                                                |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `when`     | string 10–64: RFC 3339 date-time (`2026-03-01T18:30:00+01:00`), or `YYYY-MM-DD` for a whole day                                                                                                                      |
+| `day`      | string of 10: `YYYY-MM-DD`                                                                                                                                                                                           |
+| `timeZone` | string 1–64: an IANA zone, `Europe/Oslo`                                                                                                                                                                             |
+| DID        | string 1–256: an account DID (built by `person`)                                                                                                                                                                     |
+| `money`    | `{ amount, currency }`, both required: `amount` a decimal string 1–32 (`"12.50"`), never a number; `currency` ISO 4217, 3 characters                                                                                 |
+| `address`  | `{ street, locality, region, postcode, country }`, each optional; `country` ISO 3166-1 alpha-2                                                                                                                       |
+| `place`    | `{ name, address, lat, lon, cells }` (built by `placeRef`), each optional; `lat` −90–90, `lon` −180–180, WGS 84; `cells` string 1–12[] (≤ 8), the geohash cells of `lat` and `lon` (see Places and areas)            |
+| `blob`     | `{ hash, size, mime, name?, key?, salt? }`: what `records.addFile` gives: `hash` the file's id (64 hex characters), `size` bytes as stored, `mime` required; `key` and `salt` open it (22 base64url characters each) |
+| `image`    | `{ blob, alt? }`: `alt` ≤ 2000, what it shows                                                                                                                                                                        |
+| `position` | string 1–200 that sorts where a record goes (Positions, below)                                                                                                                                                       |
 
 Until the dialect has `format` ([spec 02 §6.2](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md)), `when` and `day` are checked only for
-length. How a `blob`'s bytes are stored and fetched is planned
-([Planned: what the library still waits on](#planned-what-the-library-still-waits-on));
-the reference to them is not.
+length. A `blob` is what `records.addFile` gives
+([storage](storage.md#files)): its `hash` is the file's id, and it carries
+the `key` and `salt` that open it
+([spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md)).
 
 ## The definitions
 
@@ -485,11 +486,6 @@ _Source: `packages/core/src/schemas/geo.ts` (`geohash`, `cellsOf`, `cellsAround`
 
 > **Planned.** Not normative. Each item names its own issue.
 >
-> - **File bytes** ([spec 05 §16.6](https://github.com/leifriksheim/minca/blob/main/spec/05-sync-and-storage.md),
->   [#37](https://github.com/leifriksheim/minca/issues/37)). The `blob`
->   fragment names bytes by hash, but a space cannot yet store or send them,
->   so `std.file`, `std.photo`, `std.video` and the images elsewhere point at
->   bytes a reader may not be able to fetch.
 > - **References to other spaces** ([spec 02 §5.3](https://github.com/leifriksheim/minca/blob/main/spec/02-records.md),
 >   [#38](https://github.com/leifriksheim/minca/issues/38)). `std.follow`'s
 >   `space` is a plain space id, and a repost or a list item can point only

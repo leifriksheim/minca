@@ -66,6 +66,9 @@ export interface MirrorConfig {
 }
 
 export interface Mirror {
+  /** The blob store, and this store writer's id in it: where its files go too (spec 05 §16.6) */
+  readonly store: BlobStore;
+  readonly writer: string;
   /** Takes in what others left in the store. How many versions were stored. */
   pull(): Promise<{ readonly added: number }>;
   /** Uploads what the store is missing, now */
@@ -90,9 +93,10 @@ const newWriterId = () =>
     b.toString(16).padStart(2, '0'),
   ).join('');
 
-/** Deletes everything a space keeps in a store — every writer's segments */
+/** Deletes everything a space keeps in a store — every writer's segments, and its files */
 export async function deleteMirrored(store: BlobStore, space: string): Promise<void> {
-  for (const key of await store.list(`${space}/`)) await store.delete(key);
+  for (const key of [...(await store.list(`${space}/`)), ...(await store.list(`files/${space}/`))])
+    await store.delete(key);
 }
 
 export async function createMirror(config: MirrorConfig): Promise<Mirror> {
@@ -116,6 +120,14 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
 
   // Read once: a flush asks about every version the store keeps, and a folder flushes every second.
   const known = new Set((await state.list(knownKey(''))).map((key) => key.slice(knownKey('').length)));
+  // It knows the store held versions, yet nothing of the space is there: it was taken out of the
+  // store (`deleteMirrored`). What it knew is gone, so everything goes out again. While anything is
+  // there it knew rightly, and a store it can't reach now leaves what it knows as it was.
+  const gone = known.size > 0 && (await store.list(`${space}/`).catch(() => null))?.length === 0;
+  if (gone) {
+    for (const id of known) await state.delete(knownKey(id));
+    known.clear();
+  }
   const markKnown = async (id: string) => {
     if (known.has(id)) return;
     await state.put(knownKey(id), MARK);
@@ -241,6 +253,8 @@ export async function createMirror(config: MirrorConfig): Promise<Mirror> {
   }
 
   return Object.freeze({
+    store,
+    writer,
     pull: () => serial(pullNow),
     flush: () => serial(flushNow),
     compact: () => serial(compactNow),
