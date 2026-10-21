@@ -108,7 +108,7 @@ function gigabytesFromEnv(env: NodeJS.ProcessEnv, name: string, otherwise: numbe
  * up to MINCA_HOST_SPACE_WRITERS accounts writing (10) and MINCA_HOST_SPACE_MB
  * (500) over MINCA_HOST_WINDOW_DAYS (30); MINCA_HOST_SPACE_READERS (50) is
  * only shown. Past the line it is carried for MINCA_HOST_GRACE_DAYS (30), and
- * kept MINCA_HOST_KEEP_DAYS (90) after; a free subscription with no call for
+ * kept MINCA_HOST_KEEP_DAYS (30) after; a free subscription with no call for
  * MINCA_HOST_IDLE_DAYS (180) is dropped. None otherwise, and never with
  * MINCA_HOST_FREE=1, which has no limits at all.
  */
@@ -127,7 +127,7 @@ export function limitsFromEnv(env: NodeJS.ProcessEnv, free: boolean): HostLimits
       readers: wholeFromEnv(env, 'MINCA_HOST_SPACE_READERS', 50),
     },
     graceDays: wholeFromEnv(env, 'MINCA_HOST_GRACE_DAYS', 30),
-    keepDays: wholeFromEnv(env, 'MINCA_HOST_KEEP_DAYS', 90),
+    keepDays: wholeFromEnv(env, 'MINCA_HOST_KEEP_DAYS', 30),
     idleDays: wholeFromEnv(env, 'MINCA_HOST_IDLE_DAYS', 180),
   };
 }
@@ -348,26 +348,33 @@ export async function botsFromEnv(
 }
 
 /**
- * Community funds: what keeping one online takes a month (MINCA_FUND_MONTHLY,
- * dollars, default the wallet's monthly price or 4), what a bot's AI use
- * costs as a multiple of what the host pays (MINCA_BOT_MARKUP, default 1.5),
- * and where someone who adds every month by card stops it
- * (STRIPE_PORTAL_LINK, Stripe's no-code customer portal link).
+ * Community funds: what keeping one online takes a month for each GB it
+ * takes, at least one (MINCA_FUND_PER_GB, dollars, default 0.10), the least
+ * one payment adds (MINCA_FUND_MIN, dollars, default 5: a card's fixed fee
+ * stays small beside it), what a bot's AI use costs as a multiple of what the
+ * host pays (MINCA_BOT_MARKUP, default 1.5), and where someone who adds every
+ * month by card stops it (STRIPE_PORTAL_LINK, Stripe's no-code customer
+ * portal link).
  */
 export function fundFromEnv(env: NodeJS.ProcessEnv): {
-  fundMonthly?: string;
+  fundPerGb?: string;
+  fundMin?: string;
   botMarkup?: number;
   manageFunds?: string;
 } {
-  const monthly = (env.MINCA_FUND_MONTHLY ?? env.MINCA_WALLET_MONTHLY)?.trim();
-  if (monthly && !/^\d{1,5}(\.\d{1,2})?$/.test(monthly))
-    throw new Error(`MINCA_FUND_MONTHLY must be dollars a month, like 4, not "${monthly}"`);
+  const perGb = env.MINCA_FUND_PER_GB?.trim();
+  if (perGb && !/^\d{1,5}(\.\d{1,4})?$/.test(perGb))
+    throw new Error(`MINCA_FUND_PER_GB must be dollars a month for a GB, like 0.10, not "${perGb}"`);
+  const min = env.MINCA_FUND_MIN?.trim();
+  if (min && !/^\d{1,5}(\.\d{1,2})?$/.test(min))
+    throw new Error(`MINCA_FUND_MIN must be dollars, like 5, not "${min}"`);
   const markup = env.MINCA_BOT_MARKUP ? Number(env.MINCA_BOT_MARKUP) : undefined;
   if (markup !== undefined && (!Number.isFinite(markup) || markup < 1))
     throw new Error(`MINCA_BOT_MARKUP must be 1 or more, not "${env.MINCA_BOT_MARKUP}"`);
   const portal = env.STRIPE_PORTAL_LINK?.trim();
   return {
-    ...(monthly ? { fundMonthly: monthly } : {}),
+    ...(perGb ? { fundPerGb: perGb } : {}),
+    ...(min ? { fundMin: min } : {}),
     ...(markup !== undefined ? { botMarkup: markup } : {}),
     ...(portal ? { manageFunds: portal } : {}),
   };

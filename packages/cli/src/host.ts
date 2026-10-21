@@ -149,8 +149,10 @@ export interface HostOptions {
   readonly connectors?: ReadonlyArray<HostConnector>;
   /** Bots one space may have here, paid or not. Default 5. */
   readonly botsPerSpace?: number;
-  /** What keeping a community online takes from its fund a month, in dollars. Default "4". */
-  readonly fundMonthly?: string;
+  /** What keeping a community online takes from its fund a month for each GB it takes, at least one, in dollars. Default "0.10". */
+  readonly fundPerGb?: string;
+  /** The least one payment into a fund may add, in dollars. Default "5". */
+  readonly fundMin?: string;
   /** What a bot's AI use costs its fund, as a multiple of what the host pays for it. Default 1.5. */
   readonly botMarkup?: number;
   /** The payment provider's page where someone stops adding to a fund every month */
@@ -383,8 +385,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       ? (limits.paidAccountBytes ?? limits.accountBytes)
       : limits.accountBytes;
   };
-  /** How many paying accounts' rooms each community takes: its fund pays the monthly rate for each */
-  const rooms = new Map<string, number>();
+  /** What each community takes, as last measured: its fund pays the monthly rate for each GB */
+  const spaceBytes = new Map<string, number>();
   /** What a subscription's spaces take, and its limit: null when this host doesn't measure */
   const usageOf = async (id: string): Promise<{ bytes: number; quota?: number } | null> => {
     const measure = options.measure;
@@ -434,8 +436,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
         log(`subscription ${id}: its carry space alone is over its room; no longer carried`);
       }
     }
-    if (limits && !account)
-      rooms.set(id, Math.max(1, Math.ceil(bytes / ((limits.paidAccountBytes ?? limits.accountBytes) || 1))));
+    if (!account) spaceBytes.set(id, bytes);
     const carry = subscription?.carry?.space;
     const crowded = !!limits && (await node.carriedFor(id)) >= spacesPerSubscription;
     // At a host with limits, no room is room: 0 is a quota too.
@@ -446,9 +447,12 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
   };
   /** Measures every subscription, and lets a carry space that has room again take the spaces it waited with */
   const measureAll = async (): Promise<void> => {
-    if (!options.measure || (!options.quotaBytes && !limits)) return;
+    if (!options.measure) return;
+    // With no room to keep, only a community's size matters: its fund pays by it.
+    const rooms = !!options.quotaBytes || !!limits;
     const before = [...full].sort().join(' ');
-    for (const subscription of await node.list()) await usageOf(subscription.id);
+    for (const subscription of await node.list())
+      if (rooms || subscription.id.startsWith('space:')) await usageOf(subscription.id);
     if ([...full].sort().join(' ') !== before) await node.recheck();
   };
 
@@ -519,7 +523,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     // What each bot spent a day this last week: what people see the fund pays for.
     const priced = running.map((bot) => ({ ...bot, daily: Math.round(funds.botDaily(state, bot.bot)) }));
     return {
-      balance: Math.max(0, Math.round(state.balance)),
+      balance: Math.round(state.balance),
       daily: Math.round(funds.daily(state)),
       ...(priced.length ? { bots: priced } : {}),
     };
@@ -550,14 +554,14 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
           for: ['account'],
         })),
       ];
-  /** Communities pay through a fund: what online costs a month, and how money goes in */
-  const monthly = options.fundMonthly ?? '4';
+  /** Communities pay through a fund: what online costs a month for each GB, and how money goes in */
+  const perGb = options.fundPerGb ?? '0.10';
   const markup = options.botMarkup ?? 1.5;
   const fundOffer =
     !options.free && (billing || wallet)
       ? {
-          monthly,
-          min: '1',
+          perGb,
+          min: options.fundMin ?? '5',
           methods: [...(billing ? (['checkout'] as const) : []), ...(wallet ? (['request'] as const) : [])],
           recurring: !!billing,
           ...(options.manageFunds ? { manage: options.manageFunds } : {}),
@@ -566,7 +570,8 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
       : null;
   const funds = createFunds({
     store: await options.stores('host-funds'),
-    monthly: Number(monthly) * 1e6,
+    perGb: Number(perGb) * 1e6,
+    ...(options.graceDays !== undefined ? { graceDays: options.graceDays } : {}),
     mirror: options.mirror ?? null,
   });
   const ids = (options.connectors ?? []).map((one) => one.id);
@@ -656,7 +661,7 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
     if (options.free) return Promise.resolve();
     // One at a time: a timer's refresh read before a payment must not write its date after it.
     const next = refreshing.then(async () => {
-      const state = await funds.settle(id, rooms.get(id));
+      const state = await funds.settle(id, spaceBytes.get(id));
       const until = funds.until(state);
       // An empty fund never moves its date later: its grace runs from when it ran out, or never starts.
       const was = (await node.get(id))?.paidUntil ?? 0;

@@ -237,7 +237,8 @@ export function ChipIn({
   const amount = preset === 'other' ? other.trim() : preset;
   const valid = /^\d{1,5}(\.\d{1,2})?$/.test(amount) && Number(amount) >= Number(fund.min);
   // At the rate it spends now: keeping it online, and its bots as they have been spending.
-  const daily = rate?.daily && rate.daily > 0 ? rate.daily : (Number(fund.monthly) * 1e6) / 30;
+  // Unknown, a space pays for one GB, the least it does.
+  const daily = rate?.daily && rate.daily > 0 ? rate.daily : (Number(fund.perGb) * 1e6) / 30;
   const months = valid ? (Number(amount) * 1e6) / daily / 30 : 0;
   const bots = rate?.bots ?? [];
 

@@ -34,7 +34,14 @@ import {
 } from '../../core/src/session/hosting.js';
 import { addressOf, startHost } from '../src/host.js';
 import { createStripeBilling, verifyStripeSignature } from '../src/stripe.js';
-import { allowList, botsFromEnv, checkExposure, limitsFromEnv, walletFromEnv } from '../src/host-setup.js';
+import {
+  allowList,
+  botsFromEnv,
+  checkExposure,
+  fundFromEnv,
+  limitsFromEnv,
+  walletFromEnv,
+} from '../src/host-setup.js';
 import { createWalletPayments, NETWORKS, toUnits } from '../src/wallet.js';
 import { createMemoryBlobStore } from '../../core/src/storage/blob/memory.js';
 import { createFakeHub, type FakeHub } from '../../core/tests/helpers/fake-transport.js';
@@ -878,8 +885,8 @@ describe('bots a host runs', () => {
     const info = await describeHost(url);
     assert.equal(info.bots, true);
     assert.deepEqual(info.fund, {
-      monthly: '4',
-      min: '1',
+      perGb: '0.10',
+      min: '5',
       methods: ['request'],
       recurring: false,
       botDailyCap: '1.50',
@@ -908,11 +915,11 @@ describe('bots a host runs', () => {
     const [view] = await laptop.hosting.space(space);
     assert.ok((view?.status?.balance ?? 0) > 9_990_000, 'what was paid is in the fund');
     assert.ok(
-      Math.abs((view?.status?.daily ?? 0) - 4e6 / 30) < 1000,
-      'spent at the monthly rate, a day at a time',
+      Math.abs((view?.status?.daily ?? 0) - 0.1e6 / 30) < 100,
+      'spent at the rate for a GB, the least a space pays for, a day at a time',
     );
     const lasts = ((view?.status?.paidUntil ?? 0) - nowSeconds()) / 86_400;
-    assert.ok(lasts > 74 && lasts < 76, `$10 at $4 a month lasts about 75 days, not ${lasts}`);
+    assert.ok(lasts > 2990 && lasts < 3010, `$10 at $0.10 a month lasts about 3000 days, not ${lasts}`);
 
     const bot = await laptop.hosting.startBot(space, url, { name: 'Club Bot' });
     await until(
@@ -938,7 +945,7 @@ describe('bots a host runs', () => {
     const url = `http://127.0.0.1:${served.port}`;
     const info = await describeHost(url);
     assert.equal(info.bots, undefined);
-    assert.equal(info.fund?.monthly, '4');
+    assert.equal(info.fund?.perGb, '0.10');
     const response = await fetch(`${url}/host/bots`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1902,8 +1909,8 @@ describe('a space paying for itself', () => {
     assert.equal(before?.status?.state, 'none');
     assert.equal(before?.status?.carrying, false);
     assert.deepEqual(before?.fund, {
-      monthly: '4',
-      min: '1',
+      perGb: '0.10',
+      min: '5',
       methods: ['checkout'],
       recurring: true,
       manage: 'https://billing.stripe.test/p/login',
@@ -1921,7 +1928,7 @@ describe('a space paying for itself', () => {
     });
     await assert.rejects(
       laptop.hosting.payForSpace(space, url, { amount: '0.50', method: 'checkout' }),
-      /at least 1/,
+      /at least 5/,
     );
     await assert.rejects(
       laptop.hosting.payForSpace(space, url, { amount: '5', method: 'request' }),
@@ -1987,7 +1994,7 @@ describe('a space paying for itself', () => {
     assert.ok(Math.abs((await balance()) - 17_500_000) < 1000, 'the monthly one too, once');
     const paidUntil = (await client.status(space)).status.paidUntil;
     const days = (paidUntil - nowSeconds()) / 86_400;
-    assert.ok(days > 129 && days < 132, `$17.50 at $4 a month lasts about 131 days, not ${days}`);
+    assert.ok(days > 5240 && days < 5260, `$17.50 at $0.10 a month lasts about 5250 days, not ${days}`);
 
     const [after] = await laptop.hosting.space(space);
     assert.equal(after?.status?.carrying, true);
@@ -2037,7 +2044,7 @@ describe('a host with limits', () => {
     paidAccountBytes: 10_000_000_000,
     space: { writers: 10, bytes: 500_000_000, windowDays: 30, readers: 50 },
     graceDays: 30,
-    keepDays: 90,
+    keepDays: 30,
     idleDays: 180,
   };
 
@@ -2219,6 +2226,16 @@ describe('a host with limits', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     assert.equal(await carries(served.node, late.id)(), false, 'no room for another');
     assert.equal(await carries(served.node, first.id)(), true);
+  });
+
+  test('from the env: a fund’s rate for a GB and its least payment, checked', () => {
+    assert.deepEqual(fundFromEnv({}), {});
+    assert.deepEqual(fundFromEnv({ MINCA_FUND_PER_GB: '0.05', MINCA_FUND_MIN: '10' }), {
+      fundPerGb: '0.05',
+      fundMin: '10',
+    });
+    assert.throws(() => fundFromEnv({ MINCA_FUND_PER_GB: '4 dollars' }), /MINCA_FUND_PER_GB/);
+    assert.throws(() => fundFromEnv({ MINCA_FUND_MIN: '-1' }), /MINCA_FUND_MIN/);
   });
 
   test('from the env: MINCA_HOST_FREE_GB turns limits on, with the rest at their defaults; never with MINCA_HOST_FREE', () => {

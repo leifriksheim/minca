@@ -138,12 +138,16 @@ reference implementation, or any implementation, honestly.
     member's; the host then holds back each such member's largest spaces,
     which may be their own rather than the shared one, and keeps carrying a
     held space for any member with room. A writer also drains a community's
-    fund as fast as they make its space grow. Still open
-    ([#289](https://github.com/leifriksheim/minca/issues/289)): a fund's
-    grace is free and has no size limit, so a little money each month keeps
-    any size carried; an account with two subscriptions on one carry space
-    is held and refused by the smaller room; and a refusal stays even after
-    the account pays.
+    fund as fast as they make its space grow. A fund's grace is lent: it
+    goes below zero through it, by its size, and the next payment pays that
+    first, so a little money now and then keeps nothing carried
+    (`packages/cli/tests/fund.test.ts`, "its grace is lent…"). Whoever pays
+    into a fund nobody else has can so leave its community owing a grace's
+    worth should it fund itself later; accepted, as it is at most what that
+    grace kept online. Still open
+    ([#289](https://github.com/leifriksheim/minca/issues/289)): an account
+    with two subscriptions on one carry space is held and refused by the
+    smaller room; and a refusal stays even after the account pays.
     Accepted otherwise: it is the host's cost.
   - Anyone holding an invite link that is still open can push a community
     over a host's free line by joining more accounts and writing from them,

@@ -17,7 +17,7 @@ async function setUp(mirror = createMemoryBlobStore()) {
   let clock = START;
   const funds = createFunds({
     store: await memoryStores()('funds'),
-    monthly: 4e6,
+    perGb: 4e6,
     mirror,
     now: () => clock,
   });
@@ -25,7 +25,7 @@ async function setUp(mirror = createMemoryBlobStore()) {
 }
 
 describe('a community fund', () => {
-  test('keeping the space online takes the monthly rate by the second, and the estimate follows', async () => {
+  test('keeping a small space online takes the rate for one GB by the second, and the estimate follows', async () => {
     const t = await setUp();
     let state = await t.funds.add('space:club', 12e6);
     assert.equal(state.balance, 12e6);
@@ -40,14 +40,18 @@ describe('a community fund', () => {
     assert.ok(Math.abs(state.balance - 15e6) < 10);
   });
 
-  test('a space that takes three rooms pays three times the rate, from when it was measured so', async () => {
+  test('a space pays for each GB it takes, from when it was measured so; less than one pays for one', async () => {
     const t = await setUp();
     let state = await t.funds.add('space:club', 12e6);
-    state = await t.funds.settle('space:club', 3);
+    state = await t.funds.settle('space:club', 3e9);
     assert.ok(Math.abs(t.funds.daily(state) - (3 * 4e6) / 30) < 1);
     t.pass(10);
-    state = await t.funds.settle('space:club', 3);
+    state = await t.funds.settle('space:club', 3e9);
     assert.ok(Math.abs(state.balance - 8e6) < 10, 'ten days at $12 a month: $4 taken');
+    state = await t.funds.settle('space:club', 1.5e9);
+    assert.ok(Math.abs(t.funds.daily(state) - (1.5 * 4e6) / 30) < 1, 'by the byte, not rounded up');
+    state = await t.funds.settle('space:club', 2e6);
+    assert.ok(Math.abs(t.funds.daily(state) - 4e6 / 30) < 1, 'a small space pays for one GB');
   });
 
   test('bots take what they spend; a busy week brings the date nearer', async () => {
@@ -82,16 +86,34 @@ describe('a community fund', () => {
     );
   });
 
-  test('an empty fund stays empty until paid into, and says when it ran out', async () => {
+  test('its grace is lent: the fund goes below zero by a grace at most, and the next payment pays that first', async () => {
     const t = await setUp();
-    await t.funds.add('space:club', 1e6);
-    t.pass(10);
+    await t.funds.add('space:club', 4e6);
+    t.pass(30);
+    let state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance) < 10, 'a month at $4: empty');
+    const ranOut = t.now();
+    t.pass(15);
+    state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 2e6) < 10, 'half its grace: $2 owed');
+    assert.ok(Math.abs(t.funds.until(state) - ranOut) < 2, 'and it says when it ran out');
+    t.pass(60);
+    state = await t.funds.settle('space:club');
+    assert.ok(Math.abs(state.balance + 4e6) < 10, 'a whole grace owed, no more');
+    // A small payment pays what is owed first: it buys no grace of its own.
+    state = await t.funds.add('space:club', 1e6);
+    assert.ok(state.balance < 0);
+    state = await t.funds.add('space:club', 5e6);
+    assert.ok(Math.abs(state.balance - 2e6) < 10, '$6 in, $4 owed: $2 left');
+  });
+
+  test('a fund nobody paid into owes nothing', async () => {
+    const t = await setUp();
+    await t.funds.settle('space:club', 5e9);
+    t.pass(20);
     const state = await t.funds.settle('space:club');
-    assert.equal(state.balance, 0, 'nothing is owed below zero');
-    assert.equal(t.funds.until(state), t.now(), 'ran out now, as far as it knows');
-    // A bot's last call may take it just below zero; paying in starts from zero again.
-    await t.funds.charge('space:club', 50_000);
-    assert.equal((await t.funds.add('space:club', 2e6)).balance, 2e6);
+    assert.equal(state.balance, 0);
+    assert.equal((await t.funds.add('space:club', 5e6)).balance, 5e6);
   });
 
   test('a fund comes back from the bucket when the disk is lost', async () => {
@@ -99,7 +121,7 @@ describe('a community fund', () => {
     await t.funds.add('space:club', 7e6);
     const again = createFunds({
       store: await memoryStores()('funds'),
-      monthly: 4e6,
+      perGb: 4e6,
       mirror: t.mirror,
       now: t.now,
     });

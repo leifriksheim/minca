@@ -270,14 +270,14 @@ person can compare hosts before choosing one.
 
 **Description.** `limits`:
 
-| Field              | Meaning                                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `accountBytes`     | Bytes an account's spaces may take on the free plan: its `quota` while it does not pay.                                                                      |
-| `paidAccountBytes` | Optional: its `quota` while it pays (`paidUntil` ahead). Absent: the same as `accountBytes`.                                                                 |
-| `space`            | The free line for a space several accounts write in: `{ writers, bytes, windowDays, readers? }`, below.                                                      |
-| `graceDays`        | Days a space over the line is still carried for its members' subscriptions before only its own subscription (§2) carries it; and the notice for room (Room). |
-| `keepDays`         | Optional: days the host keeps a space it stopped carrying for being over the line, so a fund started in that time brings it back at once.                    |
-| `idleDays`         | Optional: days a free subscription is kept with no signed call from any of its devices. Absent: kept while the host runs.                                    |
+| Field              | Meaning                                                                                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accountBytes`     | Bytes an account's spaces may take on the free plan: its `quota` while it does not pay.                                                                                      |
+| `paidAccountBytes` | Optional: its `quota` while it pays (`paidUntil` ahead). Absent: the same as `accountBytes`.                                                                                 |
+| `space`            | The free line for a space several accounts write in: `{ writers, bytes, windowDays, readers? }`, below.                                                                      |
+| `graceDays`        | Days a space over the line is still carried for its members' subscriptions before only its own subscription (§2) carries it; and the notice for room (Room).                 |
+| `keepDays`         | Optional: days the host keeps a space it stopped carrying for being over the line, or held back for room (Room), so a fund or room made in that time brings it back at once. |
+| `idleDays`         | Optional: days a free subscription is kept with no signed call from any of its devices. Absent: kept while the host runs.                                                    |
 
 ```json
 {
@@ -286,7 +286,7 @@ person can compare hosts before choosing one.
     "paidAccountBytes": 10000000000,
     "space": { "writers": 10, "bytes": 500000000, "windowDays": 30, "readers": 50 },
     "graceDays": 30,
-    "keepDays": 90,
+    "keepDays": 30,
     "idleDays": 180
   }
 }
@@ -318,8 +318,10 @@ the subscription key's, and goes only after a whole `windowDays` of fitting,
 so neither a new key nor a dip under starts it again. Past `until`, while
 still over, it MUST NOT carry the largest of those spaces for that
 subscription until the rest fit; another subscription with room that names
-one still has it carried. It keeps what it held of them, unserved, while any
-is held. An account over by its carry space alone is carried for no more,
+one still has it carried. It keeps what it held of them, unserved, for
+`keepDays` from when each was first held back, then deletes its copy of one
+no subscription carries; the space is still named and comes back once it
+fits. An account over by its carry space alone is carried for no more,
 under any key, until the host's owner says. Members' devices keep
 everything. A space's own fund pays for its size instead (§2).
 
@@ -486,29 +488,33 @@ id that does not match `^[A-Za-z0-9_-]{1,120}$`.
 **The fund.** One balance, in millionths of a US dollar. Every payment into
 it adds what was paid, whoever pays and however (once, or every month). The
 host takes from it only what it says it will: keeping the space online at its
-`fund.monthly` rate for each paying account's room (`limits.paidAccountBytes`)
-its space takes or part of one (once, at a host without `limits`), for the
-time it does, and what the bots it runs in that
-space spend (§3). The subscription is `active` while the balance is above
-zero, then `grace`, then `lapsed`, as in §1. `paidUntil` is not a date that
-was bought: it is the host's estimate of when the balance reaches zero at
-what the fund spends now, and it MUST move as that changes (sooner as bots
-spend more, later with each payment).
+`fund.perGb` rate for each GB (10⁹ bytes) its space takes, and for one GB if
+it takes less, for the time it does, and what the bots it runs in that space
+spend (§3). The subscription is `active` while the balance is above zero,
+then `grace`, then `lapsed`, as in §1. Through its grace the host goes on
+taking its rate, below zero, for at most its grace period, and only from a
+fund anything was ever added to; a payment pays what is owed first. So grace
+is lent, never given: a payment that leaves the balance at or below zero
+turns nothing back on, and each grace is paid for by the payment after it.
+`paidUntil` is not a date that was bought: it is the
+host's estimate of when the balance reaches zero at what the fund spends
+now, and it MUST move as that changes (sooner as bots spend more, later with
+each payment), but an empty fund's date never moves later.
 
 A host that takes payments for communities says how in its description
 (§1), as `fund`:
 
-| Field         | Meaning                                                                                                  |
-| ------------- | -------------------------------------------------------------------------------------------------------- |
-| `monthly`     | Dollars a month that keeping the space online takes from the fund, for each room it takes: `"4"`.        |
-| `min`         | Dollars: the least one payment may add.                                                                  |
-| `methods`     | How money is added: `checkout` (a page at a payment provider) and/or `request` (a payment for a wallet). |
-| `recurring`   | Whether a `checkout` payment may be every month.                                                         |
-| `manage`      | Optional: the payment provider's page where someone stops paying every month.                            |
-| `botDailyCap` | Optional, when it runs bots: dollars a bot may take from the fund a day at most.                         |
+| Field         | Meaning                                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| `perGb`       | Dollars a month that keeping the space online takes from the fund for each GB it takes, at least one: `"0.10"`. |
+| `min`         | Dollars: the least one payment may add.                                                                         |
+| `methods`     | How money is added: `checkout` (a page at a payment provider) and/or `request` (a payment for a wallet).        |
+| `recurring`   | Whether a `checkout` payment may be every month.                                                                |
+| `manage`      | Optional: the payment provider's page where someone stops paying every month.                                   |
+| `botDailyCap` | Optional, when it runs bots: dollars a bot may take from the fund a day at most.                                |
 
 ```json
-{ "monthly": "4", "min": "1", "methods": ["checkout", "request"], "recurring": true, "botDailyCap": "1.50" }
+{ "perGb": "0.10", "min": "5", "methods": ["checkout", "request"], "recurring": true, "botDailyCap": "1.50" }
 ```
 
 **Calls.** No `Authorization`.
@@ -537,7 +543,7 @@ For a space's own subscription, `HostStatus` also has:
 | Field     | Meaning                                                                                                                                                                                                                          |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `readKey` | For a private space it carries: the read key it carries it with, as a DID. Absent otherwise.                                                                                                                                     |
-| `balance` | What is in the fund, in millionths of a dollar. Absent on a free host.                                                                                                                                                           |
+| `balance` | What is in the fund, in millionths of a dollar; below zero by what its grace (and a bot's last call) took, which the next payment pays first. Absent on a free host.                                                             |
 | `daily`   | What the fund spends a day as things go, in millionths of a dollar: the hosting rate and its bots'.                                                                                                                              |
 | `bots`    | The bots it runs in the space (§3): `[{ "bot": "<DID>", "name": "<name>", "running": true, "daily": 65000 }]`, `daily` what each took from the fund a day over the last week, in millionths of a dollar (absent on a free host). |
 
@@ -767,10 +773,8 @@ _Source: `packages/cli/src/host-connect.ts` (`createBotConnect`: `start`, `finis
 >
 > **Metering beyond storage.** A host that meters requests and bandwidth per
 > subscription says so in `HostStatus` as it says `bytes`. Open: the fields,
-> and what bounds a fund through its grace, and an account with several
-> subscriptions or refused for good ([#289](https://github.com/leifriksheim/minca/issues/289)),
-> and whether a fund's rate should follow a space's size rather than buy a
-> fixed room.
+> and an account with several subscriptions or refused for good
+> ([#289](https://github.com/leifriksheim/minca/issues/289)).
 >
 > **A reminder before time runs out.** Time paid up front does not renew
 > itself (`renews: false`), so the host reminds the person 14 and 3 days before

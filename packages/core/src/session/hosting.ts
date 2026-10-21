@@ -340,8 +340,8 @@ export function connectorOffers(described: unknown): ReadonlyArray<HostConnector
 
 /** What a host says about community funds: what keeping one online costs, and how people add to it */
 export interface FundOffer {
-  /** What keeping a space online takes from its fund a month, in dollars: `"4"` */
-  readonly monthly: string;
+  /** What keeping a space online takes from its fund a month for each GB it takes, at least one, in dollars: `"0.10"` */
+  readonly perGb: string;
   /** The least one payment may add, in dollars */
   readonly min: string;
   /** How money is added: at a payment provider, or as a request for a wallet */

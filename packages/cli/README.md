@@ -196,9 +196,12 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
 - **Communities pay through a fund.** A community names the host in its
   space (`std.host`), and anyone in it adds to its fund from the app, any
   amount, by card or wallet, once or (by card) every month, with no sign-in at
-  the host. Keeping the space online takes `MINCA_FUND_MONTHLY` dollars a
-  month from it (default the wallet's monthly price, or 4), by the second, and
-  its bots take what they spend. Every status says what is in it, what it
+  the host, at least `MINCA_FUND_MIN` dollars at a time (default 5). Keeping
+  the space online takes `MINCA_FUND_PER_GB` dollars a month (default 0.10)
+  for each GB the space takes, at least one, by the second, and its bots take
+  what they spend. Once it runs out the host carries it on through its grace
+  and the fund goes below zero by that: the next payment pays for the grace
+  first. Every status says what is in it, what it
   spends a day, and when it will run out at that rate. Card payments need no
   prices in Stripe: the amount goes in the Checkout session. For those who add
   every month, set `STRIPE_PORTAL_LINK` to Stripe's no-code customer portal
@@ -217,7 +220,7 @@ minca host --host 0.0.0.0 --port 8787 --data /var/lib/minca-host
   `MINCA_HOST_SPACE_MB` (500) over `MINCA_HOST_WINDOW_DAYS` (30);
   `MINCA_HOST_SPACE_READERS` (50) is only shown, never enforced. Past the
   line it is carried for `MINCA_HOST_GRACE_DAYS` (30) more, then only its own
-  fund carries it; the host keeps what it had for `MINCA_HOST_KEEP_DAYS` (90)
+  fund carries it; the host keeps what it had for `MINCA_HOST_KEEP_DAYS` (30)
   so a fund brings it straight back. A free subscription none of whose
   devices called for `MINCA_HOST_IDLE_DAYS` (180) is dropped. One address may
   make `MINCA_HOST_NEW_PER_DAY` subscriptions a day (5), an IPv6 /64 counting
