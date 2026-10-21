@@ -861,7 +861,7 @@ person to pause or remove ([sign-in](sign-in.md#the-account-homes-side)).
 **A carrier's matches.** `CarrierNode` reports a version that wakes one of
 the account's wakes through a `wake` event, with only the wake, the space and
 the record's key, collection and `createdAt`; `wakes()` lists the wakes it
-holds. Nothing shows these yet, the browser extension included.
+holds. The desktop app shows them as notifications (`apps/desktop/src/bun/notify.ts`); the browser extension shows none yet.
 
 **Hosting.** `node.hosting`:
 

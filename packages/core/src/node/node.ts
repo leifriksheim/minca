@@ -127,7 +127,6 @@ import {
   subscriptionKey,
   type HostClient,
   type HostDescription,
-  type HostPlan,
   type HostStatus,
   type OverSpace,
   type Hosting,
@@ -585,14 +584,11 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (!accountSpaceId || narrowNote) return;
     const open = await runtime(accountSpaceId);
     const known = await open.get<Membership>(membershipKey(spaceId));
+    if (known && (!options.refresh || known.deleted)) return;
     // A view-only invite: what lets the account write is its role in the
     // space, which every device reads there. Invite secrets are never kept.
     const invite = await inviteTo(spaceId);
-    if (
-      known &&
-      (!options.refresh || known.deleted || inviteKeyOf(known.body?.invite) === inviteKeyOf(invite))
-    )
-      return;
+    if (known && inviteKeyOf(known.body?.invite) === inviteKeyOf(invite)) return;
     await open.upsertSystem<Membership>(MEMBERSHIP_COLLECTION, membershipKey(spaceId), {
       space: spaceId,
       invite,
@@ -848,7 +844,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       );
     });
 
-  /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
   /** Writing in carry spaces, one thing at a time: a removal never lands in the middle of a refill */
   let carryTurn: Promise<unknown> = Promise.resolve();
   const inCarryTurn = <T>(work: () => Promise<T>): Promise<T> => {
@@ -857,6 +852,7 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     return run;
   };
 
+  /** Every carrier the account uses gets its passes and wakes as they are now, one run at a time */
   const passAll = serial(() =>
     inCarryTurn(async () => {
       for (const carrier of await liveCarriers()) {
@@ -1296,7 +1292,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
         name: description.name,
         status,
         live: true,
-        plans: plansFor(description, 'account'),
+        // The plans for an account's subscription, not a space's own.
+        plans: (description.plans ?? []).filter(
+          (plan) => Array.isArray(plan.for) && plan.for.includes('account'),
+        ),
         reminds: description.remind === true,
       };
     } catch (error) {
@@ -1311,10 +1310,6 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       };
     }
   }
-
-  /** The plans a host describes for an account's subscription, or a space's own */
-  const plansFor = (description: HostDescription, who: 'account'): ReadonlyArray<HostPlan> =>
-    (description.plans ?? []).filter((plan) => Array.isArray(plan.for) && plan.for.includes(who));
 
   /** Every device keeps its hosts carrying: after the registry changes, ask each once more */
   async function keepHosted(): Promise<void> {
