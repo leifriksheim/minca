@@ -42,6 +42,7 @@ import {
   grantSigner,
   joinGranted,
   nodeOptionsFromGrant,
+  watchGrant,
   type ConnectRequest,
   type Grant,
 } from '@minca/core/session';
@@ -294,7 +295,6 @@ export async function runAppNode(options: {
   let attached = false;
   let stopServing: (() => void) | null = null;
   let stopWatching: (() => void) | null = null;
-  let expiry: ReturnType<typeof setTimeout> | null = null;
   /** Counts connections asked for, and disconnections: an answer to one that was superseded is dropped */
   let generation = 0;
   const portListeners = new Set<(event: MessageEvent) => void>();
@@ -330,23 +330,6 @@ export async function runAppNode(options: {
     stopServing = serveNode(Object.freeze({ ...node, close: async () => {} }), port);
   }
 
-  function watchExpiry(): void {
-    if (expiry) clearTimeout(expiry);
-    if (!grant) return;
-    const left = grant.expiresAt * 1000 - Date.now();
-    expiry = setTimeout(
-      () => {
-        if (grant && grantExpired(grant)) {
-          // Nothing runs on a note that ran out: no automations, no syncing.
-          status = 'expired';
-          serve();
-          void stop().then(say);
-        } else watchExpiry();
-      },
-      Math.min(Math.max(left, 0), 2 ** 31 - 1),
-    );
-  }
-
   /** Stops the node, and what runs on it: the window's view and the automations */
   async function stop(): Promise<void> {
     stopWatching?.();
@@ -375,10 +358,16 @@ export async function runAppNode(options: {
     await mkdir(mine, { recursive: true, mode: 0o700 });
     const started = await start({ grant: next, key, stores: mine, seal, signer, network });
     node = started;
-    started.subscribe((event) => {
-      if (event.type === 'revoked' && node === started) void end('Your account home disconnected this app.');
+    const unwatch = watchGrant(started, next, {
+      // Nothing runs on a note that ran out: no automations, no syncing.
+      onExpired: () => {
+        status = 'expired';
+        serve();
+        void stop().then(say);
+      },
+      onRevoked: () => node === started && void end('Your account home disconnected this app.'),
     });
-    stopWatching = watchNotifications(started, {
+    const stopNotifying = watchNotifications(started, {
       origin,
       onNotify: ({ automation, record }) =>
         void started.spaces
@@ -394,9 +383,12 @@ export async function runAppNode(options: {
           .catch(() => {}),
       onError: (problem) => log(`notifications: ${messageOf(problem)}`),
     });
+    stopWatching = () => {
+      unwatch();
+      stopNotifying();
+    };
     status = 'ready';
     error = null;
-    watchExpiry();
     serve();
     say();
   }
@@ -408,7 +400,6 @@ export async function runAppNode(options: {
    */
   async function end(why: string | null): Promise<void> {
     generation += 1;
-    if (expiry) clearTimeout(expiry);
     await stop();
     grant = null;
     request = null;
@@ -420,12 +411,6 @@ export async function runAppNode(options: {
     const fresh = await appNodeKey(folder, seal);
     if (fresh) key = fresh;
     say();
-  }
-
-  /** The shell has gone: stop, and keep everything for next time */
-  async function shutdown(): Promise<void> {
-    if (expiry) clearTimeout(expiry);
-    await stop();
   }
 
   // The home's window while connecting, as a page would see its popup.
@@ -552,7 +537,7 @@ export async function runAppNode(options: {
     if (next.done) break;
     handle(next.value);
   }
-  await shutdown();
+  await stop();
   await release();
 }
 

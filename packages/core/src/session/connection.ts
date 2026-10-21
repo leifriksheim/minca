@@ -31,6 +31,7 @@ import {
   grantStore,
   proposeToHome,
   startConnectedNode,
+  watchGrant,
   type ConnectRequest,
   type Grant,
   type Proposed,
@@ -117,12 +118,10 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
   };
 
   let started: Promise<void> | null = null;
-  let expiry: ReturnType<typeof setTimeout> | null = null;
   let unwatch: (() => void) | null = null;
 
   /** Forgets the grant and this app's key, and stops the node */
   async function end(error: string | null): Promise<void> {
-    if (expiry) globalThis.clearTimeout(expiry);
     unwatch?.();
     unwatch = null;
     grants.forget();
@@ -154,16 +153,12 @@ export function createMincaConnection(config: MincaConnectionConfig): MincaConne
       : await start();
     update({ status: 'ready', home: grant.home, grant, node, error: null });
 
-    // The home disconnected this app: nothing it writes counts any more, so stop.
-    unwatch = node.subscribe((event) => {
-      if (event.type === 'revoked' && state.node === node)
-        void end('Your account home disconnected this app.');
+    unwatch = watchGrant(node, grant, {
+      // Writes stop working when the note runs out; say so rather than fail quietly.
+      onExpired: () => update({ status: 'expired' }),
+      // The home disconnected this app: nothing it writes counts any more, so stop.
+      onRevoked: () => state.node === node && void end('Your account home disconnected this app.'),
     });
-
-    // Writes stop working when the note runs out; say so rather than fail quietly.
-    if (expiry) globalThis.clearTimeout(expiry);
-    const left = grant.expiresAt * 1000 - Date.now();
-    expiry = globalThis.setTimeout(() => update({ status: 'expired' }), Math.min(left, 2 ** 31 - 1));
   }
 
   const connection: MincaConnection = {

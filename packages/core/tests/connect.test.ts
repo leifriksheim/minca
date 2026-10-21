@@ -9,6 +9,7 @@ import { createMincaAuth, type MincaAuth } from '../src/session/auth.js';
 import {
   homeAddress,
   startConnectedNode,
+  watchGrant,
   type AppKey,
   type ConnectRequest,
   type Grant,
@@ -17,7 +18,7 @@ import {
 import { createFolderAccountStore } from '../src/identity/account-store.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
-import type { P2PNode } from '../src/node/types.js';
+import type { NodeEvent, P2PNode } from '../src/node/types.js';
 import { createMemoryDirectory } from './helpers/memory-directory.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { createFakeHub, type FakeHub } from './helpers/fake-transport.js';
@@ -759,6 +760,45 @@ describe('an account home typed by a person', () => {
       spaceIds: [],
     });
     assert.deepEqual(grant.relays, ['wss://relay.of-the-home.test']);
+  });
+});
+
+describe('watching a grant', () => {
+  test('a note that runs longer than a timer waits is said to run out only once it has', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+    const day = 24 * 3600;
+    let expired = 0;
+    const stop = watchGrant(
+      { subscribe: () => () => {} },
+      { expiresAt: 30 * day },
+      {
+        onExpired: () => (expired += 1),
+      },
+    );
+    t.mock.timers.tick(29 * day * 1000);
+    assert.equal(expired, 0, 'not after 24 days, when the longest timer fires');
+    t.mock.timers.tick(day * 1000);
+    assert.equal(expired, 1);
+    stop();
+  });
+
+  test('a revoked key is told for each space, and not once it stops watching', () => {
+    const listeners = new Set<(event: NodeEvent) => void>();
+    const node = {
+      subscribe: (listener: (event: NodeEvent) => void) => {
+        listeners.add(listener);
+        return () => void listeners.delete(listener);
+      },
+    };
+    const emit = (event: NodeEvent) => listeners.forEach((listener) => listener(event));
+    const revoked: string[] = [];
+    const stop = watchGrant(node, { expiresAt: 0 }, { onRevoked: (space) => revoked.push(space) });
+    emit({ type: 'revoked', space: 'one' });
+    emit({ type: 'records', space: 'two' });
+    emit({ type: 'revoked', space: 'three' });
+    stop();
+    assert.equal(listeners.size, 0);
+    assert.deepEqual(revoked, ['one', 'three']);
   });
 });
 

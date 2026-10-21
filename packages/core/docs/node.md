@@ -801,7 +801,7 @@ is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
 node started within 30 s (`WorkerNotStarted`), is given up on and the node
 runs in the page. A worker that started and refused passes its reason on. It keeps the grant in `localStorage` under
 `minca.grant` and the person's chosen home under `minca.home` (`home` in the
-config is only a default). It switches to `expired` at `expiresAt` and does not
+config is only a default). It switches to `expired` at `expiresAt` (`watchGrant`) and does not
 load an expired grant from storage, nor one of another format (`v` other
 than `GRANT_VERSION`, 2; `usableGrant`): the person connects again. When the node sees its own note revoked in
 a space it emits `revoked` ([events](#events)), and the connection forgets the
@@ -821,7 +821,7 @@ held the first time an automation made it look there; anything arriving after th
 is, even while the account or the list of spaces changes. How the app shows a match is its own
 to decide; a "Notify me" button is where a proposal usually starts.
 
-_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`, `usableGrant`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
+_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`, `usableGrant`, `watchGrant`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "watching a grant", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
 
 ## Carriers, hosting and notifications
 

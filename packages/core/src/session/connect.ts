@@ -609,7 +609,34 @@ export function grantSigner(grant: Grant | (() => Grant | null)): RootSigner {
 }
 
 /** Whether a grant's note has run out */
-export const grantExpired = (grant: Grant): boolean => grant.expiresAt <= Math.floor(Date.now() / 1000);
+export const grantExpired = (grant: Pick<Grant, 'expiresAt'>): boolean =>
+  grant.expiresAt <= Math.floor(Date.now() / 1000);
+
+/**
+ * Watches a node started under a grant: `onExpired` once its note runs out,
+ * `onRevoked` for each space where the home revoked its key.
+ * @returns How to stop watching
+ */
+export function watchGrant(
+  node: Pick<P2PNode, 'subscribe'>,
+  grant: Pick<Grant, 'expiresAt'>,
+  on: { readonly onExpired?: () => void; readonly onRevoked?: (space: string) => void },
+): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // A timer waits at most 2^31 − 1 ms, some 24 days: a note that runs longer is looked at again then.
+  const arm = () => {
+    const left = Math.min(Math.max(grant.expiresAt * 1000 - Date.now(), 0), 2 ** 31 - 1);
+    timer = globalThis.setTimeout(() => (grantExpired(grant) ? on.onExpired?.() : arm()), left);
+  };
+  if (on.onExpired) arm();
+  const unsubscribe = node.subscribe((event) => {
+    if (event.type === 'revoked') on.onRevoked?.(event.space);
+  });
+  return () => {
+    globalThis.clearTimeout(timer);
+    unsubscribe();
+  };
+}
 
 /** Whether a kept grant still works: one kept in an older format holds a note no peer reads now */
 export const usableGrant = (grant: Grant | null): boolean =>

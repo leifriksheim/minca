@@ -47,6 +47,7 @@ export {
   grantSigner,
   grantExpired,
   usableGrant,
+  watchGrant,
   grantStore,
   grantTerms,
   GRANT_VERSION,
