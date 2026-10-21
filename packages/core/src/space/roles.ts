@@ -587,11 +587,8 @@ function anyMaySucceed(state: AccessState): boolean {
 }
 
 /**
- * Why a change is not allowed in a state, or null when it is: its author
- * held a grant for its command with these arguments, or it is one of the
- * few things anyone may do for themselves (leave a role, leave the space,
- * step down as a founder), or it names a successor where no one holds
- * `/space/succeed`.
+ * Why a change is not allowed in a state, or null: its author holds the grant, or it is one of the
+ * few things anyone may do for themselves, or it names a successor where no one holds the grant.
  */
 export function refusal(event: AccessEvent, state: AccessState): string | null {
   const root = event.root;
@@ -700,33 +697,26 @@ export function refusal(event: AccessEvent, state: AccessState): string | null {
   }
 }
 
-/** What a reduction reaches */
 type Reach =
-  /** Everything an account did: a removal, an unassignment, a stepping down */
   | { readonly kind: 'account'; readonly root: string }
-  /** What one key signed for its account: a revoke */
   | { readonly kind: 'key'; readonly root: string; readonly key: string }
-  /** One key's line for one collection, from a place on: a fork proof */
   | { readonly kind: 'line'; readonly key: string; readonly collection: string; readonly from: number }
-  /** Joins through an invite: closing it */
   | { readonly kind: 'invite'; readonly invite: string };
 
 /**
- * A change that takes from others. A revoke or a fork proof reaches its
- * key's changes whatever either saw, and is never struck; any other reaches
- * only what it had not seen and what had not seen it.
+ * A change that takes from others. A revoke or a fork proof reaches its key's changes whatever
+ * either saw, and is never struck; any other reaches only what it had not seen and what had not seen it.
  */
 interface Reduction {
   readonly id: string;
   readonly reach: Reach;
-  /** What it leaves standing: a key's versions in a collection at or below a place */
   readonly cutoff: Cutoff;
 }
 
 /** The lowest fork proof of a line */
 type Fork = Reduction & { readonly reach: Extract<Reach, { readonly kind: 'line' }> };
 
-/** What a reduction may reach: a change, or a record judged against the history, by the key that signed it */
+/** A change, or a record judged against the history */
 interface Subject {
   readonly root: string;
   readonly writer?: string;
@@ -741,12 +731,7 @@ const NO_CUTOFF: Cutoff = new Map();
 const reachesBack = (reduction: Reduction) =>
   reduction.reach.kind === 'key' || reduction.reach.kind === 'line';
 
-/**
- * What a change takes, in its own view: a removal of a member, an
- * unassignment of a role the account holds (its own leaving included), a
- * founder stepping down, a revoke, a fork proof or a closed invite. Null when
- * it takes nothing: it is no reduction.
- */
+/** What a change takes, in its own view: null when it takes nothing, and is no reduction */
 function reductionOf(event: AccessEvent, view: AccessState): Reduction | null {
   const of = (reach: Reach, cutoff = event.cutoff): Reduction => ({ id: event.id, reach, cutoff });
   const account = (holds: boolean, did: string) => (holds ? of({ kind: 'account', root: did }) : null);
@@ -875,10 +860,10 @@ function change(event: AccessEvent, state: MutableState, view: AccessState): voi
         state.definitions.delete(event.name);
         return;
       }
-      const existing = state.definitions.get(event.name);
+      const definedBy = state.definitions.get(event.name)?.definedBy;
       state.definitions.set(event.name, {
         event: event.id,
-        definedBy: existing ? existing.definedBy : event.root,
+        definedBy: definedBy !== undefined ? definedBy : event.root,
       });
       return;
     }
@@ -909,15 +894,12 @@ function change(event: AccessEvent, state: MutableState, view: AccessState): voi
 const lineOf = (writer: string, collection: string) => `${writer}\n${collection}`;
 
 /**
- * The changes one change saw, directly or not: every change placed before
- * `prefix`, and those in `extra`, by their place in the replay. Changes are
- * placed after everything they saw, so without much concurrency `extra`
- * stays empty and this is one number, where a set of ids would grow with the
- * history.
+ * The changes one change saw, directly or not: every change placed before `prefix`, and those in
+ * `extra`, by their place in the replay. Changes are placed after everything they saw, so this is
+ * mostly one number, where a set of ids would grow with the history.
  */
 interface Seen extends Iterable<string> {
   has(id: string): boolean;
-  readonly size: number;
   readonly prefix: number;
   readonly extra: ReadonlySet<number>;
   /** A change's own place in the replay */
@@ -929,31 +911,22 @@ const parentsOf = (event: AccessEvent, genesisId: string) => [
   ...new Set(event.seen.filter((parent) => parent !== genesisId)),
 ];
 
-/** What a change saw, from what its parents saw: the prefix of the replay, and the places past it */
-function seenFrom(
+/** What a change saw, from what its parents saw, placed by `order` and `index` */
+function seenOf(
   parents: ReadonlyArray<string>,
   saw: ReadonlyMap<string, Seen>,
+  order: ReadonlyArray<string>,
   index: ReadonlyMap<string, number>,
-): { readonly prefix: number; readonly extra: Set<number> } {
+): Seen {
   let prefix = 0;
   for (const parent of parents) prefix = Math.max(prefix, saw.get(parent)!.prefix);
   const extra = new Set<number>();
   for (const parent of parents)
     for (const n of [...saw.get(parent)!.extra, index.get(parent)!]) if (n >= prefix) extra.add(n);
   while (extra.delete(prefix)) prefix++;
-  return { prefix, extra };
-}
-
-function seenOf(
-  prefix: number,
-  extra: ReadonlySet<number>,
-  order: ReadonlyArray<string>,
-  index: ReadonlyMap<string, number>,
-): Seen {
   return {
     prefix,
     extra,
-    size: prefix + extra.size,
     placeOf: (id: string) => index.get(id),
     has(id: string) {
       const i = index.get(id);
@@ -970,7 +943,7 @@ interface Replay {
   readonly genesis: AccessGenesis;
   readonly byId: ReadonlyMap<string, AccessEvent>;
   readonly waiting: ReadonlySet<string>;
-  /** Placeable changes, ancestors first; ties by id. Only gives `status` an index. */
+  /** Placeable changes, ancestors first; ties by id */
   readonly order: ReadonlyArray<string>;
   /** Every change each placeable change saw, directly or not */
   readonly saw: ReadonlyMap<string, Seen>;
@@ -1002,13 +975,7 @@ interface Replay {
 const byId = (a: { readonly id: string }, b: { readonly id: string }) =>
   a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 
-/**
- * The state a set of changes gives, merged: no order, only what saw what.
- * Rival definitions of a role all stand, and hold what they share; an
- * unassignment beats an assignment; an assignment counts only if it saw every
- * removal of its account; a closed invite beats an open one, and open ones
- * for different roles close it.
- */
+/** The state a set of changes gives, merged: no order, only what saw what (spec 03 §4.4) */
 function merge(
   genesis: AccessGenesis,
   events: ReadonlyArray<AccessEvent>,
@@ -1022,10 +989,7 @@ function merge(
     if (event.kind === 'revoke' || event.kind === 'fork') continue;
     (byKey.get(event.key) ?? byKey.set(event.key, []).get(event.key)!).push(event);
   }
-  /**
-   * The latest on a key: those no other on it saw. One pass: a change was seen by another if its
-   * place is below that one's prefix, or among its exceptions.
-   */
+  // The latest on a key, those no other on it saw, in one pass: below another's prefix, or among its exceptions.
   const latest = (group: ReadonlyArray<AccessEvent>) => {
     if (group.length <= 1) return group;
     let top = -1;
@@ -1255,11 +1219,7 @@ function firstsOf(
   return life.filter((event) => !life.some((other) => other !== event && saw.get(event.id)?.has(other.id)));
 }
 
-/**
- * The strongly connected components of a graph (Tarjan's, without
- * recursion: a long history must not overflow the stack), listed so that
- * every component comes after those with an edge into it.
- */
+/** A graph's strongly connected components, each after those with an edge into it (Tarjan's, without recursion: a long history must not overflow the stack) */
 function componentsOf(
   nodes: ReadonlyArray<string>,
   edges: ReadonlyMap<string, ReadonlyArray<string>>,
@@ -1271,25 +1231,24 @@ function componentsOf(
   const onStack = new Set<string>();
   const found: string[][] = [];
   const of = new Map<string, number>();
+  const work: Array<{ readonly id: string; next: number }> = [];
+  const visit = (id: string) => {
+    indices.set(id, counter);
+    low.set(id, counter++);
+    stack.push(id);
+    onStack.add(id);
+    work.push({ id, next: 0 });
+  };
   for (const root of nodes) {
     if (indices.has(root)) continue;
-    const work: Array<{ readonly id: string; next: number }> = [{ id: root, next: 0 }];
-    indices.set(root, counter);
-    low.set(root, counter++);
-    stack.push(root);
-    onStack.add(root);
+    visit(root);
     while (work.length > 0) {
       const frame = work.at(-1)!;
       const out = edges.get(frame.id) ?? [];
       if (frame.next < out.length) {
         const next = out[frame.next++]!;
-        if (!indices.has(next)) {
-          indices.set(next, counter);
-          low.set(next, counter++);
-          stack.push(next);
-          onStack.add(next);
-          work.push({ id: next, next: 0 });
-        } else if (onStack.has(next)) low.set(frame.id, Math.min(low.get(frame.id)!, indices.get(next)!));
+        if (!indices.has(next)) visit(next);
+        else if (onStack.has(next)) low.set(frame.id, Math.min(low.get(frame.id)!, indices.get(next)!));
         continue;
       }
       work.pop();
@@ -1366,8 +1325,7 @@ export function replayAccess(genesis: AccessGenesis, events: ReadonlyArray<Acces
   const index = new Map(order.map((id, i) => [id, i]));
   const saw = new Map<string, Seen>();
   for (const id of order) {
-    const { prefix, extra } = seenFrom(parentsOf(byIdMap.get(id)!, genesis.id), saw, index);
-    saw.set(id, seenOf(prefix, extra, order, index));
+    saw.set(id, seenOf(parentsOf(byIdMap.get(id)!, genesis.id), saw, order, index));
   }
 
   // In order, ancestors first: each change's own view (the allowed changes it saw), whether it is
@@ -1651,12 +1609,11 @@ function extended(r: Replay, event: AccessEvent): Replay | null {
   if (r.struck.size > 0 || r.state.keyDue) return null;
   const parents = parentsOf(event, genesis.id);
   if (parents.some((parent) => !r.saw.has(parent))) return null;
-  const { prefix, extra } = seenFrom(parents, r.saw, r.index);
-  if (prefix !== r.order.length || extra.size > 0 || r.waiting.size > 0) return null;
-
   const order = [...r.order, event.id];
   const index = new Map(r.index).set(event.id, r.order.length);
-  const mine = seenOf(prefix, extra, order, index);
+  const mine = seenOf(parents, r.saw, order, index);
+  if (mine.prefix !== r.order.length || mine.extra.size > 0 || r.waiting.size > 0) return null;
+
   const saw = new Map(r.saw).set(event.id, mine);
   const byIdMap = new Map(r.byId).set(event.id, event);
   const named = new Set(r.named);
