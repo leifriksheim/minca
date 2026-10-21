@@ -3162,8 +3162,6 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       collection === PROFILE_COLLECTION ||
       collection === BOX_COLLECTION ||
       collection === MEMBER_KEY_COLLECTION ||
-      // What a removed carrier was is read back after the delete (`nameKeepers`).
-      collection === CARRIER_COLLECTION ||
       definition?.history === 'all' ||
       (version.seq === 0 && !!(definition?.rules?.onePer || definition?.rules?.fixed)) ||
       // Every version under a contract: it reads the one before, and others cite it.

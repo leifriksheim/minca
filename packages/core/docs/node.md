@@ -418,26 +418,23 @@ Three kinds of space are the account's own machinery and are hidden from
 | -------------------- | ------------------------------------------ | -------------------------------------------------------------- |
 | The account registry | the account key                            | Never in the node's registry; opened directly. Cannot be left. |
 | The contacts space   | the account key, or `config.contactsSpace` | Held in the registry, hidden. Cannot be left.                  |
-| Carry spaces         | one per carrier the account uses           | Held in the registry, hidden. Cannot be left.                  |
+| Carry spaces         | the account key and the carrier's key      | Never in the node's registry; opened directly. Cannot be left. |
 
 **Reconciling.** With an account key, the node makes its spaces match the
 account's list of `sys.joined` records. This runs at start and whenever
 records change in the account registry, one run at a time. It:
 
-1. joins every carry space a live `sys.carrier` record names, and closes and
-   forgets one whose carrier was removed more than 30 days ago (kept open until
-   then, so an offline carrier still hears it was removed);
-2. joins every space a live `sys.joined` record names that the node does not
+1. joins every space a live `sys.joined` record names that the node does not
    hold, using the view-only invite in the record;
-3. leaves every space whose `sys.joined` record is deleted;
-4. writes a `sys.joined` record for any space held here that the account
+2. leaves every space whose `sys.joined` record is deleted;
+3. writes a `sys.joined` record for any space held here that the account
    registry has never heard of (joined before the registry existed, or on a
    node without the account key);
-5. brings every carrier's passes and wakes up to date
+4. brings every carrier's passes and wakes up to date
    ([spec 06 §4.2](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md));
-6. names the account's carriers as keepers of the open spaces it manages
+5. names the account's carriers as keepers of the open spaces it manages
    (also whenever a space opens);
-7. asks every host the account uses how it stands, handing it the spaces if it
+6. asks every host the account uses how it stands, handing it the spaces if it
    has been paid since ([carriers and hosting](#carriers-hosting-and-notifications)),
    without waiting for the answer.
 
@@ -835,13 +832,12 @@ _Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `home
 What goes into a carry space, what a carrier checks and the host's HTTP API
 are protocol ([spec 06 §4](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)). The reference node's side:
 
-**Carriers.** `node.carriers.add({ did, name })` (needs the account key) makes
-the carry space, named `Carried by <name>` (name trimmed to 80, default
-`Carrier`), writes the `sys.carrier` record, fills the carry space, and returns
-`{ space, invite }` for the carrier to join with; for a carrier it already
-has, by `did`, it returns that one's. If the record can't be written, it
-takes the carry space back out before failing, so a restart never lists it as
-a space the account uses. A node that starts, or hears the registry change,
+**Carriers.** `node.carriers.add({ did, name })` (needs the account key)
+derives the carry space, writes the `sys.carrier` record (name trimmed to 80,
+default `Carrier`), fills the carry space, and returns `{ space, invite }` for
+the carrier to join with; for a carrier it already has, by `did`, it returns
+that one's. Carry spaces are never kept in the node's own list: each is
+derived again from its record. A node that starts, or hears the registry change,
 refills every carrier's carry space in the background: it opens every space
 the account holds, which from a data folder is slow, and signing in doesn't
 wait for it. Adding an automation doesn't either (adding a carrier writes that
@@ -852,8 +848,8 @@ waits up to `waitMs` for the node to be level with the carrier in the carry
 space and then the account registry, and says whether it was: a node about to
 close (the home's window, once it has answered) waits on it, so what it wrote
 for the carrier is not left with nobody (spec 06 §4.3). `node.carriers.remove(carrySpace)`
-writes `carry:closed` and deletes the record; the node keeps the carry space
-open for 30 days after, so a carrier that is offline still hears it.
+writes `carry:closed` and marks the record removed; the node keeps the carry
+space open until it closes, so the carrier hears it.
 
 **The account's own automations.** `node.automations` (needs the account
 key) lists, adds, updates (`name`, `paused`) and removes the account's own

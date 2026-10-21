@@ -468,7 +468,7 @@ their own view of the definition. A writer MUST set `retain: true` when:
   refuse a `seq 0` version without `retain` when the rules in force as of its
   `seen` have `onePer` or `fixed`.
   _Implementation detail:_ the reference writer also sets `retain` on
-  `sys.profile`, `sys.box`, `sys.memberkey` and `sys.carrier`, and on every
+  `sys.profile`, `sys.box` and `sys.memberkey`, and on every
   version that is not a delete when the definition in force has a `contract` (§7.6), so
   the library's checks can read the version before and cite it. Peers do not
   require it.

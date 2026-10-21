@@ -1704,12 +1704,13 @@ in [its docs](../packages/core/docs/spaces.md#the-space-manager).
 ### 13.1 Derived account spaces
 
 An account derives private spaces that only it can find, the same on every
-device, from its account key ([01 §11.1](01-identity.md), `deriveAccountKey`)
-and a label:
+device, from its account key ([01 §11.1](01-identity.md), `deriveAccountKey`),
+a label and what the space is bound to (empty, or for a carry space
+`|<carrier DID>|<gen>`, §14):
 
 ```
-nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1", 32)[0..12] )
-K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1", 32)      // the space key, §8.1
+nonce   = base64url( HKDF-SHA256(accountKey, salt = empty, info = "<label>/nonce/v1<bound>", 32)[0..12] )
+K       = HKDF-SHA256(accountKey, salt = empty, info = "<label>/key/v1<bound>", 32)      // the space key, §8.1
 space   = { minca: "constitution/1", name, visibility: "private",
             resolver: "strong-remove/1", top: { founders: [accountDid] }, roles: [],
             createdAt: "1970-01-01T00:00:00.000Z", nonce,
@@ -1721,13 +1722,17 @@ There are no founding roles: the account is the space's one founder, and
 holds every command. `name` is the name in the table below. Any other bytes
 give another id.
 
-| Label                    | Space                | Name               |
-| ------------------------ | -------------------- | ------------------ |
-| `minca/account-registry` | the account registry | `Account registry` |
-| `minca/contacts`         | the contacts space   | `Contacts`         |
+| Label                    | Bound                    | Space                | Name               |
+| ------------------------ | ------------------------ | -------------------- | ------------------ |
+| `minca/account-registry` | empty                    | the account registry | `Account registry` |
+| `minca/contacts`         | empty                    | the contacts space   | `Contacts`         |
+| `minca/carry`            | `\|<carrier DID>\|<gen>` | a carry space (§14)  | `Carry space`      |
 
 Example (seed `01 02 … 10`): registry `b42wsegs2enqkhuzz4ba2hwaqgzvdcziz7bkn23ue7qoekuzv5usq`
-(nonce `75Pq-CByGn9iQXOe`), contacts `b4ha5cfxach7u4z2i3so43ftysegxr5jg2x6ji53zc5yfy3scsnga`.
+(nonce `75Pq-CByGn9iQXOe`), contacts `b4ha5cfxach7u4z2i3so43ftysegxr5jg2x6ji53zc5yfy3scsnga`,
+carry space for `did:key:zexample` with `gen` 0 `b3lfzv5ewy4v3xxvx2plwxkfxmlmodwvkb7xlsfr5ef36imn7p5gq`
+(info `minca/carry/key/v1|did:key:zexample|0`), with `gen` 1
+`b67rxv2qo47ur7wx26ea6o4os3njv7srv7e6jv2fll3m5gxgeqnoq`.
 
 > Rationale: the DID alone is not enough to find them — it appears on
 > everything the account signs.
@@ -1741,7 +1746,7 @@ account is ignored by readers), and nothing written under a note without
 | Collection       | Record key                               | Body                                   | Meaning                                                                                                                          |
 | ---------------- | ---------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `sys.joined`     | `space:<spaceId>`                        | `{ space: spaceId, invite }`           | The account belongs to the space. `invite` is a **view-only** invite (§7.5) — secrets are never kept. Deleted: the account left. |
-| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ space, invite, did, name, since }`  | A carrier the account uses (§14).                                                                                                |
+| `sys.carrier`    | `carrier:<hex40(carrySpaceId)>`          | `{ did, name, since, gen?, removed? }` | A carrier the account uses, or used until `removed` (§14).                                                                       |
 | `sys.automation` | `automation:<base32 of 10 random bytes>` | An automation, in the library's format | One of the account's own automations, from which its wakes are made (§15).                                                       |
 | `sys.hosting`    | —                                        | —                                      | Hosting; see [08](08-hosting.md).                                                                                                |
 
@@ -1767,9 +1772,12 @@ _Source: `packages/core/src/space/account-registry.ts`, `packages/core/src/node/
 ## 14. Passes and carry spaces
 
 A **carrier** (an extension, a host) stores and forwards a space it cannot
-read. It gets a **carry space**: a private space the account creates, with itself the only member:
-its constitution names the account as its one founder and assigns nothing,
-and shares with it by a view-only invite recorded in `sys.carrier` (§13.2). In
+read. It gets a **carry space**: a private space the account derives (§13.1)
+from its account key, bound to the carrier's DID and `gen`, the number of
+`sys.carrier` records for that DID before this one (`gen` absent means 0).
+Its constitution names the account as its one founder and assigns nothing.
+Each device derives it from the carrier's `sys.carrier` record, whose key
+names it, and the account hands the carrier a view-only invite to it. In
 it the account keeps one **pass** per space to carry:
 
 ```
@@ -1788,12 +1796,18 @@ private space — the read seed gives a read DID equal to `space.readKey` or to
 the pass's `readKey`. (With a later key, the space's history is what vouches
 for that read key: one it does not name gets the carrier nowhere.)
 
-When the account stops using a carrier, it deletes the passes and writes
-`sys.pass` at `carry:closed` with `{ v: 1, closed: true }`; a carrier that
-reads it forgets everything. The account registry and contacts space are
-passed too.
+When the account stops using a carrier, it deletes the passes, writes
+`sys.pass` at `carry:closed` with `{ v: 1, closed: true }`, and sets
+`removed` in the carrier's record rather than deleting it; a carrier that
+reads `carry:closed` forgets everything. Adding the same DID again counts the
+removed record, so it gets a new carry space, never the one that told it to
+forget. The account registry and contacts space are passed too.
 
-_Source: `packages/core/src/space/pass.ts`, `packages/core/src/node/node.ts` (`syncPasses`, `carriers`). Tests: `packages/core/tests/carrier.test.ts` ("passes", "a carrier")._
+A `sys.carrier` record written before carry spaces were derived also has
+`space` and `invite`: its carry space is the one `invite` names, which a
+device joins with it. Such records are read, never written.
+
+_Source: `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts` (`deriveCarrySpace`), `packages/core/src/node/node.ts` (`syncPasses`, `carriers`, `carrySpaceOf`, `carrierRecords`). Tests: `packages/core/tests/carrier.test.ts` ("passes", "a carrier", "added again after it was removed…"), `packages/core/tests/account-vault.test.ts` ("the account key, and the spaces derived from it, match the spec's examples")._
 
 ---
 

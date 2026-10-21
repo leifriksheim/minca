@@ -31,7 +31,11 @@ import { generateSeed, seedToRecoveryCode } from '../src/identity/recovery-code.
 import { bytesToHex, hexToBytes, utf8Encode, utf8Decode } from '../src/utils/encoding.js';
 import { hkdf, hkdfAesKey } from '../src/identity/hkdf.js';
 import { deriveMemberKeyBytes } from '../src/identity/contact-key.js';
-import { deriveAccountRegistry, deriveContactsSpace } from '../src/space/account-registry.js';
+import {
+  deriveAccountRegistry,
+  deriveCarrySpace,
+  deriveContactsSpace,
+} from '../src/space/account-registry.js';
 import { isProtocolError } from '../src/utils/errors.js';
 import { team } from '../src/space/presets.js';
 
@@ -466,6 +470,10 @@ describe('encryption at rest', () => {
       (await deriveContactsSpace(await deriveAccountKey(other), did)).space.id,
       'b4ha5cfxach7u4z2i3so43ftysegxr5jg2x6ji53zc5yfy3scsnga',
     );
+    const accountKey = await deriveAccountKey(other);
+    const carry = (gen: number) => deriveCarrySpace(accountKey, did, 'did:key:zexample', gen);
+    assert.equal((await carry(0)).space.id, 'b3lfzv5ewy4v3xxvx2plwxkfxmlmodwvkb7xlsfr5ef36imn7p5gq');
+    assert.equal((await carry(1)).space.id, 'b67rxv2qo47ur7wx26ea6o4os3njv7srv7e6jv2fll3m5gxgeqnoq');
   });
 
   test('the local key is deterministic, and distinct per seed', async () => {

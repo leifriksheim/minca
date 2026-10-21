@@ -786,41 +786,38 @@ _Source: `packages/core/src/space/pass.ts`, `packages/core/src/node/carrier.ts`.
 
 Using a carrier needs the account key:
 
-1. The node makes a private space, with the account as its only writer.
+1. The node derives the carry space from the account key, the carrier's
+   `did` and `gen`, the number of `sys.carrier` records it holds for that
+   `did` ([03](03-spaces.md) §13.1, §14).
 2. It writes a `sys.carrier` record in the account registry, key
    `carrier:<hex of the first 20 bytes of SHA-256(utf8(carry space id))>`, body
-   `{ space, invite, did, name, since }`, where `invite` is a view-only invite
-   to the carry space ([03](03-spaces.md)). If that record can't be
-   written, the node removes the carry space it made: nothing else says it
-   is one, and held, a later reconcile would record it as a space the
-   account uses.
-3. It fills the carry space (below) and returns `{ space, invite }`; the
-   carrier joins with the invite. Keeping the other carriers' carry spaces
-   in step (below) needs no waiting for.
+   `{ did, name, since, gen? }` (`gen` only when not 0).
+3. It fills the carry space (below) and returns `{ space, invite }`, where
+   `invite` is a view-only invite to the carry space; the carrier joins with
+   it. Keeping the other carriers' carry spaces in step (below) needs no
+   waiting for.
 
-> **Known defect:** two devices that add the same carrier at once, each before
-> hearing of the other's record, make two carry spaces for it. Both stay live
-> and are kept in step; the carrier holds whichever invite reached it.
-> Nothing removes one on its own, since it could be the one the carrier holds.
-> Removing the carrier removes every carry space with its `did`
-> ([#283](https://github.com/leifriksheim/minca/issues/283)).
-
-> **Known defect:** a node that stops between steps 1 and 2 (a tab closed
-> mid-connect) leaves the carry space held with no record, and a later
-> reconcile records it as a space the account uses, where every app lists it.
-> Nothing in the space says it is a carry space
-> ([#283](https://github.com/leifriksheim/minca/issues/283)).
+Every device derives the same carry space, so two devices that add a carrier
+at once, each before hearing of the other's record, write one record for one
+space. Nothing is stored before step 2, so a node that stops before it
+leaves nothing behind. A space is a carry space when a `sys.carrier` record
+of the account's, live or removed, is keyed by its id; a node never lists
+one as a space the account uses, nor leaves it.
 
 A carrier the account already uses, by `did`, is not added again: the node
-returns its carry space and invite as they are. A node asked to add a carrier
-it is already adding answers both with the one carry space. So a carrier that connects
+returns its carry space and invite as they are. So a carrier that connects
 again keeps what it holds, and is never sent `carry:closed` (below) for a
-space it is still using.
+space it is still using. One added again after it was removed gets a new
+carry space, since its removed record counts toward `gen`.
+
+A `sys.carrier` record from before carry spaces were derived names its carry
+space and a view-only invite to it in `space` and `invite`; a node opens that
+space with the invite. No node writes one.
 
 A removal made on a device that is offline can cross a reconnect made
 through another device that has not heard of it yet. The removal wins: once
 it arrives, the carrier reads `carry:closed`, forgets what it held and says
-the account disconnected it, and connecting it again then makes a new carry
+the account disconnected it, and connecting it again then derives a new carry
 space. That device could not tell the record was already deleted, so nothing
 it does at the reconnect could prevent this.
 
@@ -861,9 +858,10 @@ When two accounts name one space, a pass for a later key wins over one for the
 first key.
 
 **Removing a carrier**: delete every pass, write `sys.pass` key `carry:closed`
-with body `{ "v": 1, "closed": true }`, then delete the `sys.carrier` record. A
+with body `{ "v": 1, "closed": true }`, then write the `sys.carrier` record
+again with `removed` (the time), rather than deleting it. A
 carrier that reads `carry:closed` from the account MUST stop carrying for it and
-forget what it held. The node keeps the carry space open for a while after, so
+forget what it held. The node keeps the carry space open until it closes, so
 the carrier hears it ([the node](../packages/core/docs/node.md#carriers-hosting-and-notifications)).
 
 A pass cannot be taken back. A removed carrier that does not forget keeps the
@@ -876,7 +874,7 @@ its keepers (`{ did, name }`, at most 16, [03](03-spaces.md)) and stops naming
 carriers the account removed. Other keepers stay. So apps holding part of a
 space ([05](05-sync-and-storage.md) §5) can rely on the carriers.
 
-_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "one added on two devices at once is removed whole…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
+_Source: `packages/core/src/node/node.ts` (`carriers`, `syncPasses`, `passAll`, `nameKeepers`), `packages/core/src/space/pass.ts`, `packages/core/src/space/account-registry.ts`. Tests: `packages/core/tests/carrier.test.ts` ("added twice at once, it gets one carry space", "added on two devices at once, it gets one carry space…", "added again after it was removed…", "its carry space cannot be left…", "adding one that fails leaves no carry space behind…", "removed while a refill runs, no pass is written back", "a removal reaches the carrier even when the home closes straight after")._
 
 ### 4.3 Connecting a carrier through the account home
 
