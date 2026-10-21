@@ -54,42 +54,23 @@ import {
 } from './grants.js';
 import type { SpaceGrant as Grant } from '../types.js';
 
-/** A role's definitions */
 export const ROLE_COLLECTION = 'sys.role';
 /** Assigning a role to an account, and taking it away */
 export const ASSIGN_COLLECTION = 'sys.assign';
-/** Removing an account from the space */
 export const REMOVE_COLLECTION = 'sys.remove';
 export const INVITE_COLLECTION = 'sys.invite';
 export const REVOKE_COLLECTION = 'sys.revoke';
 /** Collection definitions are part of the access history too: what a version must keep to */
 export const DEFINITION_COLLECTION = 'sys.collection';
-/**
- * A private space's key changes: the new key's id and public read key. The
- * key itself travels sealed to each member (`sys.box`); this record only says
- * which key is current, so a peer without any key can still check readers.
- */
+/** Which of a private space's keys is current; the key itself travels sealed to each member (`sys.box`) */
 export const KEY_COLLECTION = 'sys.key';
-/**
- * Where the space's members meet: the relays it names, so two people whose
- * apps use different relays still find each other. Like a Nostr relay list,
- * but the space's, and changed only by someone granted `/space/relays`.
- */
+/** The relays the space's members meet at, so people whose apps use different relays still find each other */
 export const RELAYS_COLLECTION = 'sys.relays';
-/**
- * Who keeps the space whole: nodes that hold every record of it — a host, an
- * extension — and how many copies a write should reach before a node that
- * holds only part of the space lets go of it.
- */
+/** Nodes that hold the whole space, and how many a write should reach before a partial node lets go of it */
 export const KEEPERS_COLLECTION = 'sys.keepers';
-/**
- * A writer's log forked: two versions one key signed at one place in its line
- * for one collection of this space (02 §4.10). The record carries both, so
- * every peer checks the proof for itself, and the key's versions in that
- * collection from that place on stop counting.
- */
+/** A fork proof: two versions one key signed at one place in its line (02 §4.10), checked by every peer */
 export const FORK_COLLECTION = 'sys.fork';
-/** A founder stepping down: it stays, with the roles it holds, and is a founder no more */
+/** A founder stepping down: it keeps its roles, and is a founder no more */
 export const STEPDOWN_COLLECTION = 'sys.stepdown';
 /** A space that succeeds this one, by its id. It changes nothing here. */
 export const SUCCEED_COLLECTION = 'sys.succeed';
@@ -99,34 +80,29 @@ export const STRONG_REMOVE = 'strong-remove/1';
 /** Every resolver this peer knows. A space naming another is not judged here. */
 export const RESOLVERS: ReadonlySet<string> = new Set([STRONG_REMOVE]);
 
-/** Where one kind of change lives */
-export interface AccessKind {
-  /** Its collection, where its place in its key's line is counted too */
-  readonly collection: string;
-  /** What its records' keys start with */
-  readonly prefix: string;
-  /** Kept in the clear in a private space, so a peer without the key can still judge who may do what */
-  readonly clear: boolean;
-}
-
-const accessKind = (collection: string, prefix: string, clear = true): AccessKind =>
+const accessKind = (collection: string, prefix: string, clear = true) =>
   Object.freeze({ collection, prefix, clear });
 
-/** Each kind of change in the access history. Collection definitions stay sealed: only readers need their rules. */
-export const ACCESS_KINDS: Readonly<Record<AccessEvent['kind'], AccessKind>> = Object.freeze({
-  role: accessKind(ROLE_COLLECTION, 'role:'),
-  assign: accessKind(ASSIGN_COLLECTION, 'assign:'),
-  remove: accessKind(REMOVE_COLLECTION, 'remove:'),
-  invite: accessKind(INVITE_COLLECTION, 'invite:'),
-  revoke: accessKind(REVOKE_COLLECTION, 'revoke:'),
-  definition: accessKind(DEFINITION_COLLECTION, 'collection:', false),
-  key: accessKind(KEY_COLLECTION, 'key:'),
-  relays: accessKind(RELAYS_COLLECTION, 'relays:'),
-  keepers: accessKind(KEEPERS_COLLECTION, 'keepers:'),
-  fork: accessKind(FORK_COLLECTION, 'fork:'),
-  stepdown: accessKind(STEPDOWN_COLLECTION, 'stepdown:'),
-  succeed: accessKind(SUCCEED_COLLECTION, 'succeed:'),
-});
+/**
+ * Each kind of change: its collection, where its line is counted too; its record keys' prefix; and
+ * whether a private space keeps it in the clear, so a peer without the key can still judge who may
+ * do what. Collection definitions stay sealed: only readers need their rules.
+ */
+export const ACCESS_KINDS: Readonly<Record<AccessEvent['kind'], ReturnType<typeof accessKind>>> =
+  Object.freeze({
+    role: accessKind(ROLE_COLLECTION, 'role:'),
+    assign: accessKind(ASSIGN_COLLECTION, 'assign:'),
+    remove: accessKind(REMOVE_COLLECTION, 'remove:'),
+    invite: accessKind(INVITE_COLLECTION, 'invite:'),
+    revoke: accessKind(REVOKE_COLLECTION, 'revoke:'),
+    definition: accessKind(DEFINITION_COLLECTION, 'collection:', false),
+    key: accessKind(KEY_COLLECTION, 'key:'),
+    relays: accessKind(RELAYS_COLLECTION, 'relays:'),
+    keepers: accessKind(KEEPERS_COLLECTION, 'keepers:'),
+    fork: accessKind(FORK_COLLECTION, 'fork:'),
+    stepdown: accessKind(STEPDOWN_COLLECTION, 'stepdown:'),
+    succeed: accessKind(SUCCEED_COLLECTION, 'succeed:'),
+  });
 
 /** Every collection whose records are part of the access history */
 export const ACCESS_COLLECTIONS: ReadonlySet<string> = new Set(
@@ -147,12 +123,7 @@ interface EventBase {
   readonly seen: ReadonlyArray<string>;
   /** Its place in its key's line for its collection here: what forks and cutoffs reach */
   readonly line?: number;
-  /**
-   * What this change leaves standing of what it takes away: for each key of
-   * the account it takes power from, and each collection, the end of the
-   * unbroken line of that key's versions in that collection its author held.
-   * Versions at or below it are covered.
-   */
+  /** What it leaves standing of what it takes: for each key and collection, the place covered up to */
   readonly cutoff: Cutoff;
 }
 
@@ -185,55 +156,20 @@ export type AccessEvent = EventBase &
         /** The invite's public key, when the runtime checked the invite's signature on this record */
         readonly viaInvite?: string;
       }
-    | {
-        /** `/member/remove`, or leaving when it is the account's own */
-        readonly kind: 'remove';
-        readonly did: string;
-      }
-    | {
-        /** A founder stepping down, built in: only its own */
-        readonly kind: 'stepdown';
-        readonly did: string;
-      }
-    | {
-        /** `/space/succeed`: the id of a space that succeeds this one */
-        readonly kind: 'succeed';
-        readonly space: string;
-      }
+    /** `/member/remove`, or leaving when it is the account's own; a founder stepping down, only its own */
+    | { readonly kind: 'remove' | 'stepdown'; readonly did: string }
+    | { readonly kind: 'succeed'; readonly space: string }
     | { readonly kind: 'invite'; readonly inviteKey: string; readonly role: string; readonly open: boolean }
-    | {
-        readonly kind: 'revoke';
-        /** The key revoked: every version it signed for this change's account, past the cutoff, stops counting */
-        readonly target: string;
-      }
+    /** `target`: every version that key signed for this change's account, past the cutoff, stops counting */
+    | { readonly kind: 'revoke'; readonly target: string }
     | { readonly kind: 'definition'; readonly name: string; readonly deleted: boolean }
-    | {
-        readonly kind: 'key';
-        /** The new key's id: the hash of its bytes, as encrypted bodies name it */
-        readonly keyId: string;
-        /** The public half of the read key derived from it, which readers prove they hold */
-        readonly readKey: string;
-      }
-    | {
-        readonly kind: 'fork';
-        /** The key whose log forked */
-        readonly writer: string;
-        /** The collection whose line forked */
-        readonly collection: string;
-        /** Where: its versions in that collection here and after no longer count */
-        readonly from: number;
-      }
-    | {
-        readonly kind: 'relays';
-        /** WebSocket URLs, at most `MAX_RELAYS` */ readonly relays: ReadonlyArray<string>;
-      }
-    | {
-        readonly kind: 'keepers';
-        /** Nodes that keep the space whole, at most `MAX_KEEPERS` */
-        readonly keepers: ReadonlyArray<Keeper>;
-        /** How many keepers a write should reach before a partial node lets go of it; null for the default */
-        readonly copies: number | null;
-      }
+    /** `keyId`: the hash of the new key, as encrypted bodies name it; `readKey`: what readers prove they hold */
+    | { readonly kind: 'key'; readonly keyId: string; readonly readKey: string }
+    /** `writer`'s versions in `collection` from `from` on no longer count */
+    | ({ readonly kind: 'fork' } & ForkedLine)
+    | { readonly kind: 'relays'; readonly relays: ReadonlyArray<string> }
+    /** `copies`: how many keepers a write should reach before a partial node lets go of it; null for the default */
+    | { readonly kind: 'keepers'; readonly keepers: ReadonlyArray<Keeper>; readonly copies: number | null }
   );
 
 /** A node that keeps a space whole: its key, as it appears to peers, and a name for people */
@@ -304,11 +240,7 @@ export interface SpaceKeyEpoch {
   readonly event: string;
 }
 
-/**
- * One definition of a role: the constitution's, or one written since. The
- * grants it holds count only as far as its author could invoke them itself,
- * as of `view`.
- */
+/** One definition of a role: its grants count only as far as its author could invoke them, as of `view` */
 export interface RoleDefinition {
   /** The definition's id; the space id for the constitution's */
   readonly event: string;
@@ -326,17 +258,11 @@ export interface RoleDefinition {
 export interface AccessState {
   /** The founders: they hold every command, and only each founder itself takes its place or its roles */
   readonly founders: ReadonlySet<string>;
-  /**
-   * Role name → its current definitions: one, or rivals none of which saw
-   * the others, which hold only the grants they share
-   */
+  /** Role name → its current definitions: one, or rivals, which hold only the grants they share */
   readonly roles: ReadonlyMap<string, ReadonlyArray<RoleDefinition>>;
   /** Account DID → the roles assigned to it → the assignment's id */
   readonly assigned: ReadonlyMap<string, ReadonlyMap<string, string>>;
-  /**
-   * Invite public key → its role, whether it is open, and who opened it: a
-   * join through it is judged as their assignment
-   */
+  /** Invite public key → its role, whether open, and who opened it: a join is judged as their assignment */
   readonly invites: ReadonlyMap<
     string,
     {
@@ -347,24 +273,16 @@ export interface AccessState {
       readonly by: ReadonlyArray<string>;
     }
   >;
-  /**
-   * Collection name → the id of the definition in force, and who first
-   * defined it: null when rival first definitions name different accounts
-   */
+  /** Collection name → the definition in force, and who first defined it (null for rivals' different accounts) */
   readonly definitions: ReadonlyMap<string, { readonly event: string; readonly definedBy: string | null }>;
   /**
-   * Collections whose rival first definitions, by different accounts, no
-   * later one settles → the ids of the latest of them, lowest first. Which is
-   * in force is not the replay's to say (02 §6.3: none, unless they all say
-   * the same), and only someone who may define it may define it again.
+   * Collections whose rival first definitions by different accounts no later one settles → the
+   * latest ids, lowest first. Which is in force is not the replay's to say (02 §6.3).
    */
   readonly contested: ReadonlyMap<string, ReadonlyArray<string>>;
   /** A private space's keys, oldest first; the last is current. Empty in a public space. */
   readonly keys: ReadonlyArray<SpaceKeyEpoch>;
-  /**
-   * Whether someone lost their place in the space since the current key — so
-   * a new one is due. Worked out for the history's current state only.
-   */
+  /** Whether someone lost their place since the current key, so a new one is due: the current state's only */
   readonly keyDue: boolean;
   /** The relays the space names — empty until someone names some */
   readonly relays: ReadonlyArray<string>;
