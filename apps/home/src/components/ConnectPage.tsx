@@ -12,6 +12,7 @@ import {
 import { useAuth, useSession, useMinca } from '@minca/core/react';
 import { Wordmark } from '@minca/app-shared/Wordmark';
 import { Avatar } from '@minca/app-shared/Avatar';
+import { useAccountPicture } from '../picture';
 import { Shape, shapeFor } from '@minca/app-shared/shapes';
 import { useAction } from '@minca/app-shared/action';
 import { styles, palette } from '../styles';
@@ -660,9 +661,10 @@ function useSpaces(hold: boolean): ReadonlyArray<SpaceSummary> {
 function WhichAccount({ label, busy, onSwitch }: { label: string; busy: boolean; onSwitch?: () => void }) {
   const chooseAgain = useContext(ChooseAgain);
   const session = useSession();
+  const picture = useAccountPicture();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-      <Avatar did={session.did} size={32} />
+      <Avatar did={session.did} size={32} src={picture} />
       <div style={{ flex: 1 }}>
         <p style={{ ...styles.todoText, margin: 0 }}>{session.account.name}</p>
         <p style={{ ...styles.errorHint, margin: 0 }}>{label}</p>

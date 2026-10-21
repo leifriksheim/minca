@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 /** The account page's tabs, in the order the nav shows them */
 export const TABS = [
-  { id: 'home', label: 'Home' },
-  { id: 'security', label: 'Security' },
+  { id: 'home', label: 'Overview' },
   { id: 'apps', label: 'Apps' },
-  { id: 'data', label: 'Your data' },
+  { id: 'devices', label: 'Devices' },
+  { id: 'data', label: 'Data' },
+  { id: 'security', label: 'Security' },
 ] as const;
 
 export type TabId = (typeof TABS)[number]['id'];

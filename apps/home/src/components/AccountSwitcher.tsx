@@ -4,6 +4,7 @@ import { Avatar } from '@minca/app-shared/Avatar';
 import { useDismiss } from '@minca/app-shared/useDismiss';
 import { useCopy } from '@minca/app-shared/action';
 import { palette, styles } from '../styles';
+import { useAccountPicture } from '../picture';
 
 const { ink, surface, radius } = palette;
 
@@ -17,6 +18,7 @@ const { ink, surface, radius } = palette;
 export function AccountSwitcher() {
   const { auth, state } = useAuth();
   const session = useSession();
+  const picture = useAccountPicture();
   const [open, setOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -63,7 +65,7 @@ export function AccountSwitcher() {
           gap: 8,
         }}
       >
-        <Avatar did={session.did} size={30} round />
+        <Avatar did={session.did} size={30} round src={picture} />
         <span className="switcher-name">{session.account.name}</span>
       </button>
       {open && (
@@ -71,7 +73,7 @@ export function AccountSwitcher() {
           <div
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: 20 }}
           >
-            <Avatar did={session.did} size={64} round />
+            <Avatar did={session.did} size={64} round src={picture} />
             {renaming ? (
               <form
                 onSubmit={(event) => {
