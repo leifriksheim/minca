@@ -128,6 +128,7 @@ import {
 import { accessGenesisOf, isSpaceId } from '../space/constitution.js';
 import {
   ACCESS_COLLECTIONS,
+  ACCESS_KINDS,
   ASSIGN_COLLECTION,
   DEFINITION_COLLECTION,
   INVITE_COLLECTION,
@@ -222,36 +223,12 @@ const MANAGED = new Set([
  * read the records has no use for their rules.
  */
 const IN_THE_CLEAR = new Set([
-  ROLE_COLLECTION,
-  ASSIGN_COLLECTION,
-  REMOVE_COLLECTION,
-  INVITE_COLLECTION,
-  REVOKE_COLLECTION,
-  KEY_COLLECTION,
+  ...Object.values(ACCESS_KINDS)
+    .filter(({ clear }) => clear)
+    .map(({ collection }) => collection),
   BOX_COLLECTION,
   MEMBER_KEY_COLLECTION,
-  RELAYS_COLLECTION,
-  KEEPERS_COLLECTION,
-  FORK_COLLECTION,
-  STEPDOWN_COLLECTION,
-  SUCCEED_COLLECTION,
 ]);
-
-/** Which collection each access record key belongs to */
-const ACCESS_KEYS: ReadonlyArray<readonly [string, string]> = [
-  ['role:', ROLE_COLLECTION],
-  ['assign:', ASSIGN_COLLECTION],
-  ['remove:', REMOVE_COLLECTION],
-  ['invite:', INVITE_COLLECTION],
-  ['revoke:', REVOKE_COLLECTION],
-  ['collection:', DEFINITION_COLLECTION],
-  ['key:', KEY_COLLECTION],
-  ['relays:', RELAYS_COLLECTION],
-  ['keepers:', KEEPERS_COLLECTION],
-  ['fork:', FORK_COLLECTION],
-  ['stepdown:', STEPDOWN_COLLECTION],
-  ['succeed:', SUCCEED_COLLECTION],
-];
 
 /** How many keys a cutoff may name */
 const MAX_CUTOFF = 1024;
@@ -930,10 +907,11 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       }
       case INVITE_COLLECTION: {
         const inviteDid = body.key;
-        if (typeof inviteDid !== 'string' || typeof body.role !== 'string' || typeof body.open !== 'boolean')
+        // An invite carries no cutoff: closing it takes nothing from anyone but who joins through it unseen.
+        if (body.cutoff !== undefined || typeof inviteDid !== 'string' || typeof body.role !== 'string')
           return null;
-        if (version.key !== (await inviteRecordKey(inviteDid))) return null;
-        return { ...base, cutoff, kind: 'invite', inviteKey: inviteDid, role: body.role, open: body.open };
+        if (typeof body.open !== 'boolean' || version.key !== (await inviteRecordKey(inviteDid))) return null;
+        return { ...base, kind: 'invite', inviteKey: inviteDid, role: body.role, open: body.open };
       }
       case KEY_COLLECTION: {
         if (version.key !== SPACE_KEY_RECORD || typeof body.keyId !== 'string' || body.keyId.length > 64)
@@ -1029,7 +1007,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     let unsettled = false;
     // By key, not by the current version's collection: whatever sits on top
     // may be anyone's, and every version of the history counts.
-    for (const [prefix, collection] of ACCESS_KEYS) {
+    for (const { prefix, collection } of Object.values(ACCESS_KINDS)) {
       for (const versions of (await storage.histories(prefix)).values()) {
         for (const held of versions) {
           if (held.collection !== collection) continue;
@@ -1062,8 +1040,8 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     let pending: AccessEvent[] = [];
     for (const version of placed) {
       if (
-        !ACCESS_KEYS.some(
-          ([prefix, collection]) => version.key.startsWith(prefix) && version.collection === collection,
+        !Object.values(ACCESS_KINDS).some(
+          ({ prefix, collection }) => version.key.startsWith(prefix) && version.collection === collection,
         )
       )
         continue;
@@ -3801,78 +3779,58 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    * all it holds.
    */
   async function cutoffFor(did: string, only?: string): Promise<Record<string, Record<string, number>>> {
-    return packCutoff([(await linesOf(new Set([did]), only)).get(did) ?? []]);
-  }
-
-  /**
-   * At most what a change may carry, shared among the accounts it reaches: one
-   * line from each in turn, so no one's writing can use up anyone else's
-   * share. What is left out is judged with the change.
-   */
-  function packCutoff(
-    accounts: ReadonlyArray<ReadonlyArray<Version>>,
-  ): Record<string, Record<string, number>> {
     const cutoff: Record<string, Record<string, number>> = {};
-    let named = 0;
-    for (let round = 0; named < MAX_CUTOFF && accounts.some((lines) => round < lines.length); round++)
-      for (const lines of accounts) {
-        const end = lines[round];
-        if (!end || named >= MAX_CUTOFF) continue;
-        (cutoff[end.author] ??= {})[end.collection] = end.log!.n;
-        named++;
-      }
+    // At most what a change may carry: what is left out is judged with the change.
+    for (const end of (await linesOf(did, only)).slice(0, MAX_CUTOFF))
+      (cutoff[end.author] ??= {})[end.collection] = end.log!.n;
     return cutoff;
   }
 
   /**
-   * The ends of each account's unbroken lines this node holds: defined
-   * collections first, then the rest, each in name order. One pass over what
-   * it holds, however many accounts.
+   * The ends of an account's unbroken lines this node holds: defined
+   * collections first, then the rest, each in name order.
    */
-  async function linesOf(dids: ReadonlySet<string>, only?: string): Promise<Map<string, Version[]>> {
+  async function linesOf(did: string, only?: string): Promise<Version[]> {
     // What it holds of theirs, whatever way it came: the lines' places are kept only for what arrived by sync.
-    const placed = new Map<string, { readonly did: string; readonly held: Map<number, Version> }>();
-    const add = (did: string, version: Version) => {
+    const placed = new Map<string, Map<number, Version>>();
+    const add = (version: Version) => {
       if (!version.log) return;
       const line = `${version.author} ${version.collection}`;
-      const entry = placed.get(line) ?? { did, held: new Map<number, Version>() };
-      if (!entry.held.has(version.log.n)) entry.held.set(version.log.n, version);
-      placed.set(line, entry);
+      const held = placed.get(line) ?? new Map<number, Version>();
+      if (!held.has(version.log.n)) held.set(version.log.n, version);
+      placed.set(line, held);
     };
     for (const version of await everyCurrent()) {
       if (!version.log || (only && version.author !== only) || version.space !== space.id) continue;
-      const root = (await judge(version)).root;
-      if (root && dids.has(root)) add(root, version);
+      if ((await judge(version)).root === did) add(version);
     }
     for (const name of await adapter.list(KEY_ROOT_PREFIX)) {
       const key = name.slice(KEY_ROOT_PREFIX.length);
-      const did = utf8Decode((await adapter.get(name)) ?? new Uint8Array());
-      if ((only && key !== only) || !dids.has(did)) continue;
+      if ((only && key !== only) || utf8Decode((await adapter.get(name)) ?? new Uint8Array()) !== did)
+        continue;
       for (const place of await adapter.list(`${LOG_PREFIX}${key}/`)) {
         const id = await adapter.get(place);
         const version = id ? await storage.getVersion(utf8Decode(id)) : null;
-        if (version?.author === key) add(did, version);
+        if (version?.author === key) add(version);
       }
     }
-    const byAccount = new Map<string, Version[]>();
-    for (const { did, held } of placed.values()) {
+    const ends: Version[] = [];
+    for (const held of placed.values()) {
       let end: Version | null = null;
       for (let n = 0; ; n++) {
         const version = held.get(n);
         if (!version || (n > 0 && version.log?.prev !== end?.id)) break;
         end = version;
       }
-      if (end) byAccount.set(did, [...(byAccount.get(did) ?? []), end]);
+      if (end) ends.push(end);
     }
     // Defined collections first: writing into many undefined ones costs only whoever did.
     const defined = new Set((await catalog()).keys());
-    for (const ends of byAccount.values())
-      ends.sort(
-        (a, b) =>
-          Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
-          (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
-      );
-    return byAccount;
+    return ends.sort(
+      (a, b) =>
+        Number(defined.has(b.collection)) - Number(defined.has(a.collection)) ||
+        (a.collection < b.collection ? -1 : a.collection > b.collection ? 1 : a.author < b.author ? -1 : 1),
+    );
   }
 
   /** Whether this account holds a grant, now, to do something to a record */
