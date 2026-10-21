@@ -68,6 +68,8 @@ export interface Funds {
   until(state: FundState): number;
   /** What one bot spent a day this last week */
   botDaily(state: FundState, bot: string): number;
+  /** What all its bots spent a day this last week */
+  botsDaily(state: FundState): number;
 }
 
 const PREFIX = 'fund:';
@@ -255,6 +257,7 @@ export function createFunds(options: {
       change(id, (state) => (bytes === undefined || bytes === state.bytes ? state : { ...state, bytes })),
     daily,
     botDaily: (state: FundState, bot: string) => week(state.byBot?.[bot] ?? {}),
+    botsDaily: (state: FundState) => week(state.spent),
     until(state: FundState) {
       // Run out: dated so that the host's grace from then ends where its lent grace does, in time or money.
       if (state.balance <= 0) {

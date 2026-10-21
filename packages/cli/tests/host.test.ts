@@ -5,6 +5,7 @@
  * a description, signed statuses, and a pay page opened with a signed link,
  * where Stripe and USDC from a wallet (on a fake network) pay.
  */
+import { isHostStats } from '../src/host-stats.js';
 import { test, describe, afterEach } from 'node:test';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -228,6 +229,31 @@ describe('the host API', () => {
     open.push(served);
     return served;
   }
+
+  test('anyone sees a host’s rounded totals, and nothing about any one space, unless it keeps them to itself', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const served = await running({ free: true });
+    const url = `http://127.0.0.1:${served.port}`;
+    const key = await subscriptionKey(newSubscriptionSeed());
+    const me = await account();
+    const laptop = await device(me, hub);
+    await laptop.spaces.create({ name: 'Notes', visibility: 'private' });
+    const { invite } = await laptop.carriers.add({ did: served.node.did, name: 'Host' });
+    await createHostClient(url, served.node.did, key).attach(me.did, invite);
+
+    const response = await fetch(`${url}/host/stats`);
+    assert.equal(response.status, 200);
+    const stats: unknown = await response.json();
+    assert.ok(isHostStats(stats));
+    // One account and its one space round to none: a stranger can't tell a host carries a single community.
+    assert.equal(stats.accounts, 0);
+    assert.equal(stats.spaces, 0);
+    assert.equal(stats.funds, undefined, 'a free host takes no payments');
+    assert.doesNotMatch(JSON.stringify(stats), /did:key|Notes/);
+
+    const closed = await running({ free: true, stats: false });
+    assert.equal((await fetch(`http://127.0.0.1:${closed.port}/host/stats`)).status, 404);
+  });
 
   test('a free host takes any subscription; only the subscription itself may ask about it', async () => {
     const hub = createFakeHub({ latencyMs: 1 });
