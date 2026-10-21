@@ -4,7 +4,7 @@ import type { NodeRecord, SpaceSummary } from '@minca/core';
 import { comment } from '@minca/core/schemas';
 import { bodyOf } from '../../derive/schema-ui';
 import { ago } from '../../derive/time';
-import { Avatar } from '@minca/app-shared/Avatar';
+import { PersonAvatar } from './PersonAvatar';
 import { styles, palette } from '../../styles';
 import { Person } from '../Person';
 import { peopleFrom, respondingTo } from '../../derive/people';
@@ -46,7 +46,7 @@ export function Comments({
       </h3>
       {sorted.map((c) => (
         <div key={c.key} style={{ display: 'flex', gap: 10 }}>
-          <Avatar did={c.root ?? c.author} size={26} />
+          <PersonAvatar spaceId={space.id} did={c.root ?? c.author} size={26} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13 }}>
               <Person did={c.root} style={{ fontWeight: 600, color: palette.ink.strong }} />

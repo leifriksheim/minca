@@ -765,8 +765,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     reads is still judged when shown (`packages/cli/src/agent.ts`, `startWithKey`;
     [#287](https://github.com/leifriksheim/minca/issues/287)).
   - A records-only grant can write the account's `sys.profile`, and so have
-    contact requests sealed to itself; and `sys.memberkey`, to have new space
-    keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/minca/issues/165)).
+    contact requests sealed to itself, or show a picture of its choosing as
+    the account's until the person changes theirs; and `sys.memberkey`, to
+    have new space keys sealed to itself _(traced)_ ([#165](https://github.com/leifriksheim/minca/issues/165)).
   - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
     its grant expires ([#165](https://github.com/leifriksheim/minca/issues/165)).

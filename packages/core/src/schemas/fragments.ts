@@ -146,8 +146,9 @@ export const placeRef = (description?: string) =>
 export const point = () => ({ lat: latitude(), lon: longitude() });
 
 /**
- * A file's bytes, by the SHA-256 of the bytes as stored (lower-case hex). How
- * bytes are stored and fetched is planned (05 §16.6); the reference is not.
+ * A file, as `records.addFile` gives it: its id (05 §16.6), its size as
+ * stored, what it is, and the key and salt that open it. A body holding one
+ * names the file on its version, so peers fetch and keep it.
  */
 export const blob = (description?: string) =>
   described(
@@ -161,6 +162,8 @@ export const blob = (description?: string) =>
         size: { type: 'integer' as const, minimum: 0 },
         mime: text(255, undefined, 1),
         name: text(255),
+        key: described({ type: 'string' as const, minLength: 22, maxLength: 22 }, 'What opens it, base64url'),
+        salt: described({ type: 'string' as const, minLength: 22, maxLength: 22 }, 'Its salt, base64url'),
       },
       required: ['hash', 'size', 'mime'] as const,
     },
