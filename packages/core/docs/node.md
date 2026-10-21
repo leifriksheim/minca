@@ -312,8 +312,8 @@ needs no grant. A founder who leaves is a founder no more, for good; to stay
 without being one, `spaces.stepDown`
 ([spaces](spaces.md#the-top-and-founders)). Then it deletes
 the space's `sys.joined` record in the account registry, closes the space and
-forgets it with its keys. The account registry and the contacts space cannot
-be left.
+forgets it with its keys. The account registry, the contacts space and carry
+spaces cannot be left.
 
 - The removal goes out only while the space is open, so `leave` waits up to
   5 s for a peer of another account to say it has it. With nobody reachable,
@@ -328,7 +328,7 @@ be left.
 
 `contacts.remove` and `contacts.block` leave the space for two this way.
 
-_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry")._
+_Source: `packages/core/src/node/node.ts` (`spaces.leave`, `giveUpPlace`, `forget`, `LEAVE_WAIT_MS`), `packages/core/src/node/space-runtime.ts` (`giveUpPlace`). Tests: `packages/core/tests/key-change.test.ts` ("leaving a private space"), `packages/core/tests/contacts.test.ts` ("removing a contact gives up your place"), `packages/core/tests/node.test.ts` ("the account registry"), `packages/core/tests/carrier.test.ts` ("its carry space cannot be left…")._
 
 ## Holding part of a space
 
@@ -418,7 +418,7 @@ Three kinds of space are the account's own machinery and are hidden from
 | -------------------- | ------------------------------------------ | -------------------------------------------------------------- |
 | The account registry | the account key                            | Never in the node's registry; opened directly. Cannot be left. |
 | The contacts space   | the account key, or `config.contactsSpace` | Held in the registry, hidden. Cannot be left.                  |
-| Carry spaces         | one per carrier the account uses           | Held in the registry, hidden.                                  |
+| Carry spaces         | one per carrier the account uses           | Held in the registry, hidden. Cannot be left.                  |
 
 **Reconciling.** With an account key, the node makes its spaces match the
 account's list of `sys.joined` records. This runs at start and whenever
