@@ -921,6 +921,8 @@ A writer MUST use exactly this encoding; a reader MUST decode it.
   (for sealed keys, §15).
 - **Segments** `spaces/<space id>/<store writer id>/<name>.seg`: as in
   §16.3, written once and never changed.
+- **Files** `spaces/files/<space id>/<store writer id>/<id>` and `<id>.list`:
+  as in §16.6, written once and deleted by their writer only.
 - Names that end in `.tmp` are a writer's work in progress and MUST be
   ignored.
 
@@ -1135,7 +1137,7 @@ carried forward), **then** delete the old ones. A reader in between sees
 duplicates, which are harmless.
 
 **Deleting a space** from a blob store deletes every key under
-`<space id>/`.
+`<space id>/` and under `files/<space id>/`.
 
 _Source: `packages/core/src/storage/segment.ts`, `packages/core/src/storage/mirror.ts`,
 `packages/core/src/node/space-runtime.ts` ("Mirrors"), `packages/core/src/node/host.ts`. Tests:
@@ -1190,7 +1192,11 @@ needs and how big they are.
 A peer never refuses a version for its `files`. On a version that is not a
 delete, it takes entries in order, skipping any that is not an object with
 `hash` and `size` as above (other members are ignored) or repeats an earlier
-`hash`, until it has 16, and ignores the rest. Every peer takes the same
+`hash`, until it has 16, and ignores the rest. Different versions may name
+one id with different sizes; since the id binds the size, only one is ever
+the file. A node fetches, serves, keeps and mirrors an id only as the size
+its chunk list fits, so a wrong size another member names is never
+satisfied and takes nothing from the right one. Every peer takes the same
 entries, so none disagree; a peer that predates files keeps `files` as an
 unknown member ([02](02-records.md) §3.1), so no sync version moves.
 
@@ -1234,7 +1240,8 @@ records of the `aes128gcm` content coding of
   and §2.3 say (HKDF-SHA-256, then AES-128-GCM).
 - The record size is `CHUNK`. Every record but the last holds `CHUNK` − 17
   bytes of the file followed by the delimiter `0x01`; the last holds the
-  rest followed by `0x02`. No record is padded further. So record `i` is
+  rest followed by `0x02`. A writer pads no record further (a reader
+  accepts zero padding after the delimiter, as RFC 8188 does). So record `i` is
   exactly chunk `i`, and `size` is the file's length plus 17 per record (an
   empty file is one record of 17 bytes).
 - A key and salt seal one file only: an edited file gets new ones, and so a

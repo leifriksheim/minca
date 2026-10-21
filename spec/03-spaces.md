@@ -1416,8 +1416,9 @@ rather than anyone's words.
 Everything else is encrypted — application records, `sys.collection`
 definitions, `sys.profile`, and the registry's own collections. The envelope
 ([02](02-records.md): `id`, `author`, `collection`, `space`, `key`, `seq`,
-`seen`, `createdAt`, `proof`, `tags`, `retain`, `deleted`, signature) is
-always in the clear; `links` are moved inside the ciphertext and omitted from
+`seen`, `createdAt`, `proof`, `tags`, `files`, `retain`, `deleted`, signature) is
+always in the clear (`files`, so a keeper can fetch and keep the files a
+version names; their bytes are sealed apart, [05](05-sync-and-storage.md) §16.6); `links` are moved inside the ciphertext and omitted from
 the envelope. A delete carries no body.
 
 > Rationale: a peer holding no secret of the space — a relay-side mirror, a

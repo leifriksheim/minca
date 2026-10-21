@@ -86,20 +86,40 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   // ─── Which files this node keeps ───────────────────────────────────
 
-  let named: Promise<Map<string, FileName>> | null = null;
-  /** Every file a version this store keeps whole names, and that stands */
-  const namedFiles = (): Promise<Map<string, FileName>> =>
+  let named: Promise<Map<string, FileName[]>> | null = null;
+  /**
+   * Every file a version this store keeps whole names, and that stands, by
+   * id. Versions may name one id with different sizes; the id binds the size,
+   * so only one is ever the file, and the others are never satisfied.
+   */
+  const namedFiles = (): Promise<Map<string, FileName[]>> =>
     (named ??= (async () => {
-      const files = new Map<string, FileName>();
+      const files = new Map<string, FileName[]>();
       for (const id of await storage.versionIds()) {
         const version = await storage.getVersion(id);
         if (!version || !('body' in version)) continue;
         const taken = filesOf(version);
         if (taken.length === 0 || (config.stands && !(await config.stands(version)))) continue;
-        for (const file of taken) files.set(file.hash, file);
+        for (const file of taken) {
+          const sizes = files.get(file.hash) ?? [];
+          if (!sizes.some((known) => known.size === file.size)) sizes.push(file);
+          files.set(file.hash, sizes);
+        }
       }
       return files;
     })());
+  const isNamed = async (file: FileName) =>
+    (await namedFiles()).get(file.hash)?.some((known) => known.size === file.size) ?? false;
+  /** The one of the sizes named for an id that its held chunk list fits: the file itself */
+  async function heldFile(hash: string): Promise<FileName | null> {
+    const list = await adapter.get(listKey(hash));
+    if (!list) return null;
+    for (const file of (await namedFiles()).get(hash) ?? []) if (await listFits(file, list)) return file;
+    return null;
+  }
+  const isWhole = async (file: FileName) =>
+    (await heldFile(file.hash))?.size === file.size &&
+    (await heldChunks(file)).size === chunkCount(file.size);
 
   // ─── Local chunks ──────────────────────────────────────────────────
 
@@ -193,26 +213,11 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   async function fromMirrors(file: FileName): Promise<boolean> {
     for (const mirror of config.mirrors?.() ?? []) {
       try {
-        const keys = await mirror.store.list(`files/${config.space}/`);
-        const at = keys.find((key) => key.endsWith(`/${file.hash}`));
-        if (!at) continue;
-        const list = await mirror.store.get(`${at}.list`);
-        const bytes = await mirror.store.get(at);
-        if (!list || !bytes || !(await listFits(file, list)) || bytes.length !== file.size) continue;
-        const chunks: Array<[number, Uint8Array]> = [];
-        let whole = true;
-        for (let index = 0; index < chunkCount(file.size); index++) {
-          const chunk = bytes.slice(index * CHUNK, (index + 1) * CHUNK);
-          if (!(await chunkFits(file, list, index, chunk))) {
-            whole = false;
-            break;
-          }
-          chunks.push([index, chunk]);
-        }
-        if (!whole) continue;
-        await adapter.put(listKey(file.hash), list);
-        for (const [index, chunk] of chunks) await adapter.put(chunkKey(file.hash, index), chunk);
-        return true;
+        const copies = (await mirror.store.list(`files/${config.space}/`)).filter((key) =>
+          key.endsWith(`/${file.hash}`),
+        );
+        // Every store writer's copy in turn: one that fails its checks hides none of the others.
+        for (const at of copies) if (await fromCopy(mirror, at, file)) return true;
       } catch {
         // Out of reach; the next one, or none.
       }
@@ -220,10 +225,28 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     return false;
   }
 
+  /** One store writer's copy of a file in a mirror, checked as from a peer, and kept if it passes */
+  async function fromCopy(mirror: FileMirror, at: string, file: FileName): Promise<boolean> {
+    const list = await mirror.store.get(`${at}.list`);
+    if (!list || !(await listFits(file, list))) return false;
+    const bytes = await mirror.store.get(at);
+    if (!bytes || bytes.length !== file.size) return false;
+    const chunks: Array<[number, Uint8Array]> = [];
+    for (let index = 0; index < chunkCount(file.size); index++) {
+      const chunk = bytes.slice(index * CHUNK, (index + 1) * CHUNK);
+      if (!(await chunkFits(file, list, index, chunk))) return false;
+      chunks.push([index, chunk]);
+    }
+    await adapter.put(listKey(file.hash), list);
+    for (const [index, chunk] of chunks) await adapter.put(chunkKey(file.hash, index), chunk);
+    return true;
+  }
+
   const fetching = new Map<string, Promise<void>>();
   /** Fetches whatever of a file is not held here: from peers, then mirrors. Throws if none has it all. */
   function fetchFile(file: FileName): Promise<void> {
-    const running = fetching.get(file.hash);
+    const at = `${file.hash}:${file.size}`;
+    const running = fetching.get(at);
     if (running) return running;
     const work = (async () => {
       const n = chunkCount(file.size);
@@ -249,8 +272,8 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
       if ((await missing()).length === 0) return;
       if (await fromMirrors(file)) return;
       throw new Error('No peer or mirror holds that file now');
-    })().finally(() => fetching.delete(file.hash));
-    fetching.set(file.hash, work);
+    })().finally(() => fetching.delete(at));
+    fetching.set(at, work);
     return work;
   }
 
@@ -258,7 +281,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   async function read(file: FileName): Promise<Uint8Array> {
     const held = (await heldChunks(file)).size === chunkCount(file.size);
     // A peer is asked only for a file a version kept whole here names (spec 05 §16.6).
-    if (!held && !(await namedFiles()).has(file.hash)) throw new Error('No record here names that file');
+    if (!held && !(await isNamed(file))) throw new Error('No record here names that file');
     await fetchFile(file);
     const pieces: Uint8Array[] = [];
     for (let index = 0; index < chunkCount(file.size); index++) {
@@ -306,10 +329,13 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
   async function serve(peer: string, message: Record<string, unknown>): Promise<void> {
     if (typeof message.id !== 'number' || typeof message.hash !== 'string') return;
     const { id, hash } = message;
-    const file = (await namedFiles()).get(hash);
+    // The size its held list fits, whatever other sizes other versions name for the id.
+    const file = await heldFile(hash);
     const missing: Part[] = [];
-    const sendPart = (chunk: Part, bytes: Uint8Array) => {
-      for (let at = 0; at < bytes.length; at += BYTES_PER_MESSAGE)
+    const sendPart = async (chunk: Part, bytes: Uint8Array) => {
+      for (let at = 0; at < bytes.length; at += BYTES_PER_MESSAGE) {
+        // A turn between frames, so the node's other messages go out between them (spec 05 §16.6).
+        if (at > 0) await new Promise((resolve) => setTimeout(resolve, 0));
         config.send(peer, {
           type: 'file',
           id,
@@ -318,10 +344,11 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
           at,
           bytes: base64UrlEncode(bytes.subarray(at, at + BYTES_PER_MESSAGE)),
         });
+      }
     };
     if (message.list === true) {
       const list = file ? await heldList(file) : null;
-      if (list) sendPart('list', list);
+      if (list) await sendPart('list', list);
       else missing.push('list');
     } else if (Array.isArray(message.chunks)) {
       const range: readonly unknown[] = message.chunks;
@@ -340,7 +367,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         for (let index = from; index <= last; index++) {
           const chunk = file && sent < CHUNKS_PER_REPLY ? await adapter.get(chunkKey(hash, index)) : null;
           if (chunk) {
-            sendPart(index, chunk);
+            await sendPart(index, chunk);
             sent++;
           } else missing.push(index);
         }
@@ -382,12 +409,14 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
     for (const mirror of config.mirrors?.() ?? []) {
       const mine = `files/${config.space}/${mirror.writer}/`;
       const there = new Set(await mirror.store.list(mine));
-      for (const file of wanted.values()) {
-        if (there.has(`${mine}${file.hash}`)) continue;
-        const list = await heldList(file);
-        if (!list || (await heldChunks(file)).size < chunkCount(file.size)) continue;
-        await mirror.store.put(`${mine}${file.hash}.list`, list);
-        await mirror.store.put(`${mine}${file.hash}`, await read(file));
+      for (const hash of wanted.keys()) {
+        if (there.has(`${mine}${hash}`)) continue;
+        // Only the file itself: the size its list fits, held whole.
+        const file = await heldFile(hash);
+        const list = file ? await heldList(file) : null;
+        if (!file || !list || !(await isWhole(file))) continue;
+        await mirror.store.put(`${mine}${hash}.list`, list);
+        await mirror.store.put(`${mine}${hash}`, await read(file));
       }
       for (const key of there) {
         const id = key.slice(mine.length).replace(/\.list$/, '');
@@ -398,11 +427,17 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   /** Fetches every file a version kept whole names that is not here yet: what a keeper does */
   async function fetchAll(): Promise<void> {
-    for (const file of (await namedFiles()).values()) {
-      if ((await heldChunks(file)).size === chunkCount(file.size)) continue;
-      await fetchFile(file).catch(() => {
-        // Nobody has it now; asked again after the next change.
-      });
+    for (const [hash, sizes] of await namedFiles()) {
+      const held = await heldFile(hash);
+      if (held && (await isWhole(held))) continue;
+      // Every size named for it, the file's own first if its list is here: the wrong ones fail on the list.
+      for (const file of held ? [held] : sizes) {
+        const fetched = await fetchFile(file).then(
+          () => true,
+          () => false,
+        );
+        if (fetched) break;
+      }
     }
   }
 

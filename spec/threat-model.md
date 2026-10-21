@@ -291,7 +291,9 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     `history: "all"`. It can also name another member's deleted file in a
     version of its own, keeping its ciphertext held, though nobody without
     the old body can open it. `size` is the writer's word until the bytes
-    arrive (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
+    arrive. And any peer it serves can ask for up to four chunks (1 MiB) per
+    `want-file`, as often as it likes: nothing bounds bytes served per peer
+    (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
     sorts on them, and that grow with every record a member links to it.
@@ -818,8 +820,10 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
   - Without the space key, it can't compute or test a private space's
     `onePer` keys, so it can't check a guess of who voted on which poll, or
     how (02 §7.3, 03 §8.6).
-  - It can't read a file it keeps or serves, in a public space either: each
-    is sealed under a key only bodies hold; nor pass off other bytes as one,
+  - It can't read a file it keeps or serves without a body that names it:
+    each is sealed under a key only bodies hold, so in a private space it
+    reads none, and of a deleted file it holds only ciphertext; nor pass off
+    other bytes as one,
     since every chunk is checked against the id a signed version names
     (05 §16.6; `packages/core/tests/files.test.ts`, "a chunk that is not the
     one its list names is dropped…", "a list of inner hashes, or of the wrong

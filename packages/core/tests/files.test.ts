@@ -37,6 +37,7 @@ import { until } from './helpers/until.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
 import { createStorageProvider, type StorageProvider } from '../src/storage/storage-provider.js';
 import { createMemoryBlobStore } from '../src/storage/blob/memory.js';
+import { deleteMirrored } from '../src/storage/mirror.js';
 import { createSpaceFiles, type SealedFile, type SpaceFiles } from '../src/files/space-files.js';
 import { createP256Provider } from '../src/identity/crypto-p256.js';
 import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
@@ -335,6 +336,29 @@ describe('what a peer refuses', () => {
     await files.a.tidy();
     assert.equal(await a.adapter.get(`f/${ref.hash}/0`), null);
     assert.ok(await a.adapter.get(`f/${unnamed.hash}/0`), 'a file added here and not yet named stays');
+  });
+
+  test('a wrong size named for a live file takes nothing from it: it is served, kept and mirrored whole', async () => {
+    const { a, b, files, mirror } = await wired();
+    const ref = await files.a.add(bytesOf(3 * CHUNK));
+    await name(a.storage, ref);
+    await name(b.storage, ref);
+    // Another member names the same id with a size of 1, in a version of its own.
+    for (const storage of [a.storage, b.storage]) await name(storage, { ...ref, size: 1 }, 'grief');
+    assert.deepEqual(await files.b.read(ref), await files.a.read(ref));
+    files.a.changed();
+    await files.a.tidy();
+    assert.equal((await mirror.get(`files/demo/writer-a/${ref.hash}`))?.length, ref.size);
+  });
+
+  test('deleting a space from a blob store takes its files with it', async () => {
+    const store = createMemoryBlobStore();
+    await store.put('demo/w/000001-x.seg', new Uint8Array([1]));
+    await store.put('files/demo/w/abc', new Uint8Array([1]));
+    await store.put('files/demo/w/abc.list', new Uint8Array([1]));
+    await store.put('files/other/w/abc', new Uint8Array([1]));
+    await deleteMirrored(store, 'demo');
+    assert.deepEqual(await store.list(''), ['files/other/w/abc']);
   });
 
   test('a file kept in a mirror is read from it with no peer at all, and checked', async () => {

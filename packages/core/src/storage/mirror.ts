@@ -93,9 +93,10 @@ const newWriterId = () =>
     b.toString(16).padStart(2, '0'),
   ).join('');
 
-/** Deletes everything a space keeps in a store — every writer's segments */
+/** Deletes everything a space keeps in a store — every writer's segments, and its files */
 export async function deleteMirrored(store: BlobStore, space: string): Promise<void> {
-  for (const key of await store.list(`${space}/`)) await store.delete(key);
+  for (const key of [...(await store.list(`${space}/`)), ...(await store.list(`files/${space}/`))])
+    await store.delete(key);
 }
 
 export async function createMirror(config: MirrorConfig): Promise<Mirror> {
