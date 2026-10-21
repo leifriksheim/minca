@@ -2086,6 +2086,9 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
    */
   let memberKeysCache: Promise<Map<string, string>> | null = null;
   const memberKeyMap = () => (memberKeysCache ??= loadMemberKeys());
+  /** Every key box, read once until records change */
+  let boxCache: ReturnType<typeof storage.histories> | null = null;
+  const boxIndex = () => (boxCache ??= storage.histories('box:'));
 
   async function loadMemberKeys(): Promise<Map<string, string>> {
     const found = new Map<string, string>();
@@ -2136,6 +2139,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     catalogCache = null;
     profilesCache = null;
     memberKeysCache = null;
+    boxCache = null;
     accessCache = placed && accessCache ? extendAccess(accessCache, placed) : null;
     standings.clear();
     checkVerdicts.clear();
@@ -2201,7 +2205,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     };
 
     if (memberPair && epochs.some((epoch) => !keyring.has(epoch.keyId))) {
-      for (const versions of (await storage.histories('box:')).values()) {
+      for (const versions of (await boxIndex()).values()) {
         for (const version of versions) {
           if (version.collection !== BOX_COLLECTION || version.deleted || opened.has(version.id)) continue;
           const body = isRecord(version.body) ? version.body : null;
@@ -2325,7 +2329,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
     if (!epoch || !key) return;
 
     const boxed = new Set<string>();
-    for (const versions of (await storage.histories('box:')).values()) {
+    for (const versions of (await boxIndex()).values()) {
       for (const version of versions) {
         const body = isRecord(version.body) ? version.body : null;
         if (
