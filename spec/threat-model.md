@@ -731,10 +731,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     only for a key it shows it holds, never the home's own or another
     connection's, so disconnecting it revokes nobody else (06 §2.5).
   - Given some spaces, or records only, it never changes the account's own
-    place in any space:
-    every peer ignores its account leaving, taking or giving up a role,
-    stepping down, or publishing a member key or profile, and its revoke of
-    any key but its own. Nor does it write the account's own spaces or open
+    place in any space: every peer ignores its account joining, leaving,
+    being assigned or unassigned a role, stepping down, or publishing a
+    member key or profile, and its revoke of any key but its own. Nor does it write the account's own spaces or open
     its doors: those need a note about the whole account (01 §8;
     `packages/core/tests/records-only.test.ts`, "an app given a space never
     changes the account's own place there…"; `connect.test.ts`, "it lists
@@ -812,6 +811,9 @@ _Source: 02 §4.10; 03 §6.4, §6.5; 01 §7.5. Tests: `packages/core/tests/write
     the same key. Its stores' entries are its own, unjudged, though what it
     reads is still judged when shown (`packages/cli/src/agent.ts`, `startWithKey`;
     [#287](https://github.com/leifriksheim/minca/issues/287)).
+  - Given a space and `/access/change` there, it can still redefine or
+    delete a role its own account holds, if that role may define itself: the
+    account keeps the role by name and loses what it gave (01 §8) _(traced)_.
   - `scope: account` hands over the account key, and `scope: spaces` member
     keys, neither of which ever rotates. It reads what those keys open after
     its grant expires ([#165](https://github.com/leifriksheim/minca/issues/165)).

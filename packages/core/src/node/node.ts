@@ -705,7 +705,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     for (const record of await ownRecords<Carrier>(
       await runtime(accountSpaceId),
       { collection: CARRIER_COLLECTION },
-      (one) => typeof one.body?.did === 'string',
+      // A generation is a count: anything else names no carry space.
+      (one) =>
+        typeof one.body?.did === 'string' &&
+        (one.body.gen === undefined || (Number.isSafeInteger(one.body.gen) && one.body.gen >= 0)),
     )) {
       const carry = await carrySpaceOf(record.body!);
       // Its key names its carry space: that is how every device knows the space is one.
@@ -1170,8 +1173,10 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
       let entry = all.find(({ body }) => body.did === carrier.did && !body.removed);
       if (entry) void passAll().catch(() => {});
       else {
-        // Added again after a removal, a new carry space: the last one tells it to forget.
-        const gen = all.filter(({ body }) => body.did === carrier.did).length;
+        // Added again after a removal, a new carry space: the last one tells it to forget. One past the
+        // highest seen, not a count: a device that hasn't synced every earlier one must not land on a closed space.
+        const gens = all.filter(({ body }) => body.did === carrier.did).map(({ body }) => body.gen ?? 0);
+        const gen = gens.length ? Math.max(...gens) + 1 : 0;
         const body: Carrier = {
           did: carrier.did,
           name: carrier.name.trim().slice(0, 80) || 'Carrier',

@@ -671,7 +671,10 @@ that reads anything else finds `null` (a missing member) or nothing.
   grant what it requires: it is not an event in the history, whatever the
   writer's roles ([03 — Spaces](03-spaces.md)). Any other version about the
   account itself whose proof lacks `/account/write` for the account as a
-  whole MUST NOT count.
+  whole MUST NOT count. Before v1 this applies to what is already stored:
+  a member key, profile, joining or leaving an app wrote under a narrower
+  note stops counting, and a device of the account publishes the account's
+  own again when it next opens the space.
 
 A person's own sessions, and apps granted write, get `/` about the account.
 A key the account trusts less gets `/record` (a request for records only,

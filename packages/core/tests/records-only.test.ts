@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import * as z from 'zod';
 
 import { createNode } from '../src/node/node.js';
+import { profileKey } from '../src/node/space-runtime.js';
 import { runAction } from '../src/node/actions.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
@@ -419,9 +420,32 @@ describe('an agent acting for a person', () => {
         },
         asApp,
       ),
+      // Bob's app renames him.
+      await forgeAsAgent(
+        bob,
+        space,
+        {
+          collection: 'sys.profile',
+          body: { name: 'Not Bob' },
+          retain: true,
+          version: { key: await profileKey(bob.node.did), seq: 0 },
+        },
+        asApp,
+      ),
     ];
     const alices = [
-      // Alice's app steps her down, and revokes the key her node writes with.
+      // Alice's app gives her a role, steps her down, and revokes the key her node writes with.
+      await forgeAsAgent(
+        alice,
+        space,
+        {
+          collection: 'sys.assign',
+          body: { did: alice.node.did, role: 'editor', assigned: true },
+          retain: true,
+          version: { key: await assignKey(alice.node.did, 'editor'), seq: 0 },
+        },
+        asApp,
+      ),
       await forgeAsAgent(
         alice,
         space,
@@ -460,6 +484,11 @@ describe('an agent acting for a person', () => {
       );
     const access = await alice.node.spaces.access(space);
     assert.equal(access.founder, true);
+    assert.deepEqual(access.members.find((m) => m.did === alice.node.did)?.roles, []);
+    assert.notEqual(
+      (await alice.node.spaces.profiles(space)).find((profile) => profile.did === bob.node.did)?.name,
+      'Not Bob',
+    );
     assert.deepEqual(access.members.find((m) => m.did === bob.node.did)?.roles, ['editor']);
     assert.deepEqual((await bob.node.spaces.access(space)).mine, ['editor']);
     // Alice still writes with the key her app tried to revoke.

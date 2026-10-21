@@ -787,8 +787,10 @@ _Source: `packages/core/src/space/pass.ts`, `packages/core/src/node/carrier.ts`.
 Using a carrier needs the account key:
 
 1. The node derives the carry space from the account key, the carrier's
-   `did` and `gen`, the number of `sys.carrier` records it holds for that
-   `did` ([03](03-spaces.md) §13.1, §14).
+   `did` and `gen`: 0 for a carrier new to the account, else one more than
+   the highest `gen` of the `sys.carrier` records it holds for that `did`
+   ([03](03-spaces.md) §13.1, §14). A `gen` that is not a non-negative
+   integer names no carry space: such a record is ignored.
 2. It writes a `sys.carrier` record in the account registry, key
    `carrier:<hex of the first 20 bytes of SHA-256(utf8(carry space id))>`, body
    `{ did, name, since, gen? }` (`gen` only when not 0).
@@ -801,14 +803,15 @@ Every device derives the same carry space, so two devices that add a carrier
 at once, each before hearing of the other's record, write one record for one
 space. Nothing is stored before step 2, so a node that stops before it
 leaves nothing behind. A space is a carry space when a `sys.carrier` record
-of the account's, live or removed, is keyed by its id; a node never lists
-one as a space the account uses, nor leaves it.
+of the account's, live or removed, is keyed by its id: the key alone decides
+it, whatever the body says. A node never lists one as a space the account
+uses, nor leaves it.
 
 A carrier the account already uses, by `did`, is not added again: the node
 returns its carry space and invite as they are. So a carrier that connects
 again keeps what it holds, and is never sent `carry:closed` (below) for a
 space it is still using. One added again after it was removed gets a new
-carry space, since its removed record counts toward `gen`.
+carry space, one `gen` past its removed record's.
 
 A `sys.carrier` record from before carry spaces were derived names its carry
 space and a view-only invite to it in `space` and `invite`; a node opens that
@@ -818,7 +821,7 @@ A removal made on a device that is offline can cross a reconnect made
 through another device that has not heard of it yet. The removal wins: once
 it arrives, the carrier reads `carry:closed`, forgets what it held and says
 the account disconnected it, and connecting it again then derives a new carry
-space. That device could not tell the record was already deleted, so nothing
+space. That device could not tell the carrier was already removed, so nothing
 it does at the reconnect could prevent this.
 
 Every device holding the account key keeps each live carrier's carry space in
@@ -827,7 +830,7 @@ step with the account (§1.3): one `sys.pass` record per space, and one
 It writes each pass from the key its registry holds for the space, and opens
 the space, which is how it learns of a change of key; the refill that change
 starts writes the pass for the new key. It writes no pass in the
-carry space of a carrier its registry shows deleted, and a removal on that
+carry space of a carrier its registry shows removed, and a removal on that
 device waits for a refill already under way.
 
 > **Known defect:** a device behind on a key change writes the pass from the
