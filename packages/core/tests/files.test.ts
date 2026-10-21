@@ -242,6 +242,39 @@ describe('files between nodes', () => {
     );
   });
 
+  test('a picture whose bytes are away never holds back the name and contact key', async () => {
+    const hub = createFakeHub({ latencyMs: 1 });
+    const start = async (seed = generateSeed()) => {
+      const manager = createIdentityManager();
+      const node = await createNode({
+        signer: createLocalRootSigner(await manager.fromSeed(seed), manager.getProvider()),
+        accountKey: await deriveAccountKey(seed),
+        stores: memoryStores(),
+        watchIntervalMs: 0,
+        network: { transports: (spaceId, sessionDid) => [hub.transport(sessionDid, spaceId)] },
+      });
+      open.push(node);
+      return node;
+    };
+    const seed = generateSeed();
+    const first = await start(seed);
+    await first.account.setName('Alice');
+    await first.account.setAvatar({ bytes: bytesOf(5000), mime: 'image/webp' });
+    const second = await start(seed);
+    await until(async () => (await second.account.profile())?.avatar !== undefined, 10000, 'the registry');
+    // The only device with the picture's bytes goes away; the other joins a space.
+    await first.close();
+    const bob = await start();
+    const space = await bob.spaces.create({ name: 'B', visibility: 'private', ...team });
+    await second.spaces.join(await bob.spaces.invite(space.id, { role: 'editor' }));
+    await joined(second, space.id);
+    await until(
+      async () => (await bob.spaces.profiles(space.id)).find((p) => p.did === second.did)?.name === 'Alice',
+      8000,
+      'the name, without the picture',
+    );
+  });
+
   test('a file nobody names is asked for by nobody, and served to nobody', async () => {
     const { alice, bob, space } = await pair();
     const ref = await alice.records.addFile(space.id, bytesOf(100), { mime: 'text/plain' });

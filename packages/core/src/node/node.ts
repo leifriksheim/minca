@@ -434,11 +434,19 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     if (spaceId === accountSpaceId || spaceId === contactsSpaceId || narrowNote) return;
     const own = await ownProfile();
     if (!own) return;
-    await open.publishProfile({
-      name: own.name,
-      ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}),
-      ...(own.avatar ? { avatar: await avatarIn(spaceId, open, own.avatar) } : {}),
-    });
+    const base = { name: own.name, ...(contactKeys ? { contactKey: contactKeys.publicKey } : {}) };
+    const held = (await open.profiles()).find((profile) => profile.did === config.signer.did)?.avatar;
+    const current = isAvatarRef(held) && held.source === own.avatar?.hash ? held : undefined;
+    // The name and contact key go out now, with the picture the space already has; a new picture
+    // follows once it is copied, which may wait on its bytes reaching this device.
+    const shown = own.avatar ? (current ?? (isAvatarRef(held) ? held : undefined)) : undefined;
+    await open.publishProfile({ ...base, ...(shown ? { avatar: shown } : {}) });
+    if (own.avatar && !current)
+      void avatarIn(spaceId, open, own.avatar)
+        .then((avatar) => open.publishProfile({ ...base, avatar }))
+        .catch(() => {
+          // Its bytes are on a device that is away: copied next time the profile is published.
+        });
   }
 
   /**

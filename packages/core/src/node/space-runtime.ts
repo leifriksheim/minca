@@ -2078,7 +2078,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
           if (typeof name !== 'string' || !name.trim()) break;
           found = { did: verdict.root, name: name.trim().slice(0, 64), updatedAt: version.createdAt };
         }
-        // The picture, from the newest version: taken away is gone.
+        // The picture, from the newest version: one without it shows none (the older stay kept, as retained).
         if (!found.avatar && found.updatedAt === version.createdAt && isAvatarRef(body?.avatar))
           found = { ...found, avatar: body.avatar };
         // The contact key from the newest version that has one: it never changes, and an app

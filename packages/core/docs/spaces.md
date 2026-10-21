@@ -211,7 +211,11 @@ the app resizes it first), and `picture()` reads it back. The node publishes
 both into every space it opens, and again on a change. A space's members
 can't read the registry, so the picture is copied into each space once, as a
 file of that space, and its reference names the registry file it copies
-(`source`), so opening the space again makes no second copy. It publishes
+(`source`), so opening the space again makes no second copy. A picture that
+can't be copied now (its bytes on a device that is away) leaves the space's
+copy as it was, and never holds back the name. Profiles are retained, so a
+picture once shared stays with the members who hold it: taking it away
+shows none from then on, and withdraws nothing. It publishes
 in every space but the registry and the contacts space, and not at all from
 a node whose note lacks `/account/write` (an agent's); a non-member
 publishes nothing
