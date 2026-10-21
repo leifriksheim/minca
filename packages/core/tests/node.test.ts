@@ -401,6 +401,20 @@ describe('the account registry', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
     assert.deepEqual(await names(theirs), []);
   });
+
+  test('closing while a space is still opening closes cleanly', async () => {
+    const seed = generateSeed();
+    const stores = memoryStores();
+    const hub = createFakeHub({ latencyMs: 1 });
+    const first = await device(seed, hub, stores);
+    const space = await first.spaces.create({ name: 'Opening', visibility: 'private' });
+    await first.close();
+    // On the same stores, so the space is in the registry but not yet open.
+    const node = await device(seed, hub, stores);
+    const reading = node.records.list(space.id).catch(() => []);
+    await node.close();
+    await reading;
+  });
 });
 
 describe('session', () => {

@@ -58,6 +58,23 @@ describe('a folder on disk', () => {
     assert.deepEqual(await second.getVersion(signed.id), signed);
     assert.equal(await second.fingerprint(), await first.fingerprint());
   });
+
+  test('a file another writer deletes first is not found, as in a browser', async () => {
+    const dir = await openFsDirectory(await tempDir());
+    const adapter = await createFolderAdapter(dir, 'stores/one');
+    for (let round = 0; round < 20; round++) {
+      await adapter.put('gone', new Uint8Array([1]));
+      // Both find it, then each deletes it: the second must not fail.
+      const other = await createFolderAdapter(dir, 'stores/one');
+      await Promise.all([adapter.delete('gone'), other.delete('gone')]);
+    }
+    const handle = await (
+      await (await dir.getDirectoryHandle('stores')).getDirectoryHandle('one')
+    )
+      .getDirectoryHandle('kv')
+      .then((kv) => kv.getFileHandle('late', { create: true }));
+    await assert.rejects(handle.getFile(), { name: 'NotFoundError' });
+  });
 });
 
 describe('accounts in a home', () => {

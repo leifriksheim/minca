@@ -44,7 +44,7 @@ function securityHeaders(): Plugin {
  * export condition points each entry at `packages/core/src`, so there is no
  * build step and edits there hot-reload here.
  */
-export default defineConfig(() => ({
+export default defineConfig({
   resolve: {
     conditions: ['@minca/source', ...defaultClientConditions],
     // The protocol's React bindings sit outside this folder; they must use
@@ -55,4 +55,4 @@ export default defineConfig(() => ({
   worker: { format: 'es' },
   plugins: [securityHeaders(), react()],
   server: { port: 5173 },
-}));
+});

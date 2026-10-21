@@ -20,6 +20,8 @@ function notFound(name: string): Error {
   return error;
 }
 
+const isGone = (error: unknown) => error instanceof Error && 'code' in error && error.code === 'ENOENT';
+
 /**
  * Refuses a name that is not a single entry in this directory.
  *
@@ -56,7 +58,10 @@ async function exists(target: string): Promise<boolean> {
 function fileHandle(file: string): FileHandleLike {
   return {
     async getFile() {
-      const bytes = await fs.readFile(file);
+      // Deleted since it was found: as the browser says it.
+      const bytes = await fs.readFile(file).catch((error: unknown) => {
+        throw isGone(error) ? notFound(path.basename(file)) : error;
+      });
       return {
         async arrayBuffer() {
           return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -115,7 +120,12 @@ function directory(dir: string): DirectoryHandleLike {
       checkName(name);
       const target = path.join(dir, name);
       if (!(await exists(target))) throw notFound(name);
-      await fs.rm(target, { recursive: options?.recursive ?? false, force: false });
+      // Another delete can take it between the check and this one.
+      await fs
+        .rm(target, { recursive: options?.recursive ?? false, force: false })
+        .catch((error: unknown) => {
+          throw isGone(error) ? notFound(name) : error;
+        });
     },
 
     async *keys() {

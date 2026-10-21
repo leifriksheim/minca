@@ -16,11 +16,10 @@ export default defineConfig({
     'apps/extension/static/manifest.json',
   ],
   install: true,
-  // The lockfile `install` refreshed goes in the same commit. The tree is clean beforehand (gitCheck), so it's the only other change.
+  // The lockfile `install` refreshed goes in the same commit. scripts/release.mjs checks the tree is clean first, so it's the only other change.
   all: true,
   commit: 'Release v%s',
   tag: 'v%s',
   // Pushed only once both are published, so a failed publish leaves nothing half-released on GitHub.
   push: false,
-  gitCheck: true,
 });

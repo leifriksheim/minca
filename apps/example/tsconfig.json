@@ -5,5 +5,5 @@
     "customConditions": ["@minca/source"],
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "vite.config.ts"]
 }
