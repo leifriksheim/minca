@@ -6,6 +6,7 @@ import {
   accountCredentialName,
   offerToSave,
   recoveryKit,
+  connectionKey,
   type AuthState,
   type Connection,
   type StaySignedIn,
@@ -61,9 +62,9 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
   const disconnect = (app: Connection) => {
     const what = app.name ?? new URL(app.origin).host;
     setNotYet(null);
-    leave(connectionId(app), what, async () => {
+    leave(connectionKey(app), what, async () => {
       const heard = await auth.disconnect(app.origin, {
-        ...(app.via === 'code' || app.access === 'carry' ? { audience: app.audience } : {}),
+        ...(connectionKey(app) === app.audience ? { audience: app.audience } : {}),
         waitMs: HEARD_WITHIN_MS,
       });
       if (app.access === 'read')
@@ -308,8 +309,8 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             {connections.length === 0 && elsewhere.length === 0 && <Row label="No apps yet.">{null}</Row>}
             {connections.map((app) => (
               <Row
-                key={connectionId(app)}
-                shape={connectionId(app)}
+                key={connectionKey(app)}
+                shape={connectionKey(app)}
                 label={
                   app.access === 'carry'
                     ? `${describeConnection(app)} · ${presence(app.carrySpace)}`
@@ -322,7 +323,7 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
                   data-variant="quiet"
                   style={styles.smallButton}
                 >
-                  {disconnecting === connectionId(app) ? 'Disconnecting…' : 'Disconnect'}
+                  {disconnecting === connectionKey(app) ? 'Disconnecting…' : 'Disconnect'}
                 </button>
               </Row>
             ))}
@@ -816,12 +817,8 @@ function RecoveryCode({ reveal, name, did }: { reveal: () => string | null; name
   );
 }
 
-/** Programs connect by code through an app's origin, several to one, so each is named by its key */
 /** How long disconnecting waits for one of the account's devices or apps to take the revoke in */
 const HEARD_WITHIN_MS = 5000;
-
-const connectionId = (app: Connection) =>
-  app.via === 'code' || app.access === 'carry' ? app.audience : app.origin;
 
 /** "Todo (todo.example) · read and change Groceries · until 3 October" */
 function describeConnection(app: Connection): string {

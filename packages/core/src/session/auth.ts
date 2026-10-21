@@ -239,6 +239,13 @@ export interface Connection {
   readonly recordsOnly?: true;
 }
 
+/**
+ * Which kept connection this is: an app by its origin, and a program
+ * connected by code or a carrier by its key, since one origin has several.
+ */
+export const connectionKey = (known: Connection): string =>
+  known.via === 'code' || known.access === 'carry' ? known.audience : known.origin;
+
 /** Every field a kept connection may have */
 const CONNECTION_FIELDS = new Set([
   'origin',
@@ -1769,10 +1776,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       };
       // Connecting again replaces the old note. A program connected by code is its own key: connecting one replaces only that one.
       // A carrier at the same origin is not the app, and stays (§2.10).
-      const replaced = (known: Connection) =>
-        byCode
-          ? known.audience === request.audience
-          : known.origin === choice.origin && !known.via && known.access !== 'carry';
+      const replaced = (known: Connection) => connectionKey(known) === connectionKey(connection);
       // A note it replaces stops too: no time ends it, so revoking does (unless it is the same key, still in use).
       for (const known of auth.connections().filter(replaced))
         if (known.audience !== connection.audience) await revokeConnection(node, known);
@@ -1802,9 +1806,7 @@ export function createMincaAuth(config: MincaAuthConfig = {}): MincaAuth {
       if (!session) throw new Error('Sign in first.');
       const { node } = session;
       // Only the app itself: a program connected through it by code isn't what the person is looking at, and a carrier can't read what it would notify about.
-      const connection = auth
-        .connections()
-        .find((known) => known.origin === origin && !known.via && known.access !== 'carry');
+      const connection = auth.connections().find((known) => connectionKey(known) === origin);
       if (!connection)
         throw new Error(
           'Only an app connected to your account here may suggest what to notify you about. Connect it first.',
