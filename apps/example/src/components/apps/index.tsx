@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { DefineCollection, NodeCollection, NodeRecord, P2PNode, SpaceSummary } from '@minca/core';
 import {
+  attachment,
   ballot,
   call,
   channel,
@@ -102,7 +103,7 @@ export const APPS: ReadonlyArray<MincaApp> = [
     description:
       'Talk with everyone in the space, in channels, or directly with one person: only the two of you can read it.',
     needs: [message],
-    uses: [reaction, channel, direct],
+    uses: [reaction, channel, direct, attachment],
     View: Chat,
   },
   {
@@ -116,6 +117,7 @@ export const APPS: ReadonlyArray<MincaApp> = [
     title: 'Kanban',
     description: 'Tasks on a board: drag them between columns, and into order.',
     needs: [task, column],
+    uses: [attachment],
     setup: async (node, spaceId) => {
       if ((await node.records.list(spaceId, { collection: column.name })).length > 0) return;
       let position: string | null = null;
