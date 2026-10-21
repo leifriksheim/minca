@@ -2,6 +2,7 @@
 import { createMincaConnection, type MincaConnectionConfig } from '@minca/core/session';
 import { CONFIGURED_HOSTS, CONFIGURED_NODES, relayUrls } from '@minca/app-shared/relay';
 import { desktopConnection } from './desktop';
+import { accountFromAddress } from './account-address';
 
 /** The account home's connect page — ours by default; anyone can run their own */
 const HOME = import.meta.env.VITE_MINCA_HOME ?? 'https://home.minca.social/connect';
@@ -22,6 +23,8 @@ export const connection =
     home: HOME,
     request,
     network: { relays: relayUrls(), nodes: CONFIGURED_NODES, hosts: CONFIGURED_HOSTS },
+    // A tab opened at an address that names an account acts for that one (`?as=`).
+    account: accountFromAddress,
     // Checking, decrypting and syncing happen there, so the page never stutters. One worker for
     // every tab where shared workers work (not Chrome on Android, nor WebKit): the tabs share one node.
     // A worker that fails to load says so, and the node runs in the page instead.

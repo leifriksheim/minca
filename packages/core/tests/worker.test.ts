@@ -15,6 +15,8 @@ import { team } from '../src/space/presets.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { until } from './helpers/until.js';
 import { isRecord } from '../src/utils/guards.js';
+import { createP256Provider } from '../src/identity/crypto-p256.js';
+import { didOf } from '../src/identity/did.js';
 
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
@@ -221,6 +223,29 @@ describe('a node shared by the tabs of a site', () => {
       () => c.close(),
     );
     assert.equal(new Set([a.sessionDid, b.sessionDid, c.sessionDid]).size, 3);
+  });
+
+  test('a tab signing with another key gets a node of its own, so an app connected again never signs with the old one', async () => {
+    const shared = fakeSharedWorker();
+    const me = await signer();
+    const provider = createP256Provider();
+    const [oldKey, newKey] = [await provider.generateKeyPair(), await provider.generateKeyPair()];
+    const before = await startNodeInWorker(shared.connect(), {
+      signer: me,
+      sessionKey: oldKey,
+      stores: { indexedDB: 'minca-app:me' },
+    });
+    const after = await startNodeInWorker(shared.connect(), {
+      signer: me,
+      sessionKey: newKey,
+      stores: { indexedDB: 'minca-app:me' },
+    });
+    cleanup.push(
+      () => before.close(),
+      () => after.close(),
+    );
+    assert.equal(before.sessionDid, await didOf(oldKey.publicKey));
+    assert.equal(after.sessionDid, await didOf(newKey.publicKey));
   });
 
   test('the node outlives a tab that closes it, and closes with the last', async () => {

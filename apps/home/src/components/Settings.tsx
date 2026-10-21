@@ -383,9 +383,15 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
           <Notifications node={session.node} />
         </>
       )}
+      {tab === 'devices' && (
+        <>
+          <PageHead title="Devices" line="Your account on your phone, or another computer." />
+          <PairPhone />
+        </>
+      )}
       {tab === 'data' && (
         <>
-          <PageHead title="Your data" line="Where your spaces are kept, and how they stay safe." />
+          <PageHead title="Data" line="Where your spaces are kept, and how they stay safe." />
           <Copies
             place={place}
             folderAvailable={state.folderAvailable}
@@ -395,10 +401,6 @@ export function Settings({ tab, openTab }: { tab: TabId; openTab: (tab: TabId) =
             hosts={(carriers ?? []).filter((carrier) => hostKeys.has(carrier.did))}
             presence={presence}
           />
-
-          <div style={{ marginBottom: 16 }}>
-            <PairPhone />
-          </div>
 
           <Hosting node={session.node} />
         </>
@@ -437,16 +439,6 @@ function Overview({
     tab: TabId;
   }> = [
     {
-      kind: 'scallop',
-      colour: 'cobalt',
-      title: 'Signing in',
-      line: ways ? `You sign in with ${ways}.` : 'Only your recovery code opens your account here.',
-      chip: ways ? 'All set' : 'Set one up',
-      warn: !ways,
-      action: 'Security',
-      tab: 'security',
-    },
-    {
       kind: 'daisy',
       colour: 'coral',
       title: 'Apps',
@@ -459,26 +451,36 @@ function Overview({
       tab: 'apps',
     },
     {
+      kind: 'flower',
+      colour: 'peach',
+      title: 'Devices',
+      line: 'Scan a code, and your phone is the same account.',
+      chip: 'Takes a minute',
+      action: 'Add your phone',
+      tab: 'devices',
+    },
+    {
       kind: 'burst',
       colour: 'sage',
-      title: 'Your copies',
+      title: 'Data',
       line:
         keepers === 0
           ? 'Nothing keeps your spaces while your pages are closed.'
           : `Kept online by ${keepers} ${keepers === 1 ? 'helper' : 'helpers'}.`,
       chip: keepers === 0 ? 'Only here' : 'Backed up',
       warn: keepers === 0,
-      action: 'Your data',
+      action: 'See your data',
       tab: 'data',
     },
     {
-      kind: 'flower',
-      colour: 'peach',
-      title: 'Your phone',
-      line: 'Scan a code, and your phone is the same account.',
-      chip: 'Takes a minute',
-      action: 'Add your phone',
-      tab: 'data',
+      kind: 'scallop',
+      colour: 'cobalt',
+      title: 'Security',
+      line: ways ? `You sign in with ${ways}.` : 'Only your recovery code opens your account here.',
+      chip: ways ? 'All set' : 'Set one up',
+      warn: !ways,
+      action: 'See security',
+      tab: 'security',
     },
   ];
   return (

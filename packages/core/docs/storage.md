@@ -55,7 +55,7 @@ When another writer changed the same store, the node re-reads all of it
 (`invalidate`). Other tabs of one browser are told through a
 `BroadcastChannel` named `minca-node:<root DID>:<space id>`. Where a browser
 has shared workers that work, the apps in this repository run one node for all
-of a site's tabs in a `SharedWorker`, so those tabs share one store and have
+of a site's tabs in a `SharedWorker` (one per account and key), so those tabs share one store and have
 nothing to tell each other; the channel remains for the rest (Chrome on
 Android has none; WebKit drops a message to one that holds a `CryptoKey`),
 where each tab's node runs in a worker of its own

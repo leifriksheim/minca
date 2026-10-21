@@ -10,6 +10,7 @@ export function ConnectScreen() {
   const expired = state.status === 'expired';
   const waiting = state.status === 'connecting' || state.status === 'starting';
   const home = new URL(state.home).host;
+  const others = state.accounts.filter((other) => other.did !== state.grant?.did);
 
   return (
     <div className="page">
@@ -50,6 +51,18 @@ export function ConnectScreen() {
               >
                 Use your own home
               </button>
+              {/* Another account connected here works now, without the home. */}
+              {state.status !== 'starting' &&
+                others.map((other) => (
+                  <button
+                    key={other.did}
+                    onClick={() => void connection.use(other.did)}
+                    data-variant="ghost"
+                    style={styles.linkButton}
+                  >
+                    Use {other.name}
+                  </button>
+                ))}
             </div>
           </>
         ) : (

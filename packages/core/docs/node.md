@@ -752,8 +752,7 @@ account: connecting as another account deletes the last one's, so its
 spaces never reach the new one's registry. Copied without the keychain, the
 folder yields no key, grant or private body, only what a carrier sees; a
 program running as the person can ask the keychain, as it can read a
-browser profile. Renewing keeps the key, as a page's app does: a new one would have the home
-revoke the last, withdrawing what the app wrote that the home hadn't seen.
+browser profile. Renewing keeps the key (a page's app asks with a new one each time, below).
 The key changes only when the app leaves an account: disconnecting, from the
 app or at the home, forgets it (`forgetAppKey` in a page), so a revoked key
 stays revoked. A home that answers as another account than the one connected
@@ -799,19 +798,55 @@ It then joins each granted space it does not hold yet, passing its `memberKey`
 (`joinGranted`). The desktop app's node (`minca app-node`) and the agent on a
 computer start theirs from a grant the same way, from their own folders.
 
-**The connection.** `createMincaConnection({ home, request, network?, storage?, stores? })`
+**The connection.** `createMincaConnection({ home, request, network?, storage?, stores?, worker?, keys?, account? })`
 is the app's twin of [sign-in](sign-in.md): statuses `starting`, `disconnected`,
 `connecting`, `ready`, `expired`. With `worker`, it runs the node there
 (`startNodeInWorker`); a worker that reports a load error, or does not say the
 node started within 30 s (`WorkerNotStarted`), is given up on and the node
-runs in the page. A worker that started and refused passes its reason on. It keeps the grant in `localStorage` under
-`minca.grant` and the person's chosen home under `minca.home` (`home` in the
-config is only a default). It switches to `expired` at `expiresAt` (`watchGrant`) and does not
-load an expired grant from storage, nor one of another format (`v` other
-than `GRANT_VERSION`, 2; `usableGrant`): the person connects again. When the node sees its own note revoked in
-a space it emits `revoked` ([events](#events)), and the connection forgets the
-grant and the app key. `propose(automations)` sends a proposal to the grant's home
+runs in the page. A worker that started and refused passes its reason on.
+It switches to `expired` at `expiresAt` (`watchGrant`). When the node sees its
+own note revoked in a space it emits `revoked` ([events](#events)), and the
+connection forgets that account's grant and key. `propose(automations)` sends
+a proposal to the grant's home
 ([spec 06 §2.11](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+
+**Several accounts.** The connection keeps a grant for every account the
+person connects, and acts for one at a time; `state.accounts` lists them
+(`did`, the `name` the home gave, `expiresAt`), in the order they were first
+connected. Each grant is made out to a key of its own, named
+`account-<uuid>` in `appKey`'s store (or `keys`, given), so peers never see
+one key act for two accounts. They are kept in `localStorage` under
+`minca.grants` (`[{ grant, keyName }]`), the account acted for last under
+`minca.account`, and the person's chosen home under `minca.home` (`home` in
+the config is only a default). A grant of another format (`v` other than
+`GRANT_VERSION`, 2) is dropped when read; one that ran out stays, and opens
+as `expired`.
+
+- `start()` acts for the account `account(accounts)` names, else the one used
+  last, else the first.
+- `use(did)` acts for another connected account. Its grant is here, so the
+  home is not asked; the node acting for the last one closes, and one for
+  this one starts, with its own stores.
+- `connect(home?)` asks with a new key, and acts for whichever account the
+  person chooses at the home: a new one, or one connected already, whose grant
+  it renews. A key that asked once may hold a note from whatever account the
+  home was signed in as, so no key is asked with twice. An account connected
+  again gets the new key and the app forgets the old one; the home revokes
+  nothing, and what the old key wrote stands
+  ([spec 06 §2.10](https://github.com/leifriksheim/minca/blob/main/spec/06-nodes-and-sessions.md)).
+  While it waits, an app acting for an account stays `ready`; a grant whose
+  node won't start is kept, and the connection says `disconnected` with why.
+- `disconnect(did?)` forgets an account's grant and key (default the one
+  acted for) and acts for the next connected account, or none. Disconnected
+  at the home instead, it acts for none, with `error` saying why, rather than
+  another account the person didn't choose.
+
+Another tab's changes reach `state.accounts` by `storage` events; each tab
+acts for its own account. A tab whose account another tab connected again
+goes on with its key until it starts again, then takes the newer grant; one
+whose key is revoked takes up a newer grant rather than forgetting it. A
+shared worker runs a node per key, not only per account, so tabs on two keys
+never share one. Switching again before a node has started closes it.
 
 **Showing notifications.** The app shows its own notifications.
 `watchNotifications(node, { origin?, onNotify })` needs the account key (an
@@ -826,7 +861,7 @@ held the first time an automation made it look there; anything arriving after th
 is, even while the account or the list of spaces changes. How the app shows a match is its own
 to decide; a "Notify me" button is where a proposal usually starts.
 
-_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`, `usableGrant`, `watchGrant`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "watching a grant", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
+_Source: `packages/core/src/session/connect.ts` (`appKey`, `forgetAppKey`, `homeAddress`, `connectToHome`, `proposeToHome`, `startConnectedNode`, `nodeOptionsFromGrant`, `joinGranted`, `grantSigner`, `usableGrant`, `watchGrant`, `grantStore`), `packages/cli/src/app-node.ts` (`startDesktopNode`), `packages/core/src/session/connection.ts`, `packages/core/src/node/watch-notifications.ts`, `packages/core/src/space/own-automations.ts` (`matchesRecord`). Tests: `packages/core/tests/connect.test.ts` ("an account home typed by a person", "watching a grant", "an app connected to several accounts", "an app showing its own notifications"), `packages/core/tests/topics.test.ts` ("an automation of the account’s own: its where"), `packages/core/tests/watch-notifications.test.ts`._
 
 ## Carriers, hosting and notifications
 

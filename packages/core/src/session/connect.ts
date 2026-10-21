@@ -30,7 +30,7 @@ import { parseSpaceInvite } from '../space/space-manager.js';
 import { soleFounder } from '../space/constitution.js';
 import { checkProposal, MAX_PROPOSALS, type AutomationProposal } from '../space/own-automations.js';
 import { defaultStorage, guardedStorage, type KeyValueStore } from './stay-signed-in.js';
-import { isObject } from '../utils/guards.js';
+import { isObject, unref } from '../utils/guards.js';
 
 /** Messages between an app and the home it opened */
 const HELLO = 'minca:hello';
@@ -356,8 +356,8 @@ export interface ConnectOptions {
   readonly home: string;
   /** What to ask for; `audience`, `proof` and `via` are filled in */
   readonly request: Omit<ConnectRequest, 'v' | 'audience' | 'proof' | 'via'>;
-  /** The key to ask for. Default: {@link appKey} under `keyName`. */
-  readonly key?: AppKey;
+  /** The key to ask for, or its promise, awaited once the popup is open. Default: {@link appKey} under `keyName`. */
+  readonly key?: AppKey | Promise<AppKey>;
   /** Which of this app's keys to use when `key` is not given. Default `default`. */
   readonly keyName?: string;
   /**
@@ -394,7 +394,7 @@ export async function connectToHome(options: ConnectOptions): Promise<Grant> {
       audience = options.audience;
       proof = options.audienceProof;
     } else {
-      const key = options.key ?? (await appKey(options.keyName));
+      const key = (await options.key) ?? (await appKey(options.keyName));
       audience = key.did;
       proof = await keyProof(key, { via: 'popup', recordsOnly: options.request.recordsOnly === true });
     }
@@ -626,6 +626,8 @@ export function watchGrant(
   const arm = () => {
     const left = Math.min(Math.max(grant.expiresAt * 1000 - Date.now(), 0), 2 ** 31 - 1);
     timer = globalThis.setTimeout(() => (grantExpired(grant) ? on.onExpired?.() : arm()), left);
+    // It says when the note ran out; it is no reason for a process to stay up.
+    unref(timer);
   };
   if (on.onExpired) arm();
   const unsubscribe = node.subscribe((event) => {
@@ -712,17 +714,42 @@ export async function joinGranted(
   }
 }
 
-/** Where an app keeps its grant between visits */
-export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'minca.grant') {
+/** An account an app is connected to: its grant, and the name of the app key it is made out to ({@link appKey}) */
+export interface KeptGrant {
+  readonly grant: Grant;
+  readonly keyName: string;
+}
+
+/**
+ * Where an app keeps its grants between visits: one per account, each made
+ * out to a key of its own, so two accounts never show peers one key.
+ */
+export function grantStore(storage: KeyValueStore | null = defaultStorage(), key = 'minca.grants') {
   const kept = guardedStorage(storage);
+  const all = (): ReadonlyArray<KeptGrant> =>
+    // One kept in an older format holds a note no peer reads now: connecting again replaces it.
+    (kept.read<ReadonlyArray<KeptGrant>>(key) ?? []).filter(
+      (each) => each?.grant?.v === GRANT_VERSION && typeof each.keyName === 'string',
+    );
   return {
-    load(): Grant | null {
-      const grant = kept.read<Grant>(key);
-      // Connecting again replaces one that doesn't work.
-      return usableGrant(grant) ? grant : null;
+    /** Every account, the one connected first first; an expired grant stays, to show and renew */
+    list: all,
+    get: (did: string): KeptGrant | null => all().find((each) => each.grant.did === did) ?? null,
+    save(grant: Grant, keyName: string): void {
+      const before = all();
+      const found = before.some((each) => each.grant.did === grant.did);
+      kept.write(
+        key,
+        found
+          ? before.map((each) => (each.grant.did === grant.did ? { grant, keyName } : each))
+          : [...before, { grant, keyName }],
+      );
     },
-    save: (grant: Grant): void => kept.write(key, grant),
-    forget: (): void => kept.write(key, null),
+    forget: (did: string): void =>
+      kept.write(
+        key,
+        all().filter((each) => each.grant.did !== did),
+      ),
   };
 }
 

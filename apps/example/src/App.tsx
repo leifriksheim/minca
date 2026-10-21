@@ -14,6 +14,7 @@ import { useShowNotifications } from './notifications';
 import { Bell } from './components/Bell';
 import { useRunAutomations } from './automations';
 import { ConnectScreen } from './components/ConnectScreen';
+import { useAccountInAddress } from './account-address';
 import { ContactsView } from './components/ContactsView';
 import { RelayDown } from './components/RelayNotice';
 import { DocsNote } from './components/DocsNote';
@@ -29,6 +30,7 @@ import { Notices, useWorkspace, WorkspaceContext, type Workspace as WorkspaceVal
 /** The app: connect to your account home, then your spaces, wherever the address says (`router.tsx`) */
 export function App() {
   const { state } = useConnection();
+  useAccountInAddress();
   // Calls sit above the workspace, so moving between spaces never touches one.
   return state.status === 'ready' ? (
     <CallsProvider>

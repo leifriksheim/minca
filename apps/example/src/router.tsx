@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import { createRootRoute, createRoute, createRouter, linkOptions, redirect } from '@tanstack/react-router';
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  linkOptions,
+  redirect,
+  retainSearchParams,
+} from '@tanstack/react-router';
 import { App, ContactsPage, HomeLayout, SpacesPage } from './App';
 import {
   HOOD,
@@ -29,10 +36,15 @@ import { styles } from './styles';
  * the routes, in `App`. Every redirect keeps the fragment, where invites and
  * doors travel.
  */
-const root = createRootRoute({ component: App });
-
 /** A search param that is some text, or nothing */
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined);
+
+// Which account the tab acts for (`account-address.ts`), kept on every link and redirect.
+const root = createRootRoute({
+  component: App,
+  validateSearch: (search: Record<string, unknown>): { as?: string } => ({ as: text(search.as) }),
+  search: { middlewares: [retainSearchParams(['as'])] },
+});
 
 /** A part of a space, drawn from what its layout (`SpaceLayout`) hands down */
 const page = (draw: (screen: SpaceScreen) => ReactNode) => () => draw(useSpaceScreen());
