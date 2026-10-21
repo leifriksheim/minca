@@ -589,7 +589,9 @@ export async function createNode(config: NodeConfig): Promise<P2PNode> {
     const open = runtimes.get(spaceId);
     if (!open) return;
     runtimes.delete(spaceId);
-    await (await open).close();
+    // One still opening when the node closes fails to open ("Node is closed"): there is nothing to close.
+    const rt = await open.catch(() => null);
+    await rt?.close();
   }
 
   // ─── Memberships ───────────────────────────────────────────────────
