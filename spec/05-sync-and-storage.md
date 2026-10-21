@@ -1191,8 +1191,9 @@ needs and how big they are.
 
 A peer never refuses a version for its `files`. On a version that is not a
 delete, it takes entries in order, skipping any that is not an object with
-`hash` and `size` as above (other members are ignored) or repeats an earlier
-`hash`, until it has 16, and ignores the rest. Different versions may name
+`hash` and `size` as above (other members are ignored) or repeats the
+`hash` of an entry already taken, until it has 16, and ignores the rest.
+Different versions may name
 one id with different sizes; since the id binds the size, only one is ever
 the file. A node fetches, serves, keeps and mirrors an id only as the size
 its chunk list fits, so a wrong size another member names is never

@@ -293,8 +293,9 @@ _Source: 03 §1.2, §2.7, §3.4, §4.4, §5.2; 02 §3; 01 §7, §15.3. Tests: `p
     the old body can open it. `size` is the writer's word until the bytes
     arrive. And any peer it serves can ask for up to four chunks (1 MiB) per
     `want-file`, as often as it likes, and a member naming ids nobody holds
-    has every keeper ask its peers and list its mirrors for each, again
-    every ten minutes: nothing bounds bytes served per peer
+    has every keeper ask its peers and list its mirrors for each, one id at
+    a time, again every ten minutes, which delays its fetching the files
+    that exist: nothing bounds bytes served per peer
     (05 §16.6; [#33](https://github.com/leifriksheim/minca/issues/33)).
   - Someone who may define a collection can give it computed fields that
     every member's device works out for each record a query filters or
@@ -824,7 +825,8 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     how (02 §7.3, 03 §8.6).
   - It can't read a file it keeps or serves without a body that names it:
     each is sealed under a key only bodies hold, so in a private space it
-    reads none, and of a deleted file it holds only ciphertext; nor pass off
+    reads none, and a deleted file is ciphertext to anyone who never had its
+    body; nor pass off
     other bytes as one,
     since every chunk is checked against the id a signed version names
     (05 §16.6; `packages/core/tests/files.test.ts`, "a chunk that is not the

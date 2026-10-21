@@ -4584,6 +4584,7 @@ export async function openSpaceRuntime(deps: SpaceRuntimeDeps) {
       await Promise.all(mirrors.map((mirror) => mirror.close()));
       if (filesTimer) clearTimeout(filesTimer);
       spaceFiles?.close();
+      await filesPass;
       if (watchTimer) clearInterval(watchTimer);
       if (announceTimer) clearTimeout(announceTimer);
       channel?.close();

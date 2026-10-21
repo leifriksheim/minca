@@ -101,18 +101,39 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
    * id. Versions may name one id with different sizes; the id binds the size,
    * so only one is ever the file, and the others are never satisfied.
    */
+  /** Versions already looked at, and those of them that name files: the rest are never read again */
+  const scanned = new Set<string>();
+  const namers = new Set<string>();
   const namedFiles = (): Promise<Map<string, FileName[]>> =>
     (named ??= (async () => {
       const files = new Map<string, FileName[]>();
-      for (const id of await storage.versionIds()) {
+      const kept = await storage.versionIds();
+      for (const id of kept) {
+        // Only versions not seen before, and those that name files (which may since be stubs).
+        if (scanned.has(id) && !namers.has(id)) continue;
+        scanned.add(id);
         const version = await storage.getVersion(id);
-        if (!version || !('body' in version)) continue;
+        if (!version || filesOf(version).length === 0) {
+          namers.delete(id);
+          continue;
+        }
+        namers.add(id);
+        if (!('body' in version)) continue;
         const taken = filesOf(version);
-        if (taken.length === 0 || (config.stands && !(await config.stands(version)))) continue;
+        if (config.stands && !(await config.stands(version))) continue;
         for (const file of taken) {
           const sizes = files.get(file.hash) ?? [];
           if (!sizes.some((known) => known.size === file.size)) sizes.push(file);
           files.set(file.hash, sizes);
+        }
+      }
+      // Versions this store dropped are forgotten here too.
+      if (scanned.size > kept.length) {
+        const still = new Set(kept);
+        for (const id of scanned) {
+          if (still.has(id)) continue;
+          scanned.delete(id);
+          namers.delete(id);
         }
       }
       return files;
@@ -177,22 +198,29 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   const requests = new Map<number, Request>();
   let lastRequest = 0;
+  /** Peers that answered nothing, and when: asked again only after `RETRY_MS` */
+  const silent = new Map<string, number>();
+  const askable = () => config.peers().filter((peer) => Date.now() - (silent.get(peer) ?? 0) >= RETRY_MS);
 
   /** Asks one peer for parts of a file; resolves with what arrived and checked, once it says it is done */
   function ask(peer: string, file: FileName, parts: ReadonlyArray<Part>, list: Uint8Array | null) {
     return new Promise<Set<Part>>((resolve) => {
       const id = ++lastRequest;
       const done = new Set<Part>();
+      let heard = false;
       const finish = () => {
         clearTimeout(timer);
         clearTimeout(idle);
         requests.delete(id);
+        // Nothing at all back, not even `file-done`: a peer that predates files, or won't say. Skipped a while.
+        if (!heard) silent.set(peer, Date.now());
         resolve(done);
       };
       // Given up when it falls silent, or at the latest after REQUEST_MS: a peer that trickles is left for another.
       const timer = setTimeout(finish, REQUEST_MS);
       let idle = setTimeout(finish, IDLE_MS);
       const touch = () => {
+        heard = true;
         clearTimeout(idle);
         idle = setTimeout(finish, IDLE_MS);
       };
@@ -274,7 +302,7 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
         const held = await heldChunks(file);
         return Array.from({ length: n }, (_, i) => i).filter((i) => !held.has(i));
       };
-      for (const peer of config.peers()) {
+      for (const peer of askable()) {
         if (n > 1 && !list) {
           await ask(peer, file, ['list'], null);
           list = await heldList(file);
@@ -406,7 +434,9 @@ export function createSpaceFiles(config: SpaceFilesConfig) {
 
   function onDone(peer: string, message: Record<string, unknown>): void {
     const request = typeof message.id === 'number' ? requests.get(message.id) : undefined;
-    if (request && request.peer === peer && message.hash === request.file.hash) request.settle();
+    if (!request || request.peer !== peer || message.hash !== request.file.hash) return;
+    request.touch();
+    request.settle();
   }
 
   /** A files message from a peer, as the sync engine passes it on */
