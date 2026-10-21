@@ -104,102 +104,63 @@ function methodAt(node: P2PNode, path: string): ((...args: unknown[]) => unknown
  * Answers for `node` over `port`, until the returned function is called.
  * Stopping leaves the node running: closing it is its owner's to do, or the
  * other side's, through `close()`.
- *
- * Nodes started from it with `asAgent` are served on the same port.
  */
 export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
-  interface Served {
-    readonly node: P2PNode;
-    readonly unsubscribe: () => void;
-    sent: string;
-  }
-  const served = new Map<number, Served>();
-  const watches = new Map<number, { readonly handle: number; readonly stop: () => void }>();
-  const holds = new Map<number, { readonly handle: number; readonly release: () => Promise<void> }>();
-  let nextHandle = 0;
+  const watches = new Map<number, () => void>();
+  const holds = new Map<number, () => Promise<void>>();
   let nextHold = 0;
+  let sent = node.delegation().sig;
+  let closed = false;
 
   const post = (message: Record<string, unknown>) => {
     port.postMessage({ [TAG]: true, ...message });
   };
-  const sendState = (handle: number, entry: Served) => {
-    const state = stateOf(entry.node);
-    entry.sent = state.delegation.sig;
-    post({ kind: 'state', node: handle, state });
+  const sendState = () => {
+    const state = stateOf(node);
+    sent = state.delegation.sig;
+    post({ kind: 'state', state });
   };
   /** Sends the delegation again when the node has renewed it */
-  const checkDelegation = (handle: number) => {
-    const entry = served.get(handle);
-    if (entry && entry.node.delegation().sig !== entry.sent) sendState(handle, entry);
+  const checkDelegation = () => {
+    if (node.delegation().sig !== sent) sendState();
+  };
+  const unsubscribe = node.subscribe((event) => {
+    post({ kind: 'event', event });
+    if (event.type === 'network') sendState();
+  });
+  const timer = setInterval(checkDelegation, DELEGATION_CHECK_MS);
+  const stop = () => {
+    clearInterval(timer);
+    unsubscribe();
+    for (const unwatch of watches.values()) unwatch();
+    watches.clear();
+    for (const release of holds.values()) void release().catch(() => {});
+    holds.clear();
   };
 
-  const add = (added: P2PNode): number => {
-    const handle = nextHandle++;
-    const entry: Served = {
-      node: added,
-      sent: added.delegation().sig,
-      unsubscribe: added.subscribe((event) => {
-        post({ kind: 'event', node: handle, event });
-        if (event.type === 'network') sendState(handle, entry);
-      }),
-    };
-    served.set(handle, entry);
-    return handle;
-  };
-  const drop = (handle: number) => {
-    served.get(handle)?.unsubscribe();
-    served.delete(handle);
-    for (const [id, watch] of watches) {
-      if (watch.handle !== handle) continue;
-      watch.stop();
-      watches.delete(id);
-    }
-    for (const [id, held] of holds) {
-      if (held.handle !== handle) continue;
-      holds.delete(id);
-      void held.release().catch(() => {});
-    }
-  };
-  add(node);
-  const timer = setInterval(() => {
-    for (const handle of served.keys()) checkDelegation(handle);
-  }, DELEGATION_CHECK_MS);
-
-  const run = async (handle: number, path: string, args: ReadonlyArray<unknown>): Promise<unknown> => {
-    const entry = served.get(handle);
-    if (!entry) throw new Error('That node has closed');
-    const target = entry.node;
-    if (path === 'hello') return stateOf(target);
-    if (path === 'asAgent') {
-      const agent = args[0];
-      const note = isRecord(agent) ? parseDelegation(agent.note) : null;
-      if (!isRecord(agent) || !isRecord(agent.keys) || !note) throw new Error('asAgent takes { keys, note }');
-      const { privateKey, publicKey } = agent.keys;
-      if (!(privateKey instanceof CryptoKey) || !(publicKey instanceof CryptoKey))
-        throw new Error('asAgent takes a key pair');
-      const started = await target.asAgent({ keys: { privateKey, publicKey }, note });
-      return { handle: add(started), state: stateOf(started) };
-    }
+  const run = async (path: string, args: ReadonlyArray<unknown>): Promise<unknown> => {
+    if (closed) throw new Error('That node has closed');
+    if (path === 'hello') return stateOf(node);
     if (path === 'hold') {
-      const release = await target.spaces.hold(String(args[0]));
+      const release = await node.spaces.hold(String(args[0]));
       const id = ++nextHold;
-      holds.set(id, { handle, release });
+      holds.set(id, release);
       return id;
     }
     if (path === 'release') {
-      const held = holds.get(Number(args[0]));
+      const release = holds.get(Number(args[0]));
       holds.delete(Number(args[0]));
-      await held?.release();
+      await release?.();
       return undefined;
     }
     if (path === 'close') {
-      drop(handle);
-      // With the node itself closed there is nothing left to renew; later calls are told it has closed.
-      if (handle === 0) clearInterval(timer);
-      await target.close();
+      // With the node closed there is nothing left to renew; later calls are told it has closed.
+      closed = true;
+      stop();
+      await node.close();
       return undefined;
     }
-    const method = methodAt(target, path);
+    const method = methodAt(node, path);
     if (!method) throw new Error(`A node has no method ${path}`);
     return await method(...args);
   };
@@ -207,11 +168,10 @@ export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
   const onMessage = (event: MessageEvent) => {
     const message: unknown = event.data;
     if (!isRecord(message) || message[TAG] !== true) return;
-    const handle = typeof message.node === 'number' ? message.node : 0;
     if (message.kind === 'call' && typeof message.id === 'number' && typeof message.path === 'string') {
       const { id } = message;
       const args = Array.isArray(message.args) ? message.args : [];
-      void run(handle, message.path, args).then(
+      void run(message.path, args).then(
         (value) => {
           try {
             post({ kind: 'reply', id, ok: true, value });
@@ -219,7 +179,7 @@ export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
             // A value that won't clone: say so, rather than leave the call waiting.
             post({ kind: 'reply', id, ok: false, error: sendable(error) });
           }
-          checkDelegation(handle);
+          checkDelegation();
         },
         (error: unknown) => post({ kind: 'reply', id, ok: false, error: sendable(error) }),
       );
@@ -228,22 +188,21 @@ export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
       typeof message.watch === 'number' &&
       typeof message.space === 'string'
     ) {
-      const entry = served.get(handle);
       const { watch } = message;
-      if (!entry || !isRecord(message.query)) {
+      if (!isRecord(message.query)) {
         post({ kind: 'result', watch, error: sendable(new Error('Nothing to watch')) });
         return;
       }
-      const stop = entry.node.records.watch(
+      const unwatch = node.records.watch(
         message.space,
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the query runner checks it and reports what's wrong through onError
         message.query as unknown as Query,
         (result) => post({ kind: 'result', watch, result }),
         (error) => post({ kind: 'result', watch, error: sendable(error) }),
       );
-      watches.set(watch, { handle, stop });
+      watches.set(watch, unwatch);
     } else if (message.kind === 'unwatch' && typeof message.watch === 'number') {
-      watches.get(message.watch)?.stop();
+      watches.get(message.watch)?.();
       watches.delete(message.watch);
     }
   };
@@ -251,9 +210,8 @@ export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
   port.addEventListener('message', onMessage);
   port.start?.();
   return () => {
-    clearInterval(timer);
+    stop();
     port.removeEventListener('message', onMessage);
-    for (const handle of [...served.keys()]) drop(handle);
   };
 }
 
@@ -263,14 +221,14 @@ export function serveNode(node: P2PNode, port: MessagePortLike): () => void {
  */
 export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
-  const listeners = new Map<number, Set<(event: NodeEvent) => void>>();
-  const states = new Map<number, NodeState>();
+  const listeners = new Set<(event: NodeEvent) => void>();
+  let state: NodeState | null = null;
   const watchers = new Map<
     number,
     { readonly onResult: (result: unknown) => void; readonly onError: (error: Error) => void }
   >();
-  /** Handles closed from this side: calls on them fail at once */
-  const closed = new Set<number>();
+  /** Closed from this side: calls fail at once */
+  let closed = false;
   let nextId = 0;
 
   const post = (message: Record<string, unknown>) => {
@@ -280,7 +238,6 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
   const onMessage = (event: MessageEvent) => {
     const message: unknown = event.data;
     if (!isRecord(message) || message[TAG] !== true) return;
-    const handle = typeof message.node === 'number' ? message.node : 0;
     if (message.kind === 'reply' && typeof message.id === 'number') {
       const waiting = pending.get(message.id);
       pending.delete(message.id);
@@ -289,7 +246,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
     } else if (message.kind === 'event' && isRecord(message.event)) {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the served node sent it from its own subscribe
       const nodeEvent = message.event as NodeEvent;
-      for (const listener of listeners.get(handle) ?? []) {
+      for (const listener of listeners) {
         try {
           listener(nodeEvent);
         } catch (error) {
@@ -298,7 +255,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
       }
     } else if (message.kind === 'state' && isRecord(message.state)) {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the served node sent it from its own state
-      states.set(handle, message.state as unknown as NodeState);
+      state = message.state as unknown as NodeState;
     } else if (message.kind === 'result' && typeof message.watch === 'number') {
       const watcher = watchers.get(message.watch);
       if (!watcher) return;
@@ -310,9 +267,9 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
   port.start?.();
 
   /** Calls a method of the node on the other end; it answers with that method's type */
-  const ask = <R>(handle: number, path: string, args: ReadonlyArray<unknown>): Promise<R> =>
+  const ask = <R>(path: string, args: ReadonlyArray<unknown>): Promise<R> =>
     new Promise<R>((resolve, reject) => {
-      if (closed.has(handle) || closed.has(0)) {
+      if (closed) {
         reject(new Error('That node has closed'));
         return;
       }
@@ -323,7 +280,7 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
         reject,
       });
       try {
-        post({ kind: 'call', id, node: handle, path, args });
+        post({ kind: 'call', id, path, args });
       } catch (error) {
         // An argument that won't clone, a function say.
         pending.delete(id);
@@ -335,109 +292,96 @@ export async function remoteNode(port: MessagePortLike): Promise<P2PNode> {
   const collectionName = (ref: unknown): unknown =>
     isRecord(ref) && typeof ref.name === 'string' ? ref.name : ref;
 
-  const build = (handle: number, initial: NodeState): P2PNode => {
-    states.set(handle, initial);
-    const state = () => states.get(handle) ?? initial;
-    // Every method is asked of the other end, except these.
-    const here: { readonly [N in Namespace]?: Partial<P2PNode[N]> } = {
-      spaces: {
-        preview: previewInvite,
-        async hold(spaceId: string) {
-          const held = await ask<number>(handle, 'hold', [spaceId]);
-          return () => ask<void>(handle, 'release', [held]);
-        },
-        authenticator: () =>
-          Promise.reject(
-            new Error('A node in a worker serves no sockets; ask the node that holds the space'),
-          ),
+  const initial = await ask<NodeState>('hello', []);
+  const current = () => state ?? initial;
+  // Every method is asked of the other end, except these.
+  const here: { readonly [N in Namespace]?: Partial<P2PNode[N]> } = {
+    spaces: {
+      preview: previewInvite,
+      async hold(spaceId: string) {
+        const held = await ask<number>('hold', [spaceId]);
+        return () => ask<void>('release', [held]);
       },
-      records: {
-        // Either overload: the record comes back typed as the call asked.
-        put: (...args: unknown[]) =>
-          ask<never>(handle, 'records.put', [args[0], collectionName(args[1]), ...args.slice(2)]),
-        query: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
-          spaceId: string,
-          query: Query<C, I>,
-        ) => ask<ResultFor<C, I>>(handle, 'records.query', [spaceId, plainQuery(query)]),
-        watch: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
-          spaceId: string,
-          query: Query<C, I>,
-          onResult: (result: ResultFor<C, I>) => void,
-          onError?: (error: Error) => void,
-        ) => {
-          const watch = ++nextId;
-          watchers.set(watch, {
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the served node ran this query
-            onResult: (result) => onResult(result as ResultFor<C, I>),
-            onError: onError ?? ((error) => console.error(error)),
-          });
-          try {
-            post({ kind: 'watch', watch, node: handle, space: spaceId, query: plainQuery(query) });
-          } catch (error) {
-            watchers.delete(watch);
-            throw error;
-          }
-          return () => {
-            if (!watchers.delete(watch)) return;
-            post({ kind: 'unwatch', watch });
-          };
-        },
-      },
-      collections: {
-        define: async (spaceId: string, definition: DefineCollection) =>
-          ask<NodeCollection>(handle, 'collections.define', [
-            spaceId,
-            // Plain data: a contract or computed fields built in TypeScript are functions, which can't be posted.
-            storedDefinition(definition),
-          ]),
-      },
-      network: {
-        status: () => state().status,
-        reconnect: () => {
-          void ask(handle, 'network.reconnect', []).catch(() => {});
-        },
-      },
-    };
-    return Object.freeze({
-      did: initial.did,
-      sessionDid: initial.sessionDid,
-      ...buildNamespaces(
-        (namespace, name) =>
-          givenFor(here, namespace, name) ??
-          ((...args: unknown[]) => ask(handle, `${namespace}.${name}`, args)),
-      ),
-      delegation: () => state().delegation,
-      iceServers: () => ask<ReadonlyArray<RTCIceServer>>(handle, 'iceServers', []),
-      revokeKey: (key, options) => ask(handle, 'revokeKey', options ? [key, options] : [key]),
-      revokeSelf: (options) => ask(handle, 'revokeSelf', options ? [options] : []),
-      async asAgent(agent) {
-        const started = await ask<{ handle: number; state: NodeState }>(handle, 'asAgent', [agent]);
-        return build(started.handle, started.state);
-      },
-      subscribe(listener) {
-        const own = listeners.get(handle) ?? new Set();
-        listeners.set(handle, own);
-        own.add(listener);
+      authenticator: () =>
+        Promise.reject(new Error('A node in a worker serves no sockets; ask the node that holds the space')),
+    },
+    records: {
+      // Either overload: the record comes back typed as the call asked.
+      put: (...args: unknown[]) =>
+        ask<never>('records.put', [args[0], collectionName(args[1]), ...args.slice(2)]),
+      query: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
+        spaceId: string,
+        query: Query<C, I>,
+      ) => ask<ResultFor<C, I>>('records.query', [spaceId, plainQuery(query)]),
+      watch: <const C extends CollectionRef, const I extends IncludeMap | undefined = undefined>(
+        spaceId: string,
+        query: Query<C, I>,
+        onResult: (result: ResultFor<C, I>) => void,
+        onError?: (error: Error) => void,
+      ) => {
+        const watch = ++nextId;
+        watchers.set(watch, {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the served node ran this query
+          onResult: (result) => onResult(result as ResultFor<C, I>),
+          onError: onError ?? ((error) => console.error(error)),
+        });
+        try {
+          post({ kind: 'watch', watch, space: spaceId, query: plainQuery(query) });
+        } catch (error) {
+          watchers.delete(watch);
+          throw error;
+        }
         return () => {
-          own.delete(listener);
+          if (!watchers.delete(watch)) return;
+          post({ kind: 'unwatch', watch });
         };
       },
-      async close() {
-        if (closed.has(handle)) return;
-        await ask(handle, 'close', []);
-        closed.add(handle);
-        listeners.delete(handle);
-        states.delete(handle);
-        if (handle !== 0) return;
-        port.removeEventListener('message', onMessage);
-        for (const waiting of pending.values()) waiting.reject(new Error('That node has closed'));
-        pending.clear();
-        watchers.clear();
+    },
+    collections: {
+      define: async (spaceId: string, definition: DefineCollection) =>
+        ask<NodeCollection>('collections.define', [
+          spaceId,
+          // Plain data: a contract or computed fields built in TypeScript are functions, which can't be posted.
+          storedDefinition(definition),
+        ]),
+    },
+    network: {
+      status: () => current().status,
+      reconnect: () => {
+        void ask('network.reconnect', []).catch(() => {});
       },
-    } satisfies P2PNode);
+    },
   };
-
-  return build(0, await ask<NodeState>(0, 'hello', []));
+  return Object.freeze({
+    did: initial.did,
+    sessionDid: initial.sessionDid,
+    ...buildNamespaces(
+      (namespace, name) =>
+        givenFor(here, namespace, name) ?? ((...args: unknown[]) => ask(`${namespace}.${name}`, args)),
+    ),
+    delegation: () => current().delegation,
+    iceServers: () => ask<ReadonlyArray<RTCIceServer>>('iceServers', []),
+    revokeKey: (key, options) => ask('revokeKey', options ? [key, options] : [key]),
+    revokeSelf: (options) => ask('revokeSelf', options ? [options] : []),
+    // Its keys would have to cross the port; an agent is started on the node itself.
+    asAgent: () => Promise.reject(new Error('An agent is started on the node itself, not across a port.')),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    async close() {
+      if (closed) return;
+      await ask('close', []);
+      closed = true;
+      listeners.clear();
+      port.removeEventListener('message', onMessage);
+      for (const waiting of pending.values()) waiting.reject(new Error('That node has closed'));
+      pending.clear();
+      watchers.clear();
+    },
+  } satisfies P2PNode);
 }
 
 const SIGNER_TAG = 'minca-signer';

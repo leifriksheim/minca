@@ -711,7 +711,9 @@ throws unless the note verifies, grants records only (its command is under
   `delegate`; `asAgent`;
 - sees the contact list only if the contacts space is within its note.
 
-Closing the agent leaves the underlying node running.
+Closing the agent leaves the underlying node running. A node used across a
+port (`remoteNode`) starts no agent: the agent's keys would have to cross, so
+an agent is started on the node itself.
 
 An agent granted `scope: account` gets a records-only note for every space
 (`/record`, about the whole account) and the account key in its
@@ -721,7 +723,7 @@ requests and knocks on the account's doors ([doors.md](doors.md)).
 
 Which of these each method of the node is — passed through, held to the note's spaces, or refused — is one table, `API` in `packages/core/src/node/api.ts`; a new method does not type-check until it is decided there. The same table lists what `remoteNode` forwards.
 
-_Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts`._
+_Source: `packages/core/src/node/node.ts` (`asAgent`), `packages/core/src/node/api.ts` (`API`). Tests: `packages/core/tests/records-only.test.ts` ("an agent acting for a person"), `packages/core/tests/remote.test.ts` ("no agent is started across the port…")._
 
 ## The app-side client
 

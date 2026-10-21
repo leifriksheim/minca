@@ -17,7 +17,6 @@ import type { Typed } from '../src/query/types.js';
 import { createIdentityManager } from '../src/identity/identity-manager.js';
 import { createLocalRootSigner } from '../src/identity/root-signer.js';
 import { generateSeed } from '../src/identity/recovery-code.js';
-import { publicKeyToDid, P256_MULTICODEC } from '../src/identity/did.js';
 import { memoryStores } from './helpers/memory-stores.js';
 import { team } from '../src/space/presets.js';
 import { until } from './helpers/until.js';
@@ -189,29 +188,13 @@ describe('a node across a port', () => {
     await assert.rejects(() => remote.spaces.authenticator(space), /serves no sockets/);
   });
 
-  test('an agent started across the port writes as the person, records only', async () => {
-    const { node, remote, manager, me } = await served();
-    const { id: space } = await node.spaces.create({ name: 'Climbing', ...team, visibility: 'public' });
-    const provider = manager.getProvider();
-    const keys = await provider.generateKeyPair();
-    const did = publicKeyToDid(await provider.exportPublicKey(keys.publicKey), P256_MULTICODEC);
-    const note = await createLocalRootSigner(me, provider).delegate({
-      audience: did,
-      command: '/record',
-      subject: `space:${space}`,
-      expiration: Math.floor(Date.now() / 1000) + 3600,
-    });
-
-    const agent: P2PNode = await remote.asAgent({ keys, note });
-    assert.equal(agent.did, node.did);
-    assert.equal(agent.sessionDid, did);
-    const written = await agent.records.put(space, 'app.note', { text: 'Bring chalk' });
-    assert.equal(written.recordsOnly, true);
-    await assert.rejects(() => agent.spaces.invite(space), /Ask the person/);
-
-    // Closing the agent leaves the node it acts through running.
-    await agent.close();
-    assert.equal((await remote.spaces.list()).length, 1);
+  test('no agent is started across the port: its keys would have to cross', async () => {
+    const { remote } = await served();
+    const keys = await createIdentityManager().getProvider().generateKeyPair();
+    await assert.rejects(
+      () => remote.asAgent({ keys, note: remote.delegation() }),
+      /on the node itself, not across a port/,
+    );
   });
 
   test('closing the remote node closes the node it stands for, and later calls fail at once', async () => {
