@@ -970,6 +970,19 @@ _Source: 04 §1, §5.1, §6.2; 07 §5; 01 §15.2; 06 §3. Tests: `packages/core/
     disk, since every writer is in the space's envelopes anyway, and tells
     anyone with the space id how many wrote and read; asked again and again,
     that says when the members are online (08 §1.1).
+  - What it says it charges is its word. No peer can check the model its
+    bots think with, what a reply cost, or the size it bills by, and its
+    `botTypical` and fund `lines` are words for people (08 §2). A device
+    keeps a fund only when its numbers are dollars (a host that is not free
+    and whose fund it drops shows as taking no payments, not as free), and
+    of its fund's lines at most eight short ones with no control or format
+    characters; the host's own `name`, `price` and `terms`, and bot names,
+    are not held to that
+    (`fundShown` and `fundLines` in `packages/core/src/session/hosting.ts`;
+    `packages/core/tests/fund-lines.test.ts`), and the reference app shows
+    them as text beside the `perGb` rate it bills by, never in its place
+    (`FundPaysFor` in `apps/shared/src/SpaceHosting.tsx`). Accepted: a host is chosen and
+    paid as a provider is, and left as one.
   - It can hold back what it likes from a node that syncs with nobody else.
     Only a node holding part of a space notices a gap, and only in ordinary
     collections ([#166](https://github.com/leifriksheim/minca/issues/166)) _(traced)_.

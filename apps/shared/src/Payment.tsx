@@ -133,12 +133,14 @@ export function ChipIn({
   /**
    * What the balance spends now, from the host's status: its daily rate in
    * millionths of a dollar, what is in it (below zero: owed), and the bots it
-   * pays for. Without it, the rate is keeping a GB online alone.
+   * pays for. Without it, the rate is keeping a GB online alone. `adding`
+   * names a bot about to start, whose use nothing says yet.
    */
   rate?: {
     readonly daily?: number;
     readonly balance?: number;
     readonly bots?: ReadonlyArray<{ readonly name: string }>;
+    readonly adding?: string;
   };
 }) {
   const [preset, setPreset] = useState<string>(AMOUNTS[1]);
@@ -263,9 +265,11 @@ export function ChipIn({
             ? `Pays ${dollars(Number(amount) * 1e6)} of the ${dollars(owed)} owed: it turns on past that.`
             : `Pays the ${dollars(owed)} owed first, then keeps it online for about ${lastsFor(months)}.`
           : valid
-            ? bots.length
-              ? `Lasts about ${lastsFor(months)} at the current rate, with ${bots.map((bot) => bot.name).join(' and ')}.`
-              : `Keeps it online for about ${lastsFor(months)}.`
+            ? rate?.adding
+              ? `About ${lastsFor(months)} online, less what ${rate.adding} uses${fund.botTypical ? `: ${perReply(fund.botTypical)}` : ''}.`
+              : bots.length
+                ? `Lasts about ${lastsFor(months)} at the current rate, with ${bots.map((bot) => bot.name).join(' and ')}.`
+                : `Keeps it online for about ${lastsFor(months)}.`
             : `At least $${fund.min}.`}
       </p>
       {paying.problem && <p style={{ fontSize: 13, color: palette.accent.danger }}>{paying.problem}</p>}
@@ -281,6 +285,13 @@ export function lastsFor(months: number): string {
   if (days < 91) return `${Math.round(days / 7)} weeks`;
   if (months < 23) return `${Math.round(months)} months`;
   return `${Math.round(months / 12)} years`;
+}
+
+/** What a usual bot reply costs, from a fund's `botTypical` dollars: "about 4¢ a reply" */
+export function perReply(typical: string): string {
+  const cents = Number(typical) * 100;
+  if (cents < 1) return 'under 1¢ a reply';
+  return cents < 99.5 ? `about ${Math.round(cents)}¢ a reply` : `about $${(cents / 100).toFixed(2)} a reply`;
 }
 
 /** Millionths of a dollar as dollars: $23.40 */

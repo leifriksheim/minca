@@ -515,9 +515,38 @@ accounts' balances and communities' funds alike:
 | `recurring`   | Whether a `checkout` payment may be every month.                                                                                                              |
 | `manage`      | Optional: the payment provider's page where someone stops paying every month.                                                                                 |
 | `botDailyCap` | Optional, when it runs bots: dollars a bot may take from the fund a day at most.                                                                              |
+| `botTypical`  | Optional, when it runs bots: dollars one usual bot reply takes from the fund, as the host reckons it, matching `^[0-9]{1,5}(\.[0-9]{1,4})?$`: `"0.038"`.      |
+| `lines`       | Optional: what it charges for, in words for people, each `{ for, name, price }`.                                                                              |
+
+A host MUST give `perGb`, `min`, `botDailyCap` and `botTypical` as dollars
+matching `^[0-9]{1,5}(\.[0-9]{1,4})?$`. Every field but `perGb`, `min`,
+`methods` and `recurring` is for people: a
+device shows it and counts on none of it, and what the host takes is still
+only what this section says. `botTypical` and `lines` are how a host says what
+a person can't tell from the numbers, its model and its price per token, say,
+without a new field for each. In a line, `for` says where it belongs:
+`hosting`, beside keeping the space online; `bots`, beside each bot; any other,
+on its own, and a `hosting` line goes beside the `perGb` rate, never in its
+place. A device MUST treat a `fund` whose `perGb` or `min` does not match
+`^[0-9]{1,5}(\.[0-9]{1,4})?$` as absent, MUST leave out a `botDailyCap` or
+`botTypical` that does not match it, a `manage` that is not an `https:` URL,
+and a method it does not know, MUST show a host that is not `free` and has
+no `fund` it keeps as taking no payments there, never as free, MUST
+leave out a line whose `for` does not match `^[a-z0-9-]{1,40}$` or whose `name`
+or `price` is not a string of 1 to 60 UTF-16 code units with no control or format
+characters (Unicode `Cc`, `Cf`), MUST show at most the first
+eight lines that remain, and MUST show them as text only.
 
 ```json
-{ "perGb": "0.10", "min": "5", "methods": ["checkout", "request"], "recurring": true, "botDailyCap": "1.50" }
+{
+  "perGb": "0.10",
+  "min": "5",
+  "methods": ["checkout", "request"],
+  "recurring": true,
+  "botDailyCap": "1.50",
+  "botTypical": "0.038",
+  "lines": [{ "for": "bots", "name": "Claude Sonnet 5.5", "price": "$3 / $15 per million tokens" }]
+}
 ```
 
 **Calls.** No `Authorization`.
@@ -583,7 +612,7 @@ its fund and until when, as its status is open. A pass lets its holder
 download the space's records sealed, as a carrier does; any member could hand
 one over already.
 
-_Source: `packages/core/src/node/host.ts` (`carrySpace`, `spaceSubscription`, `setPaidUntil`), `packages/core/src/node/carrier.ts` (`addPass`, `removePass`), `packages/core/src/session/hosting.ts` (`createSpaceHostClient`, `readPayAnswer`, `FundOffer`), `packages/cli/src/host.ts` (`answerSpace`, `startFund`, `refreshFund`), `packages/cli/src/fund.ts`, `packages/cli/src/stripe.ts` (`fund`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself": all), `packages/cli/tests/fund.test.ts`._
+_Source: `packages/core/src/node/host.ts` (`carrySpace`, `spaceSubscription`, `setPaidUntil`), `packages/core/src/node/carrier.ts` (`addPass`, `removePass`), `packages/core/src/session/hosting.ts` (`createSpaceHostClient`, `readPayAnswer`, `FundOffer`, `fundLines`, `describeHost`), `packages/cli/src/host.ts` (`answerSpace`, `startFund`, `refreshFund`), `packages/cli/src/hosted-bots.ts` (`botFundWords`), `packages/cli/src/fund.ts`, `packages/cli/src/stripe.ts` (`fund`). Tests: `packages/cli/tests/host.test.ts` ("a space paying for itself": all; "bots a host runs": "a bot runs from its community’s fund"), `packages/cli/tests/fund.test.ts`, `packages/core/tests/fund-lines.test.ts`._
 
 ## 3. Bots a host runs
 
@@ -645,8 +674,9 @@ at any host. No secret of a service enters the space.
 ```
 
 `id` is 1 to 40 lowercase letters, digits and dashes, and names the service
-in the addresses and records below; `name` is for people, at most 60
-characters. A device MUST ignore an entry that isn't both.
+in the addresses and records below; `name` is for people, 1 to 60
+UTF-16 code units with no control or format characters (Unicode `Cc`, `Cf`), as a
+fund's lines (§2). A device MUST ignore an entry that isn't both.
 
 **Who may.** Someone who holds `/std.automation/instruct` in the space and
 every role the bot holds there, by the host's view of the space's access

@@ -569,6 +569,7 @@ export type {
   HostDescription,
   HostedBot,
   FundOffer,
+  FundLine,
   HostConnectorOffer,
   FundPayment,
   PayAnswer,

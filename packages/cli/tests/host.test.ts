@@ -729,6 +729,7 @@ describe('bots a host runs', () => {
   /** A model that is never asked: these bots have no rules to run */
   const model = {
     name: 'claude-sonnet-5-5',
+    price: { input: 2, output: 10, cacheWrite: 2.5, cacheRead: 0.2 },
     dailyCap: 1,
     think: () => async () => {
       throw new Error('No model in these tests');
@@ -865,6 +866,9 @@ describe('bots a host runs', () => {
       methods: ['request'],
       recurring: false,
       botDailyCap: '1.50',
+      // A usual reply, 10 000 tokens read and 500 written, at the host's price and markup.
+      botTypical: '0.038',
+      lines: [{ for: 'bots', name: 'Claude Sonnet 5.5', price: '$3 / $15 per million tokens' }],
     });
     const { laptop, space } = await community(url);
     await assert.rejects(

@@ -326,7 +326,8 @@ export function connectorOffers(described: unknown): ReadonlyArray<HostConnector
     /^[a-z0-9-]{1,40}$/.test(one.id) &&
     typeof one.name === 'string' &&
     one.name.length > 0 &&
-    one.name.length <= 60
+    one.name.length <= 60 &&
+    !/[\p{Cc}\p{Cf}]/u.test(one.name)
       ? [{ id: one.id, name: one.name }]
       : [],
   );
@@ -350,6 +351,71 @@ export interface FundOffer {
   readonly manage?: string;
   /** What a bot takes from the fund a day at most, in dollars, when the host runs bots */
   readonly botDailyCap?: string;
+  /** What one usual bot reply takes from the fund, in dollars, as the host reckons it: `"0.038"` */
+  readonly botTypical?: string;
+  /** What it charges for, in words, for people: its model, say. Shown as given, never counted on. */
+  readonly lines?: ReadonlyArray<FundLine>;
+}
+
+/**
+ * One thing a fund pays for, as the host words it: `for` says where it
+ * belongs (`hosting`, `bots`, or one an app doesn't know, shown on its own).
+ */
+export interface FundLine {
+  readonly for: string;
+  readonly name: string;
+  readonly price: string;
+}
+
+/** Dollars as a fund's numbers give them: `"0.10"`, `"0.038"` */
+const DOLLARS = /^[0-9]{1,5}(\.[0-9]{1,4})?$/;
+
+/** The lines a host's fund gives that are well formed, eight at most: a lowercase `for`, and a short name and price */
+export function fundLines(described: unknown): ReadonlyArray<FundLine> {
+  if (!Array.isArray(described)) return [];
+  // No control or format characters: a right-to-left override would show a price reversed.
+  const text = (value: unknown): value is string =>
+    typeof value === 'string' && value.length > 0 && value.length <= 60 && !/[\p{Cc}\p{Cf}]/u.test(value);
+  return described
+    .flatMap((one: unknown) =>
+      typeof one === 'object' &&
+      one !== null &&
+      'for' in one &&
+      'name' in one &&
+      'price' in one &&
+      typeof one.for === 'string' &&
+      /^[a-z0-9-]{1,40}$/.test(one.for) &&
+      text(one.name) &&
+      text(one.price)
+        ? [{ for: one.for, name: one.name, price: one.price }]
+        : [],
+    )
+    .slice(0, 8);
+}
+
+/**
+ * A fund as shown, or none: its price and least payment must be dollars, and
+ * the rest is kept only when well formed, so a host's words never stand in
+ * for its numbers or run past a few short lines.
+ */
+function fundShown(fund: Record<string, unknown>): FundOffer | null {
+  const dollars = (value: unknown): value is string => typeof value === 'string' && DOLLARS.test(value);
+  const { perGb, min, methods, recurring, manage, botDailyCap, botTypical } = fund;
+  if (!dollars(perGb) || !dollars(min)) return null;
+  const ways = (Array.isArray(methods) ? methods : []).filter(
+    (way: unknown): way is 'checkout' | 'request' => way === 'checkout' || way === 'request',
+  );
+  const lines = fundLines(fund.lines);
+  return {
+    perGb,
+    min,
+    methods: ways,
+    recurring: recurring === true,
+    ...(typeof manage === 'string' && /^https:\/\//.test(manage) && URL.canParse(manage) ? { manage } : {}),
+    ...(dollars(botDailyCap) ? { botDailyCap } : {}),
+    ...(dollars(botTypical) ? { botTypical } : {}),
+    ...(lines.length ? { lines } : {}),
+  };
 }
 
 /** How someone adds to an account's balance, or a community's fund */
@@ -576,10 +642,15 @@ export async function describeHost(url: string, timeoutMs = HOST_TIMEOUT_MS): Pr
   ) {
     throw new Error(NOT_A_HOST);
   }
-  // Limits are for showing: badly described, they are left out, and the host still stands.
-  const { limits: given, ...rest } = description;
+  // Limits and a fund's words are for showing: badly described, they are left out, and the host still stands.
+  const { limits: given, fund, ...rest } = description;
   const limits = description.free ? null : hostLimits(given);
-  return limits ? { ...rest, limits } : rest;
+  const shown = typeof fund === 'object' && fund !== null ? fundShown({ ...fund }) : null;
+  return {
+    ...rest,
+    ...(shown ? { fund: shown } : {}),
+    ...(limits ? { limits } : {}),
+  };
 }
 
 /** A space id as it may appear in a host's path */

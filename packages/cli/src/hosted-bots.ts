@@ -40,6 +40,37 @@ export interface BotModel {
   readonly plain?: boolean;
 }
 
+/** A usual bot reply, for what a fund says one costs: a conversation read, a short answer written */
+const USUAL_REPLY = { input: 10_000, output: 500 };
+
+/** "claude-sonnet-5-5" as people say it: "Claude Sonnet 5.5"; any other name as given */
+function modelName(name: string): string {
+  const claude = /^claude-([a-z]+)-(\d+)(?:-(\d+))?$/.exec(name);
+  if (!claude) return name;
+  const [, family = '', major, minor] = claude;
+  return `Claude ${family.charAt(0).toUpperCase()}${family.slice(1)} ${major}${minor ? `.${minor}` : ''}`;
+}
+
+/**
+ * What a fund says about the bots a host runs: the model they think with, at
+ * what the fund pays per million tokens, and what a usual reply takes. Without
+ * a price, only the model.
+ */
+export function botFundWords(model: BotModel, markup: number) {
+  const dollars = (amount: number) => `$${Number(amount.toFixed(2))}`;
+  const price = model.price;
+  const line = {
+    for: 'bots',
+    name: modelName(model.name).slice(0, 60),
+    price: price
+      ? `${dollars(price.input * markup)} / ${dollars(price.output * markup)} per million tokens`
+      : 'as it is used',
+  };
+  if (!price) return { lines: [line] };
+  const typical = ((USUAL_REPLY.input * price.input + USUAL_REPLY.output * price.output) / 1e6) * markup;
+  return { botTypical: typical.toFixed(3), lines: [line] };
+}
+
 /** What a host keeps about a bot it runs */
 interface Kept {
   readonly did: string;

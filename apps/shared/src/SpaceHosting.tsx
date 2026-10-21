@@ -12,14 +12,18 @@ import {
   HostStatusRow,
   StopFooter,
   hostTerms,
+  size,
   stillFree,
   useAskAgain,
   useOffer,
 } from './HostOffer';
-import { ChipIn, RemindMe, dollars, lastsFor } from './Payment';
+import { ChipIn, RemindMe, dollars, lastsFor, perReply } from './Payment';
 import { Benefit, FeatureIcon, Glyph, shortDate, timeLeft, type Tone } from './Feature';
 import { useAction } from './action';
 import { styles, palette } from './styles';
+
+/** A GB as hosts count it, 10⁹ bytes: a community's fund pays for one at least */
+const GB = 1e9;
 
 const DAY = 86_400;
 /** How long the dialog waits for a host just chosen to show among the space's, before it shows the form again */
@@ -106,7 +110,9 @@ export function standing(view: SpaceHostingView): { tone: Tone; pill: string; li
       pill: 'Waiting',
       line: `${view.name} takes it the next time a member's device is online`,
     };
-  if (!view.fund) return { tone: 'good', pill: 'Online', line: `Free at ${view.name}` };
+  // No fund is free only at a free host: a paid one whose fund this device can't read still bills.
+  if (!view.fund)
+    return { tone: 'good', pill: 'Online', line: view.free ? `Free at ${view.name}` : `At ${view.name}` };
   if (status.state === 'grace')
     return {
       tone: 'bad',
@@ -387,11 +393,14 @@ export function KeepOnline({
   writable,
   onClose,
   hero = true,
+  adding,
 }: {
   spaceId: string;
   writable: boolean;
   onClose: () => void;
   hero?: boolean;
+  /** A bot about to start, named so the fund shows what it will cost */
+  adding?: string;
 }) {
   const node = useNode();
   const { hosts, look, looking, defined, mayChoose } = useSpaceHosts(spaceId, writable);
@@ -510,10 +519,20 @@ export function KeepOnline({
         </>
       ) : host.fund ? (
         <>
-          <FundPaysFor fund={host.fund} bots={host.bots} />
+          <FundPaysFor
+            fund={host.fund}
+            bots={host.bots}
+            {...(host.status?.bytes !== undefined ? { bytes: host.status.bytes } : {})}
+            {...(adding ? { adding } : {})}
+          />
           <ChipIn
             fund={host.fund}
-            rate={{ ...(host.status?.daily ? { daily: host.status.daily } : {}), bots: host.bots }}
+            rate={{
+              ...(host.status?.daily ? { daily: host.status.daily } : {}),
+              balance,
+              bots: host.bots,
+              ...(adding ? { adding } : {}),
+            }}
             start={(payment) => node.hosting.payForSpace(spaceId, host.url, payment)}
             paid={async () => {
               const now = await node.hosting.space(spaceId);
@@ -569,18 +588,26 @@ export function KeepOnline({
 
 /**
  * What a community's fund pays for, with a check for each: keeping it online
- * at the host's monthly rate for each GB, and each bot at what it has been spending. A
- * community without bots sees one line.
+ * at the host's monthly rate for each GB (one at least, so a small community
+ * sees what it is billed as), each bot at what it has been spending or, one
+ * about to start, a usual reply, and the model they think with. Lines the
+ * host adds that this doesn't place are shown as they come.
  */
 export function FundPaysFor({
   fund,
   bots,
+  bytes,
+  adding,
 }: {
   fund: FundOffer;
   bots: ReadonlyArray<{ readonly name: string; readonly daily?: number }>;
+  /** What the host keeps for the space, as it last measured */
+  bytes?: number;
+  /** A bot about to start */
+  adding?: string;
 }) {
-  const line = (label: string, price: string) => (
-    <li key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+  const line = (key: string, label: string, price: string, note?: string) => (
+    <li key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14 }}>
       <span
         style={{
           width: 20,
@@ -596,27 +623,58 @@ export function FundPaysFor({
       >
         <Glyph name="check" size={12} style={{ strokeWidth: 2 }} />
       </span>
-      <span style={{ flex: 1, color: palette.ink.body }}>{label}</span>
-      <span style={{ fontSize: 13, color: palette.ink.muted }}>{price}</span>
+      <span style={{ flex: 1, minWidth: 0, color: palette.ink.body }}>
+        {label}
+        {note && <span style={{ display: 'block', fontSize: 12, color: palette.ink.faint }}>{note}</span>}
+      </span>
+      <span style={{ fontSize: 13, color: palette.ink.muted, textAlign: 'right' }}>{price}</span>
     </li>
   );
+  const lines = fund.lines ?? [];
+  const hosting = lines.find((one) => one.for === 'hosting');
+  const model = lines.find((one) => one.for === 'bots');
+  const kept =
+    bytes === undefined
+      ? 'Billed as 1 GB at least'
+      : bytes < GB
+        ? `${size(bytes)} kept, billed as 1 GB, the least`
+        : `${size(bytes)} kept`;
+  // What each bot thinks with, at what price, and the most it takes a day: under its name.
+  const thinks =
+    [model && `${model.name}, ${model.price}`, fund.botDailyCap && `at most $${fund.botDailyCap} a day`]
+      .filter(Boolean)
+      .join(' · ') || undefined;
   return (
     <div style={{ padding: '12px 14px', borderRadius: 10, background: palette.surface.sunken }}>
       <p style={{ fontSize: 12, fontWeight: 500, color: palette.ink.muted, marginBottom: 8 }}>
         This fund pays for
       </p>
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {line('Always online, encrypted end to end', `$${fund.perGb} a GB a month`)}
-        {bots.map((bot) =>
+        {line(
+          'hosting',
+          'Always online, encrypted end to end',
+          `$${fund.perGb} a GB a month`,
+          // The host's own words sit beside the rate it bills by, never in its place.
+          [kept, hosting && `${hosting.name}, ${hosting.price}`].filter(Boolean).join(' · '),
+        )}
+        {bots.map((bot, index) =>
           line(
+            `bot-${index}`,
             bot.name,
             bot.daily === undefined
               ? 'as it is used'
               : bot.daily * 30 < 250_000
                 ? 'under $0.25 a month so far'
                 : `about $${((bot.daily * 30) / 1e6).toFixed(2)} a month`,
+            thinks,
           ),
         )}
+        {adding &&
+          !bots.some((bot) => bot.name === adding) &&
+          line('adding', adding, fund.botTypical ? perReply(fund.botTypical) : 'as it is used', thinks)}
+        {lines
+          .filter((one) => one.for !== 'hosting' && one.for !== 'bots')
+          .map((one, index) => line(`line-${index}`, one.name, one.price))}
       </ul>
       <p style={{ fontSize: 12, color: palette.ink.faint, marginTop: 10 }}>
         Anyone in the community can chip in, once or every month.

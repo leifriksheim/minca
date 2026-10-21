@@ -63,7 +63,7 @@ import { isRecord, messageOf } from './json.js';
 import { createInboundPeers, serve, type Served } from './serve.js';
 import type { WalletPayments } from './wallet.js';
 import { isEmail, type Reminders } from './reminders.js';
-import { createHostedBots, type BotModel } from './hosted-bots.js';
+import { botFundWords, createHostedBots, type BotModel } from './hosted-bots.js';
 import { createFunds } from './fund.js';
 import { createBotConnect } from './host-connect.js';
 import { dailyBudget, isConnectorId, type HostConnector } from './connectors/connector.js';
@@ -545,7 +545,12 @@ export async function startHost(options: HostOptions): Promise<RunningHost> {
           methods: [...(billing ? (['checkout'] as const) : []), ...(wallet ? (['request'] as const) : [])],
           recurring: !!billing,
           ...(options.manageFunds ? { manage: options.manageFunds } : {}),
-          ...(options.bots ? { botDailyCap: (options.bots.model.dailyCap * markup).toFixed(2) } : {}),
+          ...(options.bots
+            ? {
+                botDailyCap: (options.bots.model.dailyCap * markup).toFixed(2),
+                ...botFundWords(options.bots.model, markup),
+              }
+            : {}),
         }
       : null;
   /** "$0.10 a GB a month, past 0.25 GB free", for people */
